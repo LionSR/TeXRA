@@ -476,6 +476,39 @@ type ObservedStep = z.infer<typeof WireCompletedStepSchema> & {
   readonly argumentsText?: string;
 };
 
+/**
+ * Builds only the stored anchor a completed turn leaves for its next round.
+ * Foreground completion and background observation share it, so an observed
+ * turn chains on `previous_interaction_id` exactly as a streamed one does.
+ */
+const googleContinuation = Effect.fn('llm.google.continuation')(function* (
+  turn: Extract<ResolvedTurn, { protocol: 'google-interactions' }>,
+  result: TurnResult,
+  origin: ModelOrigin,
+) {
+  if (!turn.controls.store || result.providerResponseId === null)
+    return undefined;
+  const prefix: ResolvedTurn['messages'] = [
+    ...turn.messages,
+    { role: 'assistant', origin, content: result.content },
+  ];
+  const coveredSteps = yield* lowerMessages(prefix, origin);
+  return {
+    origin,
+    coveredMessages: prefix.length,
+    prefixFingerprint: prefixFingerprint(
+      'texra-google-interactions-prefix-v1',
+      origin,
+      turn.system,
+      prefix,
+    ),
+    anchor: {
+      interactionId: result.providerResponseId,
+      coveredSteps: coveredSteps.length,
+    },
+  };
+});
+
 const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
   function* (
     interaction: z.infer<typeof WireInteractionSchema>,
@@ -1002,34 +1035,17 @@ export function googleInteractionsModel(
                 responseSteps,
                 origin,
               );
-              if (turn.controls.store) {
-                const prefix: ResolvedTurn['messages'] = [
-                  ...turn.messages,
-                  { role: 'assistant', origin, content: result.content },
-                ];
-                const coveredSteps = yield* lowerMessages(prefix, origin);
-                return {
-                  kind: 'completed',
-                  result: TurnResultSchema.parse({
-                    ...result,
-                    continuation: {
-                      origin,
-                      coveredMessages: prefix.length,
-                      prefixFingerprint: prefixFingerprint(
-                        'texra-google-interactions-prefix-v1',
-                        origin,
-                        turn.system,
-                        prefix,
-                      ),
-                      anchor: {
-                        interactionId: responseId,
-                        coveredSteps: coveredSteps.length,
-                      },
-                    },
-                  }),
-                } as const;
-              }
-              return { kind: 'completed', result: result } as const;
+              const continuation = yield* googleContinuation(
+                turn,
+                result,
+                origin,
+              );
+              return {
+                kind: 'completed',
+                result: continuation
+                  ? TurnResultSchema.parse({ ...result, continuation })
+                  : result,
+              } as const;
             }),
           );
           return Stream.concat(events, terminal).pipe(Stream.mapError(enrich));
@@ -1163,9 +1179,11 @@ export function googleInteractionsModel(
           returnedModel: interaction.model ?? null,
         });
       }
+      const result = yield* completedSnapshot(interaction);
+      const continuation = yield* googleContinuation(turn, result, origin);
       return BackgroundSubmissionSchema.parse({
         kind: 'completed',
-        result: yield* completedSnapshot(interaction),
+        result: continuation ? { ...result, continuation } : result,
       });
     }).pipe(
       Effect.catchCause((cause) =>
@@ -1178,12 +1196,27 @@ export function googleInteractionsModel(
     );
   });
   const observe: NonNullable<Model['background']>['observe'] = (
+    admitted,
     input,
     policy,
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
         const operation = yield* boundOperation(input);
+        const parsedTurn = ResolvedTurnSchema.safeParse(admitted);
+        if (
+          !parsedTurn.success ||
+          parsedTurn.data.protocol !== 'google-interactions' ||
+          parsedTurn.data.mode !== 'background' ||
+          !sameModelOrigin(parsedTurn.data, operation.origin)
+        ) {
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message: 'The admitted turn belongs to another model binding.',
+            operation,
+          });
+        }
+        const turn = parsedTurn.data;
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
           return yield* new ModelError({
@@ -1236,13 +1269,19 @@ export function googleInteractionsModel(
               interaction.status !== 'queued' &&
               interaction.status !== 'in_progress'
             ) {
+              const result = yield* completedSnapshot({
+                ...interaction,
+                model: returnedModel,
+              });
+              const continuation = yield* googleContinuation(
+                turn,
+                result,
+                origin,
+              );
               return BackgroundEventSchema.parse({
                 kind: 'completed',
                 afterSequence: null,
-                result: yield* completedSnapshot({
-                  ...interaction,
-                  model: returnedModel,
-                }),
+                result: continuation ? { ...result, continuation } : result,
               });
             }
             yield* Effect.sleep(

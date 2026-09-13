@@ -181,6 +181,18 @@ function modelWith(fetch: typeof globalThis.fetch, configuration = CONFIG) {
   });
 }
 
+/** The admitted turn an observation anchors to. Unstored by default, so it
+ *  leaves no continuation unless a case asks for one. */
+function backgroundTurn(model: ReturnType<typeof modelWith>) {
+  return Effect.map(
+    model.prepareTurn({ ...REQUEST, mode: 'background' }),
+    (turn) => {
+      assert(turn.mode === 'background');
+      return turn;
+    },
+  );
+}
+
 const socketServers: WebSocketServer[] = [];
 async function socketServer(
   onConnection: (
@@ -1250,7 +1262,7 @@ describe('native OpenAI Responses protocol', () => {
         const policy = { deadlineAtMs: 60_000 };
         const initial = yield* Stream.runCollect(
           model.background
-            .observe(accepted.operation, policy)
+            .observe(turn, accepted.operation, policy)
             .pipe(Stream.take(3)),
         );
         expect(initial[0]).toMatchObject({
@@ -1275,6 +1287,7 @@ describe('native OpenAI Responses protocol', () => {
         ]);
         const resumed = yield* Stream.runCollect(
           model.background.observe(
+            turn,
             RemoteOperationSchema.parse({
               ...accepted.operation,
               afterSequence: 3,
@@ -1307,13 +1320,14 @@ describe('native OpenAI Responses protocol', () => {
         ]);
         const terminal = resumed.at(-1);
         assert(terminal?.kind === 'completed');
-        expect(terminal.result.continuation).toBeUndefined();
         const continuation = yield* openaiResponsesContinuation(
           configuration,
           turn,
           terminal.result,
         );
         assert(continuation && 'responseId' in continuation.anchor);
+        // An observed background turn anchors exactly as a foreground one does.
+        expect(terminal.result.continuation).toEqual(continuation);
         expect(continuation).toMatchObject({
           coveredMessages: 2,
           anchor: { kind: 'stored', responseId: 'resp_1', coveredItems: 5 },
@@ -1575,11 +1589,12 @@ describe('native OpenAI Responses protocol', () => {
       );
       const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
       assert(model.background);
+      const admitted = await Effect.runPromise(backgroundTurn(model));
       const observed: BackgroundEvent[] = [];
       const failure = await Effect.runPromise(
         Effect.flip(
           Stream.runForEach(
-            model.background.observe(OPERATION, {
+            model.background.observe(admitted, OPERATION, {
               deadlineAtMs: Date.now() + 60_000,
             }),
             (event) =>
@@ -1636,11 +1651,12 @@ describe('native OpenAI Responses protocol', () => {
       );
       const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
       assert(model.background);
+      const admitted = await Effect.runPromise(backgroundTurn(model));
       const seen: BackgroundEvent[] = [];
       const exit = await Effect.runPromise(
         Effect.exit(
           Stream.runForEach(
-            model.background.observe(OPERATION, {
+            model.background.observe(admitted, OPERATION, {
               deadlineAtMs: Date.now() + 60_000,
             }),
             (event) =>
@@ -1707,10 +1723,11 @@ describe('native OpenAI Responses protocol', () => {
       assert(model.background);
       const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
       assert(turn.mode === 'foreground');
+      const admitted = await Effect.runPromise(backgroundTurn(model));
       const stream: Stream.Stream<TurnEvent | BackgroundEvent, ModelError> =
         mode === 'foreground'
           ? model.streamTurn(turn)
-          : model.background.observe(OPERATION, {
+          : model.background.observe(admitted, OPERATION, {
               deadlineAtMs: Date.now() + 60_000,
             });
       const seen = await Effect.runPromise(Stream.runCollect(stream));
@@ -1763,8 +1780,9 @@ describe('native OpenAI Responses protocol', () => {
         const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
         assert(model.background);
         const background = model.background;
+        const admitted = yield* backgroundTurn(model);
         const observation = Stream.runDrain(
-          background.observe(OPERATION, { deadlineAtMs: 100 }),
+          background.observe(admitted, OPERATION, { deadlineAtMs: 100 }),
         );
         const fiber = yield* Effect.forkChild(Effect.flip(observation));
         yield* Deferred.await(started);

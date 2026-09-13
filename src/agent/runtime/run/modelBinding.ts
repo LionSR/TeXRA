@@ -328,9 +328,13 @@ function configurationFor(
   const effort = routeEffort(capabilities.reasoningEffort);
   const supportedEfforts = supportedRouteEfforts(config);
   const thinkingMode = capabilities.supportsReasoning ? 'enabled' : 'disabled';
-  // The user's parallel-tool-calls choice, honored on every OpenAI-protocol
-  // arm as the retired OpenAI handler base honored it on every request it
-  // built. The Anthropic arm never read it and keeps the provider default.
+  // The user's parallel-tool-calls choice, honored on every arm whose llm
+  // controls carry the field. That is narrower than the retired OpenAI
+  // handler base, whose reasoning descendants (DeepSeek, Kimi, GLM, MiniMax)
+  // also sent parallel_tool_calls: those protocols have no such control on
+  // the llm Model today, and adding one is llm-package schema work, not a
+  // read this function can route. The Anthropic arm never read the setting
+  // and keeps the provider default.
   const parallelToolCalls = getConfig<boolean>(
     'texra.model.openaiParallelToolCalls',
   );
