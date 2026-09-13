@@ -32,14 +32,6 @@ function regionSet(provider: string): boolean | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Streaming
-// ---------------------------------------------------------------------------
-
-export function getGlobalStreaming(): boolean {
-  return readPlatformSetting<boolean>(GlobalStateKey.STREAMING_GLOBAL);
-}
-
-// ---------------------------------------------------------------------------
 // Endpoint
 // ---------------------------------------------------------------------------
 

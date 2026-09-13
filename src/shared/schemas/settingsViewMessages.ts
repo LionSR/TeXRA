@@ -71,7 +71,6 @@ export { type Goal } from './goal';
 export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 
 export {
-  DEFAULT_GLOBAL_STREAMING,
   type ProviderKeyStatus,
   type ProviderSetting,
   type SessionProblem,

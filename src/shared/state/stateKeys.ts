@@ -70,9 +70,6 @@ export enum GlobalStateKey {
   REASONING_LEVELS = 'texra.reasoningLevels',
   PREFER_SHORT_MODEL_NAMES = 'texra.preferShortModelNames',
 
-  // Streaming settings
-  STREAMING_GLOBAL = 'texra.streaming.global',
-
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR = 'texra.customAgentDir',
 

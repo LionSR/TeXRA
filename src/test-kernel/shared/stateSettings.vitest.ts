@@ -129,7 +129,6 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [WorkspaceStateKey.LATEX_FORMATTER]: LATEX_CONFIG_DEFAULTS.latexFormatter,
   [GlobalStateKey.WEBSOCKET_OPENAI]: false,
   ...PROVIDER_ENDPOINT_DEFAULTS,
-  [GlobalStateKey.STREAMING_GLOBAL]: true,
   [GlobalStateKey.HELPER_MODEL]: DEFAULT_HELPER_MODEL,
   [GlobalStateKey.PREFER_SHORT_MODEL_NAMES]: false,
   [GlobalStateKey.USE_OPENROUTER]: false,

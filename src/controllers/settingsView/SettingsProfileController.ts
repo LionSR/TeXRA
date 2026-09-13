@@ -13,7 +13,6 @@ import {
 import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
-  getGlobalStreaming,
   getProviderDisplayName,
   getProviderEndpoint,
   getProviderKeyUrl,
@@ -54,7 +53,6 @@ export class SettingsProfileController {
     const base = {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       providerKeyStatuses,
-      globalStreamingDefault: getGlobalStreaming(),
     };
 
     // Preserve the distinction between an authoritatively rejected refresh

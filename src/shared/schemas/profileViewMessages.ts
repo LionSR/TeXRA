@@ -15,13 +15,6 @@ import { commandOnly } from './messageFactories';
 // Data schemas
 // ============================================================
 
-/**
- * Defaults for prefaulted UPDATE_PROFILE fields, exported so the settings
- * frontend's pre-hydration state can share them instead of restating the
- * literals.
- */
-export const DEFAULT_GLOBAL_STREAMING = true;
-
 const ProfileUserSchema = z.object({
   email: z.string(),
 });
@@ -63,7 +56,6 @@ export const UpdateProfileMessageSchema = z.object({
    */
   sessionProblem: SessionProblemSchema.nullable().prefault(null),
   providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
-  globalStreamingDefault: z.boolean().prefault(DEFAULT_GLOBAL_STREAMING),
 });
 export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 

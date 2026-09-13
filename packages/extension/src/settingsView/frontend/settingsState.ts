@@ -32,7 +32,6 @@ import {
   byCategory,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-  DEFAULT_GLOBAL_STREAMING,
   DEFAULT_LATEX_SETTINGS_STATUS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -160,10 +159,6 @@ export const sessionProblem = trackedSignal<'expired' | 'unavailable' | null>(
   () => null,
 );
 export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
-export const globalStreamingDefault = trackedSignal(
-  () => DEFAULT_GLOBAL_STREAMING,
-);
-
 // ---------------------------------------------------------------------------
 // Model selection state
 // ---------------------------------------------------------------------------

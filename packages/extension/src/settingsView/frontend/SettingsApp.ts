@@ -87,7 +87,6 @@ import {
   gitMarkCommits,
   gitSettingsLoaded,
   gitWorktreeSupport,
-  globalStreamingDefault,
   goalItems,
   helperModel,
   inlineCriticismEnabled,
@@ -327,7 +326,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         return html`
           <models-tab
             .providerKeyStatuses=${providerKeyStatuses.get()}
-            .globalStreamingDefault=${globalStreamingDefault.get()}
             .modelSelectionItems=${modelSelectionItems.get()}
             .helperModel=${helperModel.get()}
             .preferShortModelNames=${preferShortModelNames.get()}
