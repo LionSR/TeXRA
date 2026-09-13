@@ -1,63 +1,30 @@
 /**
- * Bounded projection of a workflow run's run snapshot for the executions
- * tool's `/executions/{id}` summary.
+ * Bounded projection of a workflow run's board — the `workflowRunModel` fold
+ * every host paints — for the executions tool's `/executions/{id}` summary.
  *
- * A live workflow snapshot is unbounded in stages, calls, attempts, and file
- * lists; this renders the slice worth a model's context — current stage first,
- * then failed/cancelled outcomes — and reports what it omitted so the reader
- * knows the view is truncated rather than complete.
+ * A board is unbounded in phases, cards, and file lists; this renders the
+ * slice worth a model's context — open phases still working first, then
+ * phases with a failed or cancelled card, then plan order, and within a phase
+ * the cards needing attention first — and reports what it omitted so the
+ * reader knows the view is truncated rather than complete.
  */
 
 // Local imports
+import type {
+  WorkflowPhaseModel,
+  WorkflowRunModel,
+} from '@shared/runs/workflowRunModel';
 import {
-  deriveWorkflowCounts,
-  deriveWorkflowStageState,
-  RUN_OUTCOME,
-  stageTitleFor,
-  TERMINAL_WORKFLOW_CALL_STATUSES,
-  type WorkflowRunSnapshot,
   WORKFLOW_CALL_STATUS,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 
 const WORKFLOW_SUMMARY_MAX_ENTRIES = 8;
-const WORKFLOW_SUMMARY_MAX_ATTEMPTS = 2;
 const WORKFLOW_SUMMARY_MAX_FILES_PER_KIND = 3;
 const WORKFLOW_SUMMARY_TEXT_LENGTH = 160;
 
 function compactWorkflowText(value: string | undefined): string | undefined {
   return value?.slice(0, WORKFLOW_SUMMARY_TEXT_LENGTH);
-}
-
-function workflowPhaseView(
-  snapshot: WorkflowRunSnapshot,
-  stage: WorkflowRunSnapshot['stages'][number],
-): unknown {
-  const state = deriveWorkflowStageState(snapshot, stage);
-  return {
-    id: compactWorkflowText(stage.id),
-    title: compactWorkflowText(stage.title),
-    order: stage.order,
-    // The triad once every call the phase owns has settled. Absent while the
-    // run is still inside the phase or its calls are still running, and
-    // absent alongside `startedAt` for a phase the run never reached, which
-    // therefore reads as the not-started phase it is rather than as done.
-    outcome: state.outcome,
-    startedAt: stage.startedAt,
-    completedAt: state.completedAt,
-  };
-}
-
-function workflowAttemptView(
-  attempt: WorkflowRunSnapshot['calls'][number]['attempts'][number],
-): unknown {
-  return {
-    number: attempt.number,
-    id: compactWorkflowText(attempt.id),
-    model: compactWorkflowText(attempt.model),
-    costUsd: attempt.costUsd,
-    startedAt: attempt.startedAt,
-    completedAt: attempt.completedAt,
-  };
 }
 
 function compactWorkflowFiles(files: readonly string[]): {
@@ -74,104 +41,106 @@ function compactWorkflowFiles(files: readonly string[]): {
   };
 }
 
-function workflowCallFailurePriority(status: string): number {
-  // Within terminal calls, elevate failed/cancelled so the bounded projection
-  // keeps the outcomes that matter for debugging (matches stage ranking).
-  if (
-    status === WORKFLOW_CALL_STATUS.FAILED ||
-    status === WORKFLOW_CALL_STATUS.CANCELLED
-  ) {
-    return 0;
-  }
-  return 1;
+function isAttentionCall(call: WorkflowCallProgress): boolean {
+  return (
+    call.status === WORKFLOW_CALL_STATUS.FAILED ||
+    call.status === WORKFLOW_CALL_STATUS.CANCELLED
+  );
 }
 
-export function workflowRunView(snapshot: WorkflowRunSnapshot): unknown {
-  const byPriority = snapshot.calls.toSorted(
-    (left, right) =>
-      Number(TERMINAL_WORKFLOW_CALL_STATUSES.has(left.status)) -
-        Number(TERMINAL_WORKFLOW_CALL_STATUSES.has(right.status)) ||
-      workflowCallFailurePriority(left.status) -
-        workflowCallFailurePriority(right.status) ||
-      Number(left.stageId !== snapshot.currentStageId) -
-        Number(right.stageId !== snapshot.currentStageId) ||
-      right.timestamps.updatedAt.localeCompare(left.timestamps.updatedAt),
+function isLiveCall(call: WorkflowCallProgress): boolean {
+  return (
+    call.status === WORKFLOW_CALL_STATUS.QUEUED ||
+    call.status === WORKFLOW_CALL_STATUS.RUNNING
   );
-  const phasePriority = (
-    stage: WorkflowRunSnapshot['stages'][number],
-  ): number => {
-    if (stage.id === snapshot.currentStageId) return 0;
-    const { outcome } = deriveWorkflowStageState(snapshot, stage);
-    if (outcome === RUN_OUTCOME.FAILED || outcome === RUN_OUTCOME.CANCELLED) {
-      return 1;
-    }
-    return 2;
+}
+
+/** Live calls lead, failures follow, the rest keep transcript order. */
+function callPriority(call: WorkflowCallProgress): number {
+  if (isLiveCall(call)) return 0;
+  if (isAttentionCall(call)) return 1;
+  return 2;
+}
+
+/** Phases still working lead, phases with a failure follow, then plan order. */
+function phasePriority(phase: WorkflowPhaseModel): number {
+  if (
+    phase.opened &&
+    phase.tally.done < phase.tally.total + phase.tally.declared
+  )
+    return 0;
+  if (phase.tasks.some((row) => isAttentionCall(row.call))) return 1;
+  return 2;
+}
+
+function workflowCallView(call: WorkflowCallProgress): unknown {
+  return {
+    id: compactWorkflowText(call.id),
+    label: compactWorkflowText(call.label),
+    status: call.status,
+    kind: call.kind,
+    agent: compactWorkflowText(call.agent),
+    model: compactWorkflowText(call.model),
+    childRunId: compactWorkflowText(call.childRunId),
+    attemptNumber: call.attemptNumber,
+    ...('costUsd' in call && { costUsd: call.costUsd }),
+    ...('durationMs' in call && { durationMs: call.durationMs }),
+    ...('error' in call && { error: compactWorkflowText(call.error) }),
+    ...('reason' in call && { reason: call.reason }),
+    ...(call.files !== undefined && {
+      files: {
+        input: compactWorkflowFiles(call.files.input),
+        context: compactWorkflowFiles(call.files.context),
+        media: compactWorkflowFiles(call.files.media),
+      },
+    }),
   };
-  const phases = snapshot.stages
+}
+
+function workflowPhaseView(phase: WorkflowPhaseModel): unknown {
+  const tasks = phase.tasks
     .toSorted(
-      (left, right) =>
-        phasePriority(left) - phasePriority(right) || right.order - left.order,
+      (left, right) => callPriority(left.call) - callPriority(right.call),
     )
-    .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
-    .map((stage) => workflowPhaseView(snapshot, stage));
-  const calls = byPriority
-    .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
-    .map((call) => {
-      return {
-        id: compactWorkflowText(call.id),
-        label: compactWorkflowText(call.label),
-        phaseId: compactWorkflowText(call.stageId),
-        phaseTitle: compactWorkflowText(stageTitleFor(snapshot, call)),
-        kind: call.kind,
-        agent: compactWorkflowText(call.agent),
-        model: compactWorkflowText(call.model),
-        files: {
-          input: compactWorkflowFiles(call.files.input),
-          context: compactWorkflowFiles(call.files.context),
-          media: compactWorkflowFiles(call.files.media),
-        },
-        childRunId: compactWorkflowText(call.childRunId),
-        attempts: call.attempts
-          .slice(-WORKFLOW_SUMMARY_MAX_ATTEMPTS)
-          .map(workflowAttemptView),
-        ...(call.attempts.length > WORKFLOW_SUMMARY_MAX_ATTEMPTS && {
-          omittedAttempts: call.attempts.length - WORKFLOW_SUMMARY_MAX_ATTEMPTS,
-        }),
-        status: call.status,
-        ...(call.settledBySweep && { settledBySweep: true }),
-        ...(call.status === WORKFLOW_CALL_STATUS.FAILED && {
-          error: compactWorkflowText(call.error),
-        }),
-        costUsd: call.costUsd,
-        timestamps: call.timestamps,
-      };
-    });
-  const currentPhase = snapshot.stages.find(
-    (stage) => stage.id === snapshot.currentStageId,
+    .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES);
+  const declared = phase.declaredTasks.slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES);
+  return {
+    title: compactWorkflowText(phase.heading.phaseLabel),
+    opened: phase.opened,
+    tally: phase.tally,
+    tasks: tasks.map((row) => workflowCallView(row.call)),
+    ...(phase.tasks.length > tasks.length && {
+      omittedTasks: phase.tasks.length - tasks.length,
+    }),
+    declared: declared.map((task) => compactWorkflowText(task.label)),
+    ...(phase.declaredTasks.length > declared.length && {
+      omittedDeclared: phase.declaredTasks.length - declared.length,
+    }),
+  };
+}
+
+export function workflowBoardView(model: WorkflowRunModel): unknown {
+  const phases = model.phases
+    .toSorted((left, right) => phasePriority(left) - phasePriority(right))
+    .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES);
+  const shownCalls = phases.reduce(
+    (sum, phase) =>
+      sum + Math.min(phase.tasks.length, WORKFLOW_SUMMARY_MAX_ENTRIES),
+    0,
   );
   return {
-    aggregate: {
-      outcome: snapshot.outcome,
-      error: compactWorkflowText(snapshot.error),
-      counts: deriveWorkflowCounts(snapshot.calls),
-      timestamps: snapshot.timestamps,
-      responseBounds: {
-        maxPhases: WORKFLOW_SUMMARY_MAX_ENTRIES,
-        maxCalls: WORKFLOW_SUMMARY_MAX_ENTRIES,
-        maxAttemptsPerCall: WORKFLOW_SUMMARY_MAX_ATTEMPTS,
-        maxFilesPerKind: WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
-      },
+    tally: model.tally,
+    phases: phases.map(workflowPhaseView),
+    ...(model.phases.length > phases.length && {
+      omittedPhases: model.phases.length - phases.length,
+    }),
+    ...(model.tasks.length > shownCalls && {
+      omittedCalls: model.tasks.length - shownCalls,
+    }),
+    responseBounds: {
+      maxPhases: WORKFLOW_SUMMARY_MAX_ENTRIES,
+      maxTasksPerPhase: WORKFLOW_SUMMARY_MAX_ENTRIES,
+      maxFilesPerKind: WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
     },
-    currentPhase: currentPhase
-      ? workflowPhaseView(snapshot, currentPhase)
-      : null,
-    phases,
-    calls,
-    ...(snapshot.stages.length > phases.length && {
-      omittedPhases: snapshot.stages.length - phases.length,
-    }),
-    ...(snapshot.calls.length > calls.length && {
-      omittedCalls: snapshot.calls.length - calls.length,
-    }),
   };
 }

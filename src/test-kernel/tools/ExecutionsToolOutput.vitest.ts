@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
-import { getRunRecords, registerRun } from '@agent/storage';
+import { registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
@@ -23,7 +23,7 @@ import {
   type ExecResult,
   RunIdSchema,
   type RunId,
-  type WorkflowRunSnapshot,
+  type WorkflowCallProgress,
   AgentCategory,
 } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -37,18 +37,45 @@ import { BashTool } from '@tools/bash';
 import { generateRunId } from '@utils/core';
 import * as execUtils from '@utils/system/execUtils';
 
-function writeWorkflowRunSnapshot(
-  session: ReturnType<typeof defaultSession>,
+const WORKFLOW_ATTEMPT_ID = 'attempt-1';
+
+/**
+ * Publish a workflow run's board rows the way the run's own trace does: the
+ * plan marker, one opened phase, and a card per call under that phase.
+ */
+function publishWorkflowBoard(
   runId: RunId,
-  workflow: WorkflowRunSnapshot,
+  board: {
+    readonly phase?: string;
+    readonly calls: readonly WorkflowCallProgress[];
+  },
 ) {
-  return session.commit([
-    {
-      type: 'run.workflow',
-      aggregateId: aggregateId('run', runId),
-      workflow,
-    },
-  ]);
+  return Effect.promise(async () => {
+    const session = defaultSession();
+    session.publishRunEvent(runId, {
+      type: 'workflow.plan',
+      attemptId: WORKFLOW_ATTEMPT_ID,
+      phases: board.phase === undefined ? [] : [{ title: board.phase }],
+      tasks: [],
+    });
+    if (board.phase !== undefined) {
+      session.publishRunEvent(runId, {
+        type: 'stage.start',
+        id: 'phase-1',
+        label: board.phase,
+        kind: 'phase',
+      });
+    }
+    for (const call of board.calls) {
+      session.publishRunEvent(runId, {
+        type: 'workflow.call',
+        logId: `workflow-task-${call.id}`,
+        call: { ...call, attemptId: WORKFLOW_ATTEMPT_ID },
+        ...(board.phase !== undefined && { stageId: 'phase-1' }),
+      });
+    }
+    await session.settlePublications();
+  });
 }
 
 // Local file imports
@@ -581,332 +608,131 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       ),
   );
 
-  it.live(
-    'exposes the canonical workflow aggregate without full instructions',
-    () =>
-      Effect.gen(function* () {
-        const runId = yield* registerWorkflowRun('observable');
-        const timestamp = new Date().toISOString();
-        const longStageId = `stage-${'s'.repeat(2_500)}-stage-tail`;
-        const longCallId = `call-${'i'.repeat(2_500)}-call-tail`;
-        const longTitle = `Draft ${'t'.repeat(3_000)}-title-tail`;
-        const longError = `Failure ${'e'.repeat(4_000)}-error-tail`;
-        const longFiles = Array.from(
-          { length: 513 },
-          (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
-        );
-        yield* writeWorkflowRunSnapshot(defaultSession(), runId, {
-          currentStageId: longStageId,
-          stages: [
-            {
-              id: longStageId,
-              title: longTitle,
-              order: 0,
-              startedAt: timestamp,
-            },
-          ],
-          calls: [
-            {
-              id: longCallId,
-              label: '   ',
-              stageId: longStageId,
-              kind: 'document',
-              agent: 'writer',
-              files: { input: longFiles, context: [], media: [] },
-              childRunId: 'abcdef123456' as RunId,
-              attempts: [
-                {
-                  number: 1,
-                  id: '111111111111' as RunId,
-                  startedAt: timestamp,
-                  completedAt: timestamp,
-                },
-                {
-                  number: 2,
-                  id: '222222222222' as RunId,
-                  model: 'historical-model',
-                  costUsd: 0.2,
-                  startedAt: timestamp,
-                  completedAt: timestamp,
-                },
-                {
-                  number: 3,
-                  id: 'abcdef123456' as RunId,
-                  model: 'replacement-model',
-                  costUsd: 0.3,
-                  startedAt: timestamp,
-                  completedAt: timestamp,
-                },
-              ],
-              status: 'failed',
-              error: longError,
-              timestamps: {
-                createdAt: timestamp,
-                startedAt: timestamp,
-                updatedAt: timestamp,
-                completedAt: timestamp,
-              },
-            },
-          ],
-          timestamps: { createdAt: timestamp, updatedAt: timestamp },
-        });
-
-        const result = yield* new ExecutionsTool().call({
-          path: `/executions/${runId}`,
-        });
-        const output = result.output ?? '';
-        assert.equal(result.status, 'executed');
-        assert.ok(output.includes('"currentPhase"'));
-        assert.ok(output.includes('"calls"'));
-        assert.ok(output.includes('"declared": 0'));
-        assert.ok(output.includes('"childRunId": "abcdef123456"'));
-        assert.ok(output.includes('"number": 3'));
-        assert.ok(output.includes('"id": "222222222222"'));
-        assert.ok(output.includes('"model": "historical-model"'));
-        assert.ok(output.includes('"costUsd": 0.2'));
-        assert.ok(output.includes('"error": "Failure '));
-        assert.ok(!output.includes('"number": 1'));
-        assert.ok(!output.includes('private full instruction'));
-        assert.ok(!output.includes('stage-tail'));
-        assert.ok(!output.includes('call-tail'));
-        assert.ok(!output.includes('title-tail'));
-        assert.ok(!output.includes('error-tail'));
-        assert.ok(!output.includes('file-tail'));
-        assert.ok(output.length < 20_000);
-        assert.ok(yield* getRunRecords(defaultSession(), runId).readWorkflow());
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: defaultSession(),
-              runId: PARENT_RUN_ID,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
-
-  it.live(
-    'keeps cancellation reasons on the aggregate and omits per-call error',
-    () =>
-      Effect.gen(function* () {
-        const runId = yield* registerWorkflowRun('cancelled-summary');
-        const timestamp = new Date().toISOString();
-        yield* writeWorkflowRunSnapshot(defaultSession(), runId, {
-          outcome: 'cancelled',
-          stages: [],
-          calls: [
-            {
-              id: 'cancelled-call',
-              label: 'Cancelled call',
-              kind: 'document',
-              files: { input: [], context: [], media: [] },
-              attempts: [],
-              status: 'cancelled',
-              timestamps: {
-                createdAt: timestamp,
-                updatedAt: timestamp,
-                completedAt: timestamp,
-              },
-            },
-          ],
-          error: 'Workflow cancelled by user.',
-          timestamps: {
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            completedAt: timestamp,
+  it.live('bounds the workflow board and keeps attention first', () =>
+    Effect.gen(function* () {
+      const runId = yield* registerWorkflowRun('observable');
+      const longCallId = `call-${'i'.repeat(2_500)}-call-tail`;
+      const longTitle = `Draft ${'t'.repeat(3_000)}-title-tail`;
+      const longError = `Failure ${'e'.repeat(4_000)}-error-tail`;
+      const longFiles = Array.from(
+        { length: 513 },
+        (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
+      );
+      const files = { input: [], context: [], media: [] };
+      const completed = Array.from(
+        { length: 8 },
+        (_, index): WorkflowCallProgress => ({
+          id: `completed-${index}`,
+          label: `Completed ${index}`,
+          phase: longTitle,
+          kind: 'document',
+          files,
+          status: 'completed',
+        }),
+      );
+      yield* publishWorkflowBoard(runId, {
+        phase: longTitle,
+        calls: [
+          ...completed,
+          {
+            id: longCallId,
+            label: 'Older failed',
+            phase: longTitle,
+            kind: 'document',
+            agent: 'writer',
+            model: 'replacement-model',
+            files: { input: longFiles, context: [], media: [] },
+            childRunId: 'abcdef123456' as RunId,
+            attemptNumber: 3,
+            status: 'failed',
+            error: longError,
+            costUsd: 0.5,
           },
-        });
+          {
+            id: 'earlier-live',
+            label: 'Earlier live',
+            phase: longTitle,
+            kind: 'document',
+            files,
+            status: 'running',
+          },
+        ],
+      });
 
-        const result = yield* new ExecutionsTool().call({
-          path: `/executions/${runId}`,
-        });
-        const output = result.output ?? '';
-
-        assert.equal(result.status, 'executed');
-        assert.ok(output.includes('"error": "Workflow cancelled by user."'));
-        assert.ok(output.includes('"status": "cancelled"'));
-        assert.equal(output.match(/"error":/g)?.length, 1);
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: defaultSession(),
-              runId: PARENT_RUN_ID,
-              toolPolicy: {},
-            },
-          }),
-        ),
+      const result = yield* new ExecutionsTool().call({
+        path: `/executions/${runId}`,
+      });
+      const output = result.output ?? '';
+      assert.equal(result.status, 'executed');
+      assert.ok(output.includes('"tally"'));
+      assert.ok(output.includes('"opened": true'));
+      // Attention first: the live call, then the failure, then the volume.
+      assert.ok(output.includes('"id": "earlier-live"'));
+      assert.ok(output.includes('"childRunId": "abcdef123456"'));
+      assert.ok(output.includes('"attemptNumber": 3'));
+      assert.ok(output.includes('"model": "replacement-model"'));
+      assert.ok(output.includes('"costUsd": 0.5'));
+      assert.ok(output.includes('"error": "Failure '));
+      assert.ok(output.includes('"omittedCalls": 2'));
+      assert.ok(
+        output.indexOf('"id": "earlier-live"') <
+          output.indexOf('"label": "Older failed"'),
+      );
+      assert.ok(!output.includes('"id": "completed-7"'));
+      assert.ok(!output.includes('call-tail'));
+      assert.ok(!output.includes('title-tail'));
+      assert.ok(!output.includes('error-tail'));
+      assert.ok(!output.includes('file-tail'));
+      assert.ok(output.length < 20_000);
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: PARENT_RUN_ID,
+            toolPolicy: {},
+          },
+        }),
       ),
+    ),
   );
 
-  it.live(
-    'keeps a failed call ahead of newer completed current-stage calls when bounded',
-    () =>
-      Effect.gen(function* () {
-        const runId = yield* registerWorkflowRun('failed-rank');
-        const base = Date.parse('2026-04-01T00:00:00.000Z');
-        const completedCalls = Array.from({ length: 8 }, (_, index) => {
-          const updatedAt = new Date(base + (index + 1) * 1_000).toISOString();
-          return {
-            id: `completed-${index}`,
-            label: `Completed ${index}`,
-            stageId: 'stage-2',
-            kind: 'document' as const,
+  it.live('shows a cancelled card without a per-call error', () =>
+    Effect.gen(function* () {
+      const runId = yield* registerWorkflowRun('cancelled-summary');
+      yield* publishWorkflowBoard(runId, {
+        calls: [
+          {
+            id: 'cancelled-call',
+            label: 'Cancelled call',
+            kind: 'document',
             files: { input: [], context: [], media: [] },
-            attempts: [],
-            status: 'completed' as const,
-            timestamps: {
-              createdAt: updatedAt,
-              updatedAt,
-              completedAt: updatedAt,
-            },
-          };
-        });
-        const failedAt = new Date(base).toISOString();
-        yield* writeWorkflowRunSnapshot(defaultSession(), runId, {
-          currentStageId: 'stage-2',
-          stages: [
-            {
-              id: 'stage-1',
-              title: 'Earlier stage',
-              order: 0,
-              startedAt: failedAt,
-            },
-            {
-              id: 'stage-2',
-              title: 'Current stage',
-              order: 1,
-              startedAt: failedAt,
-            },
-          ],
-          calls: [
-            {
-              id: 'older-failed',
-              label: 'Older failed',
-              stageId: 'stage-1',
-              kind: 'document',
-              files: { input: [], context: [], media: [] },
-              attempts: [
-                {
-                  number: 1,
-                  startedAt: failedAt,
-                  completedAt: failedAt,
-                },
-              ],
-              status: 'failed',
-              error: 'expected failure',
-              timestamps: {
-                createdAt: failedAt,
-                startedAt: failedAt,
-                updatedAt: failedAt,
-                completedAt: failedAt,
-              },
-            },
-            ...completedCalls,
-          ],
-          timestamps: { createdAt: failedAt, updatedAt: failedAt },
-        });
-
-        const result = yield* new ExecutionsTool().call({
-          path: `/executions/${runId}`,
-        });
-        const output = result.output ?? '';
-
-        assert.equal(result.status, 'executed');
-        assert.ok(output.includes('"id": "older-failed"'));
-        assert.ok(output.includes('"omittedCalls": 1'));
-        assert.ok(!output.includes('"id": "completed-0"'));
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: defaultSession(),
-              runId: PARENT_RUN_ID,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
-
-  it.live(
-    'keeps an earlier-stage live call ahead of current-stage terminal calls when bounded',
-    () =>
-      Effect.gen(function* () {
-        const runId = yield* registerWorkflowRun('ranked');
-        const timestamp = new Date().toISOString();
-        const terminalCalls = Array.from({ length: 8 }, (_, index) => ({
-          id: `current-terminal-${index}`,
-          label: `Current terminal ${index}`,
-          stageId: 'stage-2',
-          kind: 'document' as const,
-          files: { input: [], context: [], media: [] },
-          attempts: [],
-          status: 'completed' as const,
-          timestamps: {
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            completedAt: timestamp,
+            status: 'cancelled',
           },
-        }));
-        yield* writeWorkflowRunSnapshot(defaultSession(), runId, {
-          currentStageId: 'stage-2',
-          stages: [
-            {
-              id: 'stage-1',
-              title: 'Earlier stage',
-              order: 0,
-              startedAt: timestamp,
-            },
-            {
-              id: 'stage-2',
-              title: 'Current stage',
-              order: 1,
-              startedAt: timestamp,
-            },
-          ],
-          calls: [
-            ...terminalCalls,
-            {
-              id: 'earlier-live',
-              label: 'Earlier live',
-              stageId: 'stage-1',
-              kind: 'document',
-              files: { input: [], context: [], media: [] },
-              attempts: [{ number: 1, startedAt: timestamp }],
-              status: 'running',
-              timestamps: {
-                createdAt: timestamp,
-                startedAt: timestamp,
-                updatedAt: timestamp,
-              },
-            },
-          ],
-          timestamps: { createdAt: timestamp, updatedAt: timestamp },
-        });
+        ],
+      });
 
-        const result = yield* new ExecutionsTool().call({
-          path: `/executions/${runId}`,
-        });
-        const output = result.output ?? '';
+      const result = yield* new ExecutionsTool().call({
+        path: `/executions/${runId}`,
+      });
+      const output = result.output ?? '';
 
-        assert.equal(result.status, 'executed');
-        assert.ok(output.includes('"id": "earlier-live"'));
-        assert.ok(output.includes('"omittedCalls": 1'));
-        assert.ok(!output.includes('"id": "current-terminal-7"'));
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: defaultSession(),
-              runId: PARENT_RUN_ID,
-              toolPolicy: {},
-            },
-          }),
-        ),
+      assert.equal(result.status, 'executed');
+      assert.ok(output.includes('"status": "cancelled"'));
+      // A card issued outside any phase sits under the trailing heading.
+      assert.ok(output.includes('"title": "Unphased"'));
+      assert.ok(!output.includes('"error":'));
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: PARENT_RUN_ID,
+            toolPolicy: {},
+          },
+        }),
       ),
+    ),
   );
 
   it.live(

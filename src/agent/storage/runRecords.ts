@@ -25,7 +25,6 @@ import {
   type SessionEvent,
   type SessionEventDraft,
   type RunId,
-  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -170,14 +169,6 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
           (row) => row.aggregateId === id && row.type === 'run.report',
         );
         return event?.type === 'run.report' ? event.report : null;
-      }),
-    /** The committed snapshot of a workflow-script run, for reopening it. */
-    readWorkflow: (): Effect.Effect<WorkflowRunSnapshot | null, Error> =>
-      read((rows) => {
-        const event = rows.findLast(
-          (row) => row.aggregateId === id && row.type === 'run.workflow',
-        );
-        return event?.type === 'run.workflow' ? event.workflow : null;
       }),
     readWorkspaceFiles: (): Effect.Effect<string[], Error> =>
       read((rows) => {
