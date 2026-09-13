@@ -161,10 +161,16 @@ function anthropicCost(
       ? (provider.cacheCreationTokens ?? 0)
       : 0);
   const write1h = provider.cacheCreation1hTokens ?? 0;
+  // Tokens the API left unattributed to a TTL bucket still bill; charge them
+  // at the five-minute rate rather than dropping them from the turn.
+  const unclassified = Math.max(
+    0,
+    (provider.cacheCreationTokens ?? 0) - write5m - write1h,
+  );
   return (
     perMillion(uncached, inputPrice) +
     perMillion(cached, inputPrice * 0.1) +
-    perMillion(write5m, inputPrice * 1.25) +
+    perMillion(write5m + unclassified, inputPrice * 1.25) +
     perMillion(write1h, inputPrice * 2) +
     perMillion(usage.outputTokens ?? 0, outputPrice)
   );
