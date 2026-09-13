@@ -77,15 +77,21 @@ mkdirSync(FAKE_ROOT, { recursive: true });
 mkdirSync(FAKE_GLOBAL_STORAGE, { recursive: true });
 
 /**
- * Empties {@link FAKE_ROOT} and writes the seeded files into it. Keys are
- * paths inside the root, so `'/workspace/a.tex'` lands at
- * `fakePath('workspace/a.tex')`, under the default workspace root.
+ * The real file a seed key names. Keys are paths inside {@link FAKE_ROOT}, so
+ * `'/workspace/a.tex'` and `fakePath('workspace/a.tex')` name the same file:
+ * the first is the spelling a suite writes by hand, the second the one a path
+ * helper built on the installed roots produces.
  */
+function seedTarget(key: string): string {
+  return key.startsWith(FAKE_ROOT) ? key : fakePath(key);
+}
+
+/** Empties {@link FAKE_ROOT} and writes the seeded files into it. */
 function seedFakeRoot(files: Record<string, string | Uint8Array>): void {
   rmSync(FAKE_ROOT, { recursive: true, force: true });
   mkdirSync(FAKE_ROOT, { recursive: true });
-  for (const [target, content] of Object.entries(files)) {
-    const file = fakePath(target);
+  for (const [key, content] of Object.entries(files)) {
+    const file = seedTarget(key);
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, content);
   }
@@ -347,8 +353,9 @@ export interface FakePlatformOptions {
   workspaceState?: Record<string, unknown>;
   /**
    * Files seeded into {@link FAKE_ROOT} before the host is installed. Keys
-   * are paths inside that root, so `'/workspace/a.tex'` is written to
-   * `fakePath('workspace/a.tex')` — under the default workspace root.
+   * are paths inside that root: `'/workspace/a.tex'` and
+   * `fakePath('workspace/a.tex')` both name the same file, under the default
+   * workspace root.
    */
   files?: Record<string, string | Uint8Array>;
   secrets?: Record<string, string>;

@@ -9,6 +9,7 @@ import {
 } from '@latex/texTools';
 import * as logger from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas';
+import { fakePath } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
@@ -23,7 +24,7 @@ vi.mock('@utils/system/toolUtils', async (importOriginal) => {
   return { ...actual, runToolWithCheck: mocks.runToolWithCheck };
 });
 
-const workspacePath = '/workspace';
+const workspacePath = fakePath('workspace');
 
 function execResult(success: boolean): ExecResult {
   return {

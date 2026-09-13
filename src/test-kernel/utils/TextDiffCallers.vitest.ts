@@ -16,6 +16,7 @@ import {
 import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
 import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { computeAndWriteWorkflowDiffs } from '@tools/delegation/subagentResults';
 import {
@@ -33,8 +34,8 @@ function installFakePlatform(
 ): Promise<void> {
   return installPlatform({
     files,
-    storagePath: '/workspace/.texra/storage',
-    workspacePath: '/workspace',
+    storagePath: fakePath('workspace/.texra/storage'),
+    workspacePath: fakePath('workspace'),
   });
 }
 
@@ -54,16 +55,16 @@ describe('shared text-diff caller fixtures', () => {
           {
             round: 0,
             relativePath: 'section/paper.tex',
-            absolutePath: '/workspace/out/section/paper.tex',
+            absolutePath: fakePath('workspace/out/section/paper.tex'),
             location: 'workspace',
-            originalPath: '/workspace/original.tex',
+            originalPath: fakePath('workspace/original.tex'),
             added: 2,
             removed: 1,
           },
         ]),
       );
 
-      expect(result.get('/workspace/out/section/paper.tex')).toEqual({
+      expect(result.get(fakePath('workspace/out/section/paper.tex'))).toEqual({
         diffRelPath: 'diffs/section_paper.tex.diff',
         largeChange: true,
       });
@@ -109,7 +110,7 @@ describe('shared text-diff caller fixtures', () => {
           final,
         ).pipe(
           Effect.provide(
-            nativeToolTestLayer({ workingDirectory: '/workspace' }),
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
           ),
         );
 
@@ -119,7 +120,7 @@ describe('shared text-diff caller fixtures', () => {
         });
         expect(
           yield* Effect.tryPromise(() =>
-            AbsoluteFS.read('/workspace/paper.tex'),
+            AbsoluteFS.read(fakePath('workspace/paper.tex')),
           ),
         ).toBe('alpha\nBETA\nomega\nlocal\n');
       }),

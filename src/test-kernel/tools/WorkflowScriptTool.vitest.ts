@@ -6,6 +6,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { getRunRecords } from '@agent/storage';
@@ -27,7 +28,10 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { convertToolSchema } from '@agent/runtime/run/toolSchema';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
-setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
+setupPlatform({
+  storagePath: fakePath('storage'),
+  workspacePath: fakePath('workspace'),
+});
 
 const mocks = vi.hoisted(() => ({
   registerRun: vi.fn(),

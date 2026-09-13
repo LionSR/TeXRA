@@ -14,6 +14,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { StorageFS } from '@utils/files/storageFS';
 
 const parentRunId = 'aaaaaa111111' as RunId;
@@ -21,7 +22,10 @@ const childRunId = 'bbbbbb222222' as RunId;
 const otherParentRunId = 'cccccc333333' as RunId;
 const relativePath = 'r1/draft.tex';
 
-setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
+setupPlatform({
+  storagePath: fakePath('storage'),
+  workspacePath: fakePath('workspace'),
+});
 let session: SessionHandle;
 beforeEach(() => {
   session = createProcessSession();
@@ -149,7 +153,11 @@ describe('resolveChildRunOutput', () => {
   it('rejects paths outside run storage', async () => {
     await expect(
       Effect.runPromise(
-        resolveChildRunOutput(parentRunId, '/workspace/draft.tex', session),
+        resolveChildRunOutput(
+          parentRunId,
+          fakePath('workspace/draft.tex'),
+          session,
+        ),
       ),
     ).rejects.toThrow('not inside task-run storage');
   });

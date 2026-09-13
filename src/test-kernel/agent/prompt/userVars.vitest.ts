@@ -37,7 +37,7 @@ import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { FakeConfigProvider, fakePath } from '@test/support/FakePlatform';
 
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.
@@ -120,10 +120,10 @@ describe('buildUserVars runtime skill diagnostics', () => {
       baseConfig,
       { ...baseSetting, agentCategory: AgentCategory.ToolUse },
       basePrompt,
-      '/agents/generic',
+      fakePath('agents/generic'),
       { isOpenai: false, isAnthropic: false, isGoogle: false },
       spiedTrace({ warn, emit }),
-      { workspacePath: '/workspace' },
+      { workspacePath: fakePath('workspace') },
     );
 
     expect(vars.AVAILABLE_SKILLS).toBe('');
@@ -141,10 +141,10 @@ describe('buildUserVars runtime skill diagnostics', () => {
       baseConfig,
       { ...baseSetting, agentCategory: AgentCategory.ToolUse },
       basePrompt,
-      '/agents/generic',
+      fakePath('agents/generic'),
       { isOpenai: false, isAnthropic: false, isGoogle: false },
       spiedTrace({ warn, emit }),
-      { workspacePath: '/workspace' },
+      { workspacePath: fakePath('workspace') },
     );
 
     expect(vars.AVAILABLE_SKILLS).toBe('');
@@ -174,10 +174,10 @@ describe('buildUserVars runtime skill diagnostics', () => {
       baseConfig,
       { ...baseSetting, agentCategory: AgentCategory.ToolUse },
       basePrompt,
-      '/agents/generic',
+      fakePath('agents/generic'),
       { isOpenai: false, isAnthropic: false, isGoogle: false },
       spiedTrace({ emit }),
-      { workspacePath: '/workspace' },
+      { workspacePath: fakePath('workspace') },
     );
 
     expect(emit).toHaveBeenCalledExactlyOnceWith({
@@ -199,10 +199,10 @@ describe('buildUserVars runtime skill diagnostics', () => {
       baseConfig,
       baseSetting,
       basePrompt,
-      '/agents/generic',
+      fakePath('agents/generic'),
       { isOpenai: false, isAnthropic: false, isGoogle: false },
       spiedTrace({ emit }),
-      { workspacePath: '/workspace' },
+      { workspacePath: fakePath('workspace') },
     );
 
     expect(emit).not.toHaveBeenCalled();
@@ -275,17 +275,17 @@ function buildVars(
     agentConfig,
     agentSetting,
     agentPrompt,
-    '/agents/generic',
+    fakePath('agents/generic'),
     { isOpenai: false, isAnthropic: false, isGoogle: false },
     noopTrace,
-    { workspacePath: '/workspace' },
+    { workspacePath: fakePath('workspace') },
   );
 }
 
 describe('buildUserVars with missing configured files', () => {
   beforeEach(async () => {
     await installPlatform({
-      workspacePath: '/workspace',
+      workspacePath: fakePath('workspace'),
       files: {
         '/workspace/present.tex': 'present input',
         '/workspace/context.tex': 'present context',
@@ -341,11 +341,11 @@ describe('buildUserVars with missing configured files', () => {
 });
 
 describe('requiredFilesInternal custom variables', () => {
-  const briefPath = path.resolve('/agents/generic', 'brief.txt');
+  const briefPath = fakePath('agents/generic', 'brief.txt');
 
   beforeEach(async () => {
     await installPlatform({
-      workspacePath: '/workspace',
+      workspacePath: fakePath('workspace'),
       files: { [briefPath]: 'briefing notes' },
     });
   });

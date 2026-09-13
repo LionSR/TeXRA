@@ -66,6 +66,7 @@ import {
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { generateRunId, isObject } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
@@ -224,8 +225,8 @@ vi.mock('@agent/prompt/PromptBuilder', () => ({
 }));
 
 setupPlatform({
-  storagePath: '/storage',
-  workspacePath: '/workspace',
+  storagePath: fakePath('storage'),
+  workspacePath: fakePath('workspace'),
   workspaceState: {
     [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
   },
@@ -662,8 +663,8 @@ describe('the reflection round loop', () => {
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         installPlatform({
-          storagePath: '/storage',
-          workspacePath: '/workspace',
+          storagePath: fakePath('storage'),
+          workspacePath: fakePath('workspace'),
           workspaceState: {
             [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: false,
           },

@@ -8,6 +8,7 @@ import { beforeEach, describe, expect } from 'vitest';
 
 // Local imports
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { ReadFileTool } from '@tools/ReadTool';
 
@@ -21,13 +22,15 @@ const callRead = (input: unknown) =>
   new ReadFileTool()
     .call(input)
     .pipe(
-      Effect.provide(nativeToolTestLayer({ workingDirectory: '/workspace' })),
+      Effect.provide(
+        nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+      ),
     );
 
 describe('read_file line ranges', () => {
   beforeEach(async () => {
     await installFakePlatform({
-      workspacePath: '/workspace',
+      workspacePath: fakePath('workspace'),
       files: {
         '/workspace/large.txt': LARGE,
         '/workspace/small.txt': SMALL,

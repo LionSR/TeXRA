@@ -10,9 +10,10 @@ import type { RunId } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { listRunGeneratedFiles } from '@tools/executions/runGeneratedFiles';
+import { fakePath } from '@test/support/FakePlatform';
 
 const EXECUTION_ID = 'generated-history-test' as RunId;
-const STORAGE_PATH = path.join(path.sep, 'storage');
+const STORAGE_PATH = fakePath('storage');
 const RUN_PATH = path.join(STORAGE_PATH, 'executions', EXECUTION_ID);
 
 function fsError(code: string, message: string): Error {
@@ -56,7 +57,8 @@ describe('listRunGeneratedFiles', () => {
 
         expect(yield* listRunGeneratedFiles(EXECUTION_ID, session)).toEqual([
           { path: 'blocked.tex', size: 7, isDirectory: false },
-          { path: 'sub', size: 0, isDirectory: true },
+          // A real directory's size is the filesystem's own bookkeeping.
+          { path: 'sub', size: expect.any(Number), isDirectory: true },
           { path: 'sub/nested.tex', size: 6, isDirectory: false },
           { path: 'unreadable.tex', size: 10, isDirectory: false },
           { path: 'z.tex', size: 3, isDirectory: false },
