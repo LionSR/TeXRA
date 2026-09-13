@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 // Launch and resume coverage for the claude_agent tool. The resume fallback
 // applies when a caller passes a session_id whose in-memory
 // ClaudeAgentSessions registry entry is gone (extension reload, host crash, or
@@ -8,7 +8,6 @@ import { Effect, Fiber } from 'effect';
 // asynchronous setup, while concurrent calls wait for that loop and then
 // enqueue through the ordinary follow-up path.
 
-import pDefer from 'p-defer';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type {
@@ -245,9 +244,12 @@ describe('claude_agent tool launch and resume fallback', () => {
   it.live('logs a detached run-loop rejection through the child trace', () =>
     Effect.gen(function* () {
       const childRun = createFakeAgentCliChildRun(childRunId);
+      const logged = yield* Deferred.make<void>();
       const error = vi
         .spyOn(childRun.logger, 'error')
-        .mockImplementation(() => {});
+        .mockImplementation(() => {
+          Deferred.doneUnsafe(logged, Effect.void);
+        });
       const lateFailure = new Error('late Claude finalization failed');
       mocks.createChildRun.mockReturnValue(Effect.succeed(childRun));
       mocks.startChildRunLoop.mockReturnValue(
@@ -257,13 +259,12 @@ describe('claude_agent tool launch and resume fallback', () => {
       expect(
         yield* new ClaudeAgentTool().call({ prompt: 'launch Claude' }),
       ).toMatchObject({ status: 'executed' });
-      yield* Effect.promise(() =>
-        vi.waitFor(() => {
-          expect(error).toHaveBeenCalledWith(
-            'Claude Agent run loop failed after launch',
-            { data: lateFailure },
-          );
-        }),
+      // The detached loop fiber writes this log on the same runtime, so the
+      // spy itself is the wake; nothing is polled.
+      yield* Deferred.await(logged);
+      expect(error).toHaveBeenCalledWith(
+        'Claude Agent run loop failed after launch',
+        { data: lateFailure },
       );
     }).pipe(
       Effect.provide(
@@ -366,8 +367,9 @@ describe('claude_agent tool launch and resume fallback', () => {
     'launches one fallback loop when concurrent calls use the same stale session_id',
     () =>
       Effect.gen(function* () {
-        const envStarted = pDefer<void>();
-        const envReady = pDefer<NodeJS.ProcessEnv>();
+        const envStarted = yield* Deferred.make<void>();
+        const envReady = yield* Deferred.make<NodeJS.ProcessEnv>();
+        const secondDispatching = yield* Deferred.make<void>();
         const runs = stubRuns();
         const captured = captureStrategy();
         // The launch path generates the child's run id, and that id is both the
@@ -380,10 +382,21 @@ describe('claude_agent tool launch and resume fallback', () => {
             return Effect.succeed(createFakeAgentCliChildRun(runId));
           },
         );
-        mocks.buildClaudeAgentEnv.mockImplementation(() => {
-          envStarted.resolve(undefined);
-          return Effect.promise(() => envReady.promise);
-        });
+        mocks.buildClaudeAgentEnv.mockImplementation(() =>
+          Deferred.succeed(envStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(envReady)),
+          ),
+        );
+        // The second call's approval is the last step before it claims the id,
+        // so completing the gate there proves it reached the fallback wait
+        // rather than asserting on a fiber that has not started yet.
+        mocks.requestBashApproval
+          .mockReturnValueOnce(Effect.succeed({ action: 'approve' }))
+          .mockImplementationOnce(() =>
+            Deferred.succeed(secondDispatching, undefined).pipe(
+              Effect.as({ action: 'approve' }),
+            ),
+          );
 
         const tool = new ClaudeAgentTool();
         const first = yield* Effect.forkChild(
@@ -392,7 +405,7 @@ describe('claude_agent tool launch and resume fallback', () => {
             session_id: 'stale-session',
           }),
         );
-        yield* Effect.promise(() => envStarted.promise);
+        yield* Deferred.await(envStarted);
 
         const second = yield* Effect.forkChild(
           tool.call({
@@ -400,12 +413,12 @@ describe('claude_agent tool launch and resume fallback', () => {
             session_id: 'stale-session',
           }),
         );
-        yield* Effect.promise(() => Promise.resolve());
+        yield* Deferred.await(secondDispatching);
 
         expect(mocks.buildClaudeAgentEnv).toHaveBeenCalledTimes(1);
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
 
-        envReady.resolve({});
+        yield* Deferred.succeed(envReady, {});
         const firstResult = yield* Fiber.join(first);
         captured.strategy?.onTurnSuccess?.({ sessionId: 'stale-session' }, {
           runs,
@@ -464,18 +477,28 @@ describe('claude_agent tool launch and resume fallback', () => {
     'lets a waiting caller own the fallback after the first launch fails',
     () =>
       Effect.gen(function* () {
-        const firstEnvStarted = pDefer<void>();
-        const firstEnv = pDefer<NodeJS.ProcessEnv>();
+        const firstEnvStarted = yield* Deferred.make<void>();
+        const firstEnv = yield* Deferred.make<NodeJS.ProcessEnv>();
+        const secondDispatching = yield* Deferred.make<void>();
         const captured = captureStrategy();
         mocks.buildClaudeAgentEnv
-          .mockImplementationOnce(() => {
-            firstEnvStarted.resolve(undefined);
+          .mockImplementationOnce(() =>
             // A rejected env read was a rejected Promise collaborator before the
             // conversion; as an Effect with no failure channel it stays a defect,
             // so the tool still surfaces it as an error result.
-            return Effect.promise(() => firstEnv.promise);
-          })
+            Deferred.succeed(firstEnvStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(firstEnv)),
+            ),
+          )
           .mockReturnValueOnce(Effect.succeed({}));
+        // The second call's approval is the last step before it claims the id.
+        mocks.requestBashApproval
+          .mockReturnValueOnce(Effect.succeed({ action: 'approve' }))
+          .mockImplementationOnce(() =>
+            Deferred.succeed(secondDispatching, undefined).pipe(
+              Effect.as({ action: 'approve' }),
+            ),
+          );
 
         const tool = new ClaudeAgentTool();
         const first = yield* Effect.forkChild(
@@ -484,16 +507,16 @@ describe('claude_agent tool launch and resume fallback', () => {
             session_id: 'stale-session',
           }),
         );
-        yield* Effect.promise(() => firstEnvStarted.promise);
+        yield* Deferred.await(firstEnvStarted);
         const second = yield* Effect.forkChild(
           tool.call({
             prompt: 'retry from the waiter',
             session_id: 'stale-session',
           }),
         );
-        yield* Effect.promise(() => Promise.resolve());
+        yield* Deferred.await(secondDispatching);
 
-        firstEnv.reject(new Error('first environment failed'));
+        yield* Deferred.die(firstEnv, new Error('first environment failed'));
         const [firstResult, secondResult] = yield* Effect.all([
           Fiber.join(first),
           Fiber.join(second),

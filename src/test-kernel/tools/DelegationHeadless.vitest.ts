@@ -2,9 +2,9 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { Effect, Fiber, Stream } from 'effect';
-import { it as effectIt } from '@effect/vitest';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Deferred, Effect, Fiber, Stream } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
@@ -29,23 +29,11 @@ import {
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
-import { executeStableSubagentInBand as executeStableSubagentInBandEffect } from '@tools/delegation/inBandSubagentRun';
+import { executeStableSubagentInBand } from '@tools/delegation/inBandSubagentRun';
 import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { deriveRunId } from '@utils/core/idHash';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-
-/** Drive the native operation at the test entry point. */
-function executeStableSubagentInBand(
-  options: Parameters<typeof executeStableSubagentInBandEffect>[0],
-) {
-  return Effect.runPromise(
-    Effect.provide(
-      executeStableSubagentInBandEffect(options),
-      fakeProcessServices(),
-    ),
-  );
-}
 
 const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
@@ -230,27 +218,28 @@ function answerOpenedRequests(
   session: SessionHandle,
   decision: RequestDecision,
 ) {
-  const openedKinds: string[] = [];
-  const fiber = Effect.runFork(
-    Stream.runForEach(session.events.all(session.now()), (event) =>
-      Effect.sync(() => {
-        if (event.type !== 'request.opened') return;
-        openedKinds.push(event.payload.kind);
-        session.publish([
-          {
-            type: 'request.decided',
-            aggregateId: event.aggregateId,
-            requestId: event.requestId,
-            decision,
-          },
-        ]);
-      }),
-    ),
-  );
-  return {
-    openedKinds,
-    stop: () => Fiber.interrupt(fiber),
-  };
+  return Effect.gen(function* () {
+    const openedKinds: string[] = [];
+    // The collector lives for the enclosing scope, so the test scope owns its
+    // interruption instead of a hand-written stop finalizer.
+    yield* Effect.forkScoped(
+      Stream.runForEach(session.events.all(session.now()), (event) =>
+        Effect.sync(() => {
+          if (event.type !== 'request.opened') return;
+          openedKinds.push(event.payload.kind);
+          session.publish([
+            {
+              type: 'request.decided',
+              aggregateId: event.aggregateId,
+              requestId: event.requestId,
+              decision,
+            },
+          ]);
+        }),
+      ),
+    );
+    return { openedKinds };
+  });
 }
 
 /** The same delegation routed through the request protocol, with `decision`
@@ -263,24 +252,32 @@ function delegateWithProposalDecision(
   return Effect.scoped(
     Effect.gen(function* () {
       mocks.isProposalBypassed.mockReturnValue(false);
-      const session = createTestSession();
-      const decider = answerOpenedRequests(session, decision);
-      yield* Effect.addFinalizer(() =>
-        decider
-          .stop()
-          .pipe(Effect.ensuring(Effect.sync(() => session.dispose()))),
+      const launched = yield* Deferred.make<void>();
+      if (options.expectLaunch) {
+        const base = mocks.executeAgent.getMockImplementation();
+        mocks.executeAgent.mockImplementation((...args: unknown[]) => {
+          Deferred.doneUnsafe(launched, Effect.void);
+          return base?.(...args);
+        });
+      }
+      // Acquire the session before forking the collector, so the scope
+      // interrupts the collector first and disposes the session after.
+      const session = yield* Effect.acquireRelease(
+        Effect.sync(() => createTestSession()),
+        (handle) => Effect.sync(() => handle.dispose()),
       );
+      const decider = yield* answerOpenedRequests(session, decision);
       // A request is a row on its run, so the parent run must exist first.
       publishTestRunStart(session, PARENT_RUN_ID);
       yield* Effect.promise(() => session.settlePublications());
       const result = yield* callDelegateReview(parentRunContext({ session }));
       // A detached child commits its `child.turn` row before its first turn
       // runs, so the launch is not observable the moment the tool returns and
-      // the session must not be disposed out from under it.
+      // the session must not be disposed out from under it. The launch mock
+      // completes the deferred from the child fiber itself.
       if (options.expectLaunch) {
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalled()),
-        );
+        yield* Deferred.await(launched);
+        expect(mocks.executeAgent).toHaveBeenCalled();
       }
       yield* waitForChildrenEffect(session);
       return result;
@@ -334,7 +331,7 @@ function runInBand(
     session: prepared.session,
     signal,
     prepare: () => Effect.succeed(prepared),
-  });
+  }).pipe(Effect.provide(fakeProcessServices()));
 }
 
 /**
@@ -355,17 +352,6 @@ function mockExecuteAgentErrorOnce(
     };
     await options.onRunError?.(new Error('review model failed'), failed);
     return failed;
-  });
-}
-
-/** The shared rejection shape when the child failed AND its manifest write failed. */
-async function expectDurabilityErrorPreservingChildFailure(
-  run: Promise<unknown>,
-): Promise<void> {
-  await expect(run).rejects.toMatchObject({
-    name: 'SubagentDurabilityError',
-    message: expect.stringContaining('review model failed'),
-    cause: expect.objectContaining({ name: 'AggregateError' }),
   });
 }
 
@@ -414,13 +400,13 @@ function attemptRunId(logicalRunId: RunId, attempt: number): RunId {
  * attempts it reserved, and each attempt's phase. Both live on the launching
  * run's aggregate, keyed inside the payload.
  */
-async function seedStableMarkers(
+function seedStableMarkers(
   logicalRunId: RunId,
   nextAttempt: number,
   attempts: ReadonlyArray<{ attempt: number; phase: StableSubagentPhase }> = [],
-): Promise<void> {
+) {
   const aggregate = aggregateId('run', STABLE_PARENT_RUN_ID);
-  stableSession.publish([
+  const rows = [
     ...(nextAttempt > 0
       ? [
           {
@@ -438,8 +424,11 @@ async function seedStableMarkers(
       logicalRunId,
       phase,
     })),
-  ]);
-  await stableSession.settlePublications();
+  ];
+  return Effect.promise(async () => {
+    stableSession.publish(rows);
+    await stableSession.settlePublications();
+  });
 }
 
 /**
@@ -646,7 +635,7 @@ describe('headless delegation', () => {
     });
   });
 
-  effectIt.effect(
+  it.effect(
     'validates workflow inputs against its once-loaded definition before registration',
     () =>
       Effect.gen(function* () {
@@ -666,18 +655,7 @@ describe('headless delegation', () => {
             model: 'deepseekT',
           },
         });
-        const { signal, ...prepared } = options;
-        const run = () =>
-          Effect.provide(
-            executeStableSubagentInBandEffect({
-              runId: IN_BAND_LOGICAL_RUN_ID,
-              parentRunId: prepared.parentRunId,
-              session: prepared.session,
-              signal,
-              prepare: () => Effect.succeed(prepared),
-            }),
-            fakeProcessServices(),
-          );
+        const run = () => runInBand(options);
         expect(yield* Effect.flip(run())).toMatchObject({
           name: 'WorkflowRunAbortError',
           message: expect.stringContaining('pass options.inputFiles'),
@@ -719,7 +697,7 @@ describe('headless delegation', () => {
     stableSession.dispose();
   });
 
-  effectIt.effect('awaits child delegation during one-shot tool-use runs', () =>
+  it.effect('awaits child delegation during one-shot tool-use runs', () =>
     Effect.gen(function* () {
       const result = yield* callDelegateReview(
         parentRunContext({ stopAfterCycle: true }),
@@ -749,593 +727,712 @@ describe('headless delegation', () => {
     }),
   );
 
-  it('composes durable workflow calls through the native launch primitive', async () => {
-    const result = await runInBand(
-      delegationOptions({ workflowPhase: 'proof-review' }),
-    );
+  it.effect(
+    'composes durable workflow calls through the native launch primitive',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* runInBand(
+          delegationOptions({ workflowPhase: 'proof-review' }),
+        );
 
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({ agent: 'review' }),
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            config: expect.objectContaining({ agent: 'review' }),
+          }),
+          result.runId,
+          expect.objectContaining({
+            stopAfterCycle: true,
+            workflowPhase: 'proof-review',
+          }),
+        );
+        expect(result.result).toEqual({
+          outcome: 'completed',
+          output: {
+            category: 'toolUse',
+            response: 'The proof is correct.',
+            files: [],
+          },
+        });
+        // The single driver persists the report alongside the manifest for every
+        // child — a scripted grandchild is debuggable through the same artifacts
+        // as any detached child (this closed item 10's report gap).
+        expect(mocks.writeReport).toHaveBeenCalled();
+        expect(mocks.registerRun).toHaveBeenCalledWith(
+          stableSession,
+          result.runId,
+          expect.objectContaining({ agent: 'review' }),
+          'review',
+          expect.objectContaining({ parentRunId: STABLE_PARENT_RUN_ID }),
+        );
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expect.objectContaining({
+            producer: 'subagent',
+            agentName: 'review',
+            wallTimeMs: expect.any(Number),
+            output: result.result.output,
+          }),
+        );
+        expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
+          mocks.releaseOwnedRunLease.mock.invocationCallOrder[0],
+        );
       }),
-      result.runId,
-      expect.objectContaining({
-        stopAfterCycle: true,
-        workflowPhase: 'proof-review',
-      }),
-    );
-    expect(result.result).toEqual({
-      outcome: 'completed',
-      output: {
-        category: 'toolUse',
-        response: 'The proof is correct.',
-        files: [],
-      },
-    });
-    // The single driver persists the report alongside the manifest for every
-    // child — a scripted grandchild is debuggable through the same artifacts
-    // as any detached child (this closed item 10's report gap).
-    expect(mocks.writeReport).toHaveBeenCalled();
-    expect(mocks.registerRun).toHaveBeenCalledWith(
-      stableSession,
-      result.runId,
-      expect.objectContaining({ agent: 'review' }),
-      'review',
-      expect.objectContaining({ parentRunId: STABLE_PARENT_RUN_ID }),
-    );
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        producer: 'subagent',
-        agentName: 'review',
-        wallTimeMs: expect.any(Number),
-        output: result.result.output,
-      }),
-    );
-    expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.releaseOwnedRunLease.mock.invocationCallOrder[0],
-    );
-  });
-
-  it('commits stable success after artifact drain but before lease release', async () => {
-    const logicalRunId = 'cccccc666666' as RunId;
-    const order: string[] = [];
-    const markers = watchAttemptMarkers(order);
-    const settle = stableSession.flushArtifacts.bind(stableSession);
-    const drain = vi
-      .spyOn(stableSession, 'flushArtifacts')
-      .mockImplementation(async () => {
-        order.push('drain');
-        await settle();
-      });
-    mocks.releaseOwnedRunLease.mockImplementationOnce(async () => {
-      order.push('release');
-    });
-
-    try {
-      await runInBand(delegationOptions(), logicalRunId);
-    } finally {
-      drain.mockRestore();
-      markers.mockRestore();
-    }
-
-    expect(order).toContain('launched');
-    expect(order.lastIndexOf('drain')).toBeLessThan(order.indexOf('committed'));
-    expect(order.indexOf('committed')).toBeLessThan(order.indexOf('release'));
-    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledOnce();
-  });
-
-  it('releases the lease even when the post-drain stable commit fails', async () => {
-    const logicalRunId = 'cccccc777777' as RunId;
-    const phases: string[] = [];
-    const markers = watchAttemptMarkers(
-      phases,
-      (phase) => phase === 'committed',
-    );
-
-    try {
-      await expect(
-        runInBand(delegationOptions(), logicalRunId),
-      ).rejects.toMatchObject({
-        name: 'SubagentCommitError',
-        message: expect.stringContaining('Failed to commit durable completion'),
-        cause: expect.objectContaining({ _tag: 'DatabaseWriteFailed' }),
-      });
-    } finally {
-      markers.mockRestore();
-    }
-
-    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(logicalRunId);
-    expect(phases).toContain('launched');
-    expect(phases).not.toContain('retryable');
-  });
-
-  it('recovers committed success when lease deletion fails', async () => {
-    const logicalRunId = 'cccccc999999' as RunId;
-    const childRecords = memoryChildRecords();
-    const releaseError = new Error('lease deletion failed');
-    const phases: string[] = [];
-    const markers = watchAttemptMarkers(phases);
-    useChildRecords(childRecords);
-    mocks.releaseOwnedRunLease.mockRejectedValueOnce(releaseError);
-
-    try {
-      await expect(
-        runInBand(delegationOptions(), logicalRunId),
-      ).rejects.toMatchObject({
-        name: 'SubagentDurabilityError',
-        message: expect.stringContaining('committed durable completion'),
-        cause: releaseError,
-      });
-      await expect(
-        runInBand(delegationOptions(), logicalRunId),
-      ).resolves.toMatchObject({ runId: logicalRunId });
-    } finally {
-      markers.mockRestore();
-    }
-
-    expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    expect(phases).toContain('committed');
-    expect(phases).not.toContain('retryable');
-  });
-
-  it('records a failed child cost once for durable in-band run', async () => {
-    const onCost = vi.fn();
-    mockExecuteAgentErrorOnce(0.61, {
-      runId: IN_BAND_LOGICAL_RUN_ID,
-      output: {
-        category: 'toolUse',
-        response: 'Partial review.',
-        files: [],
-      },
-    });
-
-    await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
-      'review model failed',
-    );
-
-    expect(onCost).toHaveBeenCalledOnce();
-    expect(onCost).toHaveBeenCalledWith(0.61);
-    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        output: expect.objectContaining({ response: 'Partial review.' }),
-      }),
-    );
-  });
-
-  it('persists a cost-bearing WAITING result as a durable single-cycle failure', async () => {
-    const onCost = vi.fn();
-    mocks.executeAgent.mockResolvedValueOnce({
-      outcome: RUN_PHASE.WAITING,
-      runId: IN_BAND_LOGICAL_RUN_ID,
-      output: {
-        category: 'toolUse',
-        response: 'Waiting for clarification.',
-        files: [],
-      },
-      usage: { totalCost: 0.73 },
-    });
-
-    await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
-      `Single-cycle subagent ${IN_BAND_LOGICAL_RUN_ID} unexpectedly suspended.`,
-    );
-
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.any(Object),
-      IN_BAND_LOGICAL_RUN_ID,
-      expect.objectContaining({
-        parentRunId: STABLE_PARENT_RUN_ID,
-        stopAfterCycle: true,
-      }),
-    );
-    expect(onCost).toHaveBeenCalledOnce();
-    expect(onCost).toHaveBeenCalledWith(0.73);
-    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        output: expect.objectContaining({
-          response: 'Waiting for clarification.',
-        }),
-      }),
-    );
-  });
-
-  it('recovers a completed stable child before resolving launch prerequisites', async () => {
-    const stableRunId = 'cccccc333333' as RunId;
-    const persistedResult = {
-      outcome: 'completed' as const,
-      output: {
-        category: 'toolUse' as const,
-        response: 'Recovered review.',
-        files: [],
-      },
-    };
-    await seedStableMarkers(stableRunId, 1, [
-      { attempt: 0, phase: 'committed' },
-    ]);
-    useChildRecords(completedChildRecords(persistedResult));
-    const prepare = vi.fn(() =>
-      Effect.fail(new Error('current agent is unavailable')),
-    );
-
-    await expect(
-      executeStableSubagentInBand({
-        runId: stableRunId,
-        parentRunId: STABLE_PARENT_RUN_ID,
-        session: stableSession,
-        prepare,
-      }),
-    ).resolves.toEqual({
-      runId: stableRunId,
-      result: persistedResult,
-    });
-    expect(prepare).not.toHaveBeenCalled();
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
-    expect(mocks.writeResultMeta).not.toHaveBeenCalled();
-  });
-
-  it('recovers a later completed attempt when an earlier child was deleted', async () => {
-    const logicalRunId = 'cccccc444444' as RunId;
-    const persistedResult = {
-      outcome: 'completed' as const,
-      output: {
-        category: 'toolUse' as const,
-        response: 'Recovered later attempt.',
-        files: [],
-      },
-    };
-    await seedStableMarkers(logicalRunId, 2, [
-      { attempt: 1, phase: 'committed' },
-    ]);
-    const missingRecords = emptyChildRecords();
-    const completedRecords = completedChildRecords(persistedResult);
-    mocks.childRecords.mockImplementation((runId: RunId) =>
-      runId === logicalRunId ? missingRecords : completedRecords,
-    );
-    const prepare = vi.fn();
-
-    const recovered = await executeStableSubagentInBand({
-      runId: logicalRunId,
-      parentRunId: STABLE_PARENT_RUN_ID,
-      session: stableSession,
-      prepare,
-    });
-
-    expect(recovered.result).toEqual(persistedResult);
-    expect(recovered.runId).not.toBe(logicalRunId);
-    expect(prepare).not.toHaveBeenCalled();
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
-  });
-
-  it('refuses to repeat a committed child whose result manifest is missing', async () => {
-    const logicalRunId = 'cccccc888888' as RunId;
-    await seedStableMarkers(logicalRunId, 1, [
-      { attempt: 0, phase: 'committed' },
-    ]);
-    useChildRecords(emptyChildRecords());
-
-    await expect(
-      runInBand(delegationOptions(), logicalRunId),
-    ).rejects.toBeInstanceOf(SubagentDurabilityError);
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
-  });
-
-  it('refuses to repeat an incomplete stable child', async () => {
-    const logicalRunId = 'dddddd444444' as RunId;
-    await seedStableMarkers(logicalRunId, 1);
-    useChildRecords(emptyChildRecords());
-
-    await expect(
-      runInBand(delegationOptions(), logicalRunId),
-    ).rejects.toBeInstanceOf(SubagentDurabilityError);
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
-  });
-
-  it.each(['reserved', 'retryable'] as const)(
-    'retries a %s child without a result manifest',
-    async (phase) => {
-      const logicalRunId = 'dddddd555555' as RunId;
-      await seedStableMarkers(logicalRunId, 1, [{ attempt: 0, phase }]);
-      const records = new Map<RunId, ReturnType<typeof emptyChildRecords>>();
-      mocks.childRecords.mockImplementation((id: RunId) => {
-        let child = records.get(id);
-        if (!child) {
-          child = emptyChildRecords();
-          records.set(id, child);
-        }
-        return child;
-      });
-
-      const completed = await runInBand(delegationOptions(), logicalRunId);
-
-      expect(completed.runId).not.toBe(logicalRunId);
-      expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    },
   );
 
-  it('refuses to repeat a completed stable child when its manifest cannot be written', async () => {
-    const logicalRunId = 'dddddd666666' as RunId;
-    const phases: string[] = [];
-    const markers = watchAttemptMarkers(phases);
-    mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
-    useChildRecords({
-      ...emptyChildRecords(),
-      writeResultMeta: mocks.writeResultMeta,
-    });
-    const options = delegationOptions();
+  it.effect(
+    'commits stable success after artifact drain but before lease release',
+    () =>
+      Effect.gen(function* () {
+        const logicalRunId = 'cccccc666666' as RunId;
+        const order: string[] = [];
+        const markers = watchAttemptMarkers(order);
+        const settle = stableSession.flushArtifacts.bind(stableSession);
+        const drain = vi
+          .spyOn(stableSession, 'flushArtifacts')
+          .mockImplementation(async () => {
+            order.push('drain');
+            await settle();
+          });
+        mocks.releaseOwnedRunLease.mockImplementationOnce(async () => {
+          order.push('release');
+        });
 
-    try {
-      await expect(runInBand(options, logicalRunId)).rejects.toBeInstanceOf(
-        SubagentDurabilityError,
-      );
+        try {
+          yield* runInBand(delegationOptions(), logicalRunId);
+        } finally {
+          drain.mockRestore();
+          markers.mockRestore();
+        }
 
-      expect(phases.at(-1)).toBe('launched');
-      await expect(runInBand(options, logicalRunId)).rejects.toBeInstanceOf(
-        SubagentDurabilityError,
-      );
-    } finally {
-      markers.mockRestore();
-    }
-    expect(mocks.executeAgent).toHaveBeenCalledOnce();
-  });
-
-  it('uses a new durable attempt after failed and cancelled children', async () => {
-    const logicalRunId = 'eeeeee555555' as RunId;
-    const priorOutcomes = ['failed', 'cancelled'] as const;
-    await seedStableMarkers(logicalRunId, 0, [
-      { attempt: 0, phase: 'committed' },
-      { attempt: 1, phase: 'committed' },
-    ]);
-    const records = new Map<RunId, Record<string, unknown>>();
-    mocks.childRecords.mockImplementation((id: RunId) => {
-      let child = records.get(id);
-      if (child) return child;
-      const priorOutcome = priorOutcomes[records.size];
-      child = priorOutcome
-        ? completedChildRecords({
-            outcome: priorOutcome,
-            output: { category: 'toolUse', response: '', files: [] },
-          })
-        : emptyChildRecords();
-      records.set(id, child);
-      return child;
-    });
-
-    const completed = await runInBand(delegationOptions(), logicalRunId);
-
-    expect(completed.runId).not.toBe(logicalRunId);
-    expect(records.size).toBe(3);
-    expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    expect(mocks.registerRun).toHaveBeenCalledWith(
-      stableSession,
-      completed.runId,
-      expect.anything(),
-      'review',
-      expect.objectContaining({ parentRunId: STABLE_PARENT_RUN_ID }),
-    );
-  });
-
-  it('does not commit a cancelled stable child as successful', async () => {
-    const logicalRunId = 'eeeeee666666' as RunId;
-    const phases: string[] = [];
-    const markers = watchAttemptMarkers(phases);
-    useChildRecords(memoryChildRecords());
-    mocks.executeAgent.mockResolvedValueOnce({
-      outcome: 'cancelled',
-      runId: logicalRunId,
-      output: { category: 'toolUse', response: '', files: [] },
-    });
-
-    let completed;
-    try {
-      completed = await runInBand(delegationOptions(), logicalRunId);
-    } finally {
-      markers.mockRestore();
-    }
-
-    expect(completed.result.outcome).toBe('cancelled');
-    expect(phases).not.toContain('committed');
-  });
-
-  it('does not return a typed result when its durable manifest cannot be written', async () => {
-    mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
-
-    await expect(runInBand(delegationOptions())).rejects.toBeInstanceOf(
-      SubagentDurabilityError,
-    );
-    // The single driver persists the report independently of the manifest;
-    // the manifest read-back is what gates the typed return.
-    expect(mocks.writeReport).toHaveBeenCalled();
-  });
-
-  it('preserves the child failure when final lease cleanup also fails', async () => {
-    const childFailure = new Error('review model failed');
-    mocks.executeAgent.mockRejectedValueOnce(childFailure);
-    mocks.releaseOwnedRunLease.mockRejectedValueOnce(
-      new Error('artifact flush failed'),
-    );
-
-    await expect(runInBand(delegationOptions())).rejects.toBe(childFailure);
-  });
-
-  it('does not recover a typed result after failed artifact cleanup', async () => {
-    const cleanupFailure = new Error('artifact flush failed');
-    const logicalRunId = 'dddddd777777' as RunId;
-    // The child's lease is still held, so the failure-time retryable marker
-    // is refused: the attempt stays `launched`.
-    const markers = watchAttemptMarkers([], (phase) => phase === 'retryable');
-    useChildRecords(memoryChildRecords());
-    const cleanup = vi
-      .spyOn(stableSession, 'flushArtifacts')
-      .mockRejectedValue(cleanupFailure);
-
-    try {
-      await expect(
-        runInBand(delegationOptions(), logicalRunId),
-      ).rejects.toMatchObject({
-        name: 'SubagentDurabilityError',
-        message: expect.stringContaining(
-          'Failed to mark the stable attempt as retryable.',
-        ),
-        cause: expect.objectContaining({
-          errors: expect.arrayContaining([
-            expect.objectContaining({ cause: cleanupFailure }),
-          ]),
-        }),
-      });
-    } finally {
-      cleanup.mockRestore();
-      markers.mockRestore();
-    }
-    mocks.inspectRunLease.mockResolvedValueOnce({
-      status: 'held',
-      owner: { pid: 1, processStart: '1', hostname: 'test-host' },
-    });
-
-    await expect(
-      runInBand(delegationOptions(), logicalRunId),
-    ).rejects.toBeInstanceOf(SubagentDurabilityError);
-    expect(mocks.executeAgent).toHaveBeenCalledOnce();
-  });
-
-  it('does not recover a completed manifest after restart repair removes an abandoned lease', async () => {
-    const cleanupFailure = new Error('artifact flush failed');
-    const logicalRunId = 'dddddd888888' as RunId;
-    let abandonedLeasePresent = true;
-    const markers = watchAttemptMarkers(
-      [],
-      (phase) => abandonedLeasePresent && phase === 'retryable',
-    );
-    useChildRecords(memoryChildRecords());
-    const cleanup = vi
-      .spyOn(stableSession, 'flushArtifacts')
-      .mockRejectedValue(cleanupFailure);
-
-    try {
-      await expect(
-        runInBand(delegationOptions(), logicalRunId),
-      ).rejects.toMatchObject({
-        name: 'SubagentDurabilityError',
-        message: expect.stringContaining(
-          'Failed to mark the stable attempt as retryable.',
-        ),
-        cause: expect.objectContaining({
-          errors: expect.arrayContaining([
-            expect.objectContaining({ cause: cleanupFailure }),
-          ]),
-        }),
-      });
-    } finally {
-      cleanup.mockRestore();
-    }
-
-    // Perform the restart repair's observable lease transition before the
-    // stable call resumes: the abandoned lease no longer fences the marker
-    // write. That absence must not attest artifact-release success; only the
-    // explicit post-drain commit marker can do that.
-    abandonedLeasePresent = false;
-    await expect(
-      runInBand(delegationOptions(), logicalRunId),
-    ).rejects.toBeInstanceOf(SubagentDurabilityError);
-    markers.mockRestore();
-    expect(mocks.executeAgent).toHaveBeenCalledOnce();
-  });
-
-  it('preserves the child failure when its failure manifest cannot be written', async () => {
-    mocks.executeAgent.mockRejectedValueOnce(new Error('review model failed'));
-    mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
-
-    await expectDurabilityErrorPreservingChildFailure(
-      runInBand(delegationOptions()),
-    );
-  });
-
-  it('interrupts the live child when the in-band caller aborts', async () => {
-    const controller = new AbortController();
-    const onCost = vi.fn();
-    let childReady!: () => void;
-    let childInterrupted!: () => void;
-    const ready = new Promise<void>((resolve) => {
-      childReady = resolve;
-    });
-    const interrupted = new Promise<void>((resolve) => {
-      childInterrupted = resolve;
-    });
-    const interrupt = vi.fn(() => {
-      childInterrupted();
-      return true;
-    });
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      await options.onRun?.({ interrupt } as never);
-      childReady();
-      await interrupted;
-      return {
-        outcome: 'cancelled',
-        runId: CHILD_RUN_ID,
-        output: { category: 'toolUse', response: '', files: [] },
-      };
-    });
-
-    const run = runInBand(
-      delegationOptions({ signal: controller.signal, onCost }),
-    );
-    await ready;
-    controller.abort(new Error('Workflow stopped.'));
-
-    await expect(run).rejects.toThrow('Workflow stopped.');
-    expect(interrupt).toHaveBeenCalledOnce();
-    expect(onCost).toHaveBeenCalledOnce();
-    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-    expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        producer: 'subagent',
-        output: expect.objectContaining({ response: '' }),
+        expect(order).toContain('launched');
+        expect(order.lastIndexOf('drain')).toBeLessThan(
+          order.indexOf('committed'),
+        );
+        expect(order.indexOf('committed')).toBeLessThan(
+          order.indexOf('release'),
+        );
+        expect(mocks.releaseOwnedRunLease).toHaveBeenCalledOnce();
       }),
-    );
-  });
+  );
 
-  it('keeps the completed child result when cancellation arrives during persistence', async () => {
-    const controller = new AbortController();
-    let finishPersistence!: () => void;
-    const persistencePending = new Promise<void>((resolve) => {
-      finishPersistence = resolve;
-    });
-    mocks.writeResultMeta.mockReturnValueOnce(persistencePending);
+  it.effect(
+    'releases the lease even when the post-drain stable commit fails',
+    () =>
+      Effect.gen(function* () {
+        const logicalRunId = 'cccccc777777' as RunId;
+        const phases: string[] = [];
+        const markers = watchAttemptMarkers(
+          phases,
+          (phase) => phase === 'committed',
+        );
 
-    const run = runInBand(delegationOptions({ signal: controller.signal }));
-    await vi.waitFor(() => {
+        try {
+          expect(
+            yield* Effect.flip(runInBand(delegationOptions(), logicalRunId)),
+          ).toMatchObject({
+            name: 'SubagentCommitError',
+            message: expect.stringContaining(
+              'Failed to commit durable completion',
+            ),
+            cause: expect.objectContaining({ _tag: 'DatabaseWriteFailed' }),
+          });
+        } finally {
+          markers.mockRestore();
+        }
+
+        expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(logicalRunId);
+        expect(phases).toContain('launched');
+        expect(phases).not.toContain('retryable');
+      }),
+  );
+
+  it.effect('recovers committed success when lease deletion fails', () =>
+    Effect.gen(function* () {
+      const logicalRunId = 'cccccc999999' as RunId;
+      const childRecords = memoryChildRecords();
+      const releaseError = new Error('lease deletion failed');
+      const phases: string[] = [];
+      const markers = watchAttemptMarkers(phases);
+      useChildRecords(childRecords);
+      mocks.releaseOwnedRunLease.mockRejectedValueOnce(releaseError);
+
+      try {
+        expect(
+          yield* Effect.flip(runInBand(delegationOptions(), logicalRunId)),
+        ).toMatchObject({
+          name: 'SubagentDurabilityError',
+          message: expect.stringContaining('committed durable completion'),
+          cause: releaseError,
+        });
+        expect(
+          yield* runInBand(delegationOptions(), logicalRunId),
+        ).toMatchObject({ runId: logicalRunId });
+      } finally {
+        markers.mockRestore();
+      }
+
+      expect(mocks.executeAgent).toHaveBeenCalledOnce();
+      expect(phases).toContain('committed');
+      expect(phases).not.toContain('retryable');
+    }),
+  );
+
+  it.effect('records a failed child cost once for durable in-band run', () =>
+    Effect.gen(function* () {
+      const onCost = vi.fn();
+      mockExecuteAgentErrorOnce(0.61, {
+        runId: IN_BAND_LOGICAL_RUN_ID,
+        output: {
+          category: 'toolUse',
+          response: 'Partial review.',
+          files: [],
+        },
+      });
+
+      expect(
+        (yield* Effect.flip(runInBand(delegationOptions({ onCost })))).message,
+      ).toContain('review model failed');
+
+      expect(onCost).toHaveBeenCalledOnce();
+      expect(onCost).toHaveBeenCalledWith(0.61);
       expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-    });
-    controller.abort(new Error('Workflow stopped after child completion.'));
-    finishPersistence();
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+        expect.objectContaining({
+          output: expect.objectContaining({ response: 'Partial review.' }),
+        }),
+      );
+    }),
+  );
 
-    await expect(run).rejects.toThrow(
-      'Workflow stopped after child completion.',
-    );
-    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        producer: 'subagent',
-        output: expect.objectContaining({ response: 'The proof is correct.' }),
+  it.effect(
+    'persists a cost-bearing WAITING result as a durable single-cycle failure',
+    () =>
+      Effect.gen(function* () {
+        const onCost = vi.fn();
+        mocks.executeAgent.mockResolvedValueOnce({
+          outcome: RUN_PHASE.WAITING,
+          runId: IN_BAND_LOGICAL_RUN_ID,
+          output: {
+            category: 'toolUse',
+            response: 'Waiting for clarification.',
+            files: [],
+          },
+          usage: { totalCost: 0.73 },
+        });
+
+        expect(
+          (yield* Effect.flip(runInBand(delegationOptions({ onCost }))))
+            .message,
+        ).toContain(
+          `Single-cycle subagent ${IN_BAND_LOGICAL_RUN_ID} unexpectedly suspended.`,
+        );
+
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          expect.any(Object),
+          IN_BAND_LOGICAL_RUN_ID,
+          expect.objectContaining({
+            parentRunId: STABLE_PARENT_RUN_ID,
+            stopAfterCycle: true,
+          }),
+        );
+        expect(onCost).toHaveBeenCalledOnce();
+        expect(onCost).toHaveBeenCalledWith(0.73);
+        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expect.objectContaining({
+            output: expect.objectContaining({
+              response: 'Waiting for clarification.',
+            }),
+          }),
+        );
       }),
-    );
-  });
+  );
 
-  it('does not register a child when the in-band caller is already aborted', async () => {
-    const controller = new AbortController();
-    controller.abort(new Error('Workflow already stopped.'));
+  it.effect(
+    'recovers a completed stable child before resolving launch prerequisites',
+    () =>
+      Effect.gen(function* () {
+        const stableRunId = 'cccccc333333' as RunId;
+        const persistedResult = {
+          outcome: 'completed' as const,
+          output: {
+            category: 'toolUse' as const,
+            response: 'Recovered review.',
+            files: [],
+          },
+        };
+        yield* seedStableMarkers(stableRunId, 1, [
+          { attempt: 0, phase: 'committed' },
+        ]);
+        useChildRecords(completedChildRecords(persistedResult));
+        const prepare = vi.fn(() =>
+          Effect.fail(new Error('current agent is unavailable')),
+        );
 
-    await expect(
-      runInBand(delegationOptions({ signal: controller.signal })),
-    ).rejects.toThrow('Workflow already stopped.');
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
-  });
+        expect(
+          yield* executeStableSubagentInBand({
+            runId: stableRunId,
+            parentRunId: STABLE_PARENT_RUN_ID,
+            session: stableSession,
+            prepare,
+          }).pipe(Effect.provide(fakeProcessServices())),
+        ).toEqual({
+          runId: stableRunId,
+          result: persistedResult,
+        });
+        expect(prepare).not.toHaveBeenCalled();
+        expect(mocks.registerRun).not.toHaveBeenCalled();
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
+        expect(mocks.writeResultMeta).not.toHaveBeenCalled();
+      }),
+  );
 
-  effectIt.effect(
+  it.effect(
+    'recovers a later completed attempt when an earlier child was deleted',
+    () =>
+      Effect.gen(function* () {
+        const logicalRunId = 'cccccc444444' as RunId;
+        const persistedResult = {
+          outcome: 'completed' as const,
+          output: {
+            category: 'toolUse' as const,
+            response: 'Recovered later attempt.',
+            files: [],
+          },
+        };
+        yield* seedStableMarkers(logicalRunId, 2, [
+          { attempt: 1, phase: 'committed' },
+        ]);
+        const missingRecords = emptyChildRecords();
+        const completedRecords = completedChildRecords(persistedResult);
+        mocks.childRecords.mockImplementation((runId: RunId) =>
+          runId === logicalRunId ? missingRecords : completedRecords,
+        );
+        const prepare = vi.fn();
+
+        const recovered = yield* executeStableSubagentInBand({
+          runId: logicalRunId,
+          parentRunId: STABLE_PARENT_RUN_ID,
+          session: stableSession,
+          prepare,
+        }).pipe(Effect.provide(fakeProcessServices()));
+
+        expect(recovered.result).toEqual(persistedResult);
+        expect(recovered.runId).not.toBe(logicalRunId);
+        expect(prepare).not.toHaveBeenCalled();
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'refuses to repeat a committed child whose result manifest is missing',
+    () =>
+      Effect.gen(function* () {
+        const logicalRunId = 'cccccc888888' as RunId;
+        yield* seedStableMarkers(logicalRunId, 1, [
+          { attempt: 0, phase: 'committed' },
+        ]);
+        useChildRecords(emptyChildRecords());
+
+        expect(
+          yield* Effect.flip(runInBand(delegationOptions(), logicalRunId)),
+        ).toBeInstanceOf(SubagentDurabilityError);
+        expect(mocks.registerRun).not.toHaveBeenCalled();
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect('refuses to repeat an incomplete stable child', () =>
+    Effect.gen(function* () {
+      const logicalRunId = 'dddddd444444' as RunId;
+      yield* seedStableMarkers(logicalRunId, 1);
+      useChildRecords(emptyChildRecords());
+
+      expect(
+        yield* Effect.flip(runInBand(delegationOptions(), logicalRunId)),
+      ).toBeInstanceOf(SubagentDurabilityError);
+      expect(mocks.registerRun).not.toHaveBeenCalled();
+      expect(mocks.executeAgent).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect.each(['reserved', 'retryable'] as const)(
+    'retries a %s child without a result manifest',
+    (phase) =>
+      Effect.gen(function* () {
+        const logicalRunId = 'dddddd555555' as RunId;
+        yield* seedStableMarkers(logicalRunId, 1, [{ attempt: 0, phase }]);
+        const records = new Map<RunId, ReturnType<typeof emptyChildRecords>>();
+        mocks.childRecords.mockImplementation((id: RunId) => {
+          let child = records.get(id);
+          if (!child) {
+            child = emptyChildRecords();
+            records.set(id, child);
+          }
+          return child;
+        });
+
+        const completed = yield* runInBand(delegationOptions(), logicalRunId);
+
+        expect(completed.runId).not.toBe(logicalRunId);
+        expect(mocks.executeAgent).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'refuses to repeat a completed stable child when its manifest cannot be written',
+    () =>
+      Effect.gen(function* () {
+        const logicalRunId = 'dddddd666666' as RunId;
+        const phases: string[] = [];
+        const markers = watchAttemptMarkers(phases);
+        mocks.writeResultMeta.mockRejectedValueOnce(
+          new Error('storage offline'),
+        );
+        useChildRecords({
+          ...emptyChildRecords(),
+          writeResultMeta: mocks.writeResultMeta,
+        });
+        const options = delegationOptions();
+
+        try {
+          expect(
+            yield* Effect.flip(runInBand(options, logicalRunId)),
+          ).toBeInstanceOf(SubagentDurabilityError);
+
+          expect(phases.at(-1)).toBe('launched');
+          expect(
+            yield* Effect.flip(runInBand(options, logicalRunId)),
+          ).toBeInstanceOf(SubagentDurabilityError);
+        } finally {
+          markers.mockRestore();
+        }
+        expect(mocks.executeAgent).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'uses a new durable attempt after failed and cancelled children',
+    () =>
+      Effect.gen(function* () {
+        const logicalRunId = 'eeeeee555555' as RunId;
+        const priorOutcomes = ['failed', 'cancelled'] as const;
+        yield* seedStableMarkers(logicalRunId, 0, [
+          { attempt: 0, phase: 'committed' },
+          { attempt: 1, phase: 'committed' },
+        ]);
+        const records = new Map<RunId, Record<string, unknown>>();
+        mocks.childRecords.mockImplementation((id: RunId) => {
+          let child = records.get(id);
+          if (child) return child;
+          const priorOutcome = priorOutcomes[records.size];
+          child = priorOutcome
+            ? completedChildRecords({
+                outcome: priorOutcome,
+                output: { category: 'toolUse', response: '', files: [] },
+              })
+            : emptyChildRecords();
+          records.set(id, child);
+          return child;
+        });
+
+        const completed = yield* runInBand(delegationOptions(), logicalRunId);
+
+        expect(completed.runId).not.toBe(logicalRunId);
+        expect(records.size).toBe(3);
+        expect(mocks.executeAgent).toHaveBeenCalledOnce();
+        expect(mocks.registerRun).toHaveBeenCalledWith(
+          stableSession,
+          completed.runId,
+          expect.anything(),
+          'review',
+          expect.objectContaining({ parentRunId: STABLE_PARENT_RUN_ID }),
+        );
+      }),
+  );
+
+  it.effect('does not commit a cancelled stable child as successful', () =>
+    Effect.gen(function* () {
+      const logicalRunId = 'eeeeee666666' as RunId;
+      const phases: string[] = [];
+      const markers = watchAttemptMarkers(phases);
+      useChildRecords(memoryChildRecords());
+      mocks.executeAgent.mockResolvedValueOnce({
+        outcome: 'cancelled',
+        runId: logicalRunId,
+        output: { category: 'toolUse', response: '', files: [] },
+      });
+
+      let completed;
+      try {
+        completed = yield* runInBand(delegationOptions(), logicalRunId);
+      } finally {
+        markers.mockRestore();
+      }
+
+      expect(completed.result.outcome).toBe('cancelled');
+      expect(phases).not.toContain('committed');
+    }),
+  );
+
+  it.effect(
+    'does not return a typed result when its durable manifest cannot be written',
+    () =>
+      Effect.gen(function* () {
+        mocks.writeResultMeta.mockRejectedValueOnce(
+          new Error('storage offline'),
+        );
+
+        expect(
+          yield* Effect.flip(runInBand(delegationOptions())),
+        ).toBeInstanceOf(SubagentDurabilityError);
+        // The single driver persists the report independently of the manifest;
+        // the manifest read-back is what gates the typed return.
+        expect(mocks.writeReport).toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'preserves the child failure when final lease cleanup also fails',
+    () =>
+      Effect.gen(function* () {
+        const childFailure = new Error('review model failed');
+        mocks.executeAgent.mockRejectedValueOnce(childFailure);
+        mocks.releaseOwnedRunLease.mockRejectedValueOnce(
+          new Error('artifact flush failed'),
+        );
+
+        expect(yield* Effect.flip(runInBand(delegationOptions()))).toBe(
+          childFailure,
+        );
+      }),
+  );
+
+  it.effect(
+    'does not recover a typed result after failed artifact cleanup',
+    () =>
+      Effect.gen(function* () {
+        const cleanupFailure = new Error('artifact flush failed');
+        const logicalRunId = 'dddddd777777' as RunId;
+        // The child's lease is still held, so the failure-time retryable marker
+        // is refused: the attempt stays `launched`.
+        const markers = watchAttemptMarkers(
+          [],
+          (phase) => phase === 'retryable',
+        );
+        useChildRecords(memoryChildRecords());
+        const cleanup = vi
+          .spyOn(stableSession, 'flushArtifacts')
+          .mockRejectedValue(cleanupFailure);
+
+        try {
+          expect(
+            yield* Effect.flip(runInBand(delegationOptions(), logicalRunId)),
+          ).toMatchObject({
+            name: 'SubagentDurabilityError',
+            message: expect.stringContaining(
+              'Failed to mark the stable attempt as retryable.',
+            ),
+            cause: expect.objectContaining({
+              errors: expect.arrayContaining([
+                expect.objectContaining({ cause: cleanupFailure }),
+              ]),
+            }),
+          });
+        } finally {
+          cleanup.mockRestore();
+          markers.mockRestore();
+        }
+        mocks.inspectRunLease.mockResolvedValueOnce({
+          status: 'held',
+          owner: { pid: 1, processStart: '1', hostname: 'test-host' },
+        });
+
+        expect(
+          yield* Effect.flip(runInBand(delegationOptions(), logicalRunId)),
+        ).toBeInstanceOf(SubagentDurabilityError);
+        expect(mocks.executeAgent).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'does not recover a completed manifest after restart repair removes an abandoned lease',
+    () =>
+      Effect.gen(function* () {
+        const cleanupFailure = new Error('artifact flush failed');
+        const logicalRunId = 'dddddd888888' as RunId;
+        let abandonedLeasePresent = true;
+        const markers = watchAttemptMarkers(
+          [],
+          (phase) => abandonedLeasePresent && phase === 'retryable',
+        );
+        useChildRecords(memoryChildRecords());
+        const cleanup = vi
+          .spyOn(stableSession, 'flushArtifacts')
+          .mockRejectedValue(cleanupFailure);
+
+        try {
+          expect(
+            yield* Effect.flip(runInBand(delegationOptions(), logicalRunId)),
+          ).toMatchObject({
+            name: 'SubagentDurabilityError',
+            message: expect.stringContaining(
+              'Failed to mark the stable attempt as retryable.',
+            ),
+            cause: expect.objectContaining({
+              errors: expect.arrayContaining([
+                expect.objectContaining({ cause: cleanupFailure }),
+              ]),
+            }),
+          });
+        } finally {
+          cleanup.mockRestore();
+        }
+
+        // Perform the restart repair's observable lease transition before the
+        // stable call resumes: the abandoned lease no longer fences the marker
+        // write. That absence must not attest artifact-release success; only the
+        // explicit post-drain commit marker can do that.
+        abandonedLeasePresent = false;
+        expect(
+          yield* Effect.flip(runInBand(delegationOptions(), logicalRunId)),
+        ).toBeInstanceOf(SubagentDurabilityError);
+        markers.mockRestore();
+        expect(mocks.executeAgent).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'preserves the child failure when its failure manifest cannot be written',
+    () =>
+      Effect.gen(function* () {
+        mocks.executeAgent.mockRejectedValueOnce(
+          new Error('review model failed'),
+        );
+        mocks.writeResultMeta.mockRejectedValueOnce(
+          new Error('storage offline'),
+        );
+
+        expect(
+          yield* Effect.flip(runInBand(delegationOptions())),
+        ).toMatchObject({
+          name: 'SubagentDurabilityError',
+          message: expect.stringContaining('review model failed'),
+          cause: expect.objectContaining({ name: 'AggregateError' }),
+        });
+      }),
+  );
+
+  it.effect('interrupts the live child when the in-band caller aborts', () =>
+    Effect.gen(function* () {
+      const controller = new AbortController();
+      const onCost = vi.fn();
+      // The caller's abort is the property under test and the program is
+      // uninterruptible, so the AbortController stays; only the ready gate
+      // becomes Effect-native.
+      const ready = yield* Deferred.make<void>();
+      let childInterrupted!: () => void;
+      const interrupted = new Promise<void>((resolve) => {
+        childInterrupted = resolve;
+      });
+      const interrupt = vi.fn(() => {
+        childInterrupted();
+        return true;
+      });
+      mocks.executeAgent.mockImplementationOnce(
+        async (_config, _id, options) => {
+          await options.onRun?.({ interrupt } as never);
+          Deferred.doneUnsafe(ready, Effect.void);
+          await interrupted;
+          return {
+            outcome: 'cancelled',
+            runId: CHILD_RUN_ID,
+            output: { category: 'toolUse', response: '', files: [] },
+          };
+        },
+      );
+
+      const running = yield* Effect.forkChild(
+        Effect.flip(
+          runInBand(delegationOptions({ signal: controller.signal, onCost })),
+        ),
+      );
+      yield* Deferred.await(ready);
+      controller.abort(new Error('Workflow stopped.'));
+
+      const error = yield* Fiber.join(running);
+      expect(error.message).toContain('Workflow stopped.');
+      expect(interrupt).toHaveBeenCalledOnce();
+      expect(onCost).toHaveBeenCalledOnce();
+      expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+      expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          producer: 'subagent',
+          output: expect.objectContaining({ response: '' }),
+        }),
+      );
+    }),
+  );
+
+  it.effect(
+    'keeps the completed child result when cancellation arrives during persistence',
+    () =>
+      Effect.gen(function* () {
+        const controller = new AbortController();
+        const persisting = yield* Deferred.make<void>();
+        let finishPersistence!: () => void;
+        const persistencePending = new Promise<void>((resolve) => {
+          finishPersistence = resolve;
+        });
+        // The persistence write itself opens the cancellation window, so the
+        // mocked write completes the gate instead of a poll on its call count.
+        mocks.writeResultMeta.mockImplementationOnce(() => {
+          Deferred.doneUnsafe(persisting, Effect.void);
+          return persistencePending;
+        });
+
+        const running = yield* Effect.forkChild(
+          Effect.flip(
+            runInBand(delegationOptions({ signal: controller.signal })),
+          ),
+        );
+        yield* Deferred.await(persisting);
+        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+        controller.abort(new Error('Workflow stopped after child completion.'));
+        finishPersistence();
+
+        const error = yield* Fiber.join(running);
+        expect(error.message).toContain(
+          'Workflow stopped after child completion.',
+        );
+        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expect.objectContaining({
+            producer: 'subagent',
+            output: expect.objectContaining({
+              response: 'The proof is correct.',
+            }),
+          }),
+        );
+      }),
+  );
+
+  it.effect(
+    'does not register a child when the in-band caller is already aborted',
+    () =>
+      Effect.gen(function* () {
+        const controller = new AbortController();
+        controller.abort(new Error('Workflow already stopped.'));
+
+        const error = yield* Effect.flip(
+          runInBand(delegationOptions({ signal: controller.signal })),
+        );
+        expect(error.message).toContain('Workflow already stopped.');
+        expect(mocks.registerRun).not.toHaveBeenCalled();
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
     'carries the validated agent source to executeAgent for source-pinned launch',
     () =>
       Effect.gen(function* () {
@@ -1357,24 +1454,22 @@ describe('headless delegation', () => {
       }),
   );
 
-  effectIt.effect(
-    'extends the bare instruction with injected handoff guidance',
-    () =>
-      Effect.gen(function* () {
-        // Regression pin for #5864: delegation must inject handoff guidance rather
-        // than hand the caller's instruction through verbatim. Deliberately
-        // wording-free — the injected copy churns (#9568) without behavior changing.
-        yield* callDelegateReview();
-        yield* waitForChildrenEffect(defaultSession());
+  it.effect('extends the bare instruction with injected handoff guidance', () =>
+    Effect.gen(function* () {
+      // Regression pin for #5864: delegation must inject handoff guidance rather
+      // than hand the caller's instruction through verbatim. Deliberately
+      // wording-free — the injected copy churns (#9568) without behavior changing.
+      yield* callDelegateReview();
+      yield* waitForChildrenEffect(defaultSession());
 
-        const instruction =
-          mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
-        expect(instruction).toContain('Check the proof.');
-        expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
-      }),
+      const instruction =
+        mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
+      expect(instruction).toContain('Check the proof.');
+      expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
+    }),
   );
 
-  effectIt.effect(
+  it.effect(
     'carries the current parent instruction into the subagent constraint context',
     () =>
       Effect.gen(function* () {
@@ -1400,62 +1495,60 @@ describe('headless delegation', () => {
       }),
   );
 
-  effectIt.effect(
-    'formats returned child error results as subagent errors',
-    () =>
-      Effect.gen(function* () {
-        const recordSubagentCost = vi.fn();
-        mockExecuteAgentErrorOnce(0.42);
+  it.effect('formats returned child error results as subagent errors', () =>
+    Effect.gen(function* () {
+      const recordSubagentCost = vi.fn();
+      mockExecuteAgentErrorOnce(0.42);
 
-        const result = yield* callDelegateReview(
-          parentRunContext({
-            stopAfterCycle: true,
-            hooks: { recordSubagentCost },
-          }),
-        );
+      const result = yield* callDelegateReview(
+        parentRunContext({
+          stopAfterCycle: true,
+          hooks: { recordSubagentCost },
+        }),
+      );
 
-        expect(result.summary).toBe("Subagent 'review' failed");
-        expect(result.status).toBe('error');
-        expect(result.error).toBe('review model failed');
-        expect(mocks.writeReport).toHaveBeenCalledWith(
-          expect.stringContaining('<subagent-error'),
-        );
-        expect(mocks.writeReport).toHaveBeenCalledWith(
-          expect.stringContaining('review model failed'),
-        );
-        expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-        expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
-        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-          expect.objectContaining({
-            producer: 'subagent',
-            agentName: 'review',
-          }),
-        );
-      }),
+      expect(result.summary).toBe("Subagent 'review' failed");
+      expect(result.status).toBe('error');
+      expect(result.error).toBe('review model failed');
+      expect(mocks.writeReport).toHaveBeenCalledWith(
+        expect.stringContaining('<subagent-error'),
+      );
+      expect(mocks.writeReport).toHaveBeenCalledWith(
+        expect.stringContaining('review model failed'),
+      );
+      expect(recordSubagentCost).toHaveBeenCalledTimes(1);
+      expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+        expect.objectContaining({
+          producer: 'subagent',
+          agentName: 'review',
+        }),
+      );
+    }),
   );
 
-  effectIt.effect(
-    'rolls up failed async subagent cost from the error callback',
-    () =>
-      Effect.gen(function* () {
-        const recordSubagentCost = vi.fn();
-        mockExecuteAgentErrorOnce(0.31);
+  it.effect('rolls up failed async subagent cost from the error callback', () =>
+    Effect.gen(function* () {
+      const costRecorded = yield* Deferred.make<number>();
+      const recordSubagentCost = vi.fn((cost: number) => {
+        Deferred.doneUnsafe(costRecorded, Effect.succeed(cost));
+      });
+      mockExecuteAgentErrorOnce(0.31);
 
-        const result = yield* callDelegateReview(
-          parentRunContext({ hooks: { recordSubagentCost } }),
-        );
+      const result = yield* callDelegateReview(
+        parentRunContext({ hooks: { recordSubagentCost } }),
+      );
 
-        expect(result.summary).toBe("Launched 'review' (async)");
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-          }),
-        );
-        expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
-      }),
+      expect(result.summary).toBe("Launched 'review' (async)");
+      // The failed child's cost arrives from the detached loop's error
+      // callback, which completes this deferred as it records the cost.
+      expect(yield* Deferred.await(costRecorded)).toBe(0.31);
+      expect(recordSubagentCost).toHaveBeenCalledTimes(1);
+      expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
+    }),
   );
 
-  effectIt.effect(
+  it.effect(
     'composes interactive delegation through the same native launch primitive',
     () =>
       Effect.gen(function* () {
@@ -1480,7 +1573,7 @@ describe('headless delegation', () => {
       }),
   );
 
-  effectIt.effect('does not attribute proposal cancellation to the user', () =>
+  it.effect('does not attribute proposal cancellation to the user', () =>
     Effect.gen(function* () {
       const result = yield* delegateWithProposalDecision({
         action: 'cancel',
@@ -1494,7 +1587,7 @@ describe('headless delegation', () => {
     }),
   );
 
-  effectIt.effect(
+  it.effect(
     'proceeds without a proposal when the run cannot present approval prompts',
     () =>
       Effect.scoped(
@@ -1504,13 +1597,13 @@ describe('headless delegation', () => {
           // (delegate_multi_agents). The proposal gate must not settle a
           // guaranteed denial; the child stays on inherited approval state.
           mocks.isProposalBypassed.mockReturnValue(false);
-          const session = createTestSession();
-          const decider = answerOpenedRequests(session, { action: 'approve' });
-          yield* Effect.addFinalizer(() =>
-            decider
-              .stop()
-              .pipe(Effect.ensuring(Effect.sync(() => session.dispose()))),
+          const session = yield* Effect.acquireRelease(
+            Effect.sync(() => createTestSession()),
+            (handle) => Effect.sync(() => handle.dispose()),
           );
+          const decider = yield* answerOpenedRequests(session, {
+            action: 'approve',
+          });
           const result = yield* callDelegateReview(
             parentRunContext({ session, approvalPromptsUnavailable: true }),
           );
@@ -1530,7 +1623,7 @@ describe('headless delegation', () => {
       ),
   );
 
-  effectIt.effect(
+  it.effect(
     'rejects an approved model override unavailable in the active API mode',
     () =>
       Effect.gen(function* () {
@@ -1550,46 +1643,48 @@ describe('headless delegation', () => {
       }),
   );
 
-  effectIt.effect(
-    'launches with an approved model override that is available',
-    () =>
-      Effect.gen(function* () {
-        mocks.computeModelOptionsData.mockResolvedValue([
-          {
-            value: 'deepseekT',
-            label: 'DeepSeek',
-            availability: 'provider-key',
-          },
-          {
-            value: 'gpt5',
-            label: 'GPT-5',
-            availability: 'provider-key',
-          },
-        ]);
+  it.effect('launches with an approved model override that is available', () =>
+    Effect.gen(function* () {
+      mocks.computeModelOptionsData.mockResolvedValue([
+        {
+          value: 'deepseekT',
+          label: 'DeepSeek',
+          availability: 'provider-key',
+        },
+        {
+          value: 'gpt5',
+          label: 'GPT-5',
+          availability: 'provider-key',
+        },
+      ]);
 
-        const result = yield* delegateWithProposalDecision(
-          { action: 'approve', model: 'gpt5' },
-          { expectLaunch: true },
-        );
+      const result = yield* delegateWithProposalDecision(
+        { action: 'approve', model: 'gpt5' },
+        { expectLaunch: true },
+      );
 
-        expect(result.status).toBe('executed');
-        expect(result.summary).toBe("Launched 'review' (async)");
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          expect.objectContaining({
-            config: expect.objectContaining({ model: 'gpt5' }),
-          }),
-          expect.any(String),
-          expect.anything(),
-        );
-      }),
+      expect(result.status).toBe('executed');
+      expect(result.summary).toBe("Launched 'review' (async)");
+      expect(mocks.executeAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: expect.objectContaining({ model: 'gpt5' }),
+        }),
+        expect.any(String),
+        expect.anything(),
+      );
+    }),
   );
 
-  effectIt.effect(
+  it.effect(
     'includes memory misses in interactive early-delivered reports',
     () =>
       Effect.gen(function* () {
         // The mocked `executeAgent` is the child-run loop's `launch` turn, and the
         // WAITING result it returns is what the loop's single delivery site sees.
+        const reported = yield* Deferred.make<string>();
+        mocks.writeReport.mockImplementationOnce((message: string) => {
+          Deferred.doneUnsafe(reported, Effect.succeed(message));
+        });
         mockWaitingChildOnce({
           memoryMisses: [
             { path: '/memories/missing.md', reason: 'not found & unreadable' },
@@ -1598,24 +1693,29 @@ describe('headless delegation', () => {
 
         yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(mocks.writeReport).toHaveBeenCalledWith(
-              expect.stringContaining(
-                '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
-              ),
-            );
-          }),
+        // The loop's single delivery site writes the report from a detached
+        // fiber, and that write completes the deferred.
+        expect(yield* Deferred.await(reported)).toContain(
+          '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
+        );
+        expect(mocks.writeReport).toHaveBeenCalledWith(
+          expect.stringContaining(
+            '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
+          ),
         );
       }),
   );
 
-  effectIt.effect(
+  it.effect(
     'does not deliver detached subagent results back to the released parent',
     () =>
       Effect.gen(function* () {
         let capturedHandle: RunHandle | undefined;
 
+        const reported = yield* Deferred.make<string>();
+        mocks.writeReport.mockImplementationOnce((message: string) => {
+          Deferred.doneUnsafe(reported, Effect.succeed(message));
+        });
         mockWaitingChildOnce({
           // Detach happens between the loop capturing the handle (onRun) and the
           // loop delivering this turn's result (after the mock resolves) — the
@@ -1628,12 +1728,13 @@ describe('headless delegation', () => {
 
         yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(mocks.writeReport).toHaveBeenCalledWith(
-              expect.stringContaining('The proof is correct.'),
-            );
-          }),
+        // The detached loop's delivery write completes the deferred, so the
+        // first report is the one asserted rather than any later one.
+        expect(yield* Deferred.await(reported)).toContain(
+          'The proof is correct.',
+        );
+        expect(mocks.writeReport).toHaveBeenCalledWith(
+          expect.stringContaining('The proof is correct.'),
         );
         expect(capturedHandle?.deliveryTarget).toBeUndefined();
         expect(defaultSession().followUps.getAll(PARENT_RUN_ID)).toEqual([]);
