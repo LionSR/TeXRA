@@ -21,7 +21,6 @@ import { DisposableStore } from '@platform/disposable';
 import { effectRuntime } from '@platform/processRuntime';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
-import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
   createNodePlatform,
   createNodeWorkspaceRoots,
@@ -373,11 +372,6 @@ export async function initCliPlatform(
     if (context.installSignalHandlers !== false) {
       installCliShutdownSignalHandlers(lifecycle);
     }
-    // Register the shared Node-host agent runtime: the direct Lean language
-    // services (errors surface via the Tools dashboard if `lake` isn't on
-    // PATH).
-    initNodeAgentRuntime(lifecycle);
-
     // Kill agent-spawned OS children before the process dies, exactly as the
     // extension and desktop hosts do. Background `bash` runs are spawned
     // `detached` (their own process group, see execUtils) so they survive

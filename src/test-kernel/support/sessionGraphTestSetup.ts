@@ -1,5 +1,5 @@
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
-
+import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { fakeSetupPlatform, installedHost } from './setupPlatform';
 /**
  * The test kernel's process runtime and session graph family (PRD
@@ -34,6 +34,8 @@ export function installTestSessionGraphs(): void {
     secrets: () => installedHost().secrets,
     appState: () => installedHost().roots.globalState,
     setup: fakeSetupPlatform,
+    // The Node hosts' layer: inert until a Lean tool is invoked.
+    lean: directLeanLanguageServices(),
   });
 }
 

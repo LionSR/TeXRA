@@ -42,6 +42,7 @@ import {
 } from './AgentFlowResult';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentLaunchContext } from './AgentLaunchContext';
+import type { AgentRunServices } from './toolInjection';
 
 const logger = createChannelTrace('agentRunLifecycle');
 
@@ -70,7 +71,7 @@ export interface RunFlowLifecycleOptions {
    * Kept injected so this module does not statically reach tool-domain
    * services such as the Lean language adapter.
    */
-  onRunEnd?: (runId: RunId) => void | Promise<void>;
+  onRunEnd?: (runId: RunId) => Effect.Effect<void, unknown, AgentRunServices>;
 }
 
 interface FinalizeRunTerminalParams {
@@ -335,7 +336,11 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       handle: RunHandle,
     ) => Effect.Effect<AgentRuntimeFlowResult, Error, R>,
     options?: RunFlowLifecycleOptions,
-  ): Effect.fn.Return<AgentRuntimeFlowResult, Error, R | AppState> {
+  ): Effect.fn.Return<
+    AgentRuntimeFlowResult,
+    Error,
+    R | AppState | AgentRunServices
+  > {
     const { runId, session } = ctx.runScope;
     const agentIdentifier = ctx.config.agent;
     const handle = new RunHandle(
@@ -512,17 +517,18 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
      */
     const runOnRunEnd = Effect.gen(function* () {
       if (!options?.onRunEnd) return;
-      const onRunEnd = options.onRunEnd;
-      yield* Effect.tryPromise({
-        try: async () => onRunEnd(runId),
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((runEndError) =>
-          Effect.sync(() => {
-            logger.warn('Failed to run the run-end hook', {
-              data: { agentIdentifier, runId, error: runEndError },
-            });
-          }),
+      // Guarded on every cause but interruption: this runs as a finalizer,
+      // where a failure or defect would otherwise replace the result this run
+      // already published.
+      yield* options.onRunEnd(runId).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : Effect.sync(() => {
+                logger.warn('Failed to run the run-end hook', {
+                  data: { agentIdentifier, runId, error: Cause.squash(cause) },
+                });
+              }),
         ),
       );
     });
@@ -565,6 +571,9 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         // one place this run is recorded as suspended, and carries the teardown
         // a stop/kill runs instead of the absent interrupt target, see
         // AgentRunLifecycle/RunRegistry issue #7287.
+        // A kill runs the parked teardown from outside this run's fiber, so
+        // the process services the run-end hook reads travel with it.
+        const services = yield* Effect.context<AgentRunServices>();
         handle.suspend(
           Effect.gen(function* () {
             session.followUps.terminalize(runId);
@@ -577,7 +586,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
           }).pipe(
             // A parked run killed later ends here. Run-end cleanup remains
             // independent of transcript persistence.
-            Effect.ensuring(runOnRunEnd),
+            Effect.ensuring(Effect.provide(runOnRunEnd, services)),
           ),
         );
         return result;
