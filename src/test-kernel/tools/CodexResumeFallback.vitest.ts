@@ -1,12 +1,11 @@
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 // Regression coverage for atomic Codex disk-resume claims. Concurrent calls
 // with the same stale thread_id must share one fallback loop: the first call
 // owns asynchronous SDK setup, while later calls wait for registration and
 // enqueue through the ordinary follow-up path. The detached-rejection case is
 // also the only place the fresh `startThread` launch branch is exercised.
 
-import pDefer from 'p-defer';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
@@ -141,14 +140,17 @@ describe('codex tool - atomic resume fallback', () => {
     CodexThreads.release('stale-thread');
   });
 
-  it.live(
+  it.effect(
     'logs a detached run-loop rejection from a fresh Codex thread launch',
     () =>
       Effect.gen(function* () {
         const childRun = createFakeAgentCliChildRun(childRunId);
+        const logged = yield* Deferred.make<void>();
         const error = vi
           .spyOn(childRun.logger, 'error')
-          .mockImplementation(() => {});
+          .mockImplementation(() => {
+            Deferred.doneUnsafe(logged, Effect.void);
+          });
         const lateFailure = new Error('late Codex finalization failed');
         mocks.createChildRun.mockReturnValue(Effect.succeed(childRun));
         mocks.startChildRunLoop.mockReturnValue(
@@ -171,15 +173,14 @@ describe('codex tool - atomic resume fallback', () => {
             sandbox_mode: 'workspace-write',
           }),
         ).toMatchObject({ status: 'executed' });
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(error).toHaveBeenCalledWith(
-              'Codex run loop failed after launch',
-              {
-                data: lateFailure,
-              },
-            );
-          }),
+        // The detached loop fiber writes this log on the same runtime, so the
+        // spy itself is the wake; nothing is polled.
+        yield* Deferred.await(logged);
+        expect(error).toHaveBeenCalledWith(
+          'Codex run loop failed after launch',
+          {
+            data: lateFailure,
+          },
         );
       }).pipe(
         Effect.provide(
@@ -190,7 +191,7 @@ describe('codex tool - atomic resume fallback', () => {
       ),
   );
 
-  it.live(
+  it.effect(
     'releases a resume reservation when launch rejects a missing run context',
     () =>
       Effect.gen(function* () {
@@ -209,12 +210,13 @@ describe('codex tool - atomic resume fallback', () => {
       }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 
-  it.live(
+  it.effect(
     'launches one fallback loop when concurrent calls use the same stale thread_id',
     () =>
       Effect.gen(function* () {
-        const sdkImportStarted = pDefer<void>();
-        const sdkReady = pDefer<any>();
+        const sdkImportStarted = yield* Deferred.make<void>();
+        const sdkReady = yield* Deferred.make<unknown>();
+        const secondClaimLost = yield* Deferred.make<void>();
         const thread = {
           id: 'stale-thread',
           runStreamed: vi.fn(),
@@ -224,10 +226,31 @@ describe('codex tool - atomic resume fallback', () => {
         } as any;
         const getLaunch = captureRunLoopLaunch();
 
-        mocks.importCodexClass.mockImplementation(() => {
-          sdkImportStarted.resolve(undefined);
-          return sdkReady.promise;
-        });
+        // importCodexClass is a Promise-shaped collaborator, so the gate is an
+        // Effect run at that edge rather than a hand-rolled deferred promise.
+        mocks.importCodexClass.mockImplementation(() =>
+          Effect.runPromise(
+            Deferred.succeed(sdkImportStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(sdkReady)),
+            ),
+          ),
+        );
+        // The contention this case claims is a lost claim: dispatch resolves
+        // the registry for this session, which is the instance the suite holds,
+        // so the gate fires from inside the second call's own failed
+        // `claim` — the step that sends it into the fallback wait. Gating on
+        // anything earlier (its approval, say) would let the test release the
+        // SDK and promote the first launch before the second call ever
+        // contended, and the follow-up assertions would pass on the plain
+        // already-active path.
+        const realClaim = CodexThreads.claim.bind(CodexThreads);
+        const claim = vi
+          .spyOn(CodexThreads, 'claim')
+          .mockImplementation((threadId: string) => {
+            const release = realClaim(threadId);
+            if (!release) Deferred.doneUnsafe(secondClaimLost, Effect.void);
+            return release;
+          });
 
         const tool = new CodexTool();
         const first = yield* Effect.forkChild(
@@ -237,7 +260,7 @@ describe('codex tool - atomic resume fallback', () => {
             thread_id: 'stale-thread',
           }),
         );
-        yield* Effect.promise(() => sdkImportStarted.promise);
+        yield* Deferred.await(sdkImportStarted);
 
         const second = yield* Effect.forkChild(
           tool.call({
@@ -246,12 +269,13 @@ describe('codex tool - atomic resume fallback', () => {
             thread_id: 'stale-thread',
           }),
         );
-        yield* Effect.promise(() => Promise.resolve());
+        yield* Deferred.await(secondClaimLost);
 
         expect(mocks.importCodexClass).toHaveBeenCalledTimes(1);
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
 
-        sdkReady.resolve(
+        yield* Deferred.succeed(
+          sdkReady,
           class MockCodex {
             resumeThread(threadId: string): typeof thread {
               mocks.resumeThread(threadId);
@@ -275,8 +299,15 @@ describe('codex tool - atomic resume fallback', () => {
           expect.objectContaining({ session: expect.anything() }),
         );
 
+        // One claim apiece: the loser parked on the reservation until the
+        // launch promoted it, rather than re-claiming until the id went
+        // active. A spin would still reach the same follow-up, so the count is
+        // what distinguishes waiting from polling.
+        expect(claim).toHaveBeenCalledTimes(2);
+
         getLaunch().strategy?.releaseSessionOwnership?.();
         expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
+        claim.mockRestore();
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({
