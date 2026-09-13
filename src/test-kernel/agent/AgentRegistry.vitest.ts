@@ -6,7 +6,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
-import type * as vscode from 'vscode';
 
 // Local imports
 import {
@@ -28,6 +27,7 @@ import { AgentCategory } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
+import type * as vscode from 'vscode';
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   const ORCHESTRATOR_AGENT = {
