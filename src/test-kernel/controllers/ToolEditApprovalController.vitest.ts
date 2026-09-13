@@ -46,15 +46,19 @@ function decided(requestId: string): SessionEvent {
 }
 
 /**
- * A host whose staging can be held open, so a test can act on a request while
- * it is still initializing.
+ * A host whose staging and whose view opening can each be held open, so a
+ * test can act on a request while it is still initializing, and again while
+ * the host is presenting the request it staged.
  */
 function createTestHost() {
   const staging = pDefer<void>();
+  const presentation = pDefer<void>();
   const preview = {
     originalPath: '/tmp/original.tex',
     proposedPath: '/tmp/proposed.tex',
-    present: vi.fn(async () => {}),
+    present: vi.fn(async () => {
+      await presentation.promise;
+    }),
     showDiff: vi.fn(async () => {}),
     openProposed: vi.fn(async () => {}),
     readProposedContent: vi.fn(async () => 'edited by the user'),
@@ -63,6 +67,7 @@ function createTestHost() {
   let context: ToolEditPreviewContext | undefined;
   return {
     staging,
+    presentation,
     preview,
     contextForRequest: (): ToolEditPreviewContext => {
       if (!context) throw new Error('stagePreview has not been called yet.');
@@ -160,11 +165,47 @@ describe('tool edit approval controller', () => {
     expect(testHost.preview.present).not.toHaveBeenCalled();
   });
 
+  it('holds a release open until the view being opened has disposed', async () => {
+    const testHost = createTestHost();
+    const controller = createController(testHost.host);
+
+    const presented = controller.present(approvalRequest());
+    await vi.waitFor(() => testHost.contextForRequest());
+    const requestId = testHost.contextForRequest().requestId;
+
+    // Staging finished, so the request is staged and the host is opening its
+    // view on the staged files. A release now may not return before that view
+    // is open and closed again: closing it is what the release is for.
+    testHost.staging.resolve();
+    await vi.waitFor(() => {
+      expect(testHost.preview.present).toHaveBeenCalledOnce();
+    });
+
+    let released = false;
+    const release = controller.release(requestId).then(() => {
+      released = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(released).toBe(false);
+    expect(testHost.preview.dispose).not.toHaveBeenCalled();
+
+    testHost.presentation.resolve();
+    await release;
+    expect(released).toBe(true);
+    expect(testHost.preview.dispose).toHaveBeenCalledOnce();
+
+    // Nothing opens a view after the release resolved.
+    await presented;
+    expect(testHost.preview.present).toHaveBeenCalledOnce();
+    expect(testHost.preview.showDiff).not.toHaveBeenCalled();
+  });
+
   it('ignores actions that arrive after the request was decided', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
 
     testHost.staging.resolve();
+    testHost.presentation.resolve();
     await controller.present(approvalRequest());
     const requestId = testHost.contextForRequest().requestId;
     expect(testHost.preview.present).toHaveBeenCalled();
