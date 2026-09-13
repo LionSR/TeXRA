@@ -3,11 +3,13 @@
  * its runs journal into (runtime on Effect, section 5, PR 4). One
  * `workflow.script` row per invocation carries the source the journal
  * replays against; one `workflow.journal` row per completed `agent()` call
- * carries its result, folded latest per key. A named checkpoint outlives one
+ * carries its result, folded latest per key; one `workflow.attempt` row per
+ * launched attempt carries the attempt high-water mark that call's recovery
+ * probe starts from, folded highest per key. A named checkpoint outlives one
  * tool call: a retry after a timeout or an interruption resumes the same
  * aggregate through `run.start.checkpointId`, never through the run's id.
  */
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -155,6 +157,64 @@ export function readWorkflowScriptCheckpoint(
       }),
     ),
   );
+}
+
+/**
+ * The attempt this call's probe starts at: the highest physical attempt the
+ * parent ever launched for one `agent()` call key, 0 when it launched none.
+ *
+ * The attempt number cannot be discovered from the child aggregates alone.
+ * Deleting a run eventually collects its rows outright, and an id-by-id probe
+ * reads the hole that leaves as "never launched", so it would relaunch into
+ * the hole and never reach the later attempt that answered the call. The
+ * parent's journal outlives every child it launches, so the mark lives here.
+ */
+export function readWorkflowCallAttempt(
+  session: SessionHandle,
+  checkpointId: string,
+  key: string,
+): Effect.Effect<number, Error> {
+  return session.readAggregate(checkpointAggregate(checkpointId)).pipe(
+    Effect.map((rows) =>
+      rows.reduce(
+        (highest, row) =>
+          row.type === 'workflow.attempt' && row.key === key
+            ? Math.max(highest, row.attempt)
+            : highest,
+        0,
+      ),
+    ),
+    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  );
+}
+
+/** Move that mark before the attempt launches, so a crash between this row
+ *  and the child's own `run.start` still resumes at the attempt that ran. */
+export function recordWorkflowCallAttempt(
+  session: SessionHandle,
+  checkpointId: string,
+  key: string,
+  attempt: number,
+): Effect.Effect<void, Error> {
+  return session
+    .commit([
+      {
+        type: 'workflow.attempt',
+        aggregateId: checkpointAggregate(checkpointId),
+        key,
+        attempt,
+      },
+    ])
+    .pipe(
+      Effect.asVoid,
+      Effect.mapError(
+        (cause) =>
+          new Error(
+            `Workflow checkpoint ${checkpointId} could not record attempt ${attempt} of call ${key}.`,
+            { cause },
+          ),
+      ),
+    );
 }
 
 /**

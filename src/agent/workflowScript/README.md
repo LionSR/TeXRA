@@ -119,14 +119,19 @@ structured, cost }`), `null` on failure, or the truthy
   fails loudly, and completed child manifests close the final crash-recovery
   gap without repeating model work. The journal replay is checked first: a
   call whose entry already carries a value never reaches a child at all.
-  Past it, the child's own run aggregate is the only record of an attempt.
+  Past it, the child's own run aggregate is the record of what an attempt did.
   `run.start` is the launch edge, and a COMPLETED `run.end` carrying a
   `producer: 'subagent'` `run.result` manifest is durable completion, because
-  any row a reader can read back has already been through that child's
-  artifact drain. The attempt number is no one's counter: it is discovered by
-  probing a call's derived run ids in order, so an attempt that never reached
-  `run.start` simply launches, and an attempt no live owner holds that can no
-  longer record an outcome frees the next id. A parent execution has one
+  the terminal row is the post-drain fact: the run settles its ordered
+  publisher before committing that row and records a lost drain as a FAILED
+  outcome, so a COMPLETED row can never outlive facts the child queued. Which
+  ids to probe comes from the parent's own journal, the one thing that
+  outlives every child it launches: a `workflow.attempt` row moves the call's
+  attempt mark before each launch, and recovery probes the derived ids in
+  order from there, so a deleted attempt whose tombstone has since been
+  collected cannot read as an id that never started. An attempt that never
+  reached `run.start` simply launches, and an attempt no live owner holds that
+  can no longer record an outcome frees the next id. A parent execution has one
   active runtime owner; the execution KV store is durable state, not a
   cross-process lock. Checkpoints use the strict version-4 schema; malformed or
   older records fail instead of being translated into the current journal.

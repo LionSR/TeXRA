@@ -18,6 +18,7 @@ import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } 
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
 import { SubagentDurabilityError } from '@tools/delegation/inBandSubagentRun';
 import { ensureError } from '@utils/errors/errorMessage';
+import { deriveRunId } from '@utils/core/idHash';
 import { StorageFS } from '@utils/files/storageFS';
 
 const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
@@ -54,6 +55,8 @@ const mocks = vi.hoisted(() => ({
   executeSubagentInBand: vi.fn(),
   getRunRecords: vi.fn(),
   resolveRunLiveness: vi.fn(),
+  readWorkflowCallAttempt: vi.fn(),
+  recordWorkflowCallAttempt: vi.fn(),
   probedRunIds: [] as string[],
   preparedOptions: [] as unknown[],
   requireVisibleAgent: vi.fn(),
@@ -93,6 +96,13 @@ vi.mock('@tools/delegation/delegationAvailability', () => ({
 
 vi.mock('@tools/executions/runLiveness', () => ({
   resolveRunLiveness: mocks.resolveRunLiveness,
+}));
+
+// The parent's attempt mark lives on the checkpoint aggregate; this suite's
+// session is a stub, so the journal is faked at its two entry points.
+vi.mock('@agent/workflowScript/checkpoint', () => ({
+  readWorkflowCallAttempt: mocks.readWorkflowCallAttempt,
+  recordWorkflowCallAttempt: mocks.recordWorkflowCallAttempt,
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -304,6 +314,10 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.resolveRunLiveness.mockReturnValue(
       Effect.succeed({ kind: 'interrupted' }),
     );
+    // No attempt journaled yet: the probe starts at 0 unless a case says the
+    // parent already launched further.
+    mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(0));
+    mocks.recordWorkflowCallAttempt.mockReturnValue(Effect.void);
     mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
       name,
       source: 'builtInWorkflow',
@@ -1131,6 +1145,78 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect(mocks.probedRunIds[0]).toMatch(/^[a-f0-9]{24}$/);
       expect(mocks.probedRunIds[1]).not.toBe(mocks.probedRunIds[0]);
       expect(reported(report, 'childRunId')).toEqual([mocks.probedRunIds[1]]);
+      // The parent journals the attempt it is about to launch, before it
+      // launches: that mark is what a resume probes from once the child
+      // aggregates behind it are deleted and collected.
+      expect(mocks.recordWorkflowCallAttempt).toHaveBeenCalledWith(
+        expect.anything(),
+        'tool-call-7',
+        '0123456789abcdef',
+        1,
+      );
+      expect(
+        mocks.recordWorkflowCallAttempt.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mocks.executeSubagentInBand.mock.invocationCallOrder[0] ?? 0,
+      );
+    }),
+  );
+
+  it.effect('probes from the attempt the parent journaled', () =>
+    Effect.gen(function* () {
+      // Attempt 0 was deleted and its tombstone collected, so nothing of it
+      // reads back: without the parent's mark the probe would launch into that
+      // hole and never reach the attempt that answered the call.
+      mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(1));
+      probeAnswers({
+        exists: true,
+        runEnd: result,
+        resultMeta: { producer: 'subagent', output: result.output },
+      });
+      const report = reportSpy();
+
+      yield* defaultRunner()({ ...invocation(), report });
+
+      expect(mocks.probedRunIds).toEqual([
+        deriveRunId({
+          attempt: 1,
+          checkpointId: 'tool-call-7',
+          key: '0123456789abcdef',
+          parentRunId: runId,
+        }),
+      ]);
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      expect(reported(report, 'recovered')).toEqual([true]);
+    }),
+  );
+
+  it.effect('recovers a child that ended while the probe was reading it', () =>
+    Effect.gen(function* () {
+      // The child committed `run.end` and released its claim between the
+      // terminal read and the claim observation: the first copy is stale, the
+      // claim reads free, and only re-reading the row keeps the finished run
+      // from being repeated.
+      let terminalReads = 0;
+      mocks.getRunRecords.mockImplementation(
+        (_session: unknown, id: string) => {
+          mocks.probedRunIds.push(id);
+          return {
+            exists: () => Effect.succeed(true),
+            isRemoved: () => Effect.succeed(false),
+            readRunEnd: () =>
+              Effect.succeed(terminalReads++ === 0 ? null : result),
+            readResultMeta: () =>
+              Effect.succeed({ producer: 'subagent', output: result.output }),
+          };
+        },
+      );
+      const report = reportSpy();
+
+      yield* defaultRunner()({ ...invocation(), report });
+
+      expect(mocks.probedRunIds).toHaveLength(1);
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      expect(reported(report, 'recovered')).toEqual([true]);
     }),
   );
 

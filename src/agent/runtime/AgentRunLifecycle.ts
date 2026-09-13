@@ -32,7 +32,7 @@ import {
   setFirstRunDone,
 } from '@shared/state/onboardingState';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { RunHandle, type AgentRunHandle } from './RunHandle';
 import {
   buildTerminalFlowResult,
@@ -40,7 +40,7 @@ import {
   type AgentRuntimeFlowResult,
   type AgentFlowResult,
 } from './AgentFlowResult';
-import type { SessionHandle } from './SessionHandle';
+import { RunArtifactDrainError, type SessionHandle } from './SessionHandle';
 import type { AgentLaunchContext } from './AgentLaunchContext';
 
 const logger = createChannelTrace('agentRunLifecycle');
@@ -79,7 +79,9 @@ interface FinalizeRunTerminalParams {
    * hook), the status machine holding this run's in-memory phase
    * (terminalized last), and the display sidecars drained before the
    * `run.end` row is written — so a waiter that opens the completed-run
-   * archive does not race the final transcript or work-plan write.
+   * archive does not race the final transcript or work-plan write, and a
+   * drain that failed is the run's terminal outcome rather than a warning
+   * behind a COMPLETED row.
    */
   readonly session: SessionHandle;
   /** Live handle for this terminal attempt; its settled flag is the exactly-once guard. */
@@ -124,9 +126,12 @@ interface FinalizeRunTerminalResult {
 /**
  * The single owner of terminal run choreography, shared by the run lifecycle
  * arms below, the agent-CLI session loop, and child runs
- * (`finalizeChildRun`): transcript stage end, the artifact drain, the
+ * (`finalizeChildRun`): the artifact drain, transcript stage end, the
  * `run.end` row (through `finalizeRun`, its one writer), the delivery hook,
- * then registry untrack + terminal run phase — in that order. Exactly-once
+ * then registry untrack + terminal run phase — in that order. The drain comes
+ * first because the row is the post-drain fact: a run whose queued facts
+ * rolled back ends FAILED carrying that cause, so a reader that can read the
+ * terminal row can trust everything behind it. Exactly-once
  * per handle: the claim below flips synchronously in the same tick as the
  * check, so a second call (e.g. the lifecycle catch arm after the success arm
  * already finalized, or a concurrent finalize racing across this function's
@@ -139,17 +144,44 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
 ): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error> {
   const { session, handle } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
+  // The `run.end` row is the run's post-drain fact, and this is the drain:
+  // settling the ordered publisher, so a failure here rolled back facts the
+  // run had queued. A terminal row committed after it that still said
+  // COMPLETED would tell every later reader — the workflow attempt probe
+  // above all — that the run is durably done while its final facts are gone,
+  // so the drain decides the outcome rather than being logged past.
+  const drainFailure = yield* Effect.tryPromise({
+    try: () => session.flushArtifacts(),
+    catch: (cause) => new RunArtifactDrainError(handle.runId, cause),
+  }).pipe(
+    Effect.as(undefined),
+    Effect.catch((failure) => Effect.succeed(failure)),
+  );
+  if (drainFailure !== undefined)
+    logger.warn('Failed to persist the facts this run queued', {
+      data: { runId: handle.runId, error: drainFailure },
+    });
+  // The exiting run's own report: `params.outcome` unless the drain rolled
+  // its facts back, which outranks however the flow itself ended.
+  const reported =
+    drainFailure === undefined ? params.outcome : RUN_OUTCOME.FAILED;
+  const reportedError =
+    drainFailure === undefined
+      ? params.error
+      : {
+          kind: classifyAgentError(drainFailure),
+          message: toErrorMessage(drainFailure),
+        };
   // The `run.end` row written below is the run's terminal fact; the handle's
-  // stop latch supplies the stop precedence read here, so `params.outcome`
-  // is the exiting run's report rather than the verdict: a stop that landed
-  // before the run's exit outranks a child whose process then exits
-  // non-zero. Resolving once here is what lets every projection below (stage
-  // end, the `run.end` row) read one value, so no caller has to cross-check
-  // the latch for itself.
-  const outcome = handle.stopRequested ? RUN_OUTCOME.CANCELLED : params.outcome;
+  // stop latch supplies the stop precedence read here, so the report above is
+  // not yet the verdict: a stop that landed before the run's exit outranks a
+  // child whose process then exits non-zero. Resolving once here is what lets
+  // every projection below (stage end, the `run.end` row) read one value, so
+  // no caller has to cross-check the latch for itself.
+  const outcome = handle.stopRequested ? RUN_OUTCOME.CANCELLED : reported;
   // Error facts the run classified for an outcome that did not happen are not
   // facts about this run.
-  const error = outcome === params.outcome ? params.error : undefined;
+  const error = outcome === reported ? reportedError : undefined;
   const output = params.output ?? emptyRunEndOutput(handle.category);
   if (params.stage) {
     const stage = params.stage;
@@ -166,20 +198,6 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
       ),
     );
   }
-  // A drain failure is logged here and retried by the run-ownership release
-  // boundary.
-  yield* Effect.tryPromise({
-    try: () => session.flushArtifacts(),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((artifactError) =>
-      Effect.sync(() => {
-        logger.warn('Failed to persist pre-terminal display artifacts', {
-          data: { runId: handle.runId, error: artifactError },
-        });
-      }),
-    ),
-  );
   // Write the terminal row BEFORE untrack so the registry's terminal listener
   // event never precedes it. The row carries the classified error `kind`
   // (when any), the run usage totals (present once a round recorded usage,

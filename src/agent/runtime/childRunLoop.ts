@@ -337,8 +337,6 @@ export interface ChildRunLoopParams<TTurn, R = never> {
     readonly isError: boolean;
     readonly error?: unknown;
   }) => void;
-  /** Publish caller-owned state after final artifacts drain, before lease release. */
-  readonly afterArtifactsDrained?: Effect.Effect<void, Error>;
 }
 
 /**
@@ -1170,12 +1168,7 @@ export function startChildRunLoop<TTurn, R = never>(
           );
         }),
       );
-      const released = yield* Effect.exit(
-        runSession.releaseRunLease(
-          runId,
-          !sawTurnFailure ? params.afterArtifactsDrained : Effect.void,
-        ),
-      );
+      const released = yield* Effect.exit(runSession.releaseRunLease(runId));
       if (Exit.isFailure(released)) {
         logger.warn('Failed to persist final child-run artifacts', {
           data: { runId, error: Cause.squash(released.cause) },

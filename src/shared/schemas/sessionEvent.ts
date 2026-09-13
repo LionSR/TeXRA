@@ -477,6 +477,22 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
     },
     'workflow-checkpoint',
   ),
+  /**
+   * The attempt high-water mark for one `agent()` call: the number of the
+   * physical attempt the parent is about to launch, committed before the
+   * launch. The child aggregates cannot carry it — deleting a run collects
+   * its rows outright, and an id-by-id probe reads that hole as "never
+   * launched" and relaunches into it — so the parent's own journal, which
+   * outlives every child, keeps the count. Folded as the highest per `key`.
+   */
+  durable(
+    'workflow.attempt',
+    {
+      key: z.string().regex(/^[a-f0-9]{16}$/),
+      attempt: z.int().nonnegative(),
+    },
+    'workflow-checkpoint',
+  ),
 ]);
 const DesktopProjectsDraftSchema = durable(
   'desktop.projects.changed',
@@ -604,6 +620,7 @@ export function listingTypeOf(
     case 'child.turn':
     case 'workflow.script':
     case 'workflow.journal':
+    case 'workflow.attempt':
       // The run ledger's private rows stay out of the listing: a cold hydrate
       // must never pull a run's latest `flow.snapshot` into every renderer.
       // `flow.step` is the one ledger row that is listed (its own key, the

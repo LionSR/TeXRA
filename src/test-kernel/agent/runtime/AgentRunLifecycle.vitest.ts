@@ -951,6 +951,32 @@ describe('finalizeRunTerminal', () => {
     expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
   });
 
+  it('records a failed drain as the terminal outcome', async () => {
+    const { runId, session, handle, untrack, flushArtifacts } =
+      finalizeFixture();
+    flushArtifacts.mockRejectedValueOnce(new Error('artifact flush failed'));
+
+    const finalization = await Effect.runPromise(
+      finalizeRunTerminal({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
+    );
+
+    // The row is the post-drain fact: the facts this run queued rolled back,
+    // so no later reader — the workflow attempt probe above all — may read it
+    // as durably completed.
+    expect(finalization?.event.outcome).toBe(RUN_OUTCOME.FAILED);
+    expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+      session,
+      expect.objectContaining({
+        runId,
+        outcome: RUN_OUTCOME.FAILED,
+        error: expect.objectContaining({
+          message: expect.stringContaining('did not commit'),
+        }),
+      }),
+    );
+    expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
+  });
+
   it('settles and untracks once while reporting terminal metadata failure', async () => {
     const { runId, session, handle, untrack } = finalizeFixture();
     const durabilityError = new Error('metadata disk write failed');

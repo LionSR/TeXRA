@@ -4,6 +4,10 @@ import { Cause, Effect } from 'effect';
 // Local imports
 import { getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
+import {
+  readWorkflowCallAttempt,
+  recordWorkflowCallAttempt,
+} from '@agent/workflowScript/checkpoint';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
@@ -264,6 +268,26 @@ function probeChild<A>(
   );
 }
 
+/**
+ * The parent's own journal is read on the same rule: a checkpoint this call
+ * cannot read or move is a durability fault, not a call that answered
+ * nothing.
+ */
+function probeJournal<A>(
+  key: string,
+  read: Effect.Effect<A, Error>,
+): Effect.Effect<A, Error> {
+  return read.pipe(
+    Effect.mapError(
+      (cause) =>
+        new WorkflowRunAbortError(
+          `Workflow call ${key} could not read or move its attempt mark.`,
+          { cause },
+        ),
+    ),
+  );
+}
+
 /** Runaway backstop on the attempt probe, not a retry policy. */
 const MAX_WORKFLOW_CALL_ATTEMPTS = 1_024;
 
@@ -285,13 +309,17 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * Resolve one `agent()` call against the child runs it already has, then
  * launch only if none of them answered it. The child's own aggregate is the
  * fact: `run.start` is the launch edge, and a `run.result` manifest under a
- * COMPLETED `run.end` is durable completion (any row a reader can read back
- * has been through the child's artifact drain, which is the ordered
- * publisher).
+ * COMPLETED `run.end` is durable completion, because the terminal row is the
+ * post-drain fact — `finalizeRunTerminal` settles the ordered publisher
+ * before committing it and records a lost drain as a FAILED outcome, so a
+ * COMPLETED row can never outlive facts the child queued.
  *
- * An id the user deleted is closed, not free: its tombstone is final, so the
- * probe advances past it to the attempt that may have answered the call after
- * it.
+ * Which ids to probe comes from the parent's journal: the attempt mark it
+ * moves before each launch outlives the children, so the probe starts at the
+ * attempt that ran rather than at 0. An id the user deleted is closed, not
+ * free: its tombstone is final, so the probe advances past it, and once
+ * deletion collects that tombstone the mark is what still says the call got
+ * that far.
  *
  * A run with no `run.end` for the lifecycle in flight, whose lease no live
  * owner still holds, frees the next attempt id in either of two shapes: it
@@ -311,7 +339,19 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       try: () => call.signal?.throwIfAborted(),
       catch: ensureError,
     });
-    for (let attempt = 0; attempt < MAX_WORKFLOW_CALL_ATTEMPTS; attempt += 1) {
+    // Where the probe starts: the parent's journal, not attempt 0. A deleted
+    // attempt is collected in the end, and an id-by-id probe reads the hole
+    // that leaves as an id that never started — it would launch into it and
+    // never reach the attempt that answered this call after it.
+    const launched = yield* probeJournal(
+      call.key,
+      readWorkflowCallAttempt(session, call.checkpointId, call.key),
+    );
+    for (
+      let attempt = launched;
+      attempt < launched + MAX_WORKFLOW_CALL_ATTEMPTS;
+      attempt += 1
+    ) {
       const runId = workflowCallRunId({
         parentRunId: call.parentRunId,
         checkpointId: call.checkpointId,
@@ -326,6 +366,18 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // after it would never be probed. A deleted attempt is therefore
         // closed like any other terminal one and the probe moves on.
         if (yield* probeChild(runId, records.isRemoved())) continue;
+        // Move the parent's attempt mark before anything runs under this id:
+        // the journal outlives every child, so whatever becomes of this
+        // attempt's aggregate, a resume still starts its probe here.
+        yield* probeJournal(
+          call.key,
+          recordWorkflowCallAttempt(
+            session,
+            call.checkpointId,
+            call.key,
+            attempt,
+          ),
+        );
         // Publish the attempt id before resolving mutable launch state: a host
         // targets the in-flight child by this id.
         call.onLaunch(runId);
@@ -340,7 +392,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       }
       // Terminal for the lifecycle in flight, not for the aggregate: a
       // `run.activate` after a `run.end` means the run started again.
-      const end = yield* probeChild(runId, records.readRunEnd());
+      let end = yield* probeChild(runId, records.readRunEnd());
       if (end === null) {
         // The claim is the liveness authority: only a run nobody alive owns
         // may have its attempt number advanced. An unreadable claim reports
@@ -353,6 +405,14 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
             ),
           );
         }
+        // One read order, terminal row last: a child commits `run.end` before
+        // it releases its claim, so a free claim makes that row final, while
+        // the copy read before the claim was observed can predate a child that
+        // ended in between. Reading it again here is what stops a run that
+        // finished mid-probe from being repeated.
+        end = yield* probeChild(runId, records.readRunEnd());
+      }
+      if (end === null) {
         const turns = yield* probeChild(
           runId,
           readChildTurnState(session, runId),

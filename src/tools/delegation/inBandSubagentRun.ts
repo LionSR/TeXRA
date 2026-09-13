@@ -306,14 +306,14 @@ const executeInBand = Effect.fn('executeInBand')(
         }
       }
 
-      // The child's own rows are committed, but the drain that follows them
-      // rolled back facts this run had queued, so the call is not durably
-      // answered: a required-result caller journals from those rows. The
-      // failure reaches here as the loop's, wrapped with the loop's other
-      // cleanup failures when there are several.
+      // A drain rolled back facts this run had queued, so the call is not
+      // durably answered: a required-result caller journals from those rows.
+      // It outranks how the child itself ended, which the terminal row may be
+      // reporting as failed for this very reason (the row is the post-drain
+      // fact). The failure reaches here as the loop's, wrapped with the loop's
+      // other cleanup failures when there are several.
       if (
         mode === 'required-result' &&
-        !childFailed &&
         (loopFailure instanceof RunArtifactDrainError ||
           (loopFailure instanceof AggregateError &&
             loopFailure.errors.some(

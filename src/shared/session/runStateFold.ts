@@ -253,6 +253,7 @@ const IGNORED_ROW_TYPES: Readonly<
   // Checkpoint-aggregate rows never reach a run fold; total-record members.
   'workflow.script': true,
   'workflow.journal': true,
+  'workflow.attempt': true,
   'desktop.projects.changed': true,
   'inquiry.recorded': true,
   'update.check.recorded': true,
