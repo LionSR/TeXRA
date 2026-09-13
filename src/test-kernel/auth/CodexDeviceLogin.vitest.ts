@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 import { FetchHttpClient } from 'effect/unstable/http';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, vi } from 'vitest';
@@ -51,12 +51,6 @@ const settle = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
 );
 
-/** The flow has shown the prompt, so it is at (or past) its first wait. */
-const prompted = (onPrompt: ReturnType<typeof vi.fn>) =>
-  Effect.promise(() =>
-    vi.waitFor(() => expect(onPrompt).toHaveBeenCalledOnce()),
-  ).pipe(Effect.andThen(settle));
-
 describe('Codex device login', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -69,14 +63,19 @@ describe('Codex device login', () => {
         const inFlight = createDeferred<Response>();
         stubDeviceEndpoints({}, () => inFlight.promise);
         const coordinator = coordinatorStub();
-        const onPrompt = vi.fn();
+        const shown = yield* Deferred.make<void>();
+        const onPrompt = vi.fn(() => {
+          Deferred.doneUnsafe(shown, Effect.void);
+        });
         const fiber = yield* Effect.forkChild(
           loginWithDeviceCode({ coordinator, onPrompt }).pipe(
             Effect.provide(FetchHttpClient.layer),
             Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
           ),
         );
-        yield* prompted(onPrompt);
+        yield* Deferred.await(shown);
+        expect(onPrompt).toHaveBeenCalledOnce();
+        yield* settle;
         yield* TestClock.adjust('5 seconds');
         yield* settle;
 
@@ -108,23 +107,27 @@ describe('Codex device login', () => {
         );
         const store = createDeferred<{ accessToken: string }>();
         const coordinator = coordinatorStub();
-        vi.mocked(coordinator.completeDeviceLogin).mockReturnValue(
-          store.promise as never,
-        );
-        const onPrompt = vi.fn();
+        const storeEntered = yield* Deferred.make<void>();
+        vi.mocked(coordinator.completeDeviceLogin).mockImplementation(() => {
+          Deferred.doneUnsafe(storeEntered, Effect.void);
+          return store.promise as never;
+        });
+        const shown = yield* Deferred.make<void>();
+        const onPrompt = vi.fn(() => {
+          Deferred.doneUnsafe(shown, Effect.void);
+        });
         const fiber = yield* Effect.forkChild(
           loginWithDeviceCode({ coordinator, onPrompt }).pipe(
             Effect.provide(FetchHttpClient.layer),
             Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
           ),
         );
-        yield* prompted(onPrompt);
+        yield* Deferred.await(shown);
+        expect(onPrompt).toHaveBeenCalledOnce();
+        yield* settle;
         yield* TestClock.adjust('5 seconds');
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(coordinator.completeDeviceLogin).toHaveBeenCalledOnce(),
-          ),
-        );
+        yield* Deferred.await(storeEntered);
+        expect(coordinator.completeDeviceLogin).toHaveBeenCalledOnce();
 
         // The store is uninterruptible: the interrupt waits for it to settle.
         const interruption = yield* Effect.forkChild(Fiber.interrupt(fiber));
@@ -149,7 +152,10 @@ describe('Codex device login', () => {
           polls += 1;
           return jsonResponse({ error: 'authorization_pending' }, 403);
         });
-        const onPrompt = vi.fn();
+        const shown = yield* Deferred.make<void>();
+        const onPrompt = vi.fn(() => {
+          Deferred.doneUnsafe(shown, Effect.void);
+        });
         const fiber = yield* Effect.forkChild(
           loginWithDeviceCode({
             coordinator: coordinatorStub(),
@@ -159,7 +165,9 @@ describe('Codex device login', () => {
             Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
           ),
         );
-        yield* prompted(onPrompt);
+        yield* Deferred.await(shown);
+        expect(onPrompt).toHaveBeenCalledOnce();
+        yield* settle;
 
         // Polls at 5s and 10s; the 15-minute fallback would keep polling.
         yield* TestClock.adjust('5 seconds');
