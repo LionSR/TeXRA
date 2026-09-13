@@ -21,6 +21,9 @@ export type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
 export const AGENT_ERROR_OUTCOME: Readonly<Record<AgentErrorKind, RunOutcome>> =
   {
     abort: RUN_OUTCOME.CANCELLED,
+    // Never classified from a thrown error: `finalizeRunTerminal` marks the
+    // row when the drain it runs decided the outcome.
+    'artifact-drain': RUN_OUTCOME.FAILED,
     'context-window': RUN_OUTCOME.FAILED,
     'disk-full': RUN_OUTCOME.FAILED,
     'missing-api-key': RUN_OUTCOME.FAILED,
@@ -101,6 +104,15 @@ export function agentErrorPresentation(error: {
       return {
         type: 'error',
         payload: { message: error.message ?? 'Disk full.' },
+      };
+    case 'artifact-drain':
+      return {
+        type: 'error',
+        payload: {
+          message:
+            error.message ??
+            'The facts this run recorded did not commit; its results are incomplete.',
+        },
       };
     case 'unexpected':
       return {

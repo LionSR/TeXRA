@@ -31,7 +31,15 @@ const ResultDiffSummarySchema = z.strictObject({
 });
 export type ResultDiffSummary = z.infer<typeof ResultDiffSummarySchema>;
 
-/** Terminal errors keep the classified kind beside the provider detail. */
+/**
+ * Terminal errors keep the classified kind beside the provider detail.
+ *
+ * `artifact-drain` is a durability marker rather than a run that failed: the
+ * facts the run had queued rolled back before its terminal row was written
+ * (`finalizeRunTerminal`), so every later reader of the row can tell "the
+ * drain lost what this run recorded" from "the model run failed" without the
+ * in-process error that decided it.
+ */
 const RunEndErrorSchema = z
   .discriminatedUnion('kind', [
     RetryErrorInfoSchema.pick({
@@ -40,7 +48,7 @@ const RunEndErrorSchema = z
       partialText: true,
     })
       .partial()
-      .extend({ kind: z.enum(['abort', 'disk-full']) }),
+      .extend({ kind: z.enum(['abort', 'artifact-drain', 'disk-full']) }),
     RetryErrorInfoSchema.partial().extend({
       kind: z.enum(['context-window', 'missing-api-key', 'unexpected']),
     }),

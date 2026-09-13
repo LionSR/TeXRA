@@ -995,14 +995,18 @@ describe('finalizeRunTerminal', () => {
 
     // The row is the post-drain fact: the facts this run queued rolled back,
     // so no later reader — the workflow attempt probe above all — may read it
-    // as durably completed.
+    // as durably completed. The `artifact-drain` kind is what carries that to
+    // a reader with no access to the in-process drain error: a run whose
+    // queued facts are gone is not a run whose model call failed.
     expect(finalization?.event.outcome).toBe(RUN_OUTCOME.FAILED);
+    expect(finalization?.event.error?.kind).toBe('artifact-drain');
     expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
       session,
       expect.objectContaining({
         runId,
         outcome: RUN_OUTCOME.FAILED,
         error: expect.objectContaining({
+          kind: 'artifact-drain',
           message: expect.stringContaining('did not commit'),
         }),
       }),

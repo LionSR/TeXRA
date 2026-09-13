@@ -1254,6 +1254,34 @@ describe('createWorkflowScriptAgentRunner', () => {
   );
 
   it.effect(
+    'refuses a failed child whose claim a concurrent resume holds',
+    () =>
+      Effect.gen(function* () {
+        // A terminal row does not close the aggregate: a resume can append
+        // `run.activate` after it, so advancing past a failed attempt takes the
+        // same claim as advancing past an interrupted one, and an acquire the
+        // resume refuses stops a second child from starting beside it.
+        probeAnswers(
+          { exists: true, runEnd: { ...result, outcome: 'failed' } },
+          { exists: false },
+        );
+        mocks.acquireClaims.mockReturnValueOnce(
+          Effect.fail(new Error('held by owner-2 (alive)')),
+        );
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(
+            'could not be claimed against a concurrent resume',
+          ),
+        });
+        expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
     'routes an agent({ schema }) call to a tool-use agent with an output schema',
     () =>
       Effect.gen(function* () {

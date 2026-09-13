@@ -293,7 +293,11 @@ function probeJournal<A>(
 }
 
 /**
- * Fence one interrupted attempt against a resume for the rest of this call.
+ * Fence one attempt this call is about to advance past, against a resume, for
+ * the rest of the call. Whether that attempt recorded no outcome or ended
+ * failed/cancelled is not a difference the fence makes: a resumable snapshot
+ * outlives a terminal row (`run.activate` after `run.end` means the run
+ * started again), so every advance is decided under the claim.
  *
  * `acquireClaims` is the same admission a dead-owner takeover uses
  * (`SessionRequests.decide`, `resumeRun`): it proves the prior owner dead
@@ -301,8 +305,8 @@ function probeJournal<A>(
  * claim and this acquire is refused, while a host that arrives afterwards
  * finds the claim held here and refuses in its turn. That is what makes the
  * terminal re-read under it final — without it a resume can append
- * `run.activate` between the free-lease reading and the launch, and the probe
- * starts a second child beside a running one.
+ * `run.activate` between the reading and the launch, and the probe starts a
+ * second child beside a running one.
  *
  * The claim is released with the call's scope, after the attempt it advanced
  * to has run: a superseded attempt stays fenced for as long as its
@@ -310,7 +314,7 @@ function probeJournal<A>(
  * only the claim behind, so it is logged rather than failing a call whose
  * child already answered.
  */
-const fenceInterruptedRun = (
+const fenceSupersededRun = (
   session: InBandSubagentLaunchOptions['session'],
   runId: RunId,
 ): Effect.Effect<void, Error, Scope.Scope> =>
@@ -379,8 +383,12 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * committed its `run.result` manifest and died in the one transaction before
  * `run.end`, so nothing will ever record that outcome. A settled turn without
  * a manifest is the one irreconcilable shape, and a live owner always refuses.
- * That decision is taken while holding the attempt's own run claim, so a
- * resume cannot start the child between the reading and the launch.
+ * Advancing past an attempt — that one, and one whose row says failed or
+ * cancelled, since a resumable snapshot outlives that row — is a single
+ * decision taken while holding the attempt's own run claim, so a resume cannot
+ * start the child between the reading and the launch. A row marked
+ * `artifact-drain` is the one terminal outcome no attempt advances past: what
+ * that child did is unrecorded rather than failed.
  *
  * A journal hit never reaches here: the engine consumes it before calling.
  */
@@ -451,28 +459,36 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       // Terminal for the lifecycle in flight, not for the aggregate: a
       // `run.activate` after a `run.end` means the run started again.
       let end = yield* probeChild(runId, records.readRunEnd());
-      if (end === null) {
-        // The claim is the liveness authority: only a run nobody alive owns
-        // may have its attempt number advanced. An unreadable claim reports
-        // unsettled, so this refuses rather than repeating the work.
-        const liveness = yield* resolveRunLiveness(runId, session, null);
-        if (liveness.kind !== 'interrupted') {
-          return yield* Effect.fail(
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} recorded no outcome and is ${livenessClause(liveness)}; refusing to repeat it.`,
-            ),
-          );
+      // One decision, taken once: this call is about to advance past an
+      // attempt that did not complete — one that recorded no outcome, and one
+      // whose row says failed or cancelled alike, since a resumable snapshot
+      // outlives that row. Both have to hold against a resume, so both take
+      // the claim first and re-read the row under it.
+      if (end?.outcome !== RUN_OUTCOME.COMPLETED) {
+        if (end === null) {
+          // The claim is the liveness authority: only a run nobody alive owns
+          // may have its attempt number advanced. An unreadable claim reports
+          // unsettled, so this refuses rather than repeating the work.
+          const liveness = yield* resolveRunLiveness(runId, session, null);
+          if (liveness.kind !== 'interrupted') {
+            return yield* Effect.fail(
+              new WorkflowRunAbortError(
+                `Workflow child ${runId} recorded no outcome and is ${livenessClause(liveness)}; refusing to repeat it.`,
+              ),
+            );
+          }
         }
-        // Take the claim before deciding anything: a free lease says only
-        // that nobody owned the run when it was read, and the decision below
-        // has to hold against a resume that starts one instant later.
-        yield* fenceInterruptedRun(session, runId);
+        // Take the claim before deciding anything: a free lease, and a
+        // terminal row, each say only what was true when they were read, and
+        // the decision below has to hold against a resume that starts one
+        // instant later.
+        yield* fenceSupersededRun(session, runId);
         // One read order, terminal row last: a child commits `run.end` before
         // it releases its claim, so a free claim makes that row final, while
         // the copy read before the claim was observed can predate a child that
-        // ended in between. Reading it again here — under the claim, so no new
-        // owner can be starting — is what stops a run that finished mid-probe
-        // from being repeated.
+        // ended — or started again — in between. Reading it again here — under
+        // the claim, so no new owner can be starting — is what stops a run
+        // that finished mid-probe from being repeated.
         end = yield* probeChild(runId, records.readRunEnd());
       }
       if (end === null) {
@@ -516,6 +532,18 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           result: { ...end, output: meta.output },
           recovered: true,
         };
+      }
+      if (end.error?.kind === 'artifact-drain') {
+        // The row says the attempt's queued facts rolled back, so what it did
+        // is unknown rather than failed: repeating it could duplicate work
+        // whose record is simply gone. Same verdict as the in-band caller
+        // reaches on the same marker, and the outer boundary turns it into the
+        // abort that keeps it out of the engine's nullable call result.
+        return yield* Effect.fail(
+          new SubagentDurabilityError(
+            `Workflow child ${runId} failed to commit its final artifacts.`,
+          ),
+        );
       }
       // Failed or cancelled: this attempt is closed and repeating is safe.
     }

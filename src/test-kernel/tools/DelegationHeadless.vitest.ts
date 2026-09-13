@@ -428,12 +428,15 @@ function memoryChildRecords() {
  * Write the `run.end` fact production's `executeAgent` commits through
  * `runFlowWithLifecycle`: the flow's outcome, usage and output, plus the
  * classified error it reported. A single-cycle WAITING turn is an invariant
- * violation that the same lifecycle ends as FAILED.
+ * violation that the same lifecycle ends as FAILED, and a drain that rolled
+ * this run's queued facts back is the row's outcome and its `artifact-drain`
+ * kind, whatever the flow reported.
  */
 function recordTerminalFact(
   runId: RunId,
   turn: unknown,
   reportedError: unknown,
+  drainFailure: Error | undefined,
 ): void {
   const store = mocks.childRecords(runId) as {
     recordRunEnd?: (value: unknown) => void;
@@ -444,17 +447,19 @@ function recordTerminalFact(
     output?: unknown;
   } | null;
   if (!store.recordRunEnd || !flow?.outcome) return;
-  const outcome = flow.outcome === RUN_PHASE.WAITING ? 'failed' : flow.outcome;
+  const reported = flow.outcome === RUN_PHASE.WAITING ? 'failed' : flow.outcome;
+  const outcome = drainFailure === undefined ? reported : 'failed';
+  const flowError =
+    outcome === 'failed' && reportedError !== undefined
+      ? { kind: 'unexpected', message: toErrorMessage(reportedError) }
+      : undefined;
+  const error =
+    drainFailure === undefined
+      ? flowError
+      : { kind: 'artifact-drain', message: toErrorMessage(drainFailure) };
   store.recordRunEnd({
     outcome,
-    ...(outcome === 'failed' && reportedError !== undefined
-      ? {
-          error: {
-            kind: 'unexpected',
-            message: toErrorMessage(reportedError),
-          },
-        }
-      : {}),
+    ...(error ? { error } : {}),
     ...(flow.usage ? { usage: flow.usage } : {}),
     output: flow.output,
   });
@@ -501,7 +506,18 @@ describe('headless delegation', () => {
                 ).onRunError?.(error, result);
               },
             });
-            recordTerminalFact(runId, turn, reportedError);
+            // Production's lifecycle drains the facts this run queued before
+            // it writes the terminal row, and the row is the post-drain fact
+            // (`finalizeRunTerminal`); the drain runs here too, so a
+            // publication that fails only once is marked on the row and gone
+            // by the time the lease-release drain runs.
+            const drainFailure = await options.session
+              .flushArtifacts(runId)
+              .then(
+                () => undefined,
+                (cause: unknown) => ensureError(cause),
+              );
+            recordTerminalFact(runId, turn, reportedError, drainFailure);
             return turn;
           },
           catch: ensureError,
@@ -731,6 +747,31 @@ describe('headless delegation', () => {
         ),
         cause: expect.objectContaining({ name: 'RunArtifactDrainError' }),
       });
+    } finally {
+      drain.mockRestore();
+    }
+  });
+
+  it('does not return a typed result when only the pre-terminal drain fails', async () => {
+    const drain = vi
+      .spyOn(inBandSession, 'flushArtifacts')
+      .mockRejectedValueOnce(new Error('queued publication failed'));
+
+    try {
+      // One publication fails, and it is the run's own pre-terminal drain that
+      // loses it: that settled entry is gone, so the lease-release drain
+      // afterwards succeeds and this caller sees no drain error at all. The
+      // `artifact-drain` kind the lifecycle marked on the terminal row is the
+      // only remaining fact that the child's queued rows rolled back, and it
+      // must still refuse the call rather than read as an ordinary failed
+      // child the workflow can consume as null.
+      await expect(runInBand(delegationOptions())).rejects.toMatchObject({
+        name: 'SubagentDurabilityError',
+        message: expect.stringContaining(
+          'failed to commit its final artifacts',
+        ),
+      });
+      expect(drain).toHaveBeenCalledTimes(2);
     } finally {
       drain.mockRestore();
     }

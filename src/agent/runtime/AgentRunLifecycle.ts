@@ -196,11 +196,17 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   // its facts back, which outranks however the flow itself ended.
   const reported =
     drainFailure === undefined ? params.outcome : RUN_OUTCOME.FAILED;
+  // A lost drain is marked as one on the row it decided. The in-process
+  // `RunArtifactDrainError` reaches only whoever is awaiting this run, and a
+  // one-shot publication failure never reaches even them (the later drains
+  // succeed), so the marker is what tells every reader of the row — the
+  // in-band caller and the workflow attempt probe above all — that the run's
+  // queued facts are gone rather than that the model run failed.
   const reportedError =
     drainFailure === undefined
       ? params.error
       : {
-          kind: classifyAgentError(drainFailure),
+          kind: 'artifact-drain' as const,
           message: toErrorMessage(drainFailure),
         };
   // The `run.end` row written below is the run's terminal fact, and the stop

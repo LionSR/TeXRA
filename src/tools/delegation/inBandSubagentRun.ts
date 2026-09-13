@@ -154,9 +154,11 @@ const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
  * A loop failure after the turn settled does not rewrite the outcome when the
  * child's rows were already committed: the committed rows are the fact, and a
  * claim or lease-file release that threw afterwards leaves them whole. A
- * failed artifact drain is the exception (`RunArtifactDrainError`): it rolled
- * back facts the run had queued, so a required-result caller must not journal
- * the call as answered.
+ * failed artifact drain is the exception: it rolled back facts the run had
+ * queued, so a required-result caller must not journal the call as answered.
+ * It is read from either place it can be seen — the loop's own
+ * `RunArtifactDrainError`, and the `artifact-drain` marker the run's lifecycle
+ * left on the terminal row.
  */
 const executeInBand = Effect.fn('executeInBand')(
   function* (
@@ -308,13 +310,18 @@ const executeInBand = Effect.fn('executeInBand')(
 
       // A drain rolled back facts this run had queued, so the call is not
       // durably answered: a required-result caller journals from those rows.
-      // It outranks how the child itself ended, which the terminal row may be
+      // It outranks how the child itself ended, which the terminal row is
       // reporting as failed for this very reason (the row is the post-drain
-      // fact). The failure reaches here as the loop's, wrapped with the loop's
-      // other cleanup failures when there are several.
+      // fact). Two drains can lose it, and only one of them reaches here as an
+      // error: the pre-terminal drain the run's own lifecycle ran is only
+      // legible on the row it marked (a publication that fails once is settled
+      // and gone by the time the lease-release drain runs), while the release
+      // drain fails this loop, alone or wrapped with its other cleanup
+      // failures.
       if (
         mode === 'required-result' &&
-        (loopFailure instanceof RunArtifactDrainError ||
+        (runEnd?.error?.kind === 'artifact-drain' ||
+          loopFailure instanceof RunArtifactDrainError ||
           (loopFailure instanceof AggregateError &&
             loopFailure.errors.some(
               (error: unknown) => error instanceof RunArtifactDrainError,
@@ -322,7 +329,7 @@ const executeInBand = Effect.fn('executeInBand')(
       ) {
         throw new SubagentDurabilityError(
           `Subagent ${runId} failed to commit its final artifacts.`,
-          { cause: loopFailure },
+          loopFailure !== undefined ? { cause: loopFailure } : undefined,
         );
       }
 
