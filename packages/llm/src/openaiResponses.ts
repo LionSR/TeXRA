@@ -1544,12 +1544,25 @@ export function openaiResponsesModel(
   });
 
   const observe: NonNullable<Model['background']>['observe'] = (
+    admitted,
     input,
     policy,
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
         const operation = yield* boundOperation(input);
+        const parsedTurn = ResolvedTurnSchema.safeParse(admitted);
+        if (
+          !parsedTurn.success ||
+          parsedTurn.data.protocol !== 'openai-responses' ||
+          parsedTurn.data.mode !== 'background' ||
+          !sameModelOrigin(parsedTurn.data, operation.origin)
+        )
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message: 'The admitted turn belongs to another model binding.',
+          });
+        const turn = parsedTurn.data;
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
           return yield* new ModelError({
@@ -1832,7 +1845,20 @@ export function openaiResponsesModel(
                       kind: 'malformed-output',
                       message: 'Observation ended without a terminal response.',
                     });
-                  return { kind: 'completed', ...terminal };
+                  // The same anchor the foreground completion builds: an
+                  // observed turn chains on `previous_response_id` too.
+                  const continuation = yield* openaiResponsesContinuation(
+                    config,
+                    turn,
+                    terminal.result,
+                  );
+                  return {
+                    kind: 'completed',
+                    afterSequence: terminal.afterSequence,
+                    result: continuation
+                      ? { ...terminal.result, continuation }
+                      : terminal.result,
+                  };
                 }),
               ),
             ).pipe(

@@ -320,6 +320,36 @@ export const modelInvokerLayer: Layer.Layer<
         agentCategory: run.config.agentCategory,
       });
 
+    /**
+     * The semantic request an attempt admits: this run's history as the
+     * ledger folded it, plus the caller's system, tools and stop sequences
+     * and the continuation the last response left, when the binding still
+     * matches its origin. A resume rebuilds the admitted turn from the same
+     * inputs, so no row has to carry a second copy of the history.
+     */
+    const turnRequestFor = (
+      state: RunState,
+      request: InvokeRequest,
+      bound: BoundModel,
+      mode: TurnRequest['mode'],
+    ): TurnRequest => ({
+      mode,
+      ...(request.system !== undefined ? { system: request.system } : {}),
+      messages: state.messages,
+      ...(request.tools !== undefined ? { tools: request.tools } : {}),
+      ...(request.toolChoice !== undefined
+        ? { toolChoice: request.toolChoice }
+        : {}),
+      ...(request.stopSequences !== undefined
+        ? { stopSequences: request.stopSequences }
+        : {}),
+      ...(state.continuation !== null &&
+      state.continuation.origin.protocol === bound.origin.protocol &&
+      state.continuation.origin.requestedModel === bound.origin.requestedModel
+        ? { continuation: state.continuation }
+        : {}),
+    });
+
     const failAttempt = (
       cause: unknown,
       at: RunState,
@@ -565,7 +595,7 @@ export const modelInvokerLayer: Layer.Layer<
       );
       yield* Ref.set(stateRef, next);
       yield* Stream.runForEach(
-        background.observe(submission.operation, { deadlineAtMs }),
+        background.observe(resolved, submission.operation, { deadlineAtMs }),
         onEvent,
       );
     });
@@ -585,23 +615,12 @@ export const modelInvokerLayer: Layer.Layer<
       operationId: string,
     ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
       let state = initial;
-      const turnRequest: TurnRequest = {
-        mode: backgroundRequested(bound) ? 'background' : 'foreground',
-        ...(request.system !== undefined ? { system: request.system } : {}),
-        messages: state.messages,
-        ...(request.tools !== undefined ? { tools: request.tools } : {}),
-        ...(request.toolChoice !== undefined
-          ? { toolChoice: request.toolChoice }
-          : {}),
-        ...(request.stopSequences !== undefined
-          ? { stopSequences: request.stopSequences }
-          : {}),
-        ...(state.continuation !== null &&
-        state.continuation.origin.protocol === bound.origin.protocol &&
-        state.continuation.origin.requestedModel === bound.origin.requestedModel
-          ? { continuation: state.continuation }
-          : {}),
-      };
+      const turnRequest = turnRequestFor(
+        state,
+        request,
+        bound,
+        backgroundRequested(bound) ? 'background' : 'foreground',
+      );
       const prepared = yield* Effect.exit(bound.model.prepareTurn(turnRequest));
       if (Exit.isFailure(prepared)) {
         if (Cause.hasInterrupts(prepared.cause)) return yield* Effect.interrupt;
@@ -752,7 +771,9 @@ export const modelInvokerLayer: Layer.Layer<
      * A resumed attempt whose background operation the ledger holds: observe
      * it under the deadline recorded with its `accepted` row, never resubmit,
      * even if the background settings changed since. Unbilled, so it runs
-     * outside the route gate.
+     * outside the route gate. The admitted turn is rebuilt from the rows
+     * below the attempt, which are its history, so the observed completion
+     * can anchor the next round exactly as a live submission does.
      */
     const observeAccepted = Effect.fn('ModelInvoker.observeAccepted')(
       function* (
@@ -775,6 +796,32 @@ export const modelInvokerLayer: Layer.Layer<
             bound,
           );
         }
+        const prepared = yield* Effect.exit(
+          bound.model.prepareTurn(
+            turnRequestFor(initial, request, bound, 'background'),
+          ),
+        );
+        if (Exit.isFailure(prepared)) {
+          if (Cause.hasInterrupts(prepared.cause))
+            return yield* Effect.interrupt;
+          return yield* failAttempt(
+            Cause.squash(prepared.cause),
+            initial,
+            bound,
+          );
+        }
+        const resolved = prepared.value;
+        if (resolved.mode !== 'background') {
+          return yield* failAttempt(
+            new ModelError({
+              kind: 'unsupported',
+              message:
+                'The resumed background operation re-prepared as a foreground turn.',
+            }),
+            initial,
+            bound,
+          );
+        }
         logRetryLifecycle(operationId, 'attempt_started', bound, {
           attempt: invocation.attempt,
           delivery: 'background',
@@ -786,7 +833,7 @@ export const modelInvokerLayer: Layer.Layer<
         const completed: AttemptOutcome = { value: null, streamedText: '' };
         const streamed = yield* Effect.exit(
           Stream.runForEach(
-            background.observe(accepted.operation, {
+            background.observe(resolved, accepted.operation, {
               deadlineAtMs: accepted.deadlineAtMs,
             }),
             eventSink(invocation, stateRef, trace, completed),

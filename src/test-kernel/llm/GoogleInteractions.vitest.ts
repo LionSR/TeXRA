@@ -350,7 +350,7 @@ describe('canonical Google Interactions protocol', () => {
           }),
         );
         const observation = yield* Stream.runCollect(
-          background.observe(operation, { deadlineAtMs: 10_000 }),
+          background.observe(turn, operation, { deadlineAtMs: 10_000 }),
         ).pipe(Effect.forkChild);
         yield* TestClock.adjust('5 seconds');
         const events = yield* Fiber.join(observation);
@@ -375,12 +375,18 @@ describe('canonical Google Interactions protocol', () => {
             providerUsage: { kind: 'google', toolUsePromptTokens: 5 },
           },
         });
-        expect(completed.result.continuation).toBeUndefined();
+        expect(completed.result.continuation).toMatchObject({
+          coveredMessages: 2,
+          anchor: { interactionId: 'int_1', coveredSteps: 5 },
+        });
         const replay = yield* configured.prepareTurn(
           exchange(completed.result),
         );
         assert(replay.mode === 'foreground');
         yield* configured.generateTurn(replay);
+        // The observed turn anchors the next round: its steps are the ones
+        // the interaction already holds, so the replay sends only what
+        // follows them.
         expect(
           yield* Effect.promise(() =>
             (fetchModel.mock.calls[3][0] as Request).json(),
@@ -388,25 +394,29 @@ describe('canonical Google Interactions protocol', () => {
         ).toMatchObject({
           background: false,
           stream: true,
-          input: expect.arrayContaining([
+          previous_interaction_id: 'int_1',
+          input: [
             {
-              type: 'thought',
-              summary: [{ type: 'text', text: 'plan' }],
-              signature: 'sig_b',
-            },
-            {
-              type: 'function_call',
-              id: 'call_1',
+              type: 'function_result',
+              call_id: 'call_1',
               name: 'search',
-              arguments: { q: 'one' },
+              result: [
+                { type: 'text', text: 'a' },
+                {
+                  type: 'image',
+                  data: 'AQ==',
+                  mime_type: 'image/png',
+                  resolution: 'ultra_high',
+                },
+              ],
             },
             {
-              type: 'function_call',
-              id: 'call_2',
+              type: 'function_result',
+              call_id: 'call_2',
               name: 'fetch',
-              arguments: { u: 'two' },
+              result: [{ type: 'text', text: 'b' }],
             },
-          ]),
+          ],
         });
         expect(
           fetchModel.mock.calls
@@ -481,7 +491,9 @@ describe('canonical Google Interactions protocol', () => {
         );
         expect(
           yield* Effect.flip(
-            Stream.runDrain(background.observe(operation, { deadlineAtMs: 0 })),
+            Stream.runDrain(
+              background.observe(turn, operation, { deadlineAtMs: 0 }),
+            ),
           ),
         ).toMatchObject({ kind: 'observation-deadline', operation });
         const invalidForeground = JSON.parse(JSON.stringify(turn));
@@ -554,7 +566,7 @@ describe('canonical Google Interactions protocol', () => {
             );
           const observation = yield* Effect.flip(
             Stream.runDrain(
-              background.observe(operation, { deadlineAtMs: 10_000 }),
+              background.observe(turn, operation, { deadlineAtMs: 10_000 }),
             ),
           ).pipe(Effect.forkChild);
           if (failure === 'changed-model') yield* TestClock.adjust('5 seconds');
@@ -627,7 +639,7 @@ describe('canonical Google Interactions protocol', () => {
         else if (kind === 'cancel') action = background.cancel(operation);
         else
           action = Stream.runDrain(
-            background.observe(operation, {
+            background.observe(turn, operation, {
               deadlineAtMs: timedOut ? 1_000 : 60_000,
             }),
           );
