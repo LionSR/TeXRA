@@ -129,9 +129,12 @@ describe('Codex device login', () => {
         yield* Deferred.await(storeEntered);
         expect(coordinator.completeDeviceLogin).toHaveBeenCalledOnce();
 
-        // The store is uninterruptible: the interrupt waits for it to settle.
-        const interruption = yield* Effect.forkChild(Fiber.interrupt(fiber));
-        yield* settle;
+        // The store is uninterruptible: start the interrupt now, so it is
+        // pending before resolving the store rather than queued behind this
+        // test fiber's next scheduler turn.
+        const interruption = yield* Effect.forkChild(Fiber.interrupt(fiber), {
+          startImmediately: true,
+        });
         expect(fiber.pollUnsafe()).toBeUndefined();
         store.resolve({ accessToken: 'stored' });
 
