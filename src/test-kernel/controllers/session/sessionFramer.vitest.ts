@@ -273,13 +273,28 @@ describe('session framer', () => {
           }),
         );
 
-        yield* bridge.attach({ id: PORT, send: () => {} });
+        const second = yield* bridge.attach({ id: PORT, send: () => {} });
+        yield* second.receive({
+          ...subscribe,
+          session: session.roots.storage,
+          aggregates,
+        });
 
         yield* Effect.promise(() =>
           vi.waitFor(() => {
-            expect(setSubscriptions).toHaveBeenCalledWith(PORT, []);
+            expect(setSubscriptions.mock.calls).toEqual([
+              [PORT, aggregates],
+              [PORT, []],
+              [PORT, aggregates],
+            ]);
             expect(onPortClosed).toHaveBeenCalledTimes(1);
             expect(onPortClosed).toHaveBeenCalledWith(PORT);
+            expect(
+              setSubscriptions.mock.invocationCallOrder[1],
+            ).toBeLessThan(setSubscriptions.mock.invocationCallOrder[2]!);
+            expect(onPortClosed.mock.invocationCallOrder[0]).toBeLessThan(
+              setSubscriptions.mock.invocationCallOrder[2]!,
+            );
           }),
         );
       }),
