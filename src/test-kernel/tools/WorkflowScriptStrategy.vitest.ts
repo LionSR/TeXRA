@@ -242,6 +242,7 @@ return await agent('Solve.', {
         Promise.resolve(strategy.formatDelivery(turn, 0)),
       );
       expect(delivery).toContain('Saved result');
+      expect(delivery).not.toContain('Using saved result');
       expect(delivery).toContain(
         '"files":[{"path":"paper.tex","added":12,"removed":8}]',
       );
