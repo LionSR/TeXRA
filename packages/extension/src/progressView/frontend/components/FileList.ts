@@ -35,6 +35,7 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
+import { pluralize } from '@utils/text/stringUtils';
 import { ELEMENT_IDS } from '../constants';
 import { getComposedPathElement } from '../utils';
 
@@ -405,8 +406,8 @@ export class FileList extends LitElement {
     return html`
       <span class="file-stats">
         <span class="visually-hidden"
-          >${counts.added} ${counts.added === 1 ? 'line' : 'lines'} added,
-          ${counts.removed} ${counts.removed === 1 ? 'line' : 'lines'}
+          >${counts.added} ${pluralize(counts.added, 'line', 'lines')} added,
+          ${counts.removed} ${pluralize(counts.removed, 'line', 'lines')}
           removed</span
         >
         <span class="added" aria-hidden="true">+${counts.added}</span>

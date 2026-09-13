@@ -234,6 +234,47 @@ beforeAll(() => {
 
 describe('session events and view', () => {
   it.effect(
+    'commits a detached publication before a batch awaited after it',
+    () =>
+      Effect.gen(function* () {
+        // The tool card's start row is detached by the trace subscriber; the
+        // loop's settlement batch, awaited on its own fiber, follows it in
+        // program order. The one inbox makes that the commit order too, so
+        // a fast tool's card never closes before it opens (the inversion of
+        // 2026-09-12: 24 of 89 cards in one session).
+        const events = yield* SessionEvents;
+        const aggregateId = qualifyAggregateId('run', RUN);
+        events.detach((append) =>
+          append([
+            {
+              type: 'tool.start',
+              aggregateId,
+              logId: 'card-1',
+              toolName: 'bash',
+              input: { command: 'ls' },
+            },
+          ]),
+        );
+        const settled = yield* events.publish([
+          {
+            type: 'tool.end',
+            aggregateId,
+            logId: 'card-1',
+            status: 'completed',
+            result: { toolName: 'bash', output: { output: '' } },
+          },
+        ]);
+        yield* events.settle;
+        const rows = yield* Stream.runCollect(events.aggregate(aggregateId, 2));
+        expect([...rows].map((row) => [row.type, row.seq])).toEqual([
+          ['tool.start', 2],
+          ['tool.end', 3],
+        ]);
+        expect(settled.map((row) => row.seq)).toEqual([3]);
+      }).pipe(Effect.provide(graph([runStart]))),
+  );
+
+  it.effect(
     'does not publish unchanged views for a burst of source wakeups',
     () =>
       Effect.gen(function* () {
@@ -1981,7 +2022,7 @@ describe('RunLedger', () => {
       parallelSafe: false,
       partition: 0,
       duplicateOf: null,
-      logId: null,
+      logId: 'card-a',
       stageId: null,
     },
     {
@@ -1991,7 +2032,7 @@ describe('RunLedger', () => {
       parallelSafe: false,
       partition: 0,
       duplicateOf: 'call-a',
-      logId: null,
+      logId: 'card-b',
       stageId: null,
     },
   ] as const;

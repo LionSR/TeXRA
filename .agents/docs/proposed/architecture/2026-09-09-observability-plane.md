@@ -160,6 +160,17 @@ Ordering improves rather than degrades: `publicationGate` exists to keep status 
 transcript order, but only serializes _after_ `runPromise` has forked. A single-consumer queue
 gives that ordering by construction.
 
+> **Landed 2026-09-13 (one-door publisher).** The queue exists, and it carries more than the
+> trace: `SessionEvents` is one inbox drained by one fiber, and _every_ writer of the log is a
+> job on it — the trace subscriber (`detach`, enqueued synchronously at emit time), the run
+> loop's `RunLedger.appendBatch` (`publish`, awaited), and the surfaces' read-then-append
+> decisions (`exclusive`). A queue that carried only the trace would have left the ledger
+> racing the drain fiber exactly as it raced the gate (the 2026-09-12 inversion: a tool card's
+> terminal row committed before its start row in 24 of 89 cards of one session).
+> `publicationGate`, the promise `Set`, `schedulePublication` and its `runPromise` are gone
+> from `SessionHandle`; step 4 below now owns only the `TraceEmitter` listener set and the
+> SDK's buffer cap.
+
 One real constraint, on the producer side: `emit()` stamps `stageId` from the ambient scope and
 must do so on the emitting fiber. Stamp, then enqueue — a queue preserves this completely.
 
@@ -245,8 +256,9 @@ is a standalone logger migration, and no step introduces a bridge between old an
 
 4. **Trace hub, after model-handler retirement.** That retirement deletes
    `ModelHandler.ts:279`, leaving one construction site and two consumers that both already want
-   a queue. `createListenerSet`, `publicationGate`, the promise `Set`, and the SDK's buffer cap
-   collapse together.
+   a queue. `createListenerSet` and the SDK's buffer cap collapse together; the publication
+   half (`publicationGate`, the promise `Set`) is already gone (§3.4, landed 2026-09-13), so the
+   hub feeds `SessionEvents.detach` and adds no ordering of its own.
 5. **`logUtils.ts` dies last**, with the final Promise-based subsystem — not first.
 
 Steps 1–3 are available now. Step 4 is gated on work already scheduled, and should be sized when

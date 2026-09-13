@@ -1271,6 +1271,20 @@ filtered against. The alternative - one process-wide frame stream plus a
 overlapping stream ids or cursors can cross papers, with a filter left to
 be trusted at each call.
 
+> **Amendment 2026-09-13 (one-door publisher).** The layer sketched above orders
+> publications with a `Semaphore(1)` around the durable write. What landed
+> (`src/agent/runtime/SessionEvents.ts`) is stronger and simpler: one inbox
+> (`Queue.unbounded`) drained by one fiber, and every writer of the log is a
+> job on it — `publish` (an awaited batch, the run ledger's door), `exclusive`
+> (a read of committed rows and the append that depends on it, as one job),
+> `detach` (a synchronous enqueue for a producer with no fiber to wait on: the
+> trace subscriber), and `settle` (wait for what is detached). A semaphore
+> orders by permit acquisition, which equals program order only while a forked
+> fiber happens to run synchronously to its first async boundary; the inbox
+> orders by the moment of the call. The permit that had migrated into
+> `SessionHandle` (`publicationGate`, a promise `Set`, `schedulePublication`)
+> is deleted, and `RunLedger.appendBatch` no longer bypasses the publisher.
+
 ### 7.2 `SessionView`
 
 `SessionViewService` applies the same pure fold in every host. Its source is

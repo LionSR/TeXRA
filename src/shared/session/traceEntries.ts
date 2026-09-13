@@ -128,6 +128,10 @@ export class StreamLog {
     return fullEntry;
   }
 
+  has(id: string): boolean {
+    return this.indexById.has(id);
+  }
+
   update(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined {
     return this.updateWithSettlement(id, patch, false);
   }

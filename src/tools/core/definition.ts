@@ -9,13 +9,7 @@ import { BaseTool } from './base';
 import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
 
-const EXECUTION_FLAGS = [
-  'parallelSafe',
-  'requiresApproval',
-  'slow',
-  'deferLogUntilApproval',
-  'streamsOutput',
-] as const;
+const EXECUTION_FLAGS = ['parallelSafe', 'requiresApproval', 'slow'] as const;
 
 type ExecutionFlag = (typeof EXECUTION_FLAGS)[number];
 type DefineToolFlags = { [K in ExecutionFlag]?: boolean };
@@ -98,8 +92,6 @@ export function defineTool<T, R = never>(
     readonly parallelSafe = def.parallelSafe;
     readonly requiresApproval = def.requiresApproval;
     readonly slow = def.slow;
-    readonly deferLogUntilApproval = def.deferLogUntilApproval;
-    readonly streamsOutput = def.streamsOutput;
     readonly unavailableHosts = def.unavailableHosts;
 
     constructor() {

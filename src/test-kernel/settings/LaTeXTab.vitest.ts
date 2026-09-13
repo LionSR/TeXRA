@@ -8,7 +8,7 @@ vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
-import type { LatexConfigValues } from '@shared/schemas';
+import type { LatexConfigValues } from '@shared/constants/latexConfig';
 import {
   mountComponent,
   useLitComponentTestDom,

@@ -17,6 +17,7 @@ import type { FormatResult } from '@progressView/frontend/formatters/baseLogForm
 import type { WebFetchRow, WebSearchRow } from '@shared/transcript';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { pluralize } from '@utils/text/stringUtils';
 import { buildToolUseDetails } from './helpers';
 
 // Web search status-based wa-icon names; SPINNER_ICON_NAME triggers a spinner.
@@ -74,7 +75,7 @@ export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {
       return html`<li class="detail-item">${waIcon('link')} ${r.url ? buildWebLink(r.url, html`<bdi dir="auto">${label}</bdi>`, label) : html`<span><bdi dir="auto">${label}</bdi></span>`}${showDomain ? html` <span class="file-source">(<bdi dir="auto">${r.domain}</bdi>)</span>` : ''}</li>`;
     });
     // prettier-ignore
-    const resultsTemplate = html`<span class="file-list-summary">${resultCount} ${resultCount === 1 ? 'result' : 'results'}</span><ul class="detail-list">${resultItems}</ul>`;
+    const resultsTemplate = html`<span class="file-list-summary">${resultCount} ${pluralize(resultCount, 'result', 'results')}</span><ul class="detail-list">${resultItems}</ul>`;
     sections.push(buildToolUseSection('Sources:', resultsTemplate));
   } else if (statusKey === 'completed') {
     sections.push(

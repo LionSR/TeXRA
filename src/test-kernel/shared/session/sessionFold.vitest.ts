@@ -493,6 +493,65 @@ describe('sessionFold', () => {
     expect(runView(dead, CHILD).group).toBe('interrupted');
   });
 
+  it('projects a running card from its live output and lets the terminal row win', () => {
+    const log = new Log();
+    log.emit(CHILD, 1600, {
+      type: 'run.start',
+      identity: CHILD_IDENTITY,
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
+      parent: null,
+    });
+    const chunk = (from: number, to: number, text: string): FoldInput => ({
+      _tag: 'chunk',
+      runId: CHILD,
+      rowId: 'card',
+      from,
+      to,
+      text,
+    });
+    const outputOf = (view: SessionView) => {
+      const [row] = runView(view, CHILD).transcript.rows;
+      return row.kind === 'tool' ? row.toolUse.outputText : null;
+    };
+    // What the tool prints streams to the open card as transient text (C3),
+    // never as a row; a later chunk extends it.
+    const running = foldAll([
+      subscribe(CHILD),
+      ...log.events.map(tail),
+      tail(
+        log.emit(CHILD, 1601, {
+          type: 'tool.start',
+          logId: 'card',
+          toolName: 'bash',
+          input: { command: 'ls' },
+        }),
+      ),
+      chunk(0, 3, 'Hel'),
+      chunk(3, 5, 'lo'),
+    ]);
+    expect(outputOf(running)).toContain('Hello');
+    // The terminal row carries the bounded capture and closes the card: a
+    // late chunk reaches nothing.
+    const settled = foldAll(
+      [
+        tail(
+          log.emit(CHILD, 1602, {
+            type: 'tool.end',
+            logId: 'card',
+            status: 'completed',
+            result: { toolName: 'bash', output: { output: 'Hello, world' } },
+          }),
+        ),
+        chunk(5, 9, ' bye'),
+      ],
+      running,
+    );
+    expect(outputOf(settled)).toContain('Hello, world');
+    expect(outputOf(settled)).not.toContain('bye');
+  });
+
   it('keeps live text by offsets and joins it to its row whichever arrives first', () => {
     const log = new Log();
     log.emit(CHILD, 1500, {
@@ -1081,7 +1140,7 @@ const CALLS = [
     parallelSafe: false,
     partition: 0,
     duplicateOf: null,
-    logId: null,
+    logId: 'card-0',
     stageId: null,
   },
   {
@@ -1091,7 +1150,7 @@ const CALLS = [
     parallelSafe: false,
     partition: 0,
     duplicateOf: 'call-a',
-    logId: null,
+    logId: 'card-1',
     stageId: null,
   },
 ];

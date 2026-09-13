@@ -70,6 +70,8 @@ import {
   aggregateTarget,
   isDisplaySessionEvent,
   ownerIdentity,
+  TOOL_CALL_STATUS,
+  type CommitOrdinal,
   type OwnerId,
   type SessionCloseReport,
   type SessionEvent,
@@ -94,6 +96,7 @@ import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
+  type InflightTextChunk,
 } from './sessionSources';
 import { SessionViewService } from './SessionView';
 import { sessionInputsLayer } from './sessionInputs';
@@ -225,7 +228,8 @@ const sessionHandleLayer = (
   Layer.effect(
     Session,
     Effect.gen(function* () {
-      const { publish, ...reads } = yield* SessionEvents;
+      const { publish, exclusive, detach, settle, ...reads } =
+        yield* SessionEvents;
       const eventLog = yield* Database;
       const ledger = yield* RunLedger;
       const inquiryRecords = yield* InquiryRecords;
@@ -241,41 +245,45 @@ const sessionHandleLayer = (
           SubscriptionRef.getUnsafe(view.ref).cursor,
           SubscriptionRef.getUnsafe(delivered),
         );
-      const settlePublication = (rows: readonly SessionEvent[]) =>
+      /** Wait until the tail has delivered and the view has folded every
+       *  commit up to `commit`: what "published" means to a caller that
+       *  reads the view next. */
+      const settleTo = (commit: CommitOrdinal) =>
         Effect.gen(function* () {
-          const last = rows.at(-1);
-          if (last) {
-            yield* SubscriptionRef.changes(delivered).pipe(
-              Stream.filter((commit) => commit >= last.commit),
-              Stream.runHead,
-              Effect.raceFirst(
-                Deferred.await(tailEnded).pipe(
-                  Effect.andThen(
-                    Effect.die(
-                      new Error('Session committed-event consumer stopped'),
-                    ),
+          yield* SubscriptionRef.changes(delivered).pipe(
+            Stream.filter((delivered) => delivered >= commit),
+            Stream.runHead,
+            Effect.raceFirst(
+              Deferred.await(tailEnded).pipe(
+                Effect.andThen(
+                  Effect.die(
+                    new Error('Session committed-event consumer stopped'),
                   ),
                 ),
               ),
-            );
-          }
-          if (last) {
-            yield* view.changes.pipe(
-              Stream.filter((state) => state.cursor >= last.commit),
-              Stream.runHead,
-              Effect.flatMap((state) =>
-                Option.isSome(state)
-                  ? Effect.void
-                  : Effect.die(
-                      new Error(
-                        'Session view stopped before publication settled',
-                      ),
+            ),
+          );
+          yield* view.changes.pipe(
+            Stream.filter((state) => state.cursor >= commit),
+            Stream.runHead,
+            Effect.flatMap((state) =>
+              Option.isSome(state)
+                ? Effect.void
+                : Effect.die(
+                    new Error(
+                      'Session view stopped before publication settled',
                     ),
-              ),
-            );
-          }
-          return rows;
+                  ),
+            ),
+          );
         });
+      const settlePublication = (rows: readonly SessionEvent[]) => {
+        const last = rows.at(-1);
+        return last === undefined
+          ? Effect.succeed(rows)
+          : settleTo(last.commit).pipe(Effect.as(rows));
+      };
+      const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
         ledger,
@@ -321,6 +329,33 @@ const sessionHandleLayer = (
         aggregateRows: (id) => eventLog.readAggregate(id, 1).pipe(Effect.orDie),
         publish: (events) =>
           publish(events).pipe(Effect.flatMap(settlePublication)),
+        // A job settles against the last commit it appended, never against
+        // whatever the publisher committed next: a job that appended nothing
+        // (a decision already taken, an empty update) returns at once.
+        exclusive: (job) =>
+          Effect.gen(function* () {
+            let committed: CommitOrdinal | null = null;
+            const value = yield* exclusive((append) =>
+              job((events) =>
+                append(events).pipe(
+                  Effect.tap((rows) =>
+                    Effect.sync(() => {
+                      const last = rows.at(-1);
+                      if (last !== undefined) committed = last.commit;
+                    }),
+                  ),
+                ),
+              ),
+            );
+            if (committed !== null) yield* settleTo(committed);
+            return value;
+          }),
+        detach,
+        settle: settle.pipe(
+          Effect.flatMap((committed) =>
+            committed === null ? Effect.void : settleTo(committed),
+          ),
+        ),
         publishRegistration: (events) =>
           Effect.gen(function* () {
             const rows = yield* publish(events);
@@ -357,7 +392,7 @@ const sessionHandleLayer = (
         subscriptions,
         // The request handler admits on the root graph's log.
         requests: sessionRequests(session, eventLog, local.ref, inquiryRecords),
-        now: () => SubscriptionRef.getUnsafe(eventLog.observedCommit),
+        now,
         close: () => release(key),
       });
       // Capture before constructing the handle: constructor publications and
@@ -424,17 +459,42 @@ const sessionHandleLayer = (
                   })
                 : Effect.void;
             }),
-            Effect.andThen(
-              event.type === 'stream.end'
-                ? SubscriptionRef.update(chunks.ref, (held) => {
-                    const next = new Map(held);
-                    next.delete(
-                      `${aggregateTarget(event.aggregateId).id}/${event.id}`,
-                    );
-                    return next;
-                  })
-                : Effect.void,
-            ),
+            Effect.andThen(() => {
+              // A row that closes live text drops the held chunks: a
+              // stream's final text or a card's terminal result drop their
+              // own; the run's transcript boundary (the park, the end, the
+              // removal) drops every chunk of the run, the same rule the
+              // fold applies to its in-flight text, so a card an
+              // interrupted run closed without a terminal row holds nothing.
+              const runId = aggregateTarget(event.aggregateId).id;
+              let drop: ((key: string) => boolean) | null = null;
+              if (event.type === 'stream.end') {
+                drop = (key) => key === `${runId}/${event.id}`;
+              } else if (
+                event.type === 'tool.end' &&
+                event.status !== TOOL_CALL_STATUS.IN_PROGRESS
+              ) {
+                drop = (key) => key === `${runId}/${event.logId}`;
+              } else if (
+                event.type === 'run.end' ||
+                event.type === 'run.removed' ||
+                (event.type === 'flow.step' && event.payload.step === 'waiting')
+              ) {
+                drop = (key) => key.startsWith(`${runId}/`);
+              }
+              const dropping = drop;
+              return dropping === null
+                ? Effect.void
+                : SubscriptionRef.update(chunks.ref, (held) => {
+                    let next: Map<string, InflightTextChunk> | null = null;
+                    for (const key of held.keys()) {
+                      if (!dropping(key)) continue;
+                      next ??= new Map(held);
+                      next.delete(key);
+                    }
+                    return next ?? held;
+                  });
+            }),
             Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
           ),
         ),

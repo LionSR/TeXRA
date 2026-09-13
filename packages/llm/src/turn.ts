@@ -1669,6 +1669,45 @@ export const pullStream = <
   );
 
 /**
+ * Parses a persisted local-call's argument text back into the JSON object a
+ * provider request carries. This process authored the history, so a
+ * malformed payload is our bug, not the model's: every protocol reports it
+ * as `invalid-request`.
+ */
+export const parseOutboundToolArguments = (
+  argumentsText: string,
+): Effect.Effect<z.infer<typeof JsonObjectSchema>, ModelError> =>
+  Effect.try({
+    try: () => JsonObjectSchema.parse(JSON.parse(argumentsText)),
+    catch: (cause) =>
+      new ModelError({
+        kind: 'invalid-request',
+        message:
+          'History carries local-call arguments that are not a JSON object.',
+        cause,
+      }),
+  });
+
+/**
+ * Parses a tool call's argument text as a provider just returned it. The
+ * model authored this output, so a malformed payload reports as
+ * `malformed-output`; `provider` names the source in the surfaced message.
+ */
+export const parseInboundToolArguments = (
+  argumentsText: string,
+  provider: string,
+): Effect.Effect<z.infer<typeof JsonObjectSchema>, ModelError> =>
+  Effect.try({
+    try: () => JsonObjectSchema.parse(JSON.parse(argumentsText)),
+    catch: (cause) =>
+      new ModelError({
+        kind: 'malformed-output',
+        message: `${provider} returned tool call arguments that are not a JSON object.`,
+        cause,
+      }),
+  });
+
+/**
  * The request signal for a streamed body, with the body reader cancelled at
  * scope close. The cancel finalizer is registered before the signal's abort
  * finalizer, so LIFO order aborts the request before cancellation joins a

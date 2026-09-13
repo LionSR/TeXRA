@@ -40,6 +40,7 @@ import {
 import { readSelectValue } from '@shared/wa/selectTemplates';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { groupBy } from '@utils/core';
+import { pluralize } from '@utils/text/stringUtils';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
@@ -331,7 +332,7 @@ export class ModelSelectionList extends LitElement {
             : 'provider-group-chevron',
         })}
         ${group.deprecated.length}
-        ${group.deprecated.length === 1 ? 'deprecated model' : 'deprecated models'}
+        ${pluralize(group.deprecated.length, 'deprecated model', 'deprecated models')}
       </wa-button>
       ${
         isOpen

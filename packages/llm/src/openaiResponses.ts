@@ -16,12 +16,12 @@ import {
   CancellationEvidenceSchema,
   ContinuationSchema,
   InputTokenEstimateSchema,
-  JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
   enrichModelError,
   pullStream,
   ObservationPolicySchema,
+  parseInboundToolArguments,
   RemoteOperationSchema,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -245,17 +245,7 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
           message: 'Incomplete local calls are not dispatchable.',
         });
       }
-      yield* Effect.try({
-        try: () => {
-          JsonObjectSchema.parse(JSON.parse(item.arguments));
-        },
-        catch: (cause) =>
-          new ModelError({
-            kind: 'malformed-output',
-            message: 'The model returned invalid local-call arguments.',
-            cause,
-          }),
-      });
+      yield* parseInboundToolArguments(item.arguments, 'The model');
       return {
         kind: 'local-call',
         providerCallId: item.call_id,

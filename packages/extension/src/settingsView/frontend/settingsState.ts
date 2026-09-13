@@ -1,12 +1,13 @@
 /**
  * Module-level reactive state for the Settings view.
  *
- * Each signal is an independent, flat piece of state, so slices import and set
- * the ones they need directly rather than going through a get/set context.
+ * Each signal is an independent, flat piece of state, so the outbound handlers
+ * import and set the ones they need directly rather than going through a
+ * get/set context.
  *
  * SettingsApp has no persistence/restore path: every signal here is written
- * only by the composed `messageHandlers` registry (see `messageDispatcher.ts`
- * + `slices/`) in response to backend SETTINGS_VIEW_COMMANDS messages — the
+ * only by the `settingsViewHandlers` registry (see `messageDispatcher.ts`)
+ * in response to backend SETTINGS_VIEW_COMMANDS messages — the
  * backend configuration is the actual source of truth, this file is a pure
  * receiver.
  *
@@ -54,7 +55,6 @@ import {
   type CopilotRouteInfo,
   type Goal,
   type GrokAuthStatus,
-  type LatexConfigValues,
   type MemoryViewItem,
   type ModelSelectionItem,
   type ProviderKeyStatus,
@@ -66,6 +66,7 @@ import {
   type ToolDashboardItem,
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import type { LatexConfigValues } from '@shared/constants/latexConfig';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // ---------------------------------------------------------------------------

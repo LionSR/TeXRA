@@ -36,9 +36,9 @@ export interface ITool<E = unknown, R = never> {
   readonly parallelSafe?: boolean;
   /** Execution behavior consumed by tool resolution and dispatch. */
   readonly requiresApproval?: boolean;
+  /** Its card opens before the call runs; a fast tool's opens and closes
+   *  with its settlement. */
   readonly slow?: boolean;
-  readonly deferLogUntilApproval?: boolean;
-  readonly streamsOutput?: boolean;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
 

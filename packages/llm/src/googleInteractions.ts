@@ -15,6 +15,8 @@ import {
   ModelConfigurationSchema,
   ModelError,
   enrichModelError,
+  parseInboundToolArguments,
+  parseOutboundToolArguments,
   pullStream,
   readerAbortSignal,
   ResolvedTurnSchema,
@@ -274,17 +276,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
               type: 'function_call',
               id: part.providerCallId,
               name: part.name,
-              arguments: yield* Effect.try({
-                try: () =>
-                  JsonObjectSchema.parse(JSON.parse(part.argumentsText)),
-                catch: (cause) =>
-                  new ModelError({
-                    kind: 'invalid-request',
-                    message:
-                      'History carries local-call arguments that are not a JSON object.',
-                    cause,
-                  }),
-              }),
+              arguments: yield* parseOutboundToolArguments(part.argumentsText),
             });
             break;
           default:
@@ -994,17 +986,7 @@ export function googleInteractionsModel(
                   slot.step.type === 'function_call' &&
                   argumentsText !== undefined
                 ) {
-                  yield* Effect.try({
-                    try: () => {
-                      JsonObjectSchema.parse(JSON.parse(argumentsText));
-                    },
-                    catch: (cause) =>
-                      new ModelError({
-                        kind: 'malformed-output',
-                        message: 'Google emitted malformed tool arguments.',
-                        cause,
-                      }),
-                  });
+                  yield* parseInboundToolArguments(argumentsText, 'Google');
                   responseSteps.push({ ...slot.step, argumentsText });
                   continue;
                 }

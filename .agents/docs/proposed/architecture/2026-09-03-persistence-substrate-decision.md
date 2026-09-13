@@ -436,7 +436,8 @@ and project publication steps; no cross-database atomic delivery is claimed.
 Panel drafts remain view state and are not part of canonical inquiry records.
 
 **C3. Durable event set.** Durable: every run-scoped `AgentEvent` except text,
-thinking, and tool-input deltas; `approval.requested`,
+thinking, tool-input deltas, and (amended 2026-09-13) the output a running
+tool prints, which reaches the fold as transient text keyed by the card id; `approval.requested`,
 `approval.resolved`, `approval.policy` (snapshot); `run.start` at the
 reservation commit point carrying `identity` (nullish only for imported legacy
 streams), `worktree` (nullish), and explicit `category` and `isRemote` fields,

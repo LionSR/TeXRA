@@ -13,6 +13,8 @@ import {
   ModelConfigurationSchema,
   ModelError,
   enrichModelError,
+  parseInboundToolArguments,
+  parseOutboundToolArguments,
   pullStream,
   ResolvedTurnSchema,
   sameModelOrigin,
@@ -305,16 +307,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
             type: 'tool_use',
             id: part.providerCallId,
             name: part.name,
-            input: yield* Effect.try({
-              try: () => JsonObjectSchema.parse(JSON.parse(part.argumentsText)),
-              catch: (cause) =>
-                new ModelError({
-                  kind: 'invalid-request',
-                  message:
-                    'History carries local-call arguments that are not a JSON object.',
-                  cause,
-                }),
-            }),
+            input: yield* parseOutboundToolArguments(part.argumentsText),
           });
         } else if (
           part.kind === 'reasoning' &&
@@ -806,25 +799,7 @@ export function anthropicMessagesModel(
                   // input_json_delta carries no arguments, and '{}' is that
                   // empty object's exact text.
                   const argumentsText = open.argumentsText ?? '{}';
-                  const argumentsValue = yield* Effect.try({
-                    try: () => JSON.parse(argumentsText),
-                    catch: (cause) =>
-                      new ModelError({
-                        kind: 'malformed-output',
-                        message:
-                          'Anthropic returned incomplete function argument JSON.',
-                        cause,
-                      }),
-                  });
-                  const argumentsResult =
-                    JsonObjectSchema.safeParse(argumentsValue);
-                  if (!argumentsResult.success)
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'Anthropic function arguments must be a supported JSON object.',
-                      cause: argumentsResult.error,
-                    });
+                  yield* parseInboundToolArguments(argumentsText, 'Anthropic');
                   content.push({
                     kind: 'local-call',
                     providerCallId: block.id,
