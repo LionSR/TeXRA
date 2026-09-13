@@ -13,6 +13,7 @@ import { getRunRecords } from '@agent/storage';
 import { RunLeaseActiveError } from '@agent/storage/runLease';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
+  AgentCategory,
   aggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,
@@ -213,6 +214,46 @@ function mockPersistedReport(
   vi.spyOn(store, 'readRunEnd').mockReturnValue(
     Effect.succeed({ outcome, output: emptyRunEndOutput('workflow') }),
   );
+}
+
+const WORKFLOW_ATTEMPT_ID = 'attempt-1';
+
+function publishWorkflowBoard(
+  runId: RunId,
+  phase: string,
+  label: string,
+): Effect.Effect<void, never> {
+  return Effect.promise(async () => {
+    const session = currentSession();
+    session.publishRunEvent(runId, {
+      type: 'workflow.plan',
+      attemptId: WORKFLOW_ATTEMPT_ID,
+      phases: [{ title: phase }],
+      tasks: [],
+    });
+    session.publishRunEvent(runId, {
+      type: 'stage.start',
+      id: 'phase-1',
+      label: phase,
+      kind: 'phase',
+    });
+    session.publishRunEvent(runId, {
+      type: 'workflow.call',
+      logId: 'workflow-task-1',
+      stageId: 'phase-1',
+      call: {
+        id: 'call-1',
+        label,
+        phase,
+        kind: 'document',
+        files: { input: [], context: [], media: [] },
+        childRunId: 'bbbbbb222222' as RunId,
+        attemptId: WORKFLOW_ATTEMPT_ID,
+        status: 'running',
+      },
+    });
+    await session.settlePublications();
+  });
 }
 
 function callTool(
@@ -1017,6 +1058,74 @@ return null`;
         expect(first).toBe(runIdFor('tool-test'));
         expect(second).toBe(first);
       }),
+  );
+
+  it.effect('keeps the committed workflow board when reopening a named run', () =>
+    Effect.gen(function* () {
+      const runId = runIdFor('tool-test');
+      const phase = 'Research';
+      const label = 'Interrupted call';
+      let reopenedTasks: unknown;
+      yield* currentSession().commit([
+        {
+          type: 'run.start',
+          aggregateId: aggregateId('run', runId),
+          identity: {
+            kind: 'multiAgentWorkflow',
+            workflowName: 'tool-test',
+          },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+          category: AgentCategory.Workflow,
+          isRemote: false,
+          parent: { id: parentRunId },
+          checkpointId: checkpointIdFor('tool-test'),
+        },
+        {
+          type: 'run.launchLabel',
+          aggregateId: aggregateId('run', runId),
+          label: 'tool-test',
+        },
+        {
+          type: 'run.activate',
+          aggregateId: aggregateId('run', runId),
+          category: AgentCategory.Workflow,
+        },
+      ]);
+      yield* publishWorkflowBoard(runId, phase, label);
+
+      mocks.createChildRun.mockImplementationOnce(
+        (_session: unknown, childRunId: RunId) =>
+          Effect.gen(function* () {
+            const view = yield* currentSession().readView([childRunId]);
+            reopenedTasks = view.runs.get(childRunId)?.transcript.run?.tasks;
+            const logger = new TraceEmitter();
+            vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
+            return {
+              childRunId,
+              logger,
+              waitForInput: vi.fn(),
+              beginTurn: vi.fn(),
+              failTurn: vi.fn(),
+              finalize: vi.fn(() => Effect.void),
+            };
+          }),
+      );
+
+      const result = yield* callTool();
+
+      expect(result.status).toBe('executed');
+      expect(reopenedTasks).toEqual([
+        expect.objectContaining({
+          call: expect.objectContaining({ label }),
+        }),
+      ]);
+      expect(mocks.createChildRun).toHaveBeenCalledWith(
+        currentSession(),
+        runId,
+        expect.anything(),
+        expect.anything(),
+      );
+    }),
   );
 
   it.effect(

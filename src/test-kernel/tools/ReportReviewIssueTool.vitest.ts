@@ -35,10 +35,7 @@ function useReviewSink(sink: ReportReviewIssueSink): void {
   });
 }
 
-function useAcceptingSink(): {
-  sink: Mock<ReportReviewIssueSink>;
-  tool: InstanceType<typeof ReportReviewIssueTool>;
-} {
+function useAcceptingSink() {
   const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
   useReviewSink(sink);
   return { sink, tool: new ReportReviewIssueTool() };
