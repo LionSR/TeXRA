@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Effect, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { anthropicMessagesModel } from '@llm/anthropicMessages';
 import type { AnthropicMessagesConfiguration, TurnRequest } from '@llm/turn';
@@ -297,52 +297,50 @@ describe('canonical Anthropic Messages protocol', () => {
       }),
   );
 
-  it.each(['tools', 'media', 'history', 'binding', 'budget'] as const)(
+  it.effect.each(['tools', 'media', 'history', 'binding', 'budget'] as const)(
     'rejects unsupported %s before counting any Anthropic input',
-    async (kind) => {
-      const configured = model();
-      assert(configured.estimateInputTokens);
-      const turn = await Effect.runPromise(
-        configured.prepareTurn({
+    (kind) =>
+      Effect.gen(function* () {
+        const configured = model();
+        assert(configured.estimateInputTokens);
+        const turn = yield* configured.prepareTurn({
           messages: [{ role: 'user', content: [{ kind: 'text', text: 'x' }] }],
-        }),
-      );
-      assert(turn.protocol === 'anthropic-messages');
-      let input: unknown = turn;
-      if (kind === 'tools') input = { ...turn, tools: REQUEST.tools };
-      if (kind === 'media') input = { ...turn, messages: REQUEST.messages };
-      if (kind === 'history')
-        input = { ...turn, messages: [...turn.messages, ...turn.messages] };
-      if (kind === 'binding')
-        input = {
-          ...turn,
-          deployment: {
-            ...turn.deployment,
-            credentialScope: 'another-account',
-          },
-        };
-      if (kind === 'budget')
-        input = {
-          ...turn,
-          controls: {
-            ...turn.controls,
-            thinking: {
-              mode: 'enabled',
-              budgetTokens: 10000,
-              display: 'omitted',
+        });
+        assert(turn.protocol === 'anthropic-messages');
+        let input: unknown = turn;
+        if (kind === 'tools') input = { ...turn, tools: REQUEST.tools };
+        if (kind === 'media') input = { ...turn, messages: REQUEST.messages };
+        if (kind === 'history')
+          input = { ...turn, messages: [...turn.messages, ...turn.messages] };
+        if (kind === 'binding')
+          input = {
+            ...turn,
+            deployment: {
+              ...turn.deployment,
+              credentialScope: 'another-account',
             },
-          },
-        };
-      await expect(
-        Effect.runPromise(
+          };
+        if (kind === 'budget')
+          input = {
+            ...turn,
+            controls: {
+              ...turn.controls,
+              thinking: {
+                mode: 'enabled',
+                budgetTokens: 10000,
+                display: 'omitted',
+              },
+            },
+          };
+        const error = yield* Effect.flip(
           configured.estimateInputTokens(JSON.parse(JSON.stringify(input))),
-        ),
-      ).rejects.toMatchObject({ _tag: 'ModelError' });
-      expect(fetchModel).not.toHaveBeenCalled();
-    },
+        );
+        expect(error).toMatchObject({ _tag: 'ModelError' });
+        expect(fetchModel).not.toHaveBeenCalled();
+      }),
   );
 
-  it.each([
+  it.effect.each([
     { body: '{}', status: 200, kind: 'malformed-output' },
     { body: '{"input_tokens":-1}', status: 200, kind: 'malformed-output' },
     { body: '{', status: 200, kind: 'malformed-output' },
@@ -358,137 +356,139 @@ describe('canonical Anthropic Messages protocol', () => {
     },
   ])(
     'rejects Anthropic count receipt $body at HTTP $status without retry',
-    async ({ body, status, kind }) => {
-      fetchModel.mockImplementation(
-        async () =>
-          new Response(body, {
-            status,
-            headers: {
-              'content-type': 'application/json',
-              'request-id': 'count-request',
-            },
-          }),
-      );
-      const configured = model();
-      assert(configured.estimateInputTokens);
-      const turn = await Effect.runPromise(
-        configured.prepareTurn({
+    ({ body, status, kind }) =>
+      Effect.gen(function* () {
+        fetchModel.mockImplementation(
+          async () =>
+            new Response(body, {
+              status,
+              headers: {
+                'content-type': 'application/json',
+                'request-id': 'count-request',
+              },
+            }),
+        );
+        const configured = model();
+        assert(configured.estimateInputTokens);
+        const turn = yield* configured.prepareTurn({
           messages: [{ role: 'user', content: [{ kind: 'text', text: 'x' }] }],
-        }),
-      );
-      assert(turn.mode === 'foreground');
-      const exit = await Effect.runPromise(
-        Effect.exit(configured.estimateInputTokens(turn)),
-      );
-      assert(exit._tag === 'Failure');
-      expect(exit.cause.reasons).toHaveLength(1);
-      expect(exit.cause.reasons.find(Cause.isFailReason)?.error).toMatchObject({
-        kind,
-        requestId: 'count-request',
-        model: 'selected-claude',
-        ...(status === 200 ? {} : { status }),
-      });
-      expect(fetchModel).toHaveBeenCalledTimes(1);
-    },
+        });
+        assert(turn.mode === 'foreground');
+        const exit = yield* Effect.exit(configured.estimateInputTokens(turn));
+        assert(exit._tag === 'Failure');
+        expect(exit.cause.reasons).toHaveLength(1);
+        expect(
+          exit.cause.reasons.find(Cause.isFailReason)?.error,
+        ).toMatchObject({
+          kind,
+          requestId: 'count-request',
+          model: 'selected-claude',
+          ...(status === 200 ? {} : { status }),
+        });
+        expect(fetchModel).toHaveBeenCalledTimes(1);
+      }),
   );
 
-  it.each(['headers', 'body', 'late-body-failure'] as const)(
+  it.effect.each(['headers', 'body', 'late-body-failure'] as const)(
     'aborts and joins the complete Anthropic count promise during %s',
-    async (phase) => {
-      let enter: () => void = () => {};
-      const entered = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let abort: () => void = () => {};
-      const aborted = new Promise<void>((resolve) => {
-        abort = resolve;
-      });
-      let release: () => void = () => {};
-      const released = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      const failure = new Error('Late count read failure');
-      fetchModel.mockImplementation(async (_url, init) => {
-        assert(init?.signal);
-        const signal = init.signal;
-        if (phase === 'headers')
-          return new Promise<Response>((_resolve, reject) => {
-            signal.addEventListener(
-              'abort',
-              () => {
-                abort();
-                void released.then(() =>
-                  reject(new DOMException('Aborted', 'AbortError')),
-                );
+    (phase) =>
+      Effect.gen(function* () {
+        const entered = yield* Deferred.make<void>();
+        const enter = () => {
+          Deferred.doneUnsafe(entered, Effect.void);
+        };
+        const aborted = yield* Deferred.make<void>();
+        const abort = () => {
+          Deferred.doneUnsafe(aborted, Effect.void);
+        };
+        // The mock chains onto this plain promise from non-Effect code, which is
+        // what defers the rejection past the interrupt; a Deferred would change
+        // the race.
+        let release: () => void = () => {};
+        const released = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        const failure = new Error('Late count read failure');
+        fetchModel.mockImplementation(async (_url, init) => {
+          assert(init?.signal);
+          const signal = init.signal;
+          if (phase === 'headers')
+            return new Promise<Response>((_resolve, reject) => {
+              signal.addEventListener(
+                'abort',
+                () => {
+                  abort();
+                  void released.then(() =>
+                    reject(new DOMException('Aborted', 'AbortError')),
+                  );
+                },
+                { once: true },
+              );
+              enter();
+            });
+          return new Response(
+            new ReadableStream<Uint8Array>(
+              {
+                start(controller) {
+                  signal.addEventListener(
+                    'abort',
+                    () => {
+                      abort();
+                      void released.then(() =>
+                        controller.error(
+                          phase === 'late-body-failure'
+                            ? failure
+                            : new DOMException('Aborted', 'AbortError'),
+                        ),
+                      );
+                    },
+                    { once: true },
+                  );
+                },
+                pull() {
+                  enter();
+                },
               },
-              { once: true },
-            );
-            enter();
-          });
-        return new Response(
-          new ReadableStream<Uint8Array>(
+              { highWaterMark: 0 },
+            ),
             {
-              start(controller) {
-                signal.addEventListener(
-                  'abort',
-                  () => {
-                    abort();
-                    void released.then(() =>
-                      controller.error(
-                        phase === 'late-body-failure'
-                          ? failure
-                          : new DOMException('Aborted', 'AbortError'),
-                      ),
-                    );
-                  },
-                  { once: true },
-                );
-              },
-              pull() {
-                enter();
+              headers: {
+                'content-type': 'application/json',
+                'request-id': 'pending-count',
               },
             },
-            { highWaterMark: 0 },
-          ),
-          {
-            headers: {
-              'content-type': 'application/json',
-              'request-id': 'pending-count',
-            },
-          },
-        );
-      });
-      const configured = model();
-      assert(configured.estimateInputTokens);
-      const turn = await Effect.runPromise(
-        configured.prepareTurn({
+          );
+        });
+        const configured = model();
+        assert(configured.estimateInputTokens);
+        const turn = yield* configured.prepareTurn({
           messages: [{ role: 'user', content: [{ kind: 'text', text: 'x' }] }],
-        }),
-      );
-      assert(turn.mode === 'foreground');
-      const fiber = Effect.runFork(configured.estimateInputTokens(turn));
-      await entered;
-      let finished = false;
-      const interruption = Effect.runPromise(Fiber.interrupt(fiber)).then(
-        (exit) => {
-          finished = true;
-          return exit;
-        },
-      );
-      await aborted;
-      expect(finished).toBe(false);
-      release();
-      await interruption;
-      const exit = await Effect.runPromise(Fiber.await(fiber));
-      assert(exit._tag === 'Failure');
-      expect(Cause.hasInterrupts(exit.cause)).toBe(true);
-      if (phase === 'late-body-failure')
-        expect(
-          exit.cause.reasons.find(Cause.isDieReason)?.defect,
-        ).toMatchObject({ cause: failure, requestId: 'pending-count' });
-      else expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true);
-      expect(fetchModel).toHaveBeenCalledTimes(1);
-    },
+        });
+        assert(turn.mode === 'foreground');
+        const fiber = yield* Effect.forkChild(
+          configured.estimateInputTokens(turn),
+        );
+        yield* Deferred.await(entered);
+        const joined = yield* Deferred.make<void>();
+        const interrupting = yield* Effect.forkChild(
+          Fiber.interrupt(fiber).pipe(
+            Effect.andThen(Deferred.succeed(joined, undefined)),
+          ),
+        );
+        yield* Deferred.await(aborted);
+        expect(yield* Deferred.isDone(joined)).toBe(false);
+        release();
+        yield* Fiber.join(interrupting);
+        const exit = yield* Fiber.await(fiber);
+        assert(exit._tag === 'Failure');
+        expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+        if (phase === 'late-body-failure')
+          expect(
+            exit.cause.reasons.find(Cause.isDieReason)?.defect,
+          ).toMatchObject({ cause: failure, requestId: 'pending-count' });
+        else expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true);
+        expect(fetchModel).toHaveBeenCalledTimes(1);
+      }),
   );
 
   it.effect(
@@ -765,7 +765,7 @@ describe('canonical Anthropic Messages protocol', () => {
       }),
   );
 
-  it.each([
+  it.effect.each([
     ['stop_sequence', 'stop-sequence', { stop_sequence: '</done>' }],
     [
       'refusal',
@@ -779,67 +779,68 @@ describe('canonical Anthropic Messages protocol', () => {
     ['end_turn', 'stop', { stop_details: undefined }],
   ] as const)(
     'preserves terminal %s and partial receipt knowledge',
-    async (reason, finishReason, extra) => {
-      const start = initial();
-      fetchModel.mockImplementation(async () =>
-        response([
-          {
-            ...start,
-            message: {
-              ...start.message,
-              usage: { input_tokens: 7, output_tokens: 0 },
+    ([reason, finishReason, extra]) =>
+      Effect.gen(function* () {
+        const start = initial();
+        fetchModel.mockImplementation(async () =>
+          response([
+            {
+              ...start,
+              message: {
+                ...start.message,
+                usage: { input_tokens: 7, output_tokens: 0 },
+              },
             },
-          },
-          {
-            type: 'message_delta',
-            delta: {
-              stop_reason: reason,
-              stop_sequence: null,
-              stop_details: null,
-              ...extra,
+            {
+              type: 'message_delta',
+              delta: {
+                stop_reason: reason,
+                stop_sequence: null,
+                stop_details: null,
+                ...extra,
+              },
+              usage: { output_tokens: 3 },
             },
-            usage: { output_tokens: 3 },
-          },
-          { type: 'message_stop' },
-        ]),
-      );
-      const configured = model();
-      const turn = await Effect.runPromise(configured.prepareTurn(REQUEST));
-      assert(turn.mode === 'foreground');
-      const result = await Effect.runPromise(configured.generateTurn(turn));
-      assert(result.providerResponseId !== null);
-      expect(result.finishReason).toBe(finishReason);
-      expect(result.content).toEqual([]);
-      expect(result.stopSequence).toBe(
-        reason === 'stop_sequence' ? '</done>' : undefined,
-      );
-      if (reason === 'refusal')
-        expect(result.refusalEvidence).toEqual({
-          kind: 'anthropic-refusal',
-          category: 'cyber',
-          explanation: null,
-        });
-      else
-        expect(result.refusalEvidence).toBe(
-          reason === 'end_turn' ? undefined : null,
+            { type: 'message_stop' },
+          ]),
         );
-      expect(result.usage).toMatchObject({
-        inputTokens: null,
-        totalTokens: null,
-        outputTokens: 3,
-        cachedInputTokens: null,
-        reasoningTokens: null,
-        providerUsage: {
-          uncachedInputTokens: 7,
-          cacheCreationTokens: null,
-          serviceTier: null,
-          inferenceGeo: null,
-        },
-      });
-    },
+        const configured = model();
+        const turn = yield* configured.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const result = yield* configured.generateTurn(turn);
+        assert(result.providerResponseId !== null);
+        expect(result.finishReason).toBe(finishReason);
+        expect(result.content).toEqual([]);
+        expect(result.stopSequence).toBe(
+          reason === 'stop_sequence' ? '</done>' : undefined,
+        );
+        if (reason === 'refusal')
+          expect(result.refusalEvidence).toEqual({
+            kind: 'anthropic-refusal',
+            category: 'cyber',
+            explanation: null,
+          });
+        else
+          expect(result.refusalEvidence).toBe(
+            reason === 'end_turn' ? undefined : null,
+          );
+        expect(result.usage).toMatchObject({
+          inputTokens: null,
+          totalTokens: null,
+          outputTokens: 3,
+          cachedInputTokens: null,
+          reasoningTokens: null,
+          providerUsage: {
+            uncachedInputTokens: 7,
+            cacheCreationTokens: null,
+            serviceTier: null,
+            inferenceGeo: null,
+          },
+        });
+      }),
   );
 
-  it.each([
+  it.effect.each([
     { temperature: 0.5 },
     {
       thinking: { mode: 'enabled', budgetTokens: 8192, display: 'summarized' },
@@ -866,12 +867,14 @@ describe('canonical Anthropic Messages protocol', () => {
     },
   ] as const)(
     'rejects unsupported or invalid author controls before I/O: %j',
-    async (patch) => {
-      await expect(
-        Effect.runPromise(model().prepareTurn({ ...REQUEST, ...patch })),
-      ).rejects.toMatchObject({ _tag: 'ModelError' });
-      expect(fetchModel).not.toHaveBeenCalled();
-    },
+    (patch) =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(
+          model().prepareTurn({ ...REQUEST, ...patch }),
+        );
+        expect(error).toMatchObject({ _tag: 'ModelError' });
+        expect(fetchModel).not.toHaveBeenCalled();
+      }),
   );
 
   it('rejects ambient custom headers before they override the selected credentials', () => {
@@ -885,7 +888,7 @@ describe('canonical Anthropic Messages protocol', () => {
     expect(fetchModel).not.toHaveBeenCalled();
   });
 
-  it.each([
+  it.effect.each([
     'null-block',
     'invalid-arguments',
     'prototype-arguments',
@@ -897,111 +900,111 @@ describe('canonical Anthropic Messages protocol', () => {
     'wrong-stop-sequence',
   ] as const)(
     'rejects %s without completing or losing learned identity',
-    async (variant) => {
-      const events = signedEvents();
-      if (variant === 'null-block')
-        events[1] = {
-          type: 'content_block_start',
-          index: 0,
-          content_block: null,
-        };
-      else if (
-        variant === 'invalid-arguments' ||
-        variant === 'prototype-arguments'
-      ) {
-        events[14] = {
-          type: 'content_block_delta',
-          index: 4,
-          delta: {
-            type: 'input_json_delta',
-            partial_json:
-              variant === 'invalid-arguments' ? '[' : '{"__proto__":',
-          },
-        };
-      } else if (variant === 'missing-signature') events.splice(3, 1);
-      else if (variant === 'duplicate-call')
-        events[17] = {
-          type: 'content_block_start',
-          index: 5,
-          content_block: {
-            type: 'tool_use',
-            id: 'call_0',
-            name: 'fetch',
-            input: {},
-          },
-        };
-      else if (variant === 'missing-stop') events.pop();
-      else if (variant === 'pause')
-        events.splice(-2, 2, ...terminal('pause_turn'));
-      else if (variant === 'citations')
-        events[10] = {
-          type: 'content_block_start',
-          index: 3,
-          content_block: {
-            type: 'text',
-            text: '',
-            citations: [{ source: 'unrepresented' }],
-          },
-        };
-      else
-        events.splice(
-          -2,
-          2,
-          ...terminal('end_turn', { stop_sequence: 'unexpected' }),
-        );
-      fetchModel.mockImplementation(async () => response(events));
-      const configured = model();
-      const turn = await Effect.runPromise(configured.prepareTurn(REQUEST));
-      assert(turn.mode === 'foreground');
-      await expect(
-        Effect.runPromise(configured.generateTurn(turn)),
-      ).rejects.toMatchObject({
-        _tag: 'ModelError',
-        responseId: 'msg_1',
-        model: 'returned-claude',
-      });
-    },
+    (variant) =>
+      Effect.gen(function* () {
+        const events = signedEvents();
+        if (variant === 'null-block')
+          events[1] = {
+            type: 'content_block_start',
+            index: 0,
+            content_block: null,
+          };
+        else if (
+          variant === 'invalid-arguments' ||
+          variant === 'prototype-arguments'
+        ) {
+          events[14] = {
+            type: 'content_block_delta',
+            index: 4,
+            delta: {
+              type: 'input_json_delta',
+              partial_json:
+                variant === 'invalid-arguments' ? '[' : '{"__proto__":',
+            },
+          };
+        } else if (variant === 'missing-signature') events.splice(3, 1);
+        else if (variant === 'duplicate-call')
+          events[17] = {
+            type: 'content_block_start',
+            index: 5,
+            content_block: {
+              type: 'tool_use',
+              id: 'call_0',
+              name: 'fetch',
+              input: {},
+            },
+          };
+        else if (variant === 'missing-stop') events.pop();
+        else if (variant === 'pause')
+          events.splice(-2, 2, ...terminal('pause_turn'));
+        else if (variant === 'citations')
+          events[10] = {
+            type: 'content_block_start',
+            index: 3,
+            content_block: {
+              type: 'text',
+              text: '',
+              citations: [{ source: 'unrepresented' }],
+            },
+          };
+        else
+          events.splice(
+            -2,
+            2,
+            ...terminal('end_turn', { stop_sequence: 'unexpected' }),
+          );
+        fetchModel.mockImplementation(async () => response(events));
+        const configured = model();
+        const turn = yield* configured.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const error = yield* Effect.flip(configured.generateTurn(turn));
+        expect(error).toMatchObject({
+          _tag: 'ModelError',
+          responseId: 'msg_1',
+          model: 'returned-claude',
+        });
+      }),
   );
 
-  it.each([
+  it.effect.each([
     [401, 'authentication'],
     [429, 'provider-rejection'],
     [undefined, 'transport'],
   ] as const)(
     'classifies actual SDK failure %s without retry',
-    async (status, kind) => {
-      fetchModel.mockImplementation(async () => {
-        if (status === undefined) throw new TypeError('Network failed');
-        return new Response(
-          JSON.stringify({
-            type: 'error',
-            error: { type: 'test_error', message: 'Rejected' },
-          }),
-          {
-            status,
-            headers: {
-              'content-type': 'application/json',
-              'request-id': 'request_1',
+    ([status, kind]) =>
+      Effect.gen(function* () {
+        fetchModel.mockImplementation(async () => {
+          if (status === undefined) throw new TypeError('Network failed');
+          return new Response(
+            JSON.stringify({
+              type: 'error',
+              error: { type: 'test_error', message: 'Rejected' },
+            }),
+            {
+              status,
+              headers: {
+                'content-type': 'application/json',
+                'request-id': 'request_1',
+              },
             },
-          },
-        );
-      });
-      const configured = model();
-      const turn = await Effect.runPromise(configured.prepareTurn(REQUEST));
-      assert(turn.mode === 'foreground');
-      await expect(
-        Effect.runPromise(configured.generateTurn(turn)),
-      ).rejects.toMatchObject({
-        _tag: 'ModelError',
-        kind,
-        model: 'selected-claude',
-        ...(status === undefined ? {} : { status, requestId: 'request_1' }),
-      });
-      expect(fetchModel).toHaveBeenCalledTimes(1);
-    },
+          );
+        });
+        const configured = model();
+        const turn = yield* configured.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const error = yield* Effect.flip(configured.generateTurn(turn));
+        expect(error).toMatchObject({
+          _tag: 'ModelError',
+          kind,
+          model: 'selected-claude',
+          ...(status === undefined ? {} : { status, requestId: 'request_1' }),
+        });
+        expect(fetchModel).toHaveBeenCalledTimes(1);
+      }),
   );
 
-  it.each([
+  it.effect.each([
     'headers',
     'body',
     'failed-read',
@@ -1010,135 +1013,137 @@ describe('canonical Anthropic Messages protocol', () => {
     'completed',
   ] as const)(
     'owns the pending %s lifetime without an emitter or remote cancellation',
-    async (phase) => {
-      let enter: () => void = () => {};
-      const entered = new Promise<void>((resolve) => {
-        enter = resolve;
-      });
-      let aborted = false;
-      const cleanupFailure = new Error('Cleanup failed');
-      const boundaries: string[] = [];
-      let bodyController: ReadableStreamDefaultController<Uint8Array>;
-      fetchModel.mockImplementation(async (_url, init) => {
-        assert(init?.signal);
-        const signal = init.signal;
-        if (phase === 'headers')
-          return new Promise<Response>((_resolve, reject) => {
-            signal.addEventListener(
-              'abort',
-              () => {
-                aborted = true;
-                reject(new DOMException('Aborted', 'AbortError'));
-              },
-              { once: true },
-            );
-            enter();
-          });
-        return new Response(
-          new ReadableStream<Uint8Array>({
-            start(controller) {
-              bodyController = controller;
-              controller.enqueue(
-                new TextEncoder().encode(
-                  (phase === 'completed'
-                    ? [initial(), ...terminal()]
-                    : signedEvents().slice(0, 3)
-                  )
-                    .map((event, index) =>
-                      phase === 'malformed' && index === 1
-                        ? {
-                            type: 'content_block_start',
-                            index: 0,
-                            content_block: null,
-                          }
-                        : event,
-                    )
-                    .map(
-                      (event) =>
-                        `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
-                    )
-                    .join(''),
-                ),
-              );
+    (phase) =>
+      Effect.gen(function* () {
+        const entered = yield* Deferred.make<void>();
+        const enter = () => {
+          Deferred.doneUnsafe(entered, Effect.void);
+        };
+        let aborted = false;
+        const cleanupFailure = new Error('Cleanup failed');
+        const boundaries: string[] = [];
+        let bodyController: ReadableStreamDefaultController<Uint8Array>;
+        fetchModel.mockImplementation(async (_url, init) => {
+          assert(init?.signal);
+          const signal = init.signal;
+          if (phase === 'headers')
+            return new Promise<Response>((_resolve, reject) => {
               signal.addEventListener(
                 'abort',
                 () => {
                   aborted = true;
-                  if (phase === 'body' || phase === 'completed')
-                    controller.error(new DOMException('Aborted', 'AbortError'));
+                  reject(new DOMException('Aborted', 'AbortError'));
                 },
                 { once: true },
               );
-            },
-            cancel() {
-              if (phase === 'successful-take' || phase === 'malformed')
-                throw cleanupFailure;
-            },
-          }),
-          { headers: { 'content-type': 'text/event-stream' } },
-        );
-      });
-      const configured = model();
-      const turn = await Effect.runPromise(configured.prepareTurn(REQUEST));
-      assert(turn.mode === 'foreground');
-      const progress = configured.streamTurn(turn).pipe(
-        Stream.tap((event) =>
-          Effect.sync(() => {
-            if (event.kind === 'phase') boundaries.push(event.boundary);
-          }),
-        ),
-        Stream.filter((event) => event.kind === 'delta'),
-      );
-      if (phase === 'completed') {
-        await expect(
-          Effect.runPromise(configured.generateTurn(turn)),
-        ).resolves.toMatchObject({
-          providerResponseId: 'msg_1',
-          finishReason: 'stop',
+              enter();
+            });
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                bodyController = controller;
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    (phase === 'completed'
+                      ? [initial(), ...terminal()]
+                      : signedEvents().slice(0, 3)
+                    )
+                      .map((event, index) =>
+                        phase === 'malformed' && index === 1
+                          ? {
+                              type: 'content_block_start',
+                              index: 0,
+                              content_block: null,
+                            }
+                          : event,
+                      )
+                      .map(
+                        (event) =>
+                          `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+                      )
+                      .join(''),
+                  ),
+                );
+                signal.addEventListener(
+                  'abort',
+                  () => {
+                    aborted = true;
+                    if (phase === 'body' || phase === 'completed')
+                      controller.error(
+                        new DOMException('Aborted', 'AbortError'),
+                      );
+                  },
+                  { once: true },
+                );
+              },
+              cancel() {
+                if (phase === 'successful-take' || phase === 'malformed')
+                  throw cleanupFailure;
+              },
+            }),
+            { headers: { 'content-type': 'text/event-stream' } },
+          );
         });
-      } else if (phase === 'malformed') {
-        const exit = await Effect.runPromise(
-          Effect.exit(Stream.runDrain(progress)),
+        const configured = model();
+        const turn = yield* configured.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const progress = configured.streamTurn(turn).pipe(
+          Stream.tap((event) =>
+            Effect.sync(() => {
+              if (event.kind === 'phase') boundaries.push(event.boundary);
+            }),
+          ),
+          Stream.filter((event) => event.kind === 'delta'),
         );
-        assert(exit._tag === 'Failure');
-        expect(
-          exit.cause.reasons.find(Cause.isFailReason)?.error,
-        ).toMatchObject({
-          kind: 'malformed-output',
-          responseId: 'msg_1',
-          model: 'returned-claude',
-        });
-        expect(exit.cause.reasons.find(Cause.isDieReason)?.defect).toBe(
-          cleanupFailure,
-        );
-      } else if (phase === 'successful-take') {
-        await expect(
-          Effect.runPromise(progress.pipe(Stream.take(1), Stream.runDrain)),
-        ).rejects.toThrow('Cleanup failed');
-      } else if (phase === 'failed-read') {
-        await expect(
-          Effect.runPromise(
+        if (phase === 'completed') {
+          expect(yield* configured.generateTurn(turn)).toMatchObject({
+            providerResponseId: 'msg_1',
+            finishReason: 'stop',
+          });
+        } else if (phase === 'malformed') {
+          const exit = yield* Effect.exit(Stream.runDrain(progress));
+          assert(exit._tag === 'Failure');
+          expect(
+            exit.cause.reasons.find(Cause.isFailReason)?.error,
+          ).toMatchObject({
+            kind: 'malformed-output',
+            responseId: 'msg_1',
+            model: 'returned-claude',
+          });
+          expect(exit.cause.reasons.find(Cause.isDieReason)?.defect).toBe(
+            cleanupFailure,
+          );
+        } else if (phase === 'successful-take') {
+          const exit = yield* Effect.exit(
+            progress.pipe(Stream.take(1), Stream.runDrain),
+          );
+          assert(exit._tag === 'Failure');
+          expect(exit.cause.reasons.find(Cause.isDieReason)?.defect).toBe(
+            cleanupFailure,
+          );
+        } else if (phase === 'failed-read') {
+          const error = yield* Effect.flip(
             Stream.runForEach(progress, () =>
               Effect.sync(() =>
                 bodyController.error(new Error('Primary read failed')),
               ),
             ),
-          ),
-        ).rejects.toMatchObject({
-          _tag: 'ModelError',
-          responseId: 'msg_1',
-          message: 'Primary read failed',
-        });
-      } else {
-        const fiber = Effect.runFork(
-          Stream.runForEach(progress, () => Effect.sync(enter)),
-        );
-        await entered;
-        await Effect.runPromise(Fiber.interrupt(fiber));
-      }
-      expect(aborted).toBe(true);
-      expect(boundaries).not.toContain('end');
-      expect(fetchModel).toHaveBeenCalledTimes(1);
-    },
+          );
+          expect(error).toMatchObject({
+            _tag: 'ModelError',
+            responseId: 'msg_1',
+            message: 'Primary read failed',
+          });
+        } else {
+          const fiber = yield* Effect.forkChild(
+            Stream.runForEach(progress, () => Effect.sync(enter)),
+          );
+          yield* Deferred.await(entered);
+          yield* Fiber.interrupt(fiber);
+        }
+        expect(aborted).toBe(true);
+        expect(boundaries).not.toContain('end');
+        expect(fetchModel).toHaveBeenCalledTimes(1);
+      }),
   );
 });
