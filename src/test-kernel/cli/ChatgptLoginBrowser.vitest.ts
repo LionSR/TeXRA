@@ -26,10 +26,6 @@ vi.mock('@cli/runtime/browser', () => ({
 const { signInCliSubscription } =
   await import('@cli/runtime/subscriptionLogin');
 
-// Lets the forked sign-in reach the transport it suspends in.
-const settle = Effect.promise(
-  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
-);
 // What the host root provides the flow.
 const signInServices = Layer.mergeAll(
   Secrets.layer(() => new FakeSecrets()),
@@ -167,26 +163,28 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
     () =>
       Effect.gen(function* () {
         const interrupted: string[] = [];
-        const pending = (transport: string) =>
-          Effect.never.pipe(
+        const pending = (transport: string, started: Deferred.Deferred<void>) =>
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Effect.never),
             Effect.onInterrupt(() =>
               Effect.sync(() => {
                 interrupted.push(transport);
               }),
             ),
           );
-        mocks.loginWithLoopback.mockReturnValue(pending('loopback'));
-        mocks.loginWithDeviceCode.mockReturnValue(pending('device'));
         const options = { writeProgress: vi.fn() };
 
         for (const init of [
           { device: false, noBrowser: true },
           { device: true, noBrowser: false },
         ]) {
+          const started = yield* Deferred.make<void>();
+          mocks.loginWithLoopback.mockReturnValue(pending('loopback', started));
+          mocks.loginWithDeviceCode.mockReturnValue(pending('device', started));
           const fiber = yield* Effect.forkChild(
             signInCliChatGpt(init, options),
           );
-          yield* settle;
+          yield* Deferred.await(started);
           yield* Fiber.interrupt(fiber);
           const exit = yield* Fiber.await(fiber);
           expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
