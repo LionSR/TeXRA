@@ -3,8 +3,9 @@
  * real `<latexdiffs-section>` on properties. Reachable from any state
  * through the header overflow; `Surface.toolsSheetOpen` opens and closes
  * it. The section's selections ride in `Surface.launch` (base, edited,
- * commit) and its option lists in the `host` snapshot; each verb leaves as
- * a `host-request` and each selection as a `surface-action`.
+ * commit) and its option lists in the `host` snapshot; the section itself
+ * dispatches each verb as a `host-request` and each selection as a
+ * `surface-action`.
  */
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -12,13 +13,6 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import type {
-  BaseFileChangeDetail,
-  CommitChangeDetail,
-  EditedFileChangeDetail,
-  FileActionDetail,
-  LatexDiffsActionDetail,
-} from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { matchesEditedFile } from '@shared/launcher/editedFileMatch';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -97,15 +91,6 @@ export class ToolsSheet extends LitElement {
     );
   };
 
-  private setLaunch(patch: Partial<Surface['launch']>): void {
-    this.dispatchEvent(SessionUiEvents.surface({ kind: 'launch', patch }));
-  }
-
-  private emptyFile(type: FileActionDetail['type']): void {
-    if (type === 'base') this.setLaunch({ baseFile: '' });
-    else if (type === 'edited') this.setLaunch({ editedFile: '' });
-  }
-
   override render(): TemplateResult | typeof nothing {
     const launch = this.surface?.launch;
     const host = this.host;
@@ -139,41 +124,6 @@ export class ToolsSheet extends LitElement {
           .commit=${launch.commit}
           .commitOptions=${[...host.fileOptions.commit]}
           .isGitRepo=${host.isGitRepo}
-          @latexdiffs-action=${({
-            detail,
-          }: CustomEvent<LatexDiffsActionDetail>) =>
-            this.dispatchEvent(
-              SessionUiEvents.host({
-                kind: 'latexdiffs',
-                action: detail.action,
-                baseFile: launch.baseFile,
-                editedFile: editedFile || null,
-                commit: launch.commit,
-              }),
-            )}
-          @base-file-change=${({ detail }: CustomEvent<BaseFileChangeDetail>) =>
-            this.setLaunch({ baseFile: detail.value })}
-          @edited-file-change=${({
-            detail,
-          }: CustomEvent<EditedFileChangeDetail>) =>
-            this.setLaunch({ editedFile: detail.value })}
-          @commit-change=${({ detail }: CustomEvent<CommitChangeDetail>) =>
-            this.setLaunch({ commit: detail.value })}
-          @get-current-file=${({ detail }: CustomEvent<FileActionDetail>) =>
-            this.dispatchEvent(
-              SessionUiEvents.host({
-                kind: 'useCurrentFile',
-                fileType: detail.type,
-              }),
-            )}
-          @empty-file=${({ detail }: CustomEvent<FileActionDetail>) =>
-            this.emptyFile(detail.type)}
-          @refresh-edited-files=${() =>
-            this.dispatchEvent(SessionUiEvents.host({ kind: 'refreshFiles' }))}
-          @refresh-commits=${() =>
-            this.dispatchEvent(
-              SessionUiEvents.host({ kind: 'refreshCommits' }),
-            )}
         ></latexdiffs-section>
       </div>
     `;
