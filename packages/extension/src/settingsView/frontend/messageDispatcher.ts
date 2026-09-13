@@ -11,11 +11,11 @@
 import { create } from 'mutative';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { LATEX_CONFIG_FIELD_TO_KEY } from '@shared/constants/latexConfig';
 import {
-  LatexConfigValuesSchema,
-  type SettingsViewOutboundHandlerRegistry,
-} from '@shared/schemas';
+  LATEX_CONFIG_FIELD_TO_KEY,
+  type LatexConfigValues,
+} from '@shared/constants/latexConfig';
+import { type SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
   activePresetId,
@@ -129,15 +129,15 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   // Catalog-derived settings snapshots.
   [SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT]: (data) => {
     if (data.snapshot === 'latex') {
+      // The dispatcher already parsed each row against its own catalog
+      // schema, so this only re-keys catalog keys to field names.
       latexConfigValues.set(
-        LatexConfigValuesSchema.parse(
-          Object.fromEntries(
-            Object.entries(LATEX_CONFIG_FIELD_TO_KEY).map(([field, key]) => [
-              field,
-              data.values[key],
-            ]),
-          ),
-        ),
+        Object.fromEntries(
+          Object.entries(LATEX_CONFIG_FIELD_TO_KEY).map(([field, key]) => [
+            field,
+            data.values[key],
+          ]),
+        ) as LatexConfigValues,
       );
       return;
     }

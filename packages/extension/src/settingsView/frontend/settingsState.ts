@@ -55,7 +55,6 @@ import {
   type CopilotRouteInfo,
   type Goal,
   type GrokAuthStatus,
-  type LatexConfigValues,
   type MemoryViewItem,
   type ModelSelectionItem,
   type ProviderKeyStatus,
@@ -67,6 +66,7 @@ import {
   type ToolDashboardItem,
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import type { LatexConfigValues } from '@shared/constants/latexConfig';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // ---------------------------------------------------------------------------
