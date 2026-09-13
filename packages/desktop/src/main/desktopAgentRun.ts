@@ -33,7 +33,10 @@ import type {
 } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 
-import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
+import {
+  DesktopToolEditApprovalHost,
+  type DesktopToolEditApprovalUi,
+} from './desktopToolEditApproval.js';
 import { toLogData } from './desktopLogUtils.js';
 import {
   launchDesktopAgent,
@@ -44,10 +47,7 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 export interface DesktopAgentRunOptions {
   host: DesktopAgentRunHost;
   /** Preview operations reject; the approval controller presents failures. */
-  toolEditPreview: Pick<
-    DesktopAgentRunHost,
-    'openPath' | 'openBuildDisplay' | 'openDiff'
-  >;
+  toolEditPreview: Omit<DesktopToolEditApprovalUi, 'showErrorMessage'>;
   session: SessionHandle;
   /** A run loaded an agent from the custom directory: the New-task
    *  state's agent-config banner (`HostSnapshot.banners`). */

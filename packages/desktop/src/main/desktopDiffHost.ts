@@ -15,6 +15,7 @@ import { createTexraTempDir } from '@utils/files/tempDir';
 
 import {
   DESKTOP_DIFF_COMMANDS,
+  type DesktopCloseDiffMessage,
   type DesktopShowDiffMessage,
 } from '../shared/desktopDiffMessages.js';
 import {
@@ -38,9 +39,23 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
   recordPatchDir(tempDir: string): void;
 }
 
+/** The pair of Review-tab verbs the main process owns. */
+interface DesktopDiffHost extends Pick<DiffViewHost, 'openDiff'> {
+  /**
+   * Close the Review workbench the diffs are shown in: the renderer's
+   * `desktop:closeDiff`, the counterpart of the `desktop:showDiff` that
+   * opened them. The Review tab is one surface per window, so this closes
+   * whatever it holds rather than one entry in it.
+   */
+  closeDiff(): Promise<void>;
+}
+
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
-): Pick<DiffViewHost, 'openDiff'> {
+): DesktopDiffHost {
+  /** The window's Review surface, which both messages below address. */
+  const reviewSession = (): string => workspaceRoots().storage;
+
   async function openDiff(
     original: DiffSource,
     proposed: DiffSource,
@@ -62,7 +77,7 @@ export function createDesktopDiffHost(
       { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
       {
         command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
-        session: workspaceRoots().storage,
+        session: reviewSession(),
         title,
         displayPath: title.replace(/^Tool edit:\s*/, ''),
         originalText: originalContent,
@@ -114,5 +129,25 @@ export function createDesktopDiffHost(
     }
   }
 
-  return { openDiff };
+  /**
+   * Nothing is posted when the renderer is unreachable, which is the
+   * external-editor fallback's own path: a patch file opened in the OS
+   * editor is not a view this host can close, and the directory holding it
+   * is removed at quit.
+   */
+  async function closeDiff(): Promise<void> {
+    tryShowInRenderer(
+      {
+        ...options,
+        source: 'desktopDiffHost',
+        fallback: 'no in-app review tab to close',
+      },
+      {
+        command: DESKTOP_DIFF_COMMANDS.CLOSE_DIFF,
+        session: reviewSession(),
+      } satisfies DesktopCloseDiffMessage,
+    );
+  }
+
+  return { openDiff, closeDiff };
 }

@@ -6,7 +6,7 @@ import { it } from '@effect/vitest';
 import { Effect, Fiber, Scope, Stream, SubscriptionRef } from 'effect';
 import { afterEach, describe, expect, onTestFinished, vi } from 'vitest';
 
-import type { DesktopAgentRunHost } from '@desktop/main/desktopAgentRunHost';
+import type { DesktopToolEditApprovalUi } from '@desktop/main/desktopToolEditApproval';
 import type { DiffSource } from '@hosts/uiHosts';
 
 import type { RunId } from '@shared/schemas';
@@ -127,7 +127,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
 /** A controller with real staged previews and an isolated session. */
 function createApprovalFixture(
   options: {
-    ui?: DesktopAgentRunHost;
+    ui?: Partial<DesktopToolEditApprovalUi>;
     workspacePath?: string;
   } = {},
 ) {
@@ -138,7 +138,11 @@ function createApprovalFixture(
     const session = createTestSession();
     yield* Effect.addFinalizer(() => Effect.sync(() => session.dispose()));
     const host = new modules.desktopModule.DesktopToolEditApprovalHost({
-      ui: options.ui ?? createStubDesktopAgentRunHost(),
+      ui: {
+        ...createStubDesktopAgentRunHost(),
+        closeDiff: async () => undefined,
+        ...options.ui,
+      },
       // The desktop surface's decision: the session's one `request.decide`.
       decide: (runId, requestId, decision) =>
         Effect.runPromise(
@@ -348,9 +352,13 @@ describe('desktop tool edit approval', () => {
             _title: string,
           ): Promise<void> => undefined,
         );
+        const closeDiff = vi.fn(async (): Promise<void> => undefined);
         const { requestApproval, controller, waitForPreviews } =
           yield* createApprovalFixture({
-            ui: createStubDesktopAgentRunHost({ openPath, openDiff }),
+            ui: {
+              ...createStubDesktopAgentRunHost({ openPath, openDiff }),
+              closeDiff,
+            },
           });
 
         const result = yield* Effect.forkScoped(
@@ -390,6 +398,15 @@ describe('desktop tool edit approval', () => {
           action: 'reject',
         });
         expect(yield* Fiber.join(result)).toMatchObject({ action: 'reject' });
+
+        // The decision releases the preview: the view the diff opened in is
+        // closed before the staged files it reads are removed.
+        yield* Effect.tryPromise(() =>
+          vi.waitFor(async () => {
+            expect(closeDiff).toHaveBeenCalledOnce();
+            await expect(pathExists(proposed.filePath)).resolves.toBe(false);
+          }),
+        );
       }),
   );
 

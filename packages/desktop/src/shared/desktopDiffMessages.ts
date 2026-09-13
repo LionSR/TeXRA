@@ -42,11 +42,16 @@ export const DesktopCloseDiffMessageSchema = z.object({
   command: z.literal(DESKTOP_DIFF_COMMANDS.CLOSE_DIFF),
 });
 
+export type DesktopCloseDiffMessage = z.infer<
+  typeof DesktopCloseDiffMessageSchema
+>;
+
 // `desktop:closeDiff` is consumed by the renderer's window-message
-// handler; producers (today: the Playwright trajectory test) construct
-// the literal `{ command: 'desktop:closeDiff' }` inline via
-// `window.postMessage`, since that test runs in the browser context
-// where importing this module isn't worth the bundle hit. The schema
-// (`DesktopCloseDiffMessageSchema`) remains the source of truth. No
-// `buildDesktopCloseDiffMessage` helper is defined to avoid dead code
-// (Cursor Bugbot review on PR #3815).
+// handler. The main process posts it from `desktopDiffHost.closeDiff`,
+// the counterpart of the `desktop:showDiff` that opened the Review tab;
+// the Playwright trajectory test constructs the literal
+// `{ command: 'desktop:closeDiff' }` inline via `window.postMessage`,
+// since that test runs in the browser context where importing this
+// module isn't worth the bundle hit. The schema remains the source of
+// truth. No `buildDesktopCloseDiffMessage` helper is defined to avoid
+// dead code (Cursor Bugbot review on PR #3815).

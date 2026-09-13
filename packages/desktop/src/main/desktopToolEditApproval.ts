@@ -18,14 +18,16 @@ import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { createTexraTempDir } from '@utils/files/tempDir';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
-type DesktopToolEditApprovalUi = Pick<
+export type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,
   'openPath' | 'openBuildDisplay' | 'openDiff' | 'showErrorMessage'
->;
+> & {
+  /** Close the Review workbench `openDiff` shows the staged diff in. */
+  closeDiff(): Promise<void>;
+};
 
 interface DesktopToolEditApprovalHostOptions {
   ui: DesktopToolEditApprovalUi;
@@ -96,12 +98,15 @@ class DesktopToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  /** The prompt carries the request on its own, so the diff opens alongside it. */
+  /**
+   * The prompt carries the request on its own, but the diff beside it is
+   * part of the presentation the controller tracks: returning before it is
+   * open would let a release resolve, and the temp directory below go, while
+   * the Review tab was still reading the staged files. A failure here
+   * propagates to the `present` call the host awaits, which reports it.
+   */
   async present(): Promise<void> {
-    void this.showDiff().catch((error: unknown) => {
-      if (this.context.isSettled()) return;
-      void this.ui.showErrorMessage(toErrorMessage(error));
-    });
+    await this.showDiff();
   }
 
   async showDiff(): Promise<void> {
@@ -120,7 +125,9 @@ class DesktopToolEditPreview implements ToolEditPreview {
     return readFile(this.staged.proposedPath, 'utf8');
   }
 
+  /** Close the view before the files behind it go, in that order. */
   async dispose(): Promise<void> {
+    await this.ui.closeDiff();
     await rm(this.staged.tempDir, { recursive: true, force: true });
   }
 }

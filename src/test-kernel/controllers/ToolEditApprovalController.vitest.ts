@@ -200,6 +200,35 @@ describe('tool edit approval controller', () => {
     expect(testHost.preview.showDiff).not.toHaveBeenCalled();
   });
 
+  it('joins a second release to the cleanup the first one is running', async () => {
+    const testHost = createTestHost();
+    const controller = createController(testHost.host);
+    const disposal = pDefer<void>();
+    testHost.preview.dispose.mockImplementation(() => disposal.promise);
+
+    testHost.staging.resolve();
+    testHost.presentation.resolve();
+    await controller.present(approvalRequest());
+    const requestId = testHost.contextForRequest().requestId;
+
+    // `dispose` starts a release for every staged request without awaiting
+    // it, and the host's release for a refused `request.opened` lands right
+    // behind it: the second one finds the entry already dropped, so it has
+    // only the cleanup in flight to wait for.
+    controller.dispose();
+    let released = false;
+    const release = controller.release(requestId).then(() => {
+      released = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(released).toBe(false);
+
+    disposal.resolve();
+    await release;
+    expect(released).toBe(true);
+    expect(testHost.preview.dispose).toHaveBeenCalledOnce();
+  });
+
   it('ignores actions that arrive after the request was decided', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);

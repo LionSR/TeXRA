@@ -140,6 +140,17 @@ export class ToolEditApprovalController {
    * decision never reached the runtime.
    */
   private readonly requests = new Map<string, ToolEditApprovalState>();
+  /**
+   * The cleanup in flight for a request whose entry is already gone, until
+   * that cleanup settles. {@link release} drops the entry before it awaits
+   * anything, so a second release for the same request would otherwise find
+   * nothing and resolve while the first was still disposing: {@link dispose}
+   * starts one release per request without awaiting it, and the host's
+   * release for a `request.opened` the runtime refused lands right behind it.
+   * Joining what is already running is what makes every release mean the same
+   * thing, that nothing is left staged.
+   */
+  private readonly releasing = new Map<string, Promise<void>>();
   private disposed = false;
 
   constructor(private readonly options: ToolEditApprovalControllerOptions) {}
@@ -400,8 +411,16 @@ export class ToolEditApprovalController {
    * has to reach inside it: dropping the entry alone would return while the
    * host was still writing temp files it would then delete on its own time,
    * or still opening a diff view onto files this call is about to delete.
+   * Repeated releases for one request, which {@link dispose} and that host
+   * call produce together, all resolve on the one cleanup in flight.
    */
   async release(requestId: string): Promise<void> {
+    // A release already in flight for this request is doing exactly this
+    // work, on the entry it has already dropped: join it, rather than read
+    // an empty map and report the preview gone while it is still going.
+    const inFlight = this.releasing.get(requestId);
+    if (inFlight) return inFlight;
+
     const entry = this.requests.get(requestId);
     if (!entry) return;
     this.requests.delete(requestId);
@@ -412,20 +431,32 @@ export class ToolEditApprovalController {
     // covers the staging of a preview this call never sees (that call
     // disposes it), and the view a just-staged request is in the middle of
     // opening, which has to be open before it can be closed below.
-    const failure = await entry.inFlight;
-    if (failure !== undefined) {
-      log.warn(
-        `The tool-edit preview for request ${requestId} failed while its release waited for it`,
-        { data: failure },
-      );
-    }
-    if (entry.phase !== 'pending') return;
-    try {
-      await entry.preview.dispose();
-      await Promise.all(entry.workspaceTempCleanup.map((cleanup) => cleanup()));
-    } catch (error) {
-      this.options.host.reportError(toErrorMessage(error));
-    }
+    //
+    // The whole of that is one promise this release publishes before its
+    // first await and withdraws once it settles, so every release taken
+    // meanwhile returns with it and none returns before it.
+    const cleanup = (async (): Promise<void> => {
+      const failure = await entry.inFlight;
+      if (failure !== undefined) {
+        log.warn(
+          `The tool-edit preview for request ${requestId} failed while its release waited for it`,
+          { data: failure },
+        );
+      }
+      if (entry.phase !== 'pending') return;
+      try {
+        await entry.preview.dispose();
+        await Promise.all(
+          entry.workspaceTempCleanup.map((removeTemp) => removeTemp()),
+        );
+      } catch (error) {
+        this.options.host.reportError(toErrorMessage(error));
+      }
+    })().finally(() => {
+      this.releasing.delete(requestId);
+    });
+    this.releasing.set(requestId, cleanup);
+    await cleanup;
   }
 
   private async runAction(
