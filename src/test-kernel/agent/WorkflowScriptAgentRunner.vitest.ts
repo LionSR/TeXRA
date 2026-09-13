@@ -277,7 +277,8 @@ function probeAnswers(...children: ProbedChild[]): void {
       // No probed id here is deleted: a tombstone closes an id for good, and
       // the probe reads that apart from an id that never started.
       isRemoved: () => Effect.succeed(false),
-      readRunEnd: () => Effect.succeed(child.runEnd ?? null),
+      readRunEnd: () =>
+        Effect.succeed(launchedRows.get(id) ?? child.runEnd ?? null),
       readResultMeta: () => Effect.succeed(child.resultMeta ?? null),
     };
   });
@@ -300,13 +301,29 @@ function reported<Field extends keyof AttemptFacts>(
   );
 }
 
+/**
+ * The terminal row a launched attempt leaves behind, by run id. The real
+ * executor returns only once the child's own `run.end` is committed and read,
+ * so every fake launch leaves that row where the runner re-reads it under the
+ * fence it takes over the child it just ran.
+ */
+const launchedRows = new Map<string, RunEnd>();
+
+function launched(
+  runId: string,
+  result: RunEnd,
+): { runId: string; result: RunEnd } {
+  launchedRows.set(runId, result);
+  return { runId, result };
+}
+
 // In-band launch that runs the child's prepare step and records the options it
 // produced, under the run id the caller derived, as the real executor does.
 function inBandRunReturning(finalResult: RunEnd) {
   return (options: InBandRunOptions) =>
     Effect.gen(function* () {
       mocks.preparedOptions.push(yield* options.prepare());
-      return { runId: options.runId, result: finalResult };
+      return launched(options.runId, finalResult);
     });
 }
 
@@ -325,6 +342,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     lanes = new RunLanes();
     mocks.preparedOptions.length = 0;
     mocks.probedRunIds.length = 0;
+    launchedRows.clear();
     probeAnswers();
     // Nothing alive owns a probed run unless a case says so: the claim is the
     // liveness authority, and a dead owner is what lets the probe advance.
@@ -530,7 +548,7 @@ describe('createWorkflowScriptAgentRunner', () => {
           mocks.preparedOptions.push(prepared);
           expect(reported(report, 'childRunId')).toEqual([options.runId]);
           prepared.onRunResolved?.(options.runId);
-          return { runId: options.runId, result };
+          return launched(options.runId, result);
         }),
       );
       const runner = defaultRunner();
@@ -917,7 +935,7 @@ describe('createWorkflowScriptAgentRunner', () => {
           Effect.gen(function* () {
             const prepared = yield* options.prepare();
             prepared.onCost?.(0.25);
-            return { runId: options.runId, result };
+            return launched(options.runId, result);
           }),
         );
         const runner = defaultRunner({ onCost });
@@ -938,14 +956,11 @@ describe('createWorkflowScriptAgentRunner', () => {
       mocks.executeSubagentInBand.mockImplementationOnce((options) =>
         Effect.gen(function* () {
           yield* options.prepare();
-          return {
-            runId: options.runId,
-            result: {
-              ...result,
-              outcome: 'failed',
-              usage: spent(0.42),
-            },
-          };
+          return launched(options.runId, {
+            ...result,
+            outcome: 'failed',
+            usage: spent(0.42),
+          });
         }),
       );
       const runner = defaultRunner();
@@ -1007,10 +1022,15 @@ describe('createWorkflowScriptAgentRunner', () => {
     Effect.gen(function* () {
       const runner = defaultRunner();
 
-      yield* runner(invocation());
-      yield* runner(invocation());
-      yield* runner({ ...invocation(), index: 1 });
-      yield* runner({ ...invocation(), key: 'fedcba9876543210' });
+      // One scope per call, as the engine gives each one: the fences a call
+      // holds over the child it ran are released when its value is journaled,
+      // so the next call may take the same identity again.
+      yield* Effect.scoped(runner(invocation()));
+      yield* Effect.scoped(runner(invocation()));
+      yield* Effect.scoped(runner({ ...invocation(), index: 1 }));
+      yield* Effect.scoped(
+        runner({ ...invocation(), key: 'fedcba9876543210' }),
+      );
 
       const runIds = mocks.executeSubagentInBand.mock.calls.map(
         ([options]) => options.runId,
@@ -1025,14 +1045,14 @@ describe('createWorkflowScriptAgentRunner', () => {
     'rejects a cancelled child so the workflow journal can retry it',
     () =>
       Effect.gen(function* () {
-        mocks.executeSubagentInBand.mockReturnValueOnce(
-          Effect.succeed({
-            runId: 'bbbbbb222222',
-            result: {
-              outcome: 'cancelled',
-              output: { category: 'toolUse', response: '', files: [] },
-            },
-          }),
+        mocks.executeSubagentInBand.mockImplementationOnce(
+          (options: InBandRunOptions) =>
+            Effect.succeed(
+              launched(options.runId, {
+                outcome: 'cancelled',
+                output: { category: 'toolUse', response: '', files: [] },
+              }),
+            ),
         );
         const runner = defaultRunner();
 
@@ -1047,11 +1067,19 @@ describe('createWorkflowScriptAgentRunner', () => {
     'rejects a completed workflow child that produced no output files',
     () =>
       Effect.gen(function* () {
-        mocks.executeSubagentInBand.mockReturnValueOnce(
-          Effect.succeed({
-            runId: 'bbbbbb222222',
-            result: { ...result, output: { ...result.output, outputs: [] } },
-          }),
+        mocks.executeSubagentInBand.mockImplementationOnce(
+          (options: InBandRunOptions) =>
+            Effect.succeed(
+              launched(options.runId, {
+                ...result,
+                output: {
+                  category: 'workflow',
+                  outputs: [],
+                  compileFailures: [],
+                  diffs: [],
+                },
+              }),
+            ),
         );
         const runner = defaultRunner();
 
@@ -1350,6 +1378,31 @@ describe('createWorkflowScriptAgentRunner', () => {
           ),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'refuses a child it just launched whose claim a resume took at its return',
+    () =>
+      Effect.gen(function* () {
+        // The child's loop released its claim and its run lane as it ended, so
+        // the window between the launch's return and the engine's journal
+        // write belongs to whoever takes them next. The launched attempt is
+        // fenced and re-read like every other: an acquire a resume refuses
+        // stops the parent journaling a result from the lifecycle before it.
+        mocks.acquireClaims.mockReturnValueOnce(
+          Effect.fail(new Error('held by owner-2 (alive)')),
+        );
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(
+            'could not be claimed against a concurrent resume',
+          ),
+        });
+        expect(mocks.executeSubagentInBand).toHaveBeenCalledOnce();
       }),
   );
 

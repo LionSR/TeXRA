@@ -323,10 +323,11 @@ function probeJournal<A>(
  *
  * Both are released with the call's scope, which the engine owns and closes
  * only once the call's value is journaled: a superseded attempt stays fenced
- * for as long as its replacement is live, and a recovered one stays fenced
- * until the result it supplied is durable. A claim release that fails leaves
- * every fact committed and only the claim behind, so it is logged rather than
- * failing a call whose child already answered.
+ * for as long as its replacement is live, and the attempt whose result the
+ * parent journals — recovered, or launched by this call and returned once its
+ * loop released both — stays fenced until that result is durable. A claim
+ * release that fails leaves every fact committed and only the claim behind, so
+ * it is logged rather than failing a call whose child already answered.
  */
 const fenceSupersededRun = (
   session: InBandSubagentLaunchOptions['session'],
@@ -430,10 +431,14 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * a completed result, advancing past an attempt, and refusing one are the same
  * decision taken from the same fenced reading, and neither a local resume nor
  * one in another process can start the child between that reading and what
- * follows it. Launching an id that never started is the one branch that takes
- * no fence: there is nothing yet for a resume to claim. A row marked
- * `artifact-drain` is the one terminal outcome no attempt advances past,
- * whatever else it says: what that child did is unrecorded rather than failed.
+ * follows it. Launching an id that never started takes no fence going in —
+ * there is nothing yet for a resume to claim — and takes the same one coming
+ * out, because the loop released the claim and the lane before it returned:
+ * every attempt whose result the parent journals, recovered or just launched,
+ * is held from the reading it is taken from until that journal commits. A row
+ * marked `artifact-drain` is the one terminal outcome no attempt advances
+ * past, whatever else it says: what that child did is unrecorded rather than
+ * failed.
  *
  * A journal hit never reaches here: the engine consumes it before calling.
  */
@@ -503,6 +508,25 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           signal: call.signal,
           prepare: call.prepare,
         });
+        // The child's loop released its claim and its run lane as it ended, so
+        // from this return until the engine journals the call's value the id
+        // it answered on is resumable: a host that takes it appends
+        // `run.activate` and does more model work and more edits while the
+        // parent commits a result read from the lifecycle before it. Take the
+        // same fence every other exit takes, and read the terminal row under
+        // it: a resume already under way holds the claim or the lane and is
+        // refused here, and one that ran to its own end leaves a row this
+        // reading no longer recognizes (an activate after the row reads as no
+        // terminal row at all).
+        yield* fenceSupersededRun(session, runId);
+        const launched = yield* probeChild(runId, records.readRunEnd());
+        if (launched?.outcome !== result.outcome) {
+          return yield* Effect.fail(
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} started again before its result was journaled; refusing to report it.`,
+            ),
+          );
+        }
         return { runId, result, recovered: false };
       }
       // Terminal for the lifecycle in flight, not for the aggregate: a
@@ -608,12 +632,13 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
  * Build the production `agent()` adapter for one workflow-script run.
  *
  * The adapter takes its `Scope` from the engine rather than closing one of its
- * own around the call. The fences it holds over the attempt it recovered or
- * superseded have to outlive its return: the engine journals the call's value
- * after the runner answers, and a fence released at the return leaves the
- * inspected child free for a host to resume — appending `run.activate` and
- * doing more work — while the parent is still persisting the result read from
- * it. The engine closes that scope once the journal write has committed.
+ * own around the call. The fences it holds over the attempt it recovered,
+ * launched, or superseded have to outlive its return: the engine journals the
+ * call's value after the runner answers, and a fence released at the return
+ * leaves the inspected child free for a host to resume — appending
+ * `run.activate` and doing more work — while the parent is still persisting
+ * the result read from it. The engine closes that scope once the journal write
+ * has committed.
  */
 export function createWorkflowScriptAgentRunner(
   parent: DelegationParent,

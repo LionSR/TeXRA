@@ -907,38 +907,53 @@ export class SessionHandle {
         Effect.asVoid,
       ),
     );
-    void settled.finally(() => {
-      this.publications.delete(publication);
+    void settled.then((exit) => {
+      // A committed publication is done with; a failed one is a fact this run
+      // queued and lost, and the drain that decides its run's terminal row is
+      // what has to hear it. A fire-and-forget publication rejects on its own
+      // schedule, so dropping it here would leave a drain that arrives one
+      // tick later reading an empty set and writing a COMPLETED row with no
+      // `artifact-drain` marker. It stays tracked until a drain that answers
+      // for it reports it ({@link settlePublications}).
+      if (Exit.isSuccess(exit)) this.publications.delete(publication);
     });
   }
 
   /** Await every detached publication enqueued so far and the view's fold
-   *  of what they committed, then report the refusals this caller owns. A
-   *  refused batch wrote nothing and is never retried (D6 b, R7):
+   *  of what they committed, then report the failures nobody has heard yet.
+   *  A refused batch wrote nothing and is never retried (D6 b, R7):
    *  `DatabaseNotOwner` says this process no longer holds the aggregate and
    *  `DatabaseWriteFailed` says the transaction rolled back. Failures belong
    *  to those Exits, not a session-wide leftover array a later settler would
-   *  drain.
+   *  drain: a failed publication stays in the tracked set as its own Exit
+   *  until the drain that answers for it takes it out.
    *
    *  Every publication settles whoever asks, but a run id narrows whose
    *  rollback the caller hears: its own facts and the session's, never a
    *  sibling run's — a run's terminal outcome is decided by this settle, and
-   *  another run's lost fact is that run's outcome, not this one's. */
+   *  another run's lost fact is that run's outcome, not this one's. The
+   *  failures this call reports are the ones it clears, so a run hears each of
+   *  its lost facts exactly once and a sibling's stays for that sibling. */
   async settlePublications(runId?: RunId): Promise<void> {
     await effectRuntime().runPromise(this.graph.settle);
     const settled = await Promise.all(
       [...this.publications].map(async (publication) => ({
-        owner: publication.runId,
+        publication,
         exit: await publication.settled,
       })),
     );
+    const reported = settled.flatMap(({ publication, exit }) =>
+      Exit.isFailure(exit) &&
+      (runId === undefined ||
+        publication.runId === null ||
+        publication.runId === runId)
+        ? [{ publication, error: Cause.squash(exit.cause) }]
+        : [],
+    );
+    for (const { publication } of reported)
+      this.publications.delete(publication);
     throwAggregated(
-      settled.flatMap(({ owner, exit }) =>
-        Exit.isFailure(exit) &&
-        (runId === undefined || owner === null || owner === runId)
-          ? [Cause.squash(exit.cause)]
-          : [],
-      ),
+      reported.map(({ error }) => error),
       'Session publication failed',
     );
   }

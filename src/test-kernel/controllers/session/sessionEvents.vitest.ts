@@ -810,6 +810,40 @@ describe('Sessions owner', () => {
       }),
   );
 
+  // A fire-and-forget publication settles on its own schedule, and the drain
+  // that decides a run's terminal row can arrive after it already rejected. A
+  // failure dropped at that moment would let the row call itself the
+  // post-drain fact of facts that rolled back, with no `artifact-drain`
+  // marker: the failure is kept until the drain that answers for that run
+  // reports it, and cleared by the one that does.
+  it.live(
+    'a failed publication is reported by the next drain for its run, once',
+    () =>
+      Effect.gen(function* () {
+        const session = open('/workspace/owner/retained-failure');
+        try {
+          session.publish([runStart]);
+          yield* Effect.promise(() => session.settlePublications(RUN));
+          // A second `run.start` on the live aggregate violates its sequence:
+          // the batch rolls back whole and the publication fails.
+          session.publish([runStart]);
+          // A sibling run's drain awaits every publication — so this one has
+          // settled by the time it returns — and reports no fact of this run's.
+          yield* Effect.promise(() => session.settlePublications(OLDER));
+          yield* Effect.promise(() =>
+            expect(session.settlePublications(RUN)).rejects.toMatchObject({
+              _tag: 'DatabaseWriteFailed',
+            }),
+          );
+          // Once: the drain that told the run cleared it, so the next drain
+          // does not fail a run whose remaining facts are whole.
+          yield* Effect.promise(() => session.settlePublications(RUN));
+        } finally {
+          session.dispose();
+        }
+      }),
+  );
+
   // #12017's ownership fence: a committed row another process authored is
   // accepted like any other, and only its local side effects are fenced.
   // (That the fold itself keeps a foreign-owned run is stated over the
