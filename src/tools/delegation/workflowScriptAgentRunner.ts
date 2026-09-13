@@ -520,7 +520,20 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // terminal row at all).
         yield* fenceSupersededRun(session, runId);
         const launched = yield* probeChild(runId, records.readRunEnd());
-        if (launched?.outcome !== result.outcome) {
+        // The outcome does not identify the lifecycle: a resume that reached
+        // its own end usually ends `completed`, exactly as this one did, so a
+        // terminal row that agrees with the result can belong to a lifecycle
+        // this call never saw — with its own model work and its own edits.
+        // The activation count is that identity. This call launched into an
+        // id `exists()` read as absent, so the lifecycle it holds a result for
+        // is the run's first and only, and every resume appends one more
+        // `run.activate`. A second one means the result in hand describes a
+        // lifecycle the run has already left.
+        const activations = yield* probeChild(
+          runId,
+          records.countActivations(),
+        );
+        if (activations !== 1 || launched?.outcome !== result.outcome) {
           return yield* Effect.fail(
             new WorkflowRunAbortError(
               `Workflow child ${runId} started again before its result was journaled; refusing to report it.`,
@@ -559,7 +572,11 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       // copy read before the claim was observed can predate a child that ended
       // — or started again — in between. Reading it here — under the fence, so
       // no new owner can be starting — is what makes it the row this call
-      // recovers, advances past, or refuses on.
+      // recovers, advances past, or refuses on. It needs no activation count
+      // beside it, unlike the launch exit above: the result recovered here is
+      // built from this reading and the manifest read under the same fence,
+      // never from a lifecycle observed before it, so there is no earlier
+      // result a later row of the same outcome could be mistaken for.
       const end = yield* probeChild(runId, records.readRunEnd());
       if (end?.error?.kind === 'artifact-drain') {
         // The row says the attempt's queued facts rolled back, so what it did

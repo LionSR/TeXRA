@@ -265,6 +265,9 @@ interface ProbedChild {
   readonly exists: boolean;
   readonly runEnd?: RunEnd;
   readonly resultMeta?: { readonly producer: string; readonly output: unknown };
+  /** Activations behind this id: one per lifecycle, so more than one means a
+   *  resume opened a lifecycle after the one a launch here answered on. */
+  readonly activations?: number;
 }
 
 /** Answer the attempt probe with one child aggregate per attempt, in order. */
@@ -279,6 +282,7 @@ function probeAnswers(...children: ProbedChild[]): void {
       isRemoved: () => Effect.succeed(false),
       readRunEnd: () =>
         Effect.succeed(launchedRows.get(id) ?? child.runEnd ?? null),
+      countActivations: () => Effect.succeed(child.activations ?? 1),
       readResultMeta: () => Effect.succeed(child.resultMeta ?? null),
     };
   });
@@ -1400,6 +1404,31 @@ describe('createWorkflowScriptAgentRunner', () => {
           name: 'WorkflowRunAbortError',
           message: expect.stringContaining(
             'could not be claimed against a concurrent resume',
+          ),
+        });
+        expect(mocks.executeSubagentInBand).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'refuses a launched child a resume completed again with the same outcome',
+    () =>
+      Effect.gen(function* () {
+        // The fence can arrive after the resume has already run the child to
+        // its own end, and that lifecycle ends `completed` like the one this
+        // call watched. The terminal row therefore agrees with the result in
+        // hand while describing different model work and different edits, so
+        // the outcome cannot be what the re-read compares: the second
+        // `run.activate` is what says the run left the lifecycle this result
+        // came from.
+        probeAnswers({ exists: false, activations: 2 });
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(
+            'started again before its result was journaled',
           ),
         });
         expect(mocks.executeSubagentInBand).toHaveBeenCalledOnce();
