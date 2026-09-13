@@ -153,6 +153,9 @@ export class RunRegistry {
   private disposed = false;
   /** Set by {@link closeAdmissions}: the session is closing. */
   private closing = false;
+  /** The runs whose stop has begun ({@link beginStop}): each admits no new
+   *  child until a new generation of it is tracked. */
+  private readonly stopping = new Set<RunId>();
   private readonly runView: (runId: RunId) => RunView | undefined;
   private readonly commit: (
     events: readonly SessionEventDraft[],
@@ -233,6 +236,7 @@ export class RunRegistry {
     this.handles.clear();
     for (const runId of runIds) this.notifyWaiters(runId);
     this.childActivations.clear();
+    this.stopping.clear();
     this.listeners.clear();
   }
 
@@ -299,6 +303,12 @@ export class RunRegistry {
   /** Register a run handle. */
   track(handle: RunHandle): void {
     this.assertActive();
+    if (handle.parent !== null)
+      this.assertAdmitsChild(handle.parent, handle.runId);
+    // A generation tracked for a run whose stop had begun is that run
+    // starting again: the stop it was marked for is over, and the new
+    // generation admits children of its own.
+    this.stopping.delete(handle.runId);
     const previous = this.handles.get(handle.runId);
     const activation = this.childActivations.get(handle.runId);
     if (activation?.isDetached()) handle.detach();
@@ -334,6 +344,42 @@ export class RunRegistry {
     if (this.closing) {
       throw new Error('Cannot register run work while the session is closing.');
     }
+  }
+
+  /**
+   * Refuse a child admitted under a parent whose stop has begun
+   * ({@link beginStop}), the way {@link assertActive} refuses one admitted
+   * under a closing session.
+   *
+   * A child this registry already holds is not an admission: a native child's
+   * activation and every turn handle it tracks re-enter here while the detach
+   * runs, and those are the children the stop is severing, not new ones.
+   */
+  private assertAdmitsChild(parentRunId: RunId, childRunId: RunId): void {
+    if (!this.stopping.has(parentRunId)) return;
+    if (this.hasRetainedOwner(childRunId)) return;
+    throw new Error(
+      `Cannot launch child run ${childRunId} under run ${parentRunId} while that run is stopping.`,
+    );
+  }
+
+  /**
+   * Mark a run's stop as begun, synchronously, before the stop reads which
+   * children it has to detach.
+   *
+   * A detaching stop snapshots the parent's children, commits their
+   * `run.detach` batch, severs them locally, and only then interrupts the
+   * parent — deliberately without cascading. A child admitted while that
+   * commit is in flight would be in neither the durable nor the local sever
+   * and would still resolve the just-stopped parent as its delivery target.
+   * The mark closes that window at its start: from here until a new
+   * generation of this run is tracked, no new child is admitted under it
+   * ({@link assertAdmitsChild}). A cascading stop takes the same mark for the
+   * same reason — it interrupts the children it can see at admission, and one
+   * admitted after that would outlive the parent that owns it.
+   */
+  private beginStop(runId: RunId): void {
+    this.stopping.add(runId);
   }
 
   /** Remove a run handle and notify waiters. */
@@ -455,6 +501,7 @@ export class RunRegistry {
    * settlement at its Effect boundary before releasing ownership.
    */
   kill(runId: RunId, options: RunStopOptions = {}): RunStop {
+    this.beginStop(runId);
     const handle = this.handles.get(runId);
     if (!handle) {
       const activation = this.childActivations.get(runId);
@@ -613,6 +660,10 @@ export class RunRegistry {
    * refused batch would leave the children durably parented, and a later
    * delete of the parent would collect the children the user chose to keep
    * running.
+   *
+   * The set taken here stays the parent's whole child roster while the batch
+   * commits: the stop marked the parent before reading it ({@link beginStop}),
+   * so no child is admitted under it in the window this covers.
    */
   detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     const detachedChildRunIds = this.childRunIds(parentRunId);
@@ -706,6 +757,7 @@ export class RunRegistry {
     runId: RunId,
     options: RunStopOptions,
   ): Effect.Effect<void, Error> {
+    this.beginStop(runId);
     const detached =
       options.detachActiveChildren === true
         ? this.detachActiveChildren(runId)
@@ -792,6 +844,7 @@ export class RunRegistry {
     if (this.childActivations.has(activation.runId)) {
       return () => {};
     }
+    this.assertAdmitsChild(activation.parentRunId, activation.runId);
     this.childActivations.set(activation.runId, activation);
     return () => this.releaseChildActivation(activation.runId, activation);
   }

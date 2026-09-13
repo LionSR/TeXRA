@@ -1093,6 +1093,65 @@ describe('runRegistry', () => {
     }
   });
 
+  it('refuses a child launched while the parent is stopping', async () => {
+    // The detach snapshots the parent's children before its batch commits,
+    // and the root is interrupted without cascading, so a child admitted
+    // inside that window would be in neither sever and would still route its
+    // delivery to the stopped parent. The stop marks the parent at admission,
+    // and that mark is what refuses the child.
+    const commit = createDeferred<void>();
+    let committing = false;
+    const { registry } = createRegistry({
+      commit: () =>
+        Effect.suspend(() => {
+          committing = true;
+          return Effect.promise(() => commit.promise);
+        }),
+    });
+    const rootRunId = generateRunId();
+    const childRunId = generateRunId();
+    const lateChildRunId = generateRunId();
+
+    try {
+      trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
+        agentName: 'test-root',
+      });
+      trackInterruptibleHandle(
+        registry,
+        { runId: childRunId, parent: rootRunId },
+        vi.fn(),
+      );
+
+      const stopped = Effect.runPromise(
+        registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
+      );
+      await vi.waitFor(() => expect(committing).toBe(true));
+
+      expect(() =>
+        registry.track(createHandle(lateChildRunId, rootRunId)),
+      ).toThrow(/while that run is stopping/);
+      expect(() =>
+        registry.reserveChildActivation({
+          runId: lateChildRunId,
+          parentRunId: rootRunId,
+          interrupt: vi.fn(),
+          detach: vi.fn(),
+          isDetached: () => false,
+        }),
+      ).toThrow(/while that run is stopping/);
+
+      commit.resolve();
+      await stopped;
+
+      // Neither admission took, so the stopped parent is left owning nothing
+      // the detach batch did not carry.
+      expect(registry.getHandle(lateChildRunId)).toBeUndefined();
+      expect(registry.hasActiveChildren(rootRunId)).toBe(false);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('stops one child while preserving its owner, sibling, and agent descendants', () => {
     const { phases, registry } = createRegistry();
     const rootRunId = generateRunId();

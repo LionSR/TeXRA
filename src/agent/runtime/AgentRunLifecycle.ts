@@ -359,7 +359,7 @@ const closeSuspendedTranscriptGroup = Effect.fn(function* (
     status: RUN_OUTCOME.CANCELLED,
   });
   yield* Effect.tryPromise({
-    try: () => session.settlePublications(),
+    try: () => session.settlePublications(runId),
     catch: ensureError,
   });
 });

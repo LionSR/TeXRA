@@ -493,7 +493,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     }
 
     yield* Effect.tryPromise({
-      try: () => session.settlePublications(),
+      try: () => session.settlePublications(runId),
       catch: ensureError,
     });
     input.onRunResolved?.(runId, runTrace.trace);
@@ -667,7 +667,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
             });
           const publication = yield* Effect.exit(
             Effect.tryPromise({
-              try: () => launchSession.settlePublications(),
+              try: () => launchSession.settlePublications(runId),
               catch: ensureError,
             }),
           );

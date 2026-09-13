@@ -803,10 +803,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // them: the transcript boundary closes on `waiting`, and this turn's
       // `stream.start`/`stream.end`/`response.finalized` are then dropped by
       // the fold, leaving a parked run whose transcript holds no assistant
-      // answer. Settling the session's publications here is the order
-      // between the two paths.
+      // answer. Settling this run's publications here is the order between
+      // the two paths, and the run id is what makes it a barrier: a
+      // session-wide settle reports session-scoped failures only, so a
+      // rolled-back transcript of this run would return successfully here and
+      // park the run over it.
       yield* Effect.tryPromise({
-        try: () => session.flushArtifacts(),
+        try: () => session.flushArtifacts(runId),
         catch: ensureError,
       });
       // The turn boundary: the snapshot precedes the steps in one batch, so

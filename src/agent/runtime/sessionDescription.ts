@@ -123,7 +123,7 @@ export const generateSessionDescription = Effect.fn(
       },
     ]);
     yield* Effect.tryPromise({
-      try: () => session.settlePublications(),
+      try: () => session.settlePublications(runId),
       catch: ensureError,
     });
     log.info(`Generated session description for ${runId}`);

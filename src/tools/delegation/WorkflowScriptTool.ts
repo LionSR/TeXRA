@@ -581,7 +581,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                             },
                           ]);
                           yield* Effect.tryPromise({
-                            try: () => session.settlePublications(),
+                            try: () => session.settlePublications(runId),
                             catch: ensureError,
                           });
                         }),
