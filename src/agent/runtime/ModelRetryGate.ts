@@ -403,8 +403,10 @@ export class ModelRetryGate {
     const scheduled: ScheduledProbe = { fiber: undefined };
     state.probe = scheduled;
     const probe = Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis;
-      yield* Effect.sleep(Math.max(0, state.retryAt - now));
+      // A probe handed on by an abandoning holder is due now: grant it on
+      // this fiber's first step rather than through a zero-length sleep.
+      const delayMs = state.retryAt - (yield* Clock.currentTimeMillis);
+      if (delayMs > 0) yield* Effect.sleep(delayMs);
       if (state.probe !== scheduled) return;
       state.probe = undefined;
       if (state.phase !== 'cooling') return;
