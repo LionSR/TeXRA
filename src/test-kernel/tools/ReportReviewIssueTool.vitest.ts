@@ -12,7 +12,7 @@ import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { ReportReviewIssueTool } from '@tools/ReportReviewIssueTool';
+import { getDefaultToolRegistry } from '@tools/registry';
 
 /** The review sink a host attaches, derived from the port. */
 type ReportReviewIssueSink = NonNullable<HostInteractions['reportReviewIssue']>;
@@ -38,7 +38,7 @@ function useReviewSink(sink: ReportReviewIssueSink): void {
 function useAcceptingSink() {
   const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
   useReviewSink(sink);
-  return { sink, tool: new ReportReviewIssueTool() };
+  return { sink, tool: getDefaultToolRegistry().get('report_review_issue')! };
 }
 
 describe('ReportReviewIssueTool', () => {
@@ -91,7 +91,7 @@ describe('ReportReviewIssueTool', () => {
     'reports that agent review is unavailable when no host serves it',
     () =>
       Effect.gen(function* () {
-        const tool = new ReportReviewIssueTool();
+        const tool = getDefaultToolRegistry().get('report_review_issue')!;
 
         const result = yield* tool.call(REPORT);
 
@@ -120,7 +120,7 @@ describe('ReportReviewIssueTool', () => {
           accepted: false,
           reason: 'No agent review session is collecting issues.',
         }));
-        const tool = new ReportReviewIssueTool();
+        const tool = getDefaultToolRegistry().get('report_review_issue')!;
 
         const result = yield* tool.call(REPORT);
 
