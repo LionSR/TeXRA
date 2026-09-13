@@ -14,7 +14,6 @@ import {
   inspectRunLease,
   ownsRunLease,
   releaseOwnedRunLease,
-  runWithInactiveRunLease,
   validateOwnedRunLease,
 } from '@agent/storage/runLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
@@ -350,17 +349,11 @@ describe('cross-process run leases', () => {
     const record = await owner();
     await writeRun(runId);
     await writeForeignLease(runId, undefined, record);
-    const operation = vi.fn(async () => 'removed');
 
     await expect(inspectRunLease(runId)).resolves.toEqual({
       status: 'held',
       owner: record,
     });
-    await expect(runWithInactiveRunLease(runId, operation)).resolves.toEqual({
-      status: 'active',
-      owner: record,
-    });
-    expect(operation).not.toHaveBeenCalled();
     await expect(acquireResumedRunLease(runId)).rejects.toThrow(
       `Run ${runId} is held by another TeXRA process (pid ${record.pid} on ${record.hostname}).`,
     );
@@ -512,7 +505,7 @@ describe('cross-process run leases', () => {
     const runId = 'd8645a' as RunId;
     const registry = new RunRegistry({
       runView: () => undefined,
-      publish: () => {},
+      commit: () => Effect.void,
       approvals: createSessionApprovals({ setApprovalBypassState() {} }),
       releaseRootRunLease: () => Effect.void,
       finalizeRun: (input) =>
@@ -675,51 +668,5 @@ describe('cross-process run leases', () => {
     await expect(validation).rejects.toBeInstanceOf(RunLeaseLostError);
     await release;
     ownedRunIds.delete(runId);
-  });
-
-  it('refuses acquisition while maintenance holds the claim, then frees it', async () => {
-    const runId = 'f8644f' as RunId;
-    const deletionPaused = createDeferred();
-    const deletionStarted = createDeferred();
-    const deletion = runWithInactiveRunLease(runId, async () => {
-      deletionStarted.resolve();
-      await deletionPaused.promise;
-      return 'removed';
-    });
-    await deletionStarted.promise;
-
-    // Maintenance is itself a claim held by this live process.
-    await expect(acquireResumedRunLease(runId)).rejects.toMatchObject({
-      name: 'RunLeaseActiveError',
-      owner: { pid: process.pid },
-    });
-
-    deletionPaused.resolve();
-    await expect(deletion).resolves.toEqual({
-      status: 'performed',
-      value: 'removed',
-    });
-    await expect(inspectRunLease(runId)).resolves.toEqual({
-      status: 'free',
-    });
-    await acquire(runId);
-    await expect(inspectRunLease(runId)).resolves.toMatchObject({
-      status: 'owned',
-    });
-  });
-
-  it('keeps a locally owned run active whatever its record claims', async () => {
-    const runId = 'f86440' as RunId;
-    await acquire(runId);
-    const [persisted] = await readLeaseRecords(runId);
-    // Even a record naming a dead instance never lets maintenance reap the
-    // live local owner: token identity short-circuits before any probe.
-    await writeOrphanedLease(runId, persisted!.ownerToken);
-    const operation = vi.fn(async () => 'removed');
-
-    await expect(
-      runWithInactiveRunLease(runId, operation),
-    ).resolves.toMatchObject({ status: 'active' });
-    expect(operation).not.toHaveBeenCalled();
   });
 });

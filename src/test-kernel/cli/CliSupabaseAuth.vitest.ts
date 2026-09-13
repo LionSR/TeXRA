@@ -8,7 +8,10 @@ import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import {
+  LeanLanguageServices,
+  type LeanLanguageServicesShape,
+} from '@tools/lean/leanLanguageServices';
 
 /**
  * The secret store the CLI composition root owns. Every load below
@@ -16,6 +19,22 @@ import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
  * does, so the coordinator is keyed on one store for the whole suite.
  */
 const cliSecrets = new FakeSecrets();
+const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
+  executeFileCommand: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  getGoalState: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  getTermGoal: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  getHoverInfo: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  fetchDiagnosticsForFile: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  navigateToFirstError: () => Effect.void,
+  executeProjectCommand: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  stopSessionsForRun: () => Effect.void,
+};
 
 const mocks = vi.hoisted(() => {
   const authCoordinator = {
@@ -115,7 +134,7 @@ async function loadSupabaseAuth() {
         testHttpClientLayer,
         nodePlatformLayer,
         Layer.mock(UpdateCheckRecords, {}),
-        Layer.mock(LeanLanguageServices, {}),
+        Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
         inquiryRecordsLayer(() => globalStorage).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         ),

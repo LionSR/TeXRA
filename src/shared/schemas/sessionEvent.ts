@@ -397,18 +397,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   ),
 ]);
 /**
- * A stable subagent attempt's lifecycle phase (#10663): reserved before its
- * run exists, launched once its loop owns it, committed after its result
- * manifest drained, retryable when repeating it is known to be safe.
- */
-const StableSubagentPhaseSchema = z.enum([
-  'reserved',
-  'launched',
-  'committed',
-  'retryable',
-]);
-export type StableSubagentPhase = z.infer<typeof StableSubagentPhaseSchema>;
-/**
  * The run's private records: on the same aggregate as its display rows, read
  * by the runtime's typed accessors and never by a renderer
  * (`isDisplaySessionEvent` keeps them out of the transport by type).
@@ -419,23 +407,6 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.report', { report: z.string().nullable() }),
   durable('run.result', { result: ResultMetaSchema }),
   durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),
-  /**
-   * The stable-subagent protocol's parent-owned facts, on the launching
-   * run's aggregate and keyed inside the payload (one run model, section
-   * 3.6): the number of physical attempts reserved for one logical call,
-   * and each attempt's lifecycle phase. Latest per key is the fold; neither
-   * is a listing type because one parent carries many keys.
-   */
-  durable('run.subagentSequence', {
-    logicalRunId: RunIdSchema,
-    nextAttempt: z.int().nonnegative(),
-  }),
-  durable('run.subagentAttempt', {
-    /** The physical attempt's run. */
-    runId: RunIdSchema,
-    logicalRunId: RunIdSchema,
-    phase: StableSubagentPhaseSchema,
-  }),
 ]);
 /**
  * The run ledger's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
@@ -501,6 +472,31 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
       key: z.string().regex(/^[a-f0-9]{16}$/),
       index: z.int().nonnegative(),
       result: PersistedJsonValueSchema,
+    },
+    'workflow-checkpoint',
+  ),
+  /**
+   * The attempt high-water mark for one `agent()` call: the number of the
+   * physical attempt the parent is about to launch, committed before the
+   * launch. The child aggregates cannot carry it — deleting a run collects
+   * its rows outright, and an id-by-id probe reads that hole as "never
+   * launched" and relaunches into it — so the parent's own journal, which
+   * outlives every child, keeps the count. Folded as the highest per `key`.
+   *
+   * `supersededRunId` is the one authorization that closes a child which
+   * already started work: a user retrying that child through the workflow's
+   * control surface. The engine writes this row for the next attempt before
+   * it asks for the replacement, naming the child the retry superseded, so
+   * the recovery probe advances past an attempt it would otherwise refuse to
+   * repeat. Absent on every mark a launch writes for itself, which is what
+   * keeps restart recovery fail-closed for a child nobody retried.
+   */
+  durable(
+    'workflow.attempt',
+    {
+      key: z.string().regex(/^[a-f0-9]{16}$/),
+      attempt: z.int().nonnegative(),
+      supersededRunId: RunIdSchema.nullish(),
     },
     'workflow-checkpoint',
   ),
@@ -629,10 +625,9 @@ export function listingTypeOf(
     case 'tool.result':
     case 'flow.snapshot':
     case 'child.turn':
-    case 'run.subagentSequence':
-    case 'run.subagentAttempt':
     case 'workflow.script':
     case 'workflow.journal':
+    case 'workflow.attempt':
       // The run ledger's private rows stay out of the listing: a cold hydrate
       // must never pull a run's latest `flow.snapshot` into every renderer.
       // `flow.step` is the one ledger row that is listed (its own key, the

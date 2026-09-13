@@ -3,11 +3,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Deferred, Effect, Exit } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import { RunLanes } from '@agent/runtime/runLanes';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
@@ -16,8 +17,9 @@ import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
-import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
+import { SubagentDurabilityError } from '@tools/delegation/inBandSubagentRun';
 import { ensureError } from '@utils/errors/errorMessage';
+import { deriveRunId } from '@utils/core/idHash';
 import { StorageFS } from '@utils/files/storageFS';
 
 const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
@@ -51,7 +53,14 @@ function fingerprintWorkflowAgentDependencies(
 }
 
 const mocks = vi.hoisted(() => ({
-  executeStableSubagentInBand: vi.fn(),
+  executeSubagentInBand: vi.fn(),
+  acquireClaims: vi.fn(),
+  getRunRecords: vi.fn(),
+  resolveRunLiveness: vi.fn(),
+  readChildTurnState: vi.fn(),
+  readWorkflowCallAttempt: vi.fn(),
+  recordWorkflowCallAttempt: vi.fn(),
+  probedRunIds: [] as string[],
   preparedOptions: [] as unknown[],
   requireVisibleAgent: vi.fn(),
   selectAvailableDelegationModel: vi.fn(),
@@ -69,9 +78,14 @@ vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
 }));
 
-vi.mock('@tools/delegation/inBandSubagentRun', async () => {
+vi.mock('@tools/delegation/inBandSubagentRun', async (importOriginal) => {
+  // Only the launch entry point is faked; the durability error the runner
+  // classifies is the real class.
   return {
-    executeStableSubagentInBand: mocks.executeStableSubagentInBand,
+    ...(await importOriginal<
+      typeof import('@tools/delegation/inBandSubagentRun')
+    >()),
+    executeSubagentInBand: mocks.executeSubagentInBand,
   };
 });
 
@@ -83,8 +97,27 @@ vi.mock('@tools/delegation/delegationAvailability', () => ({
   selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
 }));
 
+vi.mock('@tools/executions/runLiveness', () => ({
+  resolveRunLiveness: mocks.resolveRunLiveness,
+}));
+
+// The parent's attempt mark lives on the checkpoint aggregate; this suite's
+// session is a stub, so the journal is faked at its two entry points.
+vi.mock('@agent/workflowScript/checkpoint', () => ({
+  readWorkflowCallAttempt: mocks.readWorkflowCallAttempt,
+  recordWorkflowCallAttempt: mocks.recordWorkflowCallAttempt,
+}));
+
 vi.mock('@agent/storage', () => ({
   resolveChildRunOutput: mocks.resolveChildRunOutput,
+  getRunRecords: mocks.getRunRecords,
+}));
+
+// The child's own turn rows live on the same stubbed session, so the one read
+// the probe makes of them is faked beside the run records above.
+vi.mock('@agent/storage/runRecords', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runRecords')>()),
+  readChildTurnState: mocks.readChildTurnState,
 }));
 
 vi.mock('@utils/files/runStorageFs', () => ({
@@ -164,8 +197,22 @@ const structuredResult: RunEnd = {
   },
 };
 
+// The in-process half of the fence, real: a case makes a run live here by
+// taking its lane, exactly as a launch or a resume of that run would. One
+// registry stub for every stub session, so sessions compare equal.
+let lanes = new RunLanes();
+const runs = {
+  holdInactiveRun: (runId: RunId) => lanes.holdInactive(runId, () => false),
+};
+
 function parentContext(): DelegationParent {
-  const session = { id: 'session' } as never;
+  // The probe fences an interrupted attempt on its run lane and its run claim
+  // before it may advance past it, so the stub session answers both.
+  const session = {
+    id: 'session',
+    acquireClaims: mocks.acquireClaims,
+    runs,
+  } as never;
   return {
     config: new FakeConfigProvider(),
     model: 'parent-model',
@@ -218,8 +265,35 @@ function invocation(
 
 interface InBandRunOptions {
   runId: string;
-  onActiveRunId?: (runId: string) => void;
   prepare: () => Effect.Effect<unknown, Error>;
+}
+
+/** The child aggregate a probed attempt id reads back, in probe order. */
+interface ProbedChild {
+  readonly exists: boolean;
+  readonly runEnd?: RunEnd;
+  readonly resultMeta?: { readonly producer: string; readonly output: unknown };
+  /** Activations behind this id: one per lifecycle, so more than one means a
+   *  resume opened a lifecycle after the one this call would report on. */
+  readonly activations?: number;
+}
+
+/** Answer the attempt probe with one child aggregate per attempt, in order. */
+function probeAnswers(...children: ProbedChild[]): void {
+  mocks.getRunRecords.mockImplementation((_session: unknown, id: string) => {
+    const child = children[mocks.probedRunIds.length] ?? { exists: false };
+    mocks.probedRunIds.push(id);
+    return {
+      exists: () => Effect.succeed(child.exists),
+      // No probed id here is deleted: a tombstone closes an id for good, and
+      // the probe reads that apart from an id that never started.
+      isRemoved: () => Effect.succeed(false),
+      readRunEnd: () =>
+        Effect.succeed(launchedRows.get(id) ?? child.runEnd ?? null),
+      countActivations: () => Effect.succeed(child.activations ?? 1),
+      readResultMeta: () => Effect.succeed(child.resultMeta ?? null),
+    };
+  });
 }
 
 /** The merged attempt-facts channel the runner reports every fact through. */
@@ -239,14 +313,29 @@ function reported<Field extends keyof AttemptFacts>(
   );
 }
 
-// Stable in-band run that runs the child's prepare step and records the
-// options it produced, as the real executor does.
+/**
+ * The terminal row a launched attempt leaves behind, by run id. The real
+ * executor returns only once the child's own `run.end` is committed and read,
+ * so every fake launch leaves that row where the runner re-reads it under the
+ * fence it takes over the child it just ran.
+ */
+const launchedRows = new Map<string, RunEnd>();
+
+function launched(
+  runId: string,
+  result: RunEnd,
+): { runId: string; result: RunEnd } {
+  launchedRows.set(runId, result);
+  return { runId, result };
+}
+
+// In-band launch that runs the child's prepare step and records the options it
+// produced, under the run id the caller derived, as the real executor does.
 function inBandRunReturning(finalResult: RunEnd) {
   return (options: InBandRunOptions) =>
     Effect.gen(function* () {
-      options.onActiveRunId?.(options.runId);
       mocks.preparedOptions.push(yield* options.prepare());
-      return { runId: 'bbbbbb222222', result: finalResult };
+      return launched(options.runId, finalResult);
     });
 }
 
@@ -262,7 +351,30 @@ function useToolUseAgentEntries(): void {
 describe('createWorkflowScriptAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    lanes = new RunLanes();
     mocks.preparedOptions.length = 0;
+    mocks.probedRunIds.length = 0;
+    launchedRows.clear();
+    probeAnswers();
+    // Nothing alive owns a probed run unless a case says so: the claim is the
+    // liveness authority, and a dead owner is what lets the probe advance.
+    mocks.resolveRunLiveness.mockReturnValue(
+      Effect.succeed({ kind: 'interrupted' }),
+    );
+    // Nothing holds a probed run's claim unless a case says so: the fence
+    // hands back the release the call's scope runs.
+    mocks.acquireClaims.mockReturnValue(Effect.succeed(Effect.void));
+    // No attempt journaled yet — absence, not attempt 0: the probe starts at 0
+    // and may launch there, unless a case says the parent already launched.
+    mocks.readWorkflowCallAttempt.mockReturnValue(
+      Effect.succeed({ attempt: null, superseded: [] }),
+    );
+    // No turn ever settled unless a case says so: the settle is what separates
+    // an ordinary failed child from one that lost its bookkeeping.
+    mocks.readChildTurnState.mockReturnValue(
+      Effect.succeed({ active: null, lastCompleted: null }),
+    );
+    mocks.recordWorkflowCallAttempt.mockReturnValue(Effect.void);
     mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
       name,
       source: 'builtInWorkflow',
@@ -280,9 +392,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     mocks.realpath.mockImplementation(async (file: string) => file);
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
-    mocks.executeStableSubagentInBand.mockImplementation(
-      inBandRunReturning(result),
-    );
+    mocks.executeSubagentInBand.mockImplementation(inBandRunReturning(result));
   });
 
   it.effect('fingerprints file bytes rather than only their paths', () =>
@@ -451,14 +561,13 @@ describe('createWorkflowScriptAgentRunner', () => {
       });
       const report = reportSpy();
       call.report = report;
-      mocks.executeStableSubagentInBand.mockImplementationOnce((options) =>
+      mocks.executeSubagentInBand.mockImplementationOnce((options) =>
         Effect.gen(function* () {
-          options.onActiveRunId?.(options.runId);
           const prepared = yield* options.prepare();
           mocks.preparedOptions.push(prepared);
           expect(reported(report, 'childRunId')).toEqual([options.runId]);
           prepared.onRunResolved?.(options.runId);
-          return { runId: 'bbbbbb222222', result };
+          return launched(options.runId, result);
         }),
       );
       const runner = defaultRunner();
@@ -481,7 +590,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         parentModel: 'parent-model',
         withScope: expect.any(Function),
       });
-      expect(mocks.executeStableSubagentInBand).toHaveBeenCalledWith(
+      expect(mocks.executeSubagentInBand).toHaveBeenCalledWith(
         expect.objectContaining({
           runId: expect.stringMatching(/^[a-f0-9]{24}$/),
           parentRunId: runId,
@@ -841,12 +950,11 @@ describe('createWorkflowScriptAgentRunner', () => {
       Effect.gen(function* () {
         const onCost = vi.fn();
         const report = reportSpy();
-        mocks.executeStableSubagentInBand.mockImplementationOnce((options) =>
+        mocks.executeSubagentInBand.mockImplementationOnce((options) =>
           Effect.gen(function* () {
-            options.onActiveRunId?.(options.runId);
             const prepared = yield* options.prepare();
             prepared.onCost?.(0.25);
-            return { runId: 'bbbbbb222222', result };
+            return launched(options.runId, result);
           }),
         );
         const runner = defaultRunner({ onCost });
@@ -864,18 +972,14 @@ describe('createWorkflowScriptAgentRunner', () => {
   it.effect('stamps terminal cost on failed outcomes before throwing', () =>
     Effect.gen(function* () {
       const report = reportSpy();
-      mocks.executeStableSubagentInBand.mockImplementationOnce((options) =>
+      mocks.executeSubagentInBand.mockImplementationOnce((options) =>
         Effect.gen(function* () {
-          options.onActiveRunId?.(options.runId);
           yield* options.prepare();
-          return {
-            runId: 'bbbbbb222222',
-            result: {
-              ...result,
-              outcome: 'failed',
-              usage: spent(0.42),
-            },
-          };
+          return launched(options.runId, {
+            ...result,
+            outcome: 'failed',
+            usage: spent(0.42),
+          });
         }),
       );
       const runner = defaultRunner();
@@ -886,25 +990,71 @@ describe('createWorkflowScriptAgentRunner', () => {
     }),
   );
 
-  it.effect('does not report recovered stable child cost as live run', () =>
+  it.effect(
+    'recovers a completed child without charging it as a live run',
+    () =>
+      // Owner ruling 2026-09-13: a COMPLETED `run.end` with a
+      // `producer: 'subagent'` manifest is durable completion on its own, with
+      // no parent-owned attestation to corroborate it.
+      Effect.gen(function* () {
+        const onCost = vi.fn();
+        const report = reportSpy();
+        probeAnswers({
+          exists: true,
+          runEnd: { ...result, usage: spent(0.25) },
+          resultMeta: { producer: 'subagent', output: result.output },
+        });
+        // The child ran its turn to a settled row before its manifest and its
+        // terminal row: that pair is what a recovered result is read from.
+        mocks.readChildTurnState.mockReturnValue(
+          Effect.succeed({
+            active: null,
+            lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+          }),
+        );
+        const runner = defaultRunner({ onCost });
+
+        yield* runner({ ...invocation(), index: 3, report });
+
+        expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+        expect(onCost).not.toHaveBeenCalled();
+        // Recovery never launched, so re-attach the recovered child's own id,
+        // but do not charge the synthetic resume attempt.
+        expect(reported(report, 'childRunId')).toEqual([mocks.probedRunIds[0]]);
+        expect(reported(report, 'recovered')).toEqual([true]);
+        expect(reported(report, 'costUsd')).toEqual([]);
+      }),
+  );
+
+  it.effect('refuses a completed child a host resumed after it delivered', () =>
     Effect.gen(function* () {
-      const onCost = vi.fn();
-      const report = reportSpy();
-      mocks.executeStableSubagentInBand.mockReturnValueOnce(
+      // A host resume of a completed child appends `run.activate` and, at its
+      // end, a second `run.end`; it never rewrites `run.result`. The manifest
+      // read beside the terminal row can therefore be the launch's while the
+      // row is the resume's, and the activation count is what separates them
+      // at this exit exactly as at the launch's.
+      probeAnswers({
+        exists: true,
+        runEnd: result,
+        resultMeta: { producer: 'subagent', output: result.output },
+        activations: 2,
+      });
+      // The child ran its turn to a settled row before its manifest and its
+      // terminal row: that pair is what a recovered result is read from.
+      mocks.readChildTurnState.mockReturnValue(
         Effect.succeed({
-          runId: 'bbbbbb222222',
-          result: { ...result, usage: spent(0.25) },
+          active: null,
+          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
         }),
       );
-      const runner = defaultRunner({ onCost });
 
-      yield* runner({ ...invocation(), index: 3, report });
+      const error = yield* Effect.flip(defaultRunner()(invocation()));
 
-      expect(onCost).not.toHaveBeenCalled();
-      // Recovered durable children never fire onActiveRunId — re-attach the
-      // known child id, but do not charge the synthetic resume attempt.
-      expect(reported(report, 'childRunId')).toEqual(['bbbbbb222222']);
-      expect(reported(report, 'costUsd')).toEqual([]);
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining('was resumed after it completed'),
+      });
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
     }),
   );
 
@@ -927,16 +1077,21 @@ describe('createWorkflowScriptAgentRunner', () => {
     }),
   );
 
-  it.effect('uses one stable child id per workflow call identity', () =>
+  it.effect('derives one child id per workflow call identity', () =>
     Effect.gen(function* () {
       const runner = defaultRunner();
 
-      yield* runner(invocation());
-      yield* runner(invocation());
-      yield* runner({ ...invocation(), index: 1 });
-      yield* runner({ ...invocation(), key: 'fedcba9876543210' });
+      // One scope per call, as the engine gives each one: the fences a call
+      // holds over the child it ran are released when its value is journaled,
+      // so the next call may take the same identity again.
+      yield* Effect.scoped(runner(invocation()));
+      yield* Effect.scoped(runner(invocation()));
+      yield* Effect.scoped(runner({ ...invocation(), index: 1 }));
+      yield* Effect.scoped(
+        runner({ ...invocation(), key: 'fedcba9876543210' }),
+      );
 
-      const runIds = mocks.executeStableSubagentInBand.mock.calls.map(
+      const runIds = mocks.executeSubagentInBand.mock.calls.map(
         ([options]) => options.runId,
       );
       expect(runIds[0]).toBe(runIds[1]);
@@ -949,14 +1104,14 @@ describe('createWorkflowScriptAgentRunner', () => {
     'rejects a cancelled child so the workflow journal can retry it',
     () =>
       Effect.gen(function* () {
-        mocks.executeStableSubagentInBand.mockReturnValueOnce(
-          Effect.succeed({
-            runId: 'bbbbbb222222',
-            result: {
-              outcome: 'cancelled',
-              output: { category: 'toolUse', response: '', files: [] },
-            },
-          }),
+        mocks.executeSubagentInBand.mockImplementationOnce(
+          (options: InBandRunOptions) =>
+            Effect.succeed(
+              launched(options.runId, {
+                outcome: 'cancelled',
+                output: { category: 'toolUse', response: '', files: [] },
+              }),
+            ),
         );
         const runner = defaultRunner();
 
@@ -971,11 +1126,19 @@ describe('createWorkflowScriptAgentRunner', () => {
     'rejects a completed workflow child that produced no output files',
     () =>
       Effect.gen(function* () {
-        mocks.executeStableSubagentInBand.mockReturnValueOnce(
-          Effect.succeed({
-            runId: 'bbbbbb222222',
-            result: { ...result, output: { ...result.output, outputs: [] } },
-          }),
+        mocks.executeSubagentInBand.mockImplementationOnce(
+          (options: InBandRunOptions) =>
+            Effect.succeed(
+              launched(options.runId, {
+                ...result,
+                output: {
+                  category: 'workflow',
+                  outputs: [],
+                  compileFailures: [],
+                  diffs: [],
+                },
+              }),
+            ),
         );
         const runner = defaultRunner();
 
@@ -992,7 +1155,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         'result manifest unavailable',
         { cause: new Error('storage offline') },
       );
-      mocks.executeStableSubagentInBand.mockReturnValueOnce(
+      mocks.executeSubagentInBand.mockReturnValueOnce(
         Effect.fail(durabilityError),
       );
       const runner = defaultRunner();
@@ -1026,7 +1189,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     'preserves $name from the in-band child',
     ({ cause, hasDurabilityError }) =>
       Effect.gen(function* () {
-        mocks.executeStableSubagentInBand.mockReturnValueOnce(
+        mocks.executeSubagentInBand.mockReturnValueOnce(
           Effect.failCause(cause),
         );
 
@@ -1049,31 +1212,453 @@ describe('createWorkflowScriptAgentRunner', () => {
       }),
   );
 
-  it.effect('reports the active-attempt run id, not the logical id', () =>
+  it.effect('refuses to repeat a child a live owner still holds', () =>
     Effect.gen(function* () {
-      // After a durable retry advances the attempt sequence, the live run uses an
-      // attempt-specific run id — the id its child stream / roster expose.
-      // The runner must report THAT id, not the logical id it hands stable
-      // run, so a host's skip/retry finds the row.
-      const attemptRunId = 'cccccc333333' as RunId;
-      let logicalRunId: string | undefined;
-      mocks.executeStableSubagentInBand.mockImplementation((options) =>
-        Effect.gen(function* () {
-          logicalRunId = options.runId;
-          options.onActiveRunId?.(attemptRunId);
-          mocks.preparedOptions.push(yield* options.prepare());
-          return { runId: attemptRunId, result };
+      probeAnswers({ exists: true });
+      mocks.resolveRunLiveness.mockReturnValueOnce(
+        Effect.succeed({
+          kind: 'unsettled',
+          reason: 'held by another TeXRA process (pid 42 on studio)',
         }),
+      );
+
+      const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining(
+          'held by another TeXRA process (pid 42 on studio); refusing to repeat it',
+        ),
+      });
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect('launches the next attempt id after a failed child', () =>
+    Effect.gen(function* () {
+      // The logical call identity is a journal key, never a run id: each
+      // attempt derives its own, and the one the runner launches is the id its
+      // child stream and roster expose, so a host's skip/retry finds the row.
+      // No `run.result` manifest under the failed row: nothing was delivered,
+      // which is the one failed shape another attempt may follow.
+      probeAnswers(
+        { exists: true, runEnd: { ...result, outcome: 'failed' } },
+        { exists: false },
       );
       const report = reportSpy();
       const runner = defaultRunner();
 
       expect(yield* runner({ ...invocation(), report })).toBe(result);
 
-      expect(logicalRunId).toMatch(/^[a-f0-9]{24}$/);
-      expect(logicalRunId).not.toBe(attemptRunId);
-      expect(reported(report, 'childRunId')).toEqual([attemptRunId]);
+      expect(mocks.probedRunIds).toHaveLength(2);
+      expect(mocks.probedRunIds[0]).toMatch(/^[a-f0-9]{24}$/);
+      expect(mocks.probedRunIds[1]).not.toBe(mocks.probedRunIds[0]);
+      expect(reported(report, 'childRunId')).toEqual([mocks.probedRunIds[1]]);
+      // The parent journals the attempt it is about to launch, before it
+      // launches: that mark is what a resume probes from once the child
+      // aggregates behind it are deleted and collected.
+      expect(mocks.recordWorkflowCallAttempt).toHaveBeenCalledWith(
+        expect.anything(),
+        'tool-call-7',
+        '0123456789abcdef',
+        1,
+      );
+      expect(
+        mocks.recordWorkflowCallAttempt.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mocks.executeSubagentInBand.mock.invocationCallOrder[0] ?? 0,
+      );
     }),
+  );
+
+  it.effect("replays a settled failed child as this call's failure", () =>
+    Effect.gen(function* () {
+      // An ordinary failed child: the strategy writes a `run.result` manifest
+      // for `isError` too and the turn settles after it, so the row, the
+      // manifest and the settle are one completed failure. Repeating it is
+      // out (its edits are durable), and so is aborting the workflow: the
+      // call fails exactly as it would have live, which the engine journals
+      // nothing for.
+      probeAnswers({
+        exists: true,
+        runEnd: { ...result, outcome: 'failed' },
+        resultMeta: { producer: 'subagent', output: result.output },
+      });
+      mocks.readChildTurnState.mockReturnValue(
+        Effect.succeed({
+          active: null,
+          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+        }),
+      );
+      const report = reportSpy();
+
+      const error = yield* Effect.flip(
+        defaultRunner()({ ...invocation(), report }),
+      );
+
+      expect(error.name).toBe('Error');
+      expect(error.message).toMatch(/ended with failed outcome/);
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      // Nothing ran now, so the recovered child's id is attached and the
+      // synthetic attempt is not charged.
+      expect(reported(report, 'recovered')).toEqual([true]);
+      expect(reported(report, 'costUsd')).toEqual([]);
+    }),
+  );
+
+  it.effect('refuses a settled turn whose manifest write rolled back', () =>
+    Effect.gen(function* () {
+      // The delivery rolled back after the model and the tools had finished:
+      // the turn settled anyway and the loop recorded FAILED, so the row
+      // beside the settle describes the rollback rather than the work. The
+      // manifest that would have said what was delivered is gone, and work
+      // that finished is not repeated for want of its record.
+      probeAnswers(
+        { exists: true, runEnd: { ...result, outcome: 'failed' } },
+        { exists: false },
+      );
+      mocks.readChildTurnState.mockReturnValue(
+        Effect.succeed({
+          active: null,
+          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+        }),
+      );
+
+      const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining(
+          'settled a turn whose result manifest is missing',
+        ),
+      });
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect('refuses a delivered child whose turn never settled', () =>
+    Effect.gen(function* () {
+      // The manifest commits ahead of the settle, so a delivery with no
+      // settled turn lost its bookkeeping in between: nothing says the child
+      // stopped where the row claims, and repeating its edits is out.
+      probeAnswers({
+        exists: true,
+        runEnd: { ...result, outcome: 'failed' },
+        resultMeta: { producer: 'subagent', output: result.output },
+      });
+
+      const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining('never settled its turn'),
+      });
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect('refuses a cancelled child whose accepted turn never settled', () =>
+    Effect.gen(function* () {
+      // Acceptance commits immediately before the turn dispatches, so a stop
+      // that lands in that window leaves a CANCELLED row with no manifest
+      // over tool edits that already ran. The open turn is the evidence work
+      // began, so the attempt is refused rather than relaunched.
+      probeAnswers({
+        exists: true,
+        runEnd: { ...result, outcome: 'cancelled' },
+      });
+      mocks.readChildTurnState.mockReturnValue(
+        Effect.succeed({
+          active: { attemptId: 'a0', turnIndex: 1 },
+          lastCompleted: null,
+        }),
+      );
+
+      const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining('accepted a turn it never settled'),
+      });
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect(
+    'advances past a journaled attempt 0 whose child was collected',
+    () =>
+      Effect.gen(function* () {
+        // The parent journaled attempt 0 and died before journaling its result,
+        // and deletion has since collected that child, so nothing of it reads
+        // back. The mark is the only fact that it ran: a mark folded to 0 would
+        // be indistinguishable from no mark, and the probe would repeat the work
+        // attempt 0 already did.
+        mocks.readWorkflowCallAttempt.mockReturnValue(
+          Effect.succeed({ attempt: 0, superseded: [] }),
+        );
+        probeAnswers({ exists: false }, { exists: false });
+        const report = reportSpy();
+
+        expect(yield* defaultRunner()({ ...invocation(), report })).toBe(
+          result,
+        );
+
+        expect(mocks.probedRunIds).toHaveLength(2);
+        expect(mocks.executeSubagentInBand).toHaveBeenCalledTimes(1);
+        expect(reported(report, 'childRunId')).toEqual([mocks.probedRunIds[1]]);
+        expect(mocks.recordWorkflowCallAttempt).toHaveBeenCalledWith(
+          expect.anything(),
+          'tool-call-7',
+          '0123456789abcdef',
+          1,
+        );
+      }),
+  );
+
+  it.effect('recovers an older attempt below the mark', () =>
+    Effect.gen(function* () {
+      // The mark says what an absent id means, not where the probe starts:
+      // this process journaled the mark for attempt 1 and died, and attempt 0
+      // still reads back as the single completed lifecycle that answered this
+      // call. So the probe inspects 0 and recovers it rather than repeating
+      // its work under attempt 1.
+      mocks.readWorkflowCallAttempt.mockReturnValue(
+        Effect.succeed({ attempt: 1, superseded: [] }),
+      );
+      probeAnswers({
+        exists: true,
+        runEnd: result,
+        resultMeta: { producer: 'subagent', output: result.output },
+      });
+      // The child ran its turn to a settled row before its manifest and its
+      // terminal row: that pair is what a recovered result is read from.
+      mocks.readChildTurnState.mockReturnValue(
+        Effect.succeed({
+          active: null,
+          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+        }),
+      );
+      const report = reportSpy();
+
+      yield* defaultRunner()({ ...invocation(), report });
+
+      expect(mocks.probedRunIds).toEqual([
+        deriveRunId({
+          attempt: 0,
+          checkpointId: 'tool-call-7',
+          key: '0123456789abcdef',
+          parentRunId: runId,
+        }),
+      ]);
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      expect(reported(report, 'recovered')).toEqual([true]);
+    }),
+  );
+
+  it.effect('recovers a child that ended while the probe was reading it', () =>
+    Effect.gen(function* () {
+      // The child committed `run.end` and released its claim between the
+      // terminal read and the claim observation: the first copy is stale, the
+      // claim reads free, and only re-reading the row keeps the finished run
+      // from being repeated.
+      let terminalReads = 0;
+      mocks.getRunRecords.mockImplementation(
+        (_session: unknown, id: string) => {
+          mocks.probedRunIds.push(id);
+          return {
+            exists: () => Effect.succeed(true),
+            isRemoved: () => Effect.succeed(false),
+            readRunEnd: () =>
+              Effect.succeed(terminalReads++ === 0 ? null : result),
+            countActivations: () => Effect.succeed(1),
+            readResultMeta: () =>
+              Effect.succeed({ producer: 'subagent', output: result.output }),
+          };
+        },
+      );
+      // The child ran its turn to a settled row before its manifest and its
+      // terminal row: that pair is what a recovered result is read from.
+      mocks.readChildTurnState.mockReturnValue(
+        Effect.succeed({
+          active: null,
+          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+        }),
+      );
+      const report = reportSpy();
+
+      yield* defaultRunner()({ ...invocation(), report });
+
+      expect(mocks.probedRunIds).toHaveLength(1);
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      expect(reported(report, 'recovered')).toEqual([true]);
+    }),
+  );
+
+  it.effect(
+    'refuses an interrupted child whose claim a concurrent resume holds',
+    () =>
+      Effect.gen(function* () {
+        // A free lease only says nobody owned the run when it was read. The
+        // claim is what the resume takes, so an acquire it refuses is the
+        // fact that a new owner is starting this child right now.
+        probeAnswers({ exists: true }, { exists: false });
+        mocks.acquireClaims.mockReturnValueOnce(
+          Effect.fail(new Error('held by owner-2 (alive)')),
+        );
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(
+            'could not be claimed against a concurrent resume',
+          ),
+        });
+        expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'refuses a failed child whose claim a concurrent resume holds',
+    () =>
+      Effect.gen(function* () {
+        // A terminal row does not close the aggregate: a resume can append
+        // `run.activate` after it, so advancing past a failed attempt takes the
+        // same claim as advancing past an interrupted one, and an acquire the
+        // resume refuses stops a second child from starting beside it.
+        probeAnswers(
+          { exists: true, runEnd: { ...result, outcome: 'failed' } },
+          { exists: false },
+        );
+        mocks.acquireClaims.mockReturnValueOnce(
+          Effect.fail(new Error('held by owner-2 (alive)')),
+        );
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(
+            'could not be claimed against a concurrent resume',
+          ),
+        });
+        expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'refuses a completed child whose claim a concurrent resume holds',
+    () =>
+      Effect.gen(function* () {
+        // A completed row is resumable too: a snapshot outlives it, so a
+        // resume can be replaying this child right now and the recorded
+        // result is stale. Recovering it takes the same claim as advancing
+        // past a failed attempt, and an acquire the resume refuses stops the
+        // parent journaling a result beside a child still running.
+        probeAnswers({
+          exists: true,
+          runEnd: result,
+          resultMeta: { producer: 'subagent', output: result.output },
+        });
+        mocks.acquireClaims.mockReturnValueOnce(
+          Effect.fail(new Error('held by owner-2 (alive)')),
+        );
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(
+            'could not be claimed against a concurrent resume',
+          ),
+        });
+        expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'refuses a child it just launched whose claim a resume took at its return',
+    () =>
+      Effect.gen(function* () {
+        // The child's loop released its claim and its run lane as it ended, so
+        // the window between the launch's return and the engine's journal
+        // write belongs to whoever takes them next. The launched attempt is
+        // fenced and re-read like every other: an acquire a resume refuses
+        // stops the parent journaling a result from the lifecycle before it.
+        mocks.acquireClaims.mockReturnValueOnce(
+          Effect.fail(new Error('held by owner-2 (alive)')),
+        );
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(
+            'could not be claimed against a concurrent resume',
+          ),
+        });
+        expect(mocks.executeSubagentInBand).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'refuses a launched child a resume completed again with the same outcome',
+    () =>
+      Effect.gen(function* () {
+        // The fence can arrive after the resume has already run the child to
+        // its own end, and that lifecycle ends `completed` like the one this
+        // call watched. The terminal row therefore agrees with the result in
+        // hand while describing different model work and different edits, so
+        // the outcome cannot be what the re-read compares: the second
+        // `run.activate` is what says the run left the lifecycle this result
+        // came from.
+        probeAnswers({ exists: false, activations: 2 });
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(
+            'started again before its result was journaled',
+          ),
+        });
+        expect(mocks.executeSubagentInBand).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'refuses an interrupted child whose lane a same-session resume holds',
+    () =>
+      Effect.gen(function* () {
+        // The claim cannot see a resume started here: it is keyed by owner,
+        // and a row this owner already holds is reclaimable. The run lane is
+        // the authority that does see it.
+        probeAnswers({ exists: true }, { exists: false });
+        const resumed = deriveRunId({
+          attempt: 0,
+          checkpointId: 'tool-call-7',
+          key: '0123456789abcdef',
+          parentRunId: runId,
+        });
+        const holding = yield* Deferred.make<void>();
+        yield* Effect.forkScoped(
+          lanes.launch(
+            resumed,
+            Deferred.succeed(holding, undefined).pipe(
+              Effect.andThen(Effect.never),
+            ),
+          ),
+        );
+        yield* Deferred.await(holding);
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining('is live in this session'),
+        });
+        expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      }).pipe(Effect.scoped),
   );
 
   it.effect(
@@ -1081,7 +1666,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     () =>
       Effect.gen(function* () {
         useToolUseAgentEntries();
-        mocks.executeStableSubagentInBand.mockImplementationOnce(
+        mocks.executeSubagentInBand.mockImplementationOnce(
           inBandRunReturning(structuredResult),
         );
         const schema = {
@@ -1124,7 +1709,7 @@ describe('createWorkflowScriptAgentRunner', () => {
   it.effect('exempts a schema call from the workflow empty-files guard', () =>
     Effect.gen(function* () {
       useToolUseAgentEntries();
-      mocks.executeStableSubagentInBand.mockImplementationOnce(
+      mocks.executeSubagentInBand.mockImplementationOnce(
         inBandRunReturning(structuredResult),
       );
       const schema = { type: 'object', additionalProperties: false };

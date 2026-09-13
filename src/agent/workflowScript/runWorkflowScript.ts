@@ -9,6 +9,7 @@ import {
   Fiber,
   FiberSet,
   Result,
+  Scope,
   Semaphore,
 } from 'effect';
 import type {
@@ -25,7 +26,7 @@ import {
 } from '@shared/schemas';
 import { isNonEmptyString, onAbort } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
 import { runScriptInSandbox } from './sandbox';
@@ -87,8 +88,17 @@ type WorkflowFailedCallStatus =
  */
 interface InFlightAgentCall {
   readonly index: number;
+  /** The call's journal key: what a supersession of this attempt is filed
+   *  under, which is why the controller can journal one without the loop. */
+  readonly key: string;
   fiber?: Fiber.Fiber<unknown, Error>;
   action?: WorkflowControlAction;
+  /** The live child the gesture named: what a retry supersedes. */
+  target?: RunId;
+  /** A retry's journaled authorization, started before the interrupt it
+   *  authorizes and resolving to the failure that write hit, if any: the loop
+   *  reads it where the replacement is asked for. */
+  superseded?: Promise<Error | undefined>;
 }
 
 /**
@@ -164,6 +174,12 @@ function isWorkflowAbort(error: unknown): boolean {
   );
 }
 
+/**
+ * The one outcome of an attempt that is not the call's value: the host asked
+ * for another attempt, so the loop runs again under a fresh scope.
+ */
+const RETRY_ATTEMPT = Symbol('workflowScript.retryAttempt');
+
 class JournalCommitFence {
   #sealed = false;
 
@@ -201,6 +217,7 @@ export function runWorkflowScript<R = never>(
         fingerprintAgentDependencies,
         onEvent,
         onJournalEntry,
+        onSupersededAttempt,
         onJournalEntryConsumed,
         onControl,
       } = options;
@@ -302,11 +319,48 @@ export function runWorkflowScript<R = never>(
         });
       yield* Effect.addFinalizer((exit) => finalize(exit).pipe(Effect.orDie));
 
+      /** Journal one retry's supersession, uninterruptibly and under the
+       *  run's own commit fence, and interrupt the attempt once that write
+       *  has settled. The order is the point: the interrupt is what makes the
+       *  child persist a CANCELLED row over an accepted, unsettled turn, and
+       *  a host that dies between the two must come back to the
+       *  authorization for it — otherwise recovery has a child it may not
+       *  repeat and no record of the replacement anyone asked for. */
+      const authorizeRetry = (
+        call: InFlightAgentCall,
+        childRunId: RunId,
+      ): Promise<Error | undefined> =>
+        runGuestAgent(
+          journalCommitFence
+            .commit(
+              Effect.suspend(
+                () =>
+                  onSupersededAttempt?.({ key: call.key, childRunId }) ??
+                  Effect.void,
+              ),
+            )
+            .pipe(Effect.as(undefined)),
+        ).then(
+          () => undefined,
+          (error: unknown) => ensureError(error),
+        );
+
       const control: WorkflowScriptControl = (childRunId, action) => {
         const call = inFlightCalls.get(childRunId);
         if (!call?.fiber) return false;
         call.action = action;
-        call.fiber.interruptUnsafe();
+        call.target = childRunId;
+        if (action !== 'retry') {
+          call.fiber.interruptUnsafe();
+          return true;
+        }
+        // A failed write still interrupts: the loop reads the failure where
+        // the replacement would be asked for and aborts the workflow there,
+        // which is where an unauthorized supersession has always ended.
+        call.superseded = authorizeRetry(call, childRunId).then((failure) => {
+          call.fiber?.interruptUnsafe();
+          return failure;
+        });
         return true;
       };
       onControl?.(control);
@@ -633,121 +687,165 @@ export function runWorkflowScript<R = never>(
           }
 
           for (;;) {
-            const call: InFlightAgentCall = { index };
-            const launch = permits.withPermit(
+            const call: InFlightAgentCall = { index, key };
+            // The attempt's scope is opened here and closed only after the
+            // journal write below: the runner fences the child it recovered or
+            // superseded into it, and a fence that ended at the runner's
+            // return would leave that child free to be resumed — appending
+            // `run.activate` and working on — while this loop is still
+            // persisting the value read from it. The engine owns the scope
+            // because the engine owns the commit.
+            const attempt = yield* Effect.scopedWith((attemptScope) =>
               Effect.gen(function* () {
-                if (firstFatalFault !== undefined) {
-                  return yield* Effect.fail(firstFatalFault);
-                }
-                liveCallCounter += 1;
-                if (liveCallCounter > maxAgentCalls) {
-                  const fault = new WorkflowRunAbortError(
-                    `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
-                  );
-                  // Record the refused call before waking the run-level fatal
-                  // race, which immediately interrupts the guest-call fiber.
-                  failCall(fault);
-                  return yield* Effect.fail(failRun(fault));
-                }
-                workflowRunState.beginAttempt(progressId);
-                yield* refreshDependencyIdentity();
-                const signal = yield* Effect.abortSignal;
-                const runnerFiber = yield* Effect.forkChild(
-                  Effect.suspend(() =>
-                    runAgent({
-                      index,
-                      progressId,
-                      key,
-                      prompt,
-                      options: callOptions,
-                      signal,
-                      report: ({ recovered, ...attemptFacts }) => {
-                        if (
-                          attemptFacts.childRunId !== undefined &&
-                          recovered !== true
-                        ) {
-                          inFlightCalls.set(attemptFacts.childRunId, call);
-                        }
-                        workflowRunState.reportAttempt(
+                const launch = permits.withPermit(
+                  Effect.gen(function* () {
+                    if (firstFatalFault !== undefined) {
+                      return yield* Effect.fail(firstFatalFault);
+                    }
+                    liveCallCounter += 1;
+                    if (liveCallCounter > maxAgentCalls) {
+                      const fault = new WorkflowRunAbortError(
+                        `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
+                      );
+                      // Record the refused call before waking the run-level fatal
+                      // race, which immediately interrupts the guest-call fiber.
+                      failCall(fault);
+                      return yield* Effect.fail(failRun(fault));
+                    }
+                    workflowRunState.beginAttempt(progressId);
+                    yield* refreshDependencyIdentity();
+                    const signal = yield* Effect.abortSignal;
+                    const runnerFiber = yield* Effect.forkChild(
+                      Effect.suspend(() =>
+                        runAgent({
+                          index,
                           progressId,
-                          attemptFacts,
-                        );
-                      },
+                          key,
+                          prompt,
+                          options: callOptions,
+                          signal,
+                          report: ({ recovered, ...attemptFacts }) => {
+                            if (
+                              attemptFacts.childRunId !== undefined &&
+                              recovered !== true
+                            ) {
+                              inFlightCalls.set(attemptFacts.childRunId, call);
+                            }
+                            workflowRunState.reportAttempt(
+                              progressId,
+                              attemptFacts,
+                            );
+                          },
+                        }).pipe(Scope.provide(attemptScope)),
+                      ),
+                      { startImmediately: true },
+                    );
+                    // The runner has started and owns its scoped AbortSignal;
+                    // give the durable writer a turn while the call remains in
+                    // its running state, even if the runner already completed.
+                    yield* Effect.yieldNow;
+                    return yield* Fiber.join(runnerFiber);
+                  }).pipe(Effect.scoped),
+                );
+                const attemptFiber = yield* Effect.forkChild(launch);
+                call.fiber = attemptFiber;
+                const attemptExit = yield* Fiber.await(attemptFiber);
+
+                for (const [childRunId, inFlight] of inFlightCalls) {
+                  if (inFlight === call) {
+                    inFlightCalls.delete(childRunId);
+                  }
+                }
+
+                if (workflowRunState.sealed || call.fiber !== attemptFiber)
+                  return undefined;
+
+                if (call.action === 'retry') {
+                  // A retry is an authorized supersession, and the child it
+                  // interrupted may already have accepted a turn — the shape
+                  // every recovery rule refuses to repeat. The controller
+                  // journaled that authorization before it interrupted the
+                  // attempt (`authorizeRetry`), so the runner's probe advances
+                  // past the superseded child instead of aborting the workflow
+                  // over it, and a host that died in that window resumes on
+                  // the same fact. Its failure is the workflow's here, where
+                  // the replacement would be asked for.
+                  const superseded = call.target;
+                  const authorization = call.superseded;
+                  if (authorization !== undefined) {
+                    const failure = yield* Effect.promise(() => authorization);
+                    if (failure !== undefined) {
+                      const fault = new WorkflowRunAbortError(
+                        `Failed to journal the retry of workflow child ${superseded}: ${toErrorMessage(failure)}`,
+                        { cause: failure },
+                      );
+                      failCall(fault);
+                      return yield* Effect.fail(failRun(fault));
+                    }
+                  }
+                  workflowRunState.queueCall(progressId, {
+                    model: callOptions.model,
+                  });
+                  return RETRY_ATTEMPT;
+                }
+                if (call.action === 'skip') {
+                  workflowRunState.settleCall(progressId, {
+                    status: WORKFLOW_CALL_STATUS.SKIPPED,
+                  });
+                  return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
+                }
+
+                if (Exit.isFailure(attemptExit)) {
+                  const error = Cause.squash(attemptExit.cause);
+                  if (isWorkflowAbort(error)) {
+                    const fatal = failRun(
+                      error instanceof WorkflowRunAbortError
+                        ? error
+                        : new WorkflowRunAbortError(toErrorMessage(error), {
+                            cause: error,
+                          }),
+                    );
+                    failCall(fatal);
+                    return yield* Effect.fail(fatal);
+                  }
+                  failCall(error, WORKFLOW_CALL_STATUS.FAILED);
+                  // Let the writer observe this failed call while its stage is
+                  // still active before guest code can launch the next call.
+                  yield* Effect.yieldNow;
+                  return 'null';
+                }
+
+                const { payload, normalizedResult } = journalValue(
+                  attemptExit.value,
+                  'agent() result',
+                );
+                let callSettled = false;
+                const entry = { index, key, result: normalizedResult };
+                const committed = yield* journalCommitFence.commit(
+                  persistJournalEntry(entry).pipe(
+                    Effect.tap(() =>
+                      Effect.sync(() => {
+                        callSettled = true;
+                        workflowRunState.settleCall(progressId, {
+                          status: WORKFLOW_CALL_STATUS.COMPLETED,
+                        });
+                        onJournalEntryConsumed?.(entry);
+                      }),
+                    ),
+                    Effect.catch((error) => {
+                      if (!callSettled) failCall(error);
+                      return Effect.fail(failRun(error));
                     }),
                   ),
-                  { startImmediately: true },
                 );
-                return yield* Fiber.join(runnerFiber);
-              }).pipe(Effect.scoped),
+                if (!committed) return undefined;
+                return payload;
+              }),
             );
-            const attemptFiber = yield* Effect.forkChild(launch);
-            call.fiber = attemptFiber;
-            const attemptExit = yield* Fiber.await(attemptFiber);
-
-            for (const [childRunId, inFlight] of inFlightCalls) {
-              if (inFlight === call) {
-                inFlightCalls.delete(childRunId);
-              }
-            }
-
-            if (workflowRunState.sealed) return undefined;
-
-            if (call.action === 'retry') {
-              workflowRunState.queueCall(progressId, {
-                model: callOptions.model,
-              });
-              continue;
-            }
-            if (call.action === 'skip') {
-              workflowRunState.settleCall(progressId, {
-                status: WORKFLOW_CALL_STATUS.SKIPPED,
-              });
-              return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
-            }
-
-            if (Exit.isFailure(attemptExit)) {
-              const error = Cause.squash(attemptExit.cause);
-              if (isWorkflowAbort(error)) {
-                const fatal = failRun(
-                  error instanceof WorkflowRunAbortError
-                    ? error
-                    : new WorkflowRunAbortError(toErrorMessage(error), {
-                        cause: error,
-                      }),
-                );
-                failCall(fatal);
-                return yield* Effect.fail(fatal);
-              }
-              failCall(error, WORKFLOW_CALL_STATUS.FAILED);
-              return 'null';
-            }
-
-            const { payload, normalizedResult } = journalValue(
-              attemptExit.value,
-              'agent() result',
-            );
-            let callSettled = false;
-            const entry = { index, key, result: normalizedResult };
-            const committed = yield* journalCommitFence.commit(
-              persistJournalEntry(entry).pipe(
-                Effect.tap(() =>
-                  Effect.sync(() => {
-                    callSettled = true;
-                    workflowRunState.settleCall(progressId, {
-                      status: WORKFLOW_CALL_STATUS.COMPLETED,
-                    });
-                    onJournalEntryConsumed?.(entry);
-                  }),
-                ),
-                Effect.catch((error) => {
-                  if (!callSettled) failCall(error);
-                  return Effect.fail(failRun(error));
-                }),
-              ),
-            );
-            if (!committed) return undefined;
-            return payload;
+            if (attempt === RETRY_ATTEMPT) continue;
+            return attempt;
           }
+
         });
 
       const argsJson = yield* Effect.try({

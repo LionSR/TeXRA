@@ -12,7 +12,7 @@ import {
 } from '@shared/schemas';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { Effect } from 'effect';
+import type { Effect, Scope } from 'effect';
 
 /** One title form for `meta.phases` entries and runtime `phase()` calls. */
 export const WorkflowScriptPhaseTitleSchema = z
@@ -296,10 +296,15 @@ export interface WorkflowAttemptFacts {
  * engine receives the typed `RunEnd`, never the XML follow-up delivery
  * string. The journal records that result; the script sees
  * {@link WorkflowScriptRunOptions.toScriptValue} of it.
+ *
+ * The engine, not the runner, owns the call's `Scope`: whatever a runner holds
+ * to keep the child it inspected from being resumed under it is released only
+ * after this call's journal entry has committed, since until then the result
+ * the parent is persisting is one another host could still invalidate.
  */
 type WorkflowAgentRunner<R = never> = (
   invocation: WorkflowAgentInvocation,
-) => Effect.Effect<unknown, Error, R>;
+) => Effect.Effect<unknown, Error, R | Scope.Scope>;
 
 /**
  * One completed agent() call, cached for resume. Identity is `key` alone;
@@ -417,6 +422,17 @@ export interface WorkflowScriptRunOptions<R = never> {
   onJournalEntry?: (
     entry: WorkflowJournalEntry,
   ) => Effect.Effect<void, Error, R>;
+  /**
+   * Durable checkpoint hook for an interactive retry: the child the user
+   * superseded, awaited before the engine asks the runner for its
+   * replacement. A retried child can already have started work, which every
+   * recovery rule otherwise refuses to repeat, so the authorization has to
+   * outlive this process for the runner's probe to advance past it.
+   */
+  onSupersededAttempt?: (superseded: {
+    readonly key: string;
+    readonly childRunId: RunId;
+  }) => Effect.Effect<void, Error, R>;
   /**
    * Synchronous observer for every validated result this invocation consumes,
    * whether replayed or live. It fires after the call reaches its terminal

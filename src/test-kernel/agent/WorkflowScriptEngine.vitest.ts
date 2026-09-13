@@ -827,6 +827,35 @@ return await parallel([
       }),
   );
 
+  it.live('releases a runner-held fence only after the journal commits', () =>
+    Effect.gen(function* () {
+      // A runner fences the child it recovered or superseded against a resume
+      // for the length of the call's scope. The engine owns that scope: it
+      // closes only once the call's value is durable, since a fence dropped at
+      // the runner's return leaves the inspected child free to be resumed
+      // while the parent is still persisting the result read from it.
+      const order: string[] = [];
+      const run = yield* runWorkflowScript({
+        script: `${META}return await agent('fenced')`,
+        runAgent: () =>
+          Effect.gen(function* () {
+            yield* Effect.addFinalizer(() =>
+              Effect.sync(() => order.push('fence released')),
+            );
+            return 'fenced result';
+          }),
+        onJournalEntry: (entry) =>
+          Effect.gen(function* () {
+            yield* sleep(5);
+            order.push(`checkpoint:${entry.index}`);
+          }),
+      });
+
+      expect(run.result).toBe('fenced result');
+      expect(order).toEqual(['checkpoint:0', 'fence released']);
+    }),
+  );
+
   it.live(
     'observes validated cache hits and live results after durable commit',
     () =>
@@ -2315,6 +2344,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       Effect.gen(function* () {
         const attemptByIndex = new Map<number, number>();
         const releases: Array<() => void> = [];
+        const superseded: RunId[] = [];
         let control!: WorkflowScriptControl;
         const runner = (invocation: WorkflowAgentInvocation) =>
           controlledEffect<string>((resolve, reject) => {
@@ -2330,6 +2360,10 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         const runFiber = yield* runWorkflowScript({
           script: `${META}return await agent('go')`,
           runAgent: runner,
+          onSupersededAttempt: ({ childRunId }) =>
+            Effect.sync(() => {
+              superseded.push(childRunId);
+            }),
           onControl: (handle) => {
             control = handle;
           },
@@ -2339,6 +2373,11 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         control(childRunIdFor(0, 1), 'retry');
         // The aborted first attempt is discarded; a fresh attempt starts.
         yield* waitFor(() => expect(attemptByIndex.get(0)).toBe(2));
+        // The retry is journaled as an authorized supersession before the
+        // replacement is asked for: that mark is the only fact letting the
+        // runner's probe advance past a child which may already have accepted
+        // a turn, rather than refusing to repeat it.
+        expect(superseded).toEqual([childRunIdFor(0, 1)]);
         releases.at(-1)?.();
 
         const run = yield* Fiber.join(runFiber);

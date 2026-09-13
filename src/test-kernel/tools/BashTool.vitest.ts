@@ -33,7 +33,6 @@ import {
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
 import * as bashDelivery from '@tools/delegation/bashDelivery';
-import { generateRunId } from '@utils/core';
 import * as execUtils from '@utils/system/execUtils';
 
 // Local file imports
@@ -101,13 +100,22 @@ function detachBackgroundRun(
 }
 
 /**
+ * A parent run the ledger already knows: its one `run.start` has landed, so
+ * the parking and the launch that follow append to a run that began exactly
+ * once. A second `run.start` on the same aggregate is refused by the seq-1
+ * rule, and that refusal is a lost publication the next settle reports.
+ */
+function startedParentRun(): RunId {
+  return publishTestRunStart(defaultSession());
+}
+
+/**
  * Park a run WAITING the way its loop does: the `waiting` flow step is the
  * fact the fold reads the phase from, so the delivery path sees the same
  * parked parent a real run would.
  */
 async function parkRunWaiting(runId: RunId): Promise<void> {
   const session = defaultSession();
-  publishTestRunStart(session, runId);
   session.publish([
     {
       type: 'flow.step',
@@ -139,7 +147,6 @@ function launchedIds(result: ToolResult): {
 }
 
 function launchBackgroundBash(parentRunId: RunId) {
-  publishTestRunStart(defaultSession(), parentRunId);
   return new BashTool()
     .call({
       command: 'make build',
@@ -509,7 +516,7 @@ describe('BashTool', () => {
           .spyOn(toolUseFollowUp, 'submitFollowUp')
           .mockReturnValue(Effect.succeed({ status: 'sent' }));
 
-        const parentRunId = generateRunId();
+        const parentRunId = startedParentRun();
         const parentLease = defaultSession().followUps.claimLive(
           parentRunId,
           'flow',
@@ -578,7 +585,7 @@ describe('BashTool', () => {
           DONE_EXEC_RESULT,
         );
 
-        const parentRunId = generateRunId();
+        const parentRunId = startedParentRun();
         const tryResumeRun = vi.fn().mockResolvedValue(true);
         yield* Effect.promise(() =>
           installPlatform(BASH_PLATFORM_OPTIONS, {
@@ -638,7 +645,7 @@ describe('BashTool', () => {
           DONE_EXEC_RESULT,
         );
 
-        const parentRunId = generateRunId();
+        const parentRunId = startedParentRun();
         let releaseResume: (() => void) | undefined;
         let handleAtResumeTime: unknown;
         let runId = '' as RunId;
@@ -701,7 +708,7 @@ describe('BashTool', () => {
       Effect.gen(function* () {
         const resolveCommand = holdCommand();
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
-        const parentRunId = generateRunId();
+        const parentRunId = startedParentRun();
         const recorded = recordSessionEvents(defaultSession());
 
         const launchResult = yield* launchBackgroundBash(parentRunId);
@@ -753,7 +760,7 @@ describe('BashTool', () => {
           throw new Error('delivery formatting blew up');
         });
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
-        const parentRunId = generateRunId();
+        const parentRunId = startedParentRun();
         const recorded = recordSessionEvents(defaultSession());
 
         const launchResult = yield* launchBackgroundBash(parentRunId);
@@ -797,7 +804,7 @@ describe('BashTool', () => {
       Effect.gen(function* () {
         const resolveCommand = holdCommand();
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
-        const parentRunId = generateRunId();
+        const parentRunId = startedParentRun();
         const recorded = recordSessionEvents(defaultSession());
 
         const launchResult = yield* launchBackgroundBash(parentRunId);
@@ -807,7 +814,7 @@ describe('BashTool', () => {
         // The user stop lands CANCELLED on the run phase; only afterwards does
         // the killed process report its non-zero exit.
         const stopped = defaultSession().runs.kill(runId);
-        assert.equal(stopped.accepted, true);
+        assert.equal(stopped.accepted(), true);
         const stopSettlement = yield* Effect.forkChild(stopped.settlement);
         resolveCommand({
           success: false,

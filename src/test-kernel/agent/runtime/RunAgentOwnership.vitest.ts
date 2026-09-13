@@ -108,6 +108,8 @@ const SESSION = {
     launchRun: vi.fn(
       (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,
     ),
+    // No parent is detaching this run, so its release waits on nothing.
+    throughDetach: () => Effect.void,
   },
   flushArtifacts,
   acquireClaims: () => Effect.succeed(Effect.void),

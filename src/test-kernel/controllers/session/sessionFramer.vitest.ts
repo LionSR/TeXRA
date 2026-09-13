@@ -245,6 +245,60 @@ describe('session framer', () => {
       );
     }),
   );
+  it.live(
+    'closes a superseded port before registering its replacement',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        yield* Effect.addFinalizer(() => Effect.sync(() => session.dispose()));
+        const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
+        const onPortClosed = vi.fn();
+        const bridge = yield* SessionBridge.make({
+          session,
+          onPortClosed,
+          handleHostRequest: async () => {
+            throw new Error('No host request is expected.');
+          },
+        });
+        const aggregates = [{ id: qualifyAggregateId('run', RUN), fromSeq: 0 }];
+        const first = yield* bridge.attach({ id: PORT, send: () => {} });
+        yield* first.receive({
+          ...subscribe,
+          session: session.roots.storage,
+          aggregates,
+        });
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(setSubscriptions).toHaveBeenCalledWith(PORT, aggregates);
+          }),
+        );
+
+        const second = yield* bridge.attach({ id: PORT, send: () => {} });
+        yield* second.receive({
+          ...subscribe,
+          session: session.roots.storage,
+          aggregates,
+        });
+
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(setSubscriptions.mock.calls).toEqual([
+              [PORT, aggregates],
+              [PORT, []],
+              [PORT, aggregates],
+            ]);
+            expect(onPortClosed).toHaveBeenCalledTimes(1);
+            expect(onPortClosed).toHaveBeenCalledWith(PORT);
+            expect(
+              setSubscriptions.mock.invocationCallOrder[1],
+            ).toBeLessThan(setSubscriptions.mock.invocationCallOrder[2]!);
+            expect(onPortClosed.mock.invocationCallOrder[0]).toBeLessThan(
+              setSubscriptions.mock.invocationCallOrder[2]!,
+            );
+          }),
+        );
+      }),
+  );
   it.effect(
     'answers a Subscribe with the replay, then frames the tail every 16 ms with one chunk per row',
     () =>

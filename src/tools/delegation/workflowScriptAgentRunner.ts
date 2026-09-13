@@ -1,7 +1,13 @@
 // Third-party imports
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, type Scope } from 'effect';
 
 // Local imports
+import { getRunRecords } from '@agent/storage';
+import { readChildTurnState } from '@agent/storage/runRecords';
+import {
+  readWorkflowCallAttempt,
+  recordWorkflowCallAttempt,
+} from '@agent/workflowScript/checkpoint';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
@@ -11,15 +17,26 @@ import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { AppState } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
-import { AgentCategory } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  AgentCategory,
+  RUN_OUTCOME,
+} from '@shared/schemas';
 import type { RunEnd, RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
+import {
+  resolveRunLiveness,
+  type RunLiveness,
+} from '@tools/executions/runLiveness';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 
 // Local file imports
-import { executeStableSubagentInBand } from './inBandSubagentRun';
-import { SubagentDurabilityError } from './stableSubagentAttempt';
+import {
+  executeSubagentInBand,
+  SubagentDurabilityError,
+  type InBandSubagentLaunchOptions,
+} from './inBandSubagentRun';
 import {
   resolveInvocationFileList,
   rejectOversizedBibAttachments,
@@ -192,7 +209,568 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
   },
 );
 
-/** Build the production `agent()` adapter for one workflow-script run. */
+/**
+ * The run one workflow `agent()` attempt executes under.
+ *
+ * Uniform across attempts: attempt 0 has no special case, so the logical call
+ * identity stays a journal key and is never itself a run id. `checkpointId` is
+ * in the preimage for more than uniqueness: the whole invocation runs under
+ * that checkpoint's own lane, which is what serializes two dispatches of one
+ * call. A caller that keys a call on anything but the checkpoint loses that
+ * serialization silently.
+ */
+function workflowCallRunId(call: {
+  /** The workflow-script run that owns the call. */
+  readonly parentRunId: RunId;
+  /** The durable journal identity. */
+  readonly checkpointId: string;
+  /** The engine's prompt + options + dependency hash. */
+  readonly key: string;
+  /** 0-based physical attempt. */
+  readonly attempt: number;
+}): RunId {
+  return deriveRunId({
+    attempt: call.attempt,
+    checkpointId: call.checkpointId,
+    key: call.key,
+    parentRunId: call.parentRunId,
+  });
+}
+
+/** Why a started child may not have its attempt number advanced. */
+function livenessClause(liveness: RunLiveness): string {
+  switch (liveness.kind) {
+    case 'unsettled':
+      return liveness.reason;
+    case 'live':
+      return 'still running in this process';
+    case 'settled':
+      return `recorded as ${liveness.outcome}`;
+    case 'interrupted':
+      return 'interrupted';
+  }
+}
+
+/**
+ * A storage fault while inspecting a child is not this call's own failure: the
+ * engine turns a failed call into a `null` the script can swallow, so an
+ * unreadable child aggregate has to abort the run rather than read as a child
+ * that answered nothing.
+ */
+function probeChild<A>(
+  runId: RunId,
+  read: Effect.Effect<A, Error>,
+): Effect.Effect<A, Error> {
+  return read.pipe(
+    Effect.mapError(
+      (cause) =>
+        new WorkflowRunAbortError(
+          `Workflow child ${runId} could not be inspected.`,
+          { cause },
+        ),
+    ),
+  );
+}
+
+/**
+ * The parent's own journal is read on the same rule: a checkpoint this call
+ * cannot read or move is a durability fault, not a call that answered
+ * nothing.
+ */
+function probeJournal<A>(
+  key: string,
+  read: Effect.Effect<A, Error>,
+): Effect.Effect<A, Error> {
+  return read.pipe(
+    Effect.mapError(
+      (cause) =>
+        new WorkflowRunAbortError(
+          `Workflow call ${key} could not read or move its attempt mark.`,
+          { cause },
+        ),
+    ),
+  );
+}
+
+/**
+ * Fence one attempt this call is about to advance past, against a resume, for
+ * the rest of the call. Whether that attempt recorded no outcome or ended
+ * failed/cancelled is not a difference the fence makes: a resumable snapshot
+ * outlives a terminal row (`run.activate` after `run.end` means the run
+ * started again), so every advance is decided under the fence.
+ *
+ * A resume has two owners to be fenced against, so the fence has two halves
+ * and neither is redundant.
+ *
+ * `acquireClaims` answers another process. It is the same admission a
+ * dead-owner takeover uses (`SessionRequests.decide`, `resumeRun`): it proves
+ * the prior owner dead before moving the claim, so a host that reached this
+ * child first holds the claim and this acquire is refused, while a host that
+ * arrives afterwards finds the claim held here and refuses in its turn. It
+ * cannot answer this process: the claim is keyed by owner, and a row this
+ * owner already holds is reclaimable, so a resume started in this session
+ * takes the same claim without conflict.
+ *
+ * `holdInactiveRun` answers this one. The run lane is the single in-process
+ * authority for "a generation of this run is live here" — the one
+ * `resumeRun` consults through `isActiveOrResuming` — so a resume already
+ * under way holds it and this hold is refused, and a resume that starts after
+ * it finds the run held and refuses in its turn.
+ *
+ * Together they are what makes the terminal re-read under them final:
+ * without them a resume can append `run.activate` between the reading and the
+ * launch, and the probe starts a second child beside a running one.
+ *
+ * Both are released with the call's scope, which the engine owns and closes
+ * only once the call's value is journaled: a superseded attempt stays fenced
+ * for as long as its replacement is live, and the attempt whose result the
+ * parent journals — recovered, or launched by this call and returned once its
+ * loop released both — stays fenced until that result is durable. A claim
+ * release that fails leaves every fact committed and only the claim behind, so
+ * it is logged rather than failing a call whose child already answered.
+ */
+const fenceSupersededRun = (
+  session: InBandSubagentLaunchOptions['session'],
+  runId: RunId,
+): Effect.Effect<void, Error, Scope.Scope> =>
+  Effect.gen(function* () {
+    yield* session.runs
+      .holdInactiveRun(runId)
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} is live in this session; refusing to repeat it.`,
+              { cause },
+            ),
+        ),
+      );
+    yield* Effect.acquireRelease(
+      session
+        .acquireClaims(qualifyAggregateId('run', runId))
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new WorkflowRunAbortError(
+                `Workflow child ${runId} could not be claimed against a concurrent resume; refusing to repeat it.`,
+                { cause },
+              ),
+          ),
+        ),
+      (release) =>
+        release.pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              log.warn(
+                `Workflow child ${runId} kept its claim after the call that fenced it: ${formatError('claim release failed', error)}`,
+              );
+            }),
+          ),
+        ),
+    );
+  });
+
+/** Runaway backstop on the attempt probe, not a retry policy. */
+const MAX_WORKFLOW_CALL_ATTEMPTS = 1_024;
+
+interface WorkflowChildOutcome {
+  readonly runId: RunId;
+  readonly result: RunEnd;
+  /** The result came from a child that had already run; nothing ran now. */
+  readonly recovered: boolean;
+}
+
+type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
+  readonly checkpointId: string;
+  readonly key: string;
+  /** Fires with the run id of the attempt about to run; recovery never fires. */
+  readonly onLaunch: (runId: RunId) => void;
+};
+
+/**
+ * Resolve one `agent()` call against the child runs it already has, then
+ * launch only if none of them answered it. The child's own aggregate is the
+ * fact: `run.start` is the launch edge, and a `run.result` manifest under a
+ * COMPLETED `run.end` is durable completion, because the terminal row is the
+ * post-drain fact — `finalizeRunTerminal` settles the ordered publisher
+ * before committing it and marks a lost drain on the row it decided, so a
+ * COMPLETED row can never outlive facts the child queued. Completion is a
+ * lifecycle's, not an aggregate's: the manifest is written by child delivery
+ * alone, so a host that resumed a completed child leaves the launch's
+ * manifest under the resume's terminal row. Every result this call journals,
+ * recovered or just launched, therefore comes from an aggregate carrying
+ * exactly one `run.activate` — the lifecycle the workflow launched; a second
+ * one is refused at both exits.
+ *
+ * The probe starts at attempt 0 always, and every id that exists is inspected
+ * in order: this process can have journaled a mark for `n` and died before
+ * launching it, leaving the dead fence on `n-1` reclaimable, and another host
+ * can have resumed `n-1` to a completed result since. Starting at the mark
+ * would repeat that child's model work and its edits. A call reaches a second
+ * attempt only when the first one closed without answering, so the ids below
+ * the mark are a handful of aggregate reads set against a whole child run.
+ *
+ * The parent's journal answers one question only: what an id that reads back
+ * as *nothing* means. The attempt mark it moves before each launch outlives
+ * the children, and that mark is nullable, so the two answers are read
+ * differently: no mark means the call never launched, so the first absent id
+ * is the launch slot; a mark of `n` means attempt `n` launched, so an absent
+ * id at or below `n` is one deletion has collected and the probe advances past
+ * it, while the first absent id above `n` is the launch slot. An id the user
+ * deleted is closed, not free: its tombstone is final, so the probe advances
+ * past it, and once deletion collects that tombstone the mark is what still
+ * says the call got that far.
+ *
+ * The journal answers one question about an id that *does* read back, and only
+ * one: whether a user superseded it. A retry through the workflow's control
+ * surface interrupts a child that may already have accepted a turn and asks
+ * for its replacement, so the engine journals the next attempt's mark naming
+ * that child before this call is invoked again. That mark is an authorization,
+ * not a reading of the child, and it is the only fact that advances past an
+ * attempt which started work.
+ *
+ * What an existing attempt did is the child's own bookkeeping to say, and the
+ * terminal row beside it says only what that came to. `childRunLoop` commits
+ * a turn's acceptance row immediately before the turn dispatches, so an
+ * accepted `child.turn` is where model work and file edits begin;
+ * `persistChildRunDelivery` commits the `run.result` manifest ahead of the
+ * turn's settle, so a settled turn is where the delivery that records them
+ * ended. Those two facts decide every existing id, in this order:
+ *
+ * - An active turn refuses. Its tools may already have edited files and
+ *   nothing recorded what they did — the shape a stop leaves, a CANCELLED row
+ *   with no manifest — so no attempt with one advances, with an outcome or
+ *   without one, unless a user's retry superseded it above.
+ * - A settled turn with no manifest refuses, whether or not the run recorded
+ *   an outcome. The delivery can roll back after the model and the tools have
+ *   finished: the turn still settles, the loop still records a FAILED — or, a
+ *   stop having landed, a CANCELLED — `run.end`, and the manifest that would
+ *   have said what was delivered is gone. Work that finished is not repeated
+ *   because its record was lost; a settled turn under no `run.end` at all is
+ *   the same verdict with the other fact missing.
+ * - A settled turn with a manifest is durable work, and the terminal row says
+ *   what it counted as. A FAILED or CANCELLED row is the whole of an ordinary
+ *   failed child — the delivery strategy writes a manifest for `isError`
+ *   exactly as for a success — so it is replayed as this call's own failure,
+ *   the failure the live path raises from the same row, and the engine
+ *   journals nothing for it. A COMPLETED row recovers the manifest, once the
+ *   aggregate's single `run.activate` proves the two belong to the lifecycle
+ *   this workflow launched.
+ * - No turn and no manifest frees the next attempt id: the attempt reached no
+ *   side-effectful work. It advances past an id whose lease no live owner
+ *   holds, and launches into one that never started.
+ *
+ * A manifest with no settled turn lost its bookkeeping between the delivery
+ * and the settle, and a COMPLETED row with no manifest lost the delivery its
+ * post-drain row claims; both stay refused for operator attention, as every
+ * refusal above does. A live owner always refuses too.
+ *
+ * One rule covers every id that already exists, whatever it recorded: it is
+ * inspected while this call holds the attempt's own run lane and run claim,
+ * and its terminal row is read again under that fence before anything is
+ * decided from it. A terminal row closes nothing — a resumable snapshot
+ * outlives it for a completed attempt exactly as it does for a failed one, and
+ * `run.activate` after `run.end` means the run started again — so recovering
+ * a completed result, advancing past an attempt, and refusing one are the same
+ * decision taken from the same fenced reading, and neither a local resume nor
+ * one in another process can start the child between that reading and what
+ * follows it. Launching an id that never started takes no fence going in —
+ * there is nothing yet for a resume to claim — and takes the same one coming
+ * out, because the loop released the claim and the lane before it returned:
+ * every attempt whose result the parent journals, recovered or just launched,
+ * is held from the reading it is taken from until that journal commits. A row
+ * marked `artifact-drain` is the one terminal outcome no attempt advances
+ * past, whatever else it says: what that child did is unrecorded rather than
+ * failed.
+ *
+ * A journal hit never reaches here: the engine consumes it before calling.
+ */
+const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
+  function* (
+    call: WorkflowChildCall,
+  ): Effect.fn.Return<
+    WorkflowChildOutcome,
+    Error,
+    AgentRunServices | Scope.Scope
+  > {
+    const { session } = call;
+    yield* Effect.try({
+      try: () => call.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    // The mark does not say where to start; it says what an absent id means. A
+    // deleted attempt is collected in the end, and an id-by-id probe reads the
+    // hole that leaves as an id that never started — it would launch into it
+    // and never reach the attempt that answered this call after it. The mark
+    // is nullable because attempt 0 is an attempt: `null` is the only answer
+    // that means nothing ever launched, so a journaled 0 whose child is gone
+    // is advanced past rather than run a second time.
+    const journaled = yield* probeJournal(
+      call.key,
+      readWorkflowCallAttempt(session, call.checkpointId, call.key),
+    );
+    for (let attempt = 0; attempt < MAX_WORKFLOW_CALL_ATTEMPTS; attempt += 1) {
+      const runId = workflowCallRunId({
+        parentRunId: call.parentRunId,
+        checkpointId: call.checkpointId,
+        key: call.key,
+        attempt,
+      });
+      const records = getRunRecords(session, runId);
+      if (!(yield* probeChild(runId, records.exists()))) {
+        // An absent id at or below the mark is one the parent journaled a
+        // launch for and deletion has since collected outright: nothing of it
+        // reads back, but it ran, so the probe advances past it exactly as it
+        // does past a tombstone. Only an id above the mark is a free slot.
+        if (journaled.attempt !== null && attempt <= journaled.attempt)
+          continue;
+        // `exists()` is false for an id that never started AND for one the
+        // user deleted, and a tombstone is final: launching a deleted id is
+        // refused by its own sequence, and the attempt that answered this call
+        // after it would never be probed. A deleted attempt is therefore
+        // closed like any other terminal one and the probe moves on.
+        if (yield* probeChild(runId, records.isRemoved())) continue;
+        // Move the parent's attempt mark before anything runs under this id:
+        // the journal outlives every child, so whatever becomes of this
+        // attempt's aggregate, a resume still starts its probe here.
+        yield* probeJournal(
+          call.key,
+          recordWorkflowCallAttempt(
+            session,
+            call.checkpointId,
+            call.key,
+            attempt,
+          ),
+        );
+        // Publish the attempt id before resolving mutable launch state: a host
+        // targets the in-flight child by this id.
+        call.onLaunch(runId);
+        const { result } = yield* executeSubagentInBand({
+          session,
+          runId,
+          parentRunId: call.parentRunId,
+          signal: call.signal,
+          prepare: call.prepare,
+        });
+        // The child's loop released its claim and its run lane as it ended, so
+        // from this return until the engine journals the call's value the id
+        // it answered on is resumable: a host that takes it appends
+        // `run.activate` and does more model work and more edits while the
+        // parent commits a result read from the lifecycle before it. Take the
+        // same fence every other exit takes, and read the terminal row under
+        // it: a resume already under way holds the claim or the lane and is
+        // refused here, and one that ran to its own end leaves a row this
+        // reading no longer recognizes (an activate after the row reads as no
+        // terminal row at all).
+        yield* fenceSupersededRun(session, runId);
+        const launched = yield* probeChild(runId, records.readRunEnd());
+        // The outcome does not identify the lifecycle: a resume that reached
+        // its own end usually ends `completed`, exactly as this one did, so a
+        // terminal row that agrees with the result can belong to a lifecycle
+        // this call never saw — with its own model work and its own edits.
+        // The activation count is that identity. This call launched into an
+        // id `exists()` read as absent, so the lifecycle it holds a result for
+        // is the run's first and only, and every resume appends one more
+        // `run.activate`. A second one means the result in hand describes a
+        // lifecycle the run has already left.
+        const activations = yield* probeChild(
+          runId,
+          records.countActivations(),
+        );
+        if (activations !== 1 || launched?.outcome !== result.outcome) {
+          return yield* Effect.fail(
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} started again before its result was journaled; refusing to report it.`,
+            ),
+          );
+        }
+        return { runId, result, recovered: false };
+      }
+      // Terminal for the lifecycle in flight, not for the aggregate: a
+      // `run.activate` after a `run.end` means the run started again. This
+      // copy therefore decides nothing; it only says whether the attempt owes
+      // a liveness proof before the claim below is taken.
+      if ((yield* probeChild(runId, records.readRunEnd())) === null) {
+        // The claim is the liveness authority: only a run nobody alive owns
+        // may have its attempt number advanced. An unreadable claim reports
+        // unsettled, so this refuses rather than repeating the work. It is
+        // asked before the fence, because the claim the fence takes reads back
+        // as an owner of this run's own.
+        const liveness = yield* resolveRunLiveness(runId, session, null);
+        if (liveness.kind !== 'interrupted') {
+          return yield* Effect.fail(
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} recorded no outcome and is ${livenessClause(liveness)}; refusing to repeat it.`,
+            ),
+          );
+        }
+      }
+      // Fence the attempt before deciding anything, whatever it recorded: a
+      // free lease, and a terminal row of any outcome, each say only what was
+      // true when they were read, and a completed row is resumable too, so
+      // every decision below has to hold against a resume that starts one
+      // instant later, here or in another process.
+      yield* fenceSupersededRun(session, runId);
+      // A user's retry of this child is the one authorization that closes an
+      // attempt which already started work: the engine journals the next
+      // attempt's mark naming this id before it asks for the replacement, so
+      // what this child began — an accepted turn included — is exactly what
+      // the retry asked to replace. Nothing else advances past a started
+      // attempt, and the mark exists only where someone authorized this
+      // supersession, so every attempt nobody retried keeps the rules below.
+      if (journaled.superseded.includes(runId)) continue;
+      // One read order, terminal row last: a child commits `run.end` before it
+      // releases its claim, so a free claim makes that row final, while the
+      // copy read before the claim was observed can predate a child that ended
+      // — or started again — in between. Reading it here — under the fence, so
+      // no new owner can be starting — is what makes it the row this call
+      // recovers, advances past, or refuses on.
+      const end = yield* probeChild(runId, records.readRunEnd());
+      if (end?.error?.kind === 'artifact-drain') {
+        // The row says the attempt's queued facts rolled back, so what it did
+        // is unknown rather than failed: repeating it could duplicate work
+        // whose record is simply gone. The marker outranks the outcome beside
+        // it — a stop that reached the run reports CANCELLED over the same
+        // lost drain — which is the verdict the in-band caller reaches on the
+        // same marker, and the outer boundary turns it into the abort that
+        // keeps it out of the engine's nullable call result.
+        return yield* Effect.fail(
+          new SubagentDurabilityError(
+            `Workflow child ${runId} failed to commit its final artifacts.`,
+          ),
+        );
+      }
+      // The attempt's own bookkeeping, both facts read once under the same
+      // fence as the terminal row, because the rule that follows is theirs
+      // rather than the row's. `childRunLoop` commits a turn's `accepted` row
+      // immediately before it dispatches, so an accepted turn is where
+      // side-effectful work begins; `persistChildRunDelivery` commits the
+      // `run.result` manifest ahead of the turn's settle, so a settled turn
+      // is where the delivery that records that work ended.
+      const turns = yield* probeChild(
+        runId,
+        readChildTurnState(session, runId),
+      );
+      const meta = yield* probeChild(runId, records.readResultMeta());
+      const delivered = meta?.producer === 'subagent';
+      if (turns.active !== null) {
+        // A turn accepted and never settled: the acceptance row commits
+        // immediately before the turn dispatches, so its tools may already
+        // have edited files, and a stop that landed in that window leaves
+        // exactly this shape — a CANCELLED row with no manifest. Work that
+        // began is not repeated, whatever the row beside it says.
+        return yield* Effect.fail(
+          new WorkflowRunAbortError(
+            `Workflow child ${runId} accepted a turn it never settled; refusing to repeat it. That run needs operator attention.`,
+          ),
+        );
+      }
+      if (turns.lastCompleted !== null) {
+        // A settled turn: the child reached model work and file edits, and
+        // what they amounted to is the manifest and the terminal row
+        // together. The manifest says the delivery landed; the row says what
+        // it landed as. Either one missing leaves durable work nothing
+        // accounts for — a delivery that rolled back after the model and the
+        // tools had finished still settles its turn and still ends the run
+        // FAILED, and an outcome lost under a manifest says as little the
+        // other way round — and ambiguous work is never repeated.
+        if (!delivered || end === null) {
+          return yield* Effect.fail(
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} settled a turn whose ${delivered ? 'outcome' : 'result manifest'} is missing; refusing to repeat it. That run needs operator attention.`,
+            ),
+          );
+        }
+        if (end.outcome === RUN_OUTCOME.COMPLETED) {
+          // The manifest carries no lifecycle of its own. `run.result` is
+          // written by child delivery alone, while a host that resumes a
+          // completed child appends `run.activate` and, at its end, a second
+          // `run.end` — leaving the first lifecycle's manifest in place under
+          // a row that describes newer model work and newer edits. Reading
+          // both under one fence pairs them in time, not in lifetime, so the
+          // same count that identifies the launch exit's lifecycle identifies
+          // this one: exactly one `run.activate` means the aggregate still
+          // holds the single lifecycle the workflow launched, and the row and
+          // the manifest are that run's. More than one is uncorrelatable, and
+          // the manifest is not repeatable either, so the attempt is refused
+          // rather than journaled or run again.
+          const activations = yield* probeChild(
+            runId,
+            records.countActivations(),
+          );
+          if (activations !== 1) {
+            return yield* Effect.fail(
+              new WorkflowRunAbortError(
+                `Workflow child ${runId} was resumed after it completed; its result manifest cannot be correlated with the latest lifecycle, so it will not be reported. That run needs operator attention.`,
+              ),
+            );
+          }
+          yield* Effect.try({
+            try: () => call.signal?.throwIfAborted(),
+            catch: ensureError,
+          });
+          return {
+            runId,
+            result: { ...end, output: meta.output },
+            recovered: true,
+          };
+        }
+        // A settled turn under a manifest and a FAILED or CANCELLED row is
+        // the whole of an ordinary failed child: the delivery strategy builds
+        // a manifest for `isError` exactly as for a success, and the turn
+        // settles after it. Report it as this call's own failure, from the
+        // same terminal row the live path raises from, and the engine records
+        // the call as failed exactly as it does live — no journal entry, so
+        // no lifecycle correlation to make: the output under it never reaches
+        // the script.
+        return { runId, result: end, recovered: true };
+      }
+      if (delivered) {
+        // Delivered and then nothing: the settle that follows the manifest
+        // never ran, so what the outcome describes is the bookkeeping rather
+        // than the work, and no fact here says the child stopped where the
+        // row claims.
+        return yield* Effect.fail(
+          new WorkflowRunAbortError(
+            `Workflow child ${runId} delivered its result but never settled its turn; refusing to repeat it. That run needs operator attention.`,
+          ),
+        );
+      }
+      if (end?.outcome === RUN_OUTCOME.COMPLETED) {
+        // A completed row is the post-drain fact, so it cannot outlive the
+        // manifest its own delivery committed: without one, the row describes
+        // a completion nothing recorded.
+        return yield* Effect.fail(
+          new WorkflowRunAbortError(
+            `Workflow child ${runId} completed without a result manifest; refusing to repeat it.`,
+          ),
+        );
+      }
+      // No turn and no manifest: the attempt opened nothing side-effectful,
+      // so it is closed and repeating it is safe — whether it recorded no
+      // outcome at all (a dead lease) or ended FAILED or CANCELLED before it
+      // reached a turn.
+    }
+    return yield* Effect.fail(
+      new WorkflowRunAbortError(
+        `Workflow call exceeded the ${MAX_WORKFLOW_CALL_ATTEMPTS} child-attempt limit.`,
+      ),
+    );
+  },
+);
+
+/**
+ * Build the production `agent()` adapter for one workflow-script run.
+ *
+ * The adapter takes its `Scope` from the engine rather than closing one of its
+ * own around the call. The fences it holds over the attempt it recovered,
+ * launched, or superseded have to outlive its return: the engine journals the
+ * call's value after the runner answers, and a fence released at the return
+ * leaves the inspected child free for a host to resume — appending
+ * `run.activate` and doing more work — while the parent is still persisting
+ * the result read from it. The engine closes that scope once the journal write
+ * has committed.
+ */
 export function createWorkflowScriptAgentRunner(
   parent: DelegationParent,
   defaultAgent: AgentEntry,
@@ -207,32 +785,21 @@ export function createWorkflowScriptAgentRunner(
   },
 ): (
   invocation: WorkflowAgentInvocation,
-) => Effect.Effect<RunEnd, Error, AgentRunServices> {
+) => Effect.Effect<RunEnd, Error, AgentRunServices | Scope.Scope> {
   const { session } = parent.run;
 
   return Effect.fn('workflowScriptAgent')(
     function* (
       invocation: WorkflowAgentInvocation,
-    ): Effect.fn.Return<RunEnd, Error, AgentRunServices> {
-      const logicalRunId = deriveRunId({
+    ): Effect.fn.Return<RunEnd, Error, AgentRunServices | Scope.Scope> {
+      const child = yield* recoverOrLaunchWorkflowChild({
+        session,
+        parentRunId: run.runId,
         checkpointId,
         key: invocation.key,
-        parentRunId: run.runId,
-      });
-      // The id this attempt actually runs (and registers its child stream)
-      // under: the logical id on attempt 0, an attempt-specific id after a
-      // durable retry. A host targets the in-flight attempt by THIS id, so it is
-      // the one reported to the engine; it also marks the attempt as live, which
-      // durable recovery (which never fires the callback) is distinguished by.
-      let activeRunId: RunId | undefined;
-      const completed = yield* executeStableSubagentInBand({
-        session,
-        runId: logicalRunId,
-        parentRunId: run.runId,
         signal: invocation.signal,
-        onActiveRunId: (runId) => {
-          activeRunId = runId;
-          invocation.report({ childRunId: runId });
+        onLaunch: (childRunId) => {
+          invocation.report({ childRunId });
         },
         prepare: () =>
           Effect.gen(function* () {
@@ -288,19 +855,18 @@ export function createWorkflowScriptAgentRunner(
             };
           }),
       });
-      const recovered = activeRunId === undefined;
+      const { recovered, result } = child;
       if (recovered) {
-        // Durable recovery never fires onActiveRunId; re-attach the
-        // known child id so /executions/{id} can navigate to the child that
-        // supplied the result. The recovered marker keeps the id out of the
-        // engine's skip/retry map; the recovered result is authoritative and
-        // must stay uncontrollable.
+        // Recovery never launched, so the id was never reported; attach it now
+        // so /executions/{id} can navigate to the child that supplied the
+        // result. The recovered marker keeps the id out of the engine's
+        // skip/retry map; a recovered result is authoritative and must stay
+        // uncontrollable.
         invocation.report({
-          childRunId: completed.runId,
+          childRunId: child.runId,
           recovered: true,
         });
       }
-      const { result } = completed;
       // Live physical attempts always charge the terminal result cost (covers
       // failed/cancelled outcomes and empty-output validation throws that
       // never reach a success-only callback). Recovered durable results must

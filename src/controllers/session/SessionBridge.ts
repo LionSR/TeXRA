@@ -101,6 +101,14 @@ export interface AttachedPort {
   readonly close: Effect.Effect<void>;
 }
 
+/** Expected refusal when a host attaches after the bridge has closed. */
+export class SessionBridgeClosedError extends Error {
+  constructor() {
+    super('SessionBridge is closed; cannot attach a port');
+    this.name = 'SessionBridgeClosedError';
+  }
+}
+
 function wireError(error: RequestError): RequestErrorWire {
   switch (error._tag) {
     case 'NotOwner':
@@ -198,29 +206,29 @@ export class SessionBridge {
     }
   }
 
-  attach(port: SessionPort): Effect.Effect<AttachedPort> {
+  attach(port: SessionPort): Effect.Effect<AttachedPort, SessionBridgeClosedError> {
     return Effect.gen({ self: this }, function* () {
-      // `Scope.state` is the module's documented read of a scope's state
-      // (its "Checking scope states" example); `Scope` exports no predicate.
-      // The read is load-bearing: `Scope.fork` of a closed parent hands back
-      // an already-closed child rather than failing, so without it a closed
-      // bridge would register a dead port silently.
-      if (this.scope.state._tag === 'Closed') {
-        return yield* Effect.die(
-          new Error('SessionBridge is closed; cannot attach a port'),
-        );
-      }
       // A port re-attaching under a live id supersedes the previous one.
-      // Started at once so its release runs before the new entry registers;
-      // the interruption of its replay finishes on its own.
+      // Close it to completion before installing the replacement so the old
+      // entry's cleanup cannot be skipped by the new map entry.
       const previous = this.ports.get(port.id);
       if (previous) {
-        yield* Effect.forkIn(previous.close, this.scope, {
-          startImmediately: true,
-        });
+        yield* previous.close;
       }
       const scope = yield* Scope.fork(this.scope);
       const framers = yield* Scope.fork(scope);
+      // `Scope.fork` of a closed parent hands back an already-closed child
+      // rather than failing, so the closed-bridge check has to observe the
+      // forked scopes before the port is registered.
+      if (
+        this.scope.state._tag === 'Closed' ||
+        scope.state._tag === 'Closed' ||
+        framers.state._tag === 'Closed'
+      ) {
+        yield* Scope.close(framers, Exit.void);
+        yield* Scope.close(scope, Exit.void);
+        return yield* Effect.fail(new SessionBridgeClosedError());
+      }
       const entry: PortEntry = {
         port,
         scope,

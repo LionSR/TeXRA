@@ -137,6 +137,9 @@ function createRegistry(
   options: {
     approvals?: ReturnType<typeof createSessionApprovals>;
     releaseRootRunLease?: (runId: RunId) => Effect.Effect<void, Error>;
+    commit?: (
+      drafts: readonly SessionEventDraft[],
+    ) => Effect.Effect<void, Error>;
   } = {},
 ): {
   events: PublishedEvents;
@@ -163,7 +166,10 @@ function createRegistry(
   };
   const registry = new RunRegistry({
     runView: (runId) => views.get(runId),
-    publish: (drafts) => events.published.push(...drafts),
+    commit: (drafts) =>
+      Effect.sync(() => {
+        events.published.push(...drafts);
+      }),
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
     releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) => finalizeRun(defaultSession(), input),
@@ -248,14 +254,18 @@ function trackSuspendedWaitingHandle(
   return handle;
 }
 
-/** Exercise synchronous stop admission and run its native settlement at the test boundary. */
+/** Run a stop's native settlement at the test boundary and report whether a
+ *  live target took it. The fork runs the settlement's synchronous part
+ *  before this returns, so a detaching stop — which interrupts only once its
+ *  detach batch has committed and severed — has answered by the time it is
+ *  asked, exactly as a cascading stop answered at admission. */
 function killRegistry(
   registry: RunRegistry,
   ...args: Parameters<RunRegistry['kill']>
 ): boolean {
   const stop = registry.kill(...args);
   Effect.runFork(stop.settlement);
-  return stop.accepted;
+  return stop.accepted();
 }
 function stopRegistry(
   registry: RunRegistry,
@@ -283,7 +293,7 @@ describe('runRegistry', () => {
       });
 
       expect(registry.hasActiveChildren(parentRunId)).toBe(true);
-      registry.detachActiveChildren(parentRunId);
+      Effect.runSync(registry.detachActiveChildren(parentRunId));
       expect(registry.hasActiveChildren(parentRunId)).toBe(false);
 
       const handle = createHandle(runId, parentRunId);
@@ -421,7 +431,7 @@ describe('runRegistry', () => {
       });
 
       const stop = registry.kill(runId);
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
       await Effect.runPromise(stop.settlement);
 
       expect(cleanup).toHaveBeenCalledOnce();
@@ -449,7 +459,7 @@ describe('runRegistry', () => {
       });
 
       const stop = registry.kill(runId);
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
       await Effect.runPromise(stop.settlement);
 
       expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
@@ -490,7 +500,7 @@ describe('runRegistry', () => {
       });
 
       const stop = registry.kill(runId);
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
       const settled = Effect.runPromise(stop.settlement);
       await Promise.resolve();
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
@@ -523,7 +533,7 @@ describe('runRegistry', () => {
       });
 
       const stop = registry.kill(runId);
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
       const settled = Effect.runPromise(stop.settlement);
 
       const successorInterrupt = vi.fn();
@@ -558,7 +568,7 @@ describe('runRegistry', () => {
       });
 
       const stop = registry.kill(runId);
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
       await Effect.runPromise(stop.settlement);
       expect(registry.getHandle(runId)).toBeUndefined();
     } finally {
@@ -587,7 +597,7 @@ describe('runRegistry', () => {
       });
 
       const stop = registry.kill(runId);
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
       await Effect.runPromise(stop.settlement);
 
       expect(registry.getHandle(runId)).toBeUndefined();
@@ -827,7 +837,7 @@ describe('runRegistry', () => {
       });
 
       const stop = registry.kill(runId);
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
       await Effect.runPromise(stop.settlement);
 
       expect(cleanup).toHaveBeenCalledOnce();
@@ -998,6 +1008,145 @@ describe('runRegistry', () => {
         type: 'run.detach',
         aggregateId: qualifyAggregateId('run', childRunId),
       });
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('fails the stop when the detach batch is refused', async () => {
+    // One batch carries every detached child, so it is no single run's fact
+    // and no run's drain answers for it: the stop that asked for the sever
+    // is the one owner that can hear the refusal. Reporting `done` over it
+    // would leave the children durably parented, and a later delete of the
+    // parent would collect the children the user chose to keep running.
+    const { registry } = createRegistry({
+      commit: () => Effect.fail(new Error('detach batch refused')),
+    });
+    const rootRunId = generateRunId();
+    const childRunId = generateRunId();
+
+    try {
+      trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
+        agentName: 'test-root',
+      });
+      trackInterruptibleHandle(
+        registry,
+        { runId: childRunId, parent: rootRunId },
+        vi.fn(),
+      );
+
+      await expect(
+        Effect.runPromise(
+          registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
+        ),
+      ).rejects.toThrow('detach batch refused');
+      // The local sever follows the commit, so a refused batch leaves the
+      // child parented here exactly as it stays parented in storage, and the
+      // retry still finds a child to detach.
+      expect(registry.getHandle(childRunId)?.isOwnedBy(rootRunId)).toBe(true);
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('interrupts the parent only once the detach has committed and severed', async () => {
+    // The interrupt is the last step of a detaching stop. A child completing
+    // between it and the sever would still resolve the just-stopped parent as
+    // its delivery target, and the sever that arrives afterwards cannot take
+    // that routing back.
+    const commit = createDeferred<void>();
+    let committing = false;
+    const { registry } = createRegistry({
+      commit: () =>
+        Effect.suspend(() => {
+          committing = true;
+          return Effect.promise(() => commit.promise);
+        }),
+    });
+    const rootRunId = generateRunId();
+    const childRunId = generateRunId();
+    const rootInterrupt = vi.fn();
+
+    try {
+      trackInterruptibleHandle(registry, { runId: rootRunId }, rootInterrupt, {
+        agentName: 'test-root',
+      });
+      trackInterruptibleHandle(
+        registry,
+        { runId: childRunId, parent: rootRunId },
+        vi.fn(),
+      );
+
+      const stopped = Effect.runPromise(
+        registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
+      );
+      await vi.waitFor(() => expect(committing).toBe(true));
+      expect(rootInterrupt).not.toHaveBeenCalled();
+
+      commit.resolve();
+      await stopped;
+
+      expect(registry.getHandle(childRunId)?.parent).toBeNull();
+      expect(rootInterrupt).toHaveBeenCalledOnce();
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('refuses a child launched while the parent is stopping', async () => {
+    // The detach snapshots the parent's children before its batch commits,
+    // and the root is interrupted without cascading, so a child admitted
+    // inside that window would be in neither sever and would still route its
+    // delivery to the stopped parent. The stop marks the parent at admission,
+    // and that mark is what refuses the child.
+    const commit = createDeferred<void>();
+    let committing = false;
+    const { registry } = createRegistry({
+      commit: () =>
+        Effect.suspend(() => {
+          committing = true;
+          return Effect.promise(() => commit.promise);
+        }),
+    });
+    const rootRunId = generateRunId();
+    const childRunId = generateRunId();
+    const lateChildRunId = generateRunId();
+
+    try {
+      trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
+        agentName: 'test-root',
+      });
+      trackInterruptibleHandle(
+        registry,
+        { runId: childRunId, parent: rootRunId },
+        vi.fn(),
+      );
+
+      const stopped = Effect.runPromise(
+        registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
+      );
+      await vi.waitFor(() => expect(committing).toBe(true));
+
+      expect(() =>
+        registry.track(createHandle(lateChildRunId, rootRunId)),
+      ).toThrow(/while that run is stopping/);
+      expect(() =>
+        registry.reserveChildActivation({
+          runId: lateChildRunId,
+          parentRunId: rootRunId,
+          interrupt: vi.fn(),
+          detach: vi.fn(),
+          isDetached: () => false,
+        }),
+      ).toThrow(/while that run is stopping/);
+
+      commit.resolve();
+      await stopped;
+
+      // Neither admission took, so the stopped parent is left owning nothing
+      // the detach batch did not carry.
+      expect(registry.getHandle(lateChildRunId)).toBeUndefined();
+      expect(registry.hasActiveChildren(rootRunId)).toBe(false);
     } finally {
       registry.dispose();
     }
@@ -1305,7 +1454,7 @@ describe('runRegistry', () => {
       registry.track(handle);
       expect(handle.deliveryTarget).toBe(parentRunId);
       const sinceTrack = recordSessionEvents(events);
-      registry.detachActiveChildren(parentRunId);
+      Effect.runSync(registry.detachActiveChildren(parentRunId));
       expect(handle.deliveryTarget).toBeUndefined();
 
       expect(sinceTrack.events.map((event) => event.type)).toEqual([
@@ -1337,7 +1486,7 @@ describe('runRegistry', () => {
       approvals.registerRunParent(childRunId, parentRunId);
       registry.track(handle);
 
-      registry.detachActiveChildren(parentRunId);
+      Effect.runSync(registry.detachActiveChildren(parentRunId));
       approvals.toolEdit.bypass.setBypass(parentRunId, false);
 
       expect(approvals.toolEdit.bypass.isBypassed(childRunId)).toBe(true);
