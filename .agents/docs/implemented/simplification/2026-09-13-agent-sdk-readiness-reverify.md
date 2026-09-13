@@ -29,7 +29,7 @@ available today.
 
 The task's four analytic asks are, in this repo, already institutionalized:
 
-- **Identify the surface areas** (ask 1) — done and *frozen*: the SDK's two
+- **Identify the surface areas** (ask 1) — done and _frozen_: the SDK's two
   entries (`@texra-ai/agent`, `@texra-ai/agent/effect`) plus `/schemas` and
   `/node`, enumerated in the Tier-1 manifest
   ([`proposed/architecture/2026-09-10-agent-sdk-tier-1-manifest.md`](../../proposed/architecture/2026-09-10-agent-sdk-tier-1-manifest.md)).
@@ -45,7 +45,7 @@ The task's four analytic asks are, in this repo, already institutionalized:
 
 `core` is a documented three-module domain model (`definition/state/tools`,
 `src/agent/core/README.md`) with a single inward edge (`state → definition`)
-and *no* top-level barrel, by design, so edges stay explicit and no re-export
+and _no_ top-level barrel, by design, so edges stay explicit and no re-export
 shim survives a move. `runtime` is a deliberately flat ~50-file layer whose
 `README.md` is its module map; the README states why splitting it into
 subdirectories would be churn disproportionate to a doc change, given the
@@ -54,7 +54,7 @@ direct internal import graph. Neither shows a collapsible pass-through layer.
 ## 2. Model handler (`packages/llm`, `src/agent/runtime/ModelInvoker.ts`, `run/modelBinding.ts`)
 
 The `Model` interface (`packages/llm/src/turn.ts:1622`) is a five-member
-executable value — *"it owns neither conversation nor retry policy"* — over a
+executable value — _"it owns neither conversation nor retry policy"_ — over a
 ~1660-line Zod contract (`TurnRequest`/`ResolvedTurn`/`TurnResult`/`TurnEvent`)
 that is a genuine single source of truth, consumed by both providers and app.
 The three-layer stack is three real responsibilities, each documenting its
@@ -63,7 +63,7 @@ seam in prose:
 - `modelRoutes.ts` — which credential/endpoint/format (routing SSOT).
 - `run/modelBinding.ts` — build the protocol config, construct the `Model`,
   carry the runtime facts the package deliberately does not own (`BoundModel`).
-- `ModelInvoker.ts` — *"the one service that touches the llm `Model`"*: billed
+- `ModelInvoker.ts` — _"the one service that touches the llm `Model`"_: billed
   attempts, ledger rows, trace bridging, the two retry owners.
 
 Provider duplication is **low and the shared shape is real**: one
@@ -87,7 +87,7 @@ Promise-shaped subsystems — write **one** structured `LogEntry` to **one**
 host sink (`logSink.ts`), which redacts once and lets the host render.
 `logUtils` documents its own eventual deletion ("deleted with the last caller
 that cannot yield an Effect"), and the `createLog` per-call namespace lookup is
-a *deliberately* preserved test seam, not accidental indirection
+a _deliberately_ preserved test seam, not accidental indirection
 (`logUtils.ts:120-148`). Nothing to remove.
 
 ## 4. The one acted item: a write-only `BoundModel` field
@@ -134,7 +134,7 @@ Gated green end-to-end before push, at the fresh-clone environment (deps via
 
 No new split points are proposed; the boundary the ask asks for already
 exists and is well-drawn. `src/agent/runtime/childRunLoop.ts` is explicitly
-*"one driver for every child-run type"* (agent-CLI codex/claude sessions,
+_"one driver for every child-run type"_ (agent-CLI codex/claude sessions,
 native subagents of either category, workflow-script runs, background shells),
 with a per-type `ChildRunStrategy` supplying only what varies and the loop
 owning the invariant lifecycle (follow-up queue, one interrupt target,

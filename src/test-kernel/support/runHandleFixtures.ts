@@ -37,7 +37,7 @@ export function testRunHandle(input: {
 export function testRunRegistry(): RunRegistry {
   return new RunRegistry({
     runView: () => undefined,
-    publish: () => {},
+    commit: () => Effect.void,
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
     releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) =>

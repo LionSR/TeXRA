@@ -122,25 +122,57 @@ structured, cost }`), `null` on failure, or the truthy
   live calls are checkpointed before their results return to the script;
   parallel writes and overlapping resumes are serialized, malformed state
   fails loudly, and completed child manifests close the final crash-recovery
-  gap without repeating model work. Each stable child attempt records a
-  reservation before registration and a launch marker before model work, so a
-  failed registration can advance safely while an uncertain launched child is
-  never repeated. A completed child is recovered only through its
-  committed marker, written after the artifact drain and before lease release;
-  lease absence alone never attests durable completion. The parent records the
-  complete attempt sequence, so deleting an earlier child cannot hide a later
-  completed result. A parent execution has one active runtime owner; the
-  execution KV store is durable state, not a cross-process lock. Stable-attempt
-  state is one-way compatible at a fixed schema version: every legacy v1 phase
-  stays readable, but readers predating the committed phase reject newer
-  markers outright, downgrade or mixed-version recovery is unsupported, and
-  unknown present values fail closed rather than being defaulted or coerced.
-  Checkpoints use the strict version-4 schema; malformed or
-  older records fail instead of being translated into the current journal.
+  gap without repeating model work. The journal replay is checked first: a
+  call whose entry already carries a value never reaches a child at all.
+  Past it, the child's own run aggregate is the record of what an attempt did.
+  `run.start` is the launch edge, and a COMPLETED `run.end` carrying a
+  `producer: 'subagent'` `run.result` manifest is durable completion, because
+  the terminal row is the post-drain fact: the run settles its ordered
+  publisher before committing that row and records a lost drain as a FAILED
+  outcome, so a COMPLETED row can never outlive facts the child queued. That
+  completion belongs to a lifecycle, not to the aggregate: the manifest is
+  written by child delivery alone, so a host that resumed a completed child
+  leaves the launch's manifest under the resume's terminal row, where the two
+  can no longer be correlated. Every result the parent journals, recovered or
+  just launched, therefore comes from a child whose aggregate carries exactly
+  one `run.activate`; a second one is refused for operator attention rather
+  than reported. Which
+  ids to probe comes from the parent's own journal, the one thing that
+  outlives every child it launches: a `workflow.attempt` row moves the call's
+  attempt mark before each launch, and recovery probes the derived ids in
+  order from there, so a deleted attempt whose tombstone has since been
+  collected cannot read as an id that never started. An attempt that never
+  reached `run.start` simply launches. What an existing attempt did is its own
+  bookkeeping to say, and the terminal row beside it says only what that came
+  to: acceptance commits immediately before a turn dispatches, so an accepted
+  `child.turn` is where model work and file edits begin, and the `run.result`
+  manifest commits ahead of the turn's settle, so a settled turn is where the
+  delivery that records them ended. An active turn refuses, with an outcome or
+  without one — a child cancelled in that window ends CANCELLED with no
+  manifest over tool edits that already landed. A settled turn with no
+  manifest refuses too, whether or not the run recorded an outcome: the
+  delivery can roll back after the model and the tools have finished, leaving
+  the settle, a FAILED (or, under a stop, CANCELLED) `run.end`, and no record
+  of what was delivered, and finished work is not repeated because its record
+  was lost. A settled turn with a manifest is durable work the terminal row
+  labels: a FAILED or CANCELLED row is an ordinary failed child (the manifest
+  is written for `isError` too), replayed as the call's own failure, the same
+  one a live child of that outcome raises and the same `null` the engine
+  journals nothing for; a COMPLETED row recovers the manifest. Only a run that
+  opened no turn and delivered no manifest frees the next id — a decision
+  taken while holding that attempt's run claim, so a resume starting one
+  instant later is refused instead of running beside the id this frees. A
+  manifest whose turn never settled lost its bookkeeping between the delivery
+  and the settle, and a COMPLETED row with no manifest lost the delivery its
+  post-drain row claims; both are refused for operator attention. A parent
+  execution has one active runtime owner; the execution KV store is durable
+  state, not a cross-process lock. Checkpoints use the strict version-4
+  schema; malformed or older records fail instead of being translated into the
+  current journal.
   Deliberately NOT an append-only started/result journal (the shape Claude
   Code's Workflow tool uses): such a log cannot distinguish "never
   finished" from a `null` result, and beside the checkpoint, the commit
-  fence, and the child attempt ledger it would be a second owner of the
+  fence, and the child run aggregate it would be a second owner of the
   same fact. Ruled 2026-08-28 (.agents/docs/archived/feature/2026-08-28-workflow-plan-vs-issued-calls.md §Study).
 - **Cost ownership**: child costs remain in the persisted typed results. The
   future tool surface must aggregate the final journal at its tool-result

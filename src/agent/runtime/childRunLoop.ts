@@ -337,8 +337,6 @@ export interface ChildRunLoopParams<TTurn, R = never> {
     readonly isError: boolean;
     readonly error?: unknown;
   }) => void;
-  /** Publish caller-owned state after final artifacts drain, before lease release. */
-  readonly afterArtifactsDrained?: Effect.Effect<void, Error>;
 }
 
 /**
@@ -661,9 +659,11 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
     persistChildRunDelivery(params.session, runId, msg, resultMeta),
   );
   // The turn settled whatever the delivery persistence did: its settle path
-  // ran, which is the fact a durable caller's re-execution gate reads
-  // (`stableSubagentAttempt`), so the row lands before that failure is
-  // raised.
+  // ran, which is the fact a recovering caller's re-execution gate reads (a
+  // settled `child.turn` under a run with no outcome refuses repetition,
+  // manifest or not, since the manifest is written for a failed delivery
+  // too and so cannot say whether the turn succeeded), so the row lands
+  // before that failure is raised.
   yield* commitChildTurn(params.session, runId, turnKey, 'settled');
 
   params.onTurnSettled?.({
@@ -1169,12 +1169,7 @@ export function startChildRunLoop<TTurn, R = never>(
           );
         }),
       );
-      const released = yield* Effect.exit(
-        runSession.releaseRunLease(
-          runId,
-          !sawTurnFailure ? params.afterArtifactsDrained : Effect.void,
-        ),
-      );
+      const released = yield* Effect.exit(runSession.releaseRunLease(runId));
       if (Exit.isFailure(released)) {
         logger.warn('Failed to persist final child-run artifacts', {
           data: { runId, error: Cause.squash(released.cause) },

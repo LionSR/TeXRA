@@ -788,6 +788,35 @@ return await parallel([
       }),
   );
 
+  it.live('releases a runner-held fence only after the journal commits', () =>
+    Effect.gen(function* () {
+      // A runner fences the child it recovered or superseded against a resume
+      // for the length of the call's scope. The engine owns that scope: it
+      // closes only once the call's value is durable, since a fence dropped at
+      // the runner's return leaves the inspected child free to be resumed
+      // while the parent is still persisting the result read from it.
+      const order: string[] = [];
+      const run = yield* runWorkflowScript({
+        script: `${META}return await agent('fenced')`,
+        runAgent: () =>
+          Effect.gen(function* () {
+            yield* Effect.addFinalizer(() =>
+              Effect.sync(() => order.push('fence released')),
+            );
+            return 'fenced result';
+          }),
+        onJournalEntry: (entry) =>
+          Effect.gen(function* () {
+            yield* sleep(5);
+            order.push(`checkpoint:${entry.index}`);
+          }),
+      });
+
+      expect(run.result).toBe('fenced result');
+      expect(order).toEqual(['checkpoint:0', 'fence released']);
+    }),
+  );
+
   it.live(
     'observes validated cache hits and live results after durable commit',
     () =>
@@ -1055,7 +1084,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
   );
 
   it.effect(
-    'refreshes file identity after waiting in the concurrency queue',
+    'uses the refreshed file identity when retrying after the concurrency queue',
     () =>
       Effect.gen(function* () {
         const script = `${META}return await parallel([
@@ -1064,8 +1093,12 @@ return await agent('Inspect src', { id: 'inspect' })`,
 ])`;
         const firstBlocked = yield* Deferred.make<void>();
         const blockerStarted = yield* Deferred.make<void>();
+        const reviewStarted = yield* Deferred.make<void>();
         let fingerprint = 'old-proof';
+        let control!: WorkflowScriptControl;
+        let reviewAttempts = 0;
         const invocations: WorkflowAgentInvocation[] = [];
+        const superseded: Array<{ key: string; childRunId: RunId }> = [];
         const runFiber = yield* runWorkflowScript({
           script,
           concurrency: 1,
@@ -1076,20 +1109,44 @@ return await agent('Inspect src', { id: 'inspect' })`,
               if (invocation.options.id === 'blocker') {
                 yield* Deferred.succeed(blockerStarted, undefined);
                 yield* Deferred.await(firstBlocked);
+                return 'blocker';
               }
-              return invocation.options.id ?? 'missing-id';
+              reviewAttempts += 1;
+              invocation.report({
+                childRunId: childRunIdFor(invocation.index, reviewAttempts),
+              });
+              if (reviewAttempts === 1) {
+                yield* Deferred.succeed(reviewStarted, undefined);
+                return yield* Effect.never;
+              }
+              return 'review';
             }),
+          onSupersededAttempt: (attempt) =>
+            Effect.sync(() => {
+              superseded.push(attempt);
+            }),
+          onControl: (handle) => {
+            control = handle;
+          },
         }).pipe(Effect.forkChild);
 
         yield* Deferred.await(blockerStarted);
         expect(invocations).toHaveLength(1);
         fingerprint = 'new-proof';
         yield* Deferred.succeed(firstBlocked, undefined);
+        yield* Deferred.await(reviewStarted);
+        control(childRunIdFor(1, 1), 'retry');
         const run = yield* Fiber.join(runFiber);
 
-        // The refresh is observable as the journal key it re-keys: against a
-        // baseline run whose bytes never changed, only the file-backed call's
-        // identity moves.
+        // The call record is created before the permit wait, but the key used
+        // by the child and its retry authorization must both be the refreshed
+        // identity observed once the permit is acquired.
+        expect(superseded).toEqual([
+          {
+            key: invocations[1]?.key,
+            childRunId: childRunIdFor(1, 1),
+          },
+        ]);
         const baseline = yield* runWorkflowScript({
           script,
           concurrency: 1,
@@ -2295,6 +2352,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
           Deferred.make<string>(),
           Deferred.make<string>(),
         ]);
+        const superseded: RunId[] = [];
         let control!: WorkflowScriptControl;
         const runner = (invocation: WorkflowAgentInvocation) =>
           Effect.gen(function* () {
@@ -2310,6 +2368,10 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         const runFiber = yield* runWorkflowScript({
           script: `${META}return await agent('go')`,
           runAgent: runner,
+          onSupersededAttempt: ({ childRunId }) =>
+            Effect.sync(() => {
+              superseded.push(childRunId);
+            }),
           onControl: (handle) => {
             control = handle;
           },
@@ -2321,6 +2383,11 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         // The aborted first attempt is discarded; a fresh attempt starts.
         yield* Deferred.await(gates[1]);
         expect(attemptByIndex.get(0)).toBe(2);
+        // The retry is journaled as an authorized supersession before the
+        // replacement is asked for: that mark is the only fact letting the
+        // runner's probe advance past a child which may already have accepted
+        // a turn, rather than refusing to repeat it.
+        expect(superseded).toEqual([childRunIdFor(0, 1)]);
         yield* Deferred.succeed(release[1], 'attempt-2');
 
         const run = yield* Fiber.join(runFiber);

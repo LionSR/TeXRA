@@ -157,6 +157,40 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       read((rows) =>
         rows.some((row) => row.aggregateId === id && row.type === 'run.start'),
       ),
+    /**
+     * The run is closed by its tombstone. This is the fact {@link exists}
+     * cannot report: the listing drops a closed run entirely, so an id the
+     * user deleted and one that never started read alike there. A
+     * `run.removed` row is the aggregate's last row and is final, so the id
+     * can never start again; deletion later collects the aggregate outright,
+     * and an id with nothing behind it is free to start. Reads the aggregate,
+     * because a closed run's records are no longer listed.
+     */
+    isRemoved: (): Effect.Effect<boolean, Error> =>
+      session.readAggregate(id).pipe(
+        Effect.map((rows) => rows.some((row) => row.type === 'run.removed')),
+        Effect.catchCause((cause) =>
+          Effect.fail(ensureError(Cause.squash(cause))),
+        ),
+      ),
+    /**
+     * How many times this run has been activated: once when registration
+     * committed it, once more for every resume. It is the identity of a
+     * lifecycle, which the terminal row alone cannot give — a resume that
+     * ran to its own end usually ends `completed` too, so a caller holding a
+     * result cannot separate the row that carried it from a later row of the
+     * same outcome. Reads the aggregate, because the record read keeps only
+     * the latest row of each type.
+     */
+    countActivations: (): Effect.Effect<number, Error> =>
+      session.readAggregate(id).pipe(
+        Effect.map(
+          (rows) => rows.filter((row) => row.type === 'run.activate').length,
+        ),
+        Effect.catchCause((cause) =>
+          Effect.fail(ensureError(Cause.squash(cause))),
+        ),
+      ),
     readRunRecord: (): Effect.Effect<RunRecord | null, Error> => read(recordOf),
     readConfig: (): Effect.Effect<AgentConfig | null, Error> =>
       read((rows) => {

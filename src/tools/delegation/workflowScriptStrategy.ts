@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, type Scope } from 'effect';
 
 /**
  * Workflow-script child-run strategy over the shared `childRunLoop`.
@@ -139,7 +139,7 @@ export interface WorkflowScriptStrategyParams {
     ) => void;
   }) => (
     invocation: WorkflowAgentInvocation,
-  ) => Effect.Effect<unknown, Error, AgentRunServices>;
+  ) => Effect.Effect<unknown, Error, AgentRunServices | Scope.Scope>;
 }
 
 /**
@@ -225,6 +225,18 @@ export function createWorkflowScriptStrategy(
         }
       }
     }
+  };
+
+  const updateDurableSummary = (
+    run: {
+      readonly journal: readonly WorkflowJournalEntry[];
+      readonly board: ReturnType<
+        WorkflowScriptProgressProjection<never>['board']
+      >;
+    },
+    costUsd: number,
+  ): void => {
+    settleSummary(run, costUsd);
   };
 
   const formatSummaryLine = (
@@ -314,6 +326,10 @@ export function createWorkflowScriptStrategy(
             // commit for live results and after validation for cache hits.
             onJournalEntryConsumed: (entry) => {
               attemptJournalByKey.set(entry.key, entry);
+              updateDurableSummary(
+                { journal: attemptJournal(), board: projection.board() },
+                attemptCost.total(attemptJournal()),
+              );
             },
             // The engine's control is already keyed by the grandchild run
             // id a host targets, so the run registers it as-is.
@@ -329,7 +345,7 @@ export function createWorkflowScriptStrategy(
           const journal = attemptJournal();
           const costUsd = attemptCost.total(journal);
           ports.recordCost(costUsd);
-          settleSummary({ journal, board: projection.board() }, costUsd);
+          updateDurableSummary({ journal, board: projection.board() }, costUsd);
         };
         const result = yield* Effect.exit(
           runPersistedWorkflowScript(projection.options).pipe(
@@ -343,7 +359,12 @@ export function createWorkflowScriptStrategy(
         );
         if (Exit.isFailure(result)) {
           const settlement = yield* Effect.exit(
-            Effect.try({ try: settleAttempt, catch: ensureError }),
+            Effect.try({
+              try: () => {
+                ports.recordCost(attemptCost.total(attemptJournal()));
+              },
+              catch: ensureError,
+            }),
           );
           if (Exit.isFailure(settlement)) {
             const settlementError = Cause.squash(settlement.cause);

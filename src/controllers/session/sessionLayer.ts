@@ -733,6 +733,10 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     if (held === undefined) return NOTHING_TO_CLOSE;
     const { key, session } = held;
     const { runs } = session;
+    const flushArtifacts = Effect.promise(
+      () =>
+        runInSession(session, () => session.flushArtifacts()) as Promise<void>,
+    );
     runs.closeAdmissions();
     // Every touch of the session's storage runs in its scope: the stop
     // writes each run's outcome under the session's roots, and the flush
@@ -743,7 +747,15 @@ const closeSession = (root: string, signal?: AbortSignal) =>
       Effect.all(
         runs.getActiveIds().flatMap((runId) => {
           if (runs.getHandle(runId)?.isChild) return [];
-          return [runs.kill(runId, { detachActiveChildren: false }).settlement];
+          // A settlement fails when a fact the stop owed storage was
+          // refused. `close` answers a `SessionCloseReport` and names no
+          // error, so that travels the same defect channel the flush below
+          // documents, rather than being widened into this close's type.
+          return [
+            runs
+              .kill(runId, { detachActiveChildren: false })
+              .settlement.pipe(Effect.orDie),
+          ];
         }),
         { concurrency: 'unbounded', discard: true },
       ),
@@ -759,9 +771,24 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     const budget = yield* Effect.forkChild(
       signal ? aborted(signal) : Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS),
     );
-    const didSettle = yield* Effect.race(
+    const didSettle = yield* Effect.raceFirst(
       settled.pipe(Effect.as(true)),
       Fiber.join(budget).pipe(Effect.as(false)),
+    ).pipe(
+      Effect.catchCause((cause) =>
+        // A refused stop fact kills the detached termination fiber. The run
+        // may still be unwinding, so retain the entry until it settles, then
+        // make the same final flush and release the ordinary close path owes.
+        // Re-raise the original defect after arming that cleanup so callers
+        // still observe the failed close instead of a false success report.
+        Effect.forkDetach(
+          untilSettled(runs).pipe(
+            Effect.andThen(flushArtifacts),
+            Effect.ensuring(sessions.invalidate(key)),
+          ),
+          { startImmediately: true },
+        ).pipe(Effect.andThen(Effect.failCause(cause))),
+      ),
     );
     const abandoned = runs.getActiveIds();
     const release = didSettle
@@ -792,12 +819,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // exactly that. Widening it into a typed failure is a contract change,
     // not a conversion.
     yield* Effect.race(
-      Effect.promise(
-        () =>
-          runInSession(session, () =>
-            session.flushArtifacts(),
-          ) as Promise<void>,
-      ),
+      flushArtifacts,
       Fiber.join(budget).pipe(
         Effect.andThen(
           Effect.sync(() =>

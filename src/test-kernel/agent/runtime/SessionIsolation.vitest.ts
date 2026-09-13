@@ -208,7 +208,7 @@ describe('session isolation', () => {
       sessionB.runs.track(handle);
 
       const stop = sessionB.runs.kill(runId);
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
       await Effect.runPromise(stop.settlement);
       expect(interrupt).toHaveBeenCalledOnce();
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();

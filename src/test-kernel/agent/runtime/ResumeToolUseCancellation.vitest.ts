@@ -20,7 +20,10 @@ const mocks = vi.hoisted(() => ({
   releaseClaims: vi.fn(),
 }));
 
-vi.mock('@agent/storage/runLease', () => ({
+vi.mock('@agent/storage/runLease', async (importOriginal) => ({
+  // The lease verbs are inert here, but the release choreography runs for
+  // real and reads the module's error types.
+  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
   acquireResumedRunLease: mocks.acquireResumedRunLease,
   assertOwnedRunLease: vi.fn(),
   releaseOwnedRunLease: mocks.releaseOwnedRunLease,
@@ -96,7 +99,10 @@ import {
   ResumeSessionUnavailableError,
   type ResumeToolUseFromResumeDataOptions,
 } from '@agent/runtime/executeAgent';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  RunArtifactDrainError,
+  SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -151,6 +157,8 @@ const LANE_SESSION = {
   runs: {
     launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
       operation,
+    // No parent is detaching this run, so its release waits on nothing.
+    throughDetach: () => Effect.void,
   },
   acquireClaims: () => Effect.succeed(Effect.void),
   graph: { releaseClaims: mocks.releaseClaims },
@@ -408,11 +416,16 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         );
         flushArtifacts.mockRejectedValueOnce(teardownFailure);
 
+        // A failed drain rolled back facts the run had queued, so it reaches
+        // the caller typed, carrying what threw.
         expect(
           yield* Effect.flip(
             resumeToolUseFromResumeData(createToolUseResumeData({ runId })),
           ),
-        ).toBe(teardownFailure);
+        ).toMatchObject({
+          name: 'RunArtifactDrainError',
+          cause: teardownFailure,
+        });
       }),
   );
 
@@ -437,7 +450,8 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
           value instanceof AggregateError &&
           value.message.includes('could not be persisted') &&
           value.errors[0] === turnFailure &&
-          value.errors[1] === teardownFailure,
+          value.errors[1] instanceof RunArtifactDrainError &&
+          value.errors[1].cause === teardownFailure,
       );
     }),
   );

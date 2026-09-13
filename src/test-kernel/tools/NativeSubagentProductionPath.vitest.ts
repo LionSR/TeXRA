@@ -253,7 +253,6 @@ function scriptedBoundModel(
     supportsVision: false,
     supportsNativePdf: false,
     supportsNativeAudio: false,
-    supportsReasoning: false,
     supportsForcedToolChoice: true,
     wireRouteKey: JSON.stringify(['openai', 'api-key', config.fullName]),
     modelRetryRouteKey: JSON.stringify([
@@ -898,7 +897,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // reaches the loop as well as the turn, so the turn is interrupted rather
     // than delivered as a cancelled completion.
     const stopped = session.runs.kill(runId);
-    expect(stopped.accepted).toBe(true);
+    expect(stopped.accepted()).toBe(true);
     const stopSettlement = Effect.runPromise(stopped.settlement);
     releaseTurn2(new Error('interrupted before result persistence'));
     await stopSettlement;

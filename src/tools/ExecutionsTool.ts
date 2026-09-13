@@ -41,6 +41,8 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
+import { deriveWorkflowRunModel } from '@shared/session/sessionFold';
+import type { SessionView } from '@shared/session/sessionView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -183,15 +185,28 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
  * (`runView`'s transcript tier is complete only while one does).
  */
 function workflowBoardLines(
-  session: SessionHandle,
+  view: SessionView | null,
   runId: RunId,
+  board: ReturnType<typeof deriveWorkflowRunModel> | null,
 ): Effect.Effect<string[]> {
-  return Effect.map(session.readView([runId]), (view) => {
-    const board = view.runs.get(runId)?.transcript.run ?? null;
-    return board
-      ? ['', 'Workflow:', JSON.stringify(workflowBoardView(board), null, 2)]
-      : [];
-  });
+  if (board) {
+    return Effect.succeed([
+      '',
+      'Workflow:',
+      JSON.stringify(workflowBoardView(board), null, 2),
+    ]);
+  }
+  if (!view) return Effect.succeed([]);
+  const derivedBoard = deriveWorkflowRunModel(view, runId);
+  return Effect.succeed(
+    derivedBoard
+      ? [
+          '',
+          'Workflow:',
+          JSON.stringify(workflowBoardView(derivedBoard), null, 2),
+        ]
+      : [],
+  );
 }
 
 function getRunningTodos(
@@ -491,7 +506,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           run,
         );
         if (run?.identity.kind === 'multiAgentWorkflow') {
-          lines.push(...(yield* workflowBoardLines(session, runId)));
+          lines.push(
+            ...(yield* workflowBoardLines(null, runId, run.transcript.run)),
+          );
         }
 
         yield* this.appendSummaryTail(
@@ -517,6 +534,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // Completed run: the view's facts beside the private records.
       const records = getRunRecords(context.session, runId);
       const run = session.runView(runId);
+      // The live projection deliberately keeps only a bounded transcript for
+      // inactive runs. Fold this completed aggregate cold so workflow cards
+      // retain their terminal statuses and board-level opened state.
+      const durableView = yield* session.readView([runId]);
+      const summaryRun = durableView.runs.get(runId) ?? run;
       const [record, children, todos, report] = yield* Effect.all(
         [
           records.readRunRecord(),
@@ -541,7 +563,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
       // Identity comes only from the stamped run row; without a row the
       // display falls back to the config.
-      const identity = run?.identity;
+      const identity = summaryRun?.identity;
       const category = runDisplayCategory(identity, record);
       const info = yield* getRunStatusInfo(
         runId,
@@ -554,10 +576,16 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         identity,
         category,
         info,
-        run,
+        summaryRun,
       );
-      if (run?.identity.kind === 'multiAgentWorkflow') {
-        lines.push(...(yield* workflowBoardLines(session, runId)));
+      if (identity?.kind === 'multiAgentWorkflow') {
+        lines.push(
+          ...(yield* workflowBoardLines(
+            durableView,
+            runId,
+            summaryRun?.transcript.run ?? null,
+          )),
+        );
       }
 
       yield* this.appendSummaryTail(
@@ -672,7 +700,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
             detachSubagentsOnStop(),
           ),
         });
-        return stop.settlement.pipe(Effect.as(stop.accepted));
+        // Asked after the settlement: a detaching stop interrupts the run
+        // only once its children have left it, so that is when it knows
+        // whether a live target took the stop.
+        return stop.settlement.pipe(
+          Effect.andThen(Effect.sync(() => stop.accepted())),
+        );
       }).pipe(Effect.uninterruptible);
       if (success) {
         return executed(`Run ${runId} terminated.`);

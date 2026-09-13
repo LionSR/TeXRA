@@ -16,6 +16,7 @@ import {
   type RunEnd,
   type RunId,
 } from '@shared/schemas';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -460,6 +461,55 @@ throw new Error('current revision failed')`,
         expect(errText).toContain('current.tex');
         expect(errText).not.toContain('stale.tex');
         expect(errText).toContain('"costUsd":0.25');
+      }),
+  );
+
+  it.effect(
+    'keeps the delivery summary at the last durable journal state when journaling fails',
+    () =>
+      Effect.gen(function* () {
+        const session = currentSession();
+        const commit = session.commit.bind(session);
+        const commitSpy = vi
+          .spyOn(session, 'commit')
+          .mockImplementation((events) => {
+            const journalWrite = events.some(
+              (event) => event.type === 'workflow.journal',
+            );
+            return journalWrite
+              ? Effect.fail(
+                  new DatabaseWriteFailed({
+                    path: ':memory:',
+                    cause: new Error('journal disk full'),
+                  }),
+                )
+              : commit(events);
+          });
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => commitSpy.mockRestore()),
+        );
+        const ports = fakePorts();
+        const strategy = createWorkflowScriptStrategy(
+          strategyParams({
+            name: 'journal-write-failure',
+            script,
+            createRunAgent: billingRunAgent,
+          }),
+        );
+
+        const launchError = yield* Effect.flip(launchStrategy(strategy, ports));
+        expect(launchError.message).toContain(
+          'Failed to persist workflow journal entry 0',
+        );
+        expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
+
+        const errText = yield* Effect.promise(() =>
+          Promise.resolve(strategy.formatError(null, new Error('boom'))),
+        );
+        expect(errText).toContain('"outcome":"failed"');
+        expect(errText).toContain('"taskDone":0');
+        expect(errText).toContain('"taskTotal":0');
+        expect(errText).not.toContain('paper.tex');
       }),
   );
 

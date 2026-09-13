@@ -134,6 +134,7 @@ import {
   workflowMarkerOf,
   workflowRunModel,
   type ChildRunProgress,
+  type WorkflowRunModel,
 } from '@shared/runs/workflowRunModel';
 import { isObject } from '@utils/core';
 import { createTranscriptFold } from './traceFold';
@@ -878,6 +879,16 @@ function withRunModel(view: SessionView, run: RunView): RunView {
     ...run,
     transcript: replaceTranscript(transcript, { run: runModel }),
   };
+}
+
+/** Re-derive one workflow run model from a folded view on demand. */
+export function deriveWorkflowRunModel(
+  view: SessionView,
+  runId: RunId,
+): WorkflowRunModel | null {
+  const run = view.runs.get(runId);
+  if (!run || !isWorkflowScriptRun(run)) return null;
+  return withRunModel(view, run).transcript.run;
 }
 
 /** Derive the run model now, or note the run for the end of the batch. */

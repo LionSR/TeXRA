@@ -612,7 +612,7 @@ describe('childRunLoop E2E fixtures', () => {
             value: 'done',
           });
           yield* Deferred.await(formatStarted);
-          session.runs.detachActiveChildren(PARENT_RUN_ID);
+          yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
           notifyProgress({ kind: 'started' });
           resolveFormattedDelivery('delivered:done');
           yield* Fiber.join(loop);
@@ -623,7 +623,7 @@ describe('childRunLoop E2E fixtures', () => {
           expect(mocks.submitFollowUp).not.toHaveBeenCalled();
         } finally {
           session.followUps.terminalize(PARENT_RUN_ID);
-          session.runs.detachActiveChildren(PARENT_RUN_ID);
+          yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
           yield* Deferred.succeed<FakeTurn, Error>(turn, {
             kind: 'terminal',
             value: 'done',
@@ -1211,7 +1211,7 @@ describe('childRunLoop E2E fixtures', () => {
         // window the stop latch has to win. Kill admission is synchronous, so
         // the stop latch is already set here and only the settlement is left
         // for the test to run once the loop is done.
-        const stopSettlements: Effect.Effect<void>[] = [];
+        const stopSettlements: Effect.Effect<void, Error>[] = [];
         const interruptAfterFailure = vi.fn(() => {
           stopSettlements.push(session.runs.kill(runId).settlement);
         });

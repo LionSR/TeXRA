@@ -931,7 +931,7 @@ describe('executeCliRequest', () => {
           () => import('@agent/runtime/SessionHandle'),
         );
         vi.spyOn(defaultSession().runs, 'kill').mockReturnValue({
-          accepted: false,
+          accepted: () => false,
           settlement: Effect.void,
         });
         const published = yield* Deferred.make<LeaseOptions>();

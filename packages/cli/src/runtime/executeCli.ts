@@ -428,14 +428,16 @@ export function executeCliRequest(
         // launchVerdict and the assignment below in one synchronous turn.
         // Headless shutdown deliberately cascades into active children: a
         // detached child cannot outlive the exiting CLI process, so the
-        // detach-on-stop toggle is not consulted on this path.
+        // detach-on-stop toggle is not consulted on this path — which is also
+        // why this stop's admission is decided here, before its settlement
+        // runs: only a detaching stop waits for the sever to interrupt.
         const stop =
           launchVerdict.kind !== 'published' && launchRunId
             ? session.runs.kill(launchRunId, {
                 detachActiveChildren: false,
               })
             : undefined;
-        if (stop?.accepted && launchVerdict.kind === 'undecided') {
+        if (stop?.accepted() === true && launchVerdict.kind === 'undecided') {
           launchVerdict = {
             kind: 'interrupted',
             artifactFailure: undefined,

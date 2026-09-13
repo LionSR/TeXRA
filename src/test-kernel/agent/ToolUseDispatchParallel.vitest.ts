@@ -179,7 +179,6 @@ function boundModel(): BoundModel {
     supportsVision: false,
     supportsNativePdf: false,
     supportsNativeAudio: false,
-    supportsReasoning: false,
     supportsForcedToolChoice: true,
     wireRouteKey: 'wire',
     modelRetryRouteKey: 'wire:gpt54',
