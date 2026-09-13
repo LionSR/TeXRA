@@ -471,20 +471,28 @@ first removes a documented deviation from PR1 before it is written.
    update the validation script and the texra-action pin together. After S2.
 7. **S6, model identity.** Independent; any time.
 
-## 7. For the owner to rule
+## 7. Owner rulings — resolved by the merges (recorded 2026-09-13)
+
+The three choices below were open when this note was written; the landed code took the
+recommended option in each case. No separate written ruling exists.
 
 1. **One aggregate per run** (recommended) versus two kinds sharing one
    logical id. The first deletes a counter, a claim, and the PR1 deviation;
    the second keeps a ratified sentence intact and one duplicate with it.
+   **Resolved:** one aggregate per run (#12222).
 2. **The CLI contract is versioned at 1.0.** The rename table is frozen by a
    comment, not by an external consumer this repository can see; texra-action
    is SHA-pinned. If the 0.40 contract must be emitted verbatim by 1.0, S5
    becomes a projection module instead of a deletion, and R3 is violated on
    purpose in one named place.
+   **Resolved:** versioned at 1.0 — the CLI projection v2 envelope landed and
+   the 0.40 contract is not emitted (#12268).
 3. **Inquiry joins the request protocol.** Its cross-project record stays;
    its second protocol does not. If the owner wants inquiry to remain a
    fire-and-forget tool call that never parks the run, that is still one
    `request.opened` row with no waiting, not a separate module.
+   **Resolved:** inquiry joins the request protocol as a non-parking
+   `request.opened` row (#12329).
 
 ## 8. Corrections to the census, so they are not re-derived
 

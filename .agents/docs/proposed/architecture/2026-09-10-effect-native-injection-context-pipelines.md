@@ -382,9 +382,16 @@ typecheck, lint, both ratchets and 8,884 tests, and still measured:
   `succeed(false)` and seven methods fail `NotFound` for paths that exist — a
   silent-degradation defect generator under CLAUDE.md's loud-failure rule.
 
-**Consequences, which are the point of recording this here.** Steps 9 and 10 are
+**Consequences as of 2026-09-13 (current).** Steps 9 and 10 proceed as the
+Platform-shrinking program's slices 4b onward (#12073 R-1 candidate B; #12364–#12374 are the
+first four): the filesystem consumers convert onto Effect's `FileSystem`/`Path` with the fs
+port last, carrier 5 (`workspaceRoots.ts`) retires when its last reader converts, and the
+`ambient:asyncLocalStorage` row can reach zero once that lands. The `lstat`/typed-`readDirectory`
+evidence below still constrains how each consumer converts.
+
+~~**Consequences as recorded on 2026-09-11 (historical; superseded above).** Steps 9 and 10 are
 **deferred, not redirected** — the ruling does not select the "own" alternative as the way
-forward, it declines the adoption. So:
+forward, it declines the adoption. So:~~
 
 - Step 9 (`BaseFS`/`AbsoluteFS`/`RelativeFS` → Effect functions) does not proceed.
 - Step 10 is gated on 9 and therefore also does not proceed, so **carrier 5

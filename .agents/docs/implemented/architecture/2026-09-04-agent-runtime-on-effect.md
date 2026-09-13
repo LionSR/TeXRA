@@ -3,7 +3,9 @@
 Status: implemented — PR0–PR4 landed (#11843 docs, #12287 foundation, #12314 both loops, #12329 replay + one child protocol); moved from `proposed/` 2026-09-13. The pure-Effect direction was ratified on 2026-09-06 in the
 [migration PRD](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md). The
 implementation contract in §0.1 below incorporates the current-main runtime/LLM
-study and review. Detailed implementation and acceptance evidence remain pending.
+study and review. The four decisions of §7 were taken by the merges (resolutions recorded
+there); the crash-boundary verification §8 asks for is the open acceptance item, tracked
+in #12025 rather than claimed here.
 The PRD's later boundary, privacy and 0.41 compatibility rulings supersede the
 historical sketches below wherever they differ: no internal Promise adapter,
 no old-flow importer, and no private ledger row in the public trace union.
@@ -1092,22 +1094,39 @@ event)` gains the `flow.step` arm and its §6 durable set gains six rows.
   of the table, by design. Single-owner D8 is upheld and extended: nothing
   deletes a completed run's rows, not even completion.
 
-## 7. Decisions requested from the owner
+## 7. Decisions requested from the owner — resolved by the merges (recorded 2026-09-13)
+
+No separate written ruling exists; each item below records how the landed code answered
+it.
 
 1. Ratify the shape (§2) and the sequencing (§3): the runtime is lane D of
    the cutover branch, with no interim column and no shim, accepting a
    larger branch in exchange for one revert point.
+   **Resolved:** the shape landed as specified (no interim column, no shim,
+   no importer). The sequencing did not: the work merged to `main` as stacked
+   reviewed PRs (#12287 foundation, #12314 both loops, #12329 replay and child
+   protocol) rather than one cutover branch with one revert point.
 2. Preserve byte-exact conversation rows with the user's history until
    explicit deletion under C9. They are never scrubbed or expired by age.
    Removing recovery rows earlier than display rows would discard the only
    conversation after the folds merge and violate the completed-run resume
    contract.
+   **Resolved:** byte-exact rows on the run aggregate are never scrubbed and
+   have no age-based expiry in the landed `RunLedger` (#12287); deletion is
+   the substrate's C9 tombstone only.
 3. Confirm that the existing `approval.requested` / `approval.resolved`
    events land with PR 2. They are required for outcome-unknown barrier
    tools and manual retry (§2.3); those resume paths cannot ship before the
    events and their decision handling are available.
+   **Resolved:** landed as the request protocol — `request.opened` /
+   `request.decided` rows with one decision route — in #12329, after PR 2
+   rather than with it.
 4. Confirm that the child-protocol unification (PR 4) is in scope, since
    leaving the script journal as a second ledger would be an intermediate.
+   **Resolved:** in scope and landed in #12329 as `child.turn` on the run
+   aggregate plus `workflow.script`/`workflow.journal` on a
+   `workflow-checkpoint` aggregate (not the single row pair sketched in §2.1;
+   the runtime design's §11 records that delta).
 
 ## 8. Risks
 
@@ -1140,6 +1159,9 @@ event)` gains the `flow.step` arm and its §6 durable set gains six rows.
   cross-aggregate ordering in the viewer, the fold needing the registry, and
   the mutable event row in release N). The revised contracts above address
   these findings; PR 2 still needs verification at each crash boundary.
+  **Status 2026-09-13:** not yet verified. The fifteen crash windows are
+  enumerated in the runtime design (§6.6) and the acceptance gates in the
+  delivery plan §8; both remain open items under #12025.
 
 ## 9. Verified
 
