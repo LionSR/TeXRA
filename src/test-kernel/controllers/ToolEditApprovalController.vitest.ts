@@ -131,6 +131,35 @@ describe('tool edit approval controller', () => {
     expect(testHost.preview.readProposedContent).not.toHaveBeenCalled();
   });
 
+  it('holds a release open until the staging in flight has disposed', async () => {
+    const testHost = createTestHost();
+    const controller = createController(testHost.host);
+
+    const presented = controller.present(approvalRequest());
+    await vi.waitFor(() => testHost.contextForRequest());
+    const requestId = testHost.contextForRequest().requestId;
+
+    // The `request.opened` commit was refused while the host was still
+    // staging, so the release runs with a preview in flight: it may not
+    // return before that preview is disposed, or the caller it answers
+    // would report the refusal with temp files still being written.
+    let released = false;
+    const release = controller.release(requestId).then(() => {
+      released = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(released).toBe(false);
+    expect(testHost.preview.dispose).not.toHaveBeenCalled();
+
+    testHost.staging.resolve();
+    await release;
+    expect(released).toBe(true);
+    expect(testHost.preview.dispose).toHaveBeenCalledOnce();
+
+    await presented;
+    expect(testHost.preview.present).not.toHaveBeenCalled();
+  });
+
   it('ignores actions that arrive after the request was decided', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
