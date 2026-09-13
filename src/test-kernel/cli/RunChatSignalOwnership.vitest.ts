@@ -23,7 +23,7 @@ import {
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { installFakeHost } from '@test/support/setupPlatform';
+import { installedHost, installFakeHost } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -258,14 +258,20 @@ describe('runChat signal ownership wiring', () => {
     vi.clearAllMocks();
     mocks.callOrder.length = 0;
     // Both inits now hand back the services the composition root holds; the
-    // fake host installed above is that platform here.
+    // fake host installed above owns those stores here.
+    const cliServices = () => ({
+      ...platform(),
+      globalStorage: installedHost().roots.globalStorage,
+      globalState: installedHost().roots.globalState,
+      secrets: installedHost().secrets,
+    });
     mocks.initCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initCliPlatform');
-      return platform();
+      return cliServices();
     });
     mocks.initInteractiveCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initInteractiveCliPlatform');
-      return platform();
+      return cliServices();
     });
     mocks.handOffCliShutdownSignalHandlers.mockImplementation(() => {
       mocks.callOrder.push('handOffCliShutdownSignalHandlers');

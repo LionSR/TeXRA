@@ -8,10 +8,13 @@ import { describe, vi } from 'vitest';
 
 // Local imports
 import { API_PROVIDERS, apiKeySecretName } from '@model/apiProviders';
-import { platform } from '@platform/platform';
 import type { ToolResult } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import {
+  hostStores,
+  installPlatform,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { ListApiKeysTool } from '@tools/setup/ListApiKeysTool';
 
@@ -42,7 +45,7 @@ function outputOf(result: ToolResult): string {
 describe('list_api_keys tool', () => {
   it.effect('reports unsupported enumeration instead of an empty store', () =>
     Effect.gen(function* () {
-      vi.spyOn(platform().secrets, 'listStoredKeys').mockRejectedValue(
+      vi.spyOn(hostStores().secrets, 'listStoredKeys').mockRejectedValue(
         new Error('SecretStorage key enumeration is not supported'),
       );
 

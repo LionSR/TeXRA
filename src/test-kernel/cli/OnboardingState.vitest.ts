@@ -12,6 +12,7 @@ import {
 } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
+  FakeSecrets,
   createFakePlatform,
   createFakeWorkspaceRoots,
 } from '@test/support/FakePlatform';
@@ -57,6 +58,8 @@ describe('maybeRunCliOnboarding headless parity', () => {
               {
                 ...createFakePlatform(),
                 globalStorage: createFakeWorkspaceRoots().globalStorage,
+                globalState: createFakeWorkspaceRoots().globalState,
+                secrets: new FakeSecrets(),
               },
               {
                 mode: 'interactive',

@@ -65,6 +65,10 @@ async function installAccessPlatform(
     secrets: options.secrets ?? OPENAI_KEY_SECRETS,
   });
   invalidateApiKeyCache();
+  // The reinstalled host has its own secret store, and the coordinator caches
+  // the first one it is handed, so both are re-pointed at this host.
+  resetCodexCoordinator();
+  installTexraAccountProbes(hostStores().secrets);
 }
 
 function codexSessionSecrets(): Record<string, string> {
@@ -107,7 +111,7 @@ describe('computeModelOptionsData availability', () => {
     resetCodexCoordinator();
     // The picker reads the app's account plane through the model layer's
     // seam; install the same probes the three hosts install.
-    installTexraAccountProbes();
+    installTexraAccountProbes(hostStores().secrets);
   });
 
   it.each([

@@ -32,6 +32,7 @@ import {
 } from '@controllers/session/sessionLayer';
 import { tryProcessRuntime } from '@platform/processRuntime';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
@@ -51,6 +52,8 @@ import { makeSessions } from './sessionPrograms.js';
  */
 export interface AgentPlatform extends Platform {
   readonly roots: WorkspaceRoots;
+  /** The secret store this process's `Secrets` service reads from. */
+  readonly secrets: PlatformSecrets;
 }
 
 /** The composed process, as the package's services read it. */
@@ -159,7 +162,7 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   }
   const processServices = {
     secrets: () => platform.secrets,
-    appState: () => platform.globalState,
+    appState: () => platform.roots.globalState,
     setup: PACKAGE_SETUP,
   };
   let processRuntime = tryProcessRuntime();

@@ -25,7 +25,6 @@ import {
   type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import { platform } from '@platform/platform';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -41,6 +40,7 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   fakeProcessServices,
   installPlatform,
+  installedHost,
 } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
 
@@ -105,7 +105,7 @@ async function initLifecycleTestPlatform(firstRunDone: boolean) {
       [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: firstRunDone,
     },
   });
-  return platform();
+  return installedHost().roots;
 }
 
 let lifecycleFixtureCounter = 0;

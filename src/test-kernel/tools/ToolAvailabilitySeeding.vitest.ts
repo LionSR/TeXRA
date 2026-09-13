@@ -4,9 +4,8 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
-import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
@@ -23,10 +22,10 @@ describe('seedDisabledToolDefaults', () => {
       Effect.gen(function* () {
         yield* Effect.promise(() => installPlatform());
 
-        yield* seedDisabledToolDefaults(platform().globalState);
+        yield* seedDisabledToolDefaults(hostStores().globalState);
 
         expect(
-          platform().globalState.get(GlobalStateKey.DISABLED_TOOLS),
+          hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
         ).toEqual(EXPECTED_DEFAULTS);
       }),
   );
@@ -41,10 +40,10 @@ describe('seedDisabledToolDefaults', () => {
           }),
         );
 
-        yield* seedDisabledToolDefaults(platform().globalState);
+        yield* seedDisabledToolDefaults(hostStores().globalState);
 
         expect(
-          platform().globalState.get(GlobalStateKey.DISABLED_TOOLS),
+          hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
         ).toEqual([]);
       }),
   );

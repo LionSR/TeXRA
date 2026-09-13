@@ -11,17 +11,20 @@
 import type {
   AgentResumePort,
   AgentDirectoriesPort,
-  StateStore,
   FileSystemProvider,
   ToolMissingHandler,
   LifecycleHost,
 } from './interfaces';
 import type { LanguageModelPort } from './languageModel';
-import type { PlatformSecrets } from './secrets';
 
 /**
  * The process-true platform services a host must provide.
  * Frozen after initialization — immutable for the lifetime of the process.
+ *
+ * The secret store and the application state store are not here either: they
+ * are the `Secrets` and `AppState` Effect services, provided once per process
+ * by `installProcessRuntime`, with `WorkspaceRoots.globalState` carrying the
+ * state store for the settings slots below the Effect boundary.
  *
  * Per-workspace services (the workspace root, its storage paths, its config
  * and its state) are not here: they are `WorkspaceRoots`
@@ -33,9 +36,7 @@ import type { PlatformSecrets } from './secrets';
  * carry a log backend.
  */
 export interface Platform {
-  readonly globalState: StateStore;
   readonly fs: FileSystemProvider;
-  readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;

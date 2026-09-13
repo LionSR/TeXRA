@@ -1,12 +1,13 @@
 /**
- * Process-wide access to the Codex OAuth coordinator, backed by
- * `platform().secrets`.
+ * Process-wide access to the Codex OAuth coordinator, over the secret store
+ * its caller holds.
  */
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   createSecretBackedCoordinator,
   getSubscriptionSessionStatus,
+  type SessionSecretStore,
 } from '../oauth/sessionAccess';
 import { SubscriptionOAuthError } from '../oauth/subscriptionOAuthError';
 import { CODEX_SESSION_SECRET_KEY } from './codexConstants';
@@ -23,12 +24,11 @@ const coordinatorAccess = createSecretBackedCoordinator({
   makeCoordinator: (storage) => new CodexSessionCoordinator({ storage }),
 });
 
-/**
- * The shared coordinator. Throws if the platform has not been initialized yet
- * (callers run after `initPlatform()`).
- */
-export function codexCoordinator(): CodexSessionCoordinator {
-  return coordinatorAccess.get();
+/** The shared coordinator, over the caller's secret store. */
+export function codexCoordinator(
+  secrets: SessionSecretStore,
+): CodexSessionCoordinator {
+  return coordinatorAccess.get(secrets);
 }
 
 /** Test seam: drop the cached coordinator. */
@@ -36,9 +36,15 @@ export function resetCodexCoordinator(): void {
   coordinatorAccess.reset();
 }
 
-/** Signed-in status. Call only after the host initializes the platform. */
-export async function getCodexStatus(): Promise<CodexSessionStatus> {
-  return getSubscriptionSessionStatus(codexCoordinator, CHANNEL, 'ChatGPT');
+/** Signed-in status, read from the caller's secret store. */
+export async function getCodexStatus(
+  secrets: SessionSecretStore,
+): Promise<CodexSessionStatus> {
+  return getSubscriptionSessionStatus(
+    () => codexCoordinator(secrets),
+    CHANNEL,
+    'ChatGPT',
+  );
 }
 
 /**
@@ -47,8 +53,10 @@ export async function getCodexStatus(): Promise<CodexSessionStatus> {
  * gone; if a session is still there, another writer replaced it mid-refresh,
  * which is transient.
  */
-export async function isCodexSessionRoutable(): Promise<boolean> {
-  const coordinator = codexCoordinator();
+export async function isCodexSessionRoutable(
+  secrets: SessionSecretStore,
+): Promise<boolean> {
+  const coordinator = codexCoordinator(secrets);
   try {
     await coordinator.getFreshAccessToken();
     return true;

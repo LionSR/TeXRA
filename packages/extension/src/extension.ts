@@ -217,8 +217,6 @@ async function initVscodePlatform(
   );
   initPlatform(
     createNodePlatform({
-      globalState: context.globalState,
-      secrets,
       lifecycle,
       agentDirectories,
       agentResume: {
@@ -234,6 +232,7 @@ async function initVscodePlatform(
       globalStorage: storage.getGlobalStoragePath(),
       config,
       workspaceState,
+      globalState: context.globalState,
     }),
   );
   return secrets;
@@ -561,7 +560,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   );
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
-  installTexraAccountProbes();
+  installTexraAccountProbes(secrets);
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
     appSignals.emit('languageModelsChanged', undefined);

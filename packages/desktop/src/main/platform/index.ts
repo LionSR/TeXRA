@@ -182,8 +182,6 @@ export async function initializeElectronPlatform(
   });
   initPlatform(
     createNodePlatform({
-      globalState: globalStateStore,
-      secrets,
       lifecycle,
       agentResume,
       agentDirectories,
@@ -195,12 +193,13 @@ export async function initializeElectronPlatform(
     globalStorage: storage.getGlobalStoragePath(),
     config: configStores,
     workspaceState: workspaceStateStore,
+    globalState: globalStateStore,
   });
   initProcessWorkspaceRoots(processRoots);
   initProcessSettingHost('desktop');
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
-  installTexraAccountProbes();
+  installTexraAccountProbes(secrets);
 
   // Route desktop model traffic to the same Supabase usage log the extension
   // and CLI write to, tagged with editorType 'desktop' and the app version.

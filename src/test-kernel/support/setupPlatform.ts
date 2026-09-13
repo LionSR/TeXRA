@@ -18,7 +18,7 @@ import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { AppState } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
-import type { Secrets } from '@platform/secrets';
+import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
@@ -26,6 +26,7 @@ import type { SetupPlatform, SetupPlatformShape } from '@tools/setup/platform';
 import {
   createFakePlatform,
   createFakeWorkspaceRoots,
+  FakeSecrets,
   type FakeHostOverrides,
   type FakePlatformOptions,
 } from './FakePlatform';
@@ -39,6 +40,8 @@ import type { Layer } from 'effect';
 export interface FakeHost {
   readonly platform: Platform;
   readonly roots: WorkspaceRoots;
+  /** The store the host's `Secrets` service reads, as a root's own local. */
+  readonly secrets: PlatformSecrets;
   readonly setup?: SetupPlatformShape;
 }
 
@@ -49,10 +52,22 @@ export function createFakeHost(
   options: FakePlatformOptions = {},
   overrides: FakeHostOverrides = {},
 ): FakeHost {
-  const { config, workspaceState, setup, ...platformOverrides } = overrides;
+  const {
+    config,
+    workspaceState,
+    globalState,
+    secrets,
+    setup,
+    ...platformOverrides
+  } = overrides;
   return {
     platform: createFakePlatform(options, platformOverrides),
-    roots: createFakeWorkspaceRoots(options, { config, workspaceState }),
+    roots: createFakeWorkspaceRoots(options, {
+      config,
+      workspaceState,
+      globalState,
+    }),
+    secrets: secrets ?? new FakeSecrets(options.secrets, options.secretsEnv),
     ...(setup ? { setup } : {}),
   };
 }
@@ -76,8 +91,8 @@ export function installedHost(): FakeHost {
  * reinstalls its host mid-test sees the new one.
  */
 export function hostStores(): ModelOptionStores {
-  const { secrets, globalState } = installedHost().platform;
-  return { secrets, globalState };
+  const { secrets, roots } = installedHost();
+  return { secrets, globalState: roots.globalState };
 }
 
 function installedSetup(): SetupPlatformShape {
@@ -178,8 +193,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     testHttpClientLayer,
     Layer.mock(UpdateCheckRecords, {}),
     Layer.mock(InquiryRecords, {}),
-    Secrets.layer(() => installedHost().platform.secrets),
-    AppState.layer(() => installedHost().platform.globalState),
+    Secrets.layer(() => installedHost().secrets),
+    AppState.layer(() => installedHost().roots.globalState),
     SetupPlatform.layer(fakeSetupPlatform),
     // No conditional injections on the bare fake host: a suite that
     // exercises them passes its own list to `resolveAgentTools`.

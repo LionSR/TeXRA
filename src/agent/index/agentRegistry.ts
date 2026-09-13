@@ -371,8 +371,7 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  * writes the same selection through identical resolution rules.
  */
 export function createWorkspaceAgentRosterController(): AgentRosterController<AgentEntry> {
-  const { workspaceState } = workspaceRoots();
-  const { globalState } = platform();
+  const { workspaceState, globalState } = workspaceRoots();
   return new AgentRosterController({
     workspaceState,
     globalState,

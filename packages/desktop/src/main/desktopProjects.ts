@@ -282,6 +282,7 @@ export function openDesktopProjectRegistry(
               global: options.globalConfigStore,
             },
             workspaceState,
+            globalState: options.stores.globalState,
           });
           // Acquire the session and install its registry owner before
           // interruption can leave this operation.

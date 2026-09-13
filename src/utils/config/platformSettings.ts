@@ -1,4 +1,3 @@
-import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { settingByKey, type SettingHost } from '@shared/schemas';
 import {
@@ -45,7 +44,7 @@ export function platformSettingsStores(): SettingsStores {
   return {
     config: roots.config,
     workspaceState: roots.workspaceState,
-    globalState: platform().globalState,
+    globalState: roots.globalState,
   };
 }
 
@@ -53,7 +52,7 @@ export function platformSettingsStores(): SettingsStores {
  * Read a catalog-modeled setting from the live platform, resolving its default
  * from the entry's schema `.prefault()` — the single default source.
  *
- * Replaces the scattered `platform().<store>.get(key, handPassedDefault)` reads
+ * Replaces the scattered per-store `get(key, handPassedDefault)` reads
  * whose second argument duplicated the catalog default: the value now comes from
  * the schema, and a stale/invalid stored value snaps back to that default (via
  * `readSetting`'s `safeParse`) rather than propagating. The store slot

@@ -880,6 +880,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
               resolveSubscriptionCredential(
                 config,
                 selectedOpenRouter,
+                input.stores.secrets,
                 input.declinedRoutes,
               ),
             ),

@@ -122,8 +122,8 @@ describe('desktop composition root and launch environment', () => {
             records,
             runWrite: (write) => Effect.runPromise(write),
             stores: {
-              secrets: host.platform.secrets,
-              globalState: host.platform.globalState,
+              secrets: host.secrets,
+              globalState: host.roots.globalState,
             },
             warn: vi.fn(),
           });

@@ -97,7 +97,7 @@ function defaultCredentials(
 ): SubscriptionUsageCredentials {
   return Object.freeze({
     async loadChatGpt(): Promise<ChatGptUsageCredential | null> {
-      const coordinator = codexCoordinator();
+      const coordinator = codexCoordinator(secrets);
       if (!(await coordinator.loadSession())) return null;
       const session = await coordinator.getFreshSession();
       return {

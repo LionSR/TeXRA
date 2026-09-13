@@ -9,13 +9,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
-import { installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
@@ -37,7 +36,7 @@ function applyTeam(input: Parameters<ApplyTeamTool['call']>[0]) {
 
 function expectNoTeamState(): void {
   expect(workspaceRoster()).toBeUndefined();
-  expect(getDefaultTeamId(platform().globalState)).toBeUndefined();
+  expect(getDefaultTeamId(hostStores().globalState)).toBeUndefined();
 }
 
 /**
@@ -60,7 +59,7 @@ async function clearOnboardingState(): Promise<void> {
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     undefined,
   );
-  await platform().globalState.update(
+  await hostStores().globalState.update(
     GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID,
     undefined,
   );
@@ -114,13 +113,13 @@ describe('apply_team', () => {
         teamId: 'starter',
         unavailableAction: 'continue',
       });
-      expect(getDefaultTeamId(platform().globalState)).toBe('starter');
+      expect(getDefaultTeamId(hostStores().globalState)).toBe('starter');
 
       yield* applyTeam({
         teamId: 'physicist',
         unavailableAction: 'continue',
       });
-      expect(getDefaultTeamId(platform().globalState)).toBe('physicist');
+      expect(getDefaultTeamId(hostStores().globalState)).toBe('physicist');
     }),
   );
 
@@ -188,7 +187,7 @@ describe('apply_team', () => {
         expect(result.status).toBe('executed');
         expect(result.summary).toMatch(/Applied the Starter roster/);
         expect(workspaceRoster()).toEqual({ kind: 'team', teamId: 'starter' });
-        expect(getDefaultTeamId(platform().globalState)).toBe('starter');
+        expect(getDefaultTeamId(hostStores().globalState)).toBe('starter');
       }),
   );
 

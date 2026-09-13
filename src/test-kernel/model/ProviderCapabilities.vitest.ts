@@ -16,7 +16,7 @@ import {
   resolveCodexSubscriptionCapabilities,
 } from '@model/providerCapabilities';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
-import { installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 
 const gpt55Config: ModelConfig = {
   name: 'gpt55',
@@ -62,7 +62,7 @@ async function installSubscriptionPlatform(options?: {
         : { [CODEX_SESSION_SECRET_KEY]: JSON.stringify(signedInSession) },
   });
   // Sign-in state reaches the model layer through the seam the hosts install.
-  installTexraAccountProbes();
+  installTexraAccountProbes(hostStores().secrets);
 }
 
 describe('provider capabilities', () => {

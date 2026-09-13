@@ -699,7 +699,7 @@ export function createChatSessionController(
       // honored by `isCancellationRequested`, which `resumeRun` re-reads once
       // this returns, rather than starting an agent the user cancelled.
       const adoptResumedRun = async (): Promise<void> => {
-        await setCliHelperModel(config.model);
+        await setCliHelperModel(state, config.model);
         adoptRunConfig(config, 'history');
         clearLocalTranscript();
         followUpQueue.clear();
@@ -875,7 +875,7 @@ export function createChatSessionController(
         focusRun(runId);
         session.runExitCode = CliExitCode.Success;
 
-        yield* hostPort(() => setCliHelperModel(config.model));
+        yield* hostPort(() => setCliHelperModel(state, config.model));
         recoveryHandedOff = true;
         const result = yield* resumeRun(runId, {
           ...toolUseResumeOptions(runId, approvalsUnavailable),
@@ -1025,7 +1025,7 @@ export function createChatSessionController(
               ),
             }),
           );
-          yield* hostPort(() => setCliHelperModel(selection.model));
+          yield* hostPort(() => setCliHelperModel(state, selection.model));
           if (session.stopRequested) {
             session.markRunCompleted();
             return;

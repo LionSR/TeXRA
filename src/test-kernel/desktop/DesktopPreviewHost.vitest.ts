@@ -111,7 +111,7 @@ describe('desktop preview host', () => {
         await import('@test/support/setupPlatform');
       const fakeHost = createFakeHost();
       await installFakeHost(fakeHost);
-      const secrets = fakeHost.platform.secrets;
+      const secrets = fakeHost.secrets;
       const globalState = new FakeStateStore();
       const { createTestSession } =
         await import('@test/support/sessionTestUtils');

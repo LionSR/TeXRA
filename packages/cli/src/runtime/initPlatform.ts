@@ -11,7 +11,12 @@ import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { consoleLogSink, setLogSink } from '@logger/logSink';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
-import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
+import type {
+  AgentResumePort,
+  LifecycleHost,
+  StateStore,
+} from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import { DisposableStore } from '@platform/disposable';
 import { effectRuntime } from '@platform/processRuntime';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -38,6 +43,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import {
   bindCliGlobalState,
+  cliGlobalState,
   installCliProcessRuntime,
 } from './cliProcessRuntime';
 import { getCliSecrets } from './cliSecrets';
@@ -77,12 +83,12 @@ type CliPlatformInitOptions = Pick<
  * leaving each caller to re-enter the ambient `platform()` singleton for a
  * value the composition root was holding all along.
  */
-export type CliPlatformServices = Pick<
-  Platform,
-  'globalState' | 'secrets' | 'lifecycle'
-> & {
+export type CliPlatformServices = Pick<Platform, 'lifecycle'> & {
   /** The process's cross-workspace storage root, from the roots built below. */
   readonly globalStorage: string;
+  /** The stores this root opened, handed over rather than read back. */
+  readonly globalState: StateStore;
+  readonly secrets: PlatformSecrets;
 };
 
 function logAt(
@@ -208,10 +214,11 @@ export function setCliAgentResumeHandler(
 }
 
 export async function setCliHelperModel(
+  state: StateStore,
   model: string | undefined,
 ): Promise<void> {
   if (!model) return;
-  await tryPlatform()?.globalState.update(GlobalStateKey.HELPER_MODEL, model);
+  await state.update(GlobalStateKey.HELPER_MODEL, model);
 }
 
 /**
@@ -331,9 +338,8 @@ export async function initCliPlatform(
       resourcesPath: context.resourcesPath,
       customDirectoryStore: { get: () => undefined },
     });
+    const cliSecrets = getCliSecrets(context.storageRoot);
     services = createNodePlatform({
-      globalState: stateStores.globalState,
-      secrets: getCliSecrets(context.storageRoot),
       lifecycle,
       agentResume: {
         tryResumeRun: async (runId, recovery) =>
@@ -349,12 +355,13 @@ export async function initCliPlatform(
       globalStorage: stateStores.storage.getGlobalStoragePath(),
       config: configStores,
       workspaceState: stateStores.workspaceState,
+      globalState: stateStores.globalState,
     });
     initProcessWorkspaceRoots(roots);
     initProcessSettingHost('cli');
     // TeXRA's account plane (ChatGPT / Grok sign-in). Without
     // this the model layer is bring-your-own-key. See installTexraAccountProbes.
-    installTexraAccountProbes();
+    installTexraAccountProbes(cliSecrets);
 
     // Seed first-install defaults (e.g. disabled tools). No-ops for anyone
     // whose DISABLED_TOOLS list already exists, so upgrading users keep the
@@ -408,8 +415,24 @@ export async function initCliPlatform(
     );
   }
 
+  // The stores this root opened, handed back rather than read off a
+  // process-wide singleton: the secret store is the same stateless view over
+  // this process's storage root the composition block installed, and the
+  // application state is the store `bindCliGlobalState` latched there.
+  const cliServices: CliPlatformServices = {
+    // The pure path calculator over this process's storage root (no mkdir),
+    // so every CLI entry, including the ones that find the platform already
+    // installed, names one root without touching the filesystem again.
+    globalStorage: resolveGlobalStoragePath(
+      context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
+    ),
+    globalState: cliGlobalState(),
+    secrets: getCliSecrets(context.storageRoot),
+    lifecycle: services.lifecycle,
+  };
+
   if (!supabaseAuthInitialized) {
-    initializeCliSupabaseAuth(services.secrets, cliPlatformLog);
+    initializeCliSupabaseAuth(cliServices.secrets, cliPlatformLog);
     supabaseAuthInitialized = true;
   }
 
@@ -418,15 +441,5 @@ export async function initCliPlatform(
     skillSourceOptions: context.skillSourceOptions,
   });
 
-  return {
-    // The pure path calculator over this process's storage root (no mkdir),
-    // so every CLI entry, including the ones that find the platform already
-    // installed, names one root without touching the filesystem again.
-    globalStorage: resolveGlobalStoragePath(
-      context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
-    ),
-    globalState: services.globalState,
-    secrets: services.secrets,
-    lifecycle: services.lifecycle,
-  };
+  return cliServices;
 }

@@ -24,6 +24,7 @@ import type { CliPlatformServices } from '@cli/runtime/initPlatform';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
+  FakeSecrets,
   createFakePlatform,
   createFakeWorkspaceRoots,
 } from '@test/support/FakePlatform';
@@ -50,6 +51,8 @@ describe('maybeRunCliOnboarding gate', () => {
     services = {
       ...createFakePlatform(),
       globalStorage: createFakeWorkspaceRoots().globalStorage,
+      globalState: createFakeWorkspaceRoots().globalState,
+      secrets: new FakeSecrets(),
     };
     originalIsTty = process.stdout.isTTY;
     Object.defineProperty(process.stdout, 'isTTY', {

@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   glmCodingPlan: false,
   notify: vi.fn(),
   openRouter: false,
-  secrets: {},
   setCliSubscriptionPreference: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
   setGLMCodingPlan: vi.fn(),
@@ -62,7 +61,6 @@ vi.mock('@platform/platform', async () => {
   const { GlobalStateKey } = await import('@shared/state/stateKeys');
   return {
     platform: () => ({
-      secrets: mocks.secrets,
       workspace: { getWorkspacePath: () => undefined },
       globalState: {
         get: (key: string, fallback: unknown) =>
@@ -83,7 +81,6 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import type { ApiProvider } from '@model/apiProviders';
-import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
@@ -102,6 +99,7 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { installedHost } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setGoalSessionAutoApproval } from '@tools/goal';
 import { proposalApprovals } from '@tools/approval';
@@ -129,9 +127,9 @@ function tui(
 ): { readonly presentationHost: CliRuntimeHost; readonly dispose: () => void } {
   const cliContext = createTuiCliContext(contextOverrides);
   defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
-  // The suite's own fake stores, mocked above: the credential work takes them
-  // directly, and the key-check expectations name exactly these objects.
-  const { secrets } = platform();
+  // The installed fake host's secret store: the credential work takes it
+  // directly, and the key-check expectations name exactly this object.
+  const { secrets } = installedHost();
   detachHost();
   detachHost = defaultSession().interactions.use(
     createTuiHostInteractions(presentationHost, cliContext, { secrets }),
@@ -751,7 +749,7 @@ describe('TUI request decisions', () => {
         expectNoPreferenceWrites();
         expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
         expect(mocks.apiKeyExistsUncached).toHaveBeenCalledWith(
-          mocks.secrets,
+          installedHost().secrets,
           'openai',
         );
         expect(mocks.apiKeyExistsUncached).toHaveBeenCalledOnce();

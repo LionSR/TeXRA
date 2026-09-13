@@ -42,6 +42,7 @@ import {
   isPreferXaiSubscription,
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
+import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -115,9 +116,14 @@ export interface SubscriptionProvider {
    */
   signIn(
     options: SubscriptionSignInOptions,
-  ): Effect.Effect<SubscriptionAccount, unknown, HttpClient.HttpClient>;
-  signOut(): Promise<void>;
-  getStatus(): Promise<SubscriptionAccount>;
+  ): Effect.Effect<
+    SubscriptionAccount,
+    unknown,
+    HttpClient.HttpClient | Secrets
+  >;
+  /** Promise-shaped, so the caller hands over the secret store it holds. */
+  signOut(secrets: PlatformSecrets): Promise<void>;
+  getStatus(secrets: PlatformSecrets): Promise<SubscriptionAccount>;
   isPreferSubscription(): boolean;
   setPreferSubscription(
     enabled: boolean,
@@ -136,10 +142,12 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   readonly sessionName: string;
   readonly copyTarget: string;
   readonly modelFamily: string;
-  readonly coordinator: () => Coordinator & {
+  readonly coordinator: (secrets: PlatformSecrets) => Coordinator & {
     signOut(): Promise<void>;
   };
-  readonly getStatus: () => Promise<SubscriptionSessionStatus>;
+  readonly getStatus: (
+    secrets: PlatformSecrets,
+  ) => Promise<SubscriptionSessionStatus>;
   readonly loginWithDeviceCode: (options: {
     coordinator: Coordinator;
     onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
@@ -181,7 +189,7 @@ function defineSubscriptionProvider<
 
   const signIn = Effect.fn(`subscriptionProviders.${bindings.id}.signIn`)(
     function* (options: SubscriptionSignInOptions) {
-      const coordinator = bindings.coordinator();
+      const coordinator = bindings.coordinator(yield* Secrets);
       const session =
         options.transport === 'device'
           ? yield* deviceCodeLogin(coordinator, options)
@@ -224,9 +232,10 @@ function defineSubscriptionProvider<
     copyTarget: bindings.copyTarget,
     modelFamily: bindings.modelFamily,
     signIn,
-    signOut: () => bindings.coordinator().signOut(),
-    async getStatus() {
-      const status = await bindings.getStatus();
+    signOut: (secrets: PlatformSecrets) =>
+      bindings.coordinator(secrets).signOut(),
+    async getStatus(secrets: PlatformSecrets) {
+      const status = await bindings.getStatus(secrets);
       return { ...status, label: bindings.accountLabel(status) };
     },
     isPreferSubscription: bindings.isPrefer,
@@ -248,8 +257,8 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   sessionName: 'ChatGPT',
   copyTarget: 'ChatGPT',
   modelFamily: 'Codex models',
-  coordinator: () => codexCoordinator(),
-  getStatus: () => getCodexStatus(),
+  coordinator: (secrets) => codexCoordinator(secrets),
+  getStatus: (secrets) => getCodexStatus(secrets),
   loginWithDeviceCode: (options) => codexLoginWithDeviceCode(options),
   loginWithLoopback: (options) => codexLoginWithLoopback(options),
   accountLabel: (account) => codexAccountLabel(account),
@@ -267,8 +276,8 @@ const GROK_PROVIDER = defineSubscriptionProvider({
   sessionName: 'xAI',
   copyTarget: 'Grok / xAI',
   modelFamily: 'xAI models',
-  coordinator: () => xaiCoordinator(),
-  getStatus: () => getXaiStatus(),
+  coordinator: (secrets) => xaiCoordinator(secrets),
+  getStatus: (secrets) => getXaiStatus(secrets),
   loginWithDeviceCode: (options) => xaiLoginWithDeviceCode(options),
   loginWithLoopback: (options) => xaiLoginWithLoopback(options),
   accountLabel: (account) => xaiAccountLabel(account),

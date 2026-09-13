@@ -31,8 +31,8 @@ export function installTestSessionGraphs(): void {
     processStart: 'vitest',
     globalStorage: () => installedHost().roots.globalStorage,
     updateCheckStorage: () => installedHost().roots.globalStorage,
-    secrets: () => installedHost().platform.secrets,
-    appState: () => installedHost().platform.globalState,
+    secrets: () => installedHost().secrets,
+    appState: () => installedHost().roots.globalState,
     setup: fakeSetupPlatform,
   });
 }

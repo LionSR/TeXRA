@@ -19,6 +19,7 @@ import { hostPort } from '@common/hostPort';
 import type { TerminalRunner } from '@hosts/uiHosts';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
+import { Secrets } from '@platform/secrets';
 
 /** Per-command surface. */
 interface SetupCommandAdapter {
@@ -83,9 +84,11 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   'getChatGptSubscriptionStatus',
 )(function* (): Effect.fn.Return<
   { signedIn: boolean; enabled: boolean },
-  unknown
+  unknown,
+  Secrets
 > {
-  const status = yield* hostPort(() => getCodexStatus());
+  const secrets = yield* Secrets;
+  const status = yield* hostPort(() => getCodexStatus(secrets));
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
   const enabled = yield* hostPort(() =>

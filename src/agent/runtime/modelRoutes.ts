@@ -166,6 +166,7 @@ export function routeBearer(credential: RouteCredential): string {
 export async function resolveSubscriptionCredential(
   config: ModelConfig,
   useOpenRouter: boolean,
+  secrets: PlatformSecrets,
   declinedRoutes: readonly DeclinableUsageRoute[] = [],
 ): Promise<{
   readonly credential: SubscriptionRouteCredential;
@@ -179,7 +180,7 @@ export async function resolveSubscriptionCredential(
     if (profile === null) return null;
     let routable: boolean;
     try {
-      routable = await isCodexSessionRoutable();
+      routable = await isCodexSessionRoutable(secrets);
     } catch (error) {
       throw error instanceof CodexAuthError
         ? new AgentError(formatCodexAuthUnavailableMessage(error), {
@@ -193,7 +194,7 @@ export async function resolveSubscriptionCredential(
       );
       return null;
     }
-    const coordinator = codexCoordinator();
+    const coordinator = codexCoordinator(secrets);
     let session: { accessToken: string; accountId: string | null };
     try {
       session = {
@@ -240,7 +241,7 @@ export async function resolveSubscriptionCredential(
     }
     let accessToken: string;
     try {
-      accessToken = await xaiCoordinator().getFreshAccessToken();
+      accessToken = await xaiCoordinator(secrets).getFreshAccessToken();
     } catch (error) {
       throw error instanceof XaiAuthError
         ? new AgentError(formatXaiAuthUnavailableMessage(error), {

@@ -109,23 +109,23 @@ type DesktopGrokHandlers = Pick<
 const SUBSCRIPTION_STATUS_ROWS: Record<
   SubscriptionProviderId,
   {
-    readonly buildStatusMessage: () => Promise<unknown>;
+    readonly buildStatusMessage: (secrets: PlatformSecrets) => Promise<unknown>;
     readonly usageProvider?: SubscriptionUsageProvider;
   }
 > = {
   chatgpt: {
-    buildStatusMessage: async () =>
+    buildStatusMessage: async (secrets) =>
       ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        status: await getChatGptAuthStatus(),
+        status: await getChatGptAuthStatus(secrets),
       }) satisfies UpdateChatGptAuthStatusMessage,
     usageProvider: 'chatgpt',
   },
   grok: {
-    buildStatusMessage: async () =>
+    buildStatusMessage: async (secrets) =>
       ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        status: await getGrokAuthStatus(),
+        status: await getGrokAuthStatus(secrets),
       }) satisfies UpdateGrokAuthStatusMessage,
   },
 };
@@ -411,7 +411,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           toErrorMessage(error),
         ),
       async (provider) => {
-        await provider.signOut();
+        await provider.signOut(this.options.secrets);
         await this.options.notifications.showInfoMessage(
           ACCOUNT_OUTCOME.signedOut(provider.displayName),
         );
@@ -448,7 +448,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     providerId: SubscriptionProviderId,
   ): Promise<void> {
     this.options.renderer.postToRenderer(
-      await SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(),
+      await SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(
+        this.options.secrets,
+      ),
     );
   }
 
