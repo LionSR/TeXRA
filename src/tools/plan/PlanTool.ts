@@ -171,10 +171,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   // the stale one.
   if (goalOf(ports.session, runId)) {
     return yield* Effect.gen(function* () {
-      const active = yield* Effect.try({
-        try: () => retargetGoal(ports.session, runId, objective),
-        catch: (error) => error,
-      });
+      const active = yield* retargetGoal(ports.session, runId, objective);
       yield* setGoalAutoApproval(ports, runId, autoApprovalScope);
       return executed(
         `The user approved a new plan while goal ${active.goalId} ` +
@@ -214,10 +211,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   }
 
   return yield* Effect.gen(function* () {
-    const goal = yield* Effect.try({
-      try: () => startGoal(ports.session, runId, objective),
-      catch: (error) => error,
-    });
+    const goal = yield* startGoal(ports.session, runId, objective);
     yield* setGoalAutoApproval(ports, runId, autoApprovalScope);
     return executed(
       `The user approved this plan and started an autonomous goal ` +
@@ -376,7 +370,7 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
       `Goal already ${goal.status}: pause is a no-op.`,
     );
   }
-  const updated = pauseGoal(ports.session, runId) ?? goal;
+  const updated = (yield* pauseGoal(ports.session, runId)) ?? goal;
   yield* setGoalAutoApproval(ports, runId, false);
   return executed(
     `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
@@ -400,7 +394,7 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   // Completing ends the pursuit — a goal is a live one, not an archived one.
   // The autonomous loop stops because the run's next row states that no goal
   // is in flight for the wait-node continuation check.
-  clearGoal(ports.session, runId);
+  yield* clearGoal(ports.session, runId);
   yield* setGoalAutoApproval(ports, runId, false);
   return executed(
     `Goal ${goal.goalId} marked complete.\n\n` +

@@ -13,6 +13,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { platform, type Platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { Goal, Plan, RequestDecision, RunId } from '@shared/schemas';
@@ -258,7 +259,6 @@ describe('PlanTool — update (plan approval)', () => {
             const outcome = yield* result;
             expect(outcome.status).toBe('executed');
 
-            yield* Effect.promise(() => session.settlePublications());
             const goal = goalOf(session, runId);
             expect(goal).not.toBeNull();
             expect(goal!.status).toBe('active');
@@ -287,7 +287,7 @@ describe('PlanTool — update (plan approval)', () => {
               },
             ]);
           } finally {
-            clearGoal(session, runId);
+            yield* clearGoal(session, runId);
             releaseRunResources(runId, session);
           }
         }),
@@ -336,7 +336,7 @@ describe('PlanTool — update (plan approval)', () => {
               },
             ]);
           } finally {
-            clearGoal(session, runId);
+            yield* clearGoal(session, runId);
             releaseRunResources(runId, session);
           }
         }),
@@ -356,8 +356,9 @@ describe('PlanTool — update (plan approval)', () => {
             runId,
             followUpPlan.objective,
             async (planned) => {
-              existing = startGoal(planned, runId, 'Old objective');
-              await planned.settlePublications();
+              existing = await effectRuntime().runPromise(
+                startGoal(planned, runId, 'Old objective'),
+              );
             },
           );
           try {
@@ -367,7 +368,6 @@ describe('PlanTool — update (plan approval)', () => {
             expect(outcome.status).toBe('executed');
             expect(outcome.summary).toMatch(/retargeted/i);
 
-            yield* Effect.promise(() => session.settlePublications());
             const goal = goalOf(session, runId);
             expect(goal).not.toBeNull();
             expect(goal!.goalId).toBe(existing?.goalId);
@@ -379,7 +379,7 @@ describe('PlanTool — update (plan approval)', () => {
               false,
             );
           } finally {
-            clearGoal(session, runId);
+            yield* clearGoal(session, runId);
             releaseRunResources(runId, session);
           }
         }),
@@ -444,10 +444,9 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     );
   }
 
-  /** Put a goal on the run and let its row fold before the tool reads it. */
+  /** Put a goal on the run: its committed row folds before the tool reads it. */
   const seedGoal = Effect.fn('test.seedGoal')(function* () {
-    startGoal(defaultSession(), RUN_ID, 'Drive the plan to completion.');
-    yield* Effect.promise(() => defaultSession().settlePublications());
+    yield* startGoal(defaultSession(), RUN_ID, 'Drive the plan to completion.');
   });
 
   it.effect('pauses an active goal with a reason', () =>

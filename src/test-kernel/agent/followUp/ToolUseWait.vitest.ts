@@ -929,10 +929,7 @@ describe('an active goal at the wait', () => {
       const logger = new TraceEmitter();
       const info = vi.spyOn(logger, 'info');
       const onFollowUpConsumed = vi.fn();
-      yield* Effect.promise(() => {
-        startGoal(session, runId, 'Finish the autonomous proof audit.');
-        return session.settlePublications();
-      });
+      yield* startGoal(session, runId, 'Finish the autonomous proof audit.');
 
       try {
         const { requests, state } = yield* runUntilSpent({
@@ -958,7 +955,7 @@ describe('an active goal at the wait', () => {
           expect.anything(),
         );
       } finally {
-        clearGoal(session, runId);
+        yield* clearGoal(session, runId);
       }
     }),
   );
@@ -967,10 +964,7 @@ describe('an active goal at the wait', () => {
     Effect.gen(function* () {
       const session = goalSession();
       const runId = startedRun(session);
-      yield* Effect.promise(() => {
-        startGoal(session, runId, 'Keep going autonomously.');
-        return session.settlePublications();
-      });
+      yield* startGoal(session, runId, 'Keep going autonomously.');
       enqueue(session, runId, [{ text: 'user correction', origin: 'user' }]);
 
       try {
@@ -984,7 +978,7 @@ describe('an active goal at the wait', () => {
         // goal's; the continuation only speaks for a queue with nothing in it.
         expect(userTexts(state).at(1)).toBe('user correction');
       } finally {
-        clearGoal(session, runId);
+        yield* clearGoal(session, runId);
       }
     }),
   );
@@ -996,10 +990,7 @@ describe('an active goal at the wait', () => {
         const setApprovalBypassState = vi.fn();
         const session = goalSession({ setApprovalBypassState });
         const runId = startedRun(session);
-        yield* Effect.promise(() => {
-          startGoal(session, runId, 'finish the refactor');
-          return session.settlePublications();
-        });
+        yield* startGoal(session, runId, 'finish the refactor');
 
         try {
           const { result } = yield* runLoop({
@@ -1012,7 +1003,6 @@ describe('an active goal at the wait', () => {
           });
 
           expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
-          yield* Effect.promise(() => session.settlePublications());
           expect(goalOf(session, runId)?.status).toBe('paused');
           for (const kind of ['bash', 'toolEdit', 'superYolo']) {
             expect(setApprovalBypassState).toHaveBeenCalledWith({
@@ -1022,7 +1012,7 @@ describe('an active goal at the wait', () => {
             });
           }
         } finally {
-          clearGoal(session, runId);
+          yield* clearGoal(session, runId);
           releaseRunResources(runId);
         }
       }),
@@ -1039,10 +1029,7 @@ describe('an active goal at the wait', () => {
         const session = goalSession({ setApprovalBypassState });
         const runId = startedRun(session);
         const parentRunId = generateRunId();
-        yield* Effect.promise(() => {
-          startGoal(session, runId, 'finish the autonomous proof');
-          return session.settlePublications();
-        });
+        yield* startGoal(session, runId, 'finish the autonomous proof');
 
         try {
           yield* runLoop({
@@ -1071,11 +1058,10 @@ describe('an active goal at the wait', () => {
 
           expect(result.outcome).toBe(RUN_PHASE.WAITING);
           expect(userTexts(state)).toContain('try the other lemma');
-          yield* Effect.promise(() => session.settlePublications());
           expect(goalOf(session, runId)?.status).toBe('active');
           expect(setApprovalBypassState).not.toHaveBeenCalled();
         } finally {
-          clearGoal(session, runId);
+          yield* clearGoal(session, runId);
           releaseRunResources(runId);
         }
       }),

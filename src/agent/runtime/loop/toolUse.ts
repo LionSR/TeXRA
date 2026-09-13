@@ -677,7 +677,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   const pauseActiveGoal = Effect.fn('toolUse.pauseGoal')(function* () {
     if (goalOf(session, runId)?.status !== 'active') return;
-    pauseGoal(session, runId);
+    yield* pauseGoal(session, runId);
     yield* Effect.tryPromise({
       try: () => setGoalSessionAutoApproval(runId, false, { session }),
       catch: ensureError,

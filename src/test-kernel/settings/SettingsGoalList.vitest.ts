@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { effectRuntime } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { RunId } from '@shared/schemas';
@@ -74,8 +75,9 @@ describe('settings goal list', () => {
   it("posts the goal the run's row states", async () => {
     const session = defaultSession();
     publishTestRunStart(session, RUN_ID);
-    const goal = startGoal(session, RUN_ID, 'Finish the settings fix.');
-    await session.settlePublications();
+    const goal = await effectRuntime().runPromise(
+      startGoal(session, RUN_ID, 'Finish the settings fix.'),
+    );
     const webview = createWebview();
 
     await createHandler().sendGoalList(webview);

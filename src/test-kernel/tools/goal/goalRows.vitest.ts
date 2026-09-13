@@ -41,6 +41,11 @@ function paperRoots(name: string) {
   });
 }
 
+/** Run a goal mutation to the point its row is committed. */
+function mutate<A>(mutation: Effect.Effect<A, Error>): Promise<A> {
+  return effectRuntime().runPromise(mutation);
+}
+
 /** Records every goal-state change delivered to one session. */
 function collectGoalChanges(session: SessionHandle): {
   seen: unknown[];
@@ -74,17 +79,15 @@ describe('the goal row is the goal', () => {
     publishTestRunStart(session, RUN_A);
     publishTestRunStart(session, RUN_B);
     try {
-      startGoal(session, RUN_A, 'objective a');
-      startGoal(session, RUN_B, 'objective b');
-      await session.settlePublications();
+      await mutate(startGoal(session, RUN_A, 'objective a'));
+      await mutate(startGoal(session, RUN_B, 'objective b'));
       expect(
         goalList(session)
           .map((goal) => goal.runId)
           .toSorted(),
       ).toEqual([RUN_A, RUN_B].toSorted());
 
-      clearGoal(session, RUN_A);
-      await session.settlePublications();
+      await mutate(clearGoal(session, RUN_A));
 
       expect(goalOf(session, RUN_A)).toBeNull();
       expect(goalList(session).map((goal) => goal.runId)).toEqual([RUN_B]);
@@ -97,13 +100,10 @@ describe('the goal row is the goal', () => {
     const session = createTestSession({ roots: paperRoots('restart') });
     publishTestRunStart(session, RUN_A);
     try {
-      const first = startGoal(session, RUN_A, 'objective one');
-      await session.settlePublications();
-      clearGoal(session, RUN_A);
-      await session.settlePublications();
+      const first = await mutate(startGoal(session, RUN_A, 'objective one'));
+      await mutate(clearGoal(session, RUN_A));
 
-      const next = startGoal(session, RUN_A, 'objective two');
-      await session.settlePublications();
+      const next = await mutate(startGoal(session, RUN_A, 'objective two'));
       expect(next.goalId).not.toBe(first.goalId);
       expect(goalOf(session, RUN_A)).toMatchObject({
         objective: 'objective two',
@@ -118,15 +118,14 @@ describe('the goal row is the goal', () => {
     const session = createTestSession({ roots: paperRoots('lifecycle') });
     publishTestRunStart(session, RUN_A);
     try {
-      const started = startGoal(session, RUN_A, 'prove the estimate');
-      await session.settlePublications();
+      const started = await mutate(
+        startGoal(session, RUN_A, 'prove the estimate'),
+      );
 
-      pauseGoal(session, RUN_A);
-      await session.settlePublications();
+      await mutate(pauseGoal(session, RUN_A));
       expect(goalOf(session, RUN_A)?.status).toBe('paused');
 
-      retargetGoal(session, RUN_A, 'prove the sharp estimate');
-      await session.settlePublications();
+      await mutate(retargetGoal(session, RUN_A, 'prove the sharp estimate'));
       expect(goalOf(session, RUN_A)).toEqual({
         ...started,
         objective: 'prove the sharp estimate',
@@ -141,11 +140,10 @@ describe('the goal row is the goal', () => {
     const session = createTestSession({ roots: paperRoots('in-flight') });
     publishTestRunStart(session, RUN_A);
     try {
-      startGoal(session, RUN_A, 'objective one');
-      await session.settlePublications();
-      expect(() => startGoal(session, RUN_A, 'objective two')).toThrow(
-        'A goal is already in progress for this run',
-      );
+      await mutate(startGoal(session, RUN_A, 'objective one'));
+      await expect(
+        mutate(startGoal(session, RUN_A, 'objective two')),
+      ).rejects.toThrow('A goal is already in progress for this run');
     } finally {
       session.dispose();
     }
@@ -155,8 +153,7 @@ describe('the goal row is the goal', () => {
     const session = createTestSession({ roots: paperRoots('removal') });
     publishTestRunStart(session, RUN_A);
     try {
-      startGoal(session, RUN_A, 'objective a');
-      await session.settlePublications();
+      await mutate(startGoal(session, RUN_A, 'objective a'));
 
       session.publish([
         {
@@ -229,12 +226,13 @@ describe('goalStateChanges', () => {
     const fallback = collectGoalChanges(defaultSession());
 
     try {
-      startGoal(runSession, SUBSCRIPTION_RUN, 'prove the estimate');
-      await runSession.settlePublications();
-      pauseGoal(runSession, SUBSCRIPTION_RUN);
-      await runSession.settlePublications();
-      retargetGoal(runSession, SUBSCRIPTION_RUN, 'prove the sharp estimate');
-      await runSession.settlePublications();
+      await mutate(
+        startGoal(runSession, SUBSCRIPTION_RUN, 'prove the estimate'),
+      );
+      await mutate(pauseGoal(runSession, SUBSCRIPTION_RUN));
+      await mutate(
+        retargetGoal(runSession, SUBSCRIPTION_RUN, 'prove the sharp estimate'),
+      );
 
       expect(run.seen).toEqual([
         { runId: SUBSCRIPTION_RUN },

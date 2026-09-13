@@ -7,7 +7,7 @@
  * aggregate. There is no goal store — a second persisted copy would be a
  * second owner of the same fact.
  */
-import { Stream, SubscriptionRef } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -30,8 +30,13 @@ export interface GoalStateChange {
 /** What a goal reader takes: the fold's per-run and whole-session levels. */
 export type GoalReader = Pick<SessionHandle, 'runView' | 'view'>;
 
-/** What a goal mutation takes: the reader plus the session's one publisher. */
-export type GoalWriter = GoalReader & Pick<SessionHandle, 'publish'>;
+/**
+ * What a goal mutation takes: the reader plus the awaited commit. A mutation
+ * reports the goal it wrote only once that row is in the log, so a refused or
+ * failed append reaches the caller as the mutation's error instead of a
+ * success over a row that never landed.
+ */
+type GoalWriter = GoalReader & Pick<SessionHandle, 'commit'>;
 
 function goalOfRunView(runId: RunId, run: RunView | undefined): Goal | null {
   if (run?.category !== AgentCategory.ToolUse || !run.goal.active) return null;
@@ -39,33 +44,41 @@ function goalOfRunView(runId: RunId, run: RunView | undefined): Goal | null {
   return { runId, ...goal };
 }
 
-function publishGoalState(
+function commitGoalState(
   session: GoalWriter,
   runId: RunId,
   state: GoalState,
-): void {
-  session.publish([
-    {
-      type: 'goalStateChanged',
-      aggregateId: qualifyAggregateId('run', runId),
-      state,
-    },
-  ]);
+): Effect.Effect<void, Error> {
+  return session
+    .commit([
+      {
+        type: 'goalStateChanged',
+        aggregateId: qualifyAggregateId('run', runId),
+        state,
+      },
+    ])
+    .pipe(Effect.asVoid);
 }
 
 /** Commit the run's goal as its next row and hand it back to the caller. */
-function publishGoal(session: GoalWriter, goal: Goal): Goal {
+function commitGoal(
+  session: GoalWriter,
+  goal: Goal,
+): Effect.Effect<Goal, Error> {
   const { runId, ...state } = goal;
-  publishGoalState(session, runId, { active: true, ...state });
-  return goal;
+  return commitGoalState(session, runId, { active: true, ...state }).pipe(
+    Effect.as(goal),
+  );
 }
 
-function requireNonEmpty(value: string, label: string): string {
+function requireNonEmpty(
+  value: string,
+  label: string,
+): Effect.Effect<string, Error> {
   const trimmed = value.trim();
-  if (!trimmed) {
-    throw new Error(`${label} must not be empty or whitespace-only.`);
-  }
-  return trimmed;
+  return trimmed
+    ? Effect.succeed(trimmed)
+    : Effect.fail(new Error(`${label} must not be empty or whitespace-only.`));
 }
 
 /** The run's in-flight goal, or null when none is. */
@@ -84,29 +97,33 @@ export function goalList(session: GoalReader): Goal[] {
 }
 
 /**
- * Start a pursuit on the run. Throws when one is already in flight (active or
- * paused): completing one and starting another is normal, replacing a live one
- * is `retargetGoal`.
+ * Start a pursuit on the run, and succeed once its row is committed. Fails
+ * when one is already in flight (active or paused): completing one and
+ * starting another is normal, replacing a live one is `retargetGoal`.
  */
 export function startGoal(
   session: GoalWriter,
   runId: RunId,
   objective: string,
-): Goal {
-  const trimmed = requireNonEmpty(objective, 'objective');
-  const existing = goalOf(session, runId);
-  if (existing) {
-    throw new Error(
-      `A goal is already in progress for this run (status: ${existing.status}). ` +
-        `Abandon or complete it before starting a new one.`,
-    );
-  }
-  return publishGoal(session, {
-    goalId: `goal_${hexId12()}`,
-    runId,
-    objective: trimmed,
-    status: 'active',
-    startedAt: new Date().toISOString(),
+): Effect.Effect<Goal, Error> {
+  return Effect.gen(function* () {
+    const trimmed = yield* requireNonEmpty(objective, 'objective');
+    const existing = goalOf(session, runId);
+    if (existing) {
+      return yield* Effect.fail(
+        new Error(
+          `A goal is already in progress for this run (status: ${existing.status}). ` +
+            `Abandon or complete it before starting a new one.`,
+        ),
+      );
+    }
+    return yield* commitGoal(session, {
+      goalId: `goal_${hexId12()}`,
+      runId,
+      objective: trimmed,
+      status: 'active',
+      startedAt: new Date().toISOString(),
+    });
   });
 }
 
@@ -114,41 +131,52 @@ export function startGoal(
  * Point the in-flight pursuit at a new objective and resume it. Used by the
  * Run as Goal path when a goal is already in flight — re-targeting an active
  * loop is preferable to silently leaving it pointed at a stale objective.
- * Throws when no goal is in flight.
+ * Fails when no goal is in flight.
  */
 export function retargetGoal(
   session: GoalWriter,
   runId: RunId,
   objective: string,
-): Goal {
-  const trimmed = requireNonEmpty(objective, 'objective');
-  const existing = goalOf(session, runId);
-  if (!existing) throw new Error('No goal found for this run.');
-  return publishGoal(session, {
-    ...existing,
-    objective: trimmed,
-    status: 'active',
+): Effect.Effect<Goal, Error> {
+  return Effect.gen(function* () {
+    const trimmed = yield* requireNonEmpty(objective, 'objective');
+    const existing = goalOf(session, runId);
+    if (!existing) {
+      return yield* Effect.fail(new Error('No goal found for this run.'));
+    }
+    return yield* commitGoal(session, {
+      ...existing,
+      objective: trimmed,
+      status: 'active',
+    });
   });
 }
 
 /**
- * Park the pursuit until the user comes back. Returns the goal as it now
+ * Park the pursuit until the user comes back. Succeeds with the goal as it now
  * stands, or null when the run has none; pausing a paused goal is a no-op.
  */
-export function pauseGoal(session: GoalWriter, runId: RunId): Goal | null {
+export function pauseGoal(
+  session: GoalWriter,
+  runId: RunId,
+): Effect.Effect<Goal | null, Error> {
   const existing = goalOf(session, runId);
-  if (!existing || existing.status === 'paused') return existing;
-  return publishGoal(session, { ...existing, status: 'paused' });
+  if (!existing || existing.status === 'paused')
+    return Effect.succeed(existing);
+  return commitGoal(session, { ...existing, status: 'paused' });
 }
 
 /**
  * End the pursuit (complete or abandon): a goal is a live one, not an
  * archived one, so the run's next row states that none is in flight. A run
- * with no goal publishes nothing.
+ * with no goal commits nothing.
  */
-export function clearGoal(session: GoalWriter, runId: RunId): void {
-  if (!goalOf(session, runId)) return;
-  publishGoalState(session, runId, { active: false });
+export function clearGoal(
+  session: GoalWriter,
+  runId: RunId,
+): Effect.Effect<void, Error> {
+  if (!goalOf(session, runId)) return Effect.void;
+  return commitGoalState(session, runId, { active: false });
 }
 
 /**

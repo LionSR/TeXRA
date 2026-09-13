@@ -1253,8 +1253,9 @@ async function appendHarnessPlanDecision(
   result: RequestDecision,
 ): Promise<void> {
   if (result.action === 'approve_and_goal') {
-    startGoal(defaultSession(), HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE);
-    await defaultSession().settlePublications();
+    await effectRuntime().runPromise(
+      startGoal(defaultSession(), HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE),
+    );
     seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
@@ -1781,7 +1782,7 @@ function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   cancelHarnessRequests('Session interrupted.');
   harnessFollowUpQueue.drainItems();
-  clearGoal(defaultSession(), HARNESS_RUN_ID);
+  void effectRuntime().runPromise(clearGoal(defaultSession(), HARNESS_RUN_ID));
   for (const runId of [...currentView().runs.keys()]) {
     removeRun(runId);
   }

@@ -58,8 +58,11 @@ describe('committed run removal', () => {
           });
           session.runs.track(handle);
           yield* Effect.promise(() => session.settlePublications());
-          startGoal(session, parent, 'Determine the boundary conditions.');
-          yield* Effect.promise(() => session.settlePublications());
+          yield* startGoal(
+            session,
+            parent,
+            'Determine the boundary conditions.',
+          );
           session.publish([
             {
               type: 'request.opened',

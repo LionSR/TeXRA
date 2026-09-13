@@ -3,6 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -449,8 +450,9 @@ describe('desktop settings IPC', () => {
       publishTestRunStart(session, runId);
 
       // A run mutates goals on its paper's session, as the desktop does.
-      startGoal(session, runId, 'Finish the proof');
-      await session.settlePublications();
+      await effectRuntime().runPromise(
+        startGoal(session, runId, 'Finish the proof'),
+      );
       await flushAsyncWork();
 
       expect(posted.at(-1)).toMatchObject({
