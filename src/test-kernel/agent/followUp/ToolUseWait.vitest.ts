@@ -43,6 +43,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { Model, TurnResult } from '@llm/turn';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -287,7 +288,12 @@ function agentRunTestLayer(init: LoopInit) {
         inScope: <A>(operation: () => A): A =>
           withRunContext(createRunContext({ runScope }), operation),
         usageMonitor: new UsageMonitor(
-          { logger, runId: init.runId, runStageId: undefined },
+          {
+            logger,
+            runId: init.runId,
+            runStageId: undefined,
+            config: workspaceRoots().config,
+          },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
         callbacks: {

@@ -17,7 +17,6 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
@@ -385,7 +384,7 @@ export class BashTool extends defineTool({
 
       const cwd =
         parseWorkingDirectory(toolCall.workingDirectory) ??
-        toolCall.inScope(() => workspaceRoots().workspace);
+        toolCall.roots.workspace;
 
       const approval = yield* requestBashApproval({
         command: input.command,

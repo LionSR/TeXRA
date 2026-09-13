@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import type { RunId } from '@shared/schemas';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
 
@@ -83,7 +83,7 @@ describe('executeSubagent child run launch', () => {
   } as never;
 
   const parent: DelegationParent = {
-    config: new FakeConfigProvider(),
+    roots: createFakeWorkspaceRoots(),
     model: 'gpt5',
     tracker: new FileInteractionState(),
     run: {

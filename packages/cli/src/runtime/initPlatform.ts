@@ -10,7 +10,10 @@ import { installTexraAccountProbes } from '@controllers/modelAccess/installTexra
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { consoleLogSink, setLogSink } from '@logger/logSink';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
-import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
+import {
+  initProcessWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
 import type {
   AgentResumePort,
   LifecycleHost,
@@ -88,6 +91,14 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> & {
   /** The stores this root opened, handed over rather than read back. */
   readonly globalState: StateStore;
   readonly secrets: PlatformSecrets;
+  /**
+   * The process roots this init installed: one process, one paper (the
+   * `--cwd` workspace). Undefined only when another root installed the
+   * platform before this init ran (a test harness's fake host), so the
+   * caller that needs them reports their absence rather than reading the
+   * ambient roots.
+   */
+  readonly roots?: WorkspaceRoots;
 };
 
 function logAt(
@@ -268,6 +279,10 @@ export async function initInteractiveCliPlatform(
   return initCliPlatform(context);
 }
 
+/** The process roots the first init installed; later inits return them
+ *  beside the already-installed platform. */
+let installedRoots: WorkspaceRoots | undefined;
+
 export async function initCliPlatform(
   context: CliPlatformInitOptions & Pick<CliContext, 'quietLogs'>,
 ): Promise<CliPlatformServices> {
@@ -357,6 +372,7 @@ export async function initCliPlatform(
       globalState: stateStores.globalState,
     });
     initProcessWorkspaceRoots(roots);
+    installedRoots = roots;
     initProcessSettingHost('cli');
     // TeXRA's account plane (ChatGPT / Grok sign-in). Without
     // this the model layer is bring-your-own-key. See installTexraAccountProbes.
@@ -423,6 +439,7 @@ export async function initCliPlatform(
     globalState: cliGlobalState(),
     secrets: getCliSecrets(context.storageRoot),
     lifecycle: services.lifecycle,
+    roots: installedRoots,
   };
 
   if (!supabaseAuthInitialized) {

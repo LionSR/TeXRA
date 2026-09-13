@@ -18,7 +18,7 @@ import {
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
 import { errorResult } from '@tools/core/result';
 import { generateShortId } from '@utils/core';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 import { previewLabel } from '@utils/text/stringUtils';
 
 const DEFAULT_BASH_REJECTION_GUIDANCE =
@@ -70,8 +70,9 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
 ): Effect.fn.Return<BashDecision, Error, ToolCall> {
   const call = yield* ToolCall;
-  const approvalsEnabled = call.inScope(() =>
-    getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY),
+  const approvalsEnabled = readConfig<boolean>(
+    call.roots.config,
+    BASH_APPROVAL_CONFIG_KEY,
   );
   const run = call.run;
   if (!run) {

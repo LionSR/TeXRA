@@ -1,3 +1,4 @@
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { goalElapsedMs, type RunId } from '@shared/schemas';
 import { goalOf, isGoalEnabled, type GoalReader } from '@tools/goal';
 import { renderPrompt } from '@utils/prompt';
@@ -6,11 +7,11 @@ import { formatCompactDuration } from '@utils/text/stringUtils';
 import { GOAL_CONTINUATION_TEMPLATE } from '../runtime/bundledPrompts';
 
 /**
- * Build the pre-wait Goal continuation for a stream.
+ * Build the pre-wait Goal continuation for a run in its session.
  *
  * Returns a rendered continuation prompt when:
- *   - the feature flag is on,
- *   - the stream has a Goal with status `active`.
+ *   - the session's workspace has the feature flag on,
+ *   - the run has a Goal with status `active`.
  *
  * Queue and subagent checks belong to the wait-node caller because it owns the
  * blocking wait. This helper is pure: no side effects, no counter, no audit
@@ -22,15 +23,13 @@ import { GOAL_CONTINUATION_TEMPLATE } from '../runtime/bundledPrompts';
  * after it.
  */
 export async function maybeBuildGoalContinuation(
-  session: GoalReader,
+  session: GoalReader & Pick<SessionHandle, 'roots'>,
   runId: RunId,
 ): Promise<string | null> {
-  // Read the fold first: it never throws, so the flag check below (which
-  // needs `platform()`) is only reached when the run actually has a goal.
   const goal = goalOf(session, runId);
   if (goal?.status !== 'active') return null;
 
-  if (!isGoalEnabled()) return null;
+  if (!isGoalEnabled(session.roots.config)) return null;
 
   return renderPrompt(GOAL_CONTINUATION_TEMPLATE, {
     objective: goal.objective,

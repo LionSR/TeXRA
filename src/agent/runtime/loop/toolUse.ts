@@ -258,7 +258,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const current = yield* SynchronizedRef.get(run.model);
       if (current.modelId === model) return state;
       const nextConfig = yield* Effect.tryPromise({
-        try: () => run.inScope(() => resolveRuntimeModelConfig(model)),
+        try: () => resolveRuntimeModelConfig(model),
         catch: ensureError,
       });
       if (!nextConfig) {
@@ -325,13 +325,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     };
     const prompts = yield* Effect.tryPromise({
       try: () =>
-        run.inScope(() =>
-          buildInitialToolUsePrompts(run.prompt, promptVars, logger, {
-            resolvedToolNames,
-            hasDelegationTools: hasDelegationTool(resolvedToolNames),
-            isChild,
-          }),
-        ),
+        buildInitialToolUsePrompts(run.prompt, promptVars, logger, {
+          workspace: session.roots.workspace,
+          resolvedToolNames,
+          hasDelegationTools: hasDelegationTool(resolvedToolNames),
+          isChild,
+        }),
       catch: ensureError,
     });
     systemPrompt = prompts.systemPrompt
@@ -652,11 +651,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         const served = yield* SynchronizedRef.get(run.model);
         yield* Effect.tryPromise({
           try: () =>
-            run.inScope(() =>
-              run.usageMonitor.recordUsage(
-                usageSnapshot(state, outcome.usage),
-                served,
-              ),
+            run.usageMonitor.recordUsage(
+              usageSnapshot(state, outcome.usage),
+              served,
             ),
           catch: ensureError,
         });
@@ -678,10 +675,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const pauseActiveGoal = Effect.fn('toolUse.pauseGoal')(function* () {
     if (goalOf(session, runId)?.status !== 'active') return;
     yield* pauseGoal(session, runId);
-    yield* Effect.tryPromise({
-      try: () => setGoalSessionAutoApproval(runId, false, { session }),
-      catch: ensureError,
-    });
+    setGoalSessionAutoApproval(session, runId, false);
   });
 
   // ------------------------------------------------------------- the loop
@@ -757,8 +751,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             if (!afterError && !followUps.hasQueued()) {
               const continuation = yield* Effect.tryPromise({
-                try: () =>
-                  run.inScope(() => maybeBuildGoalContinuation(session, runId)),
+                try: () => maybeBuildGoalContinuation(session, runId),
                 catch: ensureError,
               });
               if (continuation && !followUps.hasQueued()) {

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -51,7 +52,7 @@ function createMonitorWithEvents() {
   const runId = 'usage-last-totals' as RunId;
   const recorded = recordTraceEvents(logger);
   const monitor = new UsageMonitor(
-    { logger, runId, runStageId: undefined },
+    { logger, runId, runStageId: undefined, config: workspaceRoots().config },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );
   return {
@@ -193,6 +194,7 @@ describe('UsageMonitor', () => {
       // billed against it and not against the launch model.
       expect(log).toHaveBeenCalledWith(
         expect.objectContaining({ model: 'Switched Model' }),
+        expect.anything(),
       );
     });
   });
@@ -217,6 +219,7 @@ describe('UsageMonitor', () => {
 
       expect(log).toHaveBeenCalledWith(
         expect.objectContaining({ provider: 'openrouter-chat' }),
+        expect.anything(),
       );
       expect(warn).not.toHaveBeenCalled();
     });
