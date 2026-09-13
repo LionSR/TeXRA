@@ -353,8 +353,16 @@ npm run check:dead-code-ratchet          # exports need consumers in the same PR
 
 ## 9. Open questions requiring an owner ruling
 
-**Q1 — RULED 2026-09-11 (owner): do not adopt `@effect/platform-node`'s `FileSystem`/`Path`
-for now.** The question was whether to adopt Effect's own (already a root production
+**Q1 — SUPERSEDED 2026-09-13.** The owner ruled for #12073 R-1 candidate B: adopt Effect's own
+`FileSystem`/`Path` "as much as possible". `Platform` is shrinking onto the Effect-native and TeXRA
+Context services (#12364, #12372, #12373, #12374 landed; slices 4b onward convert the filesystem
+consumers, the fs port last), so steps 9–10 below are **redirected onto that program**, not deferred.
+The 2026-09-11 evidence recorded here still binds the mechanics (keep `lstat` type bits and typed
+directory walks through thin TeXRA helpers over the service). The rulings ledger
+(`../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md`) is the one authority.
+
+~~**Q1 — RULED 2026-09-11 (owner): do not adopt `@effect/platform-node`'s `FileSystem`/`Path`
+for now.**~~ The question was whether to adopt Effect's own (already a root production
 dependency, already used at `src/platform/defaults/jsonStore.ts:5`) or to Effect-type
 TeXRA's `BaseFS`/`RelativeFS`/`WorkspaceFS`. This document recommended adopting Effect's;
 the owner ruled against it, provisionally ("so far" — revisitable, not settled forever).
