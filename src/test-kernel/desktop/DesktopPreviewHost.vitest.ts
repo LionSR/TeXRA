@@ -1,10 +1,10 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { effectRuntime } from '@platform/processRuntime';
+import { effectRuntime, type ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -12,6 +12,7 @@ import {
   createFakeWorkspaceRoots,
   FakeStateStore,
 } from '@test/support/FakePlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   makeTempDir as makeSharedTempDir,
   useTempDirs,
@@ -23,7 +24,7 @@ import { loadSourceModule } from './loadSourceModule.ts';
 
 const mocks = createModuleMocks();
 
-type FakeCompile = (location: { absolutePath: string }) => Promise<{
+type FakeCompile = (location: { absolutePath: string }) => Effect.Effect<{
   ok: boolean;
   pdfPath?: string;
   logTail?: string;
@@ -34,11 +35,21 @@ type FakeCompile = (location: { absolutePath: string }) => Promise<{
  * source, the way the real `compileLatex2Pdf` does.
  */
 function fakeCompiler() {
-  return vi.fn(async (location: { absolutePath: string }) => ({
-    ok: true,
-    pdfPath: location.absolutePath.replace(/\.tex$/, '.pdf'),
-  }));
+  return vi.fn((location: { absolutePath: string }) =>
+    Effect.succeed({
+      ok: true,
+      pdfPath: location.absolutePath.replace(/\.tex$/, '.pdf'),
+    }),
+  );
 }
+
+/** The runtime a preview compiles on: the process filesystem services. */
+const runtime = ManagedRuntime.make(
+  nodePlatformLayer,
+) as unknown as ProcessRuntime;
+
+/** The paper a preview belongs to. */
+const roots = createFakeWorkspaceRoots();
 
 async function loadDesktopPreviewHost(
   compileLatex2Pdf: FakeCompile = fakeCompiler(),
@@ -130,7 +141,10 @@ describe('desktop preview host', () => {
       );
       const shell = makeShell();
       shell.openExternal.mockRejectedValue(new Error('Browser unavailable'));
-      const preview = createDesktopPreviewHost({ shell });
+      const preview = createDesktopPreviewHost({
+        shell,
+        runtime: effectRuntime(),
+      });
       const draftRequests = new HostDraftRequests();
       vi.spyOn(draftRequests, 'handle').mockReturnValue(
         Effect.fail(new Error('Text service unavailable')),
@@ -206,7 +220,7 @@ describe('desktop preview host', () => {
     const showErrorMessage = vi.fn();
     const shell = makeShell();
 
-    const host = createDesktopPreviewHost({ shell, showErrorMessage });
+    const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 
     await expect(host.openPath(missingPath)).rejects.toThrow(
       `File not found: ${missingPath}`,
@@ -232,7 +246,7 @@ describe('desktop preview host', () => {
     const showErrorMessage = vi.fn();
     const shell = makeShell();
 
-    const host = createDesktopPreviewHost({ shell, showErrorMessage });
+    const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 
     await expect(host.openPath(filePath)).rejects.toThrow(
       `Cannot access file ${filePath}: permission denied`,
@@ -251,7 +265,7 @@ describe('desktop preview host', () => {
     const showErrorMessage = vi.fn();
     const shell = makeShell('No associated application');
 
-    const host = createDesktopPreviewHost({ shell, showErrorMessage });
+    const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 
     await expect(host.openPath(filePath)).rejects.toThrow(
       `Failed to open file ${filePath}: No associated application`,
@@ -269,11 +283,12 @@ describe('desktop preview host', () => {
     const { dir, texPath, pdfPath } = await makeTexFixture('preview');
     const shell = makeShell();
 
-    const host = createDesktopPreviewHost({ shell });
+    const host = createDesktopPreviewHost({ shell, runtime });
 
-    await host.openBuildDisplay(createExternalLocation(texPath));
+    await host.openBuildDisplayIn(roots)(createExternalLocation(texPath));
     expect(compileLatex2Pdf).toHaveBeenCalledWith(
       expect.objectContaining({ absolutePath: texPath }),
+      roots.config,
       { outputDirectory: dir },
     );
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
@@ -292,9 +307,9 @@ describe('desktop preview host', () => {
     await writeFile(pdfPath, 'pdf');
     const shell = makeShell();
 
-    const host = createDesktopPreviewHost({ shell });
+    const host = createDesktopPreviewHost({ shell, runtime });
 
-    await host.openBuildDisplay(createExternalLocation(pdfPath));
+    await host.openBuildDisplayIn(roots)(createExternalLocation(pdfPath));
     expect(compileLatex2Pdf).not.toHaveBeenCalled();
     expect(checkToolInstalled).not.toHaveBeenCalled();
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
@@ -312,11 +327,11 @@ describe('desktop preview host', () => {
     const showErrorMessage = vi.fn();
     const shell = makeShell();
 
-    const host = createDesktopPreviewHost({ shell, showErrorMessage });
+    const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 
     const message = `No LaTeX compiler found for ${texPath}. Install latexmk or pdflatex to compile and preview this file.`;
     await expect(
-      host.openBuildDisplay(createExternalLocation(texPath)),
+      host.openBuildDisplayIn(roots)(createExternalLocation(texPath)),
     ).rejects.toThrow(message);
     expect(showErrorMessage).toHaveBeenCalledWith(message);
     expect(compileLatex2Pdf).not.toHaveBeenCalled();
@@ -325,7 +340,9 @@ describe('desktop preview host', () => {
 
   it('reports LaTeX build failures without opening stale PDFs', async () => {
     const logTail = 'simulated compile log tail';
-    const compileLatex2Pdf = vi.fn(async () => ({ ok: false, logTail }));
+    const compileLatex2Pdf = vi.fn(() =>
+      Effect.succeed({ ok: false, logTail }),
+    );
     const { createDesktopPreviewHost } =
       await loadDesktopPreviewHost(compileLatex2Pdf);
     const { texPath } = await makeTexFixture('preview', { withPdf: false });
@@ -339,11 +356,11 @@ describe('desktop preview host', () => {
       .spyOn(console, 'error')
       .mockImplementation(() => {});
 
-    const host = createDesktopPreviewHost({ shell, showErrorMessage });
+    const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 
     const message = `LaTeX build failed for ${texPath}. See the LaTeX log next to the source for details.`;
     await expect(
-      host.openBuildDisplay(createExternalLocation(texPath)),
+      host.openBuildDisplayIn(roots)(createExternalLocation(texPath)),
     ).rejects.toThrow(message);
     expect(showErrorMessage).toHaveBeenCalledWith(message);
     expect(showErrorMessage).not.toHaveBeenCalledWith(
@@ -362,7 +379,7 @@ describe('desktop preview host', () => {
     shell.openExternal.mockRejectedValueOnce(browserError);
     const showErrorMessage = vi.fn();
 
-    const host = createDesktopPreviewHost({ shell, showErrorMessage });
+    const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 
     await expect(
       host.openExternal('https://auth.openai.com/authorize', {
@@ -378,9 +395,9 @@ describe('desktop preview host', () => {
     const shell = makeShell();
     const postToRenderer = vi.fn((_message: unknown) => true);
 
-    const host = createDesktopPreviewHost({ shell, postToRenderer });
+    const host = createDesktopPreviewHost({ shell, postToRenderer, runtime });
 
-    await host.openBuildDisplay(createExternalLocation(texPath));
+    await host.openBuildDisplayIn(roots)(createExternalLocation(texPath));
     expect(postToRenderer).toHaveBeenCalledTimes(1);
     expect(postToRenderer).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -398,9 +415,9 @@ describe('desktop preview host', () => {
     const shell = makeShell();
     const postToRenderer = vi.fn((_message: unknown) => false);
 
-    const host = createDesktopPreviewHost({ shell, postToRenderer });
+    const host = createDesktopPreviewHost({ shell, postToRenderer, runtime });
 
-    await host.openBuildDisplay(createExternalLocation(texPath));
+    await host.openBuildDisplayIn(roots)(createExternalLocation(texPath));
     expect(postToRenderer).toHaveBeenCalledTimes(1);
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
   });
@@ -415,9 +432,9 @@ describe('desktop preview host', () => {
     // Silence the expected console.error so the test output is clean.
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const host = createDesktopPreviewHost({ shell, postToRenderer });
+    const host = createDesktopPreviewHost({ shell, postToRenderer, runtime });
 
-    await host.openBuildDisplay(createExternalLocation(texPath));
+    await host.openBuildDisplayIn(roots)(createExternalLocation(texPath));
     expect(postToRenderer).toHaveBeenCalledTimes(1);
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
   });

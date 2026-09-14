@@ -70,6 +70,7 @@ import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { logUserMessage, type StageHandle } from '@agent/trace';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
+import type { WorkspaceFs } from '@platform/rootedFs';
 import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
@@ -175,7 +176,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 ): Effect.fn.Return<
   ReflectionResult,
   Error,
-  AgentRun | RunLedger | ModelInvoker | FileSystem.FileSystem
+  AgentRun | RunLedger | ModelInvoker | FileSystem.FileSystem | WorkspaceFs
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -208,7 +209,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     logger,
     fileService,
     outputState,
-    run.inScope,
+    roots.config,
   );
   const diffManager = new LatexDiffManager(
     setting.isRewrite,
@@ -217,7 +218,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     runId,
     fileService,
     roots,
-    run.inScope,
   );
   const promptBuilder = new PromptBuilder(
     prompt,
@@ -225,7 +225,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     roots.workspace,
     logger,
   );
-  const latexMediaManager = new LatexMediaManager(logger, fileService);
+  const latexMediaManager = new LatexMediaManager(
+    logger,
+    roots.config,
+    fileService,
+  );
   const totalRounds = Math.max(
     setting.rounds ?? 2,
     userRequestTemplateCount(prompt.userRequest),
@@ -432,7 +436,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** The round prompt, its media and TeX count, committed with `round.begin`. */
   const prepareRound = Effect.fn('reflection.prepareRound')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem> {
+  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem | WorkspaceFs> {
     const round = flow.currentRound;
     const bound = yield* SynchronizedRef.get(run.model);
     contextWindowRecoveryAttempted = false;
@@ -800,7 +804,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     round: number,
     outputLocation: AgentFileLocation,
     endTurn: boolean,
-  ): Effect.fn.Return<OutputExecResult, Error, FileSystem.FileSystem> {
+  ): Effect.fn.Return<
+    OutputExecResult,
+    Error,
+    FileSystem.FileSystem | WorkspaceFs
+  > {
     const diffBaseFiles = yield* resolveBaseFilesForDiff(
       baseFiles,
       runId,
@@ -833,7 +841,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           const check = yield* runCompileCheck(
             {
               roots,
-              inScope: run.inScope,
               fileService,
               outputState,
               logger,
@@ -991,7 +998,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
    */
   const produceOutput = Effect.fn('reflection.produceOutput')(function* (
     state: RunState,
-  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem> {
+  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem | WorkspaceFs> {
     const round = flow.currentRound;
     const location = flow.outputLocation;
     if (location === null) {
@@ -1016,7 +1023,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** One round inside its trace stage: prompt, response cycles, output. */
   const runRound = Effect.fn('reflection.round')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RoundExit, Error, FileSystem.FileSystem> {
+  ): Effect.fn.Return<RoundExit, Error, FileSystem.FileSystem | WorkspaceFs> {
     const round = flow.currentRound;
     // The stage closes with the round's own verdict; an exit that never set
     // one is a stop (interrupt) or a defect.

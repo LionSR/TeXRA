@@ -5,17 +5,22 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { createLog } from '@logger/logUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs } from '@platform/rootedFs';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'FigCommands';
 const log = createLog(CHANNEL);
 
-export async function handleExtractTikzFigures(): Promise<void> {
+export async function handleExtractTikzFigures(
+  runtime: ProcessRuntime,
+): Promise<void> {
   await runGuardedLatexCommand(
     {
       channel: CHANNEL,
@@ -25,8 +30,8 @@ export async function handleExtractTikzFigures(): Promise<void> {
     async ({ relativePath: filePath }) => {
       log.debug(`Processing LaTeX file for TikZ figures: ${filePath}`);
 
-      const labeledTikzPictures = await TikzPictureManager.extract(
-        pathToLocation(filePath),
+      const labeledTikzPictures = await runtime.runPromise(
+        TikzPictureManager.extract(pathToLocation(filePath)),
       );
 
       if (labeledTikzPictures.length > 0) {
@@ -57,7 +62,9 @@ export async function handleExtractTikzFigures(): Promise<void> {
   );
 }
 
-export async function handleCompileTikzFigures(): Promise<void> {
+export async function handleCompileTikzFigures(
+  runtime: ProcessRuntime,
+): Promise<void> {
   await runGuardedLatexCommand(
     {
       channel: CHANNEL,
@@ -78,8 +85,15 @@ export async function handleCompileTikzFigures(): Promise<void> {
             message: 'Extracting and compiling TikZ pictures...',
           });
 
-          const compiledFiles = await TikzPictureManager.compile(
-            pathToLocation(filePath),
+          const { roots } = defaultSession();
+          const compiledFiles = await runtime.runPromise(
+            withSessionFs(
+              roots,
+              TikzPictureManager.compile(
+                pathToLocation(filePath),
+                roots.config,
+              ),
+            ),
           );
 
           if (compiledFiles.length > 0) {

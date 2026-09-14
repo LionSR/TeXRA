@@ -14,6 +14,7 @@ import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
+import { sessionFsLayer } from '@platform/rootedFs';
 import {
   aggregateId as qualifyAggregateId,
   type ModelCompatibilityKey,
@@ -106,7 +107,10 @@ type ToolUseLaunchVariant =
 
 /**
  * The per-run layer both families run under: the run's `AgentRun`, the
- * invoker, and the session's ledger. The follow-up lease is not here: only
+ * invoker, the session's ledger, and the session's rooted filesystems (built
+ * from the roots of the session the run is on, fresh or resumed, so code
+ * below the launch takes `WorkspaceFs` / `StorageFs` from context rather than
+ * from the fiber's ambient roots). The follow-up lease is not here: only
  * the tool-use loop consumes a queue and only its finalizer releases the
  * lease, so building `followUpsLayer` for a workflow run would claim a live
  * consumer nothing ever releases — later submissions would report as
@@ -162,6 +166,7 @@ function runLayerFor(
       }),
     ),
     Layer.provideMerge(Layer.succeed(RunLedger)(runSession.ledger)),
+    Layer.provideMerge(sessionFsLayer(runSession.roots)),
   );
 }
 

@@ -39,7 +39,7 @@ const CHANNEL = 'ToolEditApproval';
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost: DiffViewHost = new VscodeDiffViewHost();
   readonly openBuildDisplay: BuildDisplayFn = async (location, options) => {
-    await openBuildDisplayIfTex(location, options);
+    await openBuildDisplayIfTex(location, this.runtime, options);
   };
 
   constructor(

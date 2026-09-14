@@ -2,17 +2,18 @@
 import * as path from 'node:path';
 
 // External imports
+import { Data, Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
+import type { ConfigProvider } from '@platform/interfaces';
+import { WorkspaceFs } from '@platform/rootedFs';
 import type { ExecResult, FileLocation } from '@shared/schemas';
 import { SUPPORTED_LATEX_COMPILERS } from '@shared/constants/latexToolchain';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 
@@ -49,14 +50,24 @@ type LaTeXCompileOptions = z.input<typeof LaTeXCompileOptionsSchema>;
  * Shared by every {@link compileLatex2Pdf} caller so a failed compile always
  * comes with enough context to act on, not just a boolean.
  */
-async function readCompileLogTail(logAbs: string): Promise<string> {
-  try {
-    const full = await AbsoluteFS.read(logAbs);
-    return splitContentLines(full).slice(-LOG_TAIL_LINES).join('\n');
-  } catch (err) {
-    return `(no LaTeX log at ${logAbs}: ${toErrorMessage(err)})`;
-  }
-}
+const readCompileLogTail = Effect.fn('texTools.readCompileLogTail')(function* (
+  logAbs: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  return yield* fs.readFileString(logAbs).pipe(
+    Effect.map((full) =>
+      splitContentLines(full).slice(-LOG_TAIL_LINES).join('\n'),
+    ),
+    Effect.catchTag('PlatformError', (error) =>
+      Effect.succeed(`(no LaTeX log at ${logAbs}: ${error.message})`),
+    ),
+  );
+});
+
+/** The compiler could not be run at all, as opposed to running and failing. */
+class LatexCompilerNotRun extends Data.TaggedError('LatexCompilerNotRun')<{
+  readonly cause: unknown;
+}> {}
 
 export function buildKpathseaSearchPath(
   prependPaths: readonly string[],
@@ -140,21 +151,38 @@ export type CompileLatex2PdfResult =
   { ok: true; pdfPath: string } | { ok: false; logTail: string };
 
 /**
- * Compile a LaTeX file to PDF
+ * Compile a LaTeX file to PDF.
+ *
+ * The compiler runs in the session's workspace root and, when
+ * `texra.latex.includeWorkspaceInTexinputs` is on, searches it: the root is
+ * the {@link WorkspaceFs} in context, and the two LaTeX settings come from
+ * `config`, that same session's configuration held as data, so a compile
+ * never reads whichever roots the calling fiber happens to carry. The build
+ * directory and the engine log are absolute paths (run storage, a build
+ * folder, an external file) and go through the process `FileSystem`.
+ *
  * @param latexLocation FileLocation for the LaTeX file
+ * @param config The session's configuration
  * @param options Compilation options (channel defaults to module CHANNEL)
  * @returns `{ ok: true, pdfPath } | { ok: false, logTail }` -- `pdfPath` is the
  * absolute path the engine wrote to; `logTail` is always populated on failure.
  */
-export async function compileLatex2Pdf(
+export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   latexLocation: FileLocation,
+  config: ConfigProvider,
   options: LaTeXCompileOptions = {},
-): Promise<CompileLatex2PdfResult> {
+): Effect.fn.Return<
+  CompileLatex2PdfResult,
+  never,
+  FileSystem.FileSystem | WorkspaceFs
+> {
   // Schema provides compiler default; channel defaults to module constant
   const parsed = LaTeXCompileOptionsSchema.parse(options);
   const channel = parsed.channel ?? CHANNEL;
   const log = createLog(channel);
   const { outputDirectory, compiler, timeout, extraInputDirs } = parsed;
+  const fs = yield* FileSystem.FileSystem;
+  const workspacePath = (yield* WorkspaceFs).root;
   const latexFile = latexLocation.absolutePath;
   const outDir = outputDirectory ?? path.dirname(latexFile);
   // Both engine outputs are named after the source with the source's own
@@ -164,8 +192,9 @@ export async function compileLatex2Pdf(
     outDir,
     path.basename(latexFile, path.extname(latexFile)),
   );
-  try {
-    await AbsoluteFS.ensureDir(outDir);
+
+  const compile = Effect.gen(function* () {
+    yield* fs.makeDirectory(outDir, { recursive: true });
 
     // TeX resolves relative `\input{…}` / `\bibliography{…}` against the
     // compiler's cwd and TEXINPUTS, not the main file's location. When a
@@ -176,17 +205,18 @@ export async function compileLatex2Pdf(
     // revised sibling wins over the original source fallback.
     const documentDir = path.dirname(latexFile);
 
-    const tikzInputDirectory = getConfig<string>(
+    const tikzInputDirectory = readConfig<string>(
+      config,
       'texra.latex.tikzInputDirectory',
     );
-    const includeWorkspace = getConfig<boolean>(
+    const includeWorkspace = readConfig<boolean>(
+      config,
       'texra.latex.includeWorkspaceInTexinputs',
     );
-    const workspacePath = includeWorkspace ? WorkspaceFS.getPath() : null;
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
       documentDir,
       extraInputDirs,
-      workspacePath,
+      workspacePath: includeWorkspace ? workspacePath : null,
       tikzInputDirectory,
     });
 
@@ -197,6 +227,14 @@ export async function compileLatex2Pdf(
       log.debug(`Setting ${key} to: ${value}`);
     }
 
+    // The compiler's cwd is the workspace root: a session with no folder open
+    // has nowhere to run it.
+    if (workspacePath === undefined) {
+      return yield* new LatexCompilerNotRun({
+        cause: new Error('No workspace path found'),
+      });
+    }
+
     const pdflatexArgs = [
       '-interaction=nonstopmode',
       `-output-directory=${outDir}`,
@@ -205,49 +243,59 @@ export async function compileLatex2Pdf(
 
     const latexmkArgs = ['-pdf', '-f', ...pdflatexArgs];
 
-    function runPdflatex() {
-      return runToolWithCheck('pdflatex', pdflatexArgs, {
-        channel,
-        env,
-        timeout,
-        showError: true, // Show error if pdflatex fails
+    // Interrupting the compile aborts `signal`, which stops the engine.
+    const runTool = (tool: string, args: string[], showError: boolean) =>
+      Effect.tryPromise({
+        try: (signal) =>
+          runToolWithCheck(tool, args, {
+            channel,
+            cwd: workspacePath,
+            env,
+            timeout,
+            signal,
+            showError,
+          }),
+        catch: (cause) => new LatexCompilerNotRun({ cause }),
       });
-    }
 
     let result: ExecResult | false;
     if (compiler === 'latexmk') {
-      result = await runToolWithCheck('latexmk', latexmkArgs, {
-        channel,
-        env,
-        timeout,
-        showError: false, // Suppress error for latexmk to try pdflatex as fallback
-      });
+      // Suppress error for latexmk to try pdflatex as fallback
+      result = yield* runTool('latexmk', latexmkArgs, false);
       if (!result) {
         log.warn(
           'latexmk not found, falling back to single-pass pdflatex — ' +
             'bibliography, cross-references, and index may be incomplete',
         );
-        result = await runPdflatex();
+        result = yield* runTool('pdflatex', pdflatexArgs, true);
       }
     } else {
-      result = await runPdflatex();
+      result = yield* runTool('pdflatex', pdflatexArgs, true);
     }
 
     if (result && result.success) {
       log.debug(`Successfully compiled ${latexFile}`);
-      return { ok: true, pdfPath: `${outputStem}.pdf` };
+      return { ok: true, pdfPath: `${outputStem}.pdf` } as const;
     }
     return {
       ok: false,
-      logTail: await readCompileLogTail(`${outputStem}.log`),
-    };
-  } catch (err) {
-    const message = toErrorMessage(err);
+      logTail: yield* readCompileLogTail(`${outputStem}.log`),
+    } as const;
+  });
+
+  const failed = Effect.fnUntraced(function* (message: string) {
     log.error(`Error compiling LaTeX: ${message}`);
-    const tail = await readCompileLogTail(`${outputStem}.log`);
+    const tail = yield* readCompileLogTail(`${outputStem}.log`);
     return {
       ok: false,
       logTail: `Error compiling LaTeX: ${message}\n\n${tail}`,
-    };
-  }
-}
+    } as const;
+  });
+
+  return yield* compile.pipe(
+    Effect.catchTags({
+      PlatformError: (error) => failed(error.message),
+      LatexCompilerNotRun: (error) => failed(toErrorMessage(error.cause)),
+    }),
+  );
+});

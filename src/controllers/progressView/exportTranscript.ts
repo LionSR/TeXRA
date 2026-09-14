@@ -9,10 +9,11 @@
 // Node imports
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 
 // Local imports
 import type { ChatExportInput } from '@agent/export/schemas';
+import type { WorkspaceFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -99,7 +100,7 @@ function exportedFileMessage(storagePath: string): string {
 export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
   runId: RunId,
   ports: TranscriptExportPorts,
-): Effect.fn.Return<void, Error> {
+): Effect.fn.Return<void, Error, FileSystem.FileSystem | WorkspaceFs> {
   const format = yield* Effect.tryPromise({
     try: async () => ports.pickFormat(),
     catch: ensureError,
@@ -129,10 +130,7 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
     });
     return;
   }
-  yield* Effect.tryPromise({
-    try: async () => exportLatex(controller, runId, result.exportInput, ports),
-    catch: ensureError,
-  });
+  yield* exportLatex(controller, runId, result.exportInput, ports);
 });
 
 async function exportMarkdown(
@@ -146,32 +144,39 @@ async function exportMarkdown(
   await ports.showInfo(exportedFileMessage(result.storagePath));
 }
 
-async function exportLatex(
+const exportLatex = Effect.fn('exportLatex')(function* (
   controller: ChatExportController,
   runId: RunId,
   input: ChatExportInput,
   ports: TranscriptExportPorts,
-): Promise<void> {
-  const result = await controller.exportAsLatex(runId, input);
-  if (result.pdfPath) {
-    const pdfFilename = path
-      .basename(result.storagePath)
-      .replace(/\.tex$/, '.pdf');
-    await ports.openPath(result.pdfPath, 'pdf');
-    await ports.showInfo(`Transcript exported and compiled: ${pdfFilename}`);
-    return;
-  }
-  if (result.logTail) {
-    ports.reportDetail?.(
-      `LaTeX export compilation failed for ${result.storagePath}:\n${result.logTail}`,
-      { storagePath: result.storagePath, logTail: result.logTail },
-    );
-  }
-  await ports.openPath(result.absolutePath, 'text');
-  await ports.showWarning(
-    'LaTeX compilation failed. The .tex source file has been opened instead.',
-  );
-}
+): Effect.fn.Return<void, Error, FileSystem.FileSystem | WorkspaceFs> {
+  const result = yield* controller.exportAsLatex(runId, input);
+  yield* Effect.tryPromise({
+    try: async () => {
+      if (result.pdfPath) {
+        const pdfFilename = path
+          .basename(result.storagePath)
+          .replace(/\.tex$/, '.pdf');
+        await ports.openPath(result.pdfPath, 'pdf');
+        await ports.showInfo(
+          `Transcript exported and compiled: ${pdfFilename}`,
+        );
+        return;
+      }
+      if (result.logTail) {
+        ports.reportDetail?.(
+          `LaTeX export compilation failed for ${result.storagePath}:\n${result.logTail}`,
+          { storagePath: result.storagePath, logTail: result.logTail },
+        );
+      }
+      await ports.openPath(result.absolutePath, 'text');
+      await ports.showWarning(
+        'LaTeX compilation failed. The .tex source file has been opened instead.',
+      );
+    },
+    catch: ensureError,
+  });
+});
 
 const exportHtml = Effect.fn('exportHtml')(function* (
   controller: ChatExportController,

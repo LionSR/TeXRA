@@ -110,6 +110,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { emptySessionView } from '@shared/session/sessionView';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -154,6 +155,8 @@ const flushArtifacts = vi.fn(async () => {});
  * exists in this fixture, so the lane is a passthrough.
  */
 const LANE_SESSION = {
+  // The run layer builds the session's rooted filesystems from these.
+  roots: createFakeWorkspaceRoots(),
   runs: {
     launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
       operation,

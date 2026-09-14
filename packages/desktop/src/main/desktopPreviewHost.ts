@@ -4,7 +4,9 @@ import path from 'node:path';
 import { isFileNotFoundError } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { ExternalOpener } from '@hosts/uiHosts';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs } from '@platform/rootedFs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { createExternalLocation } from '@utils/files/fileLocation';
@@ -31,12 +33,19 @@ interface DesktopPreviewHost extends ExternalOpener {
   ): Promise<void>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Promise<void>;
-  openBuildDisplay: BuildDisplayFn;
+  /**
+   * The build-and-show preview of one open paper: a LaTeX source compiles
+   * against `roots` (its workspace, its LaTeX settings) and its PDF opens in
+   * that paper's workbench.
+   */
+  openBuildDisplayIn(roots: WorkspaceRoots): BuildDisplayFn;
 }
 
 interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
   shell: DesktopShellAdapter;
   showErrorMessage?: (message: string) => Promise<void> | void;
+  /** The process runtime a LaTeX preview compiles on. */
+  runtime: ProcessRuntime;
 }
 
 export function createDesktopPreviewHost(
@@ -89,19 +98,26 @@ export function createDesktopPreviewHost(
   // Opens the PDF in the renderer's pdf workbench tab (an `<iframe>` on
   // Electron's built-in Chromium viewer), or reports `false` so the caller
   // falls back to `shell.openPath`.
-  function tryShowPdfInRenderer(pdfPath: string, title: string): boolean {
+  function tryShowPdfInRenderer(
+    roots: WorkspaceRoots,
+    pdfPath: string,
+    title: string,
+  ): boolean {
     return tryShowInRenderer(
       { ...options, source: 'desktopPreviewHost', fallback: 'external viewer' },
       {
         command: DESKTOP_PDF_COMMANDS.SHOW_PDF,
-        session: workspaceRoots().storage,
+        session: roots.storage,
         title,
         pdfPath,
       } satisfies DesktopShowPdfMessage,
     );
   }
 
-  async function openBuildDisplay(fileLocation: FileLocation): Promise<void> {
+  async function openBuildDisplay(
+    roots: WorkspaceRoots,
+    fileLocation: FileLocation,
+  ): Promise<void> {
     const sourcePath = fileLocation.absolutePath;
     await ensurePathExists(sourcePath);
 
@@ -119,9 +135,14 @@ export function createDesktopPreviewHost(
     }
 
     const { compileLatex2Pdf } = await import('@latex/texTools');
-    const built = await compileLatex2Pdf(createExternalLocation(sourcePath), {
-      outputDirectory,
-    });
+    const built = await options.runtime.runPromise(
+      withSessionFs(
+        roots,
+        compileLatex2Pdf(createExternalLocation(sourcePath), roots.config, {
+          outputDirectory,
+        }),
+      ),
+    );
     if (!built.ok) {
       // The full engine log (up to 200 lines) goes to console.error, not the
       // dialog message -- fail() surfaces the message via a blocking native
@@ -142,13 +163,14 @@ export function createDesktopPreviewHost(
     const { pdfPath } = built;
     await ensurePathExists(pdfPath);
 
-    if (tryShowPdfInRenderer(pdfPath, path.basename(pdfPath))) return;
+    if (tryShowPdfInRenderer(roots, pdfPath, path.basename(pdfPath))) return;
 
     await openPath(pdfPath);
   }
 
   return {
-    openBuildDisplay,
+    openBuildDisplayIn: (roots) => (location) =>
+      openBuildDisplay(roots, location),
     openExternal,
     openPath,
   };
