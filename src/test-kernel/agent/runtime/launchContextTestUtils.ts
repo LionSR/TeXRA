@@ -65,7 +65,6 @@ export function createTestLaunchContext({
   category = AgentCategory.ToolUse,
   logger = noopTrace,
 }: TestLaunchContextInit): AgentLaunchContext {
-  const abortController = new AbortController();
   const stopped = Deferred.makeUnsafe<void>();
   const config = AgentConfigSchema.parse({
     agent,
@@ -81,11 +80,7 @@ export function createTestLaunchContext({
     ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
     stores: { secrets: new FakeSecrets(), globalState: new FakeStateStore() },
-    runScope: createRunScope({
-      runId,
-      session,
-      signal: abortController.signal,
-    }),
+    runScope: createRunScope({ runId, session }),
     logger,
     parentStage: logger.openStage(`Run: ${config.agent}`),
     userVarChannels: {},
@@ -101,7 +96,6 @@ export function createTestLaunchContext({
       Deferred.doneUnsafe(stopped, Effect.void);
     },
     stopped,
-    abortRunSignal: () => abortController.abort(),
     disposeTrace: vi.fn(),
   };
 }

@@ -254,7 +254,6 @@ function agentRunTestLayer(init: LoopInit) {
       const runScope = createRunScope({
         runId: init.runId,
         session: init.session,
-        signal: new AbortController().signal,
       });
       return {
         runId: init.runId,

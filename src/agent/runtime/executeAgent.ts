@@ -171,13 +171,13 @@ function runLayerFor(
 /**
  * The one boundary that races the run's stop. `ctx.stopped` is completed by
  * every stop entry (a host kill through the run handle, the live tool-use
- * flow context, an aborted launch signal); winning it interrupts the
- * program's fiber, whose masked exit protocol records the halt before this
- * returns, and reports the cancelled shell result of the run's category.
- * The run's `AbortSignal` is aborted from that interruption — the loop reads
- * the fiber's own interruption (`Effect.abortSignal`) for the provider
- * request and the tool bodies that still need a signal — so the signal is
- * downstream of the stop rather than a second way to stop the run.
+ * flow context, the launch handle's interrupt before the run has a handle of
+ * its own); winning it interrupts the program's fiber, whose masked exit
+ * protocol records the halt before this returns, and reports the cancelled
+ * shell result of the run's category.
+ * The loop reads the fiber's own interruption (`Effect.abortSignal`) for the
+ * provider request and the tool bodies that still need a signal, so no run
+ * signal exists beside the stop.
  */
 function runUntilStopped<R>(
   ctx: AgentLaunchContext,
@@ -185,10 +185,7 @@ function runUntilStopped<R>(
 ): Effect.Effect<AgentRuntimeFlowResult, Error, R> {
   const { runId } = ctx.runScope;
   return Effect.raceFirst(
-    program.pipe(
-      Effect.onInterrupt(() => Effect.sync(() => ctx.abortRunSignal())),
-      Effect.map((result) => ({ kind: 'result' as const, result })),
-    ),
+    program.pipe(Effect.map((result) => ({ kind: 'result' as const, result }))),
     Deferred.await(ctx.stopped).pipe(Effect.as({ kind: 'stopped' as const })),
   ).pipe(
     Effect.map((winner): AgentRuntimeFlowResult => {
@@ -458,8 +455,12 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
      */
     agentDefaultOutputFiles: readonly string[],
   ) => Promise<RunOutcome | void>;
-  /** Cancel launch preparation before the per-run handle is available. */
-  launchSignal?: AbortSignal;
+  /**
+   * The stop latch of a launch that owns a stop before the run has a handle
+   * of its own (`runAgent`'s launch handle): launch assembly fails at its
+   * next step once it is completed, and the run adopts it as its one stop.
+   */
+  launchStopped?: Deferred.Deferred<void>;
   /**
    * The run's `run.start` was committed by an earlier activation (a resume).
    * That row is also where this run's parent edge comes from: `runAgent`
@@ -558,7 +559,7 @@ export function executeAgent(
       session: options.session,
       modelCompatibilityKey: options.modelCompatibilityKey,
       ownApiKeyFallback: options.ownApiKeyFallback,
-      signal: options.launchSignal,
+      stopped: options.launchStopped,
       toolPolicy: {
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         runtimeUnavailableTools: options.runtimeUnavailableTools,

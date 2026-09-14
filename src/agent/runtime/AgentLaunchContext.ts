@@ -48,7 +48,7 @@ import {
   RUN_PHASE,
 } from '@shared/schemas';
 import { createRunTrace, type RunTrace } from '@transcript';
-import { isObject, linkAbortSignals, onAbort } from '@utils/core';
+import { isObject } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, runInSession, withRunContext } from './RunContext';
@@ -123,9 +123,10 @@ export interface AgentLaunchContext {
   attachedMemoryMisses: AttachedMemoryMiss[];
   /**
    * The run's one stop. Every stop entry — a host kill through the run
-   * handle, the live tool-use flow context, an aborted launch signal —
-   * completes {@link AgentLaunchContext.stopped}, and the run's program is
-   * interrupted from it. Nothing else stops a run.
+   * handle, the live tool-use flow context, the launch handle's interrupt
+   * before the run has a handle of its own — completes
+   * {@link AgentLaunchContext.stopped}, and the run's program is interrupted
+   * from it. Nothing else stops a run.
    */
   interrupt: () => void;
   /**
@@ -134,14 +135,6 @@ export interface AgentLaunchContext {
    * loop as a fiber interruption whose finalizers record the halt.
    */
   readonly stopped: Deferred.Deferred<void>;
-  /**
-   * Abort the sticky signal published on {@link AgentLaunchContext.runScope}.
-   * Driven by the program's interruption — and, before that program exists,
-   * by the lifecycle's stop-before-start branch: the signal is how the
-   * Promise-tier work a run still owns hears the stop, never a second way to
-   * stop the run.
-   */
-  abortRunSignal: () => void;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -177,8 +170,12 @@ interface AgentLaunchInput {
   /** This launch is the user's own-API-key fallback for a quota-exhausted
    *  retry: it declines the Copilot route and every subscription route. */
   ownApiKeyFallback?: boolean;
-  /** Cancel launch preparation and the resulting live run. */
-  signal?: AbortSignal;
+  /**
+   * The launch's stop latch, adopted as the run's own
+   * {@link AgentLaunchContext.stopped}: once completed, assembly fails at its
+   * next step and the run it has already assembled is stopped.
+   */
+  stopped?: Deferred.Deferred<void>;
   /** Immutable per-run tool policy carried on the launch context for cycle flows. */
   toolPolicy?: ToolPolicy;
 }
@@ -189,6 +186,20 @@ const failIfAborted = (signal: AbortSignal | undefined) =>
     try: () => signal?.throwIfAborted(),
     catch: ensureError,
   });
+
+/**
+ * Fail with an `AbortError` once a launch's stop latch has been completed.
+ * A launch prepares uninterruptibly, so every acquisition settles before its
+ * cleanup; these checks between its steps are where a stop ends it.
+ */
+export const failIfLaunchStopped = (
+  stopped: Deferred.Deferred<void> | undefined,
+): Effect.Effect<void, Error> =>
+  Effect.suspend(() =>
+    stopped !== undefined && Deferred.isDoneUnsafe(stopped)
+      ? Effect.fail(new DOMException('The launch was stopped.', 'AbortError'))
+      : Effect.void,
+  );
 
 export function withLaunchRunContext<T>(
   ctx: AgentLaunchContext,
@@ -325,10 +336,13 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       config: AgentConfig;
       enforceCategory?: boolean;
       signal?: AbortSignal;
+      /** The launch handle's stop latch; checked between async steps. */
+      stopped?: Deferred.Deferred<void>;
       suppressErrorNotification?: boolean;
     } & { session: SessionHandle },
   ) {
     yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
     const fullConfig = input.config;
     const interactions = input.session.interactions;
     // Resolve by the source the delegation captured at validation time, so launch
@@ -348,6 +362,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       catch: ensureError,
     });
     yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
     // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
     // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
     // (to Workflow when absent), so `setting.agentCategory` is always populated
@@ -360,6 +375,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       catch: ensureError,
     });
     yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
 
     // Block category mismatch: prevent launching a tool-use agent as a workflow
     // (or vice versa). Source-pinned resolution already guarantees launch lands on
@@ -391,6 +407,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       catch: ensureError,
     });
     yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
 
     const config: AgentConfig = {
       ...fullConfig,
@@ -432,7 +449,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     runId: RunId,
     resources: Array<() => void | Promise<void>>,
   ): Effect.fn.Return<AgentLaunchContext, Error, Secrets | AppState> {
-    yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
     const { config, setting, prompt, agentEntry, modelConfig } =
       input.definition;
 
@@ -444,7 +461,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       input.modelCompatibilityKey ??
       (yield* inferLaunchModelCompatibilityKey(runId, session)) ??
       null;
-    yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
     // The run's model is bound from the process stores the launch already
     // has in scope, so routing and key availability read the same secret
     // store and global state the rest of the run does.
@@ -469,12 +486,12 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       },
     };
     resources.push(() => runTrace.dispose());
-    yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
     attachment.detach = session.attachRunTrace(rawRunTrace.trace, runId);
 
     const agentLogger = runTrace.trace;
 
-    yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
     const isRemote = isRemoteAgent(config.agent);
     // Registration committed creation, configuration and initial activation,
     // each awaited; a resumed turn appends only its new activation, awaited
@@ -528,36 +545,19 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 
     const agentPath = path.dirname(agentEntry.path);
     const workingDirectory = config.workingDirectory?.trim() || undefined;
-    const runAbortController = new AbortController();
     // The run's one stop. `interrupt()` completes it; the runner races it and
-    // the program is interrupted from it.
-    const stopped = Deferred.makeUnsafe<void>();
+    // the program is interrupted from it. A launch that already owns a stop
+    // hands it in, so a stop that landed while the launch prepared is this
+    // run's stop too.
+    const stopped = input.stopped ?? Deferred.makeUnsafe<void>();
     const stopRun = () => {
       Deferred.doneUnsafe(stopped, Effect.void);
     };
-    // Linked, not composed: `AbortSignal.any` would keep this run's signal (and
-    // every listener still attached to it) reachable from the caller's signal
-    // until that signal aborts. A parent run's signal outlives each subagent it
-    // launches, so a long orchestration would retain every finished child's run
-    // scope. The link is detached with the run trace at end-of-run.
-    const detachRunAbortLink = linkAbortSignals(
-      [input.signal],
-      runAbortController,
-    );
-    resources.push(detachRunAbortLink);
-    // A caller that aborts the launch signal is asking this run to stop, so it
-    // enters through the same stop as every other stop entry. Detached with
-    // the run trace at end-of-run, for the same reason the link above is: a
-    // parent's signal outlives every subagent it launches.
-    const detachLaunchStop = onAbort(input.signal, stopRun);
-    resources.push(detachLaunchStop);
-    const runSignal = runAbortController.signal;
     const runScope = createRunScope({
       runId,
       workingDirectory,
       delegationAgentScope: config.delegationAgentScope,
       session,
-      signal: runSignal,
     });
     const buildVars = () =>
       buildUserVars(
@@ -583,7 +583,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         ),
       catch: ensureError,
     });
-    yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
 
     const userVarChannels: UserVariableChannels = { ...baseVars };
     const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
@@ -626,15 +626,10 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       runScope,
       interrupt: stopRun,
       stopped,
-      abortRunSignal: () => runAbortController.abort(),
       initialUserMessageForTranscript: initialMediaMayBeInserted
         ? initialInstruction
         : undefined,
-      disposeTrace: () => {
-        detachRunAbortLink();
-        detachLaunchStop();
-        runTrace.dispose();
-      },
+      disposeTrace: () => runTrace.dispose(),
     };
   },
 );
@@ -642,7 +637,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 /** Resolve the context of a run already admitted and created by registration. */
 export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   function* (input: AgentLaunchInput & { session: SessionHandle }) {
-    yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
     const { session: launchSession, runId } = input;
     const { config } = input.definition;
 
@@ -693,7 +688,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       ),
     );
   },
-  // The existing launch signal owns cancellation. Let each acquisition settle
+  // The launch's stop latch owns cancellation. Let each acquisition settle
   // before cleanup so a late Promise cannot create an unowned resource.
   Effect.uninterruptible,
 );

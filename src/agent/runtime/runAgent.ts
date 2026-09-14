@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Deferred, Effect, Exit } from 'effect';
 
 import { registerRun, getRunRecords } from '@agent/storage';
 import {
@@ -17,9 +17,12 @@ import {
   type RunId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { aggregateError, generateRunId, linkAbortSignals } from '@utils/core';
+import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
-import { prepareAgentDefinition } from './AgentLaunchContext';
+import {
+  failIfLaunchStopped,
+  prepareAgentDefinition,
+} from './AgentLaunchContext';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { RunHandle } from './RunHandle';
@@ -44,7 +47,6 @@ export interface RunAgentOptions extends Pick<
   | 'onRun'
   | 'onRunResolved'
   | 'onIdle'
-  | 'launchSignal'
   | 'openWorkflowOutput'
 > {
   readonly session: SessionHandle;
@@ -115,47 +117,94 @@ export const runAgent = Effect.fn('runAgent')(function* (
   // A resume of a run this session already runs is a duplicate, refused here
   // before any snapshot is taken: queued behind the live generation it would
   // wake without a handle of its own and restore a prior terminal fact over
-  // the one that generation is about to write.
-  if (!shouldRegister && runSession.runs.isActiveOrResuming(runId))
+  // the one that generation is about to write. A provisional launch handle
+  // is tracked before the lane is claimed, so `isActiveOrResuming` is not
+  // enough: treating that handle as a parked predecessor would overwrite
+  // its interrupt handler and leave the first launch unstoppable.
+  const existingHandle = runSession.runs.getHandle(runId);
+  if (
+    !shouldRegister &&
+    (runSession.runs.isActiveOrResuming(runId) ||
+      (existingHandle !== undefined && !existingHandle.isSuspended))
+  )
     return yield* Effect.fail(new Error(`Run is already running: ${runId}`));
-  // A resumed run's prior terminal fact: what a launch that fails before its
-  // lifecycle starts restores, so the run does not read as still running.
-  const priorEnd = shouldRegister
-    ? null
-    : yield* getRunRecords(runSession, runId).readRunEnd();
-  if (!shouldRegister && !(yield* getRunRecords(runSession, runId).exists()))
-    return yield* Effect.fail(new Error(`Run not found: ${runId}`));
-  // A resumed run's lineage, read before its handle is registered below: from
-  // that moment a stop of the parent sees this child, so it cascades into the
-  // launch (the handle's interrupt aborts launch preparation) or detaches it,
-  // and a parent whose stop has already begun refuses the admission outright.
-  // The launch reads the edge back off the handle instead of deriving it a
-  // second time, so nothing can install a parent after its stop finished.
-  const resumedParentRunId = shouldRegister
+  // The launch's one stop: the launch handle's interrupt completes it, the
+  // launch fails at its next preparation step once it has, and the run
+  // adopts it as its own stop, so a stop reaches the run wherever the launch
+  // has got to. Created before any await so a kill during the resume lineage
+  // reads has a latch to complete.
+  const launchStopped = Deferred.makeUnsafe<void>();
+  const completeLaunchStop = (): void => {
+    Deferred.doneUnsafe(launchStopped, Effect.void);
+  };
+  const launchFacts = {
+    runId,
+    identity: { kind: 'agent' as const, agent: request.config.agent },
+    category: request.config.agentCategory,
+  };
+  // A parked WAITING predecessor is already the kill target: attach the
+  // latch there instead of replacing it. Only a genuinely suspended handle
+  // qualifies; a live launch handle must keep its own interrupt handler.
+  // A stop already claimed on that parked handle is inherited now, not
+  // after a later track().
+  const parkedHandle =
+    existingHandle?.isSuspended === true ? existingHandle : undefined;
+  if (
+    parkedHandle?.stopRequested === true ||
+    parkedHandle?.suspendedTerminationStarted === true
+  ) {
+    completeLaunchStop();
+  }
+  let launchHandle = parkedHandle
     ? undefined
-    : yield* persistedParentRunId(runSession, runId);
-  const launchAbortController = new AbortController();
-  const detachLaunchAbortLink = linkAbortSignals(
-    [executeAgentOptions.launchSignal],
-    launchAbortController,
-  );
-  const launchSignal = launchAbortController.signal;
-  const launchHandle = runSession.runs.getHandle(runId)
-    ? undefined
-    : new RunHandle(
-        {
-          runId,
-          identity: { kind: 'agent', agent: request.config.agent },
-          category: request.config.agentCategory,
-        },
-        resumedParentRunId ?? null,
-      );
-  const detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
-    interrupt: () => launchAbortController.abort(),
-  });
+    : new RunHandle(launchFacts, null);
+  let detachLaunchInterrupt: (() => void) | undefined;
+  const attachLaunchStop = (handle: RunHandle): void => {
+    detachLaunchInterrupt?.();
+    detachLaunchInterrupt = handle.attachInterruptHandler({
+      interrupt: completeLaunchStop,
+    });
+  };
+  if (parkedHandle) attachLaunchStop(parkedHandle);
+  else if (launchHandle) attachLaunchStop(launchHandle);
 
   return yield* Effect.gen(function* () {
+    // Track before the first resume read so `runs.kill` finds a handle. The
+    // persisted parent is installed below, once the lineage read returns,
+    // by replacing this parentless handle in the same synchronous turn.
     if (launchHandle) runSession.runs.track(launchHandle);
+    yield* failIfLaunchStopped(launchStopped);
+    // A resumed run's prior terminal fact: what a launch that fails before
+    // its lifecycle starts restores, so the run does not read as still
+    // running.
+    const priorEnd = shouldRegister
+      ? null
+      : yield* getRunRecords(runSession, runId).readRunEnd();
+    yield* failIfLaunchStopped(launchStopped);
+    if (!shouldRegister && !(yield* getRunRecords(runSession, runId).exists()))
+      return yield* Effect.fail(new Error(`Run not found: ${runId}`));
+    yield* failIfLaunchStopped(launchStopped);
+    // From the moment the parented handle is tracked, a stop of the parent
+    // sees this child, so it cascades into the launch or detaches it, and a
+    // parent whose stop has already begun refuses the admission outright.
+    // The launch reads the edge back off the handle instead of deriving it
+    // a second time, so nothing can install a parent after its stop finished.
+    const resumedParentRunId = shouldRegister
+      ? undefined
+      : yield* persistedParentRunId(runSession, runId);
+    yield* failIfLaunchStopped(launchStopped);
+    if (
+      launchHandle !== undefined &&
+      resumedParentRunId !== undefined &&
+      launchHandle.parent === null
+    ) {
+      if (runSession.runs.getHandle(runId) === launchHandle) {
+        runSession.runs.untrack(runId);
+      }
+      launchHandle = new RunHandle(launchFacts, resumedParentRunId);
+      attachLaunchStop(launchHandle);
+      runSession.runs.track(launchHandle);
+    }
     return yield* runSession.runs.launchRun(
       runId,
       Effect.gen(function* () {
@@ -173,13 +222,15 @@ export const runAgent = Effect.fn('runAgent')(function* (
               (read) => runInSession(runSession, read),
             )
           : request.config;
+        yield* failIfLaunchStopped(launchStopped);
         const definition = yield* prepareAgentDefinition({
           config: requestedConfig,
           session: runSession,
           enforceCategory: request.kind === 'resume' || options.enforceCategory,
-          signal: launchSignal,
           suppressErrorNotification,
+          stopped: launchStopped,
         });
+        yield* failIfLaunchStopped(launchStopped);
         const { config } = definition;
         const userFollowUpSupport =
           config.agentCategory === AgentCategory.ToolUse &&
@@ -217,7 +268,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
               runSession.runs.detachChildren(formerParent, [runId]);
             return yield* executeAgent(definition, runId, {
               ...executeAgentOptions,
-              launchSignal,
+              launchStopped,
               session: runSession,
               resumed: !shouldRegister,
               onRun: async (handle) => {
@@ -296,7 +347,6 @@ export const runAgent = Effect.fn('runAgent')(function* (
   }).pipe(
     Effect.ensuring(
       Effect.sync(() => {
-        detachLaunchAbortLink();
         detachLaunchInterrupt?.();
         if (launchHandle && runSession.runs.getHandle(runId) === launchHandle) {
           runSession.runs.untrack(runId);

@@ -412,7 +412,7 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it.effect('carries a stop requested by onRun on the run signal', () =>
+  it.effect('carries a stop requested by onRun into the run stop', () =>
     Effect.gen(function* () {
       const { runId, ctx } = lifecycleFixture();
 
@@ -424,9 +424,7 @@ describe('runFlowWithLifecycle', () => {
         (handle) =>
           Effect.sync(() => {
             expect(handle.stopRequested).toBe(true);
-            // linkAbortSignals has separate pre-aborted replay coverage; this
-            // lifecycle test proves the signal already carries the early stop.
-            expect(ctx.runScope.signal.aborted).toBe(true);
+            expect(Deferred.isDoneUnsafe(ctx.stopped)).toBe(true);
             return toolUseResult(runId, RUN_OUTCOME.CANCELLED);
           }),
         {
