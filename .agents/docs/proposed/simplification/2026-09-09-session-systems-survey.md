@@ -124,25 +124,32 @@ substrate. Not #11867, whose SQLite cutover has landed, and not #11869.
 
 ## 3. The TUI never adopted `Surface`
 
-**The narrow proposal below has landed** (`resolveSelected` split into
-`resolveSelectedId` plus the `keepWhenViewEmpty` arm; `cliState.ts`'s
-`selectedRunId` now calls it instead of reimplementing the rule). The rest of
-this section — `Surface.expanded` vs. `expandedStreams`, `Surface.launch` vs.
+**The narrow proposal below has landed** (#12318, refined by #12395):
+`resolveSelected` is split into `resolveSelectedId`, and `cliState.ts`'s
+`selectedRunId` now calls it instead of reimplementing the rule — the CLI's
+pre-run local id (`CLI_LOCAL_RUN_ID`) is guarded by the caller rather than by
+a `resolveSelectedId` option, per #12395's refinement. The rest of this
+section — `Surface.expanded` vs. `expandedStreams`, `Surface.launch` vs.
 `sessionMeta`, `Surface.phase` vs. `WORKFLOW_POPUP_VIEW`, and the full
 `Surface` adoption in #11866 — is unchanged and still open.
 
-PRD §10.1 says in writing that the TUI "Gains a `Surface`." It did not.
-`rg -c "shared/session/surface" packages/cli/src` returns zero: the TUI imports
-no part of the shared record, not `applySurfaceAction`, not `pruneSurface`, not
-`loadSurface` or `persistSurface`, not `resolveSelected`, not `acceptsFollowUp`.
+PRD §10.1 says in writing that the TUI "Gains a `Surface`." As surveyed on
+`98afef5a7a`, it did not: `rg -c "shared/session/surface" packages/cli/src`
+returned zero, the TUI importing no part of the shared record — not
+`applySurfaceAction`, not `pruneSurface`, not `loadSurface` or
+`persistSurface`, not `resolveSelected`, not `acceptsFollowUp`. That grep no
+longer reads zero (`cliState.ts` now imports `resolveSelectedId`), but the
+twin otherwise stands as surveyed.
 
 The result is a concept-by-concept twin. `Surface.selected` against
 `activeStreamId` (`packages/cli/src/chat/tui/state/cliState.ts:90`);
 `Surface.expanded` against `expandedStreams` (`cliState.ts:126`);
 `Surface.launch` against `sessionMeta` (`cliState.ts:60`); `Surface.phase`
-against `WORKFLOW_POPUP_VIEW` (`cliState.ts:329`). The selection rule itself is
-written twice, at `src/shared/session/surface.ts:293-301` (seven extension and
-desktop call sites) and `cliState.ts:101-108` (read in five CLI files).
+against `WORKFLOW_POPUP_VIEW` (`cliState.ts:329`). The selection rule itself
+was written twice at the time of this survey, at
+`src/shared/session/surface.ts:293-301` (seven extension and desktop call
+sites) and `cliState.ts:101-108` (read in five CLI files) — it no longer is,
+per the landed note above.
 
 **Proposal, deliberately narrow.** Do not port `cliState.ts` onto `Surface`
 wholesale. That is a lane, and the cross-host convergence experience says a
