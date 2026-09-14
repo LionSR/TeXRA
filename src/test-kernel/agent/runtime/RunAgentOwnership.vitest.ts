@@ -111,6 +111,12 @@ const SESSION = {
     untrack: untrackRun,
     // No generation is live unless a case says so.
     isActiveOrResuming: () => mocks.runActive(),
+    // The registry's local application of a durable detach, over the one
+    // handle this fixture tracks.
+    detachChildren: vi.fn((_parent: RunId, children: readonly RunId[]) => {
+      if (trackedHandle && children.includes(trackedHandle.runId))
+        trackedHandle.detach();
+    }),
     // No competing generation exists in this fixture; the lane is a passthrough.
     launchRun: vi.fn(
       (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,

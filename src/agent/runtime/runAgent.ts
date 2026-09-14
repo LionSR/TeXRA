@@ -192,17 +192,6 @@ export const runAgent = Effect.fn('runAgent')(function* (
           });
         } else {
           yield* acquireResumedRunOwnership(runSession, runId);
-          // Ownership is the fence for the edge as well: a detach another
-          // host committed while this launch prepared has folded by now, and
-          // a foreign row never reaches a handle this session tracks, so the
-          // handle takes the severed edge here, before the lifecycle reads
-          // its lineage back off it.
-          if (
-            launchHandle !== undefined &&
-            launchHandle.parent !== null &&
-            (yield* persistedParentRunId(runSession, runId)) === undefined
-          )
-            launchHandle.detach();
         }
 
         let lifecycleStarted = false;
@@ -210,6 +199,21 @@ export const runAgent = Effect.fn('runAgent')(function* (
         const run = yield* Effect.exit(
           Effect.gen(function* () {
             onRunLeaseAcquired?.(runId);
+            // Ownership is the fence for the edge as well: a detach another
+            // host committed while this launch prepared has folded by now,
+            // and a foreign row never reaches a handle this session tracks,
+            // so the registry applies the severed edge here (handle,
+            // approval ancestry, the former parent's roster), before the
+            // lifecycle reads the lineage back off the handle. Inside the
+            // owned region: a failed read releases ownership like any other
+            // launch failure.
+            const formerParent = launchHandle?.parent ?? null;
+            if (
+              !shouldRegister &&
+              formerParent !== null &&
+              (yield* persistedParentRunId(runSession, runId)) === undefined
+            )
+              runSession.runs.detachChildren(formerParent, [runId]);
             return yield* executeAgent(definition, runId, {
               ...executeAgentOptions,
               launchSignal,
