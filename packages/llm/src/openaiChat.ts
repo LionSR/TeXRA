@@ -9,6 +9,7 @@ import {
   InputTokenEstimateSchema,
   ModelConfigurationSchema,
   ModelError,
+  chatToolResultMessages,
   enrichModelError,
   parseInboundToolArguments,
   pullStream,
@@ -318,28 +319,15 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
   > = [];
   for (const message of history) {
     if (message.role === 'tool') {
-      for (const result of message.results) {
-        const text: string[] = [];
-        for (const part of result.content) {
-          if (part.kind !== 'text') {
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message: 'This Chat protocol requires text-only tool results.',
-            });
-          }
-          text.push(part.text);
-        }
-        // The canonical grammar already guarantees adjacent, complete ordinals.
-        const call = calls[result.callOrdinal];
-        messages.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          // Chat has no is_error field; status alone selects its visible marker.
-          content:
-            result.status === 'error'
-              ? `Error: ${text.join('')}`
-              : text.join(''),
-        });
+      const toolResults = yield* chatToolResultMessages(
+        message.results,
+        calls.map((call) => call.id),
+        'This Chat protocol requires text-only tool results.',
+      );
+      // Chat has no is_error field; status alone selects its visible marker,
+      // which `chatToolResultMessages` has already applied to `content`.
+      for (const result of toolResults) {
+        messages.push({ role: 'tool', ...result });
       }
       continue;
     }
