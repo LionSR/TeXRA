@@ -986,7 +986,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         });
   // Uploads live only in this model's memory. They are deleted when a
   // switch or retry replaces the binding, and again when the run's scope
-  // closes (a second release is empty).
+  // closes (a second release retries IDs the first pass did not confirm).
   if (model.releaseUploads !== undefined) {
     yield* Effect.addFinalizer(() => releaseBindingUploads(model, config.name));
   }

@@ -102,18 +102,26 @@ export function uploadCache(provider: {
   const releaseUploads = Effect.fn('llm.uploads.release')(function* () {
     released = true;
     live.clear();
+    // IDs stay owned until this attempt confirms a delete or reports a
+    // provider error. An interrupt or deadline then leaves the rest for a
+    // later release (the run-scope finalizer) instead of dropping them.
     const fileIds = [...owned];
-    owned.clear();
     const confirmed = new Set<string>();
     const failed: UnreleasedUpload[] = [];
     const settled = yield* Effect.forEach(
       fileIds,
       (fileId) =>
         provider.remove(fileId).pipe(
-          Effect.tap(() => Effect.sync(() => confirmed.add(fileId))),
+          Effect.tap(() =>
+            Effect.sync(() => {
+              confirmed.add(fileId);
+              owned.delete(fileId);
+            }),
+          ),
           Effect.catchTag('ModelError', (error) =>
             Effect.sync(() => {
               failed.push({ fileId, reason: error.message });
+              owned.delete(fileId);
             }),
           ),
         ),

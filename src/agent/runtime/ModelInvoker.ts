@@ -966,8 +966,11 @@ export const modelInvokerLayer = (): Layer.Layer<
           Effect.gen(function* () {
             // A switch may have landed while the panel waited; never undo it.
             if (current !== failed) return current;
+            // A personal-key retry leaves the failed route's overlay behind
+            // (subscription window, prices, PDF admission, a Kimi coding
+            // endpoint) and binds the catalog model.
             const config =
-              selection === 'personal' && failed.routedOnKimiCode
+              selection === 'personal'
                 ? ((yield* Effect.tryPromise({
                     try: () => resolveRuntimeModelConfig(failed.modelId),
                     catch: ensureError,
