@@ -29,6 +29,7 @@ import {
 } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
@@ -502,6 +503,16 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                     error instanceof DatabaseWriteFailed &&
                     error.cause instanceof DatabaseClaimRefused
                   ) {
+                    return alreadyRunning();
+                  }
+                  // A first launch of this id has no prior row to acquire, so
+                  // its claim rides the birth append and a foreign winner
+                  // refuses that append as `DatabaseNotOwner`. Only an open
+                  // aggregate is a live run to wait for: a closed one is a
+                  // tombstone this id can never start over, and calling that
+                  // "already in progress" would send the model to wait on a
+                  // run that never reports.
+                  if (error instanceof DatabaseNotOwner && !error.closed) {
                     return alreadyRunning();
                   }
                   throw workflowScriptToolError(
