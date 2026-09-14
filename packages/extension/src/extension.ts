@@ -13,6 +13,7 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime';
+import { installAuthProgramEdge } from '@auth/authProgram';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import { setRuntimeExtensionId } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -213,6 +214,10 @@ async function initVscodePlatform(
       createVscodeLeanLanguageServices(context.globalState),
     ),
   });
+  // The auth subsystem's run edge, installed here beside the runtime it
+  // settles on (PRD R1): the edge is a process-wide value, so it belongs to
+  // this composition root rather than to any surface the root constructs.
+  installAuthProgramEdge((program) => runtime.runPromiseExit(program));
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(

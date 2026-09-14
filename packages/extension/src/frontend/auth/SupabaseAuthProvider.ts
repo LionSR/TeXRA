@@ -8,7 +8,6 @@ import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import {
   AuthPortError,
   callPort,
-  installAuthProgramEdge,
   runAuthProgram,
   SerializedWrites,
 } from '@auth/authProgram';
@@ -91,9 +90,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     private readonly secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
   ) {
-    // The auth subsystem's run edge lives at this host entry (PRD R1): every
-    // Promise-facing auth surface settles on the process runtime from here.
-    installAuthProgramEdge((program) => runtime.runPromiseExit(program));
     this.sessionCoordinator = createHostAuthCoordinator({
       secrets,
       whenReady: async () => {
