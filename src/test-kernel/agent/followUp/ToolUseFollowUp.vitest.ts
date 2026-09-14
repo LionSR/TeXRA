@@ -352,6 +352,23 @@ describe('submitFollowUp', () => {
       }),
   );
 
+  it.effect('releases recovery when tryResumeRun rejects', () =>
+    Effect.gen(function* () {
+      const runId = generateRunId();
+      const session = fakeSession({ kind: 'queue' });
+      expect(
+        yield* submitFollowUp(runId, 'keep this input', {
+          session,
+          resumePort: {
+            tryResumeRun: () => Promise.reject(new Error('resume prep failed')),
+          },
+        }),
+      ).toEqual({ status: 'queued', wake: 'failed' });
+      expect(session.followUps.claimLive(runId, 'child')).toBeDefined();
+      expect(recorded.queued(runId)).toEqual(['keep this input']);
+    }),
+  );
+
   it.effect('starts recovery after the child generation releases', () =>
     Effect.gen(function* () {
       const runId = generateRunId();

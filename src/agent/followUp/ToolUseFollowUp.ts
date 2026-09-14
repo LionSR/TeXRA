@@ -206,11 +206,17 @@ function admitFollowUp(
         // next attempt.
         const resume = (options.resumePort ?? platform().agentResume)
           .tryResumeRun(runId, recovery)
-          .then((resumed) => {
-            if (!resumed)
+          .then(
+            (resumed) => {
+              if (!resumed)
+                ownerSession.followUps.release(recovery, 'recoverable');
+              return resumed;
+            },
+            () => {
               ownerSession.followUps.release(recovery, 'recoverable');
-            return resumed;
-          });
+              return false;
+            },
+          );
         return { resume };
       },
     );

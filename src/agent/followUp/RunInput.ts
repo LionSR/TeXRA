@@ -56,24 +56,25 @@ export class RunInput {
   }
 
   /**
-   * Seed with the fold's pending follow-ups, then release what was held.
-   * `known` is every id the fold holds, consumed ones included: a held or
-   * later offer of a consumed id is a replayed delivery, and is dropped.
+   * Seed with the fold's pending follow-ups in ledger order, then append
+   * held items the fold does not already name. `known` is every id the fold
+   * holds, consumed ones included: a held or later offer of a consumed id
+   * is a replayed delivery, and is dropped. A pending id already in `held`
+   * (a producer replay before this seed) stays at its ledger position.
    */
   seed(
     pending: readonly QueuedFollowUp[],
     known: ReadonlySet<string> = new Set(),
   ): void {
-    const unseen = pending.filter((f) => !this.seen.has(f.followUpId));
     const pendingIds = new Set(pending.map((f) => f.followUpId));
-    const held = (this.held ?? []).filter(
-      (f) => pendingIds.has(f.followUpId) || !known.has(f.followUpId),
+    const extraHeld = (this.held ?? []).filter(
+      (f) => !pendingIds.has(f.followUpId) && !known.has(f.followUpId),
     );
     for (const id of [...pendingIds, ...known]) this.seen.add(id);
     this.held = null;
     Queue.offerAllUnsafe(
       this.queue,
-      [...unseen, ...held].map((followUp) => ({
+      [...pending, ...extraHeld].map((followUp) => ({
         kind: 'followUp' as const,
         followUp,
       })),
