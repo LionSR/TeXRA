@@ -33,13 +33,10 @@ import {
   handleCompileTikzFigures as latexCompileTikzFigures,
 } from '@commands/latex/figCommands';
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
-import {
-  openProgressViewInTab as progressOpenInTab,
-  showProgressView as progressShowProgressView,
-} from '@commands/progress/progressViewCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild } from '@housekeeping/clean';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -56,6 +53,7 @@ export function createExtensionCommandActions(
   settingsViewProvider: SettingsViewProvider,
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ): ExtensionCommandActions {
   const refreshAfterProviderKeyChange = (provider: string) =>
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
@@ -78,12 +76,12 @@ export function createExtensionCommandActions(
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
     signOut: authSignOut,
     runSetupAssistant: async () => {
-      await launchSetupAssistant(secrets, context.globalState);
+      await launchSetupAssistant(secrets, context.globalState, runtime);
     },
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () => sysCreateSampleProject(context.extensionPath),
-    downloadArXivSource: latexDownloadArXivSource,
-    openProgressViewInTab: progressOpenInTab,
+    downloadArXivSource: () => latexDownloadArXivSource(runtime),
+    openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     async openDoc(page) {
       if (!page) return;
       await vscode.env.openExternal(
@@ -92,24 +90,29 @@ export function createExtensionCommandActions(
     },
     indentCurrentTeX: latexIndentCurrentTeX,
     fixCompilation: latexFixCompilation,
-    getTeXCount: latexGetTeXCount,
+    getTeXCount: () => latexGetTeXCount(runtime),
     extractTikzFigures: latexExtractTikzFigures,
     compileTikzFigures: latexCompileTikzFigures,
-    cloneOverleafProject: () => gitCloneOverleafProject(secrets),
+    cloneOverleafProject: () => gitCloneOverleafProject(secrets, runtime),
     removeApiKey: () => apiRemoveApiKey(secrets, refreshAfterProviderKeyChange),
     showImportOptions: sysShowImportOptions,
     toggleView: () => progressViewProvider.toggleDrawer(),
-    showProgressView: progressShowProgressView,
+    showProgressView: (inPlace) =>
+      progressViewProvider.showProgressView({ inPlace }),
     setApiKey: (provider) =>
       apiSetApiKey(secrets, refreshAfterProviderKeyChange, provider),
+    // The wizard is an Effect program; the host entry's runtime, threaded in
+    // from `activate`, settles it here at the command boundary.
     createAgentWithAI: (category) =>
-      agentHandleCreateAgentWithAI(context, category, secrets),
+      runtime.runPromise(
+        agentHandleCreateAgentWithAI(context, category, secrets, runtime),
+      ),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.
     execute: (input) =>
       input === undefined
         ? progressViewProvider.submit()
-        : agentRunExecuteCommand(input),
+        : agentRunExecuteCommand(input, runtime),
   };
 }
 

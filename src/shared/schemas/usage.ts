@@ -2,23 +2,6 @@ import { z } from 'zod';
 
 export const TokenCountSchema = z.int().nonnegative();
 
-/** Provider identifiers for usage tracking. */
-export const UsageProviderSchema = z.enum([
-  'anthropic',
-  'openai',
-  'openai-response',
-  'google',
-  'deepseek',
-  'openrouter',
-  'dashscope',
-  'xai',
-  'moonshot',
-  'minimax',
-  'glm',
-  'meta',
-  'unknown',
-]);
-
 export const UsageRouteSchema = z.enum([
   'chatgpt-subscription',
   'xai-subscription',
@@ -28,6 +11,18 @@ export const UsageRouteSchema = z.enum([
 ]);
 
 export type UsageRoute = z.infer<typeof UsageRouteSchema>;
+
+/**
+ * The subscription routes a run can decline. A retry the user answered with
+ * their own API key declines the route that ran out of quota, for that run
+ * only: the choice is a fact of the run, not of the user's settings, so no
+ * preference is rewritten and two concurrent runs cannot cancel each other's
+ * fallback. `api-key` is excluded because it is the route a decline falls
+ * back to.
+ */
+export const DeclinableUsageRouteSchema = UsageRouteSchema.exclude(['api-key']);
+
+export type DeclinableUsageRoute = z.infer<typeof DeclinableUsageRouteSchema>;
 
 export const TokenUsageStatsSchema = z.strictObject({
   inputTokens: TokenCountSchema,
@@ -136,3 +131,10 @@ export const RunUsageTotalsSchema = z.object({
   totalToolUsePromptTokens: TokenCountSchema.prefault(0),
   totalServerToolRequests: TokenCountSchema.prefault(0),
 });
+
+export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
+
+/** A run's usage before its first turn: every counter at its zero. */
+export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze(
+  RunUsageTotalsSchema.parse({}),
+);

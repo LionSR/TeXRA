@@ -124,7 +124,6 @@ export const settingsViewStyles: CSSResult[] = [
 
     .settings-category-button wa-icon,
     .settings-page-button wa-icon,
-    .settings-unavailable-icon,
     .settings-tab-icon {
       display: grid;
       flex: 0 0 auto;
@@ -168,22 +167,6 @@ export const settingsViewStyles: CSSResult[] = [
       color: var(--wa-color-text-quiet);
       font-size: var(--font-size-sm);
       line-height: var(--line-height-normal);
-    }
-
-    .settings-unavailable {
-      display: flex;
-      flex-direction: column;
-      gap: var(--wa-space-2xs);
-      max-width: 640px;
-      color: var(--color-text-secondary);
-    }
-
-    .settings-unavailable-title {
-      display: flex;
-      align-items: center;
-      gap: var(--wa-space-2xs);
-      color: var(--text-color);
-      font-weight: var(--font-weight-medium);
     }
 
     @container settings (max-width: 520px) {

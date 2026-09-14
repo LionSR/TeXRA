@@ -11,7 +11,7 @@ import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
 import { ensureError } from '@utils/errors/errorMessage';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
 import {
@@ -31,7 +31,7 @@ const CITATION_PATTERN = new RegExp(
 );
 
 interface BibliographyReferenceResult {
-  /** Paths to bibliography files that exist, relative to the workspace. */
+  /** Paths to bibliography files that exist, as absolute paths. */
   bibliographyFiles: string[];
   /** Bibliography files referenced but not found. */
   missingBibliographyFiles: string[];
@@ -50,11 +50,11 @@ interface BibliographyEntriesResult {
 const PROBE_CONCURRENCY = 8;
 
 /** Read a workspace-relative file, surfacing the read failure as a typed error. */
-const readWorkspaceFile = Effect.fn('latex.readWorkspaceFile')(function* (
+const readBibliographyFile = Effect.fn('latex.readBibliographyFile')(function* (
   filePath: string,
 ) {
   return yield* Effect.tryPromise({
-    try: () => WorkspaceFS.read(filePath),
+    try: () => AbsoluteFS.read(filePath),
     catch: ensureError,
   });
 });
@@ -65,7 +65,7 @@ export const extractBibliographyContext = Effect.fn(
   texPath: string,
 ): Effect.fn.Return<BibliographyReferenceResult, Error> {
   const texDir = path.dirname(texPath);
-  const content = yield* readWorkspaceFile(texPath);
+  const content = yield* readBibliographyFile(texPath);
   const uncommented = stripLatexComments(content);
 
   const referencedPaths = collectBibliographyPaths(texDir, uncommented);
@@ -73,7 +73,7 @@ export const extractBibliographyContext = Effect.fn(
     referencedPaths,
     (candidate) =>
       Effect.tryPromise({
-        try: () => WorkspaceFS.exists(candidate),
+        try: () => AbsoluteFS.exists(candidate),
         catch: ensureError,
       }).pipe(Effect.map((exists) => ({ candidate, exists }))),
     { concurrency: PROBE_CONCURRENCY },
@@ -170,9 +170,13 @@ export const loadBibliographyEntries = Effect.fn(
   // Citation keys are matched case-insensitively; the first definition of a
   // key across the bibliography files wins, so the files are read as one
   // bounded fan-out and folded back in their declared order.
-  const contents = yield* Effect.forEach(bibliographyFiles, readWorkspaceFile, {
-    concurrency: PROBE_CONCURRENCY,
-  });
+  const contents = yield* Effect.forEach(
+    bibliographyFiles,
+    readBibliographyFile,
+    {
+      concurrency: PROBE_CONCURRENCY,
+    },
+  );
 
   const parsedEntries = new Map<string, { key: string; value: string }>();
   for (const content of contents) {

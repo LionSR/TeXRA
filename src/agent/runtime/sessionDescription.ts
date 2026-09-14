@@ -6,12 +6,11 @@
  * history view, and future agents can quickly understand each session.
  */
 
+import { Effect } from 'effect';
+
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  createHelperModelKit,
-  runHelperModelCompletion,
-} from '@agent/runtime/helperModel';
+import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -22,14 +21,6 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 const log = createLog('SessionDescription');
 const MAX_DESCRIPTION_LENGTH = 80;
 const MAX_DESCRIPTION_WORDS = 12;
-
-function warnWithoutRejecting(message: string): void {
-  try {
-    log.warn(message);
-  } catch {
-    // Best-effort diagnostics must not make description generation reject.
-  }
-}
 
 /**
  * Normalize a model-generated session description: collapse newlines,
@@ -86,67 +77,69 @@ export function getDisplayedInstruction(
  * Generate and persist a session description from the user's instruction.
  *
  * Started concurrently at the beginning of a run and joined before run
- * ownership is released. Never throws.
+ * ownership is released. Never fails: an unavailable or failing helper is
+ * warned about and the run keeps its agent-name label. Stopping the run
+ * interrupts it.
  *
  * Every category qualifies. Workflow runs were excluded while "session" meant
  * a tool-use conversation, which left the whole workflow-subagent population —
  * the rows a workflow script's `agent()` calls create, and the ones a reader
  * can least tell apart — labelled by nothing but their agent name.
  * Uses the configured helper model for a one-shot, non-streaming call.
- * On success, publishes the run's `run.description` row, which the meta fold
+ * On success, commits the run's `run.description` row, which the meta fold
  * and every renderer read.
  *
  * `stores` are the process secret store and global state the run already
  * holds (the `Secrets` / `AppState` services), which the helper model is
  * resolved against.
  */
-export async function generateSessionDescription(
+export const generateSessionDescription = Effect.fn(
+  'generateSessionDescription',
+)(function* (
   runId: RunId,
   config: AgentConfig,
   agentDescription: string | undefined,
   session: SessionHandle,
   stores: ModelOptionStores,
-  signal?: AbortSignal,
-): Promise<void> {
-  try {
-    signal?.throwIfAborted();
-    const instruction = getDisplayedInstruction(config);
-    if (!instruction) return;
-
-    const helperResult = await createHelperModelKit(stores);
-    signal?.throwIfAborted();
-    if (!helperResult.kit) {
-      warnWithoutRejecting(helperResult.reason);
-      return;
-    }
-
-    const userPrompt = buildUserPrompt(
-      config.agent,
-      agentDescription,
-      instruction,
-    );
-    const text = await runHelperModelCompletion(helperResult.kit, {
-      userPrompt,
+): Effect.fn.Return<void> {
+  const instruction = getDisplayedInstruction(config);
+  if (!instruction) return;
+  yield* Effect.gen(function* () {
+    const bound = yield* helperModel(stores);
+    const text = yield* helperCompletion(bound, {
+      userPrompt: buildUserPrompt(config.agent, agentDescription, instruction),
       systemPrompt: SYSTEM_PROMPT,
-      signal,
     });
-
     if (!isNonEmptyString(text)) return;
     const description = cleanSessionDescription(text);
     if (!description) return;
 
-    session.publish([
+    // The description's own row, committed awaited rather than queued behind
+    // a drain of the run's publications: this fiber runs beside the run's own
+    // (`executeAgent` forks it), so a barrier here would report — and clear —
+    // a transcript or trace rollback of the run's, which the catch below
+    // would then turn into a warning, leaving the terminal drain to write a
+    // COMPLETED row over a fact nobody hears about. A refused commit is this
+    // path's own failure and the one thing the warning is for.
+    yield* session.commit([
       {
         type: 'run.description',
         aggregateId: qualifyAggregateId('run', runId),
         description,
       },
     ]);
-    await session.settlePublications();
     log.info(`Generated session description for ${runId}`);
-  } catch (err) {
-    warnWithoutRejecting(
-      `Failed to generate session description: ${getSdkErrorMessage(err)}`,
-    );
-  }
+  }).pipe(
+    Effect.scoped,
+    Effect.catch((error) => warnFailure(error)),
+    Effect.catchDefect((defect) => warnFailure(defect)),
+  );
+});
+
+function warnFailure(cause: unknown): Effect.Effect<void> {
+  return Effect.sync(() =>
+    log.warn(
+      `Failed to generate session description: ${getSdkErrorMessage(cause)}`,
+    ),
+  );
 }

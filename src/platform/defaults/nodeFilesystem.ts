@@ -14,7 +14,7 @@ import { fileTypeFor } from './fsEntryTypeBits';
 export const nodeFilesystem: FileSystemProvider = {
   async stat(target: string): Promise<FileStat> {
     const lstats = await fs.promises.lstat(target);
-    const type = await fileTypeFor(fs, lstats, target);
+    const type = await fileTypeFor(lstats, target);
     // For symlinks, use stat (follows link) for size/timestamps to match
     // vscode.workspace.fs.stat behavior, falling back to lstat metadata for a
     // dangling symlink. For non-symlinks, lstat === stat.
@@ -104,11 +104,7 @@ export const nodeFilesystem: FileSystemProvider = {
     const entries = await fs.promises.readdir(target, { withFileTypes: true });
     return Promise.all(
       entries.map(async (entry) => {
-        const type = await fileTypeFor(
-          fs,
-          entry,
-          path.join(target, entry.name),
-        );
+        const type = await fileTypeFor(entry, path.join(target, entry.name));
         return [entry.name, type] as [string, number];
       }),
     );

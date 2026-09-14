@@ -9,7 +9,7 @@
  * case to paper over with an empty view.
  */
 import { signal, type Signal } from '@lit-labs/signals';
-import { SubscriptionRef } from 'effect';
+import { Cause, Stream, SubscriptionRef } from 'effect';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
@@ -26,8 +26,12 @@ import {
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import { isInFlightPhase } from '@shared/runs/runStatus';
-import { formatPhaseStageLabel } from '@shared/runs/runStatusDisplay';
+import {
+  flowPosition,
+  formatFlowPositionLabel,
+} from '@shared/runs/runStatusDisplay';
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */
@@ -37,14 +41,33 @@ const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
  * Bridge a session's view level into the TUI's signal; returns the unbind.
  * The only meeting point between Effect and the components (PRD 7.5): the
  * view's change run bridged onto the process runtime by `toSignal`.
+ *
+ * A session binds `changes` to `SessionHandle.viewChanges`, the level stream
+ * that fails when the fold dies: the ref's own changes never fail, so a TUI
+ * reading only those would freeze on a dead fold with nothing to say.
+ * `onFailure` is that word, as the one error the cause squashes to, so the
+ * entry that binds needs no Effect vocabulary; a fixture that binds a bare
+ * ref needs neither.
  */
 export function bindSessionView(
   view: SubscriptionRef.SubscriptionRef<SessionView>,
+  options: {
+    readonly changes?: Stream.Stream<SessionView>;
+    readonly onFailure?: (error: unknown) => void;
+  } = {},
 ): () => void {
   bound.get()?.dispose();
+  const changes = (options.changes ?? SubscriptionRef.changes(view)).pipe(
+    Stream.catchCause((cause) => {
+      if (!Cause.hasInterruptsOnly(cause)) {
+        options.onFailure?.(Cause.squash(cause));
+      }
+      return Stream.empty;
+    }),
+  );
   const bridgedBound = toSignal(
     effectRuntime(),
-    SubscriptionRef.changes(view),
+    changes,
     SubscriptionRef.getUnsafe(view),
   );
   bound.set(bridgedBound);
@@ -135,16 +158,35 @@ export function anyRunRunning(
   );
 }
 
-/** The nearest ancestor's workflow-phase heading, for a child's location. */
-export function ancestorPhaseLabel(
+/**
+ * The nearest ancestor's position, for a child's location: the loop's own
+ * coordinate off `RunView.flow`, and the open phase for a workflow-script
+ * ancestor, which drives no loop of its own — its child loop is terminal on
+ * the first turn, so it never writes a `flow.step` and its `flow` stays null.
+ */
+export function ancestorPositionLabel(
   view: SessionView,
   runId: RunId,
 ): string | undefined {
   const ancestors = runViewOf(view, runId)?.ancestors ?? [];
-  // Root first in the view; the nearest ancestor's phase wins.
+  // Root first in the view; the nearest ancestor that has a position wins.
   for (const ancestor of ancestors.toReversed()) {
-    const stage = runViewOf(view, ancestor.id)?.stage;
-    if (stage?.kind === 'phase') return formatPhaseStageLabel(stage);
+    const run = runViewOf(view, ancestor.id);
+    if (run === undefined) continue;
+    const label =
+      formatFlowPositionLabel(flowPosition(run.flow)) ??
+      openWorkflowPhaseLabel(run);
+    if (label !== undefined) return label;
   }
   return undefined;
+}
+
+/** The phase a workflow-script run has opened most recently, spelled by the
+ *  one owner of phase-heading copy. Only a workflow-script run carries a run
+ *  model, so every other run has no phase to name. */
+function openWorkflowPhaseLabel(run: RunView): string | undefined {
+  const opened = run.transcript.run?.phases.findLast((phase) => phase.opened);
+  return opened === undefined
+    ? undefined
+    : formatWorkflowPhaseHeading(opened.heading);
 }

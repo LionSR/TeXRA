@@ -1,5 +1,6 @@
-import { Data, Effect } from 'effect';
+import { Effect } from 'effect';
 
+import { hostPort } from '@common/hostPort';
 import type { PromptHost } from '@hosts/uiHosts';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -16,10 +17,16 @@ interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;
 }
 
-/** A host prompt (the delete confirmation, the pin-cap warning) rejected. */
-class MemoryPromptFailed extends Data.TaggedError('MemoryPromptFailed')<{
-  readonly cause: unknown;
-}> {}
+/**
+ * Re-raise a memory-filesystem failure as the cause it wraps. The memory
+ * path has no recovery above this point, so the host edge's `runPromise`
+ * rejects with that instance rather than with a tagged wrapper nobody reads.
+ */
+function raiseCause<A, E extends { readonly cause: unknown }, R>(
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, never, R> {
+  return Effect.catch(effect, (error) => Effect.die(error.cause));
+}
 
 type SettingsMemoryMessage =
   | {
@@ -37,7 +44,7 @@ export class SettingsMemoryController {
   readonly getMemoryDataMessage = Effect.fn(
     'SettingsMemoryController.getMemoryDataMessage',
   )(function* () {
-    const items = yield* loadMemoryItems();
+    const items = yield* raiseCause(loadMemoryItems());
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
       items,
@@ -48,7 +55,7 @@ export class SettingsMemoryController {
     'SettingsMemoryController.getMemoryPreviewMessage',
   )(function* (storagePath: string) {
     const resolvedPath = resolveMemoryStoragePath(storagePath);
-    const preview = yield* loadMemoryPreview(resolvedPath);
+    const preview = yield* raiseCause(loadMemoryPreview(resolvedPath));
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
       preview,
@@ -70,18 +77,18 @@ export class SettingsMemoryController {
       this: SettingsMemoryController,
       input: { storagePath: string; displayPath: string },
     ) {
-      const confirmed = yield* Effect.tryPromise({
-        try: () =>
+      const confirmed = yield* Effect.orDie(
+        hostPort(() =>
           this.deps.prompt.confirm(`Delete "${input.displayPath}"?`, {
             modal: true,
             confirmLabel: 'Delete',
           }),
-        catch: (cause) => new MemoryPromptFailed({ cause }),
-      });
+        ),
+      );
       if (!confirmed) return null;
 
       const storagePath = resolveMemoryStoragePath(input.storagePath);
-      yield* deleteMemoryPath(storagePath);
+      yield* raiseCause(deleteMemoryPath(storagePath));
       return yield* this.getMemoryDataMessage();
     },
   );
@@ -94,15 +101,15 @@ export class SettingsMemoryController {
     pinned: boolean,
   ) {
     const resolvedPath = resolveMemoryStoragePath(storagePath);
-    const result = yield* setMemoryPinned(resolvedPath, pinned);
+    const result = yield* raiseCause(setMemoryPinned(resolvedPath, pinned));
     if (result.status === 'cap-reached') {
-      yield* Effect.tryPromise({
-        try: () =>
+      yield* Effect.orDie(
+        hostPort(() =>
           this.deps.prompt.warning(
             `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
           ),
-        catch: (cause) => new MemoryPromptFailed({ cause }),
-      });
+        ),
+      );
       return null;
     }
     return yield* this.getMemoryDataMessage();

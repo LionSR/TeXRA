@@ -7,9 +7,6 @@ import { truncatedHexId } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
-// Local imports - platform
-import type { StorageProvider } from '../interfaces';
-
 const STORAGE_LAYOUT = {
   global: 'global-storage',
   workspace: 'workspace-storage',
@@ -91,7 +88,7 @@ export function resolveRunStorageRelativePath(
   );
 }
 
-export class WorkspaceStorageProvider implements StorageProvider {
+export class WorkspaceStorageProvider {
   /**
    * The workspace root is pinned once, at construction. A host whose source
    * can move (VS Code's first workspace folder, Electron's window) answers a

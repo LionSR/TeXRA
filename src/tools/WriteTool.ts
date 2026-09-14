@@ -1,10 +1,10 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
 import { isTexFile } from '@common/files/fileTypeUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import replacementEngine from '@replacement/engine';
 import type { ToolResult } from '@shared/schemas';
 import {
@@ -23,11 +23,11 @@ const WriteInputSchema = z.strictObject({
   content: z.string().describe('The full file contents to write.'),
 });
 
-export type WriteInput = z.infer<typeof WriteInputSchema>;
+type WriteInput = z.infer<typeof WriteInputSchema>;
 
 const write = Effect.fn('WriteFileTool.execute')(function* (
   input: WriteInput,
-): Effect.fn.Return<ToolResult, unknown> {
+): Effect.fn.Return<ToolResult, unknown, ToolCall> {
   const prepared = yield* resolveWritableTarget(input.path, {
     missing: 'allow',
   });
@@ -61,14 +61,11 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   });
 });
 
-export class WriteFileTool extends defineTool({
+export const WriteFileTool = defineTool({
   name: 'write_file',
   requiresApproval: true,
   description:
     'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
   schema: WriteInputSchema,
-}) {
-  protected execute(input: WriteInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(write(input));
-  }
-}
+  execute: write,
+});

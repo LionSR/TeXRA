@@ -40,6 +40,7 @@ import {
   initWizardModelSelectItems,
 } from '@cli/init/runInitWizard';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
+import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
@@ -96,6 +97,7 @@ describe('CLI init command', () => {
     mocks.initCliPlatform.mockReset().mockResolvedValue({
       secrets: new FakeSecrets(),
       globalState: new FakeStateStore(),
+      runtime: effectRuntime(),
     });
     mocks.loadAgents.mockReset().mockReturnValue(Effect.void);
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
@@ -274,7 +276,6 @@ describe('CLI init command', () => {
             value: 'deepseekproT',
             label: 'DeepSeek Pro',
             availability: 'missing-key',
-            requiresKey: true,
           },
         }),
       ],
@@ -289,8 +290,6 @@ describe('CLI init command', () => {
             value: 'sonnet46T',
             label: 'Sonnet',
             availability: 'missing-key',
-            disabled: true,
-            requiresKey: true,
           },
         }),
       ],

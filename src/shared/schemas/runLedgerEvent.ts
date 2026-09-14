@@ -30,7 +30,7 @@ import { JsonValueSchema } from './jsonValue';
 import { RunOutcomeSchema } from './run';
 import {
   AgentRunStateSnapshotSchema,
-  ModelHandlerCompatibilityKeySchema,
+  ModelCompatibilityKeySchema,
   NormalizedUsageSchema,
   ReflectionSnapshotStateSchema,
   StateSlicesSchema,
@@ -41,6 +41,7 @@ import {
   ExecutedToolResultSchema,
   ToolFileAttachmentSchema,
 } from './toolResult';
+import { DeclinableUsageRouteSchema } from './usage';
 
 /* ------------------------------------------------------------------ ids */
 
@@ -86,24 +87,28 @@ const FlowStepSchema = z.enum([
 ]);
 export type FlowStep = z.infer<typeof FlowStepSchema>;
 
-export const FlowStepPayloadSchema = z
-  .strictObject({
-    family: RunFamilySchema,
-    step: FlowStepSchema,
-    round: z.int().nonnegative().nullish(),
-    turn: z.int().nonnegative().nullish(),
-    /** Reflection's within-round response-cycle index. Not `continuation`:
-     *  the package's `Continuation` anchor lives in the same `RunState`, and
-     *  two fields one word apart is a live foot-gun. */
-    continuationIndex: z.int().nonnegative().nullish(),
-    /** The loop's own terminal word. Listing status stays the canonical
-     *  `status` fact, which also covers failures before the runtime starts. */
-    outcome: RunOutcomeSchema.nullish(),
-  })
-  .refine(
-    (p) => (p.step === 'halted') === (p.outcome != null),
-    'Only a halted step carries an outcome, and it always carries one.',
-  );
+/** The loop's coordinates: the step and where it sits. What `RunView.flow`
+ *  carries, so a renderer paints the position without the halt's outcome. */
+export const RunFlowSchema = z.strictObject({
+  family: RunFamilySchema,
+  step: FlowStepSchema,
+  round: z.int().nonnegative().nullish(),
+  turn: z.int().nonnegative().nullish(),
+  /** Reflection's within-round response-cycle index. Not `continuation`:
+   *  the package's `Continuation` anchor lives in the same `RunState`, and
+   *  two fields one word apart is a live foot-gun. */
+  continuationIndex: z.int().nonnegative().nullish(),
+});
+export type RunFlow = z.infer<typeof RunFlowSchema>;
+
+export const FlowStepPayloadSchema = RunFlowSchema.extend({
+  /** The loop's own terminal word. The canonical terminal fact stays
+   *  `run.end`, which also covers failures before the runtime starts. */
+  outcome: RunOutcomeSchema.nullish(),
+}).refine(
+  (p) => (p.step === 'halted') === (p.outcome != null),
+  'Only a halted step carries an outcome, and it always carries one.',
+);
 
 /* ---------------------------------------------------------- model.message */
 
@@ -122,9 +127,10 @@ const DispatchFactsSchema = z.strictObject({
   /** The primary this call duplicates. A duplicate never executes and never
    *  reapplies its primary's effects. */
   duplicateOf: CallIdSchema.nullable(),
-  /** Card correlation, so a resumed settlement closes the same card. Null for
-   *  a fast tool: `logId` is set only for slow tools. */
-  logId: z.string().min(1).nullable(),
+  /** The call's card id, minted with the response: a slow tool's card opens
+   *  under it before the call runs, a fast tool's opens and closes with the
+   *  settlement, and a resumed settlement closes the same card. */
+  logId: z.string().min(1),
   stageId: z.string().min(1).nullable(),
 });
 export type DispatchFacts = z.infer<typeof DispatchFactsSchema>;
@@ -481,7 +487,7 @@ const PendingRetrySchema = z.strictObject({
   requestId: z.string().min(1),
   invocation: InvocationRefSchema,
   failedModelId: z.string().min(1),
-  failedCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable(),
+  failedCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
   /** Route requirements without secrets: a credential scope, never a
    *  credential. */
   credentialScope: z.string().min(1),
@@ -521,7 +527,7 @@ const SnapshotRuntimeSchema = z.strictObject({
   turn: z.int().nonnegative(),
   continuationIndex: z.int().nonnegative(),
   modelId: z.string().min(1),
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable(),
+  modelCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
   /**
    * Runtime-owned failure vocabulary, already persisted today and already
    * carrying the exhaustion classification that drives retry and route-switch
@@ -529,6 +535,13 @@ const SnapshotRuntimeSchema = z.strictObject({
    */
   lastError: RetryErrorInfoSchema.nullable(),
   pendingRetry: PendingRetrySchema.nullable(),
+  /**
+   * Subscription routes this run must not bind again: one per retry the user
+   * answered with their own API key, plus the launch's own seed. Durable so a
+   * resume rebinds under the same choice; run-scoped so the user's stored
+   * preference is never rewritten on their behalf.
+   */
+  declinedRoutes: z.array(DeclinableUsageRouteSchema).readonly(),
 });
 export type SnapshotRuntime = z.infer<typeof SnapshotRuntimeSchema>;
 

@@ -27,7 +27,6 @@ import {
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
-  type LatexConfigValues,
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
   settingByKey,
@@ -62,6 +61,7 @@ import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_FIELD_TO_KEY,
   LATEX_CONFIG_RANGES,
+  type LatexConfigValues,
 } from '@shared/constants/latexConfig';
 
 // Local imports - LaTeX toolchain (install guides + commands)

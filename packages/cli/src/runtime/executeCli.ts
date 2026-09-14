@@ -3,6 +3,7 @@ import { Cause, Deferred, Effect, Result } from 'effect';
 import {
   attachTerminalResultToast,
   runAgent,
+  type SessionHandle,
   trackTerminalResultPresentation,
   validateRunRequest,
   type AgentConfigPayload,
@@ -19,9 +20,8 @@ import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { platform } from '@platform/platform';
-import { AppState, SHUTDOWN_PHASE } from '@platform/interfaces';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
-import { Secrets } from '@platform/secrets';
 import {
   RUN_OUTCOME,
   type RunEndOutput,
@@ -42,7 +42,6 @@ import {
 } from './interruptedResumeHint';
 import { attachWorkflowPlainOutput } from './runProgressRenderer';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
-import { initializeCliTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
@@ -64,10 +63,15 @@ type RunAgentWorkflowOutput = NonNullable<
 export type CliRunServices = Effect.Services<ReturnType<typeof runAgent>>;
 type CliWorkflowOutputHandler = (
   result: Parameters<RunAgentWorkflowOutput>[0],
+  /** The declared defaults the run hands over; see `RunAgentOptions`. */
+  agentDefaultOutputFiles: Parameters<RunAgentWorkflowOutput>[1],
   tryCommitPublication: () => boolean,
 ) => Effect.Effect<Awaited<ReturnType<RunAgentWorkflowOutput>>, Error>;
 
 interface CliExecuteOptions {
+  /** The process session the run executes under: `initCliPlatform`'s one
+   *  memoized open, threaded from the command that holds its services. */
+  readonly session: Effect.Effect<SessionHandle>;
   /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
    *  `expectedCategory`, never set by a command handler. */
   readonly enforceCategory?: boolean;
@@ -77,7 +81,7 @@ interface CliExecuteOptions {
    *  the commit synchronously once before destination validation or I/O. */
   readonly openWorkflowOutput?: CliWorkflowOutputHandler;
   /** Forwarded to `runAgent` on resume, pinning the original handler dialect. */
-  readonly modelHandlerCompatibilityKey?: RunAgentOptions['modelHandlerCompatibilityKey'];
+  readonly modelCompatibilityKey?: RunAgentOptions['modelCompatibilityKey'];
   /** Called during signal shutdown after CANCELLED status is durable and the
    *  resumable checkpoint has been drained, before the signal handler exits. */
   readonly onInterruptedRunFinalized?: (runId: RunId) => void | Promise<void>;
@@ -100,7 +104,6 @@ export interface CliConfigExecuteOptions<
   /** Pins the category this command path must stay in: enforced before the
    *  run by `runAgent`, and the narrowing key for the returned result. */
   readonly expectedCategory?: C;
-  readonly categoryMismatchMessage?: string;
   /**
    * Resume an existing run under its persisted id instead of minting a
    * fresh one. The CLI turns this into explicit resume intent for `runAgent`.
@@ -131,12 +134,11 @@ export function executeCliConfig<
 >(
   config: AgentConfigPayload,
   runContext: CliContext,
-  options: CliConfigExecuteOptions<C> = {},
+  options: CliConfigExecuteOptions<C>,
 ): Effect.Effect<CliConfigExecuteResult<C>, Error, CliRunServices> {
   return Effect.gen(function* () {
     const {
       expectedCategory,
-      categoryMismatchMessage,
       runId: resumedRunId,
       ...executeOptions
     } = options;
@@ -167,10 +169,7 @@ export function executeCliConfig<
       // run whenever the resolved agent setting disagrees, and the output's
       // category is stamped from that same resolved setting. Kept as an invariant so the
       // `ExecuteAgentResultForCategory<C>` narrowing below stays honest.
-      throw new Error(
-        categoryMismatchMessage ??
-          `Agent resolved to a non ${expectedCategory} run.`,
-      );
+      throw new Error(`Agent resolved to a non ${expectedCategory} run.`);
     }
 
     return {
@@ -190,7 +189,7 @@ export function executeCliToolUseConfig(
   options: CliConfigExecuteOptions<typeof AgentCategory.ToolUse> & {
     /** False when invocation-owned temporary inputs will not survive exit. */
     readonly recoveryInputIsDurable?: boolean;
-  } = {},
+  },
 ) {
   return Effect.gen(function* () {
     const { recoveryInputIsDurable = true, ...executeOptions } = options;
@@ -230,10 +229,10 @@ export function executeCliToolUseConfig(
 }
 
 /**
- * Shared headless-run skeleton for `run`, `agents run`, and
- * `multi-agent run`: stand up a runtime host, run the request, always close
- * the host, and resolve the terminal outcome.
- * Centralizing this stops the three runners from drifting apart on host
+ * Shared headless-run skeleton for `run` and `multi-agent run`: stand up a
+ * runtime host, run the request, always close the host, and resolve the
+ * terminal outcome.
+ * Centralizing this stops the runners from drifting apart on host
  * lifecycle and outcome handling, which is how their behavior diverged before.
  *
  * A classified run failure (AgentRunLifecycle already ran it through
@@ -251,7 +250,7 @@ export function executeCliToolUseConfig(
 export function executeCliRequest(
   request: RunAgentRequest,
   runContext: CliContext,
-  options: CliExecuteOptions = {},
+  options: CliExecuteOptions,
 ): Effect.Effect<
   | {
       ok: true;
@@ -263,13 +262,7 @@ export function executeCliRequest(
   CliRunServices
 > {
   return Effect.gen(function* () {
-    // Transcript persistence is a launch prerequisite for every headless run.
-    // This executes before runtime-host construction and before runAgent.
-    const stores = { secrets: yield* Secrets, globalState: yield* AppState };
-    const session = yield* Effect.tryPromise({
-      try: () => initializeCliTranscriptSession(stores),
-      catch: ensureError,
-    });
+    const session = yield* options.session;
     session.setApprovalPolicy(runContext.approvalPolicy);
     const presentationHost = createCliRuntimeHost(runContext);
     let failurePresented = false;
@@ -433,14 +426,16 @@ export function executeCliRequest(
         // launchVerdict and the assignment below in one synchronous turn.
         // Headless shutdown deliberately cascades into active children: a
         // detached child cannot outlive the exiting CLI process, so the
-        // detach-on-stop toggle is not consulted on this path.
+        // detach-on-stop toggle is not consulted on this path — which is also
+        // why this stop's admission is decided here, before its settlement
+        // runs: only a detaching stop waits for the sever to interrupt.
         const stop =
           launchVerdict.kind !== 'published' && launchRunId
             ? session.runs.kill(launchRunId, {
                 detachActiveChildren: false,
               })
             : undefined;
-        if (stop?.accepted && launchVerdict.kind === 'undecided') {
+        if (stop?.accepted() === true && launchVerdict.kind === 'undecided') {
           launchVerdict = {
             kind: 'interrupted',
             artifactFailure: undefined,
@@ -520,14 +515,15 @@ export function executeCliRequest(
         openWorkflowOutput:
           openWorkflowOutput === undefined
             ? undefined
-            : (result) =>
+            : (result, agentDefaultOutputFiles) =>
                 effectRuntime().runPromise(
                   openWorkflowOutput(
                     result,
+                    agentDefaultOutputFiles,
                     tryCommitWorkflowOutputPublication,
                   ),
                 ),
-        modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+        modelCompatibilityKey: options.modelCompatibilityKey,
         launchSignal: launchAbortController.signal,
         beforeLeaseRelease: async () => {
           const handled = await finalizeShutdownStatus();

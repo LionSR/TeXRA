@@ -5,7 +5,7 @@
 
 import { stat } from 'node:fs/promises';
 
-import { Effect } from 'effect';
+import { Effect, type FileSystem, type Path } from 'effect';
 
 import {
   createAgentResponseTextConnector,
@@ -16,19 +16,19 @@ import {
 import { hostPort } from '@common/hostPort';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import {
+  openAppStateStore,
+  type RunStateWrite,
+} from '@controllers/session/appStateStore';
+import {
   createTexraResponseTextProcessing,
   type ResponseTextProcessing,
 } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { DisposableStore } from '@platform/disposable';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import {
-  openNodeWorkspaceStateStore,
-  openTexraWorkspaceConfigStore,
-} from '@platform/defaults/nodeStores';
+import { openTexraWorkspaceConfigStore } from '@platform/defaults/nodeStores';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import {
@@ -50,7 +50,8 @@ export interface DesktopProject {
   readonly root: string | undefined;
   readonly roots: WorkspaceRoots;
   readonly session: SessionHandle;
-  dispose(): void;
+  /** Release the session from its owner; settles once its entry has unwound. */
+  dispose(): Effect.Effect<void>;
 }
 
 interface DesktopProjectRegistryOptions {
@@ -66,18 +67,30 @@ interface DesktopProjectRegistryOptions {
    */
   readonly globalConfigStore: ConfigStore;
   readonly records: DesktopProjectRecords;
+  /** Runs each project state store's durable writes on the process runtime,
+   *  the one Promise boundary those stores have. */
+  readonly runWrite: RunStateWrite;
   /**
    * The process secret store and global state the helper model behind the
    * latex text-connector resolves against, threaded from the composition root
    * that opened them.
    */
   readonly stores: ModelOptionStores;
+  /** The process runtime the composition root built; the registry's Promise
+   *  faces (run settlement, artifact flush) settle on it. */
+  readonly runtime: ProcessRuntime;
   warn(message: string): void;
 }
 
 export interface DesktopProjectRegistry {
-  /** Open a folder as a project, remember it for the next launch, or return the one already open. */
-  open(root: string): Effect.Effect<DesktopProject, Error>;
+  /**
+   * Open a folder as a project, remember it for the next launch, or return
+   * the one already open. Its stores read through the process runtime's
+   * `FileSystem` and `Path`, so it runs where those are provided.
+   */
+  open(
+    root: string,
+  ): Effect.Effect<DesktopProject, Error, FileSystem.FileSystem | Path.Path>;
   /** Open projects in the order they were opened; the no-workspace session is not one. */
   list(): readonly DesktopProject[];
   /** The project the window shows: the active folder, else the no-workspace session. */
@@ -97,8 +110,9 @@ export interface DesktopProjectRegistry {
   /** Fires after a project opens or closes, or the active project changes. */
   onChange(listener: () => void): () => void;
   flushArtifacts(): Promise<void>;
-  /** Dispose every session, the most recently opened first. */
-  dispose(): void;
+  /** Dispose every session, the most recently opened first, then the
+   *  no-workspace session. */
+  dispose(): Effect.Effect<void>;
 }
 
 export interface RememberedDesktopProjects {
@@ -158,20 +172,21 @@ export function readRememberedDesktopProjects(
  * tool that ignores its kill is the same problem the process exit drain has,
  * and the project stays open, stoppable and visible in the log, until it ends.
  */
-async function stopProjectRuns(session: SessionHandle): Promise<void> {
+async function stopProjectRuns(
+  session: SessionHandle,
+  runtime: ProcessRuntime,
+): Promise<void> {
   const { runs } = session;
   await runInSession(session, async () => {
     const stops = runs.getActiveIds().flatMap((runId) => {
       if (runs.getHandle(runId)?.isChild) return [];
       return [runs.kill(runId, { detachActiveChildren: false }).settlement];
     });
-    await effectRuntime().runPromise(
-      Effect.all(stops, { concurrency: 'unbounded' }),
-    );
+    await runtime.runPromise(Effect.all(stops, { concurrency: 'unbounded' }));
     for (;;) {
       const active = runs.getActiveIds();
       if (active.length === 0) return;
-      await effectRuntime().runPromise(runs.waitForAnyChange(active));
+      await runtime.runPromise(runs.waitForAnyChange(active));
     }
   });
 }
@@ -201,11 +216,11 @@ function openProjectSession(
             root,
             roots,
             session,
-            dispose: () => runInSession(session, () => session.dispose()),
+            dispose: () => session.dispose(),
           };
         }),
       catch: ensureError,
-    }).pipe(Effect.onError(() => Effect.sync(() => session.dispose())));
+    }).pipe(Effect.onError(() => session.dispose()));
   });
 }
 
@@ -257,25 +272,33 @@ export function openDesktopProjectRegistry(
           const existing = projects.get(root);
           if (existing) return existing;
           yield* options.records.remember(root);
-          const storage = new WorkspaceStorageProvider(
+          const storageProvider = new WorkspaceStorageProvider(
             options.dataRoot,
             root,
-          ).getStoragePath();
+          );
+          const storage = storageProvider.getStoragePath();
           const [workspaceState, workspaceConfig] = yield* Effect.all(
             [
-              openNodeWorkspaceStateStore(storage),
-              openTexraWorkspaceConfigStore(storage, root, options.warn),
+              openAppStateStore(storage, options.runWrite),
+              openTexraWorkspaceConfigStore(
+                storage,
+                root,
+                options.warn,
+                options.runtime,
+              ),
             ],
             { concurrency: 'unbounded' },
           );
           const roots = createNodeWorkspaceRoots({
             workspacePath: root,
             storage,
+            globalStorage: storageProvider.getGlobalStoragePath(),
             config: {
               workspace: workspaceConfig,
               global: options.globalConfigStore,
             },
             workspaceState,
+            globalState: options.stores.globalState,
           });
           // Acquire the session and install its registry owner before
           // interruption can leave this operation.
@@ -303,7 +326,9 @@ export function openDesktopProjectRegistry(
           // persistence operation leaves that owner available to the host.
           yield* Effect.uninterruptible(
             Effect.gen(function* () {
-              yield* hostPort(() => stopProjectRuns(project.session));
+              yield* hostPort(() =>
+                stopProjectRuns(project.session, options.runtime),
+              );
               yield* Effect.gen(function* () {
                 const remembered = yield* options.records.read;
                 const next =
@@ -321,7 +346,7 @@ export function openDesktopProjectRegistry(
                 projects.delete(root);
                 if (activeRoot === root) activeRoot = next;
                 notify();
-                project.dispose();
+                yield* project.dispose();
               }).pipe(withPerKeyLane(lanes, selection));
             }),
           );
@@ -344,7 +369,7 @@ export function openDesktopProjectRegistry(
       async flushArtifacts() {
         const failures: string[] = [];
         for (const project of [fallback, ...projects.values()]) {
-          await effectRuntime().runPromise(
+          await options.runtime.runPromise(
             hostPort(() =>
               runInSession(project.session, () =>
                 project.session.flushArtifacts(),
@@ -365,14 +390,18 @@ export function openDesktopProjectRegistry(
             `Failed to flush desktop session artifacts: ${failures.join('; ')}`,
           );
       },
-      dispose() {
-        const store = new DisposableStore();
-        store.add(() => fallback.dispose());
-        for (const project of projects.values())
-          store.add(() => project.dispose());
-        projects.clear();
-        store.dispose();
-      },
+      dispose: () =>
+        [...projects.values()]
+          .toReversed()
+          .reduce(
+            (cleanup, project) =>
+              cleanup.pipe(Effect.ensuring(project.dispose())),
+            Effect.void,
+          )
+          .pipe(
+            Effect.ensuring(fallback.dispose()),
+            Effect.ensuring(Effect.sync(() => projects.clear())),
+          ),
     } satisfies DesktopProjectRegistry;
   }).pipe(Effect.uninterruptible, Effect.mapError(ensureError));
 }

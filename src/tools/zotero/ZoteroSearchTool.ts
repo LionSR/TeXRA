@@ -10,17 +10,18 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
+import { ToolCall } from '@agent/runtime/ToolCall';
+import type { ToolServices } from '@agent/runtime/ToolServices';
 import type { ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
+import { readConfig } from '@utils/config/configUtils';
 
 // Local imports - zotero
 import {
   callBetterBibTeX,
-  getZoteroPort,
+  ZOTERO_PORT_KEY,
   BbtCollectionChainSchema,
   BbtSearchResultItemSchema,
   type BbtCollectionChain,
@@ -131,16 +132,17 @@ function collectionPath(chain: BbtCollectionChain): string {
   return parts.join(' / ');
 }
 
-const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* ({
-  query,
-  title,
-  author,
-  year,
-  library,
-  include_collections,
-}: ZoteroSearchInput) {
-  const port = getZoteroPort();
-
+const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
+  {
+    query,
+    title,
+    author,
+    year,
+    library,
+    include_collections,
+  }: ZoteroSearchInput,
+  port: number,
+) {
   // Build search params: use advanced tuple search when structured fields
   // are provided, otherwise fall back to simple quick-search string.
   const searchTerms: unknown =
@@ -196,7 +198,7 @@ const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* ({
   );
 });
 
-export class ZoteroSearchTool extends defineTool({
+export const ZoteroSearchTool = defineTool({
   name: 'zotero_search',
   parallelSafe: true,
   description:
@@ -204,10 +206,14 @@ export class ZoteroSearchTool extends defineTool({
     'Prefer the structured title/author/year fields over a single query string. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroSearchInputSchema,
-}) {
-  protected execute(input: ZoteroSearchInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(searchZotero(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
-  }
-}
+  execute: (
+    input: ZoteroSearchInput,
+  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
+    Effect.gen(function* () {
+      const call = yield* ToolCall;
+      return yield* searchZotero(
+        input,
+        readConfig<number>(call.roots.config, ZOTERO_PORT_KEY),
+      );
+    }),
+});

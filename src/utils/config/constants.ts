@@ -10,10 +10,13 @@ export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
 
 // Tool groups marked `toggleable: true` in EXTERNAL_TOOL_DEFS are treated
-// as opt-in: they're disabled for new users on first install, and the Tools
-// dashboard shows a toggle so the user can turn them on. Seeding happens in
-// `seedDisabledToolDefaults()` during host startup; existing profiles are
-// never re-seeded.
+// as opt-in: they're disabled on first install, and the Tools dashboard shows
+// a toggle so the user can turn them on. Seeding happens in
+// `seedDisabledToolDefaults()` during host startup and is keyed on the
+// DISABLED_TOOLS entry itself: a profile that has the key is never re-seeded,
+// and a profile without it is a first install. TeXRA 1.0 starts from fresh
+// state (no reader for pre-1.0 state files), so every profile is seeded once
+// at the 1.0 cut.
 
 /**
  * Get the set of tool group IDs disabled by the user.

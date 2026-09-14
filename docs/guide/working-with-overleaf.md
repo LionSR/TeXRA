@@ -6,9 +6,9 @@ import OverleafEditActions from '../.vitepress/components/OverleafEditActions.vu
 
 # Working with Overleaf: a Git-based workflow
 
-Overleaf is the standard platform for collaborative LaTeX writing. With Overleaf\'s Git integration, you can combine it with TeXRA\'s agents, local tools (like `latexdiff`), and VS Code: derivations checked and drafts revised locally, collaboration on Overleaf.
+Overleaf is a popular collaborative platform for writing LaTeX documents. By pairing Overleaf's Git integration with TeXRA, you gain local AI-assisted editing, specialized research agents, local tooling (such as `latexdiff`), and direct compilation in VS Code—while retaining real-time collaboration with coauthors on Overleaf.
 
-This guide describes a workflow to clone your Overleaf project, run TeXRA locally in VS Code, and sync your changes back: Overleaf for collaboration, TeXRA for local AI editing.
+This guide describes a workflow to clone your Overleaf project, run TeXRA locally in VS Code, and sync your changes back: Overleaf for collaboration, TeXRA for local editing and verification.
 
 ::: tip Works from the CLI too
 The clone → edit → push loop below works in the terminal as well. After
@@ -19,10 +19,10 @@ and push as usual.
 
 ## Why bridge Overleaf and TeXRA?
 
-- **AI editing:** Apply TeXRA\'s specialized agents (`correct`, `polish`, `research`, `paper2slide`, etc.) locally.
-- **Local tooling:** Use `latexdiff` for precise change tracking and local compilation for previews.
-- **VS Code environment:** Use VS Code\'s features and extensions (like LaTeX Workshop).
-- **Git:** Use granular version control, branching, and offline work locally.
+- **Local AI editing:** Apply TeXRA's specialized agents (`correct`, `polish`, `research`, `paper2slide`, etc.) directly on your local checkout.
+- **Precise local tooling:** Use `latexdiff` for visual change tracking and local LaTeX engines for fast previews.
+- **Full editor ecosystem:** Leverage VS Code's rich extension ecosystem, including LaTeX Workshop and custom keybindings.
+- **Granular version control:** Work with standard Git branches, commit histories, and offline workflows.
 
 ## Prerequisites
 
@@ -64,8 +64,8 @@ Create an empty destination directory, then pass either the Overleaf project
 URL or its 24-character project ID:
 
 ```bash
-mkdir paper
-texra clone 0123456789abcdef01234567 --cwd ./paper
+mkdir project
+texra clone 0123456789abcdef01234567 --cwd ./project
 ```
 
 The CLI requests the Git token without displaying it and saves the token in
@@ -102,7 +102,7 @@ accepted by the same command.
 
 ### 3. Commit local changes
 
-As you work, commit changes often using VS Code\'s Source Control (<wa-icon library="texra" name="source-control"></wa-icon>) or the terminal:
+As you work, commit changes often using VS Code's Source Control (<wa-icon library="texra" name="source-control"></wa-icon>) or the terminal:
 
 ```bash
 # Stage changes (e.g., all modified files)
@@ -130,7 +130,7 @@ git commit -m "Refined methodology section using TeXRA polish"
 - **Authentication:** Git may re-prompt for Overleaf credentials. If your token expires, generate a new one from [Overleaf account settings](https://www.overleaf.com/user/settings) (read the [token documentation](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens)).
 - **Large projects:** Overleaf Git has size limits; keep them in mind for large projects.
 
-This Git-based workflow lets you use TeXRA\'s local AI and tooling on your Overleaf projects while keeping Overleaf for collaboration.
+This Git-based workflow lets you use TeXRA's local AI and tooling on your Overleaf projects while keeping Overleaf for collaboration.
 
 ## Next steps
 

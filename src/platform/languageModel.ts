@@ -28,26 +28,26 @@ export interface LanguageModelReference {
   readonly id: string;
 }
 
-export interface LanguageModelTextPart {
+interface LanguageModelTextPart {
   readonly kind: 'text';
   readonly text: string;
 }
 
 /** Binary image input passed to an editor-supplied language model. */
-export interface LanguageModelDataPart {
+interface LanguageModelDataPart {
   readonly kind: 'data';
   readonly data: Uint8Array;
   readonly mimeType: string;
 }
 
-export interface LanguageModelToolCallPart {
+interface LanguageModelToolCallPart {
   readonly kind: 'toolCall';
   readonly callId: string;
   readonly name: string;
   readonly input: object;
 }
 
-export interface LanguageModelToolResultPart {
+interface LanguageModelToolResultPart {
   readonly kind: 'toolResult';
   readonly callId: string;
   readonly text: string;
@@ -69,7 +69,7 @@ export type LanguageModelMessage =
       )[];
     };
 
-export interface LanguageModelToolDefinition {
+interface LanguageModelToolDefinition {
   readonly name: string;
   readonly description: string;
   readonly inputSchema?: object;

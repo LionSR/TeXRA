@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
-import { resolveModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
+import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
 
 import {
   resolveModelApiKeyProvider,
@@ -65,35 +65,27 @@ describe('Kimi Code routing', () => {
 
   it('uses the shared Kimi handler', () => {
     expect(
-      resolveModelHandlerCompatibilityKey(
+      resolveModelCompatibilityKey(
         MODEL_CONFIGS.kimiCoding,
         globalState,
         false,
       ),
-    ).toBe('ModelHandlerKimi');
+    ).toBe('Kimi');
   });
 
   it('routes dual-backend kimi3 through OpenRouter when the toggle is on', () => {
     // The factory's Kimi Code reroute is guarded on compat key
-    // 'ModelHandlerKimi'. Because kimi3 carries an openrouterFullName, an
-    // OpenRouter-enabled session persists as 'ModelHandlerOpenRouterNative'
-    // instead — so a resumed 'ModelHandlerKimi' kimi3 was, by construction, a
+    // 'Kimi'. Because kimi3 carries an openrouterFullName, an
+    // OpenRouter-enabled session persists as 'OpenRouterNative'
+    // instead — so a resumed 'Kimi' kimi3 was, by construction, a
     // direct (non-OpenRouter) session, which is why the resume path's
     // useOpenRouter=false is correct.
     expect(
-      resolveModelHandlerCompatibilityKey(
-        MODEL_CONFIGS.kimi3,
-        globalState,
-        false,
-      ),
-    ).toBe('ModelHandlerKimi');
+      resolveModelCompatibilityKey(MODEL_CONFIGS.kimi3, globalState, false),
+    ).toBe('Kimi');
     expect(
-      resolveModelHandlerCompatibilityKey(
-        MODEL_CONFIGS.kimi3,
-        globalState,
-        true,
-      ),
-    ).toBe('ModelHandlerOpenRouterNative');
+      resolveModelCompatibilityKey(MODEL_CONFIGS.kimi3, globalState, true),
+    ).toBe('OpenRouterNative');
   });
 
   it('does not divert other moonshot models off their normal routes', () => {

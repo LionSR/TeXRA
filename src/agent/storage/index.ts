@@ -2,9 +2,9 @@
  * Agent storage — the cross-host public surface of `src/agent/storage`.
  *
  * One curated barrel the hosts (CLI, desktop, extension) import instead of
- * deep-reaching each storage module by path. Beyond unified key-value storage
- * for run-scoped data, this is the curated host boundary for run
- * lifecycle and listing, resumability, the `runLease` lifecycle, and
+ * deep-reaching each storage module by path. This is the curated host
+ * boundary for run records, run lifecycle and listing, resumability, the
+ * `runLease` lifecycle, and
  * conversation formatting — decoupling host code from the storage internals'
  * file layout, per the module-level barrel pattern set by `@agent/runtime`
  * (#10011). The R-b deep-import width ratchet
@@ -13,14 +13,7 @@
  * `runLease` — collapsed to this single door.
  */
 
-export {
-  type RunKVStore,
-  type ChildRecord,
-  getRunStore,
-  getRunRecords,
-  clearStoreCache,
-  isReservedKvKeyName,
-} from './RunKVStore';
+export { type ChildRecord, getRunRecords } from './runRecords';
 export { buildCliWorkflowResultMeta, unwrapResultMeta } from './resultMeta';
 export {
   listRunWorkspaceFiles,

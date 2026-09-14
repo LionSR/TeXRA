@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApprovalModal } from '@cli/chat/tui/modals/ApprovalModal';
 import { RetryRequest } from '@cli/chat/tui/modals/RetryRequest';
 import type {
-  ApprovalDecision,
   ApprovalPayload,
   PendingApproval,
   RetryApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import type { RunId } from '@shared/schemas';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
   loadInk,
@@ -19,10 +19,10 @@ import {
 /** A foreground modal entry whose decision the test awaits. */
 function pendingFor(payload: ApprovalPayload): {
   readonly pending: PendingApproval;
-  readonly decision: Promise<ApprovalDecision>;
+  readonly decision: Promise<SurfaceDecision>;
 } {
-  let decide!: (decision: ApprovalDecision) => void;
-  const decision = new Promise<ApprovalDecision>((resolve) => {
+  let decide!: (decision: SurfaceDecision) => void;
+  const decision = new Promise<SurfaceDecision>((resolve) => {
     decide = resolve;
   });
   return { pending: { payload, decide }, decision };
@@ -70,7 +70,7 @@ describe('CLI retry request', () => {
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('n');
-      await expect(decision).resolves.toMatchObject({ accepted: false });
+      await expect(decision).resolves.toEqual({ action: 'reject' });
     } finally {
       instance.unmount();
     }
@@ -120,8 +120,8 @@ describe('CLI retry request', () => {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('k');
       await expect(decision).resolves.toEqual({
-        accepted: true,
-        disableQuotaRoute: 'chatgpt',
+        action: 'retry',
+        credentials: 'personal',
       });
     } finally {
       instance.unmount();

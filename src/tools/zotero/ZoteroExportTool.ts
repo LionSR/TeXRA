@@ -10,15 +10,16 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
+import { ToolCall } from '@agent/runtime/ToolCall';
+import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
+import { readConfig } from '@utils/config/configUtils';
 
 // Local imports - zotero
-import { callBetterBibTeX, getZoteroPort } from './bbtClient';
+import { callBetterBibTeX, ZOTERO_PORT_KEY } from './bbtClient';
 
 const ZOTERO_EXPORT_TIMEOUT_MS = 30_000; // 30 s
 
@@ -42,12 +43,10 @@ const ZoteroExportInputSchema = z.strictObject({
 
 type ZoteroExportInput = z.infer<typeof ZoteroExportInputSchema>;
 
-const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* ({
-  citekeys,
-  format,
-  library,
-}: ZoteroExportInput) {
-  const port = getZoteroPort();
+const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* (
+  { citekeys, format, library }: ZoteroExportInput,
+  port: number,
+) {
   const translator = format || 'biblatex';
 
   const params: unknown[] = [citekeys, translator];
@@ -78,16 +77,20 @@ const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* ({
   );
 });
 
-export class ZoteroExportTool extends defineTool({
+export const ZoteroExportTool = defineTool({
   name: 'zotero_export',
   description:
     'Export BibTeX/BibLaTeX entries from Zotero by citation keys. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroExportInputSchema,
-}) {
-  protected execute(input: ZoteroExportInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(exportEntries(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
-  }
-}
+  execute: (
+    input: ZoteroExportInput,
+  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
+    Effect.gen(function* () {
+      const call = yield* ToolCall;
+      return yield* exportEntries(
+        input,
+        readConfig<number>(call.roots.config, ZOTERO_PORT_KEY),
+      );
+    }),
+});

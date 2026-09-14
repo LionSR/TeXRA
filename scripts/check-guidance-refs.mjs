@@ -39,7 +39,6 @@ const GUIDANCE_FILES = [
   'AGENTS.md',
   'src/README.md',
   'src/agent/core/README.md',
-  'src/agent/modelHandlers/README.md',
   'src/agent/runtime/README.md',
   'src/agent/workflowScript/README.md',
   'src/replacement/README.md',

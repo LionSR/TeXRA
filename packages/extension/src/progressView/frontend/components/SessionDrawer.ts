@@ -8,7 +8,7 @@
  * the root as `surface-action` events. The docked list of the wide editor
  * tab is the same body inside `<progress-app>`, never this element.
  */
-import { LitElement, css, html, type TemplateResult } from 'lit';
+import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
@@ -170,19 +170,25 @@ export class SessionDrawer extends LitElement {
             .surface=${this.surface}
           ></run-tabs>
         </div>
-        <div class="drawer-footer">
-          <wa-button
-            appearance="plain"
-            variant="neutral"
-            size="s"
-            type="button"
-            @click=${this.openInEditor}
-            >${waIcon(inEditor ? 'backward-step' : 'picture-in-picture', {
-              slot: 'start',
-            })}
-            ${inEditor ? 'Back to sidebar' : 'Open sessions in editor'}</wa-button
-          >
-        </div>
+        ${
+          this.placement === 'desktop'
+            ? nothing
+            : html`<div class="drawer-footer">
+                <wa-button
+                  appearance="plain"
+                  variant="neutral"
+                  size="s"
+                  type="button"
+                  @click=${this.openInEditor}
+                  >${waIcon(inEditor ? 'backward-step' : 'picture-in-picture', {
+                    slot: 'start',
+                  })}
+                  ${
+                    inEditor ? 'Back to sidebar' : 'Open sessions in editor'
+                  }</wa-button
+                >
+              </div>`
+        }
       </div>
     `;
   }

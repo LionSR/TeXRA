@@ -88,11 +88,6 @@ export const AGENT_DECORATORS = {
       label: 'Custom',
       hint: 'Custom agent: User-defined in your agents directory',
     },
-    inline: {
-      icon: 'code',
-      label: 'Inline',
-      hint: 'Inline agent: Definition supplied directly by the embedding application',
-    },
   },
   agentCategories: {
     workflow: { icon: 'cube', label: 'Workflow' },

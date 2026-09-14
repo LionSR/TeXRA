@@ -7,13 +7,13 @@ import PQueue from 'p-queue';
 
 // Local imports
 import { loadAgents } from '@agent/index';
-import { clearStoreCache } from '@agent/storage';
 import {
   createAgentResponseTextConnector,
   defaultSession,
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime';
+import { installAuthProgramEdge } from '@auth/authProgram';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import { setRuntimeExtensionId } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -33,7 +33,6 @@ import {
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
-import { SecretManager } from '@frontend/secretManager';
 import {
   initializeLatexSupport,
   registerAgentDirectoryRoots,
@@ -67,15 +66,16 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
-import { redactSecrets } from '@logger/redaction';
+import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform } from '@platform/platform';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { tryProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import {
-  bootstrapNodeAgentDirectories,
   createNodePlatform,
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
@@ -90,6 +90,7 @@ import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
+import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import {
   formatTexraApprovalPolicy,
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
@@ -105,9 +106,12 @@ import {
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
 import type { SetupPlatformShape } from '@tools/setup/platform';
-import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
+import {
+  GITHUB_TOKEN_STORAGE_KEY,
+  gitHubTokenRejectedMessage,
+} from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
-import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import {
   initProcessSettingHost,
@@ -122,8 +126,8 @@ import { registerCommands } from './commands';
 
 const log = createLog('extension');
 
-// Shared by the `Platform` tool-availability port and the setup platform's
-// extensions port, which both answer the same question.
+// The setup platform's extensions port: also what the Lean 4 availability
+// probe reads to see whether the editor host has the extension installed.
 const isVscodeExtensionInstalled = (id: string) =>
   vscode.extensions.getExtension(id) !== undefined;
 
@@ -169,8 +173,9 @@ let extensionShutdownPromise: Promise<void> | undefined;
  * both activation paths: the credential-only path without a folder and the
  * workspace path, which adds the ports only a folder can answer.
  *
- * Returns the secrets port it built so the surfaces registered below take it
- * as an argument instead of reading it back off the ambient locator.
+ * Returns the secrets port and the process runtime it built, so the surfaces
+ * registered below take both as arguments instead of reading either back off
+ * an ambient locator (PRD R1: each composition root holds its runtime).
  */
 async function initVscodePlatform(
   context: vscode.ExtensionContext,
@@ -179,18 +184,19 @@ async function initVscodePlatform(
   workspaceState: NodeWorkspaceRootsInit['workspaceState'],
   extras: Pick<
     NodePlatformServices,
-    'toolAvailability' | 'languageModel' | 'toolMissingHandler'
+    'languageModel' | 'toolMissingHandler'
   > = {},
-): Promise<PlatformSecrets> {
+): Promise<{ secrets: PlatformSecrets; runtime: ProcessRuntime }> {
   // The process runtime comes first: the config stores below are opened as
   // Effect programs, so it must exist before the platform this host wires.
   // The process identity is read before installing: an opener that uses the
   // synchronous `open` would otherwise face an asynchronous layer build.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
+  installLongRunningModelDispatcher();
   // Both process stores exist before the runtime here: VS Code hands the
   // extension its SecretStorage and Memento at activation.
   const secrets = new VscodeSecrets(context);
-  installProcessRuntime({
+  const runtime = installProcessRuntime({
     processStart: await nodeProcesses.selfIdentity(),
     globalStorage: () => storage.getGlobalStoragePath(),
     updateCheckStorage: () => storage.getGlobalStoragePath(),
@@ -203,25 +209,34 @@ async function initVscodePlatform(
       acquire: (configuration) =>
         acquireVscodeLanguageModel(context, configuration),
     },
+    // Lean through the Lean 4 extension, not a direct `lake` pool.
+    lean: LeanLanguageServices.layer(
+      createVscodeLeanLanguageServices(context.globalState),
+    ),
   });
+  // The auth subsystem's run edge, installed here beside the runtime it
+  // settles on (PRD R1): the edge is a process-wide value, so it belongs to
+  // this composition root rather than to any surface the root constructs.
+  installAuthProgramEdge((program) => runtime.runPromiseExit(program));
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(
-    await effectRuntime().runPromise(
-      openTexraConfigStores(storage, workspaceRoot, (message) =>
-        log.warn(message),
+    await runtime.runPromise(
+      openTexraConfigStores(
+        storage,
+        workspaceRoot,
+        (message) => log.warn(message),
+        runtime,
       ),
     ),
   );
   initPlatform(
     createNodePlatform({
-      globalState: context.globalState,
-      storage,
-      secrets,
       lifecycle,
       agentDirectories,
       agentResume: {
-        tryResumeRun: tryResumeFromResumeData,
+        tryResumeRun: (runId, recovery) =>
+          tryResumeFromResumeData(runId, runtime, recovery),
       },
       ...extras,
     }),
@@ -230,11 +245,13 @@ async function initVscodePlatform(
     createNodeWorkspaceRoots({
       workspacePath: workspaceRoot,
       storage: storage.getStoragePath(),
+      globalStorage: storage.getGlobalStoragePath(),
       config,
       workspaceState,
+      globalState: context.globalState,
     }),
   );
-  return secrets;
+  return { secrets, runtime };
 }
 
 function shutdownExtension(): Promise<void> {
@@ -246,7 +263,9 @@ function shutdownExtension(): Promise<void> {
       await host?.runShutdown();
     } finally {
       if (lifecycleHost === host) lifecycleHost = undefined;
-      teardownDefaultSession();
+      // No runtime, no session was ever opened: an activation that failed
+      // before installing one has nothing to tear down here.
+      await tryProcessRuntime()?.runPromise(teardownDefaultSession());
       // After the session: its graph releases on the runtime it runs on.
       await disposeProcessRuntime();
     }
@@ -268,7 +287,7 @@ function installUnhandledRejectionSurface(
     log.error('Unhandled extension-host rejection', { data: error });
     void vscode.window
       .showErrorMessage(
-        `The extension host encountered an unrecoverable error: ${redactSecrets(toErrorMessage(error))}`,
+        `The extension host encountered an unrecoverable error: ${formatFatalErrorDetail(error)}`,
       )
       .then(undefined, (notificationError: unknown) => {
         log.error('Failed to display unhandled rejection error', {
@@ -376,6 +395,7 @@ function registerWalkthroughWorkspaceAction(
 function registerSupabaseAuth(
   context: vscode.ExtensionContext,
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ): void {
   try {
     setRuntimeExtensionId(context.extension.id);
@@ -404,6 +424,7 @@ function registerSupabaseAuth(
         },
       },
       secrets,
+      runtime,
     );
     context.subscriptions.push(
       vscode.authentication.registerAuthenticationProvider(
@@ -461,14 +482,18 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // opening a folder reloads the window into that path (welcomeView.ts).
     const lifecycle = createLifecycleHost();
     lifecycleHost = lifecycle;
-    agentDirectories.initialize(context.globalState);
-    const secrets = await initVscodePlatform(
+    const { secrets, runtime } = await initVscodePlatform(
       context,
       lifecycle,
       undefined,
       context.workspaceState,
     );
-    registerSupabaseAuth(context, secrets);
+    agentDirectories.initialize(
+      context.globalState,
+      path.join(context.extensionPath, 'resources'),
+      runtime,
+    );
+    registerSupabaseAuth(context, secrets, runtime);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
     // path below, so the welcome view registers its own standalone variant:
@@ -487,7 +512,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         authSignIn(),
       ),
       vscode.commands.registerCommand('texra.auth.chatgpt.signIn', () =>
-        signInWithSubscription('welcomeView', 'chatgpt'),
+        signInWithSubscription('welcomeView', 'chatgpt', runtime),
       ),
       // No settings view exists before a folder is open, so there is no
       // credential surface to refresh after the key write.
@@ -512,7 +537,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
-  agentDirectories.initialize(context.globalState);
   setLogSink(createVsCodeLogSink());
   // Deactivation releases the output channels with the sink, so a reload does
   // not leave a disposed host surface installed.
@@ -530,13 +554,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
-  const secrets = await initVscodePlatform(
+  const { secrets, runtime } = await initVscodePlatform(
     context,
     lifecycle,
     workspaceRoot,
     workspaceState,
     {
-      toolAvailability: { isVscodeExtensionInstalled },
       languageModel,
       toolMissingHandler: async (message, openDocsCommand) => {
         const actions = openDocsCommand ? ['View Installation Guide'] : [];
@@ -552,9 +575,16 @@ async function activateExtension(context: vscode.ExtensionContext) {
       },
     },
   );
+  // After the platform above, which built the runtime the manager settles its
+  // watcher rebuilds on.
+  agentDirectories.initialize(
+    context.globalState,
+    path.join(context.extensionPath, 'resources'),
+    runtime,
+  );
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
-  installTexraAccountProbes();
+  installTexraAccountProbes(secrets);
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
     appSignals.emit('languageModelsChanged', undefined);
@@ -562,25 +592,35 @@ async function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     languageModel.onDidChange(invalidateLanguageModels),
   );
-  const runtimeSession = initializeDefaultSession({
-    responseTextProcessing: createTexraResponseTextProcessing(
-      createAgentResponseTextConnector({
-        secrets,
-        globalState: context.globalState,
-      }),
-    ),
-  });
+  // The host entry holds the process runtime in a local and threads it to the
+  // surfaces registered below, so code under `activate` settles its Effects on
+  // the runtime it was handed instead of reading the global back.
+  const runtimeSession = await runtime.runPromise(
+    initializeDefaultSession({
+      responseTextProcessing: createTexraResponseTextProcessing(
+        createAgentResponseTextConnector({
+          secrets,
+          globalState: context.globalState,
+        }),
+      ),
+    }),
+  );
+  if (runtimeSession.storeCleared) {
+    void vscode.window.showWarningMessage(
+      sessionStoreClearedMessage(runtimeSession.storeCleared),
+    );
+  }
   // `disposeStatusListener` and `statusBarItem` are owned solely by
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
   registerRuntimeShutdownHandlers(lifecycle, {
-    runSettlement: (settlement) => effectRuntime().runPromise(settlement),
+    runSettlement: (settlement) => runtime.runPromise(settlement),
     afterAgentShutdown: [
       () => killActiveRecording(),
-      () => effectRuntime().runPromise(UsageLogService.dispose()),
+      () => runtime.runPromise(UsageLogService.dispose()),
     ],
     flushArtifacts: () => runtimeSession.flushArtifacts(),
-    afterRunSettlement: [() => clearStoreCache(), () => disposeDiffRefresh()],
+    afterRunSettlement: [() => disposeDiffRefresh()],
   });
   runtimeSession.setApprovalPolicy(
     readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
@@ -589,53 +629,29 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `AVAILABLE_SKILLS` is actually populated for tool-use agents in VS Code —
   // without this call `loadRuntimeSkillCatalog` always sees zero sources and
   // `texra.skills.enabled` has no observable effect (issue #7751 FS5).
-  // (`initNodeAgentRuntime`, which registers the direct Lean adapter, stays
-  // out: VS Code drives Lean through its own integration.)
   initializeNodeRuntimeSkills({
     resourcesPath: path.join(context.extensionPath, 'resources'),
   });
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
 
-  // Seed first-install defaults (e.g. disabled tools) before anything writes
-  // LAST_KNOWN_VERSION, so upgrading users are not affected.
-  await effectRuntime().runPromise(
-    seedDisabledToolDefaults(
-      context.globalState,
-      GlobalStateKey.LAST_KNOWN_VERSION,
-    ),
-  );
+  // Seed first-install defaults (e.g. disabled tools). No-ops once
+  // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
+  await runtime.runPromise(seedDisabledToolDefaults(context.globalState));
 
-  // The following startup steps touch independent state, so they run
-  // concurrently to shorten activation. Within the agent branch the order
-  // still matters: the bundled-agent reconciliation populates the built-in
-  // directories, registerAgentDirectoryRoots exposes them, and loadAgents
-  // scans them.
-  await Promise.all([
-    (async () => {
-      await effectRuntime().runPromise(
-        bootstrapNodeAgentDirectories({
-          channel: 'extension',
-          resourcesPath: path.join(context.extensionPath, 'resources'),
-          currentVersion: context.extension.packageJSON?.version,
-          versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-        }),
-      );
-      await registerAgentDirectoryRoots(context);
-      try {
-        await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
-        void effectRuntime()
-          .runPromise(loadAgents())
-          .catch((err) => {
-            log.warn(`Remote agent refresh failed: ${toErrorMessage(err)}`);
-          });
-      } catch (err) {
-        log.error(`Failed to initialize agent index: ${toErrorMessage(err)}`);
-      }
-    })(),
-  ]);
+  // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
+  // directories, and loadAgents scans them.
+  await registerAgentDirectoryRoots(context);
+  try {
+    await runtime.runPromise(loadAgents({ includeRemote: false }));
+    void runtime.runPromise(loadAgents()).catch((err) => {
+      log.warn(`Remote agent refresh failed: ${toErrorMessage(err)}`);
+    });
+  } catch (err) {
+    log.error(`Failed to initialize agent index: ${toErrorMessage(err)}`);
+  }
 
-  registerSupabaseAuth(context, secrets);
+  registerSupabaseAuth(context, secrets, runtime);
 
   // Usage logging is a runtime service, not an authentication-provider
   // capability. Initialize it even when Supabase sign-in is not configured,
@@ -646,9 +662,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ? context.extension.packageJSON.version
       : undefined;
   try {
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       UsageLogService.initialize(
-        effectRuntime().scope,
+        runtime.scope,
         {},
         extensionVersion,
         vscode.env.appName || undefined,
@@ -658,7 +674,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
     log.warn(`Failed to initialize usage logging: ${toErrorMessage(error)}`);
   }
 
-  const progressViewProvider = new ProgressViewProvider(context, secrets);
+  const progressViewProvider = new ProgressViewProvider(
+    context,
+    secrets,
+    runtime,
+  );
   await progressViewProvider.initialize();
 
   log.info('TeXRA extension activated');
@@ -668,13 +688,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(context.globalState), 0);
-  registerCommands(context, progressViewProvider, secrets);
+  registerCommands(context, progressViewProvider, secrets, runtime);
   registerWalkthroughWorkspaceAction(context, true);
-  registerFileDecorations(context);
+  registerFileDecorations(context, runtime);
 
-  setLeanLanguageServices(
-    createVscodeLeanLanguageServices(context.globalState),
-  );
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this helper to log rejections
   // instead of letting them become unhandled promise rejections.
@@ -686,17 +703,17 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     context.secrets.onDidChange((e) => {
-      if (e.key !== SecretManager.GITHUB_TOKEN_KEY) return;
+      if (e.key !== GITHUB_TOKEN_STORAGE_KEY) return;
       // Re-probe so any subscribed UI (Tools tab) reflects the new token
       // presence; getGitHubToken() now reads SecretStorage live (no cache).
-      void effectRuntime()
+      void runtime
         .runPromise(refreshToolAvailability())
         .catch(logRefreshFailure('secret change'));
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
-      void effectRuntime()
+      void runtime
         .runPromise(refreshToolAvailability())
         .catch(logRefreshFailure('extension change'));
     }),
@@ -704,7 +721,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // gates the GitHub PR subscription tool group. ProgressViewProvider owns
     // the ordered workspace-storage and native-config replacement.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void effectRuntime()
+      void runtime
         .runPromise(refreshToolAvailability())
         .catch(logRefreshFailure('workspace folder change'));
     }),
@@ -724,7 +741,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     },
   );
   context.subscriptions.push({ dispose: disposeGitHubAuthListener });
-  registerInlineCriticism(context);
+  registerInlineCriticism(context, runtime);
   registerInlineComments(context);
   setInlineCommentProvider(getInlineCommentProvider());
 
@@ -768,10 +785,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   });
 
   const statusBarSession = defaultSession();
-  const statusBarUsageTracker = new StatusBarUsageTracker(
-    statusBarSession.status,
-    statusBarSession,
-  );
+  const statusBarUsageTracker = new StatusBarUsageTracker(statusBarSession);
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;
     const policy = statusBarSession.approvalPolicy;
@@ -824,6 +838,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   const disposeStatusListener = subscribeStatusBarSessionEvents({
     session: statusBarSession,
+    tracker: statusBarUsageTracker,
     onStatusChanged: () => {
       updateStatusBarTooltip();
       updateStatusBarText();
@@ -831,6 +846,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // The snapshot store accumulates the per-round deltas; the tracker
     // projects the running runs' totals from it on each refresh.
     onUsageChanged: updateStatusBarTooltip,
+    runtime,
   });
   // Paint the policy line immediately; otherwise the tooltip shows the
   // generic "Show TeXRA Tasks" text until the first status/usage event.
@@ -845,7 +861,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   // Surface curated research tools to VS Code's Language Model Tool API
   // (Copilot Chat `#texra_*` references).
-  registerLanguageModelTools(context);
+  registerLanguageModelTools(context, runtime, statusBarSession.roots);
 
   context.subscriptions.push(
     { dispose: disposeStatusListener },

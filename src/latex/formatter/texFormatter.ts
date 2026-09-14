@@ -1,20 +1,29 @@
 // Local imports - formatter implementations
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { getConfig } from '@utils/config/configUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 // Local file imports
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
 import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
 
-interface LatexFormatter {
+interface LatexFormatterDefinition {
   /** Setting value that selects this formatter. */
   id: string;
   /** Config key holding this formatter's optional config-file path. */
   configKey: string;
-  run(filePath: string): Promise<boolean>;
+  run(
+    filePath: string,
+    workspaceRoot?: string,
+    configPath?: string,
+  ): Promise<boolean>;
 }
 
-const LATEX_FORMATTERS: Record<string, LatexFormatter> = {
+export interface LatexFormatter extends LatexFormatterDefinition {
+  readonly configPath: string;
+}
+
+const LATEX_FORMATTERS: Record<string, LatexFormatterDefinition> = {
   'tex-fmt': {
     id: 'tex-fmt',
     configKey: TEXFMT_CONFIG_KEY,
@@ -39,10 +48,13 @@ export function resolveLatexFormatter(): LatexFormatter | null {
   if (formatter === 'none') {
     return null;
   }
-  return LATEX_FORMATTERS[formatter] ?? LATEX_FORMATTERS.latexindent;
+  const selected = LATEX_FORMATTERS[formatter] ?? LATEX_FORMATTERS.latexindent;
+  return { ...selected, configPath: getConfig<string>(selected.configKey, '') };
 }
 
 export async function runLatexFormatter(filePath: string): Promise<boolean> {
   const formatter = resolveLatexFormatter();
-  return formatter ? formatter.run(filePath) : true;
+  return formatter
+    ? formatter.run(filePath, undefined, formatter.configPath)
+    : true;
 }

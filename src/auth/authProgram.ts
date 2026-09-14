@@ -2,9 +2,9 @@
  * The Promise edge of the auth subsystem's Effect programs (Effect 4 runtime
  * PRD, R1 and R7): one typed failure for the host ports those programs call,
  * and the settle-fold every Promise-facing auth surface shares. The run edge
- * itself is installed by the host entry ({@link installAuthProgramEdge}), so
- * the only `Effect.run*` site in the subsystem lives in host code at the
- * sanctioned boundary, not here.
+ * itself is installed by the host's composition root
+ * ({@link installAuthProgramEdge}), so the only `Effect.run*` site in the
+ * subsystem lives in host code at the sanctioned boundary, not here.
  */
 import { Cause, Data, Deferred, Effect, Exit, Option, Semaphore } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -114,9 +114,12 @@ function rethrowPortCause(error: unknown): never {
 /**
  * Settles an auth program as an `Exit`, for the Promise-facing surfaces that
  * settle through {@link runAuthProgram}. Installed like the process roots:
- * exactly once per process, by the host entry, as
- * `(program) => effectRuntime().runPromiseExit(program)` — which keeps the
- * `Effect.run*` call itself in boundary code (PRD R1).
+ * exactly once per process, by the host's composition root and over the
+ * runtime that root installed, as
+ * `(program) => runtime.runPromiseExit(program)`. That keeps the
+ * `Effect.run*` call itself in boundary code (PRD R1), and ties the edge's
+ * lifetime to the process runtime rather than to any surface the root
+ * constructs.
  */
 export type AuthProgramEdge = <A, E>(
   program: Effect.Effect<A, E, HttpClient.HttpClient>,
@@ -141,7 +144,7 @@ export async function runAuthProgram<A, E>(
 ): Promise<A> {
   if (!authProgramEdge) {
     throw new Error(
-      'Auth program edge not installed: the host entry installs it beside the process runtime.',
+      'Auth program edge not installed: the host composition root installs it beside the process runtime.',
     );
   }
   const exit = await authProgramEdge(program);

@@ -4,19 +4,26 @@ import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Exit } from 'effect';
-import { describe, expect } from 'vitest';
+import { Effect, Exit, ManagedRuntime } from 'effect';
+import { afterEach, describe, expect } from 'vitest';
 
 // Local imports - platform
 import type { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 
 // Local imports - test support
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 describe('desktop JsonConfigProvider (dual-store)', () => {
   const tempDirs = useTempDirs();
+  // Each provider's stores run their `update` on a runtime of their own;
+  // the runtime ends with the test that made it.
+  const runtimes: { dispose(): Promise<void> }[] = [];
+  afterEach(async () => {
+    for (const runtime of runtimes.splice(0)) await runtime.dispose();
+  });
 
   function createProvider(): Effect.Effect<
     {
@@ -40,9 +47,13 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
       );
       const globalPath = join(tempDir, 'global.json');
       const workspacePath = join(tempDir, 'workspace.json');
+      // The provider's `update` is a Promise, so each store is handed the
+      // runtime its write runs on, exactly as a host hands over its own.
+      const runtime = ManagedRuntime.make(nodePlatformLayer);
+      runtimes.push(runtime);
       const [globalStore, workspaceStore] = yield* Effect.all([
-        JsonStore.open(globalPath),
-        JsonStore.open(workspacePath),
+        JsonStore.open(globalPath, { runtime }),
+        JsonStore.open(workspacePath, { runtime }),
       ]);
       return {
         provider: new JsonConfigProvider({
@@ -53,7 +64,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
         workspaceStore,
         files: [globalPath, workspacePath],
       };
-    });
+    }).pipe(Effect.provide(nodePlatformLayer));
   }
 
   it.effect('returns schema defaults without creating empty config files', () =>
@@ -99,7 +110,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
         globalValue: ['dist'],
         workspaceValue: ['node_modules'],
       });
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('stores new config values under the canonical prefixed key', () =>
@@ -127,6 +138,6 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
 
       expect(provider.isExplicitlySet('files.exclude')).toBe(false);
       expect(workspaceStore.snapshot()).toEqual({});
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

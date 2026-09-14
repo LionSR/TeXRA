@@ -25,7 +25,11 @@ import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import type { SessionType, RunId } from '@shared/schemas';
+import {
+  isModelOptionAvailable,
+  type SessionType,
+  type RunId,
+} from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
@@ -635,7 +639,7 @@ export class SessionComposer extends LitElement {
                 value=${`model:${option.value}`}
                 type="checkbox"
                 ?checked=${option.value === launch.model}
-                ?disabled=${option.disabled === true}
+                ?disabled=${!isModelOptionAvailable(option)}
                 >${option.label}</wa-dropdown-item
               >`,
           )}

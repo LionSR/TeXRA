@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { platform } from '@platform/platform';
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
-import { fakeProcessServices } from '@test/support/setupPlatform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
@@ -116,7 +117,8 @@ function delegationRegistry(tools: readonly ToolInput[]) {
         tool.name,
         {
           definition: tool,
-          call: async () => ({ status: 'executed', summary: '', output: '' }),
+          call: () =>
+            Effect.succeed({ status: 'executed', summary: '', output: '' }),
         },
       ]),
     ),
@@ -124,12 +126,13 @@ function delegationRegistry(tools: readonly ToolInput[]) {
 }
 
 async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
-  const { secrets, globalState } = platform();
+  const { secrets, globalState } = hostStores();
   return resolveAgentTools({
     tools,
     registry: delegationRegistry(tools),
     logger: { warn: () => {} },
     toolInjections: new ToolInjectionRegistry(),
+    config: new FakeConfigProvider(),
     stores: { secrets, globalState },
   });
 }
@@ -194,9 +197,9 @@ describe('delegation model availability', () => {
     expect(
       availableModelNamesFromOptions([
         model('sonnet46T'),
-        model('opus48T', { disabled: true }),
-        model('gemini31p', { requiresKey: true, availability: 'missing-key' }),
-        model('deepseekT', { disabled: false, requiresKey: false }),
+        model('opus48T', { availability: 'retired' }),
+        model('gemini31p', { availability: 'missing-key' }),
+        model('deepseekT', { availability: 'provider-key' }),
       ]),
     ).toEqual(['sonnet46T', 'deepseekT']);
   });
@@ -311,8 +314,7 @@ describe('resolveAgentTools delegation annotation', () => {
       {
         value: 'deepseekT',
         label: 'DeepSeek',
-        disabled: false,
-        requiresKey: false,
+        availability: 'provider-key',
       },
     ]);
   });

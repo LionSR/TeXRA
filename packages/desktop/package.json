@@ -30,7 +30,6 @@
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@openai/codex-sdk": "^0.153.4",
     "@playwright/test": "^1.63.0",
-    "@sentry/electron": "^7.18.0",
     "@typescript/native": "npm:typescript@^7.0.2",
     "electron": "^44.2.0",
     "electron-builder": "^26.15.3",

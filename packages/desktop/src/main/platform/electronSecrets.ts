@@ -1,7 +1,7 @@
 import { safeStorage } from 'electron';
 
 import { secretsGet, type PlatformSecrets } from '@platform/secrets';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -63,6 +63,9 @@ export class ElectronSecrets implements PlatformSecrets {
 
   constructor(
     private readonly store: JsonStore,
+    /** The process runtime the composition root built; this port's writes run
+     *  on it rather than on a looked-up one. */
+    private readonly runtime: ProcessRuntime,
     private readonly options: ElectronSecretsOptions = {},
   ) {}
 
@@ -123,7 +126,7 @@ export class ElectronSecrets implements PlatformSecrets {
         };
         // `PlatformSecrets` is a Promise-shaped platform port; this is where
         // the store's write program runs for the desktop host.
-        await effectRuntime().runPromise(this.store.set(key, stored));
+        await this.runtime.runPromise(this.store.set(key, stored));
         return;
       }
       case 'unavailable':
@@ -140,7 +143,7 @@ export class ElectronSecrets implements PlatformSecrets {
   }
 
   async delete(key: string): Promise<void> {
-    await effectRuntime().runPromise(this.store.set(key, undefined));
+    await this.runtime.runPromise(this.store.set(key, undefined));
   }
 
   async listStoredKeys(): Promise<readonly string[]> {

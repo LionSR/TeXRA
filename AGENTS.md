@@ -221,7 +221,7 @@ subset of the same files under the same options.
 - Use the path aliases defined in `tsconfig.json` (for example `@frontend/*`, `@common/*`, `@utils/*`) instead of long relative import chains.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
-- Keep the directory structure aligned among different webviews where they share a concern (e.g. `components/`, `styles/`). `progressView` and `settingsView` intentionally diverge beyond that — see "Webview Consistency Patterns" for which folders are pattern-specific (`settingsView/frontend/slices/` vs `progressView/frontend/formatters/`) rather than a naming drift to fix.
+- Keep the directory structure aligned among different webviews where they share a concern (e.g. `components/`, `styles/`). `progressView` and `settingsView` intentionally diverge beyond that — see "Webview Consistency Patterns" for which folders are pattern-specific (`settingsView/frontend/messageDispatcher.ts` vs `progressView/frontend/formatters/`) rather than a naming drift to fix.
 - Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`). Host-neutral session bridging lives under `src/controllers/session/` (e.g. `src/controllers/session/SessionBridge.ts`), per the `controllers/` host-neutral-orchestration rule.
 
 ### Naming conventions
@@ -452,9 +452,16 @@ agent YAML fields, or flags (see "TeXRA 1.0 direction"). Do not add legacy
 readers, aliases, migrations, dual-format unions, or compatibility writers, and
 there is no retirement window to wait out: delete existing ones on sight, with
 their schemas, transforms, fixtures, and compatibility-specific tests. The only
-exceptions are external export formats (for example `trace.json`) and wire
-protocols TeXRA still supports; normalize those once at their boundary, and
-reject any other unsupported state with a clear error.
+exceptions are formats with consumers outside TeXRA and wire protocols TeXRA
+still supports; normalize those once at their boundary, and reject any other
+unsupported state with a clear error. `trace.json` is **not** such an exception:
+the owner ruled that 1.0's exports start fresh, so a document from an older
+build fails loudly at the parse boundary (#12359). The session database is
+the same stance made mechanical: `SESSION_EVENT_FORMAT`
+(`src/shared/schemas/sessionEvent.ts`) stamps every `texra.db`, `Database`
+clears a store of any other version at open, and
+`sessionEventFormat.vitest.ts` pins the stored shape so a vocabulary change
+cannot land without bumping the version.
 
 ### ES2023+ Patterns
 
@@ -540,7 +547,7 @@ For good separation of concerns and platform independence, core business logic s
 
 3. **Push UI side-effects to the caller.** Business logic functions should return error information (result objects, thrown errors) instead of calling `vscode.window.show*Message()` directly. The command/frontend layer handles user-facing notifications.
 
-4. **Use `Platform` ports for platform capabilities.** When agnostic code needs something only the host provides (e.g., checking if a VS Code extension is installed), add a typed port to `Platform` (e.g., `toolAvailability.isVscodeExtensionInstalled`) and wire it from the host composition root.
+4. **Read host capabilities from the Context service that owns them.** When agnostic code needs something only the host provides (e.g., whether an editor extension is installed), take it from the typed service the host composition root already provides once per process (e.g., `SetupPlatform.extensions?.isInstalled`, `Secrets`, `AppState`, the Effect-native `FileSystem`/`Path`). Do not add fields to `Platform`: it is shrinking onto those services (ruling 2026-09-13, #12073 R-1), and a new `Platform` port is a second home for a fact a service already owns.
 
 5. **Prefer `WorkspaceFS.getPath()` over `vscode.workspace.workspaceFolders`.** The former is already available and returns the same value.
 
@@ -567,17 +574,17 @@ For good separation of concerns and platform independence, core business logic s
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
 - Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns an `executionId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `executionId` (e.g. subagent dispatch in `src/tools/delegation/DelegationTools.ts` or a resume path). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
 - Resume a persisted tool-use session via `resumeToolUseFromResumeData` (`src/agent/runtime/executeAgent.ts`), not `runAgent`.
-- Add new model handlers under `src/agent/modelHandlers/<provider>/` (no barrel — import via the `@agent/modelHandlers/<provider>/<File>` alias, per that directory's `README.md`), and register capabilities/pricing in `src/model/computeModelOptions.ts`.
+- A new provider is a protocol arm in `packages/llm` plus a route row in `src/agent/runtime/modelRoutes.ts` and `src/agent/runtime/run/modelBinding.ts`; there is no per-provider handler class. Register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
 **Run loop architecture**
 
 A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph:
 
-- **Two programs**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`) for tool-use agents and `runReflection` (`loop/reflection.ts`) for multi-round reflection agents. `loop/rows.ts` builds every ledger draft a loop appends. `core/flows/` keeps only what both use (`toolCallParsing`).
+- **Two programs**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`) for tool-use agents and `runReflection` (`loop/reflection.ts`) for multi-round reflection agents. `loop/rows.ts` builds every ledger draft a loop appends. `core/tools/toolCallParsing.ts` is the one helper both use.
 - **State is row data.** The loop never holds its own copy of the conversation: it continues from the folded `RunState` (`src/shared/session/runStateFold.ts`) that `RunLedger.appendBatch` returns, so the live path and the resume path are one function. Resume reads only the fold; `flow_<id>.json` is never read.
 - **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), `FollowUps` (the run's lease over the follow-up queue), and the session-root `RunLedger`. No services bag, no node fields.
 - **Write points are the contract**: a `model.message attempt` before a billed request leaves the process; the `response` row before any tool dispatches; `tool.intent` before every barrier call; `tool.result` before the loop continues; a `flow.step` for every wait and every halt; a `flow.snapshot` authored only from the state the ledger returned (reconcile-never-overwrite).
-- **Retry has two owners**, both inside `ModelInvoker`: an automatic route-scoped batch under the session's `ModelRetryGate`, and a durable human permit (`approval.requested` bound through the snapshot's `pendingRetry`: `waiting` -> `authorized` -> `started`). Nothing else retries a model call; provider SDK retries stay disabled (`auxiliaryRetry`).
+- **Retry has two owners**, both inside `ModelInvoker`: an automatic route-scoped batch under the session's `ModelRetryGate`, and a durable human permit (`approval.requested` bound through the snapshot's `pendingRetry`: `waiting` -> `authorized` -> `started`). Nothing else retries a model call; provider SDK retries stay disabled; the helper path (`helperCompletion`) keeps its own bounded retry because it runs outside the invoker.
 - **Interruption is the fiber's.** Each activity/append pair runs under `Effect.uninterruptibleMask` with only the handoff and the durable append masked; there is no `AbortSignal` threading inside the loop.
 - **Agent owns lifecycle**: `executeAgent` / `AgentRunLifecycle` handle init and finalize; the loops only execute and fail typed (`RunHalted`).
 
@@ -621,13 +628,13 @@ default to reach for, it's `settingsView`'s pattern specifically:
   `settingsView/handlers/` (`AgentHandlers`, `LatexSettingsHandlers`,
   `MemoryHandlers`, `GitHubSubscriptionHandlers`, `SubscriptionHandlers`).
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
-  `SETTINGS_VIEW_CMD`, `PROFILE_VIEW_COMMANDS`, `MEMORY_VIEW_COMMANDS`) — use
-  those, not string literals. Frontend state lives in module-level reactive
+  `SETTINGS_VIEW_CMD`, `SETTINGS_VIEW_COMMANDS`) — use those, not string
+  literals. Frontend state lives in module-level reactive
   signals declared in `settingsView/frontend/settingsState.ts`
-  (`trackedSignal`); `settingsView/frontend/slices/` holds the domain-grouped
-  outbound message-handler registries (`agentSelectionSlice.ts`,
-  `latexSlice.ts`, etc., each `satisfies Partial<SettingsViewOutboundHandlerRegistry>`)
-  that mutate those signals — there is no Redux store or reducer.
+  (`trackedSignal`); `settingsView/frontend/messageDispatcher.ts` holds the one
+  outbound message-handler registry (`settingsViewHandlers`, typed
+  `SettingsViewOutboundHandlerRegistry` so it stays exhaustive) that mutates
+  those signals — there is no Redux store or reducer.
 - **`progressView`** (the sidebar and editor-tab conversation shell) is
   event-fold, not request/response: `ProgressViewProvider` implements
   `vscode.WebviewViewProvider` directly — composed with
@@ -754,7 +761,7 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 - **Exports are contracts; default to file-local.** A new export needs a consumer in the same PR. Across the 2026-07 campaign, five separate areas' main cleanup yield was deleting exports with zero outside consumers (20 in `src/tools` alone). Mechanical enforcement lives in the dead-export ratchet (`npm run check:dead-code-ratchet`, per-symbol baseline in `config/ratchets/knip-baseline.json`; any unused export not in the baseline fails the check); this is the principle behind it.
 
-- **No convenience barrels.** A barrel/index re-export file exists only for a documented public surface (for example, the trace events SDK contract, which declares its surface in its own docstring). Everything else imports the file that defines the symbol directly — this includes model handlers (`src/agent/modelHandlers/`; see that directory's `README.md`), which have no barrel and no re-export shims. The campaign deleted dead barrels in `workflowScript/`, `storage/`, and `index/` that no caller actually used.
+- **No convenience barrels.** A barrel/index re-export file exists only for a documented public surface (for example, the trace events SDK contract, which declares its surface in its own docstring). Everything else imports the file that defines the symbol directly. Nothing has a re-export shim. The campaign deleted dead barrels in `workflowScript/`, `storage/`, and `index/` that no caller actually used.
 
 - **Never hand out a shared mutable literal.** A module-level object that a function returns, or that crosses a module boundary, must be frozen (`as const` plus `Object.freeze`) or produced fresh by a factory that returns a new object each call; see "Discouraged factory patterns" above for when a factory is and isn't warranted. `Object.freeze` is shallow — for a literal with nested objects/arrays, or for a `Map`/`Set`, either deep-freeze it or use a factory, since a shallow freeze doesn't stop mutation of nested values or calls like `.set()`/`.add()`. A campaign consolidation once replaced fresh no-retry result literals with a single shared constant; the resulting aliasing behavior change was caught only by a follow-up factory rewrite and a `notStrictEqual` regression test.
 
@@ -772,7 +779,7 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 - **Effect-based tests use `@effect/vitest`.** A test body that executes an `Effect` program uses `it.effect` (`import { it } from '@effect/vitest'`; `describe`/`expect` stay on `vitest`) with `Effect.gen` + `yield*` instead of `await Effect.runPromise(...)`; rejection assertions use `Effect.flip` or `Effect.exit` plus `expect`. `it.effect` provides a `TestContext` whose clock starts at 0, so tests that depend on real time (real sleeps, polling loops, subprocess or network timeouts) use `it.live` instead. Keep `Effect.runPromise` only in hooks and non-test helpers. Exemplar: `src/test-kernel/tools/Cancellation.vitest.ts`.
 
-- **`expect` and `node:assert` are both supported.** New `src/test-kernel/` suites should use Vitest `expect`. Existing suites may stay on `node:assert` (strict); do not convert them as drive-by work in a feature, polish, or refactor PR. Convert only in a dedicated mechanical PR (one file or one directory, no behavior changes riding along) using the strict mapping: `assert.equal` becomes `toBe`, `assert.deepEqual` becomes `toStrictEqual` (never `toEqual`, which drops the `{a: undefined}` versus `{}` distinction), `assert.ok` becomes `toBeTruthy()`, or `toBe(true)` when the argument is already a boolean expression. One file keeps `node:assert` even then: `shared/stateSettings.vitest.ts` uses its per-key message argument to name the failing settings key inside a catalog loop. `agent/modelHandlers/ModelHandlerAnthropic.vitest.ts` and `agent/modelHandlers/ModelHandlerOpenAIResponse.vitest.ts` (about 300 sites between them) are barred from batch conversion inside a polish or refactor pass, where the mechanical diff would bury the change under review.
+- **`expect` and `node:assert` are both supported.** New `src/test-kernel/` suites should use Vitest `expect`. Existing suites may stay on `node:assert` (strict); do not convert them as drive-by work in a feature, polish, or refactor PR. Convert only in a dedicated mechanical PR (one file or one directory, no behavior changes riding along) using the strict mapping: `assert.equal` becomes `toBe`, `assert.deepEqual` becomes `toStrictEqual` (never `toEqual`, which drops the `{a: undefined}` versus `{}` distinction), `assert.ok` becomes `toBeTruthy()`, or `toBe(true)` when the argument is already a boolean expression. One file keeps `node:assert` even then: `shared/stateSettings.vitest.ts` uses its per-key message argument to name the failing settings key inside a catalog loop.
 
 ## Documentation
 

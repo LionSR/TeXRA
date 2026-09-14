@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import type { FileLocation } from '@shared/schemas';
@@ -88,12 +88,12 @@ export class LatexMediaManager {
    * interruption still propagate: a bug or a cancelled run is not a skipped
    * file.
    */
-  private forEachFile<T, E>(
+  private forEachFile<T, E, R>(
     items: readonly T[],
     pathOf: (item: T) => string,
     failureMessage: string,
-    task: (item: T) => Effect.Effect<unknown, E>,
-  ): Effect.Effect<void> {
+    task: (item: T) => Effect.Effect<unknown, E, R>,
+  ): Effect.Effect<void, never, R> {
     return Effect.forEach(
       items,
       (item) =>
@@ -114,7 +114,7 @@ export class LatexMediaManager {
     latexFile: FileLocation,
     figures: readonly string[],
     baseDir?: string,
-  ): Effect.Effect<void> {
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const fileService = this.fileService;
       if (!fileService || figures.length === 0) {
@@ -279,7 +279,7 @@ export class LatexMediaManager {
    */
   private mirrorLatexFileDependencies(
     files: readonly FileLocation[],
-  ): Effect.Effect<void> {
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const fileService = this.fileService;
       if (!fileService || files.length === 0) {
@@ -350,7 +350,7 @@ export class LatexMediaManager {
    */
   private collectDependencies(
     latexFile: FileLocation,
-  ): Effect.Effect<string[]> {
+  ): Effect.Effect<string[], never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const found = new Set<string>();
 
@@ -470,7 +470,7 @@ export class LatexMediaManager {
    */
   private mirrorFiguresForFiles(
     files: readonly FileLocation[],
-  ): Effect.Effect<void> {
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       if (!this.fileService || files.length === 0) {
         return;
@@ -498,7 +498,7 @@ export class LatexMediaManager {
   private extractFiguresFromFiles(
     files: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const figureResults = yield* Effect.forEach(
         files,
@@ -513,7 +513,7 @@ export class LatexMediaManager {
         { concurrency: LATEX_CONCURRENCY },
       );
 
-      const mirrors: Effect.Effect<void>[] = [];
+      const mirrors: Effect.Effect<void, never, FileSystem.FileSystem>[] = [];
 
       for (const { file, figures } of figureResults) {
         if (figures.length === 0) {
@@ -618,7 +618,7 @@ export class LatexMediaManager {
       extraMediaFiles?: readonly FileLocation[];
       logTikzSummary?: boolean;
     },
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       if (files.length === 0) {
         return;
@@ -678,7 +678,7 @@ export class LatexMediaManager {
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
     extraMediaFiles: readonly FileLocation[] = [],
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
     return this.processFiles(inputFiles, workspaceState, cfg, {
       figureMode: 'extract',
       extraMediaFiles,
@@ -697,7 +697,7 @@ export class LatexMediaManager {
     outputFiles: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
     return this.processFiles(outputFiles, workspaceState, cfg, {
       figureMode: 'mirror',
     });

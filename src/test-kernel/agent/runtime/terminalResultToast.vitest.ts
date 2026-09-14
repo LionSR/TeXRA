@@ -1,5 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ResultEvent } from '@agent/trace';
@@ -34,7 +35,7 @@ async function toastsFor(
     emitted.push({ event: name, payload });
     return true;
   });
-  const detachHost = session.interactions.use({ emit, cancel: vi.fn() });
+  const detachHost = session.interactions.use({ emit });
   const detachToast = attachTerminalResultToast(session, session.interactions);
   const committed = new Promise<void>((resolve) =>
     session.onResult(() => resolve()),
@@ -48,7 +49,7 @@ async function toastsFor(
   } finally {
     detachToast();
     detachHost();
-    session.dispose();
+    await Effect.runPromise(session.dispose());
   }
   return emitted;
 }

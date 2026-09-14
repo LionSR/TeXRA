@@ -47,7 +47,6 @@ const mocks = vi.hoisted(() => ({
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
   eventListener: undefined as ((event: unknown) => void) | undefined,
-  initNodeAgentRuntime: vi.fn(),
   initPlatform: vi.fn(),
   initProcessWorkspaceRoots: vi.fn(),
   /** The process's session owner, as `installProcessRuntime` installs it
@@ -75,8 +74,6 @@ const mocks = vi.hoisted(() => ({
     mocks.eventListener = listener;
     return mocks.detachEvents;
   }),
-  /** The host a session was born with, per construction. */
-  useInteractions: vi.fn(),
 }));
 
 vi.mock('@agent/core/definition/AgentConfig', () => ({
@@ -93,12 +90,10 @@ vi.mock('@utils/core', async (importActual) => ({
 
 vi.mock('@agent/index', () => ({
   loadAgents: mocks.loadAgents,
-  resolveAgent: () => ({
-    entry: {
-      category: mocks.agentCategory,
-      source: 'custom',
-      name: 'assistant',
-    },
+  getAgent: () => ({
+    category: mocks.agentCategory,
+    source: 'custom',
+    name: 'assistant',
   }),
 }));
 
@@ -143,15 +138,10 @@ vi.mock('@agent/runtime', async () => {
 
     readonly roots: { readonly storage: string };
 
-    constructor(
-      init: (typeof mocks.sessionInits)[number] & {
-        readonly interactions?: unknown;
-      },
-    ) {
+    constructor(init: (typeof mocks.sessionInits)[number]) {
       mocks.sessionInits.push(init);
       mocks.sessionView = this.view;
       this.roots = init.roots;
-      if (init.interactions) mocks.useInteractions(init.interactions);
     }
   }
   const sessions = new Map<string, FakeSession>();
@@ -201,10 +191,6 @@ vi.mock('@tools/agentCliSessionStores', () => ({
   },
 }));
 
-vi.mock('@platform/defaults/nodeAgentRuntime', () => ({
-  initNodeAgentRuntime: mocks.initNodeAgentRuntime,
-}));
-
 vi.mock('@platform/platform', () => ({
   initPlatform: mocks.initPlatform,
   tryPlatform: () => mocks.activePlatform,
@@ -219,6 +205,7 @@ vi.mock('@transcript/StreamLogStore', () => ({
 }));
 
 // Local imports - package API under test
+import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
 import {
@@ -330,6 +317,7 @@ describe('agent package run lifecycle', () => {
     });
     mocks.installRuntime.mockImplementation(() => {
       mocks.ownerInstalled = true;
+      return effectRuntime();
     });
     mocks.disposeRuntime.mockImplementation(async () => {
       mocks.ownerInstalled = false;
@@ -347,8 +335,6 @@ describe('agent package run lifecycle', () => {
 
     expect(mocks.initPlatform).toHaveBeenCalledWith(PLATFORM);
     expect(mocks.initPlatform).toHaveBeenCalledTimes(1);
-    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledWith(PLATFORM.lifecycle);
-    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledTimes(1);
   });
 
   it('delivers the launch events: the trace is subscribed when the stream resolves, before the run handle exists', async () => {
@@ -454,11 +440,10 @@ describe('agent package run lifecycle', () => {
     await runAgent(INPUT).result;
 
     // Both runs resolved the platform's root through the owner, which built
-    // the session once, over the package's roots, born with the package's
-    // one headless host; the second run found it open.
+    // the session once, over the package's roots; the second run found it
+    // open.
     expect(mocks.sessionInits).toHaveLength(1);
     expect(mocks.sessionInits[0]).toMatchObject({ roots: PLATFORM.roots });
-    expect(mocks.useInteractions).toHaveBeenCalledOnce();
     expect(mocks.closeSession).not.toHaveBeenCalled();
 
     const hooks = mocks.shutdownHooks;

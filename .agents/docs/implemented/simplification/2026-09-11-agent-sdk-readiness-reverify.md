@@ -33,7 +33,7 @@ available today.
 **What changed since `-09-09` is progress along the already-ratified line, not
 the verdict.** The Effect-4-native direction deepened: a cluster of `proposed`
 architecture notes landed on 2026-09-10 — the
-[one run model](../../proposed/architecture/2026-09-10-one-run-model.md)
+[one run model](../../implemented/architecture/2026-09-10-one-run-model.md)
 (superseding the duplicate-concept families),
 [collapse-duplicate-concepts](../../proposed/architecture/2026-09-10-collapse-duplicate-concepts.md),
 [execution-ownership lane-and-lease](../../proposed/architecture/2026-09-10-execution-ownership-lane-and-lease.md),

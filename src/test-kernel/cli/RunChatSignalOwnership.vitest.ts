@@ -8,13 +8,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@test/support/sessionGraphTestSetup';
 
 // Local imports
-import { defaultSession } from '@agent/runtime';
+import {
+  defaultSession,
+  initializeDefaultSession,
+  teardownDefaultSession,
+} from '@agent/runtime';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -23,7 +28,7 @@ import {
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { installFakeHost } from '@test/support/setupPlatform';
+import { installedHost, installFakeHost } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -86,7 +91,7 @@ vi.mock('@latex/texraResponseTextProcessing', () => ({
   createTexraResponseTextProcessing: () => ({
     normalizeResponseText: (text: string) => text,
     postProcessResponse: (text: string) => text,
-    connectResponseText: async () => ' ',
+    connectResponseText: () => Effect.succeed(' '),
   }),
 }));
 
@@ -257,15 +262,27 @@ describe('runChat signal ownership wiring', () => {
     await installFakeHost(await createTempDirPlatform('texra-chat-', tempDirs));
     vi.clearAllMocks();
     mocks.callOrder.length = 0;
+    // The init opens the process session over the roots it installed; here
+    // the suite opens it over the fake host's roots, once per test.
+    await Effect.runPromise(teardownDefaultSession());
+    const session = await Effect.runPromise(initializeDefaultSession({}));
     // Both inits now hand back the services the composition root holds; the
-    // fake host installed above is that platform here.
+    // fake host installed above owns those stores here.
+    const cliServices = () => ({
+      ...platform(),
+      globalStorage: installedHost().roots.globalStorage,
+      globalState: installedHost().roots.globalState,
+      secrets: installedHost().secrets,
+      session: Effect.succeed(session),
+      runtime: effectRuntime(),
+    });
     mocks.initCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initCliPlatform');
-      return platform();
+      return cliServices();
     });
     mocks.initInteractiveCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initInteractiveCliPlatform');
-      return platform();
+      return cliServices();
     });
     mocks.handOffCliShutdownSignalHandlers.mockImplementation(() => {
       mocks.callOrder.push('handOffCliShutdownSignalHandlers');

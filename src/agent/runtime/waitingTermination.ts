@@ -35,7 +35,6 @@ export interface WaitingTerminationContext {
   readonly getHandle: (runId: RunId) => RunHandle | undefined;
   readonly untrackIfCurrent: (handle: RunHandle) => boolean;
   readonly untrackHandle: (handle: RunHandle) => void;
-  readonly cancelRunStatus: (runId: RunId) => void;
 }
 
 export class WaitingTermination {
@@ -87,9 +86,6 @@ export class WaitingTermination {
               Effect.try({
                 try: () => {
                   untracked = this.context.untrackIfCurrent(handle);
-                  if (untracked) {
-                    this.context.cancelRunStatus(handle.runId);
-                  }
                 },
                 catch: ensureError,
               }),
@@ -170,7 +166,6 @@ export class WaitingTermination {
         });
       }
       this.context.untrackHandle(handle);
-      this.context.cancelRunStatus(handle.runId);
     });
     return yield* finalize.pipe(
       Effect.ensuring(

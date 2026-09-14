@@ -53,6 +53,7 @@ import {
 } from './state/childControls';
 import {
   selectedRunId as selectedRunIdSignal,
+  sessionViewFailure as sessionViewFailureSignal,
   activeForm as activeFormSignal,
   closeInfoPane,
   closeForegroundReader,
@@ -155,6 +156,7 @@ export function App(props: AppProps): React.JSX.Element {
   // The selection and the reader arrive already resolved against the view
   // (their signals own that rule), so render derives from settled values.
   const activeRunId = useSignal(selectedRunIdSignal);
+  const sessionViewFailure = useSignal(sessionViewFailureSignal);
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
   const goalAutoApproveAll = useSignal(goalAutoApproveAllSignal);
@@ -203,9 +205,12 @@ export function App(props: AppProps): React.JSX.Element {
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
     ? SESSION_LIST.choosing
-    : unavailableDetail;
+    : (sessionViewFailure ?? unavailableDetail);
   const inputDisabled =
-    appInputDisabled || childInputHidden || unavailableDetail !== undefined;
+    appInputDisabled ||
+    childInputHidden ||
+    unavailableDetail !== undefined ||
+    sessionViewFailure !== undefined;
   // One gate for "the App owns the keyboard": focus shortcuts and bare Escape
   // both derive from these same three facts.
   const focusShortcutsActive =

@@ -18,7 +18,7 @@ import {
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import type { ConfigProvider } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -26,10 +26,8 @@ import {
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
 import {
-  SUBSCRIPTION_USAGE_PROVIDERS,
   type SettingsViewInboundHandlerRegistry,
   type SubscriptionUsageProvider,
-  type SubscriptionUsageSnapshots,
   type UpdateChatGptAuthStatusMessage,
   type UpdateGrokAuthStatusMessage,
 } from '@shared/schemas';
@@ -67,13 +65,16 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   };
   readonly subscriptionUsage?: Pick<
     SubscriptionUsageService,
-    'getUsage' | 'invalidate'
+    'getAllUsage' | 'invalidate'
   >;
   readonly onCredentialChanged: () => Promise<void>;
   /** The model catalog changed: every open paper's `host` snapshot reloads
    *  it (PRD 8.1). */
   readonly onModelOptionsChanged: () => Promise<void>;
   readonly onError: (error: unknown) => void;
+  /** The process runtime the composition root built; this controller's
+   *  Effect-typed provider calls settle on it. */
+  readonly runtime: ProcessRuntime;
 }
 
 type DesktopProfileHandlers = Pick<
@@ -111,23 +112,23 @@ type DesktopGrokHandlers = Pick<
 const SUBSCRIPTION_STATUS_ROWS: Record<
   SubscriptionProviderId,
   {
-    readonly buildStatusMessage: () => Promise<unknown>;
+    readonly buildStatusMessage: (secrets: PlatformSecrets) => Promise<unknown>;
     readonly usageProvider?: SubscriptionUsageProvider;
   }
 > = {
   chatgpt: {
-    buildStatusMessage: async () =>
+    buildStatusMessage: async (secrets) =>
       ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        status: await getChatGptAuthStatus(),
+        status: await getChatGptAuthStatus(secrets),
       }) satisfies UpdateChatGptAuthStatusMessage,
     usageProvider: 'chatgpt',
   },
   grok: {
-    buildStatusMessage: async () =>
+    buildStatusMessage: async (secrets) =>
       ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        status: await getGrokAuthStatus(),
+        status: await getGrokAuthStatus(secrets),
       }) satisfies UpdateGrokAuthStatusMessage,
   },
 };
@@ -159,7 +160,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   private readonly profileKeyController: SettingsProfileKeyController;
   private readonly subscriptionUsage: Pick<
     SubscriptionUsageService,
-    'getUsage' | 'invalidate'
+    'getAllUsage' | 'invalidate'
   >;
 
   constructor(
@@ -238,17 +239,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   async postSubscriptionUsage(forceRefresh = false): Promise<void> {
-    const snapshots = Object.fromEntries(
-      await Promise.all(
-        SUBSCRIPTION_USAGE_PROVIDERS.map(async (provider) => [
-          provider,
-          await this.subscriptionUsage.getUsage(provider, { forceRefresh }),
-        ]),
-      ),
-    ) as SubscriptionUsageSnapshots;
     this.options.renderer.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-      snapshots,
+      snapshots: await this.subscriptionUsage.getAllUsage({ forceRefresh }),
     });
   }
 
@@ -350,7 +343,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       (provider, error) =>
         `${provider.displayName} sign-in failed: ${toErrorMessage(error)}`,
       async (provider) => {
-        const account = await effectRuntime().runPromise(
+        const account = await this.options.runtime.runPromise(
           provider.signIn({
             transport: 'auto',
             present: this.signInPresenter(provider.displayName),
@@ -421,7 +414,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           toErrorMessage(error),
         ),
       async (provider) => {
-        await provider.signOut();
+        await provider.signOut(this.options.secrets);
         await this.options.notifications.showInfoMessage(
           ACCOUNT_OUTCOME.signedOut(provider.displayName),
         );
@@ -458,7 +451,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     providerId: SubscriptionProviderId,
   ): Promise<void> {
     this.options.renderer.postToRenderer(
-      await SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(),
+      await SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(
+        this.options.secrets,
+      ),
     );
   }
 

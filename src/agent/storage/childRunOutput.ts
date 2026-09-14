@@ -13,7 +13,7 @@ import {
   runStorageLocationFromAnyAbsolutePath,
 } from '@utils/files/runStorageFs';
 
-import { getRunRecords } from './RunKVStore';
+import { getRunRecords } from './runRecords';
 
 /**
  * Resolve a declared output of a completed direct child run. The absolute path

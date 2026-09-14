@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 
-import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { ProviderSettingDefSchema } from '@shared/constants/providers';
 
 import { commandOnly } from './messageFactories';
@@ -14,13 +14,6 @@ import { commandOnly } from './messageFactories';
 // ============================================================
 // Data schemas
 // ============================================================
-
-/**
- * Defaults for prefaulted UPDATE_PROFILE fields, exported so the settings
- * frontend's pre-hydration state can share them instead of restating the
- * literals.
- */
-export const DEFAULT_GLOBAL_STREAMING = true;
 
 const ProfileUserSchema = z.object({
   email: z.string(),
@@ -54,7 +47,7 @@ export type ProviderKeyStatus = z.infer<typeof ProviderKeyStatusSchema>;
 // ============================================================
 
 export const UpdateProfileMessageSchema = z.object({
-  command: z.literal(PROFILE_VIEW_COMMANDS.UPDATE_PROFILE),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE),
   authenticated: z.boolean(),
   user: ProfileUserSchema.nullable(),
   /**
@@ -63,7 +56,6 @@ export const UpdateProfileMessageSchema = z.object({
    */
   sessionProblem: SessionProblemSchema.nullable().prefault(null),
   providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
-  globalStreamingDefault: z.boolean().prefault(DEFAULT_GLOBAL_STREAMING),
 });
 export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 
@@ -72,6 +64,8 @@ export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 // ============================================================
 
 // Inbound messages with command literals
-export const SignInMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_IN);
+export const SignInMessageSchema = commandOnly(SETTINGS_VIEW_COMMANDS.SIGN_IN);
 
-export const SignOutMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_OUT);
+export const SignOutMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SIGN_OUT,
+);

@@ -8,26 +8,10 @@ import {
 
 import { isApiProvider, type ApiProvider } from './apiProviders';
 
-/**
- * A {@link ModelConfig} carrying TeXRA's own runtime-only routing override.
- * `forceDirectProvider` is not part of llm-zoo's registry shape — it is
- * stamped onto a config by `ModelFactory.withCompatibilityRoutingMode` when
- * rebuilding a handler for an already-persisted conversation format that must
- * stay off OpenRouter even if the global OpenRouter toggle is later turned
- * on. This module owns the field's meaning (see `isOpenRouterAccessSelected`
- * below), so it is also the single declaration site: `ModelHandler.config`
- * and every routing helper that reads the field import this type instead of
- * re-declaring it locally.
- */
-export type ResolvedModelConfig = ModelConfig & {
-  readonly forceDirectProvider?: boolean;
-};
-
 interface OpenRouterRoutingConfig {
   provider?: string;
   requiresResponsesAPI?: boolean;
   openRouterOnly: boolean;
-  forceDirectProvider?: ResolvedModelConfig['forceDirectProvider'];
   capabilities?: Pick<ModelConfig['capabilities'], 'reasoningMode'>;
 }
 
@@ -47,7 +31,6 @@ function isOpenRouterAccessSelected(
 ): boolean {
   return (
     !isKimiCodeExclusiveModel(config) &&
-    !config.forceDirectProvider &&
     (config.openRouterOnly || useOpenRouter)
   );
 }
@@ -64,7 +47,7 @@ export function isOpenRouterRoutingUnsupported(
   return openRouterSelected && config.capabilities?.reasoningMode !== undefined;
 }
 
-/** API-key owner for the route ModelFactory will use for this model. */
+/** API-key owner for the route `modelRoutes` will use for this model. */
 export function resolveModelApiKeyProvider(
   config: ModelRoutingConfig,
   useOpenRouter: boolean,

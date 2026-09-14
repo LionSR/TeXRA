@@ -12,13 +12,13 @@ export function createToolUseResumeData(
 ): ToolUseResumeData {
   return {
     type: 'toolUse',
-    runId: 'test-run' as RunId,
+    runId: '7e57ec000001' as RunId,
     agentConfig: AgentConfigSchema.parse({
       agent: 'test-agent',
       model: 'test-model',
       agentCategory: 'toolUse',
     }),
-    modelHandlerCompatibilityKey: null,
+    modelCompatibilityKey: null,
     ...overrides,
   };
 }

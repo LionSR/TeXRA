@@ -21,17 +21,20 @@ import type {
   AgentPrompt,
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
+import type {
+  RuntimeTool as ITool,
+  RuntimeToolRegistry as IToolRegistry,
+} from '@agent/runtime/ToolServices';
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   AgentCategory,
+  DeclinableUsageRouteSchema,
+  type DeclinableUsageRoute,
   type JsonValue,
   type RetryErrorInfo,
   type RunId,
@@ -50,7 +53,19 @@ import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
 import type { AgentLaunchContext, ToolPolicy } from '../AgentLaunchContext';
+import type { RunScope } from '../RunScope';
 import type { SessionHandle } from '../SessionHandle';
+
+/**
+ * The routes a launch declines before it has any ledger state: an
+ * own-API-key fallback turns away from every subscription route, since the
+ * user answered a quota prompt by choosing to pay with their own key.
+ */
+function launchDeclinedRoutes(
+  ctx: AgentLaunchContext,
+): readonly DeclinableUsageRoute[] {
+  return ctx.ownApiKeyFallback ? DeclinableUsageRouteSchema.options : [];
+}
 
 /**
  * The loop's typed halt: the run ends without a completed turn. `cancelled`
@@ -87,6 +102,9 @@ export interface AgentRunShape {
   readonly logger: AgentTrace;
   readonly parentStage: StageHandle;
   readonly toolPolicy: ToolPolicy;
+  readonly workingDirectory?: string;
+  readonly delegationAgentScope?: RunScope['delegationAgentScope'];
+  readonly onApprovalPolicyDenial?: () => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
   readonly stores: ModelOptionStores;
@@ -102,6 +120,14 @@ export interface AgentRunShape {
   readonly structured: { value: JsonValue | undefined };
   /** The run's live model binding; a mid-run switch replaces it. */
   readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
+  /**
+   * Subscription routes this run must not bind: the launch's own-API-key
+   * fallback, plus every retry the user answered with their own key. The
+   * run's opening snapshot records them and each retry appends to the
+   * recorded set, so a resume rebinds under the same choice — and the user's
+   * stored preferences are never rewritten to express it.
+   */
+  readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /**
    * The run's scope: the layer's, closed when the run's layer is released.
    * A model bound mid-run (a manual retry's rebind, a host-admitted switch)
@@ -144,7 +170,7 @@ export interface AgentRunLayerInput {
   /** The conditional tool injections this run resolves its tools with. */
   readonly toolInjections: ToolInjections['Service'];
   readonly callbacks: RunCallbacks;
-  readonly copilotRouteOverride?: CopilotRouteOverride;
+  readonly onApprovalPolicyDenial?: () => void;
   readonly inScope: <A>(operation: () => A) => A;
 }
 
@@ -178,6 +204,7 @@ export const agentRunLayer = (
                 ctx.toolPolicy.approvalPromptsUnavailable,
               runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
               toolInjections: input.toolInjections,
+              config: session.roots.config,
               stores: ctx.stores,
             }),
           ),
@@ -236,18 +263,15 @@ export const agentRunLayer = (
       // fresh run binds the launch model under the route the launch context
       // resolved for it (including a persisted compatibility key).
       const snapshot = yield* ledger.latestSnapshot(runId);
-      const launchKey = activeModelHandlerCompatibilityKey(
-        ctx.modelCell.handler,
-      );
       const persisted = snapshot === null ? null : snapshot.payload.runtime;
       const modelId = persisted?.modelId ?? config.model;
       const compatibilityKey =
         persisted !== null
-          ? persisted.modelHandlerCompatibilityKey
-          : (launchKey ?? null);
+          ? persisted.modelCompatibilityKey
+          : ctx.modelCompatibilityKey;
       const modelConfig =
         modelId === config.model
-          ? ctx.modelCell.handler.config
+          ? ctx.modelConfig
           : yield* Effect.tryPromise({
               try: () => resolveRuntimeModelConfig(modelId),
               catch: ensureError,
@@ -257,11 +281,18 @@ export const agentRunLayer = (
           new Error(`Model ${modelId} is not registered`),
         );
       }
+      // The routes this run declines: a resumed run replays the set its
+      // snapshot recorded, a fresh own-API-key fallback declines every
+      // subscription route from its first binding. Nothing here reads or
+      // writes the user's stored preferences.
+      const declinedRoutes =
+        persisted?.declinedRoutes ?? launchDeclinedRoutes(ctx);
       const bound = yield* bindModel({
         config: modelConfig,
         stores: ctx.stores,
         compatibilityKey,
-        copilotRouteOverride: input.copilotRouteOverride,
+        ownApiKeyFallback: ctx.ownApiKeyFallback,
+        declinedRoutes,
         agentCategory: config.agentCategory,
         temperature: input.setting.temperature,
         inScope: input.inScope,
@@ -279,6 +310,9 @@ export const agentRunLayer = (
         logger,
         parentStage: ctx.parentStage,
         toolPolicy: ctx.toolPolicy,
+        workingDirectory: ctx.runScope.workingDirectory,
+        delegationAgentScope: ctx.runScope.delegationAgentScope,
+        onApprovalPolicyDenial: input.onApprovalPolicyDenial,
         stores: ctx.stores,
         userVarChannels: ctx.userVarChannels,
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
@@ -287,6 +321,7 @@ export const agentRunLayer = (
         finalToolName,
         structured,
         model,
+        declinedRoutes,
         scope,
         pendingModelSwitch,
         usageMonitor: ctx.usageMonitor,

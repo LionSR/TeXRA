@@ -16,12 +16,6 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import {
-  getRunContextSession,
-  runInSession,
-  type RunContext,
-} from '@agent/runtime/RunContext';
-import type { ToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
@@ -43,6 +37,7 @@ import {
 } from './detachedChildRun';
 import { executeSubagentForDeliveryInBand } from './inBandSubagentRun';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
+import type { DelegationParent } from './proposalFlow';
 
 // ============================================================================
 // Shared utilities
@@ -95,41 +90,22 @@ interface ApprovalMeta {
  * delivery — the same choreography every child-run type shares.
  */
 export const executeSubagent = Effect.fn('executeSubagent')(function* (
-  parentContext: RunContext | undefined,
-  callContext: ToolCallContext | undefined,
+  parent: DelegationParent,
   configPayload: AgentConfigPayload,
   agentName: string,
   parentRunId: RunId,
   options?: { approvalMeta?: ApprovalMeta },
 ) {
-  const parentSession = parentContext
-    ? getRunContextSession(parentContext)
-    : undefined;
-  if (!parentContext || !parentSession) {
-    return errorResult(
-      'delegate_agent and delegate_workflow require an active agent session. Run delegation from an active agent session, or ensure the tool run context provides its owning session.',
-      {
-        summary: 'Delegation session unavailable',
-        diagnostics: {
-          type: 'missing_session',
-          tools: ['delegate_agent', 'delegate_workflow'],
-        },
-      },
-    );
-  }
-  // Captured now (while the launching tool call's ALS frame is live) so the
-  // child-run loop can still roll the child's cost into the parent run after
-  // this tool call has returned. Subagents count toward parent usage totals
-  // only — they never drive the loop.
-  const recordSubagentCost = callContext?.hooks?.recordSubagentCost;
+  const parentSession = parent.run.session;
+  // Capture the invocation hook explicitly so the child-run loop can still
+  // roll the child's cost into the parent after this tool call has returned.
+  // Subagents count toward parent usage totals only — they never drive the loop.
+  const recordSubagentCost = parent.hooks?.recordSubagentCost;
   const recordCost = (costUsd: number | undefined): void => {
     recordSubagentCost?.(costUsd ?? 0);
   };
 
-  const delegationAgentScope =
-    parentContext.kind === 'launch'
-      ? parentContext.runScope.delegationAgentScope
-      : undefined;
+  const delegationAgentScope = parent.delegationAgentScope ?? undefined;
   const childConfigPayload: AgentConfigPayload = {
     ...configPayload,
     ...(delegationAgentScope ? { delegationAgentScope } : {}),
@@ -150,12 +126,12 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     );
   };
 
-  if (parentContext.stopAfterCycle) {
+  if (parent.stopAfterCycle ?? parent.run.toolPolicy.stopAfterCycle) {
     // The parent is mid-cycle, so child progress cannot be delivered as a
     // follow-up the way the detached loop does it. Degrade deliberately to the
     // parent run's trace (the same trace nested tool activity projects onto):
     // the orchestrator's transcript still records what its child is doing.
-    const parentTrace = callContext?.trace;
+    const parentTrace = parent.trace;
     const notifyParentTrace = (update: SubagentProgressUpdate): void => {
       const line = describeSubagentProgress(agentName, update);
       if (line) parentTrace?.info(line);
@@ -166,9 +142,10 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         agentName,
         parentRunId,
         session: parentSession,
-        approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
-        onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
-        runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
+        approvalPromptsUnavailable:
+          parent.run.toolPolicy.approvalPromptsUnavailable,
+        onApprovalPolicyDenial: parent.onApprovalPolicyDenial,
+        runtimeUnavailableTools: parent.run.toolPolicy.runtimeUnavailableTools,
         onRunResolved: inheritChildRunApprovals,
         onCost: recordCost,
         notify: notifyParentTrace,
@@ -222,9 +199,10 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         session: parentSession,
         startedAt,
         workingDirectory,
-        approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
-        onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
-        runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
+        approvalPromptsUnavailable:
+          parent.run.toolPolicy.approvalPromptsUnavailable,
+        onApprovalPolicyDenial: parent.onApprovalPolicyDenial,
+        runtimeUnavailableTools: parent.run.toolPolicy.runtimeUnavailableTools,
         onRunResolved: inheritChildRunApprovals,
         userFollowUpSupport,
       };

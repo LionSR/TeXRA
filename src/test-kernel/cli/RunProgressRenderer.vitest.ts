@@ -25,13 +25,11 @@ import {
   type ConversationProgress,
   type RunId,
   type InstructionAction,
-  type RoundStage,
   type RunPhase,
   AgentCategory,
   emptyRunEndOutput,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -224,17 +222,15 @@ async function handleOrchestratorRootRun(
     inputFiles: [],
   });
 }
-async function handleRoundStage(
+/** The loop's round as `flow.step` states it. `RunView.flow` carries the
+ *  coordinate alone: a planned total is the agent registry's fact. */
+async function handleRound(
   renderer: TestRunProgressRenderer,
   runId: string,
-  roundStage: RoundStage,
+  round: number,
 ): Promise<void> {
   await renderer.set(runId, {
-    stage: {
-      kind: 'round',
-      index: roundStage.index,
-      ...(roundStage.total !== undefined ? { total: roundStage.total } : {}),
-    },
+    flow: { family: 'reflection', step: 'round.begin', round },
   });
 }
 async function handleConversationProgress(
@@ -338,12 +334,21 @@ async function publishRun(
       workingDirectory: '/tmp/project',
     }),
   });
-  session.publishStatus({
-    type: 'status',
-    runId,
-    phase: RUN_PHASE.RUNNING,
-    cause: RUN_TRANSITION_CAUSE.LIFECYCLE,
-  });
+  session.publish([
+    {
+      type: 'run.activate',
+      aggregateId: qualifyAggregateId('run', runId),
+      category: overrides.agentCategory ?? AgentCategory.Workflow,
+      isRemote: false,
+    },
+    // The first step of the loop: what clears the activation's starting
+    // substate, so the live line reads the plain running phase.
+    {
+      type: 'flow.step',
+      aggregateId: qualifyAggregateId('run', runId),
+      payload: { family: 'toolUse', step: 'turn.begin' },
+    },
+  ]);
   await settle();
 }
 function outputBuffer(): { write: (chunk: string) => void; text: string } {
@@ -459,7 +464,7 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe('\r\x1b[2Kpolish paper.tex · 0s');
 
     now = 1200;
-    await handleRoundStage(renderer, 'stream-1', { index: 1 });
+    await handleRound(renderer, 'stream-1', 1);
     expect(output.text).toContain('\r\x1b[2K[r2] · polish paper.tex · 1s');
 
     renderer.clear();
@@ -506,7 +511,7 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
     await handleRunConfig(renderer);
-    await handleRoundStage(renderer, 'stream-1', { index: 0 });
+    await handleRound(renderer, 'stream-1', 0);
 
     expect(mocks.getAgent).toHaveBeenCalledWith(
       'polish',
@@ -525,7 +530,7 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
     await handleRunConfig(renderer);
-    await handleRoundStage(renderer, 'stream-1', { index: 3 });
+    await handleRound(renderer, 'stream-1', 3);
 
     expect(output.text).toBe(
       'polish paper.tex · 3 rounds · 0s\n' + '[r4/3] · polish paper.tex · 0s\n',
@@ -570,7 +575,7 @@ describe('CLI run progress renderer', () => {
 
     await handleRunConfig(renderer, { runId });
     await handleConversationProgress(renderer, runId, { toolCallCount: 3 });
-    await handleRoundStage(renderer, runId, { index: 0, total: 2 });
+    await handleRound(renderer, runId, 0);
     await handleRunDescription(renderer, runId, 'drafting');
     await handleActiveSubagents(renderer, runId, [subagentChild()]);
     await handleRunStatus(renderer, runId, RUN_PHASE.COMPLETED);
@@ -578,10 +583,10 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe(
       'polish paper.tex · 0s\n' +
         'polish paper.tex · tools: 3 · 0s\n' +
-        '[r1/2] · polish paper.tex · tools: 3 · 0s\n' +
-        '[r1/2] · polish paper.tex · drafting · tools: 3 · 0s\n' +
-        '[r1/2] · polish paper.tex · drafting · subagent: review · 0s\n' +
-        '[r1/2] · polish paper.tex · Completed · tools: 3 · 0s\n',
+        '[r1] · polish paper.tex · tools: 3 · 0s\n' +
+        '[r1] · polish paper.tex · drafting · tools: 3 · 0s\n' +
+        '[r1] · polish paper.tex · drafting · subagent: review · 0s\n' +
+        '[r1] · polish paper.tex · Completed · tools: 3 · 0s\n',
     );
   });
 
@@ -673,7 +678,7 @@ describe('CLI run progress renderer', () => {
     await handleConversationProgress(renderer, 'root-stream', {
       toolCallCount: 4,
     });
-    await handleRoundStage(renderer, 'root-stream', { index: 1 });
+    await handleRound(renderer, 'root-stream', 1);
     await handleRunConfig(renderer, {
       runId: 'child-stream',
       agent: 'reviewer',
@@ -851,7 +856,7 @@ describe('CLI run progress renderer', () => {
       'root-stream',
       'Running Mathematician multi-agent preset',
     );
-    await handleRoundStage(renderer, 'root-stream', { index: 2 });
+    await handleRound(renderer, 'root-stream', 2);
     await handleConversationProgress(renderer, 'root-stream', {
       toolCallCount: 9,
     });

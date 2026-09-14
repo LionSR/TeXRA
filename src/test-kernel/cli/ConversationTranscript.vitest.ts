@@ -39,7 +39,7 @@ import {
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
-import { CLI_LOCAL_RUN_ID } from '@cli/chat/tui/state/transcript';
+import { CLI_LOCAL_RUN_ID } from '@cli/chat/tui/state/cliState';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
@@ -155,7 +155,7 @@ function phaseRow(
 function workflowTaskRow(
   id: string,
   call: WorkflowCallProgress,
-  line = 'Planned: Task',
+  line = 'Queued: Task',
 ): TranscriptRow {
   return {
     kind: 'workflowTask',
@@ -214,7 +214,7 @@ describe('CLI conversation transcript', () => {
     const workflowTask = workflowTaskRow('w1', {
       id: 'w1',
       label: 'Task',
-      status: 'planned',
+      status: 'queued',
     });
     const workflowPhase = phaseRow('p2', 'After workflow task');
 

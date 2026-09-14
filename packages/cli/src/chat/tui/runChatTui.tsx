@@ -5,6 +5,7 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
+import { Cause, Effect, Exit } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
@@ -26,11 +27,9 @@ import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
-  type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
-import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -40,7 +39,6 @@ import {
   clearTerminalScrollback,
   installTerminalRestoreOnExit,
 } from '@cli/tui/terminalCleanup';
-import { effectRuntime } from '@platform/processRuntime';
 import { DisposableStore } from '@platform/disposable';
 import {
   formatTexraApprovalPolicy,
@@ -51,7 +49,7 @@ import { AgentCategory, RUN_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { descendantRuns } from '@shared/session/sessionView';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import { isActivePhase } from '@shared/runs/runStatus';
+import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -78,6 +76,7 @@ import {
   activeRunId as activeRunIdSignal,
   resetCliState,
   patchSessionMeta,
+  sessionViewFailure as sessionViewFailureSignal,
   rootRunId as rootRunIdSignal,
   sessionMeta as sessionMetaSignal,
 } from './state/cliState';
@@ -168,14 +167,17 @@ export async function runChat(
     quietLogs: true,
   });
   const initialResume = init.initialResume;
-  const runtimeSession = await initializeCliTranscriptSession(services);
+  // The entry's runtime, in a local: the chat is the first thing that opens
+  // the process session, and the Effects below settle on the same runtime.
+  const { runtime } = services;
+  const runtimeSession = await runtime.runPromise(services.session);
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the model
   // resolution below then see the freshly-set credentials in the same process.
   const { maybeRunCliOnboarding } =
     await import('@cli/onboarding/runOnboarding');
-  const onboarding = await effectRuntime().runPromise(
+  const onboarding = await runtime.runPromise(
     maybeRunCliOnboarding(services, context),
   );
   if (onboarding.declined) {
@@ -195,20 +197,19 @@ export async function runChat(
     firstRunDone: getFirstRunDone(services.globalState),
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
-  await effectRuntime().runPromise(loadAgents());
-  const visibleToolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
-  const defaults = await effectRuntime().runPromise(
-    resolveChatDefaults(
-      {
+  // The visible agent list only exists once the registry has loaded, so the
+  // load and the defaults resolution are one program rather than two runs.
+  const defaults = await runtime.runPromise(
+    Effect.flatMap(loadAgents(), () =>
+      resolveChatDefaults({
         cwd: context.cwd,
         agentOverride: explicitAgent ?? setupAgentOverride,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
         envModel: context.envModel,
-        visibleToolUseAgents,
+        visibleToolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
         quiet: context.quietLogs,
-      },
-      runtimeSession,
+      }),
     ),
   );
   const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
@@ -220,20 +221,31 @@ export async function runChat(
   // wins, otherwise the persisted account default. Model resolution, the
   // no-models hints, and the header/status all read this same value so they can
   // never disagree.
-  let modelSelection: CliRunnableModelResolution;
-  try {
-    modelSelection = await selectCliRunnableModel(defaults.model, {
-      stores: services,
-      fallbackReason: defaults.modelSource,
-      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-        CHAT_STARTUP_MODEL_RECOVERY,
+  const modelSelectionExit = await runtime.runPromiseExit(
+    Effect.tryPromise({
+      try: () =>
+        selectCliRunnableModel(defaults.model, {
+          stores: services,
+          fallbackReason: defaults.modelSource,
+          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+            CHAT_STARTUP_MODEL_RECOVERY,
+          ),
+        }),
+      catch: (error: unknown) => error,
+    }).pipe(
+      Effect.tap((selection) =>
+        Effect.tryPromise({
+          try: () => setCliHelperModel(services.globalState, selection.model),
+          catch: (error: unknown) => error,
+        }),
       ),
-    });
-    await setCliHelperModel(modelSelection.model);
-  } catch (error: unknown) {
-    writeTextStderr(toErrorMessage(error));
+    ),
+  );
+  if (Exit.isFailure(modelSelectionExit)) {
+    writeTextStderr(toErrorMessage(Cause.squash(modelSelectionExit.cause)));
     return { exitCode: CliExitCode.Usage };
   }
+  const modelSelection = modelSelectionExit.value;
   const { agent } = defaults;
   const model = modelSelection.model;
   const version = await readCliVersion();
@@ -293,8 +305,8 @@ export async function runChat(
     appendLocalAssistantTranscript(startupNotice);
   }
 
-  const inputHistory = await effectRuntime().runPromise(
-    loadInputHistory(() => services.storage.getGlobalStoragePath()),
+  const inputHistory = await runtime.runPromise(
+    loadInputHistory(() => services.globalStorage),
   );
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
@@ -318,7 +330,19 @@ export async function runChat(
   // set is the view's stream set. Bound before anything reads the view:
   // the terminal title below derives its attention state from it on
   // install.
-  const unbindSessionView = bindSessionView(runtimeSession.view);
+  const session = new TuiSession();
+  // A dead fold (`viewChanges` failing) is the end of this session: the
+  // composer closes on the reason, Ctrl-C still exits, and the exit is a
+  // failure on every exit path, since they all read `session.runExitCode`.
+  const unbindSessionView = bindSessionView(runtimeSession.view, {
+    changes: runtimeSession.viewChanges,
+    onFailure: (error) => {
+      sessionViewFailureSignal.set(
+        `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit.`,
+      );
+      session.runExitCode = CliExitCode.AgentError;
+    },
+  });
   // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
   // shell prompt in every tab makes a multi-session workflow hard to
   // navigate. Keep the project name while surfacing live attention state.
@@ -331,7 +355,7 @@ export async function runChat(
     const key = ids.join('\0');
     if (key === subscribedRuns) return;
     subscribedRuns = key;
-    effectRuntime().runFork(
+    runtime.runFork(
       runtimeSession.setTranscriptSubscriptions(
         'tui',
         ids.map((id) => ({ id, fromSeq: 0 })),
@@ -342,8 +366,6 @@ export async function runChat(
     subscribeToSignalChanges([sessionView()], syncTranscriptSubscriptions),
   );
   syncTranscriptSubscriptions();
-
-  const session = new TuiSession();
 
   const followUpQueue = new PQueue({ concurrency: 1 });
   const rootRunStatus = (): RunPhase | undefined =>
@@ -420,7 +442,6 @@ export async function runChat(
 
     const meta = sessionMetaSignal.get();
     if (isRunPending) chatController.stop();
-    runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
     followUpQueue.clear();
     chatController.clearInterruptedRecovery();
     chatController.clearPendingSkills();
@@ -448,6 +469,8 @@ export async function runChat(
   registerBuiltinSlashCommands({
     secrets: services.secrets,
     state: services.globalState,
+    runtime,
+    runtimeSession,
     canSelectAgent: () => chatTuiCanStartRootRun(session),
     onAgentSelect: (nextAgent) =>
       applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
@@ -467,7 +490,8 @@ export async function runChat(
     // `onApiKeySave` and `onLogoutSelect` are deliberately absent: the
     // registry's own defaults are exactly these handlers. Only `/login` needs
     // an override, to carry this session's CliContext.
-    onLoginSelect: (value, output) => loginFromChat(value, context, output),
+    onLoginSelect: (value, output) =>
+      loginFromChat(value, runtime, context, output),
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: chatController.activateSkill,
     onResumeSelect: chatController.resume,
@@ -488,7 +512,7 @@ export async function runChat(
       }
       canInterruptRun={(runId) =>
         (runId === session.runId && canInterruptActiveRun()) ||
-        runtimeSession.status.isInFlight(runId)
+        isInFlightPhase(runtimeSession.runView(runId)?.status)
       }
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
@@ -497,11 +521,21 @@ export async function runChat(
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
       onKillRun={(runId) => {
-        runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
         const stop = runtimeSession.runs.kill(runId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
-        effectRuntime().runFork(stop.settlement);
+        // A refused detach commit leaves the run alive: the parent's
+        // interrupt runs only after the detach batch commits. Surface that
+        // failure instead of discarding the forked settlement's exit.
+        runtime.runFork(
+          stop.settlement.pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                appendLocalAssistantTranscript(toErrorMessage(error));
+              }),
+            ),
+          ),
+        );
       }}
       onWorkflowControl={(runId, action) => {
         runtimeSession.workflowControls.control(runId, action);

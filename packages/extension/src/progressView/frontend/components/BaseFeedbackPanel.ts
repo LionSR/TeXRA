@@ -10,8 +10,8 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 // Local imports - shared utilities
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
-// Local imports - approval decision vocabulary
-import type { FeedbackPermissionKind } from '@shared/session/approvalDecision';
+// Local imports - the payload whose kind types the panel
+import type { PermissionPayload } from '@shared/schemas';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
@@ -23,7 +23,7 @@ import { BaseRequestPanel } from './BaseRequestPanel';
 export const REDIRECT_FEEDBACK_PROMPT = 'What should the agent do instead?';
 
 export abstract class BaseFeedbackPanel<
-  K extends FeedbackPermissionKind = FeedbackPermissionKind,
+  K extends PermissionPayload['kind'] = PermissionPayload['kind'],
 > extends BaseRequestPanel<K> {
   @query('[data-feedback-input]')
   private feedbackInput?: HTMLElementTagNameMap['wa-textarea'];

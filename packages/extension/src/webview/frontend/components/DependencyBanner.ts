@@ -8,8 +8,8 @@ import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import type { DependencyBannerState } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@shared/wa/bannerFrame';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { StateVisibleBanner } from './StateVisibleBanner';
-import { MainViewEvents } from '../events';
 
 function getToolLabel(tool: string): string {
   switch (tool) {
@@ -52,15 +52,19 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
   };
 
   private handleDismiss(): void {
-    this.dispatchEvent(MainViewEvents.dependencyDismiss());
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'dismissBanner', banner: 'dependency' }),
+    );
   }
 
   private handleRecheck(): void {
-    this.dispatchEvent(MainViewEvents.recheckDependencies());
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'recheckDependencies' }));
   }
 
   private handleInstall(tool: string): void {
-    this.dispatchEvent(MainViewEvents.openInstallGuide({ tool }));
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'openInstallGuide', tool }),
+    );
   }
 
   override render(): TemplateResult {

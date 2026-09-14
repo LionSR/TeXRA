@@ -1,5 +1,10 @@
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
+import type {
+  NonRegexReplacementCategory,
+  RegexReplacementCategory,
+} from './replacementCategories';
+
 /**
  * LaTeX/compile/diff configuration — single source of truth.
  *
@@ -54,13 +59,46 @@ export const LATEX_CONFIG_RANGES = {
 } as const;
 
 /**
+ * The value type each LaTeX field renders, as `LatexConfigValues` below
+ * projects it. Restated here rather than derived because the catalog is
+ * runtime-typed (`settingSchemaWithoutPrefault` returns `unknown`) — the same
+ * bargain the 26 other catalog-backed signals strike in `settingsState.ts`,
+ * where `settingSignal<T>` names the value type beside the key. The values
+ * themselves are validated by each row's own catalog schema at the snapshot
+ * wire boundary (`snapshotMessage` in `@shared/schemas/settingsViewMessages`),
+ * so this type describes what already arrived rather than guarding it.
+ */
+interface LatexConfigValueTypes {
+  workflowAutoCompile: boolean;
+  workflowAutoCompileTimeoutMs: number;
+  workflowAutoOpenPdf: boolean;
+  workflowRejectOnCompileFailure: boolean;
+  latexdiffBetweenRounds: boolean;
+  latexdiffTimeoutMs: number;
+  latexdiffMathMarkup: LatexdiffMathMarkupValue;
+  latexdiffChangesOnly: boolean;
+  latexFormatter: LatexFormatterValue;
+  wrapCritiqueInAlign: boolean;
+  enabledReplacements: NonRegexReplacementCategory[];
+  enabledReplacementsRegex: RegexReplacementCategory[];
+  customReplacementsRegex: Record<string, string>;
+  customReplacements: Record<string, string>;
+}
+
+/**
+ * Frontend field projection of the catalog-derived LaTeX snapshot. Partial
+ * because the signal starts empty and fills in when the snapshot lands.
+ */
+export type LatexConfigValues = Partial<LatexConfigValueTypes>;
+
+/**
  * Every frontend-facing LaTeX field → its canonical catalog key. This map is
- * the field set: `LatexConfigValuesSchema` (`@shared/schemas`) is built by
- * looking up each of these keys in the settings catalog and re-keying its
- * schema under the frontend field name, so the projection can never drift
- * from the catalog's own validators. `latexSlice` uses this map to build the
- * projection at the wire boundary; `LaTeXTab` uses it for catalog-driven
- * writes.
+ * the field set: the `satisfies` below fails to compile if a field is added to
+ * (or removed from) {@link LatexConfigValueTypes} without a matching entry
+ * here, in either direction. `miscSettingsSlice` uses the map to re-key the
+ * snapshot at the wire boundary; `LaTeXTab` uses it for catalog-driven writes
+ * and for the `latex-setting-<field>` control ids. `stateSettings.vitest.ts`
+ * checks that every key here still names a catalog row.
  */
 export const LATEX_CONFIG_FIELD_TO_KEY = {
   workflowAutoCompile: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
@@ -79,4 +117,4 @@ export const LATEX_CONFIG_FIELD_TO_KEY = {
   enabledReplacementsRegex: 'texra.latex.enabledReplacementsRegex',
   customReplacementsRegex: 'texra.latex.customReplacementsRegex',
   customReplacements: 'texra.latex.customReplacements',
-} as const;
+} as const satisfies Record<keyof LatexConfigValueTypes, string>;

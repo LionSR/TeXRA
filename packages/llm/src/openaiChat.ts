@@ -1,6 +1,5 @@
 // Third-party imports
 import { Cause, Effect, Exit, Stream } from 'effect';
-import { Sse } from 'effect/unstable/encoding';
 import OpenAI from 'openai';
 import { z } from 'zod';
 
@@ -8,9 +7,14 @@ import { z } from 'zod';
 import { openaiFailure } from './openaiError.js';
 import {
   InputTokenEstimateSchema,
-  JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  enrichModelError,
+  hasErrorField,
+  parseInboundToolArguments,
+  parseJsonOrModelError,
+  pullStream,
+  sseEvents,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -666,6 +670,8 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
   }
   parameters.max_tokens = turn.controls.maxOutputTokens;
   if (effort !== null) parameters.reasoning_effort = effort;
+  if (turn.tools.length > 0)
+    parameters.parallel_tool_calls = turn.controls.parallelToolCalls;
   if (turn.protocol === 'deepseek-chat') {
     if (thinking.mode === 'enabled' && turn.controls.temperature !== null) {
       return yield* new ModelError({
@@ -826,12 +832,7 @@ export function openaiChatModel(
             parsed.data.effort !== undefined)) ||
         ((config.protocol === 'openai-chat' ||
           config.protocol === 'xai-chat') &&
-          parsed.data.thinking !== undefined) ||
-        (config.protocol !== 'openai-chat' &&
-          config.protocol !== 'xai-chat' &&
-          config.protocol !== 'dashscope-chat' &&
-          config.protocol !== 'minimax-chat' &&
-          parsed.data.parallelToolCalls !== undefined)
+          parsed.data.thinking !== undefined)
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
@@ -963,6 +964,8 @@ export function openaiChatModel(
           effort,
           temperature,
           maxOutputTokens,
+          parallelToolCalls:
+            parsed.data.parallelToolCalls ?? config.defaults.parallelToolCalls,
           toolChoice,
         };
       }
@@ -991,10 +994,7 @@ export function openaiChatModel(
       let requestId: string | undefined;
       let bodyRequestId: string | undefined;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId: error.responseId ?? responseId,
           requestId: error.requestId ?? requestId,
           model: error.model ?? returnedModel ?? config.requestedModel,
@@ -1078,49 +1078,10 @@ export function openaiChatModel(
             }
           >();
 
-          const bytes = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => body.read(),
-                catch: openaiFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          );
-          let parsedEvents: Sse.Event[] = [];
-          const parser = Sse.makeParser(
-            (event) => {
-              // Retry is only a reconnect hint; this operation never reconnects.
-              if (event._tag === 'Event') parsedEvents.push(event);
-            },
-            {
-              // Preserve the prior no-added-cap policy, not a bounded-memory claim.
-              maxEventSize: Number.POSITIVE_INFINITY,
-            },
-          );
-          const chunks = bytes.pipe(
-            Stream.decodeText,
-            Stream.mapEffect((text) =>
-              Effect.gen(function* () {
-                parsedEvents = [];
-                const failure = parser.feed(text);
-                if (failure !== undefined) {
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message: 'The model returned malformed server-sent events.',
-                    cause: failure,
-                  });
-                }
-                return parsedEvents;
-              }),
-            ),
-            Stream.flattenIterable,
-            Stream.takeUntil((event) => event.data === '[DONE]'),
+          const bytes = pullStream(() => body.read(), openaiFailure);
+          const chunks = sseEvents(
+            bytes,
+            'The model returned malformed server-sent events.',
           );
 
           const progress = chunks.pipe(
@@ -1130,17 +1091,16 @@ export function openaiChatModel(
                   receivedSentinel = true;
                   return [];
                 }
-                const raw: unknown = yield* Effect.try({
-                  try: () => JSON.parse(event.data),
-                  catch: (cause) =>
+                const raw = yield* parseJsonOrModelError(
+                  event.data,
+                  (cause) =>
                     new ModelError({
                       kind: 'malformed-output',
                       message: 'The model returned malformed stream data.',
                       cause,
                     }),
-                });
-                const embedsError =
-                  typeof raw === 'object' && raw !== null && 'error' in raw;
+                );
+                const embedsError = hasErrorField(raw);
                 if (event.event === 'error' || embedsError) {
                   const payload = embedsError ? raw.error : raw;
                   return yield* openaiFailure(
@@ -1601,18 +1561,7 @@ export function openaiChatModel(
                       'The model returned incomplete tool call identities.',
                   });
                 }
-                yield* Effect.try({
-                  try: () => {
-                    JsonObjectSchema.parse(JSON.parse(call.arguments));
-                  },
-                  catch: (cause) =>
-                    new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The model returned invalid tool call arguments.',
-                      cause,
-                    }),
-                });
+                yield* parseInboundToolArguments(call.arguments, 'The model');
                 completedContent.push({
                   kind: 'local-call',
                   providerCallId: call.id,

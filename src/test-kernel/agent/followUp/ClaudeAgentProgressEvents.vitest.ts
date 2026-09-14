@@ -33,7 +33,7 @@ async function runWithLoggerStore<T>(
 }
 
 function collectToolLogs(store: StreamLog): unknown[] {
-  const entries = store.getRange(0, store.head);
+  const entries = store.toJSON();
   return entries
     .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)
     .map((entry) => entry.data);

@@ -5,7 +5,6 @@ on:
     branches:
       - main
   pull_request:
-  merge_group:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
@@ -216,7 +215,7 @@ jobs:
 
   test:
     # Keep the pre-existing `linux` / `windows` labels rather than the raw
-    # runner image: these strings are the check names branch protection pins.
+    # runner image: these strings are the historical check names.
     name: kernel tests (${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}, shard ${{ matrix.shard }}/2)
     needs: changes
     if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
@@ -348,7 +347,7 @@ jobs:
   runtime-validation:
     name: runtime validation (linux)
     # Runs on push to main, the nightly schedule (whose whole purpose is this
-    # timing run), merge groups, and manual dispatch; never on PRs.
+    # timing run), and manual dispatch; never on PRs.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15

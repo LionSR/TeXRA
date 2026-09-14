@@ -5,6 +5,7 @@ import {
   acquireResumedRunOwnership,
   finalizeRun,
 } from '@agent/storage/runLifecycle';
+import { persistedParentRunId } from '@agent/storage/runRecords';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AppState } from '@platform/interfaces';
@@ -38,8 +39,8 @@ export interface RunAgentOptions extends Pick<
   | 'onApprovalPolicyDenial'
   | 'runtimeUnavailableTools'
   | 'tools'
-  | 'modelHandlerCompatibilityKey'
-  | 'copilotRouteOverride'
+  | 'modelCompatibilityKey'
+  | 'ownApiKeyFallback'
   | 'onRun'
   | 'onRunResolved'
   | 'onIdle'
@@ -108,6 +109,12 @@ export const runAgent = Effect.fn('runAgent')(function* (
   const runId = request.runId ?? generateRunId();
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session;
+  // A resume of a run this session already runs is a duplicate, refused here
+  // before any snapshot is taken: queued behind the live generation it would
+  // wake without a handle of its own and restore a prior terminal fact over
+  // the one that generation is about to write.
+  if (!shouldRegister && runSession.runs.isActiveOrResuming(runId))
+    return yield* Effect.fail(new Error(`Run is already running: ${runId}`));
   // A resumed run's prior terminal fact: what a launch that fails before its
   // lifecycle starts restores, so the run does not read as still running.
   const priorEnd = shouldRegister
@@ -115,6 +122,15 @@ export const runAgent = Effect.fn('runAgent')(function* (
     : yield* getRunRecords(runSession, runId).readRunEnd();
   if (!shouldRegister && !(yield* getRunRecords(runSession, runId).exists()))
     return yield* Effect.fail(new Error(`Run not found: ${runId}`));
+  // A resumed run's lineage, read before its handle is registered below: from
+  // that moment a stop of the parent sees this child, so it cascades into the
+  // launch (the handle's interrupt aborts launch preparation) or detaches it,
+  // and a parent whose stop has already begun refuses the admission outright.
+  // The launch reads the edge back off the handle instead of deriving it a
+  // second time, so nothing can install a parent after its stop finished.
+  const resumedParentRunId = shouldRegister
+    ? undefined
+    : yield* persistedParentRunId(runSession, runId);
   const launchAbortController = new AbortController();
   const detachLaunchAbortLink = linkAbortSignals(
     [executeAgentOptions.launchSignal],
@@ -129,7 +145,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
           identity: { kind: 'agent', agent: request.config.agent },
           category: request.config.agentCategory,
         },
-        null,
+        resumedParentRunId ?? null,
       );
   const detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
     interrupt: () => launchAbortController.abort(),
@@ -183,6 +199,21 @@ export const runAgent = Effect.fn('runAgent')(function* (
         const run = yield* Effect.exit(
           Effect.gen(function* () {
             onRunLeaseAcquired?.(runId);
+            // Ownership is the fence for the edge as well: a detach another
+            // host committed while this launch prepared has folded by now,
+            // and a foreign row never reaches a handle this session tracks,
+            // so the registry applies the severed edge here (handle,
+            // approval ancestry, the former parent's roster), before the
+            // lifecycle reads the lineage back off the handle. Inside the
+            // owned region: a failed read releases ownership like any other
+            // launch failure.
+            const formerParent = launchHandle?.parent ?? null;
+            if (
+              !shouldRegister &&
+              formerParent !== null &&
+              (yield* persistedParentRunId(runSession, runId)) === undefined
+            )
+              runSession.runs.detachChildren(formerParent, [runId]);
             return yield* executeAgent(definition, runId, {
               ...executeAgentOptions,
               launchSignal,
@@ -204,16 +235,33 @@ export const runAgent = Effect.fn('runAgent')(function* (
             ? RUN_OUTCOME.FAILED
             : priorEnd?.outcome;
           if (!lifecycleStarted && restoredOutcome !== undefined) {
-            const finalization = yield* Effect.exit(
-              finalizeRun(runSession, {
-                runId,
-                outcome: restoredOutcome,
-              }),
-            );
-            if (Exit.isFailure(finalization))
-              failures.push(Cause.squash(finalization.cause));
-            else if (!finalization.value.ok)
-              failures.push(finalization.value.error);
+            // A resume restores its snapshot only while the snapshot is
+            // still the run's terminal fact: a generation that admitted
+            // itself beside this one (both passed the duplicate check before
+            // either awaited) may have written a newer end, which this
+            // failure must not undo. A read that fails here is one more
+            // failure to report, never a reason to skip the release below.
+            const current = shouldRegister
+              ? Exit.succeed(priorEnd)
+              : yield* Effect.exit(
+                  getRunRecords(runSession, runId).readRunEnd(),
+                );
+            if (Exit.isFailure(current)) {
+              failures.push(Cause.squash(current.cause));
+            } else if (
+              JSON.stringify(current.value) === JSON.stringify(priorEnd)
+            ) {
+              const finalization = yield* Effect.exit(
+                finalizeRun(runSession, {
+                  runId,
+                  outcome: restoredOutcome,
+                }),
+              );
+              if (Exit.isFailure(finalization))
+                failures.push(Cause.squash(finalization.cause));
+              else if (!finalization.value.ok)
+                failures.push(finalization.value.error);
+            }
           }
         }
 

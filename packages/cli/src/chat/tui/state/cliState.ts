@@ -10,10 +10,12 @@ import {
 } from '@shared/approvalPolicy';
 import {
   AgentCategory,
+  RunIdSchema,
   type AgentDelegationScope,
   type RunId,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
+import { resolveSelectedId } from '@shared/session/surface';
 import { RUN_GROUP_LABELS } from '@shared/runs/runStatusDisplay';
 import type { WorkflowRowGroup } from '@shared/runs/workflowRunModel';
 import { sessionView } from './sessionView';
@@ -86,25 +88,36 @@ function defaultSessionMeta(): SessionMeta {
 // run-lifecycle side effects that touch these signals alongside others
 // (e.g. `removeRun`) live in the `removeRun` section below.
 
+/**
+ * Where notices land before the root run exists. A reserved 8-hex id: real
+ * run ids are 12 hex (generated) or 24 (derived), so it can never collide,
+ * and it is minted through the schema rather than forged with a cast.
+ */
+export const CLI_LOCAL_RUN_ID = RunIdSchema.parse('c1110ca1');
+
 /** The Surface's selection as written by `focusRun`; renders read
  *  `selectedRunId`, which resolves it against the view. */
 export const activeRunId = signal<RunId | undefined>(undefined);
 
 /**
- * The run the transcript and status bar show: the Surface's selection
- * resolved against the view (PRD 9). The selected run while the view
- * holds it; the first top-level run once it has left; the selection
- * itself while the view holds no run at all (the pre-run local
- * conversation is a Surface-only id). A computed rather than an effect that
- * clears a stale selection, and a signal rather than a per-render derivation
- * so every component reads one answer.
+ * The run the transcript and status bar show: `resolveSelectedId` (PRD 9,
+ * shared with the extension and desktop `Surface`). The pre-run local
+ * conversation is a Surface-only id the view never holds, and the view
+ * lists every run of the workspace, so it is kept as-is rather than
+ * resolved: a fresh chat must not read as whatever run the workspace last
+ * left behind. `undefined`/`null` are reconciled here, the one call site,
+ * since the TUI spells "no selection" as `undefined` rather than `Surface`'s
+ * `null`. A computed rather than an effect that clears a stale selection,
+ * and a signal rather than a per-render derivation so every component reads
+ * one answer.
  */
 export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
   () => {
     const selected = activeRunId.get();
-    const view = sessionView().get();
-    if (selected === undefined || view.runs.has(selected)) return selected;
-    return view.runs.size === 0 ? selected : view.order.at(0);
+    if (selected === CLI_LOCAL_RUN_ID) return selected;
+    return (
+      resolveSelectedId(sessionView().get(), selected ?? null) ?? undefined
+    );
   },
 );
 
@@ -456,6 +469,10 @@ const DEFAULT_TRANSIENT_NOTICE_TTL_MS = 4_000;
 
 /** Single status-bar notice slot; later notices replace earlier ones. */
 export const transientNotice = signal<TransientNotice | undefined>(undefined);
+
+/** Why the session view stopped updating (the fold died), once it has: the
+ *  composer is closed on it, since nothing typed could be shown again. */
+export const sessionViewFailure = signal<string | undefined>(undefined);
 let transientNoticeTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Show a regenerable status-bar notice for a bounded interval.

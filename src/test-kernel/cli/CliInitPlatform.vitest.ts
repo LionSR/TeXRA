@@ -61,7 +61,6 @@ function spyOnSignalRegistration(): {
 const mocks = vi.hoisted(() => ({
   consoleLogSink: { write: vi.fn() },
   signInCliSupabase: vi.fn(),
-  bootstrapNodeAgentDirectories: vi.fn(),
   createPlatformAgentDirectories: vi.fn(() => ({
     custom: vi.fn(),
     builtIn: vi.fn(),
@@ -76,11 +75,11 @@ const mocks = vi.hoisted(() => ({
   })),
   initializeCliSupabaseAuth: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
-  initNodeAgentRuntime: vi.fn(),
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   openTexraConfigStores: vi.fn(),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
   tryPlatform: vi.fn(),
+  publishPlatform: vi.fn(),
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
   shutdownHandlers: [] as Array<() => unknown>,
@@ -115,7 +114,7 @@ vi.mock('@logger/logUtils', () => ({
 }));
 
 vi.mock('@platform/platform', () => ({
-  initPlatform: vi.fn(),
+  initPlatform: mocks.publishPlatform,
   tryPlatform: mocks.tryPlatform,
   platform: () => ({
     config: { get: (_key: string, def: unknown) => def },
@@ -127,14 +126,9 @@ vi.mock('@platform/platform', () => ({
 // nodeHost; stub it so the test exercises only the CLI-specific wiring and
 // feature registration does not run twice across cases.
 vi.mock('@platform/defaults/nodeHost', () => ({
-  bootstrapNodeAgentDirectories: mocks.bootstrapNodeAgentDirectories,
   createNodePlatform: mocks.createNodePlatform,
   createNodeWorkspaceRoots: mocks.createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
-}));
-
-vi.mock('@platform/defaults/nodeAgentRuntime', () => ({
-  initNodeAgentRuntime: mocks.initNodeAgentRuntime,
 }));
 
 // The two lifecycle arms are Effects the host runs, so the doubles answer
@@ -190,10 +184,6 @@ vi.mock('@cli/runtime/cliStateStores', () => ({
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
   getCliSecrets: mocks.getCliSecrets,
-}));
-
-vi.mock('@tools/lean/direct/directLspAdapter', () => ({
-  registerDirectLeanLanguageServices: vi.fn(),
 }));
 
 // Installed so startup never reaches a real auth check.
@@ -254,7 +244,6 @@ describe('CLI platform init', () => {
     mocks.cliGlobalState.update.mockReset();
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
-    mocks.bootstrapNodeAgentDirectories.mockReturnValue(Effect.void);
     mocks.openTexraConfigStores.mockReturnValue(
       Effect.succeed({ workspace: {}, global: {} }),
     );
@@ -281,6 +270,38 @@ describe('CLI platform init', () => {
     expect(vi.mocked(UsageLogService.dispose)).not.toHaveBeenCalled();
     for (const handler of mocks.shutdownHandlers) await handler();
     expect(vi.mocked(UsageLogService.dispose)).toHaveBeenCalled();
+  });
+
+  it('retries after seed failure without publishing platform, session, or signals', async () => {
+    await withFreshSignalCapture(async ({ registered, initPlatform }) => {
+      mocks.tryPlatform.mockReset();
+      mocks.tryPlatform
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValue({ globalState: stubGlobalState() });
+      mocks.cliGlobalState.update.mockRejectedValueOnce(
+        new Error('disabled-tool defaults could not be seeded'),
+      );
+
+      await expect(initPlatform.initCliPlatform(cliContext())).rejects.toThrow(
+        'disabled-tool defaults could not be seeded',
+      );
+
+      const { tryDefaultSession } = await import('@agent/runtime');
+      expect(mocks.publishPlatform).not.toHaveBeenCalled();
+      expect(tryDefaultSession()).toBeUndefined();
+      expect(registered).toEqual([]);
+
+      await expect(initPlatform.initCliPlatform(cliContext())).resolves.toEqual(
+        expect.objectContaining({ roots: expect.anything() }),
+      );
+      expect(mocks.publishPlatform).toHaveBeenCalledOnce();
+      expect(tryDefaultSession()).toBeUndefined();
+      expect(registered).toEqual([
+        { event: 'SIGINT', kind: 'once' },
+        { event: 'SIGTERM', kind: 'once' },
+      ]);
+    });
   });
 
   it('registers the agent shutdown drain on first platform init', async () => {
@@ -358,7 +379,9 @@ describe('CLI platform init', () => {
     expect(setup.host).toBe('cli');
     await expect(setup.signIn()).resolves.toBe(true);
     expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
-    expect(mocks.signInCliSupabase).toHaveBeenCalledWith({ openBrowser: true });
+    expect(mocks.signInCliSupabase).toHaveBeenCalledWith(effectRuntime(), {
+      openBrowser: true,
+    });
   });
 });
 
@@ -389,7 +412,6 @@ describe('CLI platform interactive signal ownership', () => {
     mocks.tryPlatform.mockReturnValue({
       globalState: stubGlobalState(() => undefined),
     });
-    mocks.bootstrapNodeAgentDirectories.mockReturnValue(Effect.void);
   });
 
   it('initInteractiveCliPlatform keeps the platform handler live until an explicit handoff', async () => {

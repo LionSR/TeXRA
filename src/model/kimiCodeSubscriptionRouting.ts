@@ -2,7 +2,7 @@
  * The single route resolver that decides whether a model request should be
  * served by the Kimi Code (Moonshot coding-subscription) endpoint.
  *
- * Shared by the handler dispatch (ModelFactory) and the picker availability
+ * Shared by the route resolution (`modelRoutes`) and the picker availability
  * gate (computeModelOptions) so they never drift: both consume the same
  * synchronous resolver with the same injected facts (whether a Kimi Code API
  * key is stored, and whether the "Prefer Kimi Code" switch is on).
@@ -21,6 +21,7 @@
 import { type ModelConfig } from 'llm-zoo';
 
 import type { PlatformSecrets } from '@platform/secrets';
+import type { DeclinableUsageRoute } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
@@ -43,7 +44,7 @@ const KIMI_CODE_WIRE_MODEL_IDS: Readonly<Record<string, string>> = {
 /**
  * The host facts the Kimi Code route decision depends on, assembled once by
  * {@link resolveKimiCodeRoutingFacts} and threaded through the decision and
- * config-synthesis helpers so the three call sites (ModelFactory dispatch,
+ * config-synthesis helpers so the three call sites (`modelRoutes` route resolution,
  * picker availability, subscription-active gate) cannot assemble them
  * differently.
  */
@@ -85,16 +86,21 @@ export function isKimiCodeRoute(
  * used to duplicate this assembly inline.
  *
  * `secrets` is the process secret store the caller holds (the `Secrets`
- * service, or the store a host root threaded down).
+ * service, or the store a host root threaded down). `declinedRoutes` are the
+ * routes the asking run declines: a declined coding subscription reads as
+ * "prefer off" for that run without touching the user's switch.
  */
 export async function resolveKimiCodeRoutingFacts(
   secrets: PlatformSecrets,
   useOpenRouter: boolean,
+  declinedRoutes?: readonly DeclinableUsageRoute[],
 ): Promise<KimiCodeRoutingFacts> {
   return {
     useOpenRouter,
     keySet: await hasUsableApiKey(secrets, 'kimiCode'),
-    preferKimiCode: getPreferKimiCode(),
+    preferKimiCode:
+      getPreferKimiCode() &&
+      !declinedRoutes?.includes('kimi-code-subscription'),
   };
 }
 
@@ -116,7 +122,7 @@ const KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW = 262_144;
  * conservative tier cap rather than the open platform's advertised 1M.
  * Exclusive models already carry the pinned `baseUrl`, zero price and 256K
  * window from the registry, so they keep `config` untouched. Shared by the
- * dispatch path (ModelFactory) and the availability path
+ * route path (`modelRoutes`) and the availability path
  * (computeModelOptions) so both apply the identical post-route synthesis.
  */
 export function kimiCodeEffectiveConfig(

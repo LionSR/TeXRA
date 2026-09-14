@@ -372,7 +372,7 @@ export async function buildCliContext(
   // Workspace file first, user file second — the same order
   // `workspaceRoots().config` gives the extension and desktop hosts. This is
   // the pre-runtime caller of both readers, which is why it goes through
-  // `loadCliStartupConfig` rather than `effectRuntime()`.
+  // `loadCliStartupConfig` rather than the process runtime.
   const [loadedConfig, userApprovalPolicy] = await loadCliStartupConfig(
     cwd,
     init.storageRoot,

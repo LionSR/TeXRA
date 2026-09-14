@@ -22,12 +22,12 @@ import { hostPort } from '@common/hostPort';
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
-import { Secrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 import {
   EXTERNAL_TOOL_DEFS,
   type ExternalToolDef,
+  type ToolProbeServices,
 } from '@tools/externalToolDefs';
 import { getDisabledToolIds } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -77,21 +77,17 @@ export function getDisabledToolNames(
  *
  * Every tool group flagged `toggleable: true` in EXTERNAL_TOOL_DEFS is
  * treated as opt-in and seeded as disabled on a fresh install. Callers pass
- * the global state store they already hold, and must invoke this before
- * anything writes `versionStateKey` (each host's bundled-agent-directory
- * sync) — the combined absence of that key and DISABLED_TOOLS is how a
- * genuinely fresh install is told apart from an existing, upgrading user who
- * simply never toggled a tool; re-seeding the latter would silently disable
- * tools they already had enabled.
- * `versionStateKey` differs per host (e.g. `LAST_KNOWN_VERSION` for
- * the extension/desktop, `CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION` for the
- * CLI) because each tracks its own bundled-agent version independently.
+ * the global state store they already hold. DISABLED_TOOLS is its own
+ * fresh-install signal, because this seed is the only thing that writes it
+ * before the user does: an absent value means neither the seed nor the user
+ * has ever set the list, and a present one (an empty list included) means the
+ * user's choices are already recorded, so re-seeding would silently disable
+ * tools they had enabled.
  */
 export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
-  function* (state: StateStore, versionStateKey: string) {
-    const lastKnownVersion = state.get<string>(versionStateKey);
+  function* (state: StateStore) {
     const disabledTools = state.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
-    if (lastKnownVersion !== undefined || disabledTools !== undefined) return;
+    if (disabledTools !== undefined) return;
 
     const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
       (def) => def.id,
@@ -128,7 +124,7 @@ let pendingRerun = false;
 export function runExternalToolChecks(): Effect.Effect<
   ExternalToolCheckResult[],
   never,
-  Secrets
+  ToolProbeServices
 > {
   return Effect.suspend(() => {
     if (inflightProbe) {
@@ -159,15 +155,18 @@ const probeUntilSettled = Effect.gen(function* () {
   return results;
 });
 
-const runProbes: Effect.Effect<ExternalToolCheckResult[], never, Secrets> =
-  Effect.suspend(() =>
-    // Same fan-out as the Promise.all this replaces: every group probes at once
-    // and no group's failure cancels a sibling, because each one resolves to a
-    // result of its own below.
-    Effect.forEach(EXTERNAL_TOOL_DEFS, probeToolGroup, {
-      concurrency: 'unbounded',
-    }),
-  );
+const runProbes: Effect.Effect<
+  ExternalToolCheckResult[],
+  never,
+  ToolProbeServices
+> = Effect.suspend(() =>
+  // Same fan-out as the Promise.all this replaces: every group probes at once
+  // and no group's failure cancels a sibling, because each one resolves to a
+  // result of its own below.
+  Effect.forEach(EXTERNAL_TOOL_DEFS, probeToolGroup, {
+    concurrency: 'unbounded',
+  }),
+);
 
 const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
   id,
@@ -177,7 +176,11 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
   check,
   statusLabel: getStatusLabel,
   detailCheck,
-}: ExternalToolDef): Effect.fn.Return<ExternalToolCheckResult, never, Secrets> {
+}: ExternalToolDef): Effect.fn.Return<
+  ExternalToolCheckResult,
+  never,
+  ToolProbeServices
+> {
   // Run check/status/detail from one shared probe result. Some groups
   // (Codex, Zotero, GitHub PR) touch async local state, so running the
   // callbacks independently can duplicate the same probe work.
@@ -228,12 +231,12 @@ function resolveOptionalStatus(
   getStatus:
     | ((
         probeResult?: unknown,
-      ) => Effect.Effect<string | undefined, unknown, Secrets>)
+      ) => Effect.Effect<string | undefined, unknown, ToolProbeServices>)
     | undefined,
   probeResult: unknown,
   toolName: string,
   field: string,
-): Effect.Effect<string | undefined, never, Secrets> {
+): Effect.Effect<string | undefined, never, ToolProbeServices> {
   if (!getStatus) return Effect.succeed(undefined);
   return getStatus(probeResult).pipe(
     Effect.catch((error) =>

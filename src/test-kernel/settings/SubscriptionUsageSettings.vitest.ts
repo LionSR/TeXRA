@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-import { sendSubscriptionUsage } from '@settingsView/handlers/subscriptionUsageHandlers';
 import { settingsViewHandlers } from '@settingsView/frontend/messageDispatcher';
 import {
   resetSettingsState,
@@ -11,8 +10,6 @@ import { formatSubscriptionUsagePercent } from '@shared/subscriptionUsagePresent
 import {
   dispatchSettingsViewOutbound,
   SettingsViewInboundMessageSchema,
-  SUBSCRIPTION_USAGE_PROVIDERS,
-  type SubscriptionUsageProvider,
   type SubscriptionUsageSnapshot,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';

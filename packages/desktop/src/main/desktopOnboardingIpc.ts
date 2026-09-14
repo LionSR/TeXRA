@@ -1,11 +1,8 @@
-import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
-import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
-import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
-  readOnboardingFlags,
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
@@ -20,8 +17,6 @@ import type {
   DesktopRenderer,
 } from './desktopIpcTypes.js';
 
-const logger = createLog('DesktopOnboarding');
-
 interface DesktopOnboardingIpcOptions {
   /** The process global store, handed down by the composition root. */
   state: StateStore;
@@ -35,6 +30,9 @@ interface DesktopOnboardingIpcOptions {
   /** Run ChatGPT sign-in flow from the welcome card. */
   signInWithChatGpt: () => Promise<void>;
   onAsyncError: (error: unknown) => void;
+  /** The process runtime the composition root built; the funnel refresh runs
+   *  on it rather than on a looked-up one. */
+  runtime: ProcessRuntime;
 }
 
 /**
@@ -63,20 +61,21 @@ export function createDesktopOnboardingIpc(
   options: DesktopOnboardingIpcOptions,
 ): DesktopOnboardingIpc {
   const state = options.state;
-  let previousFunnelState: OnboardingFunnelState | undefined;
   let setupKickoffStarted = false;
   const funnelListeners = new Set<(state: OnboardingFunnelState) => void>();
-  // Serialize refreshes so concurrent callers (WEBVIEW_READY, post-backfill,
-  // auth refresh, api-key hooks, run completion) never interleave. The funnel
-  // derivation has an internal `await` (the credential probe) and mutates the
-  // shared `previousFunnelState`; without serialization the last caller to
-  // finish could push a `SET_ONBOARDING_FUNNEL` derived from a stale previous
-  // state. A latch coalesces overlapping requests: while one refresh is in
-  // flight, a single re-run is queued and run once the current one settles, so
-  // callers always observe a consistent terminal state.
-  const funnelRefreshQueue = new OnboardingRefreshQueue(
-    runOnboardingFunnelRefresh,
-  );
+  // This host's half of the shared funnel loop. Entering State 1 only paints
+  // the setup card (the launcher's agent selection is the surface's), so the
+  // `selectSetupAgent` arm is deliberately discarded here as it is in the CLI;
+  // the user launches setup explicitly via the card's "Run Setup" button
+  // (ONBOARDING_RUN_SETUP).
+  const funnel = new OnboardingFunnelRefresher({
+    hasCredential: () => options.hasCredential(),
+    flags: state,
+    apply: ({ state: funnelState, changed }) => {
+      if (!changed) return;
+      for (const listener of [...funnelListeners]) listener(funnelState);
+    },
+  });
 
   function postCurrentState(): void {
     const dismissed = state.get<boolean>(
@@ -84,39 +83,6 @@ export function createDesktopOnboardingIpc(
       false,
     );
     renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(!dismissed));
-  }
-
-  async function runOnboardingFunnelRefresh(): Promise<void> {
-    // A failed probe still has to paint the funnel, but never silently: it
-    // demotes a mid-setup user back to the sign-in card, and the two states
-    // are indistinguishable on screen. The call is inside the `try` so a
-    // synchronous throw from the host wiring is reported too.
-    let hasCredential = false;
-    try {
-      hasCredential = await options.hasCredential();
-    } catch (error) {
-      logger.warn('Credential probe failed; treating as no credential', {
-        data: error,
-      });
-    }
-    const flags = readOnboardingFlags(state);
-    const transition = planOnboardingFunnelTransition(previousFunnelState, {
-      hasCredential,
-      ...flags,
-    });
-    const changed = previousFunnelState !== transition.state;
-    previousFunnelState = transition.state;
-    if (changed) {
-      for (const listener of [...funnelListeners]) listener(transition.state);
-    }
-
-    if (transition.clearDeclined) {
-      await setOnboardingDeclined(state, false);
-    }
-    // Entering State 1 only paints the setup card (the launcher's agent
-    // selection is the surface's); it never auto-starts the setup
-    // conversation. The user launches setup explicitly via the card's
-    // "Run Setup" button (ONBOARDING_RUN_SETUP).
   }
 
   // Single guarded entry point for launching setup. The explicit "Run Setup"
@@ -146,7 +112,7 @@ export function createDesktopOnboardingIpc(
   }
 
   function refreshOnboardingFunnel(): Promise<void> {
-    return effectRuntime().runPromise(funnelRefreshQueue.run());
+    return options.runtime.runPromise(funnel.run());
   }
 
   async function dismiss(): Promise<void> {
@@ -190,7 +156,7 @@ export function createDesktopOnboardingIpc(
       }
     },
     refreshOnboardingFunnel,
-    funnelState: () => previousFunnelState ?? null,
+    funnelState: () => funnel.state ?? null,
     onFunnelChange(listener) {
       funnelListeners.add(listener);
       return () => {

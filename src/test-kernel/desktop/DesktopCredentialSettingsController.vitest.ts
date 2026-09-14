@@ -9,6 +9,7 @@ import { DefaultDesktopCredentialSettingsController } from '@desktop/main/deskto
 import * as logger from '@logger/logUtils';
 import { apiKeySecretName } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import { effectRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -111,15 +112,20 @@ async function createFixture({
   const onModelOptionsChanged = vi.fn(async () => {
     events.push('modelOptions');
   });
+  const unavailable = (provider: string) => ({
+    state: 'unavailable' as const,
+    provider: provider as 'chatgpt',
+    providerName: provider,
+    planName: provider,
+    fetchedAt: 0,
+    windows: [] as [],
+    reason: 'missing_credentials' as const,
+  });
   const subscriptionUsage = {
-    getUsage: vi.fn(async (provider: string) => ({
-      state: 'unavailable' as const,
-      provider: provider as 'chatgpt',
-      providerName: provider,
-      planName: provider,
-      fetchedAt: 0,
-      windows: [] as [],
-      reason: 'missing_credentials' as const,
+    getAllUsage: vi.fn(async () => ({
+      chatgpt: unavailable('chatgpt'),
+      kimiCode: unavailable('kimiCode'),
+      glmCodingPlan: unavailable('glmCodingPlan'),
     })),
     invalidate: vi.fn(),
   };
@@ -130,6 +136,7 @@ async function createFixture({
   );
 
   const controller = new DefaultDesktopCredentialSettingsController({
+    runtime: effectRuntime(),
     workspaceState,
     globalState,
     config: new FakeConfigProvider(),
@@ -311,7 +318,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(
         usageProvider,
       );
-      expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(3);
+      expect(fixture.subscriptionUsage.getAllUsage).toHaveBeenCalledOnce();
       expect(fixture.posted).toContainEqual(
         expect.objectContaining({
           command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,

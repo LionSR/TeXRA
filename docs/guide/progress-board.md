@@ -8,7 +8,7 @@ import CliHistoryHero from '../.vitepress/components/CliHistoryHero.vue';
 
 # ProgressBoard
 
-The ProgressBoard is where you watch agents work and review what they did, whether a run is a long derivation attempt or a quick edit. It is the record of every TeXRA run: you can see live progress, re-run a past job, or restore its settings with one action.
+The ProgressBoard is TeXRA's execution dashboard for tracking autonomous agents and inspecting their artifacts in real time. Whether supervising extended mathematical derivations or reviewing concise document edits, you can inspect streaming thoughts and tool calls, re-run tasks, or restore exact configurations with a single click.
 
 ::: tip CLI
 The ProgressBoard is the VS Code extension's live view. The CLI shows the same
@@ -42,7 +42,7 @@ The ProgressBoard is split into two main sections (usually side by side, but con
 
 ## Stream tabs section
 
-This section lists the stored runs for the workspace, including runs from earlier sessions and from other TeXRA hosts; transcripts are loaded from storage when you open them.
+This section lists the stored runs for the workspace, including runs from earlier sessions and from other TeXRA hosts; transcripts and run facts load from the workspace SQLite run database.
 
 - **Switching streams**: Select a stream name (e.g., `polish: paper.tex`) to view its logs and status in the Content Area.
 - **Removing a stream**: Each tab has an <wa-icon library="texra" name="xmark"></wa-icon> button that removes that stream and its logs from the ProgressBoard view.
@@ -64,7 +64,7 @@ The header provides a summary and actions for the selected stream:
 
 <StatusDotLegend />
 
-<p class="hero-caption">The status dot: green while running, blue while waiting for input, grey once finished, red on error.</p>
+<p class="hero-caption">The status dot: green while running, blue while waiting for input, gray once finished, red on error.</p>
 
 - **Token and cost summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
 - **Stream header actions**: A toolbar of icon buttons acting on the selected stream. Workflow streams get Stop, Run New, Resume, Restore, Open in task storage, Export, Copy run context, Diff, Clean, and Pack; tool-use streams get Stop, AUTO-EDIT, AUTO-BASH, AUTO-TASK, Compact, Restore, Open in task storage, and Export. Export saves the conversation as Markdown, HTML, or PDF.

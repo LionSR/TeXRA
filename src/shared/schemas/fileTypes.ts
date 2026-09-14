@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const DocumentFileTypeSchema = z.enum(['input', 'context', 'media']);
 export type DocumentFileType = z.infer<typeof DocumentFileTypeSchema>;
 
-export const MultipleDocumentFileTypeSchema = z.enum([
+const MultipleDocumentFileTypeSchema = z.enum([
   ...DocumentFileTypeSchema.options,
   'output',
 ]);

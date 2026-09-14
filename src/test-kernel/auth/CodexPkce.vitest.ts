@@ -14,7 +14,7 @@ import {
   generateOAuthState,
   generatePkcePair,
 } from '@auth/oauth/pkce';
-import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
+import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
@@ -49,7 +49,7 @@ describe('codex PKCE', () => {
 
 describe('codex model eligibility', () => {
   // The profile reads the Codex context-window setting once a model is eligible.
-  setupPlatform();
+  setupPlatform({ config: { 'texra.chatgptCodex.preferSubscription': true } });
 
   // Serving status is registry data: llm-zoo's `codexSubscription` flag,
   // sourced from the Codex CLI's embedded model manifest cross-checked
@@ -139,10 +139,8 @@ describe('codex model eligibility', () => {
     ],
   )('$name', ({ overrides, eligible }) => {
     expect(
-      resolveCodexSubscriptionProfile({
-        model: openAIModel(overrides),
-        useOpenRouter: false,
-      }) !== null,
+      resolveCodexSubscriptionCapabilities(openAIModel(overrides), false) !==
+        null,
     ).toBe(eligible);
   });
 });

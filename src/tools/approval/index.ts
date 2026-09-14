@@ -65,12 +65,12 @@ export function configureDelegatedChildApprovals(
 }
 
 /**
- * Release all agent resources held for a deleted stream: approval state AND
- * the follow-up queue. Cancels pending host interactions;
- * `forgetRunAncestry` clears the stream's ancestry edges and its explicit
- * bypass values; `followUps.terminalize` drops the queue. These always need to
- * be cleared together when a stream is removed, so this is the single function
- * hosts should call.
+ * Release all agent resources held for a deleted run: approval state AND
+ * the follow-up queue. `forgetRunAncestry` clears the run's ancestry edges
+ * and its explicit bypass values; `followUps.terminalize` drops the queue.
+ * These always need to be cleared together when a run is removed, so this
+ * is the single function hosts should call. The run's open requests need no
+ * sweep: the fold drops them with the run's tombstone.
  *
  * Host-specific teardown (webview state, backup files, goal store, etc.)
  * remains the caller's responsibility after this returns.
@@ -79,10 +79,6 @@ export function releaseRunResources(
   runId: RunId,
   session: SessionHandle = defaultSession(),
 ): void {
-  session.interactions.cancel({
-    runId,
-    cause: 'Stream resources released.',
-  });
   session.approvals.forgetRunAncestry(runId);
   session.followUps.terminalize(runId);
 }

@@ -16,7 +16,8 @@ import { ModelError } from '@texra-ai/llm/turn';
 import { defaultSession } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { BaseViewMessageHandler } from '@common/webview';
-import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
+import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
@@ -28,7 +29,6 @@ import {
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
-import { SecretManager } from '@frontend/secretManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
@@ -43,6 +43,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
 import {
+  API_PROVIDERS,
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
@@ -52,9 +53,8 @@ import {
   refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { revealProgressRun } from '@progressView/progressNavigation';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -86,7 +86,7 @@ import {
   getLastCheckResults,
   refreshToolAvailability,
 } from '@tools/toolAvailability';
-import { GoalStore } from '@tools/goal';
+import { goalList } from '@tools/goal';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
@@ -97,10 +97,6 @@ import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import { SubscriptionHandlers } from './handlers/subscriptionHandlers';
-import {
-  sendSubscriptionUsage,
-  type SubscriptionUsageReader,
-} from './handlers/subscriptionUsageHandlers';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
@@ -115,33 +111,34 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly chatgptHandlers: SubscriptionHandlers;
   private readonly grokHandlers: SubscriptionHandlers;
-  private readonly settingsHost: SettingsViewHost;
+  private readonly memoryController: SettingsMemoryController;
+  private readonly modelSelectionController: SettingsModelSelectionController;
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
-  private readonly subscriptionUsage: SubscriptionUsageReader;
+  private readonly subscriptionUsage: SubscriptionUsageService;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     secrets: PlatformSecrets,
+    private readonly runtime: ProcessRuntime,
   ) {
     super('SettingsView');
 
     const ctx: SettingsHandlerContext = this.bindViewSliceHost(context);
 
     const globalState = context.globalState;
-    this.settingsHost = new SettingsViewHost({
-      state: {
-        workspaceState: workspaceRoots().workspaceState,
-        globalState,
-      },
+    this.memoryController = new SettingsMemoryController({
+      prompt: new VscodePromptHost(),
+    });
+    this.modelSelectionController = new SettingsModelSelectionController({
+      globalState,
       secrets,
-      memoryPrompt: new VscodePromptHost(),
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',
       globalState,
       loadProviderKeyStatuses: () =>
-        loadApiKeyStatusMap(secrets, SecretManager.API_PROVIDERS),
+        loadApiKeyStatusMap(secrets, API_PROVIDERS),
       getConfig,
     });
     this.subscriptionUsage = new SubscriptionUsageService({ secrets });
@@ -170,31 +167,37 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           agentCatalogAlreadyFresh,
         ),
       globalState,
+      this.runtime,
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.memoryHandlers = new MemoryHandlers(
       ctx,
-      this.settingsHost,
+      this.memoryController,
       this.viewName,
+      this.runtime,
     );
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx, secrets);
     this.chatgptHandlers = new SubscriptionHandlers(
       'chatgpt',
       async () => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        status: await getChatGptAuthStatus(),
+        status: await getChatGptAuthStatus(secrets),
       }),
       ctx,
+      secrets,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
+      this.runtime,
     );
     this.grokHandlers = new SubscriptionHandlers(
       'grok',
       async () => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        status: await getGrokAuthStatus(),
+        status: await getGrokAuthStatus(secrets),
       }),
       ctx,
+      secrets,
       () => this.refreshAfterSubscriptionAuthChange(),
+      this.runtime,
     );
     this.handlerRegistry = this.createHandlerRegistry(context);
 
@@ -232,9 +235,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         }),
       },
     );
-    const unsubscribeGoals = subscribeGoalStateChanges(defaultSession(), () => {
-      void this.withActiveWebview((w) => this.sendGoalList(w));
-    });
+    const unsubscribeGoals = subscribeGoalStateChanges(
+      defaultSession(),
+      () => {
+        void this.withActiveWebview((w) => this.sendGoalList(w));
+      },
+      this.runtime,
+    );
     context.subscriptions.push({ dispose: unsubscribeGoals });
   }
 
@@ -280,13 +287,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       openExternalUrl: (message) => this.openExternalUrl(message.url),
       setModelEnabled: (message) =>
         this.setModelEnabled(message.modelName, message.enabled),
-      setModelReasoningLevel: (message) =>
-        this.settingsHost.setReasoningLevel(
-          { modelName: message.modelName, level: message.level },
-          {
-            respond: (response) => this.postMessageToActiveWebview(response),
-          },
-        ),
+      setModelReasoningLevel: async (message) => {
+        await this.modelSelectionController.setReasoningLevel({
+          modelName: message.modelName,
+          level: message.level,
+        });
+        await this.postModelSelectionData();
+      },
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName, context),
       clearCopilotRoute: (message) =>
@@ -295,17 +302,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.agentHandlers.handleSetAgentEnabled(message),
       setAllAgentsEnabled: (message) =>
         this.agentHandlers.handleSetAllAgentsEnabled(message),
-      openAgentYaml: (message) =>
-        this.agentHandlers.handleOpenAgentYaml(message),
+      openAgentYaml: this.agentHandlers.agentActions.openAgentYaml,
       openAgentFolder: (message) =>
         this.agentHandlers.handleOpenAgentFolder(message),
       createAgent: (message) => this.agentHandlers.handleCreateAgent(message),
-      customizeAgent: (message) =>
-        this.agentHandlers.handleCustomizeAgent(message),
+      customizeAgent: this.agentHandlers.agentActions.customizeAgent,
       deleteCustomAgent: (message) =>
         this.agentHandlers.handleDeleteCustomAgent(message),
-      revealAgentFile: (message) =>
-        this.agentHandlers.handleRevealAgentFile(message),
+      revealAgentFile: this.agentHandlers.agentActions.revealAgentFile,
       viewRemoteAgentPrompt: (message) =>
         this.agentHandlers.handleViewRemoteAgentPrompt(message),
       setCustomAgentDir: () => this.agentHandlers.handleSetCustomAgentDir(),
@@ -340,11 +344,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.grokHandlers.handleSetPreferSubscription(message.enabled),
       getSubscriptionUsage: (message) =>
         this.withActiveWebview((webview) =>
-          sendSubscriptionUsage(
-            webview,
-            this.subscriptionUsage,
-            message.forceRefresh ?? false,
-          ),
+          this.sendSubscriptionUsage(webview, message.forceRefresh ?? false),
         ),
       updateStateSetting: (message) =>
         this.updateStateSetting(message.key, message.value),
@@ -352,7 +352,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       installToolExtension: (message) =>
         this.latexHandlers.installExtension(message.extensionId),
       recheckToolStatus: () =>
-        effectRuntime().runPromise(refreshToolAvailability()),
+        this.runtime.runPromise(refreshToolAvailability()),
       toggleTool: async (message) => {
         await setToolEnabled(
           message.toolId,
@@ -382,12 +382,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendGoalList(webview: vscode.Webview): Promise<void> {
-    const result = await effectRuntime().runPromiseExit(
+    const result = await this.runtime.runPromiseExit(
       Effect.tryPromise({
         try: () =>
           webview.postMessage({
             command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-            items: GoalStore.list(),
+            items: goalList(defaultSession()),
           }),
         catch: (error) => error,
       }).pipe(
@@ -506,8 +506,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
-    await this.settingsHost.sendModelSelectionData((message) =>
-      webview.postMessage(message),
+    await webview.postMessage(
+      await this.modelSelectionController.buildModelSelectionMessage(),
+    );
+  }
+
+  /** Post the model-selection payload to whichever webview is active. */
+  private async postModelSelectionData(): Promise<void> {
+    await this.postMessageToActiveWebview(
+      await this.modelSelectionController.buildModelSelectionMessage(),
     );
   }
 
@@ -594,10 +601,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
     }
     if (codingPlanForUsageSetting(key) !== undefined) {
-      await this.withActiveWebview((w) =>
-        sendSubscriptionUsage(w, this.subscriptionUsage),
-      );
+      await this.withActiveWebview((w) => this.sendSubscriptionUsage(w));
     }
+  }
+
+  /** Fetch and post one sanitized snapshot for every subscription provider. */
+  private async sendSubscriptionUsage(
+    webview: vscode.Webview,
+    forceRefresh = false,
+  ): Promise<void> {
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+      snapshots: await this.subscriptionUsage.getAllUsage({ forceRefresh }),
+    });
   }
 
   private async postStateSettingSnapshot(
@@ -646,11 +662,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((w) => options.refreshProfileData(w)),
       ...(options.usageProvider
-        ? [
-            this.withActiveWebview((w) =>
-              sendSubscriptionUsage(w, this.subscriptionUsage),
-            ),
-          ]
+        ? [this.withActiveWebview((w) => this.sendSubscriptionUsage(w))]
         : []),
     ]);
   }
@@ -688,7 +700,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     context: vscode.ExtensionContext,
   ): Promise<void> {
     try {
-      const discovery = await effectRuntime().runPromiseExit(
+      const discovery = await this.runtime.runPromiseExit(
         Effect.gen(function* () {
           // Retry one superseded discovery, then fail closed rather than
           // authorize from the retained presentation catalogue.
@@ -705,7 +717,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       const route = Exit.isSuccess(discovery) ? discovery.value : undefined;
       let result: Exit.Exit<unknown, unknown> = discovery;
       if (route?.access === 'consent-required') {
-        result = await effectRuntime().runPromiseExit(
+        result = await this.runtime.runPromiseExit(
           Effect.gen(function* () {
             const model = yield* acquireVscodeLanguageModel(
               context,
@@ -750,7 +762,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         );
       }
       if (Exit.isSuccess(result)) {
-        result = await effectRuntime().runPromiseExit(
+        result = await this.runtime.runPromiseExit(
           Effect.tryPromise({
             try: (): Promise<unknown> =>
               !route || route.access === 'unavailable'
@@ -853,7 +865,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const cachedResults = options?.skipChecks
       ? (getLastCheckResults() ?? undefined)
       : undefined;
-    const items = await effectRuntime().runPromise(
+    const items = await this.runtime.runPromise(
       buildToolDashboardItems('extension', cachedResults),
     );
     await webview.postMessage({
@@ -870,14 +882,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     modelName: string,
     enabled: boolean,
   ): Promise<void> {
-    await this.settingsHost.setModelEnabled(
-      { modelName, enabled },
-      {
-        // The options cache is invalidated by the writer itself.
-        respond: (message) => this.postMessageToActiveWebview(message),
-        afterPost: () =>
-          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-      },
-    );
+    await this.modelSelectionController.setModelEnabled({ modelName, enabled });
+    await this.postModelSelectionData();
+    // The options cache is invalidated by the writer itself.
+    await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
   }
 }

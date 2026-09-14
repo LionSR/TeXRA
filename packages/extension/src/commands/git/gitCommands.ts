@@ -17,7 +17,7 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { readPlatformSetting } from '@utils/config/platformSettings';
@@ -229,14 +229,17 @@ function buildOverleafClonePorts(
 
     runClone: (remoteUrl, workspacePath) =>
       Effect.tryPromise({
-        try: () =>
+        try: (signal) =>
           vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: `Cloning ${remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX'}…`,
             },
-            () =>
-              execa('git', ['clone', remoteUrl, '.'], {
+            () => {
+              // execa starts its child before observing an already-aborted
+              // cancelSignal, so do not enter it after the fiber is interrupted.
+              signal.throwIfAborted();
+              return execa('git', ['clone', remoteUrl, '.'], {
                 cwd: workspacePath,
                 // Same extended PATH as the executeCommandSync preflight
                 // above, so the probe can't pass while the clone misses git
@@ -245,7 +248,9 @@ function buildOverleafClonePorts(
                 // execa's default merge re-adds them.
                 env: makeMachineGitEnv(),
                 extendEnv: false,
-              }),
+                cancelSignal: signal,
+              });
+            },
           ),
         catch: ensureError,
       }).pipe(Effect.asVoid),
@@ -289,6 +294,7 @@ function buildOverleafClonePorts(
 
 export async function cloneOverleafProject(
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   const input = await promptInput(
     'Clone Overleaf/ShareLaTeX Project',
@@ -308,7 +314,7 @@ export async function cloneOverleafProject(
     return;
   }
 
-  await effectRuntime().runPromise(
+  await runtime.runPromise(
     runOverleafClone(
       remote,
       workspacePath,

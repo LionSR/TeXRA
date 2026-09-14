@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - platform
 import type { ElectronSecrets as ElectronSecretsInstance } from '@desktop/main/platform/electronSecrets';
 import type { JsonStore } from '@platform/defaults/jsonStore';
+import { effectRuntime } from '@platform/processRuntime';
 
 // Local imports - test support
 import { repoPath } from './desktopTestPaths.ts';
@@ -73,7 +74,7 @@ async function secretsWithWarningLog(): Promise<{
 }> {
   const { ElectronSecrets } = await loadElectronSecrets();
   const warnings: string[] = [];
-  const secrets = new ElectronSecrets(encryptedRecordStore(), {
+  const secrets = new ElectronSecrets(encryptedRecordStore(), effectRuntime(), {
     showWarningMessage: (message: string) => {
       warnings.push(message);
     },
@@ -161,7 +162,10 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
     const decryptSpy = vi.spyOn(await safeStorageStub(), 'decryptString');
 
     const { ElectronSecrets } = await loadElectronSecrets();
-    const secrets = new ElectronSecrets(encryptedRecordStore());
+    const secrets = new ElectronSecrets(
+      encryptedRecordStore(),
+      effectRuntime(),
+    );
 
     expect(await secrets.get('any.key')).toBeUndefined();
     expect(decryptSpy).not.toHaveBeenCalled();
@@ -172,7 +176,7 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
     process.env.SOME_TEST_KEY = 'from-env';
 
     const { ElectronSecrets } = await loadElectronSecrets();
-    const secrets = new ElectronSecrets(emptyRecordStore());
+    const secrets = new ElectronSecrets(emptyRecordStore(), effectRuntime());
 
     expect(await secrets.get('SOME_TEST_KEY')).toBe('from-env');
     delete process.env.SOME_TEST_KEY;
@@ -193,6 +197,7 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
           writes.push([key, value]);
         },
       }),
+      effectRuntime(),
     );
 
     await expect(secrets.set('a', 'b')).resolves.toBeUndefined();

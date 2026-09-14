@@ -19,7 +19,6 @@ import {
 type AgentSelectionPanelElement = HTMLElement & {
   agents: AgentSelectionItem[];
   category: 'workflow' | 'toolUse';
-  unsupportedCommands: ReadonlySet<string> | null;
   updateComplete: Promise<boolean>;
 };
 
@@ -45,7 +44,6 @@ function renderAgentSelectionPanel(
   return mountComponent<AgentSelectionPanelElement>('agent-selection-panel', {
     agents,
     category: 'workflow',
-    unsupportedCommands: new Set(),
   });
 }
 

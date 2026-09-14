@@ -9,11 +9,7 @@ import {
   notifyFollowUpSent,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { RUN_PHASE, RUN_SUBSTATE, type RunId } from '@shared/schemas';
-import {
-  clearRunStatusForTest,
-  seedRunStatusForTest,
-} from '@test/support/runStatusTestUtils';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -23,9 +19,11 @@ import {
   createRecordingHost,
   recordFollowUpsSent,
   recordSessionEvents,
+  seedActiveRun,
+  seedTerminalRun,
 } from '../progressTestUtils';
 
-const runId = 'run:follow-up' as RunId;
+const runId = 'fa0001' as RunId;
 
 let paperCount = 0;
 
@@ -46,7 +44,7 @@ describe('tool-use follow-up progress events', () => {
   }> = [];
   const sessions = new Set<SessionHandle>();
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const unsubscribe of unsubscribeFollowUpObservers.splice(0)) {
       unsubscribe();
     }
@@ -54,10 +52,9 @@ describe('tool-use follow-up progress events', () => {
       session.runs.untrack(runId);
     }
     for (const session of sessions) {
-      session.dispose();
+      await Effect.runPromise(session.dispose());
     }
     sessions.clear();
-    clearRunStatusForTest(defaultSession().status, runId);
   });
 
   function trackSession(): SessionHandle {
@@ -75,7 +72,6 @@ describe('tool-use follow-up progress events', () => {
     const owner = session ?? defaultSession();
     handle.attachToolUseFlow({
       ownerSession: owner,
-      modelHandler: { supportsManualCompaction: true },
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,
       switchModel: async () => {},
@@ -142,12 +138,9 @@ describe('tool-use follow-up progress events', () => {
   it('breaks a blocking wait when the owning session emits followUpSent', () => {
     const session = trackSession();
     const onFollowUp = vi.fn();
-    const otherRun = 'run:other' as RunId;
+    const otherRun = 'fa0003' as RunId;
 
-    let cleanup: () => void = () => {};
-    withRunContext(createRunContext({ session, runId }), () => {
-      cleanup = listenForFollowUp(onFollowUp);
-    });
+    const cleanup = listenForFollowUp(session, runId, onFollowUp);
     unsubscribeFollowUpObservers.push(cleanup);
 
     notifyFollowUpSent(otherRun, session);
@@ -158,26 +151,23 @@ describe('tool-use follow-up progress events', () => {
   });
 
   it('does not append through stale active contexts after final status', async () => {
-    seedRunStatusForTest(defaultSession().status, runId, {
-      phase: RUN_PHASE.COMPLETED,
-    });
+    await seedTerminalRun(defaultSession(), runId, RUN_OUTCOME.COMPLETED);
     trackToolUseFlow();
 
     const result = await Effect.runPromise(
       submitFollowUp(runId, 'late follow-up', { session: defaultSession() }),
     );
 
-    expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
+    // The run's own terminal row is the refusal: it finished.
+    expect(result).toEqual({ status: 'failed', reason: 'finished' });
     expect(defaultSession().followUps.getAll(runId)).toEqual([]);
   });
 
   it('queues follow-ups for resuming runs through registry admission', async () => {
-    const resumingRunId = 'run:resuming-follow-up' as RunId;
+    const resumingRunId = 'fa0002' as RunId;
 
-    seedRunStatusForTest(defaultSession().status, resumingRunId, {
-      phase: RUN_PHASE.RUNNING,
-      substate: RUN_SUBSTATE.RESUMING,
-    });
+    // A second activation is the resume the registry admits a follow-up for.
+    await seedActiveRun(defaultSession(), resumingRunId, { resuming: true });
 
     try {
       const result = await Effect.runPromise(
@@ -194,7 +184,6 @@ describe('tool-use follow-up progress events', () => {
       ]);
     } finally {
       defaultSession().followUps.terminalize(resumingRunId);
-      clearRunStatusForTest(defaultSession().status, resumingRunId);
     }
   });
 });

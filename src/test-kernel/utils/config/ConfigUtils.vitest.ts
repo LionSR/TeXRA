@@ -43,7 +43,9 @@ describe('getConfig', () => {
     };
     await installPlatform({}, { config: callerDefaultConfig });
 
-    expect(getConfig<boolean>('texra.model.useOpenAIResponsesAPI')).toBe(true);
+    expect(
+      getConfig<boolean>('texra.model.useGoogleInteractionsServerState'),
+    ).toBe(true);
     expect(getConfig('not.a.catalog.key', 'fallback')).toBe('fallback');
   });
 });

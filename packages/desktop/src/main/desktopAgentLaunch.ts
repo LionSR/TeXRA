@@ -4,7 +4,7 @@ import {
   type RunAgentRequest,
   type SessionHandle,
 } from '@agent/runtime';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RequestOpenFilePayload } from '@shared/schemas';
 import {
   createExternalLocation,
@@ -14,12 +14,15 @@ import {
 
 interface DesktopAgentLaunchContext {
   readonly session: SessionHandle;
+  /** The process runtime this host's launch runs on, handed down from the
+   *  composition root rather than looked up. */
+  readonly runtime: ProcessRuntime;
 }
 
 export type DesktopAgentLaunchOptions = Pick<
   RunAgentOptions,
-  | 'copilotRouteOverride'
-  | 'modelHandlerCompatibilityKey'
+  | 'ownApiKeyFallback'
+  | 'modelCompatibilityKey'
   | 'preferHelperModel'
   | 'onRun'
   | 'onRunResolved'
@@ -35,12 +38,12 @@ export async function launchDesktopAgent(
     import('@agent/runtime'),
     import('@tools/registry'),
   ]);
-  await effectRuntime().runPromise(
+  await context.runtime.runPromise(
     runAgent(request, {
       session: context.session,
       runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
-      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-      copilotRouteOverride: options.copilotRouteOverride,
+      modelCompatibilityKey: options.modelCompatibilityKey,
+      ownApiKeyFallback: options.ownApiKeyFallback,
       ...(options.preferHelperModel && { preferHelperModel: true }),
       onRun: options.onRun,
       onRunResolved: options.onRunResolved,

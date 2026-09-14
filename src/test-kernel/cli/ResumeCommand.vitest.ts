@@ -9,13 +9,14 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { getRunRecords } from '@agent/storage/RunKVStore';
+import { getRunRecords } from '@agent/storage/runRecords';
 import {
   acquireFreshRunLease,
   releaseOwnedRunLease,
 } from '@agent/storage/runLease';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { effectRuntime } from '@platform/processRuntime';
 import { aggregateId } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -28,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   assertOutputFileAvailable: vi.fn(),
   executeCliWorkflowConfig: vi.fn(),
   initInteractiveCliPlatform: vi.fn(),
-  initializeCliTranscriptSession: vi.fn(),
   resolveCliLaunchAgent: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   runChat: vi.fn(),
@@ -57,10 +57,6 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
       try: () => mocks.retrieveSessionResumeData(...args),
       catch: (error) => error,
     }),
-}));
-
-vi.mock('@cli/runtime/transcriptSession', () => ({
-  initializeCliTranscriptSession: mocks.initializeCliTranscriptSession,
 }));
 
 vi.mock('@cli/commands/workflow', () => ({
@@ -104,9 +100,10 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     turn: 0,
     continuationIndex: 0,
     modelId: 'gpt54',
-    modelHandlerCompatibilityKey: null,
+    modelCompatibilityKey: null,
     lastError: null,
     pendingRetry: null,
+    declinedRoutes: [],
   },
   references: { pendingIntents: [], pendingResponse: null },
   state: { shouldSkipCycle: false, stateSlices: null },
@@ -117,8 +114,12 @@ async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
   readonly checkpoint?: boolean;
 }): Promise<void> {
-  const session = createProcessSession();
-  mocks.initializeCliTranscriptSession.mockResolvedValue(session);
+  const session = await Effect.runPromise(createProcessSession());
+  // `runResumeCommand` reads the session off the services the init returns.
+  mocks.initInteractiveCliPlatform.mockResolvedValue({
+    runtime: effectRuntime(),
+    session: Effect.succeed(session),
+  });
   await Effect.runPromise(
     session.commit([
       {
@@ -179,7 +180,6 @@ async function stubWorkflowResume(config: AgentConfig): Promise<void> {
 describe('runResumeCommand', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
     await seedRunRecord({ config: TOOL_USE_CONFIG });
     mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'correct',
@@ -220,7 +220,7 @@ describe('runResumeCommand', () => {
       type: 'workflow',
       agentConfig: WORKFLOW_CONFIG,
       runId: RUN_ID,
-      modelHandlerCompatibilityKey: 'anthropic',
+      modelCompatibilityKey: 'anthropic',
     });
 
     // Headless (non-TTY) is fine for the workflow arm — only tool-use resume
@@ -232,10 +232,13 @@ describe('runResumeCommand', () => {
       expect.any(Object),
       expect.objectContaining({
         runId: RUN_ID,
-        modelHandlerCompatibilityKey: 'anthropic',
+        modelCompatibilityKey: 'anthropic',
       }),
     );
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('correct', 'run');
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
+      'correct',
+      'workflowResume',
+    );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 

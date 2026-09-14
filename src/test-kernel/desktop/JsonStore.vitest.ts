@@ -1,9 +1,6 @@
 // Node imports
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
-import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { chmod, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -12,11 +9,10 @@ import { Effect, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - test support
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { moduleFileUrl, repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
-
-const require = createRequire(import.meta.url);
 
 const JSON_STORE_SOURCE = repoPath(
   'src',
@@ -77,7 +73,7 @@ describe('shared JsonStore', () => {
       expect(yield* Effect.promise(() => readFile(filePath, 'utf8'))).toBe(
         original,
       );
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect.each([
@@ -94,7 +90,7 @@ describe('shared JsonStore', () => {
       const error = yield* Effect.flip(JsonStore.open(filePath));
       expect(error).toBeInstanceOf(TypeError);
       expect(error.message).toContain('to contain a JSON object');
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -119,7 +115,7 @@ describe('shared JsonStore', () => {
           keep: 1,
           foreign: 2,
         });
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -140,7 +136,7 @@ describe('shared JsonStore', () => {
         expect(yield* Effect.promise(() => readFile(filePath, 'utf8'))).toBe(
           corrupt,
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -160,7 +156,7 @@ describe('shared JsonStore', () => {
           keep: 1,
           added: 2,
         });
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -187,7 +183,7 @@ describe('shared JsonStore', () => {
           fromA: 'a',
           fromB: 'b',
         });
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('flushes chained sets in call order, not in wake-up order', () =>
@@ -213,7 +209,7 @@ describe('shared JsonStore', () => {
       expect(yield* Effect.promise(() => readStoredJson(filePath))).toEqual({
         k: 3,
       });
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it('keeps the lock function callable in a split ESM bundle', async () => {
@@ -240,101 +236,16 @@ describe('shared JsonStore', () => {
       Effect: typeof Effect;
     };
     const filePath = join(tempDir, 'state.json');
-    const store = await bundledEffect.runPromise(JsonStore.open(filePath));
+    const store = await bundledEffect.runPromise(
+      JsonStore.open(filePath).pipe(Effect.provide(nodePlatformLayer)),
+    );
 
-    await bundledEffect.runPromise(store.set('persisted', true));
+    await bundledEffect.runPromise(
+      store.set('persisted', true).pipe(Effect.provide(nodePlatformLayer)),
+    );
 
     expect(await readStoredJson(filePath)).toEqual({
       persisted: true,
-    });
-  });
-
-  it('waits for a cross-process lock before merging its mutation', async () => {
-    const filePath = await createTempFile('state.json', '{"initial": 1}\n');
-    const bundlePath = join(tempDir!, 'jsonStore.cjs');
-    const lockAttemptPath = join(tempDir!, 'lock-attempted');
-    const lockShimPath = join(tempDir!, 'proper-lockfile.cjs');
-    await writeFile(
-      lockShimPath,
-      `
-        const fs = require('node:fs');
-        const actual = require(${JSON.stringify(require.resolve('proper-lockfile'))});
-        const lockFs = Object.create(fs);
-        lockFs.mkdir = (path, callback) => fs.mkdir(path, (error) => {
-          fs.writeFileSync(${JSON.stringify(lockAttemptPath)}, '');
-          callback(error);
-        });
-        exports.lock = (file, options) => actual.lock(file, {
-          ...options,
-          fs: lockFs,
-        });
-      `,
-    );
-    await build({
-      entryPoints: [await writeBundleEntry(tempDir!)],
-      bundle: true,
-      format: 'cjs',
-      platform: 'node',
-      outfile: bundlePath,
-      logLevel: 'silent',
-      tsconfig: repoPath('tsconfig.json'),
-      nodePaths: [repoPath('node_modules')],
-      plugins: [
-        {
-          name: 'signal-lock-attempt',
-          setup(context) {
-            context.onResolve({ filter: /^proper-lockfile$/ }, () => ({
-              path: lockShimPath,
-            }));
-          },
-        },
-      ],
-    });
-    await mkdir(`${filePath}.lock`);
-
-    const script = `
-      (async () => {
-        const { JsonStore, Effect } = require(${JSON.stringify(bundlePath)});
-        const store = await Effect.runPromise(JsonStore.open(${JSON.stringify(filePath)}));
-        console.log('ready');
-        await Effect.runPromise(store.set('child', 2));
-      })().catch((error) => {
-        console.error(error);
-        process.exitCode = 1;
-      });
-    `;
-    const child = spawn(process.execPath, ['--eval', script], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const exited = once(child, 'exit');
-    const stderr: Buffer[] = [];
-    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
-    await Promise.race([
-      once(child.stdout, 'data'),
-      exited.then(() => {
-        throw new Error(Buffer.concat(stderr).toString());
-      }),
-    ]);
-    await expect
-      .poll(() =>
-        stat(lockAttemptPath).then(
-          () => true,
-          () => false,
-        ),
-      )
-      .toBe(true);
-    const whileLocked = await readStoredJson(filePath);
-
-    await writeFile(filePath, '{"initial": 1, "foreign": 2}\n');
-    await rm(`${filePath}.lock`, { recursive: true });
-    const [exitCode] = await exited;
-    if (exitCode !== 0) throw new Error(Buffer.concat(stderr).toString());
-
-    expect(whileLocked).toEqual({ initial: 1 });
-    expect(await readStoredJson(filePath)).toEqual({
-      initial: 1,
-      foreign: 2,
-      child: 2,
     });
   });
 
@@ -370,6 +281,6 @@ describe('shared JsonStore', () => {
         } finally {
           yield* Effect.promise(() => chmod(tempDir!, 0o700));
         }
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

@@ -11,7 +11,7 @@ const usageFixture = {
   outputTokens: 20,
   cost: 0.01,
   responseTimeMs: 500,
-  provider: 'anthropic',
+  provider: 'anthropic-messages',
 } as const;
 
 describe('run-state snapshot usage accumulator — canonical shape', () => {

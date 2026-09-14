@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import { defineCommand } from 'citty';
-import type { SessionHandle } from '@agent/runtime';
 
 import { getVisibleAgents, refresh } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -11,12 +10,10 @@ import {
 } from '@common/teams/TeamPlan';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, byCategory } from '@shared/schemas';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 
 import {
   firstRunSetupAgentOverride,
@@ -87,20 +84,16 @@ const log = createLog('orchestrate');
 const canLaunchWithDefaultModel = Effect.fn(function* (
   context: CliContext,
   models: readonly CliModelAccess[],
-  session: SessionHandle,
   stores: ModelOptionStores,
 ): Effect.fn.Return<boolean, Error> {
   if (models.length === 0) return true;
 
-  const defaults = yield* resolveChatDefaults(
-    {
-      cwd: context.cwd,
-      envAgent: context.envAgent,
-      envModel: context.envModel,
-      quiet: context.quietLogs,
-    },
-    session,
-  );
+  const defaults = yield* resolveChatDefaults({
+    cwd: context.cwd,
+    envAgent: context.envAgent,
+    envModel: context.envModel,
+    quiet: context.quietLogs,
+  });
   return yield* Effect.tryPromise({
     try: () =>
       selectCliRunnableModel(defaults.model, {
@@ -149,16 +142,14 @@ async function runOrchestration(context: CliContext): Promise<number> {
     ...context,
     quietLogs: true,
   });
-  // Every model-availability read below goes through the stores this entry
-  // point already wired, rather than looking a host up again.
-  const session = await initializeCliTranscriptSession(services);
   // First-run gate: a credential-less interactive user picks sign-in or a key
   // here instead of landing on a launcher full of "login required" models. On
   // success the models read below re-reads the freshly-set credentials
   // in-process — the key paths invalidate the relevant caches — so no
   // relaunch is needed.
   const { maybeRunCliOnboarding } = await import('../onboarding/runOnboarding');
-  const onboarding = await effectRuntime().runPromise(
+  const { runtime } = services;
+  const onboarding = await runtime.runPromise(
     maybeRunCliOnboarding(services, context),
   );
   if (onboarding.declined) {
@@ -193,9 +184,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // launcher, which is the same outcome the navigation kinds used to spell
   // out.
   launcher: while (true) {
-    const history = await listCliHistoryEntries(services);
+    const history = await listCliHistoryEntries(runtime, services.session);
     const presets = readCliMultiAgentPresets();
-    const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
+    const presetPlanSet = await loadCliMultiAgentPresetPlanSet(
+      runtime,
+      presets,
+    );
     const presetLaunchBlockReason =
       context.approvalPolicy === 'never' ? 'delegation-denied' : undefined;
     const [modelAccess, authProfile] = await Promise.all([
@@ -221,7 +215,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // after an agent/team choice. Best-effort: an unavailable registry just
     // launches with the default model instead of blocking the launcher.
     const [models, statusLines] = await Promise.all([
-      effectRuntime().runPromise(
+      runtime.runPromise(
         Effect.tryPromise({
           try: () => getCliModelAccessList({ stores: services }),
           catch: ensureError,
@@ -231,8 +225,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
       ),
       loadCliApiStatus(services.secrets, authProfile),
     ]);
-    const allowDefaultModelLaunch = await effectRuntime().runPromise(
-      canLaunchWithDefaultModel(context, models, session, services),
+    const allowDefaultModelLaunch = await runtime.runPromise(
+      canLaunchWithDefaultModel(context, models, services),
     );
     const { runOrchestrationTui } =
       await import('../orchestration/runOrchestrationTui');
@@ -268,11 +262,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
           ) ??
           (
             await loadCliMultiAgentRunPlan(
+              runtime,
               { preset: action.preset },
               { reloadRemoteAgents: false },
             )
           ).plan;
-        const preflight = await effectRuntime().runPromise(
+        const preflight = await runtime.runPromise(
           preflightTeamAvailability({
             initial: initialPlan,
             unresolvedNames: teamTexraHostedMissingNames,
@@ -350,13 +345,14 @@ async function runOrchestration(context: CliContext): Promise<number> {
         const { runConfigTui } = await import('../config/runConfigTui');
         await runConfigTui({
           secrets: services.secrets,
+          runtime,
           colorEnabled: context.stdoutColorEnabled,
           onError: writeErrorStderr,
         });
         continue launcher;
       }
       case 'account': {
-        await effectRuntime().runPromise(
+        await runtime.runPromise(
           Effect.gen(function* () {
             if (action.provider === 'chatgpt' || action.provider === 'grok') {
               if (action.operation === 'sign-out') {
@@ -397,7 +393,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         continue launcher;
       }
       case 'set-model-access': {
-        await effectRuntime().runPromise(
+        await runtime.runPromise(
           updateCliModelAccess(context, action.access, {
             writeProgress: writeTextStdout,
           }).pipe(

@@ -33,7 +33,6 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import { appendRow, snapshotRow } from '@agent/runtime/loop/rows';
 import {
   ModelInvoker,
@@ -46,11 +45,7 @@ import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
-import {
-  attachContextWindowError,
-  attachManualRetryOnlyError,
-  attachSdkErrorMetadata,
-} from '@common/errors/sdkError/errorMetadata';
+import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
 import {
   ModelError,
   ResolvedTurnSchema,
@@ -61,6 +56,7 @@ import {
   type TurnEvent,
   type TurnResult,
 } from '@llm/turn';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -74,10 +70,6 @@ import {
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import {
-  clearRunStatusForTest,
-  seedRunStatusForTest,
-} from '@test/support/runStatusTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -85,8 +77,11 @@ import { isObject } from '@utils/core';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 // Local file imports
-import { sessionWithInteractions } from '../progressTestUtils';
-import { testModelCell } from '../modelCellTestUtils';
+import {
+  autoDecideRequests,
+  seedActiveRun,
+  sessionWithInteractions,
+} from '../progressTestUtils';
 import { testModelInfo } from './launchContextTestUtils';
 
 /** Mirrors RETRY_BACKOFF_MS in ModelInvoker.ts. */
@@ -204,16 +199,14 @@ function boundModel(
   return {
     modelId: 'gpt54',
     config: MODEL_CONFIGS.gpt54,
-    compatibilityKey: 'ModelHandlerOpenAI',
+    compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
     supportsVision: false,
     supportsNativePdf: false,
     supportsNativeAudio: false,
-    supportsReasoning: false,
     supportsForcedToolChoice: true,
     wireRouteKey: JSON.stringify(['openai', 'api-key', ORIGIN.requestedModel]),
     modelRetryRouteKey: JSON.stringify([
@@ -279,11 +272,11 @@ function agentRun(
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
+    declinedRoutes: [],
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
-      testModelCell(testModelInfo, 'gpt54'),
-      { logger, runId, runStageId: undefined },
+      { logger, runId, runStageId: undefined, config: workspaceRoots().config },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),
     callbacks: { onModelChanged: () => undefined },
@@ -304,16 +297,17 @@ const freshState = (): RunState => ({
   turn: 0,
   continuationIndex: 0,
   modelId: 'gpt54',
-  modelHandlerCompatibilityKey: 'ModelHandlerOpenAI',
+  modelCompatibilityKey: 'OpenAI',
   lastError: null,
   pendingRetry: null,
+  declinedRoutes: [],
   messages: [],
   continuation: null,
   openAttempt: null,
   lastTurn: null,
   pendingResponse: null,
   pendingIntents: {},
-  approvals: {},
+  requests: {},
   usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
   flow: null,
 });
@@ -378,12 +372,10 @@ function httpError(
   return Object.assign(new Error(message), { status, ...extra });
 }
 
-/** A status-less OpenAI server_error response, tagged as the SDK would. */
+/** A status-less OpenAI server_error response, as the SDK raises it. */
 function statuslessServerError(message: string): OpenAIAPIError {
   const body = { type: 'server_error', code: 'server_error', message };
-  const error = new OpenAIAPIError(undefined, body, message, undefined);
-  tagOpenAISdkError(error, 'openai');
-  return error;
+  return new OpenAIAPIError(undefined, body, message, undefined);
 }
 
 /**
@@ -432,6 +424,28 @@ describe('model failure classification', () => {
     expect(classifyModelFailure(abort).autoRetryable).toBe(false);
   });
 
+  it('carries the text streamed before the failure onto the retry surface', () => {
+    // The one producer of `partialText`: the loop hands `classifyModelFailure`
+    // the tail it had already received, and the retry panel reads it back off
+    // the classified error rather than from a provider handler.
+    const error = new OpenAIAPIError(
+      500,
+      { message: 'stream dropped' },
+      'stream dropped',
+      undefined,
+    );
+
+    const failure = classifyModelFailure(error, 'api-key', 'partial answer');
+
+    expect(failure.formatted.partialText).toBe('partial answer');
+    expect(failure.info.partialText).toBe('partial answer');
+    // A failure with nothing streamed carries no tail at all.
+    expect(
+      classifyModelFailure(statuslessServerError('nothing streamed')).formatted
+        .partialText,
+    ).toBeUndefined();
+  });
+
   it('reports a retryable provider failure with its formatted message', () => {
     const error = new OpenAIAPIError(
       503,
@@ -439,7 +453,6 @@ describe('model failure classification', () => {
       'transient provider failure',
       undefined,
     );
-    tagOpenAISdkError(error, 'openai');
 
     expect(classifyModelFailure(error).formatted).toMatchObject({
       message: 'HTTP 503 Service Unavailable – 503 transient provider failure',
@@ -452,17 +465,6 @@ describe('model failure classification', () => {
       name: 'a status-less OpenAI server_error response',
       error: statuslessServerError('temporary provider failure'),
       autoRetryable: true,
-    },
-    {
-      name: 'a manual-retry-only failure',
-      error: (() => {
-        const error = Object.assign(new Error('retry explicitly'), {
-          provider: 'openai',
-        });
-        attachManualRetryOnlyError(error);
-        return error;
-      })(),
-      autoRetryable: false,
     },
     {
       name: 'an HTTP conflict after provider SDK retries are disabled',
@@ -571,20 +573,6 @@ describe('recovery-route verdicts', () => {
       expected: { retryAfterMs: undefined },
     },
     {
-      name: 'recognizes tagged connection closures as route failures',
-      error: (() => {
-        const closure = new Error(
-          'WebSocket closed unexpectedly (code: 1006, reason: idle timeout)',
-        );
-        attachSdkErrorMetadata(closure, {
-          provider: 'openai',
-          kind: 'connection',
-        });
-        return closure;
-      })(),
-      expected: { retryAfterMs: undefined },
-    },
-    {
       name: 'recognizes a retryable HTTP status carried by an SDK error cause',
       error: new Error('request failed', {
         cause: httpError('service unavailable', 503, {
@@ -668,7 +656,7 @@ describe('ModelInvoker retry', () => {
 
       expect(outcome.kind).toBe('response');
       expect(stub.attempts()).toBe(2);
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 
@@ -677,10 +665,11 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions({
-        requestRetry: async () => ({ action: 'deny' as const }),
-        cancel: () => {},
-      });
+      const session = sessionWithInteractions(undefined);
+      const denied = autoDecideRequests(session, () => ({
+        action: 'deny',
+        reason: 'Denied by TeXRA approval policy.',
+      }));
       const stub = stubModel([{ silent: true }]);
 
       const outcome = yield* invokeOn(yield* openRun(session, stub.model));
@@ -689,17 +678,17 @@ describe('ModelInvoker retry', () => {
       if (outcome.kind === 'failed') {
         expect(outcome.error.message).toContain('Model response was empty');
       }
-      session.dispose();
+      denied.detach();
+      yield* session.dispose();
     }),
   );
 
   it.effect('treats a user abort as a cancellation without prompting', () =>
     Effect.gen(function* () {
-      const requestRetry = vi.fn();
-      const session = sessionWithInteractions({
-        requestRetry,
-        cancel: () => {},
-      });
+      const session = sessionWithInteractions(undefined);
+      const requests = autoDecideRequests(session, () => ({
+        action: 'retry',
+      }));
       const stub = stubModel([
         { fail: new DOMException('Request aborted', 'AbortError') },
       ]);
@@ -707,8 +696,9 @@ describe('ModelInvoker retry', () => {
       const outcome = yield* invokeOn(yield* openRun(session, stub.model));
 
       expect(outcome.kind).toBe('cancelled');
-      expect(requestRetry).not.toHaveBeenCalled();
-      session.dispose();
+      expect(requests.opened).toEqual([]);
+      requests.detach();
+      yield* session.dispose();
     }),
   );
 
@@ -729,20 +719,21 @@ describe('ModelInvoker retry', () => {
 
       expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
       expect(stub.attempts()).toBe(1);
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 
-  it.effect('admits a manual retry through a durable approval', () =>
+  // Live clock: the authorized attempt waits out the session gate's cooldown
+  // the failed attempt opened, which sleeps on the runtime clock.
+  it.live('admits a manual retry through a durable approval', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const requestRetry = vi.fn(async () => ({ action: 'retry' as const }));
-      const session = sessionWithInteractions({
-        requestRetry,
-        cancel: () => {},
-      });
+      const session = sessionWithInteractions(undefined);
+      const requests = autoDecideRequests(session, () => ({
+        action: 'retry',
+      }));
       const stub = stubModel([
         { fail: httpError('temporary provider failure', 503) },
         { ok: completedTurn('recovered') },
@@ -750,31 +741,71 @@ describe('ModelInvoker retry', () => {
 
       const kit = yield* openRun(session, stub.model);
       const { runId } = kit;
-      seedRunStatusForTest(session.status, runId, { phase: RUN_PHASE.RUNNING });
+      yield* Effect.promise(() => seedActiveRun(session, runId));
       const outcome = yield* invokeOn(kit);
 
       expect(outcome.kind).toBe('response');
       expect(stub.attempts()).toBe(2);
-      expect(requestRetry).toHaveBeenCalledWith(
-        expect.objectContaining({
+      // The request the run opened carries the retry payload every surface
+      // answers from.
+      expect(requests.opened).toHaveLength(1);
+      expect(requests.opened[0]?.payload).toMatchObject({
+        kind: 'retry',
+        data: expect.objectContaining({
           runId,
           operation: 'Model request',
           model: 'gpt54',
-          kimiCodeRoutedOnFailure: false,
         }),
-        // Every run carries a binding, so the host is always offered the
-        // credential-selecting retry preparation.
-        expect.objectContaining({ prepareRetry: expect.any(Function) }),
-      );
+      });
       // The permit is retired by the response it admitted: a resumed run
       // cannot spend it a second time.
       if (outcome.kind === 'response') {
         expect(outcome.state.pendingRetry).toBeNull();
       }
-      expect(session.status.get(runId)).toBe(RUN_PHASE.RUNNING);
-      clearRunStatusForTest(session.status, runId);
-      session.dispose();
+      // The decision neither parks nor ends the run: the phase the fold
+      // reports is still running.
+      expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
+      requests.detach();
+      yield* session.dispose();
     }),
+  );
+
+  // Live clock, as above: the authorized attempt waits out the gate cooldown.
+  it.live(
+    'declines the exhausted subscription route for the run, not in settings',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        );
+        const session = sessionWithInteractions(undefined);
+        const requests = autoDecideRequests(session, () => ({
+          action: 'retry',
+          credentials: 'personal',
+        }));
+        const stub = stubModel([
+          { fail: httpError('subscription quota exhausted', 429) },
+          { ok: completedTurn('recovered') },
+        ]);
+
+        const kit = yield* openRun(session, stub.model, {
+          usageRoute: 'chatgpt-subscription',
+        });
+        yield* Effect.promise(() => seedActiveRun(session, kit.runId));
+        const outcome = yield* invokeOn(kit);
+
+        expect(outcome.kind).toBe('response');
+        // The route the failed attempt billed is declined on this run's own
+        // ledger, so a resume rebinds the same way and a concurrent run keeps
+        // the subscription the user still prefers.
+        if (outcome.kind === 'response') {
+          expect(outcome.state.declinedRoutes).toStrictEqual([
+            'chatgpt-subscription',
+          ]);
+        }
+        requests.detach();
+        yield* session.dispose();
+      }),
   );
 
   // A denial does not retry and — crucially — is NOT a user cancel, so the
@@ -785,20 +816,18 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions({
-        requestRetry: async () => ({
-          action: 'deny' as const,
-          reason: 'Denied by TeXRA approval policy.',
-        }),
-        cancel: () => {},
-      });
+      const session = sessionWithInteractions(undefined);
+      const requests = autoDecideRequests(session, () => ({
+        action: 'deny',
+        reason: 'Denied by TeXRA approval policy.',
+      }));
       const stub = stubModel([
         { fail: new Error('stream dropped before first token') },
       ]);
 
       const kit = yield* openRun(session, stub.model);
       const { runId } = kit;
-      seedRunStatusForTest(session.status, runId, { phase: RUN_PHASE.RUNNING });
+      yield* Effect.promise(() => seedActiveRun(session, runId));
       const outcome = yield* invokeOn(kit);
 
       expect(outcome.kind).toBe('failed');
@@ -808,10 +837,12 @@ describe('ModelInvoker retry', () => {
         );
         expect(outcome.state.pendingRetry).toBeNull();
       }
-      expect(session.status.get(runId)).toBe(RUN_PHASE.RUNNING);
+      // A denial is not a cancel: the run stays running so the failure can
+      // terminalize (#7331).
+      expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       expect(stub.attempts()).toBe(1);
-      clearRunStatusForTest(session.status, runId);
-      session.dispose();
+      requests.detach();
+      yield* session.dispose();
     }),
   );
 
@@ -820,38 +851,38 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions({
-        requestRetry: async () => ({ action: 'cancel' as const }),
-        cancel: () => {},
-      });
+      const session = sessionWithInteractions(undefined);
+      const requests = autoDecideRequests(session, () => ({
+        action: 'cancel',
+        cause: 'The user declined the retry.',
+      }));
       const stub = stubModel([
         { fail: httpError('temporary provider failure', 503) },
       ]);
 
       const kit = yield* openRun(session, stub.model);
       const { runId } = kit;
-      seedRunStatusForTest(session.status, runId, { phase: RUN_PHASE.RUNNING });
+      yield* Effect.promise(() => seedActiveRun(session, runId));
       const outcome = yield* invokeOn(kit);
 
       expect(outcome.kind).toBe('cancelled');
-      expect(session.status.get(runId)).toBe(RUN_PHASE.CANCELLED);
       expect(stub.attempts()).toBe(1);
-      clearRunStatusForTest(session.status, runId);
-      session.dispose();
+      requests.detach();
+      yield* session.dispose();
     }),
   );
 
-  it.effect('records one operation of attempt and decision diagnostics', () =>
+  it.live('records one operation of attempt and decision diagnostics', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
       const logger = new TraceEmitter();
       const events = collectRetryLifecycleEvents(logger);
-      const session = sessionWithInteractions({
-        requestRetry: async () => ({ action: 'retry' as const }),
-        cancel: () => {},
-      });
+      const session = sessionWithInteractions(undefined);
+      const requests = autoDecideRequests(session, () => ({
+        action: 'retry',
+      }));
       const stub = stubModel([
         { fail: httpError('temporary provider failure', 503) },
         { ok: completedTurn('recovered') },
@@ -859,7 +890,7 @@ describe('ModelInvoker retry', () => {
 
       const kit = yield* openRun(session, stub.model, {}, logger);
       const { runId } = kit;
-      seedRunStatusForTest(session.status, runId, { phase: RUN_PHASE.RUNNING });
+      yield* Effect.promise(() => seedActiveRun(session, runId));
       yield* invokeOn(kit);
 
       expect(events.map((event) => [event.event, event.attempt])).toEqual([
@@ -872,15 +903,15 @@ describe('ModelInvoker retry', () => {
       ]);
       expect(
         events.find((event) => event.event === 'retry_decided'),
-      ).toMatchObject({ decisionSource: 'human' });
+      ).toMatchObject({ action: 'retry' });
       expect(new Set(events.map((event) => event.operationId)).size).toBe(1);
       expect(
         events.every(
           (event) => event.runId === runId && event.model === 'gpt54',
         ),
       ).toBe(true);
-      clearRunStatusForTest(session.status, runId);
-      session.dispose();
+      requests.detach();
+      yield* session.dispose();
     }),
   );
 
@@ -896,25 +927,23 @@ describe('ModelInvoker retry', () => {
           },
         }),
       );
-      const requestRetry = vi.fn(async () => ({ action: 'deny' as const }));
-      const session = sessionWithInteractions({
-        requestRetry,
-        cancel: () => {},
-      });
+      const session = sessionWithInteractions(undefined);
+      const requests = autoDecideRequests(session, () => ({
+        action: 'deny',
+        reason: 'Denied by TeXRA approval policy.',
+      }));
       const stub = stubModel([{ fail: httpError('busy', 503) }]);
 
       const kit = yield* openRun(session, stub.model);
-      seedRunStatusForTest(session.status, kit.runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
+      yield* Effect.promise(() => seedActiveRun(session, kit.runId));
       yield* invokeOn(kit);
-      clearRunStatusForTest(session.status, kit.runId);
 
       expect(stub.attempts()).toBe(
         1 + MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
       );
-      expect(requestRetry).toHaveBeenCalledOnce();
-      session.dispose();
+      expect(requests.opened).toHaveLength(1);
+      requests.detach();
+      yield* session.dispose();
     }),
   );
 });

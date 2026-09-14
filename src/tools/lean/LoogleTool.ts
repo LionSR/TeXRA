@@ -8,9 +8,7 @@ import { Effect } from 'effect';
 import ky from 'ky';
 import { z } from 'zod';
 
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolResult } from '@shared/schemas';
 import { retryTransientFetch } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
@@ -271,7 +269,7 @@ const searchLoogle = Effect.fn('LoogleTool.execute')(function* ({
 /**
  * Search for Lean/Mathlib theorems and definitions using Loogle.
  */
-export class LeanLoogleTool extends defineTool({
+export const LeanLoogleTool = defineTool({
   name: 'lean_loogle',
   parallelSafe: true,
   description: `Search for Lean 4 / Mathlib theorems and definitions by type signature or name.
@@ -290,13 +288,10 @@ Returns: name, type signature, module (for imports), and documentation.
 
 Useful for finding the right lemma when you know roughly what type it should have.`,
   schema: LeanLoogleInputSchema,
-}) {
-  protected execute(input: LeanLoogleInput): Promise<ToolResult> {
+  execute: (input: LeanLoogleInput): Effect.Effect<ToolResult, unknown> => {
     // The owning agent run's cancellation enters here as interruption —
     // parallel batches must be able to abort in-flight Loogle requests and
     // their retry backoff.
-    return effectRuntime().runPromise(searchLoogle(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
-  }
-}
+    return searchLoogle(input);
+  },
+});

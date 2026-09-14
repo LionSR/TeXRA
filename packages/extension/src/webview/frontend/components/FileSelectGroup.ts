@@ -18,12 +18,13 @@ import {
 } from '@shared/schemas';
 import { dropCueStyles } from '@shared/styles/commonViewStyles';
 import { SortableController } from '@shared/litControllers/SortableController';
+import type { SurfaceAction } from '@shared/session/surface';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
 import { capitalize, formatResultCount } from '@utils/text/stringUtils';
-import { MainViewEvents } from '../events';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { fileSelectStyles } from '../fileSelectStyles';
 
@@ -81,47 +82,52 @@ export class FileSelectGroup extends LitElement {
     this,
     () => this.fileListElement,
     () => [...this.files],
-    (result) =>
-      this.dispatchEvent(
-        MainViewEvents.filesReordered({
-          listId: this.listId,
-          files: result.items,
-        }),
-      ),
+    (result) => this.patchLaunch({ [this.listId]: result.items }),
   );
 
   private get listId(): `${DocumentFileType}Files` {
     return `${this.config.type}Files`;
   }
 
+  /** A change to one of the launcher fields this group owns: its file list,
+   *  or a toggle from one of its two config menus. */
+  private patchLaunch(
+    patch: Extract<SurfaceAction, { kind: 'launch' }>['patch'],
+  ): void {
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'launch', patch }));
+  }
+
   private handleAddOpenedFiles(): void {
     this.dispatchEvent(
-      MainViewEvents.addOpenedFiles({ type: this.config.type }),
+      SessionUiEvents.host({
+        kind: 'addOpenedFiles',
+        fileType: this.config.type,
+      }),
     );
   }
 
   private handleEmptyFiles(): void {
-    this.dispatchEvent(MainViewEvents.emptyFiles({ type: this.config.type }));
+    this.patchLaunch({ [this.listId]: [] });
   }
 
   private handleSelectMultipleFiles(): void {
     this.dispatchEvent(
-      MainViewEvents.selectMultipleFiles({ listId: this.listId }),
+      SessionUiEvents.host({ kind: 'pickFiles', fileType: this.config.type }),
     );
   }
 
   private handleRemoveClick(button: HTMLElement): void {
     const file = button.dataset.removeFile;
     if (file) {
-      this.dispatchEvent(
-        MainViewEvents.removeFile({ listId: this.listId, file }),
-      );
+      this.patchLaunch({
+        [this.listId]: this.files.filter((entry) => entry !== file),
+      });
     }
   }
 
   /** Keyboard/touch counterpart to Sortable drag reordering (order is
-   * semantic: the first input file is the primary input). Dispatches the
-   * same filesReordered event as a drag. */
+   * semantic: the first input file is the primary input). Patches the same
+   * launcher list as a drag. */
   private handleMoveClick(button: HTMLElement): void {
     const index = Number(button.dataset.moveIndex);
     const direction = Number(button.dataset.moveDirection);
@@ -133,9 +139,7 @@ export class FileSelectGroup extends LitElement {
     const reordered = [...files];
     const [moved] = reordered.splice(index, 1);
     reordered.splice(target, 0, moved);
-    this.dispatchEvent(
-      MainViewEvents.filesReordered({ listId: this.listId, files: reordered }),
-    );
+    this.patchLaunch({ [this.listId]: reordered });
   }
 
   /** Single delegate for the file-list row: lit-html rejects two `@click`
@@ -160,8 +164,8 @@ export class FileSelectGroup extends LitElement {
 
   /**
    * Handle wa-select on the checkbox-type dropdown items: keep the menu open
-   * (preventDefault), translate the toggle into a checkboxChange event,
-   * and react to the auto-toggle wa-dropdown applies before this fires.
+   * (preventDefault), patch the launcher field the item names, and react to
+   * the auto-toggle wa-dropdown applies before this fires.
    */
   private handleMenuSelect = (
     event: CustomEvent<{ item: HTMLElement }>,
@@ -171,9 +175,7 @@ export class FileSelectGroup extends LitElement {
       (HTMLElement & { value?: string; checked?: boolean }) | undefined;
     const id = item?.value;
     if (!id) return;
-    this.dispatchEvent(
-      MainViewEvents.checkboxChange({ id, checked: Boolean(item?.checked) }),
-    );
+    this.patchLaunch({ [id]: Boolean(item?.checked) });
   };
 
   /** Shared wa-dropdown chrome (trigger button + tooltip) for the checkbox menus. */

@@ -4,12 +4,12 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
-import { initProcessRuntime } from '@platform/processRuntime';
+import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
   fakeProcessServices,
@@ -128,7 +128,8 @@ function createHandlers(): AgentHandlers {
       postMessageToActiveWebview: vi.fn(),
     },
     mocks.refreshAfterAgentMutation,
-    installedHost().platform.globalState,
+    installedHost().roots.globalState,
+    effectRuntime(),
   );
 }
 
@@ -151,14 +152,14 @@ const APPLY_AGENT_MODE_PRESET = {
 describe('AgentHandlers custom-agent file actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    const storage = createFakePlatform().storage;
+    const { globalStorage } = createFakeWorkspaceRoots();
     initProcessRuntime(
       ManagedRuntime.make(
         Layer.mergeAll(
           testHttpClientLayer,
           Layer.mock(UpdateCheckRecords, {}),
           fakeProcessServices(),
-          inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
+          inquiryRecordsLayer(() => globalStorage).pipe(
             Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
           ),
         ),
@@ -231,7 +232,7 @@ describe('AgentHandlers custom-agent file actions', () => {
       path.join(path.sep, 'bundled'),
     );
 
-    await createHandlers().handleCustomizeAgent(CUSTOMIZE_MY_AGENT);
+    await createHandlers().agentActions.customizeAgent(CUSTOMIZE_MY_AGENT);
 
     expect(mocks.copyFile).toHaveBeenCalledWith(
       path.join(path.sep, 'bundled', 'writing', 'my-agent.yaml'),
@@ -245,7 +246,7 @@ describe('AgentHandlers custom-agent file actions', () => {
     mocks.getAgent.mockReturnValueOnce({ path: '/outside/my-agent.yaml' });
     mocks.getSourceDirectory.mockResolvedValueOnce('/bundled');
 
-    await createHandlers().handleCustomizeAgent(CUSTOMIZE_MY_AGENT);
+    await createHandlers().agentActions.customizeAgent(CUSTOMIZE_MY_AGENT);
 
     expect(mocks.showLoggedMessage).toHaveBeenCalledWith(
       'test',

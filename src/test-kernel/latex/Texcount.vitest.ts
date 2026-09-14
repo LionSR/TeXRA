@@ -9,6 +9,7 @@ import { setLogSink } from '@logger/logSink';
 import { platform } from '@platform/platform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
   runToolWithCheck: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock('@utils/system/toolUtils', async (importOriginal) => {
 });
 
 /**
- * The memfs platform, with debug mode on: the Effect logger drops `Debug`
+ * The fake platform, with debug mode on: the Effect logger drops `Debug`
  * entries otherwise, and these assertions are about which channel an entry
  * lands on, not about that gate.
  */
@@ -30,7 +31,7 @@ const withPlatform = (
 ): Effect.Effect<void> =>
   Effect.promise(() =>
     installPlatform({
-      workspacePath: '/workspace',
+      workspacePath: fakePath('workspace'),
       config: { 'texra.logger.debugMode': true },
       files,
     }),

@@ -1,23 +1,16 @@
 /**
  * `<session-banners>`: the five host-owned banners (API key, agent config,
  * dependency, getting started, login) in one strip, host state read from
- * the `host` snapshot (8.1) and every action dispatched as the
- * `host.request` arm it names. The empty state renders it above the launch
- * composer; a conversation renders it as the thin strip above the follow-up
- * (PRD 12.4).
+ * the `host` snapshot (8.1). Each banner dispatches its own `host.request`
+ * arm, so the strip only hands each one the state it names. The empty state
+ * renders it above the launch composer; a conversation renders it as the
+ * thin strip above the follow-up (PRD 12.4).
  */
 import { css, html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type {
-  AgentConfigBannerActionDetail,
-  ApiKeyBannerActionDetail,
-  GettingStartedActionDetail,
-  InstallGuideDetail,
-  SessionType,
-} from '@shared/schemas';
+import type { SessionType } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import '@webview/frontend/components/AgentConfigBanner';
 import '@webview/frontend/components/ApiKeyBanner';
 import '@webview/frontend/components/DependencyBanner';
@@ -48,53 +41,19 @@ export class SessionBanners extends LitElement {
   /** The launcher's mode, which the agent-config banner's actions name. */
   @property() sessionType: SessionType = 'toolUse';
 
-  private request(request: Parameters<typeof SessionUiEvents.host>[0]): void {
-    this.dispatchEvent(SessionUiEvents.host(request));
-  }
-
   override render(): TemplateResult {
     const { banners } = this;
+    // The agent the banner names owns its actions: a workflow agent's missing
+    // configuration opens the workflow catalog even while a tool-use
+    // conversation renders the strip. The launcher's mode stands in only for
+    // a banner raised without one.
+    const agentConfigType = banners.agentConfig.sessionType ?? this.sessionType;
     return html`
-      <div
-        class="strip"
-        @api-key-action=${({ detail }: CustomEvent<ApiKeyBannerActionDetail>) =>
-          this.request({
-            kind: 'apiKeyBanner',
-            action: detail.action,
-            provider: banners.apiKey.provider,
-          })}
-        @agent-config-action=${({
-          detail,
-        }: CustomEvent<AgentConfigBannerActionDetail>) =>
-          this.request({
-            kind: 'agentConfigBanner',
-            action: detail.action,
-            // The agent the banner names owns the action: a workflow agent's
-            // missing configuration opens the workflow catalog even while a
-            // tool-use conversation renders the strip. The launcher's mode
-            // stands in only for a banner raised without one.
-            sessionType: banners.agentConfig.sessionType ?? this.sessionType,
-            customDirSet: banners.agentConfig.customDirSet,
-          })}
-        @dependency-dismiss=${() =>
-          this.request({ kind: 'dismissBanner', banner: 'dependency' })}
-        @recheck-dependencies=${() =>
-          this.request({ kind: 'recheckDependencies' })}
-        @open-install-guide=${({ detail }: CustomEvent<InstallGuideDetail>) =>
-          this.request({ kind: 'openInstallGuide', tool: detail.tool })}
-        @sign-in=${() => this.request({ kind: 'signIn' })}
-        @dismiss-login=${() =>
-          this.request({ kind: 'dismissBanner', banner: 'login' })}
-        @dismiss-getting-started=${() =>
-          this.request({ kind: 'dismissBanner', banner: 'gettingStarted' })}
-        @getting-started-action=${({
-          detail,
-        }: CustomEvent<GettingStartedActionDetail>) =>
-          this.request({ kind: 'gettingStarted', action: detail.action })}
-      >
+      <div class="strip">
         <api-key-banner .state=${banners.apiKey}></api-key-banner>
         <agent-config-banner
           .state=${banners.agentConfig}
+          .sessionType=${agentConfigType}
         ></agent-config-banner>
         <dependency-banner .state=${banners.dependency}></dependency-banner>
         <getting-started-banner

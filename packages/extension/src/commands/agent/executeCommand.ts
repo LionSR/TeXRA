@@ -6,12 +6,9 @@ import { z, ZodError } from 'zod';
 import { AgentConfigSchema, runAgent, defaultSession } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
-import {
-  ModelHandlerCompatibilityKeySchema,
-  RunIdSchema,
-} from '@shared/schemas';
+import { ModelCompatibilityKeySchema, RunIdSchema } from '@shared/schemas';
 
 const log = createLog('ExecuteCommand');
 
@@ -26,8 +23,8 @@ const WrappedExecuteInputSchema = z.object({
   config: z.unknown(),
   runId: RunIdSchema.optional(),
   preferHelperModel: z.boolean().optional(),
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
-  copilotRouteOverride: z.literal('direct').optional(),
+  modelCompatibilityKey: ModelCompatibilityKeySchema.nullish(),
+  ownApiKeyFallback: z.boolean().optional(),
 });
 
 /**
@@ -39,7 +36,10 @@ const WrappedExecuteInputSchema = z.object({
  *
  * Tool-use sessions resume through `tryResumeFromResumeData` instead.
  */
-export async function runExecuteCommand(input: unknown): Promise<void> {
+export async function runExecuteCommand(
+  input: unknown,
+  runtime: ProcessRuntime,
+): Promise<void> {
   try {
     const isWrapped =
       input !== null && typeof input === 'object' && 'config' in input;
@@ -53,7 +53,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     const request = wrapped?.runId
       ? ({ kind: 'resume', config, runId: wrapped.runId } as const)
       : ({ kind: 'fresh', config } as const);
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       runAgent(request, {
         session: defaultSession(),
         openWorkflowOutput: openFinalOutputIfAvailable,
@@ -61,8 +61,8 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
         // progress-view compile fixer); a direct main-view launch omits it and
         // keeps the user's selected model.
         preferHelperModel: wrapped?.preferHelperModel ?? false,
-        modelHandlerCompatibilityKey: wrapped?.modelHandlerCompatibilityKey,
-        copilotRouteOverride: wrapped?.copilotRouteOverride,
+        modelCompatibilityKey: wrapped?.modelCompatibilityKey,
+        ownApiKeyFallback: wrapped?.ownApiKeyFallback,
         onRun,
         onRunResolved: presentLaunchedProgressRun,
       }),

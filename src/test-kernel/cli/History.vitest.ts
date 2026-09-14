@@ -3,7 +3,7 @@ import '@test/support/sessionGraphTestSetup';
 
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Effect } from 'effect';
 import { it as effectIt } from '@effect/vitest';
@@ -14,9 +14,11 @@ import {
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { effectRuntime } from '@platform/processRuntime';
+
 import {
   createFakeHost,
-  hostStores,
+  installedHost,
   setupPlatform,
 } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -31,7 +33,10 @@ import {
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -108,8 +113,8 @@ vi.mock('@cli/runtime/initPlatform', () => ({
 
 // Imported after vi.mock so the mocked dependencies are in place.
 import { parseHistoryListLimit, runHistoryExport } from '@cli/commands/history';
-import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { initLocalCliPlatform } from '@cli/runtime/initPlatform';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import type { TraceDocument } from '@transcript';
@@ -126,7 +131,6 @@ import {
   readCliHistoryDetails,
   readCliHistoryExportInput,
   readCliHistoryStandaloneTemplate,
-  stageCliHistoryTraceViewerAssets,
 } from '@cli/runtime/history';
 
 const config = AgentConfigSchema.parse({
@@ -146,7 +150,12 @@ function historyDetails(
   id: RunId,
   options?: { includeFullConversation?: boolean },
 ) {
-  return readCliHistoryDetails(hostStores(), id, options);
+  return readCliHistoryDetails(
+    effectRuntime(),
+    Effect.succeed(defaultSession()),
+    id,
+    options,
+  );
 }
 
 // An internal tool-use agent config with no input/output files, built from
@@ -260,19 +269,6 @@ const RESUMABLE_ROW_FACTS = {
   checkpointPresent: true,
 };
 
-// A fresh temp directory to point --assets-dir at.
-async function makeAssetsDestDir(prefix: string): Promise<string> {
-  const cwd = await makeTempDir(prefix, tempDirs);
-  return path.join(cwd, 'shared-assets');
-}
-
-// The minimal bundled trace-viewer: just an index.html.
-async function writeViewerBundle(resourcesPath: string): Promise<void> {
-  const viewerDir = path.join(resourcesPath, 'traceViewer');
-  await mkdir(viewerDir, { recursive: true });
-  await writeFile(path.join(viewerDir, 'index.html'), '<html></html>');
-}
-
 describe('CLI history runtime', () => {
   setupPlatform(async () => {
     const historyStoragePath = await makeTempDir(
@@ -291,9 +287,19 @@ describe('CLI history runtime', () => {
   beforeEach(async () => {
     const { initializeDefaultSession, teardownDefaultSession } =
       await import('@agent/runtime/SessionHandle');
-    teardownDefaultSession();
-    initializeDefaultSession({});
+    await Effect.runPromise(teardownDefaultSession());
+    await Effect.runPromise(initializeDefaultSession({}));
     vi.clearAllMocks();
+    const host = installedHost();
+    vi.mocked(initLocalCliPlatform).mockResolvedValue({
+      ...host.platform,
+      globalStorage: host.roots.globalStorage,
+      globalState: host.roots.globalState,
+      secrets: host.secrets,
+      session: Effect.succeed(defaultSession()),
+      roots: host.roots,
+      runtime: effectRuntime(),
+    });
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
@@ -307,7 +313,10 @@ describe('CLI history runtime', () => {
   it('formats history list rows with the stable tab-separated text shape', async () => {
     mocks.listRuns.mockReturnValue(Effect.succeed([runListEntry('a1a1a1')]));
 
-    const entries = await listCliHistoryEntries(hostStores());
+    const entries = await listCliHistoryEntries(
+      effectRuntime(),
+      Effect.succeed(defaultSession()),
+    );
 
     expect(formatCliHistoryText(entries)).toBe(
       'a1a1a1\t2026-05-18T08:00:00.000Z\tcorrect\tcompleted\tintro.tex',
@@ -350,7 +359,10 @@ describe('CLI history runtime', () => {
       ),
     );
 
-    const entries = await listCliHistoryEntries(hostStores());
+    const entries = await listCliHistoryEntries(
+      effectRuntime(),
+      Effect.succeed(defaultSession()),
+    );
     expect(entries.map((entry) => entry.status)).toEqual([
       'cancelled',
       'failed',
@@ -399,7 +411,10 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(hostStores());
+    const entries = await listCliHistoryEntries(
+      effectRuntime(),
+      Effect.succeed(defaultSession()),
+    );
 
     expect(entries.map((entry) => entry.id)).toEqual(['visible']);
   });
@@ -415,7 +430,10 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(hostStores());
+    const entries = await listCliHistoryEntries(
+      effectRuntime(),
+      Effect.succeed(defaultSession()),
+    );
 
     expect(entries.map((entry) => entry.id)).toEqual(['root']);
   });
@@ -437,7 +455,10 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(hostStores());
+    const entries = await listCliHistoryEntries(
+      effectRuntime(),
+      Effect.succeed(defaultSession()),
+    );
 
     expect(entries[0]?.agent).toBe('engineer');
     expect(entries[0]?.teamPresetId).toBe('software-engineer');
@@ -461,7 +482,10 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(hostStores());
+    const entries = await listCliHistoryEntries(
+      effectRuntime(),
+      Effect.succeed(defaultSession()),
+    );
 
     expect(formatCliHistoryText(entries)).toBe(
       'chat1\t2026-05-18T11:00:00.000Z\tassistant\tresumable\tSketch a proof outline',
@@ -932,7 +956,7 @@ describe('CLI history runtime', () => {
             });
             expect(mocks.listRuns).not.toHaveBeenCalled();
           }),
-        (session) => Effect.sync(() => session.dispose()),
+        (session) => session.dispose(),
       ),
   );
 
@@ -941,7 +965,7 @@ describe('CLI history runtime', () => {
     expect(parseCliHistoryId('../abc123')).toBeUndefined();
   });
 
-  describe('history export (--export / --assets-dir)', () => {
+  describe('history export (--export)', () => {
     it('builds export input from the stored config, conversation, and run facts', async () => {
       const runId = 'a1a1a1' as RunId;
       mocks.readConversation.mockResolvedValue([
@@ -960,7 +984,11 @@ describe('CLI history runtime', () => {
         await Effect.runPromise(session.readView([]))
       ).runs.get(runId)?.launchedAt;
 
-      const result = await readCliHistoryExportInput(hostStores(), runId);
+      const result = await readCliHistoryExportInput(
+        effectRuntime(),
+        Effect.succeed(defaultSession()),
+        runId,
+      );
 
       expect(result).toEqual({
         status: 'ok',
@@ -991,7 +1019,11 @@ describe('CLI history runtime', () => {
       mockNothingPersisted();
 
       await expect(
-        readCliHistoryExportInput(hostStores(), 'facade' as RunId),
+        readCliHistoryExportInput(
+          effectRuntime(),
+          Effect.succeed(defaultSession()),
+          'facade' as RunId,
+        ),
       ).resolves.toEqual({ status: 'not_found' });
     });
 
@@ -1001,7 +1033,11 @@ describe('CLI history runtime', () => {
       // the id not resolving to anything at all. This is the beforeEach
       // baseline: stored config, no conversation, no meta.
       await expect(
-        readCliHistoryExportInput(hostStores(), 'a1a1a1' as RunId),
+        readCliHistoryExportInput(
+          effectRuntime(),
+          Effect.succeed(defaultSession()),
+          'a1a1a1' as RunId,
+        ),
       ).resolves.toEqual({ status: 'incomplete' });
     });
 
@@ -1012,7 +1048,11 @@ describe('CLI history runtime', () => {
       ]);
 
       await expect(
-        readCliHistoryExportInput(hostStores(), 'a1a1a1' as RunId),
+        readCliHistoryExportInput(
+          effectRuntime(),
+          Effect.succeed(defaultSession()),
+          'a1a1a1' as RunId,
+        ),
       ).resolves.toEqual({ status: 'incomplete' });
     });
 
@@ -1026,42 +1066,13 @@ describe('CLI history runtime', () => {
       mocks.readConversation.mockResolvedValue([]);
 
       await expect(
-        readCliHistoryExportInput(hostStores(), 'facade' as RunId),
+        readCliHistoryExportInput(
+          effectRuntime(),
+          Effect.succeed(defaultSession()),
+          'facade' as RunId,
+        ),
       ).resolves.toEqual({ status: 'not_found' });
       await expect(historyDetails('facade' as RunId)).resolves.toBeNull();
-    });
-
-    it('stages the bundled trace-viewer page into the destination directory', async () => {
-      const resourcesPath = await makeTempDir(
-        'texra-history-export-src-',
-        tempDirs,
-      );
-      await writeViewerBundle(resourcesPath);
-      const destDir = await makeAssetsDestDir('texra-history-export-dest-');
-
-      const result = await stageCliHistoryTraceViewerAssets({
-        resourcesPath,
-        destDir,
-      });
-
-      expect(result).toBe('staged');
-      expect(await readFile(path.join(destDir, 'index.html'), 'utf8')).toBe(
-        '<html></html>',
-      );
-    });
-
-    it('reports "missing" instead of throwing when the bundled trace-viewer assets are absent', async () => {
-      const resourcesPath = await makeTempDir(
-        'texra-history-export-empty-',
-        tempDirs,
-      );
-
-      const result = await stageCliHistoryTraceViewerAssets({
-        resourcesPath,
-        destDir: await makeAssetsDestDir('texra-history-export-dest-'),
-      });
-
-      expect(result).toBe('missing');
     });
 
     it('reads the bundled trace-viewer default template', async () => {
@@ -1077,7 +1088,7 @@ describe('CLI history runtime', () => {
       );
 
       await expect(
-        readCliHistoryStandaloneTemplate(resourcesPath),
+        readCliHistoryStandaloneTemplate(effectRuntime(), resourcesPath),
       ).resolves.toBe('<html>standalone</html>');
     });
 
@@ -1088,11 +1099,11 @@ describe('CLI history runtime', () => {
       );
 
       await expect(
-        readCliHistoryStandaloneTemplate(resourcesPath),
+        readCliHistoryStandaloneTemplate(effectRuntime(), resourcesPath),
       ).resolves.toBeNull();
     });
 
-    describe('runHistoryExport --assets-dir', () => {
+    describe('runHistoryExport html', () => {
       // Capture every byte written so we can assert on exit code + wording
       // without the real bytes leaking to the test runner's own stdout/stderr.
       let stdout = '';
@@ -1100,25 +1111,14 @@ describe('CLI history runtime', () => {
       let stdoutSpy: ReturnType<typeof vi.spyOn>;
       let stderrSpy: ReturnType<typeof vi.spyOn>;
 
-      function makeTrace(runId: string): TraceDocument {
-        return {
-          runId,
-          config,
-          meta: null,
-          entries: [],
-          snapshot: { todos: [], plan: null, usage: null },
-          terminalStatus: null,
-        } as unknown as TraceDocument;
-      }
-
-      const trace = makeTrace('a1a1a1');
-
-      function makeContext(resourcesPath: string): CliContext {
-        return createTestCliContext({
-          cwd: '/workspace',
-          resourcesPath,
-        });
-      }
+      const trace = {
+        runId: 'a1a1a1',
+        config,
+        meta: null,
+        entries: [],
+        snapshot: { todos: [], plan: null, usage: null },
+        terminalStatus: null,
+      } as unknown as TraceDocument;
 
       beforeEach(() => {
         stdout = '';
@@ -1139,124 +1139,24 @@ describe('CLI history runtime', () => {
         stderrSpy.mockRestore();
       });
 
-      /** Temp resources dir holding the bundled trace viewer. */
-      async function makeStagedResources(prefix: string): Promise<string> {
-        const resourcesPath = await makeTempDir(prefix, tempDirs);
-        await writeViewerBundle(resourcesPath);
-        return resourcesPath;
-      }
-
       it('reports missing replayable roots without an empty sidecar list', async () => {
         mocks.assembleTrace.mockReturnValue(
           Effect.succeed({ status: 'streamLogs_missing' }),
         );
 
         const exitCode = await runHistoryExport(
-          makeContext('/resources'),
+          createTestCliContext({
+            cwd: '/workspace',
+            resourcesPath: '/resources',
+          }),
           'a1a1a1' as RunId,
           'html',
-          {},
         );
 
         expect(exitCode).toBe(CliExitCode.Usage);
         expect(stdout).toBe('');
         expect(stderr).toContain('no replayable run-root transcript');
         expect(stderr).not.toContain('sidecars (');
-      });
-
-      it('returns a non-zero exit code (but still writes the trace JSON) when the bundled assets are missing', async () => {
-        const resourcesPath = await makeTempDir(
-          'texra-history-export-missing-src-',
-          tempDirs,
-        );
-        const destDir = await makeAssetsDestDir(
-          'texra-history-export-missing-dest-',
-        );
-
-        const exitCode = await runHistoryExport(
-          makeContext(resourcesPath),
-          'a1a1a1' as RunId,
-          'html',
-          { assetsDir: destDir },
-        );
-
-        expect(exitCode).toBe(CliExitCode.Usage);
-        expect(stdout).toBe(JSON.stringify(trace));
-        expect(stderr).toContain('were not found in this CLI install');
-      });
-
-      it('returns success and writes a concrete (non-placeholder) instruction when assets stage correctly', async () => {
-        const resourcesPath = await makeStagedResources(
-          'texra-history-export-staged-src-',
-        );
-        const destDir = await makeAssetsDestDir(
-          'texra-history-export-staged-dest-',
-        );
-
-        const exitCode = await runHistoryExport(
-          makeContext(resourcesPath),
-          'a1a1a1' as RunId,
-          'html',
-          { assetsDir: destDir },
-        );
-
-        expect(exitCode).toBe(CliExitCode.Success);
-        expect(stdout).toBe(JSON.stringify(trace));
-        // The instruction names concrete paths; literal placeholder tokens
-        // would read as an unresolved template.
-        expect(stderr).not.toContain('<redirected-path>');
-        expect(stderr).not.toContain('<relative-path-to-the-redirected-file>');
-        expect(stderr).toContain(
-          `Wrote trace JSON for a1a1a1 to stdout. Save the output to ` +
-            `${path.join(destDir, 'a1a1a1.json')}, then open ` +
-            `${destDir}/index.html?trace=a1a1a1.json.`,
-        );
-      });
-
-      it('uses run-specific trace filenames for repeat exports into the same assets directory', async () => {
-        const resourcesPath = await makeStagedResources(
-          'texra-history-export-repeat-src-',
-        );
-        const destDir = await makeAssetsDestDir(
-          'texra-history-export-repeat-dest-',
-        );
-        const firstTrace = makeTrace('abc123');
-        const secondTrace = makeTrace('def456');
-        mocks.assembleTrace
-          .mockReturnValueOnce(
-            Effect.succeed({ status: 'ok', trace: firstTrace }),
-          )
-          .mockReturnValueOnce(
-            Effect.succeed({ status: 'ok', trace: secondTrace }),
-          );
-
-        const firstExit = await runHistoryExport(
-          makeContext(resourcesPath),
-          'abc123' as RunId,
-          'html',
-          { assetsDir: destDir },
-        );
-        const secondExit = await runHistoryExport(
-          makeContext(resourcesPath),
-          'def456' as RunId,
-          'html',
-          { assetsDir: destDir },
-        );
-
-        expect(firstExit).toBe(CliExitCode.Success);
-        expect(secondExit).toBe(CliExitCode.Success);
-        expect(stdout).toBe(
-          JSON.stringify(firstTrace) + JSON.stringify(secondTrace),
-        );
-        expect(stderr).toContain(
-          `${path.join(destDir, 'abc123.json')}, then open ` +
-            `${destDir}/index.html?trace=abc123.json.`,
-        );
-        expect(stderr).toContain(
-          `${path.join(destDir, 'def456.json')}, then open ` +
-            `${destDir}/index.html?trace=def456.json.`,
-        );
-        expect(stderr).not.toContain('trace=trace.json');
       });
     });
   });

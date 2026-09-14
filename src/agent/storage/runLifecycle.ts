@@ -1,9 +1,9 @@
 /**
  * Run lifecycle operations.
  *
- * Business logic that orchestrates reads and writes across run stores.
- * Separated from RunKVStore to keep the store a clean storage interface
- * with no cross-store mutations or error-swallowing policies.
+ * Business logic that orchestrates the run's records across its aggregate:
+ * registration, activation, finalization and the child listing, separate
+ * from the record accessors in `runRecords.ts`.
  */
 
 import { Cause, Effect, Exit } from 'effect';
@@ -39,11 +39,10 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
-  getRunStore,
   getRunRecords,
   runEndFromEvents,
   type ChildRecord,
-} from './RunKVStore';
+} from './runRecords';
 import {
   acquireFreshRunLease,
   acquireResumedRunLease,
@@ -98,7 +97,8 @@ export const registerRun = Effect.fn('registerRun')(function* (
     Effect.gen(function* () {
       const records = getRunRecords(session, runId);
       const prior = yield* records.exists();
-      if (prior) releaseClaims = yield* session.acquireRunClaims(runId);
+      if (prior)
+        releaseClaims = yield* session.acquireClaims(aggregateId('run', runId));
       // The database refuses a parent that is closed or has no `run.start`;
       // this read only words the refusal before the transaction opens.
       if (
@@ -157,18 +157,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
             : {}),
         },
       );
-      if (
-        options.identity.kind === 'agent' &&
-        options.identity.tool === undefined
-      )
-        events.push({
-          type: 'status',
-          aggregateId: target,
-          phase: RUN_PHASE.RUNNING,
-          substate: RUN_SUBSTATE.STARTING,
-          runStartedAt: Date.now(),
-          cause: 'lifecycle',
-        });
       if (options.description !== undefined)
         events.push({
           type: 'run.description',
@@ -230,7 +218,9 @@ export const acquireResumedRunOwnership = Effect.fn(
           try: () => runInSession(session, () => releaseOwnedRunLease(runId)),
           catch: ensureError,
         });
-  const claims = yield* Effect.exit(session.acquireRunClaims(runId));
+  const claims = yield* Effect.exit(
+    session.acquireClaims(aggregateId('run', runId)),
+  );
   if (Exit.isFailure(claims)) {
     const release = yield* Effect.exit(releaseLease);
     return yield* Effect.fail(
@@ -342,7 +332,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
       if (ended === persisted) return { events: [], value: persisted };
       return {
         events: [
-          ...session.statusClosureFacts(runId, persisted),
+          ...session.streamClosureFacts(runId),
           {
             type: 'run.end' as const,
             aggregateId: target,

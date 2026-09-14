@@ -36,7 +36,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -117,8 +117,12 @@ class AgentReviewServiceImpl {
   private baseDescription = 'main branch';
   /** A commit arrived while a review was running; run once more afterwards. */
   private pendingCommitReview: AgentReviewRunOptions | undefined;
+  // Captured by `initialize` from the host entry, which holds the process
+  // runtime in a local; the service is a process-lifetime singleton.
+  private runtime: ProcessRuntime | undefined;
 
-  initialize(context: vscode.ExtensionContext): void {
+  initialize(context: vscode.ExtensionContext, runtime: ProcessRuntime): void {
+    this.runtime = runtime;
     this.collection =
       vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
     context.subscriptions.push(this.collection, this.emitter);
@@ -215,6 +219,12 @@ class AgentReviewServiceImpl {
     options: AgentReviewRunOptions,
     run: AgentReviewRunToken,
   ): Promise<void> {
+    const runtime = this.runtime;
+    if (!runtime) {
+      throw new Error(
+        'Agent review is not initialized. Call AgentReviewService.initialize() first.',
+      );
+    }
     // `clear()` discards the run. Check before collecting so a clear that
     // landed during the initial context-key update cannot start stale work.
     if (!this.reviewRuns.isCurrent(run)) return;
@@ -309,7 +319,7 @@ class AgentReviewServiceImpl {
       // its fire-and-forget error swallowing) so the panel can distinguish
       // a completed review from a failed or cancelled one. The run itself
       // is visible as a regular tool-use session in the progress view.
-      const result = await effectRuntime().runPromise(
+      const result = await runtime.runPromise(
         runAgent(
           { kind: 'fresh', config },
           {
@@ -317,7 +327,7 @@ class AgentReviewServiceImpl {
             stopAfterCycle: true,
             session: run.session,
             onRun: (handle) =>
-              effectRuntime().runPromise(this.reviewRuns.bind(run, handle)),
+              runtime.runPromise(this.reviewRuns.bind(run, handle)),
             onRunResolved: presentLaunchedProgressRun,
           },
         ),

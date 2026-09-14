@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import { effectRuntime } from '@platform/processRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
@@ -126,6 +127,7 @@ describe('CLI Overleaf clone command', () => {
         cwd: workspacePath,
         env: makeMachineGitEnv(),
         extendEnv: false,
+        cancelSignal: expect.any(AbortSignal),
       },
     );
     expect(JSON.parse(stdout)).toEqual({
@@ -162,12 +164,59 @@ describe('CLI Overleaf clone command', () => {
         cwd: destination,
         env: makeMachineGitEnv(),
         extendEnv: false,
+        cancelSignal: expect.any(AbortSignal),
       },
     );
     expect(JSON.parse(stdout)).toMatchObject({
       cloned: true,
       destination: destination,
     });
+  });
+
+  it('cancels the Git process when the host interrupts cloning', async () => {
+    const controller = new AbortController();
+    const runtime = effectRuntime();
+    const runPromise = runtime.runPromise.bind(runtime);
+    const runSpy = vi
+      .spyOn(runtime, 'runPromise')
+      .mockImplementation((program, options) =>
+        runPromise(program, { ...options, signal: controller.signal }),
+      );
+    let cancelled = false;
+    mocks.execa.mockImplementation(
+      (_file, _args, options: { cancelSignal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          options.cancelSignal?.addEventListener(
+            'abort',
+            () => {
+              cancelled = true;
+              reject(options.cancelSignal?.reason);
+            },
+            { once: true },
+          );
+          queueMicrotask(() => controller.abort());
+        }),
+    );
+
+    try {
+      await expect(
+        runCli([
+          'clone',
+          PROJECT_ID,
+          '--cwd',
+          workspacePath,
+          '--output-format',
+          'json',
+          '--no-input',
+        ]),
+      ).rejects.toBeInstanceOf(Error);
+
+      expect(mocks.execa).toHaveBeenCalledOnce();
+      expect(cancelled).toBe(true);
+      expect(stdout).not.toContain('"cloned":true');
+    } finally {
+      runSpy.mockRestore();
+    }
   });
 
   it('does not create a positional destination when the token is missing', async () => {

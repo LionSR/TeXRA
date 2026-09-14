@@ -11,28 +11,22 @@
  * deliberately reaches "up" into `@agent` and `@skills` for the registration
  * helpers, mirroring what each host's composition root would otherwise inline.
  * Nothing in `@agent` / `@skills` imports it back, so there is no cycle. The
- * direct Lean LSP registration lives in `nodeAgentRuntime.ts` instead, so that
- * adapter stays out of hosts that only need the composition helpers.
+ * direct Lean LSP adapter is not here: each Node root hands its layer to
+ * `installProcessRuntime`, so the adapter stays out of hosts that only need
+ * the composition helpers.
  */
 
-// Third-party imports
-import { Effect } from 'effect';
-
 // Local imports
-import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import {
   defaultSkillSources,
   type SkillSourceOptions,
 } from '@skills/skillSources';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 // Local file imports
-import { nodeFileLocks } from './fileLocks';
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { canonicalizeWorkspacePath } from './nodeWorkspace';
-import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
 import type { WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
@@ -42,30 +36,21 @@ import type {
   ConfigProvider,
   LifecycleHost,
   StateStore,
-  StorageProvider,
-  ToolAvailabilityHost,
   ToolMissingHandler,
 } from '../interfaces';
 import type { LanguageModelPort } from '../languageModel';
 import type { Platform } from '../platform';
-import type { PlatformSecrets } from '../secrets';
 
 /**
  * Host-specific services a Node host supplies to {@link createNodePlatform}. The
- * shared Node defaults (filesystem, file locks, and the no-op
- * tool-availability host) are filled in by the helper. The
+ * shared Node default (the filesystem) is filled in by the helper. The
  * per-workspace services are not here: hosts build them with
  * {@link createNodeWorkspaceRoots}.
  */
 export interface NodePlatformServices {
-  readonly globalState: StateStore;
-  readonly storage: StorageProvider;
-  readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;
-  /** Host-specific availability overrides merged over the no-op defaults. */
-  readonly toolAvailability?: Partial<ToolAvailabilityHost>;
   /** Editor-host subscription models; defaults to the unavailable port. */
   readonly languageModel?: LanguageModelPort;
   /** Optional process-host capability; absent means no-op (see `Platform`). */
@@ -77,6 +62,8 @@ export interface NodeWorkspaceRootsInit {
   readonly workspacePath: string | undefined;
   /** The storage root opened for this workspace (`WorkspaceStorageProvider.getStoragePath()`). */
   readonly storage: string;
+  /** The cross-workspace global storage root (`getGlobalStoragePath()`). */
+  readonly globalStorage: string;
   /**
    * Config source: the workspace + global stores to build the file-backed
    * provider from, or an already-constructed provider for hosts that resolve
@@ -85,6 +72,8 @@ export interface NodeWorkspaceRootsInit {
    */
   readonly config: JsonConfigProviderOptions | ConfigProvider;
   readonly workspaceState: StateStore;
+  /** The process's application state store (`WorkspaceRoots.globalState`). */
+  readonly globalState: StateStore;
 }
 
 /**
@@ -102,19 +91,14 @@ export function createNodeWorkspaceRoots(
         ? undefined
         : canonicalizeWorkspacePath(init.workspacePath),
     storage: init.storage,
+    globalStorage: init.globalStorage,
     config:
       'workspace' in init.config
         ? new JsonConfigProvider(init.config)
         : init.config,
     workspaceState: init.workspaceState,
+    globalState: init.globalState,
   };
-}
-
-export interface NodeAgentDirectoryBootstrapOptions {
-  readonly channel: string;
-  readonly resourcesPath: string;
-  readonly currentVersion: string | undefined;
-  readonly versionStateKey: string;
 }
 
 export interface NodeRuntimeSkillOptions {
@@ -122,33 +106,21 @@ export interface NodeRuntimeSkillOptions {
   readonly skillSourceOptions?: SkillSourceOptions;
 }
 
-const bootstrappedAgentDirectoryResources = new Map<string, string>();
-const agentDirectoryBootstrapLanes = new Map<string, PerKeyLane>();
-
 /**
  * Assemble the platform services for a Node-family host (CLI, desktop,
  * extension) or an SDK embedder.
  *
  * Centralizes the default building blocks every host would otherwise restate
- * in its own `initPlatform` literal (`nodeFilesystem`, `nodeFileLocks`, the
- * no-op tool-availability host) while preserving the rule that only
- * composition roots call `initPlatform(...)`.
+ * in its own `initPlatform` literal (`nodeFilesystem`) while preserving the
+ * rule that only composition roots call `initPlatform(...)`.
  */
 export function createNodePlatform(services: NodePlatformServices): Platform {
   return {
-    globalState: services.globalState,
     fs: nodeFilesystem,
-    storage: services.storage,
-    fileLocks: nodeFileLocks,
-    secrets: services.secrets,
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,
     agentDirectories: services.agentDirectories,
     languageModel: services.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    toolAvailability: {
-      ...NO_TOOL_AVAILABILITY_HOST,
-      ...services.toolAvailability,
-    },
     // Missing-tool reporting remains an optional process-host capability;
     // omitting it is the no-op, which is what both Node hosts want.
     toolMissingHandler: services.toolMissingHandler,
@@ -175,40 +147,3 @@ export function initializeNodeRuntimeSkills(
     ),
   );
 }
-
-/**
- * Reconcile packaged agent directories for a host after `initPlatform`.
- *
- * Hosts use different version-state keys, but the resources-path re-entry rule
- * is the same: after a successful reconcile, a process only reconciles a given
- * host channel again when its active packaged resources path changes. Failures
- * are reported and answered `false` by `bootstrapPlatformAgentDirectories` so a
- * broken agent directory does not abort startup, and a later call can retry.
- *
- * Concurrent calls for one channel take the channel's in-process lane in call
- * order, so the second sees the first's recorded resources path and skips.
- */
-export const bootstrapNodeAgentDirectories = Effect.fn(
-  'nodeHost.bootstrapNodeAgentDirectories',
-)(function* (options: NodeAgentDirectoryBootstrapOptions) {
-  const guardKey = `${options.channel}:${options.versionStateKey}`;
-  yield* withPerKeyLane(
-    agentDirectoryBootstrapLanes,
-    guardKey,
-  )(
-    Effect.gen(function* () {
-      if (
-        bootstrappedAgentDirectoryResources.get(guardKey) ===
-        options.resourcesPath
-      ) {
-        return;
-      }
-      if (yield* bootstrapPlatformAgentDirectories(options)) {
-        bootstrappedAgentDirectoryResources.set(
-          guardKey,
-          options.resourcesPath,
-        );
-      }
-    }),
-  );
-});

@@ -11,9 +11,9 @@
  * {@link SessionHostInteractions}, and the other session-scoped owners.
  *
  * A session is one per workspace storage root, built and held by the
- * process's session owner (the `Sessions` map behind `openSession`): the
+ * process's session owner (the `Sessions` map behind `openSessionEffect`): the
  * extension and the CLI open one over the process roots, the desktop one
- * per paper, the SDK one per platform. The default instance is installed
+ * per project, the SDK one per platform. The default instance is installed
  * explicitly through {@link initializeDefaultSession}; {@link defaultSession}
  * only retrieves that process-wide owner. There is no other way to reach
  * these owners: the invariant is "no session-scoped mutable module export"
@@ -32,26 +32,14 @@
  * session is justified only as the ownership container.
  */
 
-import {
-  Cause,
-  Effect,
-  Exit,
-  Option,
-  Semaphore,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Cause, Effect, Exit, Option, Stream, SubscriptionRef } from 'effect';
 
-import type {
-  AgentEvent,
-  AgentTrace,
-  ResultEvent,
-  StatusEvent,
-} from '@agent/trace';
+import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   ownsRunLease,
   releaseOwnedRunLease,
+  RunLeaseLostError,
   validateOwnedRunLease,
 } from '@agent/storage/runLease';
 import { finalizeRun } from '@agent/storage/runLifecycle';
@@ -59,7 +47,7 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import { DisposableStore } from '@platform/disposable';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -71,13 +59,15 @@ import {
   interruptedWorkflowCall,
   isTranscriptEvent,
   RUN_OUTCOME,
-  RUN_PHASE,
+  type AggregateId,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
+  type PermissionPayload,
+  type RequestDecision,
   type RunId,
+  type RunOutcome,
   type SessionEvent,
   type SessionEventDraft,
-  type RunPhase,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type {
@@ -90,57 +80,109 @@ import {
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
-import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import type { RunLedgerDraft } from '@shared/session/runStateFold';
+import type { Append, SessionEventReads } from '@shared/session/sessionEvents';
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
   nonterminalWorkflowCall,
 } from '@shared/session/traceEntries';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type {
   StreamLogStore,
   StreamLogStoreMode,
 } from '@transcript/StreamLogStore';
 import { throwAggregated } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getRunContextSession,
   runInSession,
   tryUseRunContext,
 } from './RunContext';
 import { RunRegistry } from './runRegistry';
-import { RunStatusMachine } from './RunStatusService';
 import {
   SessionHostInteractions,
   type HostInteractions,
 } from './HostInteractions';
-import { runEventDraft, statusDraft } from './SessionEvents';
+import { redactedForFact } from './loop/rows';
+import { runEventDraft } from './SessionEvents';
 import {
   defaultRootSession,
-  openSession,
+  openSessionEffect,
   type SessionGraph,
 } from './sessionGraph';
-import { ModelRetryGate } from './ModelRetryGate';
 import {
   createSessionApprovals,
   type SessionApprovals,
 } from './runApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
+import type { ModelRetryGate } from './ModelRetryGate';
 
 const logger = createLog('sessionHandle');
 
 /**
- * What opening a session supplies (`openSession`): persistence mode and
- * host-owned policies. The graph constructs its store over its event database. `interactions` is the host the
- * session is born with, attached for its whole life, for an opener with no
- * later attach step of its own (the SDK's headless host).
+ * Facts a run had queued did not commit before its lease ended: the artifact
+ * drain (`flushArtifacts`, which settles the ordered publisher), the
+ * post-drain step, or the settle after them failed, so those rows were rolled
+ * back. Deliberately distinct from a claim or lease-file release that failed,
+ * which happens once every fact is already committed and leaves the record
+ * whole: only a drain failure can leave a caller journaling work whose rows
+ * are gone, so the two are told apart by identity rather than by message.
+ */
+export class RunArtifactDrainError extends Error {
+  constructor(
+    readonly runId: RunId,
+    cause: unknown,
+  ) {
+    super(
+      `Run ${runId}: the facts it queued did not commit before its lease ended.`,
+      { cause },
+    );
+    this.name = 'RunArtifactDrainError';
+  }
+}
+
+/**
+ * One publication in flight and the run whose fact it carries, so a settle
+ * can answer for one run's facts rather than for whatever the session
+ * happened to have queued. `runId` is `null` for a fact no single run owns:
+ * every settle answers for those.
+ */
+interface TrackedPublication {
+  readonly runId: RunId | null;
+  readonly settled: Promise<
+    Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>
+  >;
+}
+
+/** The run one published batch belongs to, read off the aggregates it
+ *  targets; `null` when the batch is not one run's (a session-scoped fact,
+ *  or a batch spanning runs, which no run may be failed for alone — an
+ *  author with a batch of that shape whose refusal someone must hear commits
+ *  it through {@link SessionHandle.commit} instead, as the registry's
+ *  `run.detach` batch does). */
+function draftedRun(events: readonly SessionEventDraft[]): RunId | null {
+  let runId: RunId | null = null;
+  for (const event of events) {
+    const target = aggregateTarget(event.aggregateId);
+    if (target.kind !== 'run') return null;
+    if (runId !== null && runId !== target.id) return null;
+    runId = target.id;
+  }
+  return runId;
+}
+
+/**
+ * What opening a session supplies (`openSessionEffect`): persistence mode and
+ * host-owned policies. The graph constructs its store over its event
+ * database. `interactions` is a presentation host the session is born with,
+ * attached for its whole life, for an opener with no later attach step of its
+ * own.
  *
- * `status` and `events` are deliberately absent: the machine publishes
- * canonical `status` through the session, and the event plane is the
- * session's graph, built by the session owner per workspace root, so a
- * separately-injected machine or plane could not silently drop every fact
- * of a session onto a plane nobody reads. The session co-constructs them.
+ * `events` is deliberately absent: the event plane is the session's graph,
+ * built by the session owner per workspace root, so a separately-injected
+ * plane could not silently drop every fact of a session onto a plane nobody
+ * reads. The session co-constructs it.
  */
 export type SessionHandleInit = Partial<
   Pick<SessionHandle, 'responseTextProcessing' | 'roots'>
@@ -167,23 +209,28 @@ export class SessionHandle {
    * instead of hanging it.
    */
   readonly viewChanges: Stream.Stream<SessionView>;
+  /** Set when opening this session's store cleared another build's rows;
+   *  the host that opened the session presents it once. */
+  readonly storeCleared: SessionGraph['storeCleared'];
   /**
    * Per-run run handles: registration, lookup, change listeners, and
-   * subagent lineage. Hears every canonical `status` fact from
-   * {@link publishStatus}, in publish order.
+   * subagent lineage. Hears every phase-moving row this process committed
+   * ({@link receiveFoldedEvent}), in commit order and only once the view has
+   * folded it; the phase itself is the fold's (`RunView.status`), never a
+   * second map here.
    */
   readonly runs: RunRegistry;
   /**
    * The session's event plane (PRD 7.1, contract C7): what a renderer reads
    * with `events.all(session.now())`. The reads only: publishing goes
-   * through {@link publish}, which runs the session's ordering-sensitive
-   * bookkeeping before the log moves, and nothing else can append.
+   * through {@link publish} and {@link commit}, the session's doors onto
+   * the graph's one publisher, and nothing else can append.
    */
-  readonly events: Omit<SessionEventsShape, 'publish'>;
+  readonly events: SessionEventReads;
   /**
    * The one handler of every request a surface issues to this session (PRD
-   * 7.6, 8.2): an in-process surface runs it on the process runtime
-   * (`effectRuntime()`) and reads the Effect's own result as the response.
+   * 7.6, 8.2): an in-process surface runs it on the runtime its own
+   * composition root owns and reads the Effect's own result as the response.
    */
   readonly requests: SessionGraph['requests'];
   /** The run ledger over this session's event plane, provided to each run's
@@ -206,8 +253,6 @@ export class SessionHandle {
    * qualification and disposal guard applied.
    */
   readonly subscriptions: SessionGraph['subscriptions'];
-  /** Session-scoped status plane. */
-  readonly status: RunStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
   readonly transcripts: StreamLogStore;
   /**
@@ -220,17 +265,26 @@ export class SessionHandle {
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
   private readonly graph: SessionGraph;
+  /**
+   * The runtime this session's owner built and runs it on, captured at
+   * construction rather than read from the process when a fiber is wanted.
+   * Two members of this class face Promises and have no fiber of their own
+   * to borrow -- {@link settlePublications} and the `unreadable` write -- and
+   * both start theirs here. Nothing else in the session runs an Effect.
+   */
+  private readonly runtime: ProcessRuntime;
   private disposed = false;
-  private readonly publicationGate = Semaphore.makeUnsafe(1);
-  private readonly publications = new Set<
-    Promise<Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>>
-  >();
+  private readonly publications = new Set<TrackedPublication>();
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
   readonly approvals: SessionApprovals;
   private texraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
-  /** Coordinates recovery probes for model routes shared by parallel runs. */
+  /**
+   * Coordinates recovery probes for model routes shared by parallel runs.
+   * Built by the session owner in the session's scope, so its probe fibers
+   * and waiting calls end with the session rather than through this store.
+   */
   readonly modelRetries: ModelRetryGate;
   /** Host policy for provider-output cleanup and continuation joining. */
   readonly responseTextProcessing: ResponseTextProcessing;
@@ -247,35 +301,35 @@ export class SessionHandle {
    * Built by the session owner alone (`sessionLayer.ts`), inside the root's
    * graph, with that graph handed over as a function of the session: the
    * request handler admits on the session, so the graph is bound to the
-   * handle it serves. Every other caller opens through `openSession`.
+   * handle it serves. Every other caller opens through `openSessionEffect`.
    */
   constructor(
     init: SessionHandleInit &
-      Pick<SessionHandle, 'transcripts'> & {
+      Pick<SessionHandle, 'transcripts' | 'modelRetries'> & {
         readonly roots: WorkspaceRoots;
         readonly graph: (session: SessionHandle) => SessionGraph;
+        /** The owner's runtime, for this session's two Promise faces. */
+        readonly runtime: ProcessRuntime;
       },
   ) {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
     this.transcripts = init.transcripts;
     this.roots = init.roots;
+    this.runtime = init.runtime;
     const graph = init.graph(this);
     this.graph = graph;
     this.events = graph.events;
     this.ledger = graph.ledger;
     this.view = graph.view;
     this.viewChanges = graph.viewChanges;
+    this.storeCleared = graph.storeCleared;
     this.folded = graph.folded;
     this.requests = graph.requests;
     this.inputs = graph.inputs;
     this.subscriptions = graph.subscriptions;
-    const status = new RunStatusMachine(
-      (event) => this.publishStatus(event),
-      (runId, detail) => this.setUnreadable(runId, detail),
-    );
     this.followUps = new ToolUseFollowUpQueue();
-    const interactions = new SessionHostInteractions(this);
+    const interactions = new SessionHostInteractions();
     // The approval authority publishes a stream's full policy snapshot on
     // every effective bypass change; `setApprovalPolicy` below publishes the
     // same snapshot when the policy half moves.
@@ -283,17 +337,18 @@ export class SessionHandle {
       this.publishApprovalPolicy(runId),
     );
     this.runs = new RunRegistry({
-      runStatus: status,
-      publish: (events) => this.publish(events),
+      runView: (runId) => this.runView(runId),
+      commit: (events) => this.commit(events).pipe(Effect.asVoid),
       approvals,
       finalizeRun: (input) => finalizeRun(this, input),
+      acquireRunClaim: (runId) =>
+        this.acquireClaims(qualifyAggregateId('run', runId)),
       releaseRootRunLease: (runId) => this.releaseRunLease(runId),
     });
 
-    this.status = status;
     this.interactions = interactions;
     this.approvals = approvals;
-    this.modelRetries = new ModelRetryGate();
+    this.modelRetries = init.modelRetries;
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
     this.workflowControls = new WorkflowControlRegistry();
@@ -313,7 +368,6 @@ export class SessionHandle {
     });
     this.teardown.add(() => this.resultListeners.clear());
     this.teardown.add(() => this.interactions.dispose());
-    this.teardown.add(() => this.modelRetries.dispose());
     // Drop bypass state before the interaction slot settles pending approvals.
     this.teardown.add(() => this.approvals.clearAll());
     this.teardown.add(() => this.runs.dispose());
@@ -372,40 +426,70 @@ export class SessionHandle {
    * The claim is unlinked whatever the drain did: resumability is the
    * checkpoint, so a failed flush is logged and rethrown but never changes
    * who owns the run. A release failure never masks a drain failure: the
-   * drain's error is the one the caller sees, and the release's is logged.
-   * This is the one exit choreography every run driver calls.
+   * drain's error is the one the caller sees, as a
+   * {@link RunArtifactDrainError} so a caller can tell rolled-back facts from
+   * a release that failed with everything already committed; the release's is
+   * logged. This is the one exit choreography every run driver calls.
+   *
+   * The post-drain step runs whether or not the drain rejected, and hears
+   * which it was: it is where the run's terminal row is written, and a run
+   * whose ownership ends with no terminal row at all reads back as merely
+   * interrupted — the one classification a shutdown must not leave behind. A
+   * failed drain is what the row it writes carries (the `artifact-drain`
+   * marker `finalizeRunTerminal` stamps on the same fact), and the drain's
+   * own failure is still the error this call reports once that row has
+   * landed.
    */
   releaseRunLease(
     runId: RunId,
-    afterArtifactsDrained: Effect.Effect<void, Error> = Effect.void,
+    afterArtifactsDrained: (
+      drainFailure: Error | undefined,
+    ) => Effect.Effect<void, Error> = () => Effect.void,
   ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const drained = yield* Effect.exit(
-        Effect.gen({ self: this }, function* () {
-          yield* Effect.tryPromise({
-            try: () =>
-              runInSession(this, async () => {
-                await validateOwnedRunLease(runId);
-                await this.flushArtifacts();
-              }),
-            catch: ensureError,
-          });
-          yield* afterArtifactsDrained;
+        Effect.tryPromise({
+          try: () =>
+            runInSession(this, async () => {
+              await validateOwnedRunLease(runId);
+              await this.flushArtifacts(runId);
+            }),
+          // The drain is the ordered publisher's settle, so anything that
+          // fails here left facts this run had queued uncommitted. The one
+          // exception is a lost lease, which keeps its own identity: it
+          // says this process no longer owns the run, and the callers that
+          // treat shutdown contention as expected read that type.
+          catch: (cause) =>
+            cause instanceof RunLeaseLostError
+              ? cause
+              : new RunArtifactDrainError(runId, cause),
         }),
       );
-      // Settle whatever the drain did. When the drain rejected
-      // (including in `validateOwnedExecutionLease`), the post-drain step
-      // never ran, and this settle still stops claim release from overtaking
-      // facts the owner already queued. On success it also covers the facts
-      // `afterArtifactsDrained` published.
+      const finalized = yield* Effect.exit(
+        afterArtifactsDrained(
+          Exit.isFailure(drained)
+            ? ensureError(Cause.squash(drained.cause))
+            : undefined,
+        ),
+      );
+      // Settle whatever the drain and the post-drain step did. When the drain
+      // rejected (including in `validateOwnedExecutionLease`), this settle
+      // still stops claim release from overtaking facts the owner already
+      // queued, and it covers the facts `afterArtifactsDrained` published.
       const published = yield* Effect.exit(
         Effect.tryPromise({
-          try: () => this.settlePublications(),
-          catch: ensureError,
+          try: () => this.settlePublications(runId),
+          catch: (cause) => new RunArtifactDrainError(runId, cause),
         }),
       );
+      // A child a parent's detach has snapshotted keeps its claim until that
+      // batch has committed: the `run.detach` row lands on the child's own
+      // aggregate, which takes an append from its claim holder alone, so a
+      // release that overtook the batch would have it refused with nothing
+      // severed. The one check at the one release.
+      yield* this.runs.throughDetach(runId);
       const claimRelease = yield* Effect.exit(
-        this.graph.releaseRunClaims(runId),
+        this.releaseClaims(qualifyAggregateId('run', runId)),
       );
       const fileRelease = yield* Effect.exit(
         Effect.tryPromise({
@@ -413,8 +497,14 @@ export class SessionHandle {
           catch: ensureError,
         }),
       );
-      const failures = [drained, published, claimRelease, fileRelease].flatMap(
-        (exit) => (Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : []),
+      const failures = [
+        drained,
+        finalized,
+        published,
+        claimRelease,
+        fileRelease,
+      ].flatMap((exit) =>
+        Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
       );
       const primary = failures.shift();
       for (const error of failures)
@@ -426,11 +516,13 @@ export class SessionHandle {
     });
   }
 
-  /** Admit the run's existing claim before resume reads or mutations. */
-  acquireRunClaims(
-    runId: RunId,
+  /** Admit an aggregate's existing claim before this process appends to it:
+   *  a run's before resume reads or mutations, a workflow checkpoint's
+   *  before a relaunch journals into it. */
+  acquireClaims(
+    id: AggregateId,
   ): Effect.Effect<Effect.Effect<void, Error>, Error> {
-    return this.graph.acquireRunClaims(runId).pipe(
+    return this.graph.acquireClaims(id).pipe(
       Effect.map((release) =>
         release.pipe(
           Effect.catchCause((cause) =>
@@ -444,14 +536,30 @@ export class SessionHandle {
     );
   }
 
+  /** Drop this process's claim on one aggregate, so the next process resumes
+   *  it instead of reading a live owner: a run's when its lease ends, a
+   *  workflow checkpoint's when its invocation does. The claim belongs to the
+   *  invocation, not to the process, and this is its one release. */
+  releaseClaims(id: AggregateId): Effect.Effect<void, Error> {
+    return this.graph
+      .releaseClaims(id)
+      .pipe(
+        Effect.catchCause((cause) =>
+          Effect.fail(ensureError(Cause.squash(cause))),
+        ),
+      );
+  }
+
   /**
    * The host-facing name for "everything this session owes storage has
    * landed": a session's durable artifacts are the facts it publishes, so
    * this is exactly {@link settlePublications}. Hosts call it on shutdown and
-   * every run driver reaches it through {@link releaseRunLease}.
+   * every run driver reaches it through {@link releaseRunLease}. A run id
+   * narrows whose failure the caller is asking about, exactly as it does
+   * there.
    */
-  flushArtifacts(): Promise<void> {
-    return this.settlePublications();
+  flushArtifacts(runId?: RunId): Promise<void> {
+    return this.settlePublications(runId);
   }
 
   /**
@@ -461,10 +569,12 @@ export class SessionHandle {
   private readonly resultListeners = new Set<(event: ResultEvent) => void>();
 
   /**
-   * Subscribe to the `run.end` rows of this session's runs, as they commit.
-   * Hosts hold the session, so this is how they receive a run's outcome —
-   * per-run traces are created inside the run and are not reachable from the
-   * host otherwise.
+   * Subscribe to the `run.end` rows of this session's runs, each delivered
+   * once the view has folded it, so a listener that reads the run's view
+   * (its parent, its status) reads the state the row produced. Hosts hold
+   * the session, so this is how they receive a run's outcome — per-run
+   * traces are created inside the run and are not reachable from the host
+   * otherwise.
    */
   onResult(listener: (event: ResultEvent) => void): () => void {
     this.resultListeners.add(listener);
@@ -493,88 +603,276 @@ export class SessionHandle {
   publishRunEvent(runId: RunId, event: AgentEvent): void {
     if (this.disposed) return;
     if (event.type === 'stream.chunk') {
-      this.schedulePublication(
-        this.graph.publishText(runId, event.id, redactSecrets(event.text)),
+      const text = redactSecrets(event.text);
+      this.detachPublication(runId, () =>
+        this.graph.publishText(runId, event.id, text),
       );
       return;
     }
-    this.schedulePublication(
-      Effect.suspend(() => {
-        const draft = runEventDraft(
-          runId,
-          event.type === 'stream.end'
-            ? {
-                ...event,
-                finalText:
-                  event.finalText ?? this.graph.readText(runId, event.id),
-              }
-            : event,
-        );
-        return draft === null
-          ? Effect.void
-          : this.graph.publish([
-              isTranscriptEvent(draft)
-                ? { ...draft, transcriptDebug: isDebugModeEnabled() }
-                : draft,
-            ]);
-      }),
+    // The call fixes the row's place in the publication order; the job
+    // builds the draft when it runs.
+    this.detachPublication(runId, (append) =>
+      this.runEventPublication(runId, event, append),
     );
   }
 
   /**
-   * Publish one canonical status fact from the session's status machine. The
-   * runtime's status consumers hear it only after the event batch commits:
-   * the recorders' status ports and the run registry's waiters and
-   * child rosters cannot announce a rejected write.
+   * The awaited twin of {@link publishRunEvent}, for a caller whose own trace
+   * fact this is: the row takes its place in the publication order at this
+   * call like any other, and the refusal comes back typed, like
+   * {@link commit}'s, so the caller hears its own write fail instead of
+   * asking a drain that answers for every other fact the run has in flight.
    */
-  publishStatus(event: StatusEvent): void {
-    if (this.disposed) return;
-    this.schedulePublication(
-      Effect.suspend(() => {
-        const closure = this.statusClosureFacts(event.runId, event.phase);
-        return this.graph.publish([...closure, statusDraft(event)]);
-      }),
-    );
+  commitRunEvent(
+    runId: RunId,
+    event: AgentEvent,
+  ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
+    return this.graph
+      .exclusive((append) => this.runEventPublication(runId, event, append))
+      .pipe(Effect.asVoid);
   }
 
-  /** Final text facts committed immediately before a status closes its entries. */
-  statusClosureFacts(runId: RunId, phase: RunPhase): SessionEventDraft[] {
-    const closure: SessionEventDraft[] = [];
-    if (phase === RUN_PHASE.WAITING || isTerminalOutcomePhase(phase)) {
-      for (const entry of this.transcripts.get(runId)?.getRange(0) ?? []) {
-        if (!isRunningStreamingTextEntry(entry)) continue;
-        closure.push({
-          type: 'stream.end',
-          aggregateId: qualifyAggregateId('run', runId),
-          id: entry.id,
-          finalText: this.graph.readText(runId, entry.id) ?? entry.text,
-        });
-      }
+  /** The row one run-scoped trace event commits, on whichever publisher path
+   *  the caller took. The draft is built when the publisher runs the job,
+   *  after every chunk enqueued before it has reached the text source, so a
+   *  `stream.end` with no final text of its own closes on the complete
+   *  streamed text. */
+  private runEventPublication(
+    runId: RunId,
+    event: AgentEvent,
+    append: Append,
+  ): Effect.Effect<unknown, DatabaseNotOwner | DatabaseWriteFailed> {
+    const draft = runEventDraft(
+      runId,
+      event.type === 'stream.end'
+        ? {
+            ...event,
+            finalText: event.finalText ?? this.graph.readText(runId, event.id),
+          }
+        : event,
+    );
+    if (draft === null) return Effect.void;
+    return append([
+      isTranscriptEvent(draft)
+        ? { ...draft, transcriptDebug: isDebugModeEnabled() }
+        : draft,
+    ]);
+  }
+
+  /**
+   * The final-text facts that close every streaming row still open for
+   * `runId`: the loop commits them in the batch that parks the run (its
+   * `waiting` step), so a parked transcript never shows a permanently
+   * streaming block.
+   */
+  streamClosureFacts(
+    runId: RunId,
+  ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
+    const closure: Extract<RunLedgerDraft, { type: 'stream.end' }>[] = [];
+    for (const entry of this.transcripts.get(runId)?.toJSON() ?? []) {
+      if (!isRunningStreamingTextEntry(entry)) continue;
+      closure.push({
+        type: 'stream.end',
+        aggregateId: qualifyAggregateId('run', runId),
+        id: entry.id,
+        finalText: this.graph.readText(runId, entry.id) ?? entry.text,
+      });
     }
     return closure;
   }
 
   /**
-   * The one publisher of this session's facts (PRD 7.1). Durable subscribers
+   * The `request.decided` row that answers `requestId`, read from the plane's
+   * tail above `from` (one run model, 3.7): what a run parked on a request
+   * waits on, in process, whichever surface decides it. Fails when the plane
+   * closes before a decision lands, which a waiting caller reads as a
+   * cancellation.
+   */
+  decisionFor(
+    runId: RunId,
+    requestId: string,
+    from: CommitOrdinal,
+  ): Effect.Effect<Extract<SessionEvent, { type: 'request.decided' }>, Error> {
+    const aggregate = qualifyAggregateId('run', runId);
+    return this.events.all(from).pipe(
+      Stream.filter(
+        (event): event is Extract<SessionEvent, { type: 'request.decided' }> =>
+          event.type === 'request.decided' &&
+          event.aggregateId === aggregate &&
+          event.requestId === requestId,
+      ),
+      Stream.runHead,
+      Effect.flatMap(
+        Option.match({
+          onNone: () =>
+            Effect.fail(
+              new Error(
+                `The session closed before request ${requestId} was decided.`,
+              ),
+            ),
+          onSome: Effect.succeed,
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Ask a person: open the request on its run and wait for the decision. The
+   * one door for a request outside the loop's own batches (a command, an
+   * edit, a plan, a delegation, a question); a loop-owned request commits
+   * its row with its recovery binding through the ledger and waits with
+   * {@link decisionFor} directly. An interruption anywhere in the call (the
+   * run stopped, the session unwound) closes the request as cancelled, so a
+   * pending set is never left behind in the fold; a cancel for a request
+   * this call never opened writes nothing.
+   *
+   * This call is also the one place that knows whether the open committed,
+   * so it owns `onNeverCommitted`: whatever the caller staged for a request
+   * the fold never listed is released from here, and from nowhere else.
+   */
+  openRequest(
+    runId: RunId,
+    payload: PermissionPayload,
+    options: {
+      readonly thread?: string | null;
+      /**
+       * Cleanup for what the caller staged before the request opened, run
+       * once and uninterruptibly in the two cases that leave no row behind:
+       * the `request.opened` append was refused, or an interruption's
+       * cancellation found nothing open. An open that did commit always
+       * ends in a `request.decided` — the release every surface already
+       * follows — so a committed request is never released here, not even
+       * when its cancellation is itself refused and it stays pending.
+       */
+      readonly onNeverCommitted?: Effect.Effect<void>;
+    } = {},
+  ): Effect.Effect<RequestDecision, DatabaseNotOwner | DatabaseWriteFailed> {
+    const requestId = payload.data.requestId;
+    const aggregateId = qualifyAggregateId('run', runId);
+    const releaseUncommitted = Effect.uninterruptible(
+      options.onNeverCommitted ?? Effect.void,
+    );
+    return Effect.gen({ self: this }, function* () {
+      const from = this.now();
+      yield* this.commit([
+        {
+          type: 'request.opened',
+          aggregateId,
+          requestId,
+          payload: redactedForFact(payload),
+          thread: options.thread ?? null,
+        },
+      ]).pipe(Effect.tapError(() => releaseUncommitted));
+      return yield* this.decisionFor(runId, requestId, from).pipe(
+        Effect.map((row) => row.decision),
+        Effect.catch((cause) =>
+          Effect.sync((): RequestDecision => {
+            logger.warn(`Request ${requestId} closed without a decision`, {
+              data: cause,
+            });
+            return { action: 'cancel', cause: cause.message };
+          }),
+        ),
+      );
+    }).pipe(
+      Effect.onInterrupt(() =>
+        Effect.sync(() => {
+          if (this.disposed) return;
+          this.detachPublication(runId, (append) =>
+            this.decisionRow(
+              runId,
+              requestId,
+              { action: 'cancel', cause: 'Run interrupted.' },
+              append,
+            ).pipe(
+              // `false` is the interruption that landed before the open
+              // committed: no row exists, so this cancellation writes none
+              // either and the caller's staging has no decision coming.
+              Effect.tap((cancelled) =>
+                cancelled ? Effect.void : releaseUncommitted,
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Answer a request, if it is still open: the one writer of a decision (one
+   * run model, 3.7). The check reads the committed rows and the
+   * `request.decided` row lands as one job of the session's publisher, so
+   * two surfaces answering at once record exactly one decision — a run
+   * aggregate takes appends from its claim holder alone, and inside this
+   * process the publisher orders them. `false` is that lost race, or an id
+   * never opened: nothing was written and the live waiter keeps the
+   * decision that was.
+   */
+  decideRequest(
+    runId: RunId,
+    requestId: string,
+    decision: RequestDecision,
+  ): Effect.Effect<boolean, DatabaseNotOwner | DatabaseWriteFailed> {
+    return this.graph.exclusive((append) =>
+      this.decisionRow(runId, requestId, decision, append),
+    );
+  }
+
+  /** {@link decideRequest}'s job: the body the session's one publisher
+   *  runs, whether a surface awaits it or an interrupted
+   *  {@link openRequest} detaches it. */
+  private decisionRow(
+    runId: RunId,
+    requestId: string,
+    decision: RequestDecision,
+    append: Append,
+  ): Effect.Effect<boolean, DatabaseNotOwner | DatabaseWriteFailed> {
+    const aggregateId = qualifyAggregateId('run', runId);
+    return Effect.gen({ self: this }, function* () {
+      let open = false;
+      for (const row of yield* this.graph.aggregateRows(aggregateId)) {
+        if (row.type === 'request.opened' && row.requestId === requestId) {
+          open = true;
+        } else if (
+          row.type === 'request.decided' &&
+          row.requestId === requestId
+        ) {
+          open = false;
+        }
+      }
+      if (!open) return false;
+      yield* append([
+        { type: 'request.decided', aggregateId, requestId, decision },
+      ]);
+      return true;
+    });
+  }
+
+  /**
+   * Publish facts the session authors with no fiber to wait on (PRD 7.1):
+   * a registry's roster change, a policy snapshot. The batch takes its
+   * place in the graph's one publication order at this call and commits in
+   * that order; {@link settlePublications} waits for it. Durable subscribers
    * read committed facts from the table tail; publication never delivers
-   * payloads directly. A publish after teardown goes
-   * nowhere: the session's owners have unwound and a late fact has no reader.
+   * payloads directly. A publish after teardown goes nowhere: the session's
+   * owners have unwound and a late fact has no reader.
    */
   publish(events: readonly SessionEventDraft[]): void {
     if (this.disposed || events.length === 0) return;
-    this.schedulePublication(this.graph.publish(events));
+    this.detachPublication(draftedRun(events), (append) => append(events));
   }
 
-  /** Native metadata publication shares the existing ordered publisher. A
-   *  refused batch wrote nothing and comes back typed (D6 b): the caller
-   *  stops on it, it is never retried or converted here. */
+  /** Native metadata publication through the same ordered publisher,
+   *  awaited: returns once the view has folded the batch. A refused batch
+   *  wrote nothing and comes back typed (D6 b): the caller stops on it, it
+   *  is never retried or converted here. */
   commit(
     events: readonly SessionEventDraft[],
   ): Effect.Effect<
     readonly SessionEvent[],
     DatabaseNotOwner | DatabaseWriteFailed
   > {
-    return this.publicationGate.withPermit(this.graph.publish(events));
+    return this.graph.publish(events);
   }
 
   /** Registration owns birth claims as soon as append commits, before its
@@ -585,14 +883,13 @@ export class SessionHandle {
     readonly SessionEvent[],
     DatabaseNotOwner | DatabaseWriteFailed
   > {
-    return this.publicationGate.withPermit(
-      this.graph.publishRegistration(events),
-    );
+    return this.graph.publishRegistration(events);
   }
 
-  /** Read and append under the same local publisher permit. C5 excludes
-   *  foreign writers; losing the claim between the read and the append comes
-   *  back as `DatabaseNotOwner` with nothing written. */
+  /** Read and append as one job of the publisher, with no other write
+   *  between them. C5 excludes foreign writers; losing the claim between
+   *  the read and the append comes back as `DatabaseNotOwner` with nothing
+   *  written. */
   updateRecordFacts<A>(
     runId: RunId,
     update: (rows: readonly SessionEvent[]) => {
@@ -601,10 +898,10 @@ export class SessionHandle {
     },
   ): Effect.Effect<A, DatabaseNotOwner | DatabaseWriteFailed> {
     const graph = this.graph;
-    return this.publicationGate.withPermit(
+    return graph.exclusive((append) =>
       Effect.gen(function* () {
         const updateResult = update(yield* graph.runRecords(runId));
-        yield* graph.publish(updateResult.events);
+        yield* append(updateResult.events);
         return updateResult.value;
       }),
     );
@@ -662,76 +959,165 @@ export class SessionHandle {
     return this.graph.runChildren(runId);
   }
 
+  /** Every committed row of one aggregate, private rows included, for the
+   *  readers that fold a keyed record or a journal over the whole aggregate. */
+  readAggregate(id: AggregateId): Effect.Effect<readonly SessionEvent[]> {
+    return this.graph.aggregateRows(id);
+  }
+
   readRecordListing(): Effect.Effect<readonly SessionEvent[]> {
     return this.graph.recordListing();
   }
 
   /**
-   * Run one fire-and-forget publication under the session's ordered permit.
-   * A refused batch wrote nothing and is never retried here (D6 b, R7):
-   * `DatabaseNotOwner` says this process no longer holds the aggregate, and
-   * `DatabaseWriteFailed` says the transaction rolled back. The whole cause
-   * is logged as itself, and the Exit carries it to
-   * {@link settlePublications}, which throws it at the caller waiting for
-   * the session's facts to settle.
+   * Enqueue one publication on the graph's publisher, tagged with the run
+   * whose fact it carries. The publisher fixes the commit order; this
+   * remembers who the fact belongs to, so a drain can answer for one run's
+   * facts rather than for whatever the session happened to have queued. A
+   * refused batch wrote nothing and is never retried here (D6 b, R7): the
+   * cause is logged as itself and kept on the publication's Exit for the
+   * settle that answers for it, and the job itself returns quietly so the
+   * publisher's own settle stays a barrier rather than a second reporter.
    */
-  private schedulePublication(
-    program: Effect.Effect<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
+  private detachPublication(
+    runId: RunId | null,
+    job: (
+      append: Append,
+    ) => Effect.Effect<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
   ): void {
-    const publication = effectRuntime().runPromise(
-      this.publicationGate.withPermit(program).pipe(
+    let settle: (
+      exit: Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
+    ) => void = () => {};
+    const settled = new Promise<
+      Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>
+    >((resolve) => {
+      settle = resolve;
+    });
+    const publication: TrackedPublication = { runId, settled };
+    this.publications.add(publication);
+    this.graph.detach((append) =>
+      job(append).pipe(
         Effect.tapCause((cause) =>
           Effect.sync(() => {
             logger.error('Session publication failed', { data: cause });
           }).pipe(Effect.ignoreCause),
         ),
         Effect.exit,
+        Effect.tap((exit) => Effect.sync(() => settle(exit))),
+        Effect.asVoid,
       ),
     );
-    this.publications.add(publication);
-    void publication.finally(() => {
-      this.publications.delete(publication);
+    void settled.then((exit) => {
+      // A committed publication is done with; a failed one is a fact this run
+      // queued and lost, and the drain that decides its run's terminal row is
+      // what has to hear it. A fire-and-forget publication rejects on its own
+      // schedule, so dropping it here would leave a drain that arrives one
+      // tick later reading an empty set and writing a COMPLETED row with no
+      // `artifact-drain` marker. It stays tracked until a drain that answers
+      // for it reports it ({@link settlePublications}).
+      if (Exit.isSuccess(exit)) this.publications.delete(publication);
     });
   }
 
-  /** Await in-flight publications. Failures belong to those Exits, not a
-   *  session-wide leftover array a later settler would drain. */
-  async settlePublications(): Promise<void> {
-    const exits = await Promise.all([...this.publications]);
+  /** Await every detached publication enqueued so far and the view's fold
+   *  of what they committed, then report the failures nobody has heard yet.
+   *  A refused batch wrote nothing and is never retried (D6 b, R7):
+   *  `DatabaseNotOwner` says this process no longer holds the aggregate and
+   *  `DatabaseWriteFailed` says the transaction rolled back. Failures belong
+   *  to those Exits, not a session-wide leftover array a later settler would
+   *  drain: a failed publication stays in the tracked set as its own Exit
+   *  until the drain that answers for it takes it out.
+   *
+   *  Every publication settles whoever asks, but a run id narrows whose
+   *  rollback the caller hears: that run's own facts only — never a sibling
+   *  run's, and never a session-scoped fact (an inquiry thread update, say),
+   *  which no run's terminal outcome may absorb. A run's terminal outcome is
+   *  decided by this settle, and another owner's lost fact is that owner's
+   *  outcome, not this one's. Session-scoped failures are heard by a
+   *  session-wide settle (no run id).
+   *
+   *  A session-wide settle is the session's own drain, not a drain of every
+   *  run at once: it awaits every publication — callers queue an operation and
+   *  wait on it as a barrier (`createChildRun`, a workflow checkpoint's
+   *  journal write) — and reports the session-scoped failures only. A run's
+   *  lost fact is that run's outcome to carry, and a barrier that reported it
+   *  would fail a child creation, or a journal entry that committed, over
+   *  another run's rollback. Whoever hears a failure is who clears it, so a
+   *  run-tagged one stays tracked until that run's own drain takes it: that
+   *  drain is what stamps the `artifact-drain` marker on the row it decides,
+   *  and `settleLiveSessionRuns` settles the session before it releases each
+   *  live run's lease ({@link releaseRunLease}, the terminal path every run
+   *  driver takes), which would otherwise read an empty set and write an
+   *  unmarked CANCELLED row that recovery would treat as repeatable.
+   *
+   *  `consume: false` observes instead of answering: the failures are
+   *  reported and left tracked for the drain that decides the run's terminal
+   *  row. That is what a mid-run barrier takes (the loop's park, `toolUse`),
+   *  since ending the run over a lost fact is the loop's own failure path and
+   *  the row it lands on still has to say `artifact-drain` rather than
+   *  `unexpected`. */
+  async settlePublications(
+    runId?: RunId,
+    options: { readonly consume?: boolean } = {},
+  ): Promise<void> {
+    await this.runtime.runPromise(this.graph.settle);
+    const settled = await Promise.all(
+      [...this.publications].map(async (publication) => ({
+        publication,
+        exit: await publication.settled,
+      })),
+    );
+    const reported = settled.flatMap(({ publication, exit }) =>
+      Exit.isFailure(exit) && publication.runId === (runId ?? null)
+        ? [{ publication, error: Cause.squash(exit.cause) }]
+        : [],
+    );
+    if (options.consume !== false)
+      for (const { publication } of reported)
+        this.publications.delete(publication);
     throwAggregated(
-      exits.flatMap((exit) =>
-        Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
-      ),
+      reported.map(({ error }) => error),
       'Session publication failed',
     );
   }
 
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
-    return this.transcripts.acceptCommitted(event).pipe(
-      Effect.andThen(
-        Effect.sync(() => {
-          // Host notifications and runtime waiters belong to the authoring process.
-          const { self } = SubscriptionRef.getUnsafe(this.graph.local);
-          if (event.ownerId == null || !self.includes(event.ownerId)) return;
+    return this.transcripts.acceptCommitted(event);
+  }
 
-          const target = aggregateTarget(event.aggregateId);
-          if (target.kind !== 'run') return;
-          if (event.type === 'run.end') {
-            for (const listener of [...this.resultListeners]) {
-              try {
-                listener({ ...event, runId: target.id });
-              } catch (error) {
-                logger.warn('Session result listener threw', { data: error });
-              }
-            }
-          }
-
-          if (event.type !== 'status' && event.type !== 'run.end') return;
-          this.runs.handleStatus(target.id);
-        }),
-      ),
-    );
+  /**
+   * One row of the fold-gated tail ({@link folded}, PRD 7.2): the registry's
+   * phase notification and the result listeners, which is why neither is on
+   * the raw tail above. A woken waiter, a refreshed child roster, and a
+   * result listener all read the run's view synchronously, so a notification
+   * ahead of the fold would hand them the state the row just replaced.
+   */
+  receiveFoldedEvent(event: SessionEvent): void {
+    // Runtime waiters and host notifications belong to the authoring process.
+    const { self } = SubscriptionRef.getUnsafe(this.graph.local);
+    if (event.ownerId == null || !self.includes(event.ownerId)) return;
+    const target = aggregateTarget(event.aggregateId);
+    if (target.kind !== 'run') return;
+    if (event.type === 'run.end') {
+      for (const listener of [...this.resultListeners]) {
+        try {
+          listener({ ...event, runId: target.id });
+        } catch (error) {
+          logger.warn('Session result listener threw', { data: error });
+        }
+      }
+    }
+    // The rows that move a run's phase (one run model, 3.3): every
+    // activation, the park and the step that leaves it, the end.
+    const phaseMoved =
+      event.type === 'run.activate' ||
+      event.type === 'run.end' ||
+      (event.type === 'flow.step' &&
+        (event.payload.step === 'waiting' ||
+          event.payload.step === 'turn.begin'));
+    if (!phaseMoved) return;
+    this.runs.handleStatus(target.id);
   }
 
   /**
@@ -770,13 +1156,28 @@ export class SessionHandle {
     );
   }
 
-  /** The status machine's hold on a stream this process cannot read, or its
-   *  release: local truth the fold reads as `readOnly` (PRD 5.1). */
+  /**
+   * Record why this process cannot act on a run (another live TeXRA process
+   * holds it, its state could not be read): local truth the fold reads as
+   * `readOnly` with the detail as `statusDetail` (PRD 5.1), never a row.
+   */
+  markUnreadable(runId: RunId, detail: string): void {
+    this.setUnreadable(runId, detail);
+  }
+
+  /** Drop a run's unreadable detail: a read that found it free disproved it. */
+  clearUnreadable(runId: RunId): void {
+    this.setUnreadable(runId, null);
+  }
+
   private setUnreadable(runId: RunId, detail: string | null): void {
     if (this.disposed) return;
-    effectRuntime().runFork(
+    this.runtime.runFork(
       SubscriptionRef.update(this.graph.local, (local) => {
         const rest = local.unreadable.filter((u) => u.runId !== runId);
+        if (detail === null && rest.length === local.unreadable.length) {
+          return local;
+        }
         return {
           ...local,
           unreadable: detail === null ? rest : [...rest, { runId, detail }],
@@ -787,19 +1188,21 @@ export class SessionHandle {
 
   /**
    * Unwind this session ({@link unwind}) and release it from its owner,
-   * which frees the root's graph after it. A teardown failure surfaces to
-   * the caller and still releases the session. Settles nothing: a host that
+   * which frees the root's graph after it: the returned Effect settles once
+   * the root's entry has unwound. A teardown failure surfaces to the caller
+   * as a defect and still releases the session. Settles no runs: a host that
    * needs the session's live runs ended first closes through
    * `closeSession`, which ends here. Idempotent, so a handle released once
    * never reaches the session its owner built over the same root later.
    */
-  dispose(): void {
-    if (this.disposed) return;
-    try {
-      this.unwind();
-    } finally {
-      this.graph.close();
-    }
+  dispose(): Effect.Effect<void> {
+    return Effect.suspend(() =>
+      this.disposed
+        ? Effect.void
+        : Effect.sync(() => this.unwind()).pipe(
+            Effect.ensuring(this.graph.close()),
+          ),
+    );
   }
 
   /**
@@ -870,36 +1273,31 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
             return tracked ? yield* session.transcripts.readEntries(runId) : [];
           }),
         );
-        yield* session.releaseRunLease(
-          runId,
+        // The run's closure facts, queued and settled under the same lease
+        // *before* the terminal row: that row is the one place their loss is
+        // reported (the `artifact-drain` marker), so a settle after it could
+        // only discover a rollback the record can no longer carry. Reports
+        // the loss rather than failing on it — the row carries it, and the
+        // caller hears it once the row has landed.
+        const closeTranscriptGroups = (
+          outcome: RunOutcome,
+        ): Effect.Effect<Error | undefined> =>
           Effect.gen(function* () {
-            const finalization = yield* finalizeRun(session, {
-              runId,
-              outcome: RUN_OUTCOME.CANCELLED,
-              keepExistingOutcome: true,
-            });
-            if (!finalization.ok) {
-              throw new Error(
-                `Failed to persist the CANCELLED outcome for run ${runId}`,
-                { cause: finalization.error },
-              );
-            }
             if (signal.aborted) {
               logger.warn(
-                `Host exit deadline passed after run ${runId}'s outcome was written; its transcript groups stay open`,
+                `Host exit deadline passed before run ${runId}'s transcript groups could be closed; they stay open`,
               );
-              return;
+              return undefined;
             }
             if (!tracked) {
               logger.warn(
                 `Run ${runId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
               );
-              return;
+              return undefined;
             }
-            // A failed read must still pass through the owner's release
-            // choreography after recording the terminal outcome.
-            if (Exit.isFailure(transcript))
-              throw Cause.squash(transcript.cause);
+            // A failed read leaves nothing to close; it is reported after the
+            // terminal row, through the owner's release choreography.
+            if (Exit.isFailure(transcript)) return undefined;
             // These are ordinary canonical facts. The lease owner settles their
             // publication before unlinking the claim, so replay sees the same
             // closure as the resident transcript.
@@ -908,7 +1306,7 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
                 session.publishRunEvent(runId, {
                   type: 'stage.end',
                   id: entry.id,
-                  status: finalization.outcome,
+                  status: outcome,
                 });
               } else if (isRunningStreamingTextEntry(entry)) {
                 session.publishRunEvent(runId, {
@@ -926,6 +1324,58 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
                   });
               }
             }
+            const settled = yield* Effect.exit(
+              Effect.tryPromise({
+                try: () => session.settlePublications(runId),
+                catch: ensureError,
+              }),
+            );
+            return Exit.isFailure(settled)
+              ? ensureError(Cause.squash(settled.cause))
+              : undefined;
+          });
+        yield* session.releaseRunLease(runId, (drainFailure) =>
+          Effect.gen(function* () {
+            // The outcome the closure facts carry is the one this row is
+            // about to state: the run's own driver's, when it already wrote
+            // one, and CANCELLED otherwise — the same choice
+            // `keepExistingOutcome` makes below.
+            const closureFailure = yield* closeTranscriptGroups(
+              session.runView(runId)?.durableOutcome ?? RUN_OUTCOME.CANCELLED,
+            );
+            // A drain that rejected rolled back facts this run had queued, and
+            // the row written here is what every later reader has: the same
+            // `artifact-drain` marker `finalizeRunTerminal` stamps says the
+            // run's queued facts are gone rather than that it was merely
+            // interrupted. The closure facts settled just above are those
+            // facts too, so their loss marks this row the same way. The
+            // failures themselves are reported once the row has landed.
+            const lostFacts = drainFailure ?? closureFailure;
+            const finalization = yield* finalizeRun(session, {
+              runId,
+              outcome: RUN_OUTCOME.CANCELLED,
+              keepExistingOutcome: true,
+              ...(lostFacts === undefined
+                ? {}
+                : {
+                    error: {
+                      kind: 'artifact-drain' as const,
+                      message: toErrorMessage(lostFacts),
+                    },
+                  }),
+            });
+            if (!finalization.ok) {
+              throw new Error(
+                `Failed to persist the CANCELLED outcome for run ${runId}`,
+                { cause: finalization.error },
+              );
+            }
+            // A failed read or a rolled-back closure must still pass through
+            // the owner's release choreography after recording the terminal
+            // outcome.
+            if (Exit.isFailure(transcript))
+              throw Cause.squash(transcript.cause);
+            if (closureFailure !== undefined) throw closureFailure;
           }),
         );
       });
@@ -950,15 +1400,18 @@ let defaultSessionFallbackWarned = false;
  * Open the process-default session, the session of the process roots, after
  * its transcript store is valid. Its owner holds it, as it holds every
  * session: {@link defaultSession} reads it from there on each call, so no
- * second reference to it exists to go stale when the root is closed.
+ * second reference to it exists to go stale when the root is closed. A
+ * second initialization while one is open is a lifecycle error and dies.
  */
 export function initializeDefaultSession(
   init: SessionHandleInit,
-): SessionHandle {
-  if (defaultRootSession()) {
-    throw new Error('The default session has already been initialized.');
-  }
-  return openSession(init);
+): Effect.Effect<SessionHandle> {
+  return Effect.suspend(() => {
+    if (defaultRootSession()) {
+      throw new Error('The default session has already been initialized.');
+    }
+    return openSessionEffect(init);
+  });
 }
 
 /** Inspect whether the host has installed its process-default session. */
@@ -966,9 +1419,10 @@ export function tryDefaultSession(): SessionHandle | undefined {
   return defaultRootSession();
 }
 
-/** Dispose the process-default session during host teardown. */
-export function teardownDefaultSession(): void {
-  defaultRootSession()?.dispose();
+/** Dispose the process-default session during host teardown; nothing to
+ *  do when none is open. */
+export function teardownDefaultSession(): Effect.Effect<void> {
+  return Effect.suspend(() => defaultRootSession()?.dispose() ?? Effect.void);
 }
 
 /**

@@ -7,53 +7,42 @@ export const GOAL_FEATURE_FLAG_KEY = 'texra.goal.enabled' as const;
 /**
  * A goal is a live pursuit: it exists only while the autonomous loop is running
  * (`active`) or waiting for the user (`paused`). Finishing or abandoning one
- * drops the record entirely rather than parking it in a terminal state.
+ * publishes an inactive state rather than parking it in a terminal state.
  */
 const GoalStatusSchema = z.enum(['active', 'paused']);
-export type GoalStatus = z.infer<typeof GoalStatusSchema>;
 
 /**
- * True when a record exists for the stream. With only `active`/`paused` as
- * persisted states, any record is an in-flight pursuit; complete/abandon forget
- * the record instead of transitioning it.
+ * The pursuit itself, as the run's latest `goalStateChanged` row states it:
+ * the row carries the whole goal, so the fold's `RunView.goal` is the goal
+ * and no store holds a second copy.
  */
-export function isGoalInFlight(
-  goal: { status: GoalStatus } | null | undefined,
-): boolean {
-  return goal != null;
-}
+const ActiveGoalSchema = z.strictObject({
+  goalId: z.string().min(1),
+  status: GoalStatusSchema,
+  objective: z.string().min(1),
+  /** When the pursuit started; preserved across pause and retarget. */
+  startedAt: z.iso.datetime(),
+});
 
 /**
- * Canonical goal-state shape: status/objective only exist while a goal is
- * active. This is the one definition of that union — `runState.ts` and the
- * progress-view projection (`projectionShape.ts`) parse it directly, so the
- * shape has exactly one place to drift. The progress-view wire flattens it
- * per message arm (see `outbound.ts`'s GOAL_ACTIVE_UPDATED).
+ * Canonical goal-state shape: the goal only exists while one is in flight.
+ * This is the one definition of that union — the session fold parks it on
+ * `RunView.goal` and every renderer reads it from there.
  */
 export const GoalStateSchema = z.discriminatedUnion('active', [
   z.strictObject({ active: z.literal(false) }),
-  z.strictObject({
-    active: z.literal(true),
-    status: GoalStatusSchema,
-    objective: z.string(),
-  }),
+  ActiveGoalSchema.extend({ active: z.literal(true) }),
 ]);
 export type GoalState = z.infer<typeof GoalStateSchema>;
 
-export const GoalSchema = z.object({
-  goalId: z.string().min(1),
-  runId: RunIdSchema,
-  objective: z.string().min(1),
-  status: GoalStatusSchema,
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-});
+/** One row of a cross-run goal list: an in-flight goal and the run it drives. */
+export const GoalSchema = ActiveGoalSchema.extend({ runId: RunIdSchema });
 export type Goal = z.infer<typeof GoalSchema>;
 
 /**
  * Wall-clock elapsed time since the goal was started.
  * Computed live so we don't need to accumulate ticks.
  */
-export function goalElapsedMs(goal: { createdAt: string }): number {
-  return Math.max(0, Date.now() - new Date(goal.createdAt).getTime());
+export function goalElapsedMs(goal: { startedAt: string }): number {
+  return Math.max(0, Date.now() - new Date(goal.startedAt).getTime());
 }

@@ -9,10 +9,11 @@ import { platform } from '@platform/platform';
 import type { RunId } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { listRunGeneratedFiles } from '@tools/executions/runGeneratedFiles';
 
 const EXECUTION_ID = 'generated-history-test' as RunId;
-const STORAGE_PATH = path.join(path.sep, 'storage');
+const STORAGE_PATH = fakePath('storage');
 const RUN_PATH = path.join(STORAGE_PATH, 'executions', EXECUTION_ID);
 
 function fsError(code: string, message: string): Error {
@@ -37,19 +38,16 @@ describe('listRunGeneratedFiles', () => {
       [path.join(RUN_PATH, 'vanished.tex')]: 'gone',
       [path.join(RUN_PATH, 'blocked.tex')]: 'blocked',
       [path.join(RUN_PATH, 'unreadable.tex')]: 'unreadable',
-      // A KV-*named* directory is internal metadata all the way down: the walk
-      // must skip it before recursing, or its children leak into the listing.
-      [path.join(RUN_PATH, 'turn-state.json', 'buried.tex')]: 'buried',
     },
   });
   let session: SessionHandle;
-  beforeEach(() => {
-    session = createProcessSession();
+  beforeEach(async () => {
+    session = await Effect.runPromise(createProcessSession());
   });
   afterEach(() => vi.restoreAllMocks());
 
   it.effect(
-    'lists in path order, skipping KV-named subtrees and concurrent disappearance',
+    'lists in path order, skipping entries that disappear concurrently',
     () =>
       Effect.gen(function* () {
         failStatFor(
@@ -59,7 +57,8 @@ describe('listRunGeneratedFiles', () => {
 
         expect(yield* listRunGeneratedFiles(EXECUTION_ID, session)).toEqual([
           { path: 'blocked.tex', size: 7, isDirectory: false },
-          { path: 'sub', size: 0, isDirectory: true },
+          // A real directory's size is the filesystem's own bookkeeping.
+          { path: 'sub', size: expect.any(Number), isDirectory: true },
           { path: 'sub/nested.tex', size: 6, isDirectory: false },
           { path: 'unreadable.tex', size: 10, isDirectory: false },
           { path: 'z.tex', size: 3, isDirectory: false },

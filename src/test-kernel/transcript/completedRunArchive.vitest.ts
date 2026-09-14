@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const launchMocks = vi.hoisted(() => ({
   acquireResumedRunLease: vi.fn(),
   buildVars: vi.fn(),
-  createHandler: vi.fn(),
   loadAgent: vi.fn(),
   resolveAgent: vi.fn(),
 }));
@@ -20,11 +19,6 @@ vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/agentLoad')>()),
   loadAgentSettingAndPrompts: launchMocks.loadAgent,
 }));
-vi.mock('@agent/runtime/ModelFactory', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime/ModelFactory')>()),
-  createModelHandler: launchMocks.createHandler,
-  createModelHandlerForCompatibilityKey: launchMocks.createHandler,
-}));
 vi.mock('@agent/prompt/userVars', async (importActual) => ({
   ...(await importActual<typeof import('@agent/prompt/userVars')>()),
   buildUserVars: launchMocks.buildVars,
@@ -35,21 +29,26 @@ vi.mock('@agent/storage/runLease', async (importActual) => ({
   assertOwnedRunLease: vi.fn(),
 }));
 
-import { clearStoreCache, getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/loadChatExportInput';
-import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
+import {
+  initializeDefaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import { closeSession } from '@agent/runtime/sessionGraph';
 import {
   readCliHistoryDetails,
   formatCliHistoryDetailsText,
   cliHistoryDetailNdjsonRecord,
 } from '@cli/runtime/history';
 import { createHostRunActions } from '@controllers/session/hostRunActions';
+import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -61,7 +60,6 @@ import {
   FlowSnapshotPayloadSchema,
 } from '@shared/schemas';
 import type { RunId, TodoItem } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   createTempDirPlatform,
@@ -77,6 +75,7 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
@@ -112,6 +111,20 @@ const readCompletedRunConversation = (id: RunId) =>
 const loadChatExportInput = (id: RunId) =>
   Effect.runPromise(loadChatExportInputEffect(id, taskSession));
 
+function closeTestSession(session: SessionHandle): Effect.Effect<void, Error> {
+  return closeSession(session.roots.storage).pipe(
+    Effect.flatMap((report) =>
+      report.settled && report.abandoned.length === 0
+        ? Effect.void
+        : Effect.fail(
+            new Error(
+              `Test session did not close: ${report.abandoned.join(', ')}`,
+            ),
+          ),
+    ),
+  );
+}
+
 /** Persist completed tasks as committed run events. */
 async function seedTasks(runId: RunId, todos: TodoItem[]): Promise<void> {
   publishTestRunStart(taskSession, runId);
@@ -144,20 +157,21 @@ function logRow(
   };
 }
 
-/** Seed recorded transcript entries through the canonical historical-entry event. */
+/** Seed recorded transcript rows through the durable log fact. */
 async function appendRows(
   runId: RunId,
   rows: readonly LogRow[],
 ): Promise<void> {
   if (!taskSession.transcripts.has(runId))
     publishTestRunStart(taskSession, runId);
-  const entries = new StreamLog();
-  for (const row of rows) entries.appendSettled(row);
   taskSession.publish(
-    entries.toJSON().map((entry) => ({
-      type: 'transcript.entry',
+    rows.map((row) => ({
+      type: 'log' as const,
       aggregateId: aggregateId('run', runId),
-      entry,
+      level: row.level,
+      message: row.text ?? '',
+      messageType: row.messageType,
+      data: row.data,
     })),
   );
   await taskSession.settlePublications();
@@ -218,10 +232,9 @@ async function writeArchiveFixture(runId: RunId): Promise<void> {
 describe('completedRunArchive facade', () => {
   setupPlatform(() => createTempDirPlatform('texra-archive-', tempDirs));
 
-  beforeEach(() => {
-    clearStoreCache();
+  beforeEach(async () => {
     vi.resetAllMocks();
-    taskSession = createProcessSession();
+    taskSession = await Effect.runPromise(createProcessSession());
   });
 
   afterEach(async () => {
@@ -229,10 +242,12 @@ describe('completedRunArchive facade', () => {
   });
 
   it('keeps private metadata exact while public events and exports redact its secrets', async () => {
-    taskSession.dispose();
-    taskSession = createProcessSession({
-      transcriptMode: { kind: 'persistent' },
-    });
+    await Effect.runPromise(closeTestSession(taskSession));
+    taskSession = await Effect.runPromise(
+      createProcessSession({
+        transcriptMode: { kind: 'persistent' },
+      }),
+    );
     const runId = 'abc654abc654' as RunId;
     const secret = 'sk-private-export-key-1234567890';
     const content = `  retained text ${secret}  `;
@@ -278,9 +293,7 @@ describe('completedRunArchive facade', () => {
         promptForApiKey: async () => undefined,
         showInfo: vi.fn(),
         showWarning: vi.fn(),
-      }).pipe(
-        Effect.provide(Secrets.layer(() => installedHost().platform.secrets)),
-      ),
+      }).pipe(Effect.provide(Secrets.layer(() => installedHost().secrets))),
     );
     await Effect.runPromise(actions.runNew(runId));
     expect(runAgentRequest).toHaveBeenCalledWith({ config });
@@ -288,9 +301,9 @@ describe('completedRunArchive facade', () => {
     expect(trace.status).toBe('ok');
     if (trace.status !== 'ok') throw new Error('Expected trace export');
     const exportInput = await loadChatExportInput(runId);
-    const { secrets, globalState } = installedHost().platform;
     const details = await readCliHistoryDetails(
-      { secrets, globalState },
+      effectRuntime(),
+      Effect.succeed(taskSession),
       runId,
     );
     expect(details).not.toBeNull();
@@ -320,69 +333,85 @@ describe('completedRunArchive facade', () => {
     }
   });
 
-  it('keeps concurrent exports of the same run isolated by session roots', async () => {
-    const runId = 'abc456abc456' as RunId;
-    const papers = ['first-paper', 'second-paper'].map((label) => ({
-      label,
-      session: createTestSession(),
-    }));
-    try {
-      await Promise.all(
-        papers.map(async ({ session, label }) => {
-          publishTestRunStart(session, runId);
-          await session.settlePublications();
-          await Effect.runPromise(
-            getRunRecords(session, runId).writeRunRecord({
-              ...runConfig(label),
-              instruction: label,
+  // it.live: the release at the end of this test closes both sessions through
+  // `closeSession`, whose settlement budget is
+  // `Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS)`. With no active runs that arm
+  // is never awaited today, so the happy path would also pass on the test
+  // clock. The live clock is kept for the regression case: under TestClock
+  // nothing advances that sleep, so a session that stopped settling could
+  // never reach the `Test session did not close` failure and would surface as
+  // a suite timeout instead of a named assertion.
+  effectIt.live(
+    'keeps concurrent exports of the same run isolated by session roots',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'abc456abc456' as RunId;
+        // Both sessions close on every exit of this test, interruption
+        // included; a close failure is the defect the old `finally` threw.
+        const papers = yield* Effect.acquireRelease(
+          Effect.sync(() =>
+            ['first-paper', 'second-paper'].map((label) => ({
+              label,
+              session: createTestSession(),
+            })),
+          ),
+          (open) =>
+            Effect.forEach(open, ({ session }) => closeTestSession(session), {
+              concurrency: 'unbounded',
+              discard: true,
+            }).pipe(Effect.orDie),
+        );
+        yield* Effect.forEach(
+          papers,
+          ({ session, label }) =>
+            Effect.gen(function* () {
+              publishTestRunStart(session, runId);
+              yield* Effect.promise(() => session.settlePublications());
+              yield* getRunRecords(session, runId).writeRunRecord({
+                ...runConfig(label),
+                instruction: label,
+              });
+              yield* session.commit([
+                {
+                  type: 'run.description',
+                  aggregateId: aggregateId('run', runId),
+                  description: label,
+                },
+              ]);
+              session.publish([
+                {
+                  type: 'response.finalized',
+                  aggregateId: aggregateId('run', runId),
+                  text: `Proof for ${label}.`,
+                },
+              ]);
+              yield* Effect.promise(() => session.settlePublications());
             }),
-          );
-          await Effect.runPromise(
-            session.commit([
-              {
-                type: 'run.description',
-                aggregateId: aggregateId('run', runId),
-                description: label,
-              },
-            ]),
-          );
-          session.publish([
-            {
-              type: 'response.finalized',
-              aggregateId: aggregateId('run', runId),
-              text: `Proof for ${label}.`,
-            },
-          ]);
-          await session.settlePublications();
-        }),
-      );
-      const exports = await Effect.runPromise(
-        Effect.all(
+          { concurrency: 'unbounded', discard: true },
+        );
+        const exports = yield* Effect.all(
           papers.map(({ session }) =>
             loadChatExportInputEffect(runId, session),
           ),
           { concurrency: 2 },
-        ),
-      );
-      expect(
-        exports.map((result) => ({
-          description: result.run?.description,
-          agent: result.config?.agent,
-          instruction: result.exportInput?.config.instruction,
-          nodes: result.exportInput?.nodes,
-        })),
-      ).toEqual(
-        papers.map(({ label }) => ({
-          description: label,
-          agent: label,
-          instruction: label,
-          nodes: [{ kind: 'assistant-text', text: `Proof for ${label}.` }],
-        })),
-      );
-    } finally {
-      for (const { session } of papers) session.dispose();
-    }
-  });
+        );
+        expect(
+          exports.map((result) => ({
+            description: result.run?.description,
+            agent: result.config?.agent,
+            instruction: result.exportInput?.config.instruction,
+            nodes: result.exportInput?.nodes,
+          })),
+        ).toEqual(
+          papers.map(({ label }) => ({
+            description: label,
+            agent: label,
+            instruction: label,
+            nodes: [{ kind: 'assistant-text', text: `Proof for ${label}.` }],
+          })),
+        );
+      }),
+  );
 
   it('serves conversation and export from transcripts and tasks from committed events', async () => {
     const runId = 'abc123abc123' as RunId;
@@ -450,8 +479,8 @@ describe('completedRunArchive facade', () => {
         const config = runConfig('orchestrator');
 
         yield* Effect.promise(() => stampRun(runId));
-        taskSession.dispose();
-        const session = initializeDefaultSession({});
+        yield* closeTestSession(taskSession);
+        const session = yield* initializeDefaultSession({});
         taskSession = session;
         publishTestRunStart(session, runId);
         yield* Effect.promise(() => session.settlePublications());
@@ -487,19 +516,12 @@ describe('completedRunArchive facade', () => {
           leaseModule.acquireResumedRunLease,
         );
         launchMocks.resolveAgent.mockReturnValue({
-          entry: { path: '/agents/orchestrator.yaml' },
+          path: '/agents/orchestrator.yaml',
         });
         launchMocks.loadAgent.mockResolvedValue([
           { agentCategory: AgentCategory.ToolUse },
           {},
         ]);
-        launchMocks.createHandler.mockResolvedValue({
-          capabilities: { supportsVision: false, supportsNativeAudio: false },
-          config: { provider: 'openai' },
-          setAgentCategory: vi.fn(),
-          setLogger: vi.fn(),
-          dispose: vi.fn(),
-        });
         launchMocks.buildVars.mockRejectedValueOnce(launchFailure);
 
         // The one fact a resume reads: the run aggregate's latest
@@ -516,9 +538,10 @@ describe('completedRunArchive facade', () => {
                 turn: 0,
                 continuationIndex: 0,
                 modelId: config.model,
-                modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+                modelCompatibilityKey: 'OpenAIResponse',
                 lastError: null,
                 pendingRetry: null,
+                declinedRoutes: [],
               },
               references: { pendingIntents: [], pendingResponse: null },
               state: { shouldSkipCycle: false, stateSlices: null },
@@ -604,11 +627,17 @@ describe('completedRunArchive facade', () => {
           ],
         });
 
-        const endpoint = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
+        const toolLayer = nativeToolTestLayer({
+          run: { session: taskSession, runId, toolPolicy: {} },
+          inScope: (operation) =>
+            runWithWorkspaceRoots(taskSession.roots, operation),
+        });
+
+        const endpoint = yield* new ExecutionsTool()
+          .call({
             path: `/executions/${runId}/conversation`,
-          }),
-        );
+          })
+          .pipe(Effect.provide(toolLayer));
         expect(endpoint.status).toBe('executed');
         expect(endpoint.output).toContain('Conversation (4 messages)');
         expect(endpoint.output).toContain('Prove the first lemma.');
@@ -616,20 +645,20 @@ describe('completedRunArchive facade', () => {
         expect(endpoint.output).toContain('Now prove the second lemma.');
         expect(endpoint.output).toContain('Second proof.');
 
-        const firstPage = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
+        const firstPage = yield* new ExecutionsTool()
+          .call({
             path: `/executions/${runId}/conversation`,
             offset: 0,
             limit: 2,
-          }),
-        );
-        const secondPage = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
+          })
+          .pipe(Effect.provide(toolLayer));
+        const secondPage = yield* new ExecutionsTool()
+          .call({
             path: `/executions/${runId}/conversation`,
             offset: 2,
             limit: 2,
-          }),
-        );
+          })
+          .pipe(Effect.provide(toolLayer));
         expect(firstPage.output).toContain('Source: streamLog');
         expect(firstPage.output).toContain('Returned message interval: [0, 2)');
         expect(firstPage.output).toContain('Next offset: 2');
@@ -655,12 +684,12 @@ describe('completedRunArchive facade', () => {
           ).toHaveLength(2);
         }
 
-        const lineRange = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
+        const lineRange = yield* new ExecutionsTool()
+          .call({
             path: `/executions/${runId}/conversation`,
             view_range: [1, 10],
-          }),
-        );
+          })
+          .pipe(Effect.provide(toolLayer));
         expect(lineRange.status).toBe('error');
         expect(lineRange.error).toContain(
           'Conversation pagination is message-based. Use offset and limit',
@@ -739,26 +768,42 @@ describe('completedRunArchive facade', () => {
     ]);
   });
 
-  it('reports a diagnostic-only transcript as no conversation', async () => {
-    const runId = '0999cb0999cb' as RunId;
+  effectIt.live('reports a diagnostic-only transcript as no conversation', () =>
+    Effect.gen(function* () {
+      const runId = '0999cb0999cb' as RunId;
 
-    await stampRun(runId);
+      yield* Effect.promise(() => stampRun(runId));
 
-    await appendRows(runId, [
-      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
-    ]);
+      yield* Effect.promise(() =>
+        appendRows(runId, [
+          logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
+        ]),
+      );
 
-    const result = await readCompletedRunConversation(runId);
-    expect(result).toEqual({
-      conversation: null,
-      source: 'none',
-    });
-    expect(hasCompletedRunConversationEvidence(result)).toBe(false);
+      const result = yield* Effect.promise(() =>
+        readCompletedRunConversation(runId),
+      );
+      expect(result).toEqual({
+        conversation: null,
+        source: 'none',
+      });
+      expect(hasCompletedRunConversationEvidence(result)).toBe(false);
 
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${runId}/conversation`,
-    });
-    expect(endpoint.status).toBe('executed');
-    expect(endpoint.output).toContain('Conversation (0 messages)');
-  });
+      const endpoint = yield* new ExecutionsTool()
+        .call({
+          path: `/executions/${runId}/conversation`,
+        })
+        .pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              run: { session: taskSession, runId, toolPolicy: {} },
+              inScope: (operation) =>
+                runWithWorkspaceRoots(taskSession.roots, operation),
+            }),
+          ),
+        );
+      expect(endpoint.status).toBe('executed');
+      expect(endpoint.output).toContain('Conversation (0 messages)');
+    }),
+  );
 });

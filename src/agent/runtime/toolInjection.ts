@@ -1,10 +1,10 @@
 import { Context, Layer } from 'effect';
 
-import type { AppState } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
+import type { ConfigProvider } from '@platform/interfaces';
+import type { ProcessServices } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
-// Deliberately not the `@tools/goal` barrel: it also loads goalStore, whose
+// Deliberately not the `@tools/goal` barrel: it also loads goalRows, whose
 // session graph must not sit behind tool resolution (see the barrel's note).
 import { isGoalEnabled } from '@tools/goal/goalFeatureFlag';
 import { readPlatformSetting } from '@utils/config/platformSettings';
@@ -20,7 +20,9 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
  */
 export interface ConditionalToolInjection {
   readonly toolName: RegisteredToolName;
-  shouldInject(): boolean;
+  /** Whether the run resolving its tools, in the workspace `config` is the
+   *  configuration of, gets this tool. */
+  shouldInject(config: ConfigProvider): boolean;
 }
 
 /**
@@ -46,8 +48,10 @@ export class ToolInjectionRegistry {
 
 /**
  * The fixed injections every host ships. Each predicate reads its setting
- * when a run resolves its tools, so `initPlatform()` and the process
- * workspace roots must be initialized by then.
+ * when a run resolves its tools: the goal flag from the run's workspace
+ * configuration it is handed, the memory setting through the catalog reader
+ * (so `initPlatform()` and the process workspace roots must be initialized
+ * by then).
  */
 export const AGENT_TOOL_INJECTIONS: readonly ConditionalToolInjection[] = [
   {
@@ -65,7 +69,7 @@ export const AGENT_TOOL_INJECTIONS: readonly ConditionalToolInjection[] = [
   // is no idle-continuation registry — goal was its only consumer.
   {
     toolName: 'plan',
-    shouldInject: () => isGoalEnabled(),
+    shouldInject: (config) => isGoalEnabled(config),
   },
 ];
 
@@ -92,4 +96,4 @@ export class ToolInjections extends Context.Service<
  * Named once here because the launch, resume and delegation signatures all
  * carry exactly these three tags in their `R` channel.
  */
-export type AgentRunServices = ToolInjections | AppState | Secrets;
+export type AgentRunServices = ProcessServices;

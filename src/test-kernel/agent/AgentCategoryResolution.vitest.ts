@@ -13,7 +13,6 @@ import {
   getRosterAgent,
   getVisibleAgent,
   refresh,
-  resolveAgent,
   resolveAgentForLaunch,
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
@@ -97,8 +96,8 @@ describe('cross-category agent resolution', () => {
       'toolUse',
       getVisibleAgent('toolUse', 'assistant'),
     );
-    expect(toolUse?.entry.category).toBe('toolUse');
-    expect(toolUse?.entry.source).toBe('builtInToolUse');
+    expect(toolUse?.category).toBe('toolUse');
+    expect(toolUse?.source).toBe('builtInToolUse');
 
     // The same mechanism reaches the custom workflow entry when that is what a
     // workflow delegation validated.
@@ -106,8 +105,8 @@ describe('cross-category agent resolution', () => {
       'workflow',
       getVisibleAgent('workflow', 'assistant'),
     );
-    expect(workflow?.entry.category).toBe('workflow');
-    expect(workflow?.entry.source).toBe('custom');
+    expect(workflow?.category).toBe('workflow');
+    expect(workflow?.source).toBe('custom');
   });
 
   it('resolves an unpinned launch through the same visible set as validation', () => {
@@ -115,11 +114,11 @@ describe('cross-category agent resolution', () => {
     // through getVisibleAgent — the identical call validation makes — so it
     // resolves to exactly the entry validation would, never a same-name shadow.
     const toolUse = resolveAgentForLaunch(AgentCategory.ToolUse, 'assistant');
-    expect(toolUse?.entry).toBe(getVisibleAgent('toolUse', 'assistant'));
-    expect(toolUse?.entry.source).toBe('builtInToolUse');
+    expect(toolUse).toBe(getVisibleAgent('toolUse', 'assistant'));
+    expect(toolUse?.source).toBe('builtInToolUse');
 
     const workflow = resolveAgentForLaunch(AgentCategory.Workflow, 'assistant');
-    expect(workflow?.entry).toBe(getVisibleAgent('workflow', 'assistant'));
+    expect(workflow).toBe(getVisibleAgent('workflow', 'assistant'));
 
     // A stale/missing pinned source falls through to that same visible-set tier.
     const stale = resolveAgentForLaunch(
@@ -127,7 +126,7 @@ describe('cross-category agent resolution', () => {
       'assistant',
       'remote',
     );
-    expect(stale?.entry.source).toBe('builtInToolUse');
+    expect(stale?.source).toBe('builtInToolUse');
   });
 
   it('resolves a non-colliding name within category', () => {

@@ -12,12 +12,6 @@ export const DEFAULT_TOOL_CONFIG = {
 
 type ToolConfigField = keyof typeof DEFAULT_TOOL_CONFIG;
 
-export const ToolConfigInputFieldsSchema = z.object(
-  Object.fromEntries(
-    Object.keys(DEFAULT_TOOL_CONFIG).map((key) => [key, z.boolean()]),
-  ) as Record<ToolConfigField, z.ZodBoolean>,
-);
-
 /**
  * Base tool config object schema (exposes .shape for composition).
  * Field-level prefaults handle partial inputs.

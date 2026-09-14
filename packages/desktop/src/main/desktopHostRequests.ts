@@ -19,14 +19,10 @@ import type { ChatExportController } from '@controllers/progressView/ChatExportC
 import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import {
-  ProgressWorkflowRunActionsController,
-  type WorkflowDiffRequest,
-  type WorkflowFileOperation,
-  type WorkflowFileOperationRequest,
-} from '@controllers/progressView/ProgressWorkflowRunActionsController';
-import {
   createHostRunActions,
   launchPatchOf,
+  type WorkflowDiffRequest,
+  type WorkflowFileOperationRequest,
 } from '@controllers/session/hostRunActions';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
@@ -39,7 +35,7 @@ import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   cloneRoundIndexed,
@@ -106,6 +102,9 @@ interface DesktopHostRequestsOptions {
   openExternalUrl(url: string): Promise<void>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Promise<void>;
+  /** The process runtime this window was handed; every request arm below runs
+   *  on it. */
+  runtime: ProcessRuntime;
   logger: {
     warn(message: string, data?: { data?: unknown }): void;
     error(message: string, data?: { data?: unknown }): void;
@@ -121,6 +120,8 @@ export interface DesktopHostRequests {
 
 const LATEXDIFF_CHANNEL = 'DesktopHostRequests';
 
+type WorkflowFileOperation = 'pack' | 'clean';
+
 function operationLabel(operation: WorkflowFileOperation): {
   verb: string;
   gerund: string;
@@ -133,10 +134,7 @@ function operationLabel(operation: WorkflowFileOperation): {
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
-  const { session, host, run, logger } = options;
-  // The window's handle on the process runtime, taken once here rather than
-  // re-fetched at each of the request arms below.
-  const runtime = effectRuntime();
+  const { session, host, run, logger, runtime } = options;
   // Shared controllers propagate request failures to the dispatcher.
   const rejectRequest = async (reason: string): Promise<never> => {
     throw new Rejected({ reason });
@@ -192,6 +190,7 @@ export function createDesktopHostRequests(
     {
       session,
       globalState: options.globalState,
+      runtime,
       // The request schedules a merge; its later run failure belongs to this
       // lifecycle callback, after the request has already completed.
       startRun: (request) => {
@@ -374,12 +373,6 @@ export function createDesktopHostRequests(
     }
     await reportFileOperationResult(operation, ran.value, inputFile);
   }
-
-  const workflowRunActions = new ProgressWorkflowRunActionsController({
-    state: runOutputs,
-    runDiff: runWorkflowDiff,
-    runFileOperation: runWorkflowFileOperation,
-  });
 
   let chatExportControllerLoad: Promise<ChatExportController> | undefined;
   function getChatExportController(): Promise<ChatExportController> {
@@ -607,22 +600,18 @@ export function createDesktopHostRequests(
         await runtime.runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff': {
-        const config = await runtime.runPromise(
-          runActions.readConfig(request.runId),
+        const diff = await runtime.runPromise(
+          runActions.workflowDiffRequest(request.runId),
         );
-        await workflowRunActions.diffStream(request.runId, config);
+        if (diff) await runWorkflowDiff(diff);
         return done;
       }
       case 'pack':
       case 'clean': {
-        const config = await runtime.runPromise(
-          runActions.readConfig(request.runId),
+        const operation = await runtime.runPromise(
+          runActions.workflowFileOperationRequest(request.runId),
         );
-        await workflowRunActions.runFileOperation(
-          request.runId,
-          request.kind,
-          config,
-        );
+        if (operation) await runWorkflowFileOperation(request.kind, operation);
         return done;
       }
       case 'latexdiffs':
@@ -675,8 +664,6 @@ export function createDesktopHostRequests(
           await runtime.runPromise(prepareSurfaceLaunch(request, host)),
         );
         return done;
-      case 'compileInputPdf':
-        throw notOnDesktop('Compiling the input PDF');
       case 'extractFigures':
         throw notOnDesktop('Figure extraction');
       case 'toolEdit':

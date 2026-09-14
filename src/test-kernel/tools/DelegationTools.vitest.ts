@@ -1,27 +1,13 @@
 import * as assert from 'node:assert';
-import { Effect } from 'effect';
+import { Deferred, Effect } from 'effect';
 // Node imports
 
 // Third-party imports
-import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { describe, expect, afterEach, beforeEach, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  tryUseRunContext: vi.fn(),
-  currentSession: vi.fn(),
   submitFollowUp: vi.fn(),
-}));
-
-vi.mock('@agent/runtime/RunContext', () => {
-  const readRunContextField = (context: any, field: string) =>
-    context?.kind === 'launch' ? context.runScope[field] : context?.[field];
-  return {
-    tryUseRunContext: mocks.tryUseRunContext,
-    getRunContextRunId: (context: any) => readRunContextField(context, 'runId'),
-  };
-});
-
-vi.mock('@agent/runtime/SessionHandle', () => ({
-  currentSession: mocks.currentSession,
 }));
 
 vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
@@ -34,6 +20,7 @@ import type { RunHandle } from '@agent/runtime/RunHandle';
 import { FileType, type FileStat } from '@platform/interfaces';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import {
   rejectOversizedBibAttachments,
@@ -118,34 +105,46 @@ describe('DelegateAgentTool resume ownership', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.tryUseRunContext.mockReturnValue({
-      runId: parentRunId,
-    } as never);
-    mocks.currentSession.mockReturnValue({
-      runs: { getHandle: () => makeHandle() },
-    } as never);
   });
 
-  it('reports a merged recovery failure to the parent', async () => {
-    mocks.submitFollowUp.mockReturnValue(
-      Effect.succeed({
-        status: 'queued',
-        wake: 'failed',
-      }),
-    );
+  it.effect('reports a merged recovery failure to the parent', () =>
+    Effect.gen(function* () {
+      const reported = yield* Deferred.make<void>();
+      const queued = { status: 'queued', wake: 'failed' };
+      mocks.submitFollowUp
+        .mockReturnValueOnce(Effect.succeed(queued))
+        .mockImplementationOnce(() =>
+          Deferred.succeed(reported, undefined).pipe(Effect.as(queued)),
+        )
+        .mockReturnValue(Effect.succeed(queued));
 
-    await new DelegateAgentTool().call({
-      execution_id: runId,
-      instruction: 'Keep going.',
-    });
+      const session = {
+        runs: { getHandle: () => makeHandle() },
+      } as never;
 
-    await vi.waitFor(() =>
-      assert.strictEqual(mocks.submitFollowUp.mock.calls.length, 2),
-    );
-    expect(mocks.submitFollowUp).toHaveBeenLastCalledWith(
-      parentRunId,
-      expect.objectContaining({ origin: 'subagent_result' }),
-      expect.anything(),
-    );
-  });
+      yield* new DelegateAgentTool()
+        .call({
+          execution_id: runId,
+          instruction: 'Keep going.',
+        })
+        .pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              model: 'parent-model',
+              run: { session, runId: parentRunId, toolPolicy: {} },
+            }),
+          ),
+        );
+
+      // The wake-failure delivery is forked detached inside the tool; the mock
+      // completes this deferred when that fiber makes the second call.
+      yield* Deferred.await(reported);
+      expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2);
+      expect(mocks.submitFollowUp).toHaveBeenLastCalledWith(
+        parentRunId,
+        expect.objectContaining({ origin: 'subagent_result' }),
+        expect.anything(),
+      );
+    }),
+  );
 });

@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 
 // Third-party imports
-import { it as effectIt } from '@effect/vitest';
-import { Cause, Effect, Fiber, Stream } from 'effect';
+import { it } from '@effect/vitest';
+import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ContinuationSchema, RemoteOperationSchema } from '@llm/turn';
 import {
+  openaiResponsesAdmittedFingerprint,
   openaiResponsesContinuation,
   openaiResponsesModel,
   openaiResponsesWebSocketModel,
@@ -98,6 +99,11 @@ const OPERATION: RemoteOperation = {
   },
   providerResponseId: 'resp_1',
   afterSequence: null,
+  // A handle only: cancellation never reads the digest, and every case that
+  // observes takes the operation `backgroundTurn` derives from its own
+  // admitted turn.
+  admittedFingerprint: 'f'.repeat(64),
+  store: false,
 };
 const REASONING = {
   type: 'reasoning',
@@ -179,6 +185,28 @@ function modelWith(fetch: typeof globalThis.fetch, configuration = CONFIG) {
     authentication: { kind: 'api-key', apiKey: 'synthetic-not-a-secret' },
     fetch,
   });
+}
+
+/** The admitted turn an observation anchors to, with the handle a submission
+ *  of it would leave: the operation records the digest of what it admitted.
+ *  Unstored by default, so it leaves no continuation unless a case asks. */
+function backgroundTurn(model: ReturnType<typeof modelWith>) {
+  return Effect.map(
+    model.prepareTurn({ ...REQUEST, mode: 'background' }),
+    (turn) => {
+      assert(
+        turn.mode === 'background' && turn.protocol === 'openai-responses',
+      );
+      return {
+        admitted: turn,
+        operation: {
+          ...OPERATION,
+          admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
+          store: turn.controls.store,
+        },
+      };
+    },
+  );
 }
 
 const socketServers: WebSocketServer[] = [];
@@ -438,78 +466,90 @@ describe('native OpenAI Responses protocol', () => {
     },
   );
 
-  it.each([
+  it.effect.each([
     { phase: 'headers', lateFailure: false },
     { phase: 'body', lateFailure: false },
     { phase: 'body', lateFailure: true },
   ])(
     'aborts and joins count $phase consumption (distinct late failure: $lateFailure)',
-    async ({ phase, lateFailure }) => {
-      let signal: AbortSignal | null | undefined;
-      let release!: () => void;
-      const gate = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      const late = new Error('distinct count-body failure');
-      const settled = vi.fn();
-      const fetch = vi
-        .fn<typeof globalThis.fetch>()
-        .mockImplementation(async (_url, init) => {
-          signal = init?.signal;
-          assert(signal);
-          const aborted = new Promise<never>((_resolve, reject) => {
-            signal!.addEventListener(
-              'abort',
-              () => {
-                void gate.then(() => {
-                  settled();
-                  reject(lateFailure ? late : signal!.reason);
-                });
-              },
-              { once: true },
-            );
-          });
-          if (phase === 'headers') return aborted;
-          const result = Response.json({});
-          vi.spyOn(result, 'json').mockImplementation(() => aborted);
-          return result;
+    ({ phase, lateFailure }) =>
+      Effect.gen(function* () {
+        let signal: AbortSignal | null | undefined;
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
         });
-      const model = modelWith(fetch, {
-        ...CONFIG,
-        supportsInputTokenEstimation: true,
-      });
-      assert(model.estimateInputTokens);
-      const turn = await Effect.runPromise(
-        model.prepareTurn({ messages: REQUEST.messages }),
-      );
-      assert(turn.mode === 'foreground');
-      const fiber = Effect.runFork(model.estimateInputTokens(turn));
-      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-      let finished = false;
-      const interruption = Effect.runPromise(Fiber.interrupt(fiber)).then(
-        () => {
-          finished = true;
-        },
-      );
-      await vi.waitFor(() => expect(signal?.aborted).toBe(true));
-      expect(finished).toBe(false);
-      expect(settled).not.toHaveBeenCalled();
-      release();
-      await interruption;
-      expect(settled).toHaveBeenCalledTimes(1);
-      const exit = await Effect.runPromise(Fiber.await(fiber));
-      assert(exit._tag === 'Failure');
-      expect(exit.cause.reasons.filter(Cause.isInterruptReason)).toHaveLength(
-        1,
-      );
-      const defects = exit.cause.reasons.filter(Cause.isDieReason);
-      if (lateFailure)
-        expect(defects).toMatchObject([
-          { defect: { cause: late, model: CONFIG.requestedModel } },
-        ]);
-      else expect(defects).toHaveLength(0);
-      expect(fetch).toHaveBeenCalledTimes(1);
-    },
+        // Completed once the request is issued and its abort listener is armed.
+        const entered = yield* Deferred.make<void>();
+        // Completed by the abort listener itself.
+        const abortSeen = yield* Deferred.make<void>();
+        const late = new Error('distinct count-body failure');
+        const settled = vi.fn();
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async (_url, init) => {
+            signal = init?.signal;
+            assert(signal);
+            const aborted = new Promise<never>((_resolve, reject) => {
+              signal!.addEventListener(
+                'abort',
+                () => {
+                  Deferred.doneUnsafe(abortSeen, Effect.void);
+                  void gate.then(() => {
+                    settled();
+                    reject(lateFailure ? late : signal!.reason);
+                  });
+                },
+                { once: true },
+              );
+            });
+            // Completing resumes the test fiber inside this call, so the
+            // listener above has to be registered first.
+            Deferred.doneUnsafe(entered, Effect.void);
+            if (phase === 'headers') return aborted;
+            const result = Response.json({});
+            vi.spyOn(result, 'json').mockImplementation(() => aborted);
+            return result;
+          });
+        const model = modelWith(fetch, {
+          ...CONFIG,
+          supportsInputTokenEstimation: true,
+        });
+        assert(model.estimateInputTokens);
+        const turn = yield* model.prepareTurn({ messages: REQUEST.messages });
+        assert(turn.mode === 'foreground');
+        const fiber = yield* Effect.forkChild(model.estimateInputTokens(turn));
+        yield* Deferred.await(entered);
+        expect(fetch).toHaveBeenCalledTimes(1);
+        let finished = false;
+        const interrupting = yield* Fiber.interrupt(fiber).pipe(
+          Effect.tap(() =>
+            Effect.sync(() => {
+              finished = true;
+            }),
+          ),
+          Effect.forkChild,
+        );
+        yield* Deferred.await(abortSeen);
+        expect(signal?.aborted).toBe(true);
+        expect(finished).toBe(false);
+        expect(settled).not.toHaveBeenCalled();
+        release();
+        yield* Fiber.join(interrupting);
+        expect(settled).toHaveBeenCalledTimes(1);
+        const exit = yield* Fiber.await(fiber);
+        assert(exit._tag === 'Failure');
+        expect(exit.cause.reasons.filter(Cause.isInterruptReason)).toHaveLength(
+          1,
+        );
+        const defects = exit.cause.reasons.filter(Cause.isDieReason);
+        if (lateFailure)
+          expect(defects).toMatchObject([
+            { defect: { cause: late, model: CONFIG.requestedModel } },
+          ]);
+        else expect(defects).toHaveLength(0);
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
   );
 
   it.each(['stop', 'length'] as const)(
@@ -1123,243 +1163,270 @@ describe('native OpenAI Responses protocol', () => {
     },
   );
 
-  it('joins submission detach, resumes only the accepted job and constructs continuation from admitted input', async () => {
-    let finishCancellation!: () => void;
-    const cancellation = new Promise<void>((resolve) => {
-      finishCancellation = resolve;
-    });
-    const cancelBody = vi.fn(() => cancellation);
-    const submissionFinished = vi.fn();
-    const acceptance = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(
-          new TextEncoder().encode(
-            sse([
-              {
-                type: 'response.created',
-                response: snapshot([], { status: 'queued' }),
-              },
-            ]),
-          ),
-        );
-      },
-      cancel: cancelBody,
-    });
-    const observedFrames = [
-      {
-        type: 'response.in_progress',
-        response: snapshot([], { status: 'in_progress' }),
-      },
-      {
-        type: 'response.output_item.added',
-        output_index: 0,
-        item: { ...REASONING, status: 'in_progress', summary: [] },
-      },
-      {
-        type: 'response.output_item.done',
-        output_index: 0,
-        item: REASONING,
-      },
-      {
-        type: 'response.output_text.delta',
-        output_index: 1,
-        item_id: 'msg_1',
-        delta: 'Progress only',
-      },
-      {
-        type: 'response.output_item.done',
-        output_index: 1,
-        item: MESSAGE,
-      },
-      { type: 'response.completed', response: snapshot(OUTPUT) },
-    ];
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockImplementation(async (url, init) => {
-        if (init?.method === 'POST') {
-          const body = JSON.parse(String(init.body));
-          if (body.background)
-            return new Response(acceptance, {
+  it.effect(
+    'joins submission detach, resumes only the accepted job and constructs continuation from admitted input',
+    () =>
+      Effect.gen(function* () {
+        let finishCancellation!: () => void;
+        const cancellation = new Promise<void>((resolve) => {
+          finishCancellation = resolve;
+        });
+        // Completed when the acceptance body is cancelled, the fact the
+        // submission detach used to be polled for.
+        const cancelling = yield* Deferred.make<void>();
+        const cancelBody = vi.fn(() => {
+          Deferred.doneUnsafe(cancelling, Effect.void);
+          return cancellation;
+        });
+        const submissionFinished = vi.fn();
+        const acceptance = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                sse([
+                  {
+                    type: 'response.created',
+                    response: snapshot([], { status: 'queued' }),
+                  },
+                ]),
+              ),
+            );
+          },
+          cancel: cancelBody,
+        });
+        const observedFrames = [
+          {
+            type: 'response.in_progress',
+            response: snapshot([], { status: 'in_progress' }),
+          },
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: { ...REASONING, status: 'in_progress', summary: [] },
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: REASONING,
+          },
+          {
+            type: 'response.output_text.delta',
+            output_index: 1,
+            item_id: 'msg_1',
+            delta: 'Progress only',
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 1,
+            item: MESSAGE,
+          },
+          { type: 'response.completed', response: snapshot(OUTPUT) },
+        ];
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async (url, init) => {
+            if (init?.method === 'POST') {
+              const body = JSON.parse(String(init.body));
+              if (body.background)
+                return new Response(acceptance, {
+                  headers: { 'content-type': 'text/event-stream' },
+                });
+              return response(events([MESSAGE]));
+            }
+            const after = Number(
+              new URL(String(url)).searchParams.get('starting_after'),
+            );
+            return new Response(sse(observedFrames.slice(after), after + 1), {
               headers: { 'content-type': 'text/event-stream' },
             });
-          return response(events([MESSAGE]));
-        }
-        const after = Number(
-          new URL(String(url)).searchParams.get('starting_after'),
-        );
-        return new Response(sse(observedFrames.slice(after), after + 1), {
-          headers: { 'content-type': 'text/event-stream' },
+          });
+        const configuration = { ...CONFIG, background: 'supported' as const };
+        const model = modelWith(fetch, configuration);
+        assert(model.background);
+        const turn = yield* model.prepareTurn({
+          ...REQUEST,
+          mode: 'background',
+          store: true,
+          system: 'policy',
         });
-      });
-    const configuration = { ...CONFIG, background: 'supported' as const };
-    const model = modelWith(fetch, configuration);
-    assert(model.background);
-    const turn = await Effect.runPromise(
-      model.prepareTurn({
-        ...REQUEST,
-        mode: 'background',
-        store: true,
-        system: 'policy',
-      }),
-    );
-    assert(turn.mode === 'background' && turn.protocol === 'openai-responses');
-    const fiber = Effect.runFork(
-      model.background
-        .submit(turn)
-        .pipe(Effect.tap(() => Effect.sync(submissionFinished))),
-    );
-    await vi.waitFor(() => expect(cancelBody).toHaveBeenCalledTimes(1));
-    expect(submissionFinished).not.toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledTimes(1);
-    finishCancellation();
-    const accepted = await Effect.runPromise(Fiber.join(fiber));
-    assert(accepted.kind === 'accepted');
-    expect(accepted.operation).toEqual({
-      origin: {
-        protocol: turn.protocol,
-        codecVersion: turn.codecVersion,
-        requestedModel: turn.requestedModel,
-        deployment: turn.deployment,
-      },
-      providerResponseId: 'resp_1',
-      afterSequence: 0,
-    });
-    const policy = { deadlineAtMs: Date.now() + 60_000 };
-    const initial = await Effect.runPromise(
-      Stream.runCollect(
-        model.background
-          .observe(accepted.operation, policy)
-          .pipe(Stream.take(3)),
-      ),
-    );
-    expect(initial[0]).toMatchObject({ kind: 'identified', afterSequence: 1 });
-    expect(initial.slice(1)).toEqual([
-      {
-        kind: 'phase',
-        part: 'reasoning',
-        boundary: 'start',
-        providerItemIndex: 0,
-        afterSequence: 2,
-      },
-      {
-        kind: 'phase',
-        part: 'reasoning',
-        boundary: 'end',
-        providerItemIndex: 0,
-        afterSequence: 3,
-      },
-    ]);
-    const resumed = await Effect.runPromise(
-      Stream.runCollect(
-        model.background.observe(
-          RemoteOperationSchema.parse({
-            ...accepted.operation,
+        assert(
+          turn.mode === 'background' && turn.protocol === 'openai-responses',
+        );
+        const fiber = yield* Effect.forkChild(
+          model.background
+            .submit(turn)
+            .pipe(Effect.tap(() => Effect.sync(submissionFinished))),
+        );
+        yield* Deferred.await(cancelling);
+        expect(cancelBody).toHaveBeenCalledTimes(1);
+        expect(submissionFinished).not.toHaveBeenCalled();
+        expect(fetch).toHaveBeenCalledTimes(1);
+        finishCancellation();
+        const accepted = yield* Fiber.join(fiber);
+        assert(accepted.kind === 'accepted');
+        expect(accepted.operation).toEqual({
+          origin: {
+            protocol: turn.protocol,
+            codecVersion: turn.codecVersion,
+            requestedModel: turn.requestedModel,
+            deployment: turn.deployment,
+          },
+          providerResponseId: 'resp_1',
+          afterSequence: 0,
+          // Recorded at admission, so the resumed observation below can tell
+          // that this turn is still the one the provider answered.
+          admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
+          // The storage mode the provider admitted, which a resumed
+          // observation re-prepares with instead of the current setting.
+          store: true,
+        });
+        // observe subtracts Clock.currentTimeMillis, which TestClock starts at 0.
+        const policy = { deadlineAtMs: 60_000 };
+        const initial = yield* Stream.runCollect(
+          model.background
+            .observe(turn, accepted.operation, policy)
+            .pipe(Stream.take(3)),
+        );
+        expect(initial[0]).toMatchObject({
+          kind: 'identified',
+          afterSequence: 1,
+        });
+        expect(initial.slice(1)).toEqual([
+          {
+            kind: 'phase',
+            part: 'reasoning',
+            boundary: 'start',
+            providerItemIndex: 0,
+            afterSequence: 2,
+          },
+          {
+            kind: 'phase',
+            part: 'reasoning',
+            boundary: 'end',
+            providerItemIndex: 0,
             afterSequence: 3,
-          }),
-          policy,
-        ),
-      ),
-    );
-    expect(resumed.map((event) => [event.kind, event.afterSequence])).toEqual([
-      ['delta', 4],
-      ['phase', 5],
-      ['completed', 6],
-    ]);
-    expect(resumed.slice(0, 2)).toEqual([
-      {
-        kind: 'delta',
-        part: 'text',
-        text: 'Progress only',
-        providerItemIndex: 1,
-        afterSequence: 4,
-      },
-      {
-        kind: 'phase',
-        part: 'text',
-        boundary: 'end',
-        providerItemIndex: 1,
-        afterSequence: 5,
-      },
-    ]);
-    const terminal = resumed.at(-1);
-    assert(terminal?.kind === 'completed');
-    expect(terminal.result.continuation).toBeUndefined();
-    const continuation = await Effect.runPromise(
-      openaiResponsesContinuation(configuration, turn, terminal.result),
-    );
-    assert(continuation && 'responseId' in continuation.anchor);
-    expect(continuation).toMatchObject({
-      coveredMessages: 2,
-      anchor: { kind: 'stored', responseId: 'resp_1', coveredItems: 5 },
-    });
-    const messages: TurnRequest['messages'] = [
-      ...turn.messages,
-      {
-        role: 'assistant',
-        origin: terminal.result.requestedOrigin,
-        content: terminal.result.content,
-      },
-      {
-        role: 'tool',
-        results: [
+          },
+        ]);
+        const resumed = yield* Stream.runCollect(
+          model.background.observe(
+            turn,
+            RemoteOperationSchema.parse({
+              ...accepted.operation,
+              afterSequence: 3,
+            }),
+            policy,
+          ),
+        );
+        expect(
+          resumed.map((event) => [event.kind, event.afterSequence]),
+        ).toEqual([
+          ['delta', 4],
+          ['phase', 5],
+          ['completed', 6],
+        ]);
+        expect(resumed.slice(0, 2)).toEqual([
           {
-            callOrdinal: 0,
-            status: 'success',
-            content: [{ kind: 'text', text: 'a' }],
+            kind: 'delta',
+            part: 'text',
+            text: 'Progress only',
+            providerItemIndex: 1,
+            afterSequence: 4,
           },
           {
-            callOrdinal: 1,
-            status: 'error',
-            content: [{ kind: 'text', text: 'b' }],
+            kind: 'phase',
+            part: 'text',
+            boundary: 'end',
+            providerItemIndex: 1,
+            afterSequence: 5,
           },
-        ],
-      },
-    ];
-    const nextRequest = {
-      ...REQUEST,
-      messages,
-      system: 'policy',
-      continuation,
-    };
-    const next = await Effect.runPromise(model.prepareTurn(nextRequest));
-    assert(next.mode === 'foreground');
-    await Effect.runPromise(model.generateTurn(next));
-    expect(
-      JSON.parse(String(fetch.mock.calls.at(-1)?.[1]?.body)),
-    ).toMatchObject({
-      previous_response_id: 'resp_1',
-      instructions: 'policy',
-      input: [
-        { type: 'function_call_output', call_id: 'call_1', output: 'a' },
-        { type: 'function_call_output', call_id: 'call_2', output: 'Error: b' },
-      ],
-    });
-    for (const request of [
-      { ...nextRequest, system: 'changed' },
-      {
-        ...nextRequest,
-        continuation: ContinuationSchema.parse({
-          ...continuation,
-          anchor: { ...continuation.anchor, coveredItems: 4 },
-        }),
-      },
-    ])
-      expect(
-        (await Effect.runPromise(Effect.flip(model.prepareTurn(request)))).kind,
-      ).toBe('invalid-request');
-    const retrievals = fetch.mock.calls.filter(
-      ([, init]) => init?.method === 'GET',
-    );
-    expect(retrievals).toHaveLength(2);
-    expect(
-      retrievals.map(([url]) =>
-        new URL(String(url)).searchParams.get('starting_after'),
-      ),
-    ).toEqual(['0', '3']);
-    for (const [url] of retrievals)
-      expect(String(url)).toContain('reasoning.encrypted_content');
-    expect(fetch).toHaveBeenCalledTimes(4);
-  });
+        ]);
+        const terminal = resumed.at(-1);
+        assert(terminal?.kind === 'completed');
+        const continuation = yield* openaiResponsesContinuation(
+          configuration,
+          turn,
+          terminal.result,
+        );
+        assert(continuation && 'responseId' in continuation.anchor);
+        // An observed background turn anchors exactly as a foreground one does.
+        expect(terminal.result.continuation).toEqual(continuation);
+        expect(continuation).toMatchObject({
+          coveredMessages: 2,
+          anchor: { kind: 'stored', responseId: 'resp_1', coveredItems: 5 },
+        });
+        const messages: TurnRequest['messages'] = [
+          ...turn.messages,
+          {
+            role: 'assistant',
+            origin: terminal.result.requestedOrigin,
+            content: terminal.result.content,
+          },
+          {
+            role: 'tool',
+            results: [
+              {
+                callOrdinal: 0,
+                status: 'success',
+                content: [{ kind: 'text', text: 'a' }],
+              },
+              {
+                callOrdinal: 1,
+                status: 'error',
+                content: [{ kind: 'text', text: 'b' }],
+              },
+            ],
+          },
+        ];
+        const nextRequest = {
+          ...REQUEST,
+          messages,
+          system: 'policy',
+          continuation,
+        };
+        const next = yield* model.prepareTurn(nextRequest);
+        assert(next.mode === 'foreground');
+        yield* model.generateTurn(next);
+        expect(
+          JSON.parse(String(fetch.mock.calls.at(-1)?.[1]?.body)),
+        ).toMatchObject({
+          previous_response_id: 'resp_1',
+          instructions: 'policy',
+          input: [
+            { type: 'function_call_output', call_id: 'call_1', output: 'a' },
+            {
+              type: 'function_call_output',
+              call_id: 'call_2',
+              output: 'Error: b',
+            },
+          ],
+        });
+        for (const request of [
+          { ...nextRequest, system: 'changed' },
+          {
+            ...nextRequest,
+            continuation: ContinuationSchema.parse({
+              ...continuation,
+              anchor: { ...continuation.anchor, coveredItems: 4 },
+            }),
+          },
+        ])
+          expect((yield* Effect.flip(model.prepareTurn(request))).kind).toBe(
+            'invalid-request',
+          );
+        const retrievals = fetch.mock.calls.filter(
+          ([, init]) => init?.method === 'GET',
+        );
+        expect(retrievals).toHaveLength(2);
+        expect(
+          retrievals.map(([url]) =>
+            new URL(String(url)).searchParams.get('starting_after'),
+          ),
+        ).toEqual(['0', '3']);
+        for (const [url] of retrievals)
+          expect(String(url)).toContain('reasoning.encrypted_content');
+        expect(fetch).toHaveBeenCalledTimes(4);
+      }),
+  );
 
   it('retains learned acceptance in an unexpected cleanup defect', async () => {
     const cleanupFailure = new Error('cancel rejected');
@@ -1444,60 +1511,72 @@ describe('native OpenAI Responses protocol', () => {
     },
   );
 
-  it.each(['submit', 'cancel'] as const)(
+  it.effect.each(['submit', 'cancel'] as const)(
     'interrupts a pending %s HTTP read without reporting acceptance or cancellation',
-    async (operationName) => {
-      let signal: AbortSignal | null | undefined;
-      const cancelBody = vi.fn();
-      let bodyController!: ReadableStreamDefaultController<Uint8Array>;
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          bodyController = controller;
-        },
-        cancel: cancelBody,
-      });
-      const fetch = vi
-        .fn<typeof globalThis.fetch>()
-        .mockImplementation(async (_url, init) => {
-          signal = init?.signal;
-          if (operationName === 'cancel') {
-            signal?.addEventListener(
-              'abort',
-              () => bodyController.error(signal?.reason),
-              { once: true },
-            );
-          }
-          return new Response(body, {
-            headers: {
-              'content-type':
-                operationName === 'submit'
-                  ? 'text/event-stream'
-                  : 'application/json',
+    (operationName) =>
+      Effect.gen(function* () {
+        let signal: AbortSignal | null | undefined;
+        const cancelBody = vi.fn();
+        let bodyController!: ReadableStreamDefaultController<Uint8Array>;
+        // Completed by the first read, which only happens once the reader
+        // holds the body lock.
+        const reading = yield* Deferred.make<void>();
+        const body = new ReadableStream<Uint8Array>(
+          {
+            start(controller) {
+              bodyController = controller;
             },
+            pull() {
+              Deferred.doneUnsafe(reading, Effect.void);
+            },
+            cancel: cancelBody,
+          },
+          { highWaterMark: 0 },
+        );
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async (_url, init) => {
+            signal = init?.signal;
+            if (operationName === 'cancel') {
+              signal?.addEventListener(
+                'abort',
+                () => bodyController.error(signal?.reason),
+                { once: true },
+              );
+            }
+            return new Response(body, {
+              headers: {
+                'content-type':
+                  operationName === 'submit'
+                    ? 'text/event-stream'
+                    : 'application/json',
+              },
+            });
           });
+        const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+        assert(model.background);
+        const turn = yield* model.prepareTurn({
+          ...REQUEST,
+          mode: 'background',
         });
-      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
-      assert(model.background);
-      const turn = await Effect.runPromise(
-        model.prepareTurn({ ...REQUEST, mode: 'background' }),
-      );
-      assert(turn.mode === 'background');
-      const completed = vi.fn();
-      const task =
-        operationName === 'submit'
-          ? model.background.submit(turn).pipe(Effect.asVoid)
-          : model.background.cancel(OPERATION).pipe(Effect.asVoid);
-      const fiber = Effect.runFork(
-        task.pipe(Effect.tap(() => Effect.sync(completed))),
-      );
-      await vi.waitFor(() => expect(body.locked).toBe(true));
-      await Effect.runPromise(Fiber.interrupt(fiber));
-      expect(signal?.aborted).toBe(true);
-      expect(completed).not.toHaveBeenCalled();
-      if (operationName === 'submit')
-        expect(cancelBody).toHaveBeenCalledTimes(1);
-      expect(fetch).toHaveBeenCalledTimes(1);
-    },
+        assert(turn.mode === 'background');
+        const completed = vi.fn();
+        const task =
+          operationName === 'submit'
+            ? model.background.submit(turn).pipe(Effect.asVoid)
+            : model.background.cancel(OPERATION).pipe(Effect.asVoid);
+        const fiber = yield* Effect.forkChild(
+          task.pipe(Effect.tap(() => Effect.sync(completed))),
+        );
+        yield* Deferred.await(reading);
+        expect(body.locked).toBe(true);
+        yield* Fiber.interrupt(fiber);
+        expect(signal?.aborted).toBe(true);
+        expect(completed).not.toHaveBeenCalled();
+        if (operationName === 'submit')
+          expect(cancelBody).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
   );
 
   it.each(['missing', 'failed', 'not-found'] as const)(
@@ -1532,11 +1611,14 @@ describe('native OpenAI Responses protocol', () => {
       );
       const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
       assert(model.background);
+      const { admitted, operation } = await Effect.runPromise(
+        backgroundTurn(model),
+      );
       const observed: BackgroundEvent[] = [];
       const failure = await Effect.runPromise(
         Effect.flip(
           Stream.runForEach(
-            model.background.observe(OPERATION, {
+            model.background.observe(admitted, operation, {
               deadlineAtMs: Date.now() + 60_000,
             }),
             (event) =>
@@ -1548,7 +1630,7 @@ describe('native OpenAI Responses protocol', () => {
       );
       expect(failure).toMatchObject({
         kind: outcome === 'missing' ? 'malformed-output' : 'provider-rejection',
-        operation: OPERATION,
+        operation,
         responseId: 'resp_1',
       });
       if (outcome === 'failed')
@@ -1593,11 +1675,14 @@ describe('native OpenAI Responses protocol', () => {
       );
       const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
       assert(model.background);
+      const { admitted, operation } = await Effect.runPromise(
+        backgroundTurn(model),
+      );
       const seen: BackgroundEvent[] = [];
       const exit = await Effect.runPromise(
         Effect.exit(
           Stream.runForEach(
-            model.background.observe(OPERATION, {
+            model.background.observe(admitted, operation, {
               deadlineAtMs: Date.now() + 60_000,
             }),
             (event) =>
@@ -1664,19 +1749,26 @@ describe('native OpenAI Responses protocol', () => {
       assert(model.background);
       const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
       assert(turn.mode === 'foreground');
+      const { admitted, operation } = await Effect.runPromise(
+        backgroundTurn(model),
+      );
       const stream: Stream.Stream<TurnEvent | BackgroundEvent, ModelError> =
         mode === 'foreground'
           ? model.streamTurn(turn)
-          : model.background.observe(OPERATION, {
+          : model.background.observe(admitted, operation, {
               deadlineAtMs: Date.now() + 60_000,
             });
       const seen = await Effect.runPromise(Stream.runCollect(stream));
       const completed = seen.at(-1);
       expect(seen.some((event) => event.kind === 'phase')).toBe(false);
+      assert(completed?.kind === 'completed');
       expect(completed).toMatchObject({
         kind: 'completed',
         result: { providerResponseId: 'resp_1', finishReason: 'stop' },
       });
+      // Admitted unstored, either way: a temporary response is not there for
+      // a next round to chain on, so neither completion leaves an anchor.
+      expect(completed.result).not.toHaveProperty('continuation');
       if (mode === 'observation')
         expect(completed).toHaveProperty('afterSequence', 0);
       expect(cancelBody).toHaveBeenCalledTimes(1);
@@ -1684,63 +1776,70 @@ describe('native OpenAI Responses protocol', () => {
     },
   );
 
-  it.each(['headers', 'body'] as const)(
+  it.effect.each(['headers', 'body'] as const)(
     'keeps the original deadline while waiting for %s and before another request',
-    async (phase) => {
-      let markStarted!: () => void;
-      const started = new Promise<void>((resolve) => {
-        markStarted = resolve;
-      });
-      const cancelled = vi.fn();
-      const body = new ReadableStream<Uint8Array>({ cancel: cancelled });
-      let sendHeaders!: () => void;
-      const headers = new Promise<void>((resolve) => {
-        sendHeaders = resolve;
-      });
-      let signal: AbortSignal | null | undefined;
-      const fetch = vi
-        .fn<typeof globalThis.fetch>()
-        .mockImplementation(async (_url, init) => {
-          signal = init?.signal;
-          markStarted();
-          await headers;
-          return new Response(body, {
-            headers: { 'content-type': 'text/event-stream' },
-          });
+    (phase) =>
+      Effect.gen(function* () {
+        // Completed when the request is issued.
+        const started = yield* Deferred.make<void>();
+        const cancelled = vi.fn();
+        // Completed by the first read, which implies the body lock.
+        const reading = yield* Deferred.make<void>();
+        const body = new ReadableStream<Uint8Array>(
+          {
+            pull() {
+              Deferred.doneUnsafe(reading, Effect.void);
+            },
+            cancel: cancelled,
+          },
+          { highWaterMark: 0 },
+        );
+        let sendHeaders!: () => void;
+        const headers = new Promise<void>((resolve) => {
+          sendHeaders = resolve;
         });
-      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
-      assert(model.background);
-      const background = model.background;
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          const observation = Stream.runDrain(
-            background.observe(OPERATION, { deadlineAtMs: 100 }),
-          );
-          const fiber = yield* Effect.forkChild(Effect.flip(observation));
-          yield* Effect.promise(() => started);
-          yield* TestClock.adjust('40 millis');
-          if (phase === 'body') {
-            sendHeaders();
-            yield* Effect.promise(() =>
-              vi.waitFor(() => expect(body.locked).toBe(true)),
-            );
-          }
-          yield* TestClock.adjust('60 millis');
-          expect((yield* Fiber.join(fiber)).kind).toBe('observation-deadline');
-          expect(signal?.aborted).toBe(true);
-          expect(cancelled).toHaveBeenCalledTimes(phase === 'body' ? 1 : 0);
-          expect((yield* Effect.flip(observation)).kind).toBe(
-            'observation-deadline',
-          );
-          expect(fetch).toHaveBeenCalledTimes(1);
-        }).pipe(Effect.provide(TestClock.layer())),
-      );
-      sendHeaders();
-      expect(String(fetch.mock.calls[0]?.[0])).not.toContain('starting_after');
-    },
+        let signal: AbortSignal | null | undefined;
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async (_url, init) => {
+            signal = init?.signal;
+            Deferred.doneUnsafe(started, Effect.void);
+            await headers;
+            return new Response(body, {
+              headers: { 'content-type': 'text/event-stream' },
+            });
+          });
+        const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+        assert(model.background);
+        const background = model.background;
+        const { admitted, operation } = yield* backgroundTurn(model);
+        const observation = Stream.runDrain(
+          background.observe(admitted, operation, { deadlineAtMs: 100 }),
+        );
+        const fiber = yield* Effect.forkChild(Effect.flip(observation));
+        yield* Deferred.await(started);
+        yield* TestClock.adjust('40 millis');
+        if (phase === 'body') {
+          sendHeaders();
+          yield* Deferred.await(reading);
+          expect(body.locked).toBe(true);
+        }
+        yield* TestClock.adjust('60 millis');
+        expect((yield* Fiber.join(fiber)).kind).toBe('observation-deadline');
+        expect(signal?.aborted).toBe(true);
+        expect(cancelled).toHaveBeenCalledTimes(phase === 'body' ? 1 : 0);
+        expect((yield* Effect.flip(observation)).kind).toBe(
+          'observation-deadline',
+        );
+        expect(fetch).toHaveBeenCalledTimes(1);
+        sendHeaders();
+        expect(String(fetch.mock.calls[0]?.[0])).not.toContain(
+          'starting_after',
+        );
+      }),
   );
 
-  effectIt.effect(
+  it.effect(
     'joins an interrupted cancellation body and retains its cleanup failure',
     () =>
       Effect.gen(function* () {
@@ -2427,49 +2526,58 @@ describe('native OpenAI Responses protocol', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('interrupts a pending body read after publishing identity and joins cleanup', async () => {
-    let signal: AbortSignal | null | undefined;
-    const cancel = vi.fn();
-    const identified = vi.fn();
-    const completed = vi.fn();
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(
-          new TextEncoder().encode(
-            sse([
-              {
-                type: 'response.created',
-                response: snapshot([], { status: 'in_progress' }),
-              },
-            ]),
-          ),
-        );
-      },
-      cancel,
-    });
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockImplementation(async (_url, init) => {
-        signal = init?.signal;
-        return new Response(body, {
-          headers: { 'content-type': 'text/event-stream' },
+  it.effect(
+    'interrupts a pending body read after publishing identity and joins cleanup',
+    () =>
+      Effect.gen(function* () {
+        let signal: AbortSignal | null | undefined;
+        const cancel = vi.fn();
+        const identified = vi.fn();
+        // Completed by the identity event the spy above also records.
+        const identifiedSeen = yield* Deferred.make<void>();
+        const completed = vi.fn();
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                sse([
+                  {
+                    type: 'response.created',
+                    response: snapshot([], { status: 'in_progress' }),
+                  },
+                ]),
+              ),
+            );
+          },
+          cancel,
         });
-      });
-    const model = modelWith(fetch);
-    const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
-    assert(turn.mode === 'foreground');
-    const fiber = Effect.runFork(
-      Stream.runForEach(model.streamTurn(turn), (event) =>
-        Effect.sync(() => {
-          if (event.kind === 'identified') identified();
-          if (event.kind === 'completed') completed();
-        }),
-      ),
-    );
-    await vi.waitFor(() => expect(identified).toHaveBeenCalledTimes(1));
-    await Effect.runPromise(Fiber.interrupt(fiber));
-    expect(signal?.aborted).toBe(true);
-    expect(cancel).toHaveBeenCalledTimes(1);
-    expect(completed).not.toHaveBeenCalled();
-  });
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async (_url, init) => {
+            signal = init?.signal;
+            return new Response(body, {
+              headers: { 'content-type': 'text/event-stream' },
+            });
+          });
+        const model = modelWith(fetch);
+        const turn = yield* model.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const fiber = yield* Effect.forkChild(
+          Stream.runForEach(model.streamTurn(turn), (event) => {
+            if (event.kind === 'identified') {
+              identified();
+              return Deferred.succeed(identifiedSeen, undefined);
+            }
+            if (event.kind === 'completed') completed();
+            return Effect.void;
+          }),
+        );
+        yield* Deferred.await(identifiedSeen);
+        expect(identified).toHaveBeenCalledTimes(1);
+        yield* Fiber.interrupt(fiber);
+        expect(signal?.aborted).toBe(true);
+        expect(cancel).toHaveBeenCalledTimes(1);
+        expect(completed).not.toHaveBeenCalled();
+      }),
+  );
 });

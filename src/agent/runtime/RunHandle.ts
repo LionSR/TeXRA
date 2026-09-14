@@ -71,10 +71,9 @@ type RunSuspension =
  *
  * This is derived from — not a parallel re-declaration of — {@link
  * ToolUseFlowContext}, so a shape change to either surface fails type-checking
- * instead of silently diverging: the nested `modelHandler` view is a `Pick` of
- * the flow context's own type, and the method members are picked through
- * directly. The loop's context is deliberately richer (it owns the run's
- * `FollowUps` lease and the bound model); the handle keeps only what a
+ * instead of silently diverging: every member is picked through from the flow
+ * context's own type. The loop's context is deliberately richer (it owns the
+ * run's `FollowUps` lease and the bound model); the handle keeps only what a
  * consumer of an attached run needs.
  *
  * {@link RunHandle.interrupt} falls back to this context's
@@ -84,12 +83,7 @@ type RunSuspension =
  * `flowContext` is attached via `attachToolUseFlow` for the duration of one
  * turn and knows how to cancel the in-progress model/tool round.
  */
-export type LiveToolUseFlowContext = {
-  readonly modelHandler: Pick<
-    ToolUseFlowContext['modelHandler'],
-    'supportsManualCompaction'
-  >;
-} & Pick<
+export type LiveToolUseFlowContext = Pick<
   ToolUseFlowContext,
   | 'ownerSession'
   | 'requestImmediateCompaction'
@@ -134,6 +128,13 @@ export class RunHandle<
 
   /** Whether a caller has claimed the run's exactly-once terminal outcome. */
   private terminalClaimed = false;
+  /**
+   * Whether a stop reached this handle. Stop precedence reads it: a stop
+   * that landed before the run's own exit outranks the report the flow makes
+   * of that exit, so the `run.end` row says cancelled. In-process only; the
+   * durable verdict is the row.
+   */
+  private stopped = false;
 
   constructor(
     /**
@@ -237,7 +238,14 @@ export class RunHandle<
     };
   }
 
+  /** True once a stop reached this handle, whether or not a program was
+   *  there to interrupt. */
+  get stopRequested(): boolean {
+    return this.stopped;
+  }
+
   interrupt(): boolean {
+    this.stopped = true;
     const handler = this.interruptHandler;
     if (handler) {
       handler.interrupt();
@@ -295,6 +303,7 @@ export class RunHandle<
   beginSuspendedTermination(): Effect.Effect<void, Error> | undefined {
     if (this.suspension?.state !== 'parked') return undefined;
     if (!this.claimTerminalFinalize()) return undefined;
+    this.stopped = true;
     const { teardown } = this.suspension;
     this.suspension = { state: 'terminating' };
     return teardown;

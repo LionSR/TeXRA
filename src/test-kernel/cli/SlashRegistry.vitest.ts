@@ -4,6 +4,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 
 import {
   findSlashCommand,
@@ -24,6 +25,7 @@ import {
 import { type AccountAccessFormValue } from '@cli/chat/tui/forms/AccountAccessForm';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import {
+  CLI_LOCAL_RUN_ID,
   activeForm,
   formProgress,
   resetCliState,
@@ -31,12 +33,9 @@ import {
   transientNotice,
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
-import {
-  CLI_LOCAL_RUN_ID,
-  notices,
-  noticesFor,
-} from '@cli/chat/tui/state/transcript';
+import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
+import { effectRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
@@ -81,12 +80,14 @@ const CHATGPT_PREFERENCE_FORM_VALUE: AccountAccessFormValue = {
 function registerBuiltins(
   options: Omit<
     Parameters<typeof registerBuiltinSlashCommands>[0],
-    'secrets' | 'state'
+    'secrets' | 'state' | 'runtime' | 'runtimeSession'
   > = {},
 ): void {
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
     state: new FakeStateStore(),
+    runtime: effectRuntime(),
+    runtimeSession: defaultSession(),
     ...options,
   });
 }

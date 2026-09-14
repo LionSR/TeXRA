@@ -32,7 +32,7 @@ machinery, stand up an own **`packages/llm`** package, and retire the
 `IModelHandler` port and provider-class compatibility, with `@texra-ai/agent`
 as the single supported entry — has advanced. The **direction** itself is
 ratified (the pure-Effect runtime,
-[`2026-09-04-agent-runtime-on-effect.md`](../../proposed/architecture/2026-09-04-agent-runtime-on-effect.md)
+[`2026-09-04-agent-runtime-on-effect.md`](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md)
 and the accepted delivery plan
 [`2026-09-06-effect-runtime-delivery-plan.md`](../../proposed/architecture/2026-09-06-effect-runtime-delivery-plan.md),
 built on the migration PRD

@@ -91,9 +91,9 @@ describe('bash-request-panel', () => {
         },
       },
       {
-        kind: 'decision.bash',
+        kind: 'request.decide',
         runId: 'run-1',
-        approvalId: 'bash-request-1',
+        requestId: 'bash-request-1',
         decision: { action: 'approve' },
       },
     ]);

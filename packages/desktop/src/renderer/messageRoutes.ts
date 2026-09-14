@@ -71,7 +71,11 @@ interface DesktopMessageRouteHandlers {
   logs: { applySnapshot(message: DesktopSetLogMessage): void };
   review: {
     open(message: DesktopShowDiffMessage): void;
-    clear(session: string): void;
+    /**
+     * Drop the reviews `previewId` opened, keeping the rest; reports whether
+     * the pane is left empty.
+     */
+    close(session: string, previewId: string): boolean;
   };
   disposeReviewTab(session: string): void;
   pdf: { open(message: DesktopShowPdfMessage): void };
@@ -136,8 +140,12 @@ export function createMessageRoutes(
       handlers.review.open(message);
     }),
     messageRoute(DesktopCloseDiffMessageSchema, (message) => {
-      handlers.review.clear(message.session);
-      handlers.disposeReviewTab(message.session);
+      // A close takes its own diff off the pane and nothing else; the Review
+      // tab goes only once that leaves the pane empty, so a request settling
+      // never dismisses another request's preview or an unrelated review.
+      if (handlers.review.close(message.session, message.previewId)) {
+        handlers.disposeReviewTab(message.session);
+      }
     }),
     messageRoute(DesktopShowPdfMessageSchema, (message) =>
       handlers.pdf.open(message),

@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
 import { Cause, Deferred, Effect, Exit, Option } from 'effect';
-import { z } from 'zod';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { installAuthProgramEdge, runAuthProgram } from '@auth/authProgram';
@@ -11,6 +10,11 @@ import {
   getAuthCallbackUri,
   type OAuthProvider,
 } from '@auth/config';
+import {
+  isPendingOAuthStateFresh,
+  PendingOAuthStateSchema,
+  type PendingOAuthState,
+} from '@auth/pendingOAuthState';
 import {
   refreshRemoteAgentCatalogAfterSignOut,
   requireOAuthRedirectUrl,
@@ -24,7 +28,7 @@ import {
 import type { AuthCallbackUriParts } from '@auth/authCallback';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
@@ -42,12 +46,6 @@ const DESKTOP_PENDING_OAUTH_STATE_KEY = 'texra.desktop.pendingOAuthState';
 const AUTH_PERSIST_LANE = 'persist';
 const AUTH_COMMIT_LANE = 'commit';
 const AUTH_CALLBACK_LANE = 'callback';
-
-const DesktopPendingOAuthStateSchema = z.object({
-  createdAt: z.number(),
-  nonce: z.string(),
-});
-type DesktopPendingOAuthState = z.infer<typeof DesktopPendingOAuthStateSchema>;
 
 interface DesktopSupabaseAuth {
   signIn(provider?: OAuthProvider): Promise<void>;
@@ -88,6 +86,9 @@ interface DesktopSupabaseAuthOptions {
   callbackState: DesktopAuthCallbackState;
   host: DesktopSupabaseAuthHost;
   log: DesktopAuthLog;
+  /** The process runtime the composition root built; every lane and callback
+   *  below settles on it. */
+  runtime: ProcessRuntime;
 }
 
 interface DesktopOAuthClient {
@@ -121,8 +122,11 @@ export interface DesktopAuthCoordinator {
  * re-throws the original error, so a caller sees the same rejection the
  * queued job produced before the lanes were Effect programs.
  */
-async function runSettled<A>(effect: Effect.Effect<A, unknown>): Promise<A> {
-  const exit = await effectRuntime().runPromiseExit(effect);
+async function runSettled<A>(
+  runtime: ProcessRuntime,
+  effect: Effect.Effect<A, unknown>,
+): Promise<A> {
+  const exit = await runtime.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
   throw Cause.squash(exit.cause);
 }
@@ -132,11 +136,12 @@ async function runSettled<A>(effect: Effect.Effect<A, unknown>): Promise<A> {
  * work lands, and a failure leaves only the debug trace.
  */
 function runCleanupDetached(
+  runtime: ProcessRuntime,
   log: DesktopAuthLog,
   cleanup: () => Promise<unknown>,
   failureMessage: string,
 ): void {
-  effectRuntime().runFork(
+  runtime.runFork(
     Effect.tryPromise({ try: cleanup, catch: (error) => error }).pipe(
       Effect.catch((error) =>
         Effect.sync(() => {
@@ -152,11 +157,12 @@ function runCleanupDetached(
  * error when the dialog host is already gone.
  */
 async function warnOnNotificationFailure(
+  runtime: ProcessRuntime,
   log: DesktopAuthLog,
   notify: () => unknown,
   failureMessage: string,
 ): Promise<void> {
-  const notified = await effectRuntime().runPromiseExit(
+  const notified = await runtime.runPromiseExit(
     Effect.tryPromise({ try: async () => notify(), catch: (error) => error }),
   );
   if (Exit.isFailure(notified)) {
@@ -167,6 +173,7 @@ async function warnOnNotificationFailure(
 }
 
 export function createDesktopAuthCallbackState(
+  runtime: ProcessRuntime,
   log: DesktopAuthLog,
   store?: Pick<StateStore, 'get' | 'update'>,
 ): DesktopAuthCallbackState {
@@ -174,7 +181,7 @@ export function createDesktopAuthCallbackState(
   // One exclusive persist lane, so an expired-state clear cannot be
   // reordered after a newer attempt's persist.
   const persistLanes = new Map<string, PerKeyLane>();
-  const persistEffect = (state: DesktopPendingOAuthState | null) =>
+  const persistEffect = (state: PendingOAuthState | null) =>
     withPerKeyLane(
       persistLanes,
       AUTH_PERSIST_LANE,
@@ -188,10 +195,10 @@ export function createDesktopAuthCallbackState(
     );
 
   const persistPendingState = async (
-    state: DesktopPendingOAuthState | null,
+    state: PendingOAuthState | null,
   ): Promise<void> => {
     if (!store) return;
-    await runSettled(persistEffect(state));
+    await runSettled(runtime, persistEffect(state));
   };
 
   // A dropped persist leaves the expired nonce on disk; in-memory state is
@@ -200,7 +207,7 @@ export function createDesktopAuthCallbackState(
   const forgetExpiredPendingState = (): void => {
     pendingState = null;
     if (!store) return;
-    effectRuntime().runFork(
+    runtime.runFork(
       persistEffect(null).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
@@ -213,7 +220,7 @@ export function createDesktopAuthCallbackState(
     );
   };
 
-  if (pendingState && isPendingOAuthStateExpired(pendingState)) {
+  if (pendingState && !isPendingOAuthStateFresh(pendingState)) {
     forgetExpiredPendingState();
   }
 
@@ -221,7 +228,7 @@ export function createDesktopAuthCallbackState(
   // best-effort persists the reset once the stored attempt has expired.
   const hasValidPendingState = (): boolean => {
     if (!pendingState) return false;
-    if (isPendingOAuthStateExpired(pendingState)) {
+    if (!isPendingOAuthStateFresh(pendingState)) {
       forgetExpiredPendingState();
       return false;
     }
@@ -248,14 +255,10 @@ export function createDesktopAuthCallbackState(
 
 function readPendingOAuthState(
   store: Pick<StateStore, 'get' | 'update'> | undefined,
-): DesktopPendingOAuthState | null {
+): PendingOAuthState | null {
   const persisted = store?.get<unknown>(DESKTOP_PENDING_OAUTH_STATE_KEY, null);
-  const parsed = DesktopPendingOAuthStateSchema.safeParse(persisted);
+  const parsed = PendingOAuthStateSchema.safeParse(persisted);
   return parsed.success ? parsed.data : null;
-}
-
-function isPendingOAuthStateExpired(state: DesktopPendingOAuthState): boolean {
-  return Date.now() - state.createdAt > AUTH_CALLBACK_TIMEOUT_MS;
 }
 
 /**
@@ -276,8 +279,15 @@ function createAuthAttempt(nonce: string): DesktopAuthAttempt {
 export function createDesktopSupabaseAuth(
   options: DesktopSupabaseAuthOptions,
 ): DesktopSupabaseAuth {
-  const { callbackState, coordinator, host, log, oauthClient, router } =
-    options;
+  const {
+    callbackState,
+    coordinator,
+    host,
+    log,
+    oauthClient,
+    router,
+    runtime,
+  } = options;
   // The callback lane keeps a second deeplink from committing a session while
   // the first is still storing one; the commit lane serializes session
   // storage writes. The lane map itself answers "is a callback in flight",
@@ -288,6 +298,7 @@ export function createDesktopSupabaseAuth(
     activeAttempt === attempt;
   const runAuthCommit = <T>(commit: () => Promise<T>): Promise<T> =>
     runSettled(
+      runtime,
       withPerKeyLane(
         authLanes,
         AUTH_COMMIT_LANE,
@@ -320,6 +331,7 @@ export function createDesktopSupabaseAuth(
       Deferred.doneUnsafe(outcome, Effect.succeed(success));
     };
     return runSettled(
+      runtime,
       Effect.gen(function* () {
         const settled = yield* Deferred.await(outcome).pipe(
           Effect.timeoutOption(timeoutMs),
@@ -329,6 +341,7 @@ export function createDesktopSupabaseAuth(
         settleAttempt(attempt, false);
         if (wasOwned) {
           runCleanupDetached(
+            runtime,
             log,
             () => callbackState.clearAwaitingCallback(attempt.nonce),
             'Desktop sign-in timeout cleanup failed',
@@ -342,10 +355,11 @@ export function createDesktopSupabaseAuth(
     callback: DesktopProtocolCallback;
     attempt: DesktopAuthAttempt;
   }): Promise<void> => {
-    const processed = await effectRuntime().runPromiseExit(
+    const processed = await runtime.runPromiseExit(
       Effect.tryPromise({
         try: () =>
           processProtocolCallback(
+            runtime,
             coordinator,
             queued.callback,
             host,
@@ -364,6 +378,7 @@ export function createDesktopSupabaseAuth(
     const message = toErrorMessage(Cause.squash(processed.cause));
     log.error(`Desktop auth callback failed: ${message}`);
     await warnOnNotificationFailure(
+      runtime,
       log,
       () => host.showErrorMessage(`Sign-in failed: ${message}`),
       'Desktop sign-in error notification failed',
@@ -387,6 +402,7 @@ export function createDesktopSupabaseAuth(
     const claimedAttempt = activeAttempt;
     if (claimedAttempt.nonce !== callbackNonce) return;
     runCleanupDetached(
+      runtime,
       log,
       () => callbackState.clearAwaitingCallback(callbackNonce),
       'Desktop auth callback state clear failed',
@@ -396,7 +412,7 @@ export function createDesktopSupabaseAuth(
         'Desktop auth callback queued while another callback is being processed',
       );
     }
-    effectRuntime().runFork(
+    runtime.runFork(
       withPerKeyLane(
         authLanes,
         AUTH_CALLBACK_LANE,
@@ -452,7 +468,7 @@ export function createDesktopSupabaseAuth(
     const attempt = createAuthAttempt(nonce);
     activeAttempt = attempt;
     onAttempt?.(attempt);
-    const started = await effectRuntime().runPromiseExit(
+    const started = await runtime.runPromiseExit(
       Effect.tryPromise({
         try: () => startSignInAttempt(provider, attempt),
         catch: (error) => error,
@@ -476,7 +492,7 @@ export function createDesktopSupabaseAuth(
     ) {
       let startedAttempt: DesktopAuthAttempt | undefined;
       let completion: Promise<boolean> | undefined;
-      const started = await effectRuntime().runPromiseExit(
+      const started = await runtime.runPromiseExit(
         Effect.tryPromise({
           try: () =>
             startSignIn(provider, (attempt) => {
@@ -503,7 +519,7 @@ export function createDesktopSupabaseAuth(
         await coordinator.clearSession();
       });
       await refreshRemoteAgentCatalogAfterSignOut(
-        () => effectRuntime().runPromise(invalidateRemoteAgentsAfterSignOut()),
+        () => runtime.runPromise(invalidateRemoteAgentsAfterSignOut()),
         (message) => log.warn(message),
       );
       await host.onSessionChanged();
@@ -519,11 +535,14 @@ export function createDesktopSupabaseAuth(
 export function createDesktopAuthCoordinator(options: {
   secrets: PlatformSecrets;
   log: DesktopAuthLog;
+  /** The process runtime the composition root built; the auth subsystem's run
+   *  edge is installed over it. */
+  runtime: ProcessRuntime;
 }): DesktopAuthCoordinator {
   // The auth subsystem's run edge lives at this host entry (PRD R1); the
   // coordinator's surface is Effect-typed and this module settles it through
   // `runAuthProgram` for the Promise interface above.
-  installAuthProgramEdge((program) => effectRuntime().runPromiseExit(program));
+  installAuthProgramEdge((program) => options.runtime.runPromiseExit(program));
   const coordinator = createHostAuthCoordinator({
     secrets: options.secrets,
     log: createSessionLog(options.log),
@@ -538,6 +557,7 @@ export function createDesktopAuthCoordinator(options: {
 }
 
 async function processProtocolCallback(
+  runtime: ProcessRuntime,
   coordinator: DesktopAuthCoordinator,
   callback: DesktopProtocolCallback,
   host: DesktopSupabaseAuthHost,
@@ -558,6 +578,7 @@ async function processProtocolCallback(
         return false;
       }
       await warnOnNotificationFailure(
+        runtime,
         log,
         () => host.showErrorMessage(`Sign-in failed: ${result.error}`),
         'Desktop sign-in error notification failed',
@@ -582,6 +603,7 @@ async function processProtocolCallback(
     if (!(await stillOwned())) return false;
 
     await warnOnNotificationFailure(
+      runtime,
       log,
       () =>
         host.showInfoMessage(`Signed in as ${result.session.account.label}`),
@@ -590,6 +612,7 @@ async function processProtocolCallback(
     if (!(await stillOwned())) return false;
 
     await warnOnNotificationFailure(
+      runtime,
       log,
       () => host.onSessionChanged(),
       'Desktop auth surface refresh failed',

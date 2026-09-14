@@ -1,4 +1,3 @@
-import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { settingByKey, type SettingHost } from '@shared/schemas';
 import {
@@ -17,10 +16,10 @@ function requireEntry(key: string) {
 
 /**
  * The host this process is, for the catalog rows whose storage slot differs
- * by host (the git identity and skill availability rows live in workspace
- * state on the extension and desktop and in `.texra/config.json` on the
- * CLI). One process is one host, so the composition root installs it once,
- * beside `initProcessWorkspaceRoots()`.
+ * by host (the git identity rows live in worktree-shared workspace state on
+ * the extension and desktop and in `.texra/config.json` on the CLI). One
+ * process is one host, so the composition root installs it once, beside
+ * `initProcessWorkspaceRoots()`.
  */
 let processSettingHost: SettingHost = 'vscode';
 
@@ -45,7 +44,7 @@ export function platformSettingsStores(): SettingsStores {
   return {
     config: roots.config,
     workspaceState: roots.workspaceState,
-    globalState: platform().globalState,
+    globalState: roots.globalState,
   };
 }
 
@@ -53,7 +52,7 @@ export function platformSettingsStores(): SettingsStores {
  * Read a catalog-modeled setting from the live platform, resolving its default
  * from the entry's schema `.prefault()` — the single default source.
  *
- * Replaces the scattered `platform().<store>.get(key, handPassedDefault)` reads
+ * Replaces the scattered per-store `get(key, handPassedDefault)` reads
  * whose second argument duplicated the catalog default: the value now comes from
  * the schema, and a stale/invalid stored value snaps back to that default (via
  * `readSetting`'s `safeParse`) rather than propagating. The store slot

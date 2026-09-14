@@ -2,7 +2,7 @@
 
 Status: this is a **proposal, adversarially reviewed once**, not a ratified
 plan. It specifies PR 1 of lane D of the runtime cutover
-([the agent runtime on Effect](./2026-09-04-agent-runtime-on-effect.md), §5
+([the agent runtime on Effect](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md), §5
 PR plan), stacked on `cutover/native-runtime-llm-20260907`. The review found
 real defects and this document carries their corrections rather than the
 original text: five of the six §0.1 boundary values came back **partial**,
@@ -1480,16 +1480,12 @@ conversion of `flow_<id>.json` into rows. The 0.41 owner ruling removed it.
 Numbered by how expensive they are to reverse after the first row is written.
 Decisions 10 to 12 are new, added by the review; the rest carry forward.
 
-**0. One aggregate per run.** _(Before PR 1 is implemented.)_ This note now
-declares every row on one `run` aggregate keyed by the run id, which is what
-removes the two-key deviation earlier drafts carried. That shape is the
-recommendation of the
-[one run model](2026-09-10-one-run-model.md), not yet a ruling: its §7 item 1
-still puts it to the owner, and it is the one place that note departs from a
-ratified detail, the one-fold PRD's per-kind sequence. If the owner instead
-keeps two aggregate kinds sharing one logical id, §2.2, §2.8, §3.1 and §4.3
-here revert to naming a kind per row class, and the counter and claim this
-shape deletes come back.
+**0. One aggregate per run.** _Resolved by #12222 (recorded 2026-09-13)._ Every
+row lives on one `run` aggregate keyed by the run id, as this note declares and
+as the [one run model](../../implemented/architecture/2026-09-10-one-run-model.md)
+§7 item 1 now records; the two-key alternative (two aggregate kinds sharing one
+logical id, with the counter and claim it needs) is closed, and §2.2, §2.8, §3.1
+and §4.3 stand as written.
 
 **1. Is the durable route binding the literal deployment, or an opaque route
 id?** _(Before PR 1 merges; after rows exist it is a row rewrite.)_

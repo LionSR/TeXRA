@@ -19,7 +19,7 @@ import { hostPort } from '@common/hostPort';
 import type { TerminalRunner } from '@hosts/uiHosts';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { Secrets } from '@platform/secrets';
 
 /** Per-command surface. */
 interface SetupCommandAdapter {
@@ -61,19 +61,6 @@ export class SetupPlatform extends Context.Service<
   }
 }
 
-/**
- * The scope violation for a non-`texra.*` key, or `undefined` when the key is
- * in scope. Returned rather than thrown so the synchronous reader can throw it
- * while the update program fails with it in the error channel.
- */
-function texraScopeViolation(key: string): Error | undefined {
-  return key.startsWith('texra.')
-    ? undefined
-    : new Error(
-        `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
-      );
-}
-
 /** TeXRA account status shared by every host. */
 export const getSetupAuthStatus = Effect.fn('getSetupAuthStatus')(
   function* (): Effect.fn.Return<
@@ -97,37 +84,15 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   'getChatGptSubscriptionStatus',
 )(function* (): Effect.fn.Return<
   { signedIn: boolean; enabled: boolean },
-  unknown
+  unknown,
+  Secrets
 > {
-  const status = yield* hostPort(() => getCodexStatus());
+  const secrets = yield* Secrets;
+  const status = yield* hostPort(() => getCodexStatus(secrets));
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
   const enabled = yield* hostPort(() =>
     isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
   );
   return { signedIn: true, enabled };
-});
-
-/** Configuration operations scoped to `texra.*` keys. */
-export const texraScopedConfig = Object.freeze({
-  get(key: string): unknown {
-    const violation = texraScopeViolation(key);
-    if (violation) throw violation;
-    return workspaceRoots().config.get(key);
-  },
-  update: Effect.fn('texraScopedConfig.update')(function* (
-    key: string,
-    value: unknown,
-    target: 'user' | 'workspace',
-  ): Effect.fn.Return<void, unknown> {
-    const violation = texraScopeViolation(key);
-    if (violation) return yield* Effect.fail(violation);
-    yield* hostPort(() =>
-      workspaceRoots().config.update(
-        key,
-        value,
-        target === 'workspace' ? 'workspace' : 'global',
-      ),
-    );
-  }),
 });

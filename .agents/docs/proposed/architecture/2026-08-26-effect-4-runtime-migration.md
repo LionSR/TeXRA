@@ -15,10 +15,10 @@ for the application's working unit, reserving **paper** for scholarly documents.
 **Status:** Owner ruling of 2026-09-06: the agent runtime is written in pure
 Effect to Effect's best practice, and PocketFlow is not retained. That ruling
 amends R4, 8.4, Phase 2, and alternative 13.C below, in the form
-`.agents/docs/proposed/architecture/2026-09-04-agent-runtime-on-effect.md` §6 specifies, and
-closes open decisions 6 and 7 of section 15. That proposal is in flight as
-pull request #11843 and merges before this amendment; until it lands, every
-section reference to it below resolves in that pull request's branch.
+`.agents/docs/implemented/architecture/2026-09-04-agent-runtime-on-effect.md` §6 specifies, and
+closes open decisions 6 and 7 of section 15. That proposal landed (#11843,
+docs; #12287, #12314, #12329 implementation) and now lives under
+`implemented/architecture/`; every section reference to it below resolves there.
 
 A second owner ruling, later on 2026-09-06 on the first wave of conversion
 pull requests (#11922 to #11928): "we should fully embrace Effect. No more
@@ -625,7 +625,7 @@ those rows (`foldRunState`, in `src/shared`), computed the same way on
 resume and in the trace viewer, and never persisted. The shape, the six row
 types, the services (`RunLedger`, `RunContext`, `ModelInvoker`, `Tools`,
 `FollowUps`, `OutputPipeline`), and the elimination ledger are specified in
-`.agents/docs/proposed/architecture/2026-09-04-agent-runtime-on-effect.md` §2 and §4.
+`.agents/docs/implemented/architecture/2026-09-04-agent-runtime-on-effect.md` §2 and §4.
 
 What does not change: an Effect fiber, scope, `Ref`, `Exit`, or `Cause` is
 still not a durable object and is never serialized. Effect governs one
@@ -1429,7 +1429,7 @@ unreachable, or the foundation is reverted under the rollback rule.
 
 **Implementation order clarified from current main, 2026-09-06:** first
 complete the joint runtime/LLM contract in
-[`agent-runtime-on-effect` §0.1](./2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package).
+[`agent-runtime-on-effect` §0.1](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package).
 The canonical request, prepared invocation, remote acceptance, continuation
 and tool-settlement boundaries govern the ledger schemas below. Preserve
 both reflection and tool-use as full consumers; do not freeze new rows around
@@ -1441,7 +1441,7 @@ execution kernel": one typed node Effect, one transition kernel, sixteen
 subclasses converted, cursor semantics preserved) is struck. The engine is not
 converted; it is deleted with its replacement in the same change. This phase is
 lane D of the persistence cutover branch, sequenced and sized by
-`.agents/docs/proposed/architecture/2026-09-04-agent-runtime-on-effect.md` §3 and §5:
+`.agents/docs/implemented/architecture/2026-09-04-agent-runtime-on-effect.md` §3 and §5:
 
 1. **Foundation.** `RunLedger` over `SessionEvents`; the six row schemas as
    data-only Zod in `src/shared/schemas/runLedger.ts`, beside

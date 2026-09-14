@@ -17,19 +17,16 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
-import { testModelCell } from '../modelCellTestUtils';
-
-/** The zero-priced OpenAI model every runtime fixture bills against. */
+/**
+ * The zero-priced OpenAI model every runtime fixture bills against, shaped
+ * as the binding `UsageMonitor.recordUsage` reads.
+ */
 export const testModelInfo = {
-  capabilities: {
-    supportsPromptCaching: false,
-    supportsAutoPromptCaching: false,
-    supportsReasoning: false,
-    cacheDiscountFactor: 0,
-  },
   config: {
     provider: ModelProvider.OPENAI,
     name: 'test-model',
@@ -37,6 +34,12 @@ export const testModelInfo = {
     inputPrice: 0,
     openRouterOnly: false,
     requiresResponsesAPI: false,
+    capabilities: {
+      supportsPromptCaching: false,
+      supportsAutoPromptCaching: false,
+      supportsReasoning: false,
+      cacheDiscountFactor: 0,
+    },
   },
 };
 
@@ -70,15 +73,12 @@ export function createTestLaunchContext({
     agentCategory: category,
   });
   const setting = AgentSettingSchema.parse({ agentCategory: category });
-  const modelCell = testModelCell(
-    { ...testModelInfo, dispose: vi.fn() },
-    config.model,
-  );
 
   return {
     config,
     setting,
     prompt: AgentPromptSchema.parse({}),
+    ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
     stores: { secrets: new FakeSecrets(), globalState: new FakeStateStore() },
     runScope: createRunScope({
@@ -92,11 +92,11 @@ export function createTestLaunchContext({
     toolPolicy: {},
     attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(
-      modelCell,
-      { logger, runId, runStageId: undefined },
+      { logger, runId, runStageId: undefined, config: workspaceRoots().config },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
-    modelCell,
+    modelConfig: buildTestModelConfig(),
+    modelCompatibilityKey: null,
     interrupt: () => {
       Deferred.doneUnsafe(stopped, Effect.void);
     },

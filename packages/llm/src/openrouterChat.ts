@@ -3,14 +3,19 @@ import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
 import { Cause, Effect, Stream } from 'effect';
-import { Sse } from 'effect/unstable/encoding';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
-  JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  authOrRejectionKind,
+  enrichModelError,
+  hasErrorField,
+  parseInboundToolArguments,
+  parseJsonOrModelError,
+  pullStream,
+  sseEvents,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -670,10 +675,7 @@ export function openrouterChatModel(
       let returnedModel: string | undefined;
       let requestId: string | undefined;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId,
           requestId,
           model: returnedModel ?? config.requestedModel,
@@ -739,13 +741,7 @@ export function openrouterChatModel(
               });
             const error = parsedError.data;
             return new ModelError({
-              kind:
-                status === 401 ||
-                status === 403 ||
-                error.code === 401 ||
-                error.code === 403
-                  ? 'authentication'
-                  : 'provider-rejection',
+              kind: authOrRejectionKind(status, error.code),
               message: error.message,
               status,
               cause: payload,
@@ -762,20 +758,7 @@ export function openrouterChatModel(
           };
           // Reads and classification stay inside the acquired scope: primary failures
           // and distinct cleanup defects are combined by Effect, not reconstructed.
-          const bytes = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => body.read(),
-                catch: transportFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          );
+          const bytes = pullStream(() => body.read(), transportFailure);
           if (!response.ok)
             return Stream.fromEffect(
               Effect.gen(function* () {
@@ -784,20 +767,18 @@ export function openrouterChatModel(
                   () => '',
                   (all, chunk) => all + chunk,
                 );
-                const raw: unknown = yield* Effect.try({
-                  try: () => JSON.parse(text),
-                  catch: (cause) =>
+                const raw = yield* parseJsonOrModelError(
+                  text,
+                  (cause) =>
                     new ModelError({
                       kind: 'provider-rejection',
                       message: `OpenRouter rejected the request (HTTP ${response.status}).`,
                       status: response.status,
                       cause,
                     }),
-                });
+                );
                 return yield* failure(
-                  typeof raw === 'object' && raw !== null && 'error' in raw
-                    ? raw.error
-                    : raw,
+                  hasErrorField(raw) ? raw.error : raw,
                   response.status,
                 );
               }).pipe(Effect.mapError(enrich)),
@@ -826,46 +807,25 @@ export function openrouterChatModel(
             number,
             { id?: string; name?: string; arguments: string }
           >();
-          let parsedEvents: Sse.Event[] = [];
-          const parser = Sse.makeParser(
-            (event) => {
-              // This one-shot operation ignores reconnect hints and never reconnects.
-              if (event._tag === 'Event') parsedEvents.push(event);
-            },
-            { maxEventSize: Number.POSITIVE_INFINITY },
-          );
-          const progress = bytes.pipe(
-            Stream.decodeText,
-            Stream.mapEffect((text) =>
-              Effect.gen(function* () {
-                parsedEvents = [];
-                const error = parser.feed(text);
-                if (error !== undefined)
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message: 'OpenRouter returned malformed SSE.',
-                    cause: error,
-                  });
-                return parsedEvents;
-              }),
-            ),
-            Stream.flattenIterable,
-            Stream.takeUntil((event) => event.data === '[DONE]'),
+          const progress = sseEvents(
+            bytes,
+            'OpenRouter returned malformed SSE.',
+          ).pipe(
             Stream.mapEffect((event) =>
               Effect.gen(function* () {
                 if (event.data === '[DONE]') {
                   sentinel = true;
                   return [];
                 }
-                const raw: unknown = yield* Effect.try({
-                  try: () => JSON.parse(event.data),
-                  catch: (cause) =>
+                const raw = yield* parseJsonOrModelError(
+                  event.data,
+                  (cause) =>
                     new ModelError({
                       kind: 'malformed-output',
                       message: 'OpenRouter returned malformed stream JSON.',
                       cause,
                     }),
-                });
+                );
                 const identity = IdentitySchema.safeParse(raw);
                 if (identity.success) {
                   if (
@@ -883,15 +843,8 @@ export function openrouterChatModel(
                   responseId ??= identity.data.id;
                   returnedModel ??= identity.data.model;
                 }
-                if (
-                  event.event === 'error' ||
-                  (typeof raw === 'object' && raw !== null && 'error' in raw)
-                )
-                  return yield* failure(
-                    typeof raw === 'object' && raw !== null && 'error' in raw
-                      ? raw.error
-                      : raw,
-                  );
+                if (event.event === 'error' || hasErrorField(raw))
+                  return yield* failure(hasErrorField(raw) ? raw.error : raw);
                 const parsedChunk = ChunkSchema.safeParse(raw);
                 if (!parsedChunk.success)
                   return yield* new ModelError({
@@ -1156,23 +1109,7 @@ export function openrouterChatModel(
                     message:
                       'OpenRouter returned incomplete or duplicate local tool calls.',
                   });
-                const args: unknown = yield* Effect.try({
-                  try: () => JSON.parse(call.arguments),
-                  catch: (cause) =>
-                    new ModelError({
-                      kind: 'malformed-output',
-                      message: 'OpenRouter returned malformed tool arguments.',
-                      cause,
-                    }),
-                });
-                const parsedArgs = JsonObjectSchema.safeParse(args);
-                if (!parsedArgs.success)
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message:
-                      'OpenRouter tool arguments must be a supported JSON object.',
-                    cause: parsedArgs.error,
-                  });
+                yield* parseInboundToolArguments(call.arguments, 'OpenRouter');
                 ids.add(call.id);
                 content.push({
                   kind: 'local-call',

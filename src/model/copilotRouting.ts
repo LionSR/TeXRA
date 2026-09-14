@@ -14,9 +14,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isDeprecatedModel, isRetiredModel } from './modelOptionsBasic';
 import { copilotRouteForModel } from './runtimeModelRegistry';
 
-/** One-launch override for a deliberate direct-key retry. */
-export type CopilotRouteOverride = 'direct';
-
 /**
  * Copilot discovery never matches a retired or deprecated base model, so a
  * preference for one could never resolve to a route; it drops out at read.

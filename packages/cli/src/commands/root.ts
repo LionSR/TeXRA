@@ -49,7 +49,7 @@ import { setupCommand } from './setup';
 import { skillsCommand } from './skills';
 import { toolsCommand } from './tools';
 import { versionCommand } from './version';
-import { runWorkflowCommand } from './workflow';
+import { headlessRunCommand } from './workflow';
 
 function defaultRootSubcommand(): 'orchestrate' | 'help' {
   const ambient = readCliAmbientState();
@@ -77,7 +77,7 @@ export const rootCommand = withUsageSections(
       orchestrate: orchestrationCommand,
       chat: chatCommand,
       clone: cloneCommand,
-      run: runWorkflowCommand,
+      run: headlessRunCommand,
       resume: resumeCommand,
       setup: setupCommand,
       init: initCommand,
@@ -118,7 +118,7 @@ export const rootCommand = withUsageSections(
           'texra clone <project> --cwd ./paper',
           'clone an Overleaf or ShareLaTeX project',
         ],
-        ['texra run <agent> --input file.tex', 'run a workflow agent headless'],
+        ['texra run <agent> --input file.tex', 'run an agent headless'],
         ['texra agents list', 'list the available agents'],
         ['texra config agents --all', 'show all agents in this workspace'],
         ['texra init', 'save workspace defaults to .texra/config.json'],

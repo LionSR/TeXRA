@@ -62,39 +62,6 @@ const RoundStageSchema = z.object({
 
 export type RoundStage = z.infer<typeof RoundStageSchema>;
 
-// Phase Stage (ephemeral phase label from typed stage.start metadata)
-//
-// A workflow-script run advances through named phases instead of the numbered
-// rounds used by reflection workflows. Both are projected from the same
-// `stage.start` fact, discriminated by its `kind`, and a run that opens
-// phases never opens rounds.
-
-const PhaseStageSchema = z.object({
-  /** Phase title, free-form text from the workflow script. */
-  label: z.string(),
-  /** Zero-based position in the declared phase list. Absent for a phase the
-   *  script opened dynamically, which has no declared position. */
-  index: z.int().nonnegative().optional(),
-  /** Number of declared phases, when known. */
-  total: z.int().positive().optional(),
-});
-
-export type PhaseStage = z.infer<typeof PhaseStageSchema>;
-
-/**
- * The one discriminated run-progress slot: a reflection workflow advances
- * through numbered rounds, a workflow-script run through named phases — never
- * both — so state and wire carry one `stage` field rather than two
- * independently-optional ones every reader has to fall back between. The arms
- * extend the payload schemas above, so projecting to either is a `kind` strip.
- */
-export const RunStageSchema = z.discriminatedUnion('kind', [
-  RoundStageSchema.extend({ kind: z.literal('round') }),
-  PhaseStageSchema.extend({ kind: z.literal('phase') }),
-]);
-
-export type RunStage = z.infer<typeof RunStageSchema>;
-
 // Conversation Progress (tool-call counters updated during run)
 
 export const ConversationProgressSchema = z.object({

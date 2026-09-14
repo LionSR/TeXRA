@@ -46,16 +46,17 @@ function questionPayload(runId: RunId) {
   } satisfies ApprovalPayload;
 }
 
-/** The view after each payload's `approval.requested` folded, in order. */
-function viewOfApprovals(...payloads: readonly ApprovalPayload[]): SessionView {
+/** The view after each payload's `request.opened` folded, in order. */
+function viewOfRequests(...payloads: readonly ApprovalPayload[]): SessionView {
   const runs = [...new Set(payloads.map((p) => p.data.runId))]
     .filter((id): id is RunId => id !== '')
     .map((id) => makeRunView({ id }));
   return viewWith(runs, {
-    approvals: payloads.map((payload) => ({
+    requests: payloads.map((payload) => ({
       runId: payload.data.runId as RunId,
       requestId: payload.data.requestId,
       payload,
+      thread: null,
     })),
   });
 }
@@ -67,7 +68,7 @@ describe('CLI approval surface', () => {
   it("shows the fold's first outstanding approval and reads the rest as attention", () => {
     const first = bashPayload(RUN_A);
     const second = questionPayload(RUN_B);
-    const view = viewOfApprovals(first, second);
+    const view = viewOfRequests(first, second);
     seedView(view);
 
     expect(currentApproval.get()?.payload).toEqual(first);
@@ -80,13 +81,13 @@ describe('CLI approval surface', () => {
   it('drops a request the moment the fold resolves it', () => {
     const first = bashPayload(RUN_A);
     const second = bashPayload(RUN_B);
-    seedView(viewOfApprovals(first, second));
+    seedView(viewOfRequests(first, second));
     expect(currentApproval.get()?.payload).toEqual(first);
 
-    seedView(viewOfApprovals(second));
+    seedView(viewOfRequests(second));
     expect(currentApproval.get()?.payload).toEqual(second);
 
-    seedView(viewOfApprovals());
+    seedView(viewOfRequests());
     expect(currentApproval.get()).toBeUndefined();
   });
 
@@ -94,7 +95,7 @@ describe('CLI approval surface', () => {
     const a = bashPayload(RUN_A);
     const b1 = bashPayload(RUN_B, 'bash-b-1');
     const b2 = bashPayload(RUN_B, 'bash-b-2');
-    const view = viewOfApprovals(a, b1, b2);
+    const view = viewOfRequests(a, b1, b2);
     seedView(view);
     expect(currentApproval.get()?.payload).toEqual(a);
 
@@ -110,7 +111,7 @@ describe('CLI approval surface', () => {
   it("promotes the requests of a workflow popup's children with it", () => {
     const a = bashPayload(RUN_A);
     const child = bashPayload(WORKFLOW_CHILD);
-    const view = viewOfApprovals(a, child);
+    const view = viewOfRequests(a, child);
     seedView(view);
 
     promoteApprovalsForRun(WORKFLOW, {
@@ -133,7 +134,7 @@ describe('CLI approval surface', () => {
       },
     } as unknown as ApprovalPayload;
     const bash = bashPayload(RUN_A);
-    seedView(viewOfApprovals(edit, bash));
+    seedView(viewOfRequests(edit, bash));
 
     expect(currentApproval.get()?.payload).toEqual(bash);
   });

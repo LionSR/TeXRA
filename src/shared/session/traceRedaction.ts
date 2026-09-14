@@ -1,4 +1,9 @@
-/** Existing transcript redaction rules, shared by publication and display. */
+/**
+ * The one owner of transcript redaction. `Database.prepareEventDraft` calls
+ * `redactTraceDraft` on every draft before it enters the event table, so every
+ * committed row is already redacted and no reader — fold, projection or host —
+ * redacts again.
+ */
 import { redactDisplayValue, redactSecrets } from '@logger/redaction';
 import type { SessionEventDraft } from '@shared/schemas';
 import { isObject } from '@utils/core';
@@ -79,7 +84,7 @@ export function redactTraceDraft(event: SessionEventDraft): SessionEventDraft {
  * The result keeps the input's type: redaction replaces existing string fields
  * with strings and adds no keys.
  */
-export function redactLogData<T>(data: T): T {
+function redactLogData<T>(data: T): T {
   if (
     !isObject(data) ||
     Object.getPrototypeOf(data) !== Object.prototype ||

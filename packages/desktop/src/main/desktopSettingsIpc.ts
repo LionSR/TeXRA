@@ -1,7 +1,7 @@
 import { runInSession, type SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
 import { storeCredential } from '@common/secrets/storeCredential';
-import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import {
   listGitHubSubscriptionEntries,
   noActiveGitHubSubscriptionMessage,
@@ -10,7 +10,7 @@ import {
 import { appSignals } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
@@ -34,7 +34,7 @@ import {
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import { GoalStore } from '@tools/goal';
+import { goalList } from '@tools/goal';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
   GITHUB_TOKEN_CREATE_URL,
@@ -47,6 +47,7 @@ import {
 } from '@tools/github/githubAuth';
 import { StorageFS } from '@utils/files/storageFS';
 import { subscribeDesktopGoalChanges } from './desktopGoalSubscription.js';
+import type { Effect } from 'effect';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -106,6 +107,9 @@ export interface DesktopSettingsIpcOptions {
    * process-default session, so it must be passed.
    */
   session: SessionHandle;
+  /** The process runtime this window was handed; every Effect below runs on
+   *  it. */
+  runtime: ProcessRuntime;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
@@ -126,7 +130,7 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): DesktopSettingsIpc {
-  const { globalState } = options;
+  const { globalState, runtime } = options;
   const { workspaceState, config } = options.session.roots;
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
@@ -139,15 +143,8 @@ export function createDesktopSettingsIpc(
       options.ui.onError,
     );
   };
-  const settingsHost = new SettingsViewHost({
-    state: { workspaceState, globalState },
-    secrets: options.secrets,
-    respond: options.postToRenderer,
-    controllers: {
-      modelSelection:
-        options.credentialSettingsController.modelSelectionController,
-    },
-    memoryPrompt: {
+  const memoryController = new SettingsMemoryController({
+    prompt: {
       confirm: (message, promptOptions) =>
         options.ui.confirmAction(message, promptOptions?.confirmLabel),
       warning: async (message) => {
@@ -155,6 +152,53 @@ export function createDesktopSettingsIpc(
       },
     },
   });
+  const modelSelectionController =
+    options.credentialSettingsController.modelSelectionController;
+
+  async function postModelSelectionData(): Promise<void> {
+    options.postToRenderer(
+      await modelSelectionController.buildModelSelectionMessage(),
+    );
+  }
+
+  async function postMemoryData(): Promise<void> {
+    options.postToRenderer(
+      await runtime.runPromise(memoryController.getMemoryDataMessage()),
+    );
+  }
+
+  /**
+   * Post one memory message, skipping a mutation the user declined (a
+   * cancelled delete, a pin over the cap) — the controller answers those with
+   * `null` after prompting.
+   */
+  async function postMemoryMutation(
+    mutation: Effect.Effect<unknown>,
+  ): Promise<void> {
+    const message = await runtime.runPromise(mutation);
+    if (message != null) options.postToRenderer(message);
+  }
+
+  /**
+   * Post one memory preview, or the preview's error placeholder when it
+   * cannot be produced, so the view never waits on a preview that will not
+   * arrive.
+   */
+  async function postMemoryPreview(storagePath: string): Promise<void> {
+    try {
+      options.postToRenderer(
+        await runtime.runPromise(
+          memoryController.getMemoryPreviewMessage(storagePath),
+        ),
+      );
+      return;
+    } catch (error) {
+      onError(error);
+    }
+    options.postToRenderer(
+      memoryController.getMemoryPreviewErrorMessage(storagePath),
+    );
+  }
 
   const settingsStores: SettingsStores = {
     config,
@@ -192,7 +236,7 @@ export function createDesktopSettingsIpc(
     try {
       options.postToRenderer({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-        items: GoalStore.list(),
+        items: goalList(options.session),
       });
     } catch (error) {
       options.ui.onError(error);
@@ -206,7 +250,7 @@ export function createDesktopSettingsIpc(
     postSettingsSnapshot('git-author');
     options.toolingSettingsController.postLatexConfigValues();
     const goalListPosted = postGoalList();
-    const modelSelectionDataPosted = settingsHost.sendModelSelectionData();
+    const modelSelectionDataPosted = postModelSelectionData();
     postSettingsSnapshot('multi-agent');
     postSettingsSnapshot('approval');
     postSettingsSnapshot('skills');
@@ -215,7 +259,7 @@ export function createDesktopSettingsIpc(
     await Promise.all([
       goalListPosted,
       postSkillsList(),
-      effectRuntime().runPromise(settingsHost.sendMemoryData()),
+      postMemoryData(),
       modelSelectionDataPosted,
       postGitHubTokenStatus(),
       postGitHubSubscriptions(),
@@ -229,11 +273,10 @@ export function createDesktopSettingsIpc(
     modelName: string;
     enabled: boolean;
   }): Promise<void> {
-    await settingsHost.setModelEnabled(input, {
-      // The options cache is invalidated by the writer itself.
-      afterPost: () =>
-        options.credentialSettingsController.refreshModelOptions(),
-    });
+    await modelSelectionController.setModelEnabled(input);
+    await postModelSelectionData();
+    // The options cache is invalidated by the writer itself.
+    await options.credentialSettingsController.refreshModelOptions();
   }
 
   async function refreshAuthDependentData(
@@ -249,7 +292,7 @@ export function createDesktopSettingsIpc(
     'git-author': () => postSettingsSnapshot('git-author'),
     latex: () => options.toolingSettingsController.postLatexConfigValues(),
     memory: () => postSettingsSnapshot('memory'),
-    models: () => settingsHost.sendModelSelectionData(),
+    models: () => postModelSelectionData(),
     'multi-agent': () => postSettingsSnapshot('multi-agent'),
     profile: () => options.credentialSettingsController.postProfileData(),
     skills: async () => {
@@ -317,8 +360,10 @@ export function createDesktopSettingsIpc(
   // needs the push. The session outlives the window, so the subscription is
   // window-scoped and released in `dispose` below.
   const subscriptions = [
-    subscribeDesktopGoalChanges(options.session, () =>
-      runAsyncInPaper(postGoalList),
+    subscribeDesktopGoalChanges(
+      options.session,
+      () => runAsyncInPaper(postGoalList),
+      runtime,
     ),
   ];
 
@@ -352,14 +397,14 @@ export function createDesktopSettingsIpc(
     });
     await options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
     await postGitHubTokenStatus();
-    await effectRuntime().runPromise(refreshToolAvailability());
+    await runtime.runPromise(refreshToolAvailability());
   }
 
   async function removeGitHubToken(): Promise<void> {
     await options.secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
     await options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
     await postGitHubTokenStatus();
-    await effectRuntime().runPromise(refreshToolAvailability());
+    await runtime.runPromise(refreshToolAvailability());
   }
 
   async function postGitHubSubscriptions(): Promise<void> {
@@ -429,28 +474,26 @@ export function createDesktopSettingsIpc(
     // the dispatcher, so this entry is never actually invoked — it exists
     // only to satisfy the exhaustive registry type.
     webviewReady: () => {},
-    getMemoryData: () =>
-      effectRuntime().runPromise(settingsHost.sendMemoryData()),
-    getMemoryPreview: (message) =>
-      effectRuntime().runPromise(
-        settingsHost.sendMemoryPreview(message, { onError }),
-      ),
+    getMemoryData: postMemoryData,
+    getMemoryPreview: (message) => postMemoryPreview(message.storagePath),
     openMemoryFile,
     openMemoryFolder,
     deleteMemory: (message) =>
-      effectRuntime().runPromise(settingsHost.deleteMemory(message)),
+      postMemoryMutation(memoryController.deleteMemory(message)),
     pinMemory: (message) =>
-      effectRuntime().runPromise(
-        settingsHost.setMemoryPinned(message.storagePath, true),
+      postMemoryMutation(
+        memoryController.setMemoryPinned(message.storagePath, true),
       ),
     unpinMemory: (message) =>
-      effectRuntime().runPromise(
-        settingsHost.setMemoryPinned(message.storagePath, false),
+      postMemoryMutation(
+        memoryController.setMemoryPinned(message.storagePath, false),
       ),
     ...options.credentialSettingsController.profileHandlers,
     setModelEnabled: updateModelEnabled,
-    setModelReasoningLevel: (message) =>
-      settingsHost.setReasoningLevel(message),
+    setModelReasoningLevel: async (message) => {
+      await modelSelectionController.setReasoningLevel(message);
+      await postModelSelectionData();
+    },
     requestModelAccess: unsupported('Copilot models require VS Code.'),
     clearCopilotRoute: unsupported('Copilot models require VS Code.'),
     ...options.agentSettingsController.handlers,

@@ -1,10 +1,11 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import * as os from 'node:os';
 
-import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Deferred, Effect, Fiber } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { clearStoreCache, finalizeRun, getRunStore } from '@agent/storage';
+import { finalizeRun } from '@agent/storage';
 import {
   RunLeaseActiveError,
   RunLeaseLostError,
@@ -14,15 +15,14 @@ import {
   inspectRunLease,
   ownsRunLease,
   releaseOwnedRunLease,
-  runWithInactiveRunLease,
   validateOwnedRunLease,
 } from '@agent/storage/runLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import {
@@ -220,12 +220,20 @@ async function writeOrphanedLease(
   await writeLeaseFixture(runId, await deadOwner(), ownerToken);
 }
 
+/** Let a forked generation reach the run lane before the negative check. */
+const settle = Effect.promise(
+  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+);
+
 const ownedRunIds = new Set<RunId>();
 
+/** Give the run a directory of its own on disk, the way its artifacts do. */
 async function writeRun(runId: RunId): Promise<void> {
-  await getRunStore(runId).write('lease-probe', {
-    timestamp: '2026-07-16T12:00:00.000Z',
-  });
+  await StorageFS.ensureDir(resolveRunStoragePath(runId));
+  await StorageFS.write(
+    resolveRunStoragePath(runId, 'lease-probe.json'),
+    JSON.stringify({ timestamp: '2026-07-16T12:00:00.000Z' }),
+  );
 }
 
 async function acquire(runId: RunId): Promise<void> {
@@ -272,12 +280,9 @@ afterEach(async () => {
     recursive: true,
   }).catch(() => {});
   await StorageFS.delete('executions', { recursive: true }).catch(() => {});
-  clearStoreCache();
 });
 
-beforeEach(() => {
-  clearStoreCache();
-});
+beforeEach(() => {});
 
 describe('cross-process run leases', () => {
   it('takes over an orphaned lease whose owner is provably dead', async () => {
@@ -350,17 +355,10 @@ describe('cross-process run leases', () => {
     const record = await owner();
     await writeRun(runId);
     await writeForeignLease(runId, undefined, record);
-    const operation = vi.fn(async () => 'removed');
-
     await expect(inspectRunLease(runId)).resolves.toEqual({
       status: 'held',
       owner: record,
     });
-    await expect(runWithInactiveRunLease(runId, operation)).resolves.toEqual({
-      status: 'active',
-      owner: record,
-    });
-    expect(operation).not.toHaveBeenCalled();
     await expect(acquireResumedRunLease(runId)).rejects.toThrow(
       `Run ${runId} is held by another TeXRA process (pid ${record.pid} on ${record.hostname}).`,
     );
@@ -508,67 +506,74 @@ describe('cross-process run leases', () => {
     );
   });
 
-  it('starts a resume only after the previous generation has released its lease', async () => {
-    const runId = 'd8645a' as RunId;
-    const registry = new RunRegistry({
-      runStatus: new RunStatusMachine(
-        () => {},
-        () => {},
-      ),
-      publish: () => {},
-      approvals: createSessionApprovals({ setApprovalBypassState() {} }),
-      releaseRootRunLease: () => Effect.void,
-      finalizeRun: (input) =>
-        Effect.succeed({ ok: true, outcome: input.outcome }),
-    });
-    const readToken = async (): Promise<string> => {
-      const [record, ...rest] = await readLeaseRecords(runId);
-      expect(rest).toEqual([]);
-      return record!.ownerToken;
-    };
-    const disposing = createDeferred();
-    let resumeStarted = false;
+  // Real lease files on the storage filesystem and the registry's own lane
+  // hand-off; no Effect clock is involved.
+  it.live(
+    'starts a resume only after the previous generation has released its lease',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'd8645a' as RunId;
+        const registry = new RunRegistry({
+          runView: () => undefined,
+          commit: () => Effect.void,
+          approvals: createSessionApprovals({ setApprovalBypassState() {} }),
+          releaseRootRunLease: () => Effect.void,
+          finalizeRun: (input) =>
+            Effect.succeed({ ok: true, outcome: input.outcome }),
+          acquireRunClaim: () => Effect.succeed(Effect.void),
+        });
+        const readToken = async (): Promise<string> => {
+          const [record, ...rest] = await readLeaseRecords(runId);
+          expect(rest).toEqual([]);
+          return record!.ownerToken;
+        };
+        const acquired = yield* Deferred.make<void>();
+        const disposing = yield* Deferred.make<void>();
+        const resumeStarted = yield* Deferred.make<void>();
 
-    try {
-      const first = Effect.runPromise(
-        registry.launchRun(
-          runId,
-          Effect.promise(async () => {
-            await acquireFreshRunLease(runId);
-            await disposing.promise;
-            await releaseOwnedRunLease(runId);
-          }),
-        ),
-      );
-      await vi.waitFor(() => expect(ownsRunLease(runId)).toBe(true));
-      const firstToken = await readToken();
+        yield* Effect.gen(function* () {
+          const first = yield* Effect.forkChild(
+            registry.launchRun(
+              runId,
+              Effect.gen(function* () {
+                yield* Effect.promise(() => acquireFreshRunLease(runId));
+                yield* Deferred.succeed(acquired, undefined);
+                yield* Deferred.await(disposing);
+                yield* Effect.promise(() => releaseOwnedRunLease(runId));
+              }),
+            ),
+          );
+          yield* Deferred.await(acquired);
+          expect(ownsRunLease(runId)).toBe(true);
+          const firstToken = yield* Effect.promise(readToken);
 
-      const second = Effect.runPromise(
-        registry.launchRun(
-          runId,
-          Effect.promise(async () => {
-            resumeStarted = true;
-            return acquireResumedRunLease(runId);
-          }),
-        ),
-      );
-      await new Promise((resolve) => setTimeout(resolve, 20));
+          const second = yield* Effect.forkChild(
+            registry.launchRun(
+              runId,
+              Effect.gen(function* () {
+                yield* Deferred.succeed(resumeStarted, undefined);
+                return yield* Effect.promise(() =>
+                  acquireResumedRunLease(runId),
+                );
+              }),
+            ),
+          );
+          yield* settle;
 
-      // The first generation is still disposing: the resume waits and the
-      // record on disk is still the first generation's, so no second lease
-      // was minted under it.
-      expect(resumeStarted).toBe(false);
-      await expect(readToken()).resolves.toBe(firstToken);
+          // The first generation is still disposing: the resume waits and the
+          // record on disk is still the first generation's, so no second lease
+          // was minted under it.
+          expect(yield* Deferred.isDone(resumeStarted)).toBe(false);
+          expect(yield* Effect.promise(readToken)).toBe(firstToken);
 
-      disposing.resolve();
-      await first;
-      await expect(second).resolves.toBe('acquired');
-      ownedRunIds.add(runId);
-      await expect(readToken()).resolves.not.toBe(firstToken);
-    } finally {
-      registry.dispose();
-    }
-  });
+          yield* Deferred.succeed(disposing, undefined);
+          yield* Fiber.join(first);
+          expect(yield* Fiber.join(second)).toBe('acquired');
+          ownedRunIds.add(runId);
+          expect(yield* Effect.promise(readToken)).not.toBe(firstToken);
+        }).pipe(Effect.ensuring(Effect.sync(() => registry.dispose())));
+      }),
+  );
 
   it('surfaces a transient resume validation failure without dropping ownership', async () => {
     const runId = 'd86451' as RunId;
@@ -591,7 +596,7 @@ describe('cross-process run leases', () => {
     await expect(inspectRunLease(runId)).resolves.toMatchObject({
       status: 'owned',
     });
-    const session = createProcessSession();
+    const session = await Effect.runPromise(createProcessSession());
     publishTestRunStart(session, runId);
     await session.settlePublications();
     await Effect.runPromise(
@@ -637,27 +642,31 @@ describe('cross-process run leases', () => {
     });
   });
 
-  it('fences a run-store write immediately after takeover', async () => {
+  it('fences the durability boundary immediately after takeover', async () => {
     const runId = 'e86440' as RunId;
     await acquire(runId);
     await displaceLease(runId, '00000000-0000-4000-8000-000000000004');
 
-    await expect(writeRun(runId)).rejects.toBeInstanceOf(RunLeaseLostError);
+    await expect(validateOwnedRunLease(runId)).rejects.toBeInstanceOf(
+      RunLeaseLostError,
+    );
 
+    // The first refusal also forgets the lost claim, so every later
+    // boundary refuses without touching the disk again.
     expect(ownsRunLease(runId)).toBe(false);
-    await expect(
-      getRunStore(runId).write('lease-probe', {
-        timestamp: '2026-07-16T12:01:00.000Z',
-      }),
-    ).rejects.toBeInstanceOf(RunLeaseLostError);
+    await expect(validateOwnedRunLease(runId)).rejects.toBeInstanceOf(
+      RunLeaseLostError,
+    );
     ownedRunIds.delete(runId);
   });
 
-  it('rejects unscoped writes while another owner has a lease', async () => {
+  it('refuses the durability boundary while another owner has a lease', async () => {
     const runId = 'e86446' as RunId;
     await writeForeignLease(runId);
 
-    await expect(writeRun(runId)).rejects.toBeInstanceOf(RunLeaseLostError);
+    await expect(validateOwnedRunLease(runId)).rejects.toBeInstanceOf(
+      RunLeaseLostError,
+    );
   });
 
   it('rejects validation when release starts during its record read', async () => {
@@ -673,51 +682,5 @@ describe('cross-process run leases', () => {
     await expect(validation).rejects.toBeInstanceOf(RunLeaseLostError);
     await release;
     ownedRunIds.delete(runId);
-  });
-
-  it('refuses acquisition while maintenance holds the claim, then frees it', async () => {
-    const runId = 'f8644f' as RunId;
-    const deletionPaused = createDeferred();
-    const deletionStarted = createDeferred();
-    const deletion = runWithInactiveRunLease(runId, async () => {
-      deletionStarted.resolve();
-      await deletionPaused.promise;
-      return 'removed';
-    });
-    await deletionStarted.promise;
-
-    // Maintenance is itself a claim held by this live process.
-    await expect(acquireResumedRunLease(runId)).rejects.toMatchObject({
-      name: 'RunLeaseActiveError',
-      owner: { pid: process.pid },
-    });
-
-    deletionPaused.resolve();
-    await expect(deletion).resolves.toEqual({
-      status: 'performed',
-      value: 'removed',
-    });
-    await expect(inspectRunLease(runId)).resolves.toEqual({
-      status: 'free',
-    });
-    await acquire(runId);
-    await expect(inspectRunLease(runId)).resolves.toMatchObject({
-      status: 'owned',
-    });
-  });
-
-  it('keeps a locally owned run active whatever its record claims', async () => {
-    const runId = 'f86440' as RunId;
-    await acquire(runId);
-    const [persisted] = await readLeaseRecords(runId);
-    // Even a record naming a dead instance never lets maintenance reap the
-    // live local owner: token identity short-circuits before any probe.
-    await writeOrphanedLease(runId, persisted!.ownerToken);
-    const operation = vi.fn(async () => 'removed');
-
-    await expect(
-      runWithInactiveRunLease(runId, operation),
-    ).resolves.toMatchObject({ status: 'active' });
-    expect(operation).not.toHaveBeenCalled();
   });
 });

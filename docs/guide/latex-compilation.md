@@ -4,7 +4,7 @@ import DoctorSliceHero from '../.vitepress/components/DoctorSliceHero.vue';
 
 # LaTeX compilation environment
 
-TeXRA's agents work on derivations, proofs, and the papers that record them. Most of that work happens in LaTeX source, so several features rely on a working LaTeX distribution on your system, such as compiling previews or processing generated `latexdiff` files.
+TeXRA's agents operate on mathematical derivations, formal arguments, and the LaTeX manuscripts that document them. Because this work takes place in LaTeX source, core capabilities—including compiling previews, typesetting standalone TikZ figures, and generating `latexdiff` visualizations—rely on a local LaTeX distribution.
 
 ## Required LaTeX distribution
 

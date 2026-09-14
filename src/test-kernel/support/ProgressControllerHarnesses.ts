@@ -1,23 +1,12 @@
-// Third-party imports
-import { vi } from 'vitest';
-
 // Local imports
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import {
-  ProgressWorkflowRunActionsController,
-  type WorkflowDiffRequest,
-  type WorkflowFileOperation,
-  type WorkflowFileOperationRequest,
-} from '@controllers/progressView/ProgressWorkflowRunActionsController';
-import type { OutputFileInfo, RoundIndexed, RunId } from '@shared/schemas';
+import type { OutputFileInfo, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 
-export function createAgentConfig(
-  overrides: Partial<AgentConfig> = {},
-): AgentConfig {
+function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({
     agent: 'correct',
     model: 'gemini31p',
@@ -103,49 +92,5 @@ export function createOutputFile(
     lineage: null,
     diff: null,
     ...outputOverrides,
-  };
-}
-
-export interface ProgressWorkflowRunActionsHarnessOptions {
-  outputs?: Map<RunId, RoundIndexed<OutputFileInfo>>;
-  knownWorkspaceOutputs?: Map<RunId, Set<string>>;
-}
-
-export interface ProgressWorkflowRunActionsHarness {
-  controller: ProgressWorkflowRunActionsController;
-  diffs: WorkflowDiffRequest[];
-  fileOperations: Array<{
-    operation: WorkflowFileOperation;
-    request: WorkflowFileOperationRequest;
-  }>;
-}
-
-export function createProgressWorkflowRunActionsHarness(
-  options: ProgressWorkflowRunActionsHarnessOptions = {},
-): ProgressWorkflowRunActionsHarness {
-  const diffs: WorkflowDiffRequest[] = [];
-  const fileOperations: Array<{
-    operation: WorkflowFileOperation;
-    request: WorkflowFileOperationRequest;
-  }> = [];
-
-  return {
-    controller: new ProgressWorkflowRunActionsController({
-      state: {
-        // The controller takes its config from the caller, so the harness
-        // only answers the run's outputs.
-        getOutputFiles: (runId) => options.outputs?.get(runId) ?? {},
-        getKnownWorkspaceOutputPaths: (runId) =>
-          new Set(options.knownWorkspaceOutputs?.get(runId) ?? []),
-      },
-      runDiff: async (request) => {
-        diffs.push(request);
-      },
-      runFileOperation: async (operation, request) => {
-        fileOperations.push({ operation, request });
-      },
-    }),
-    diffs,
-    fileOperations,
   };
 }

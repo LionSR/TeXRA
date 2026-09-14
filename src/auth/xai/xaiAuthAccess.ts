@@ -1,10 +1,11 @@
 /**
- * Process-wide access to the xAI Grok OAuth coordinator, backed by
- * `platform().secrets`.
+ * Process-wide access to the xAI Grok OAuth coordinator, over the secret store
+ * its caller holds.
  */
 import {
   createSecretBackedCoordinator,
   getSubscriptionSessionStatus,
+  type SessionSecretStore,
 } from '../oauth/sessionAccess';
 import { XAI_SESSION_SECRET_KEY } from './xaiConstants';
 import {
@@ -19,15 +20,20 @@ const coordinatorAccess = createSecretBackedCoordinator({
   makeCoordinator: (storage) => new XaiSessionCoordinator({ storage }),
 });
 
-/**
- * The shared coordinator. Throws if the platform has not been initialized yet
- * (callers run after `initPlatform()`).
- */
-export function xaiCoordinator(): XaiSessionCoordinator {
-  return coordinatorAccess.get();
+/** The shared coordinator, over the caller's secret store. */
+export function xaiCoordinator(
+  secrets: SessionSecretStore,
+): XaiSessionCoordinator {
+  return coordinatorAccess.get(secrets);
 }
 
-/** Signed-in status. Call only after the host initializes the platform. */
-export async function getXaiStatus(): Promise<XaiSessionStatus> {
-  return getSubscriptionSessionStatus(xaiCoordinator, CHANNEL, 'Grok');
+/** Signed-in status, read from the caller's secret store. */
+export async function getXaiStatus(
+  secrets: SessionSecretStore,
+): Promise<XaiSessionStatus> {
+  return getSubscriptionSessionStatus(
+    () => xaiCoordinator(secrets),
+    CHANNEL,
+    'Grok',
+  );
 }

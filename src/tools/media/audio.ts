@@ -3,9 +3,12 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { execa, type Subprocess } from 'execa';
 import { MODEL_CONFIGS } from 'llm-zoo';
+import OpenAI from 'openai';
 
+import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
+import type { PlatformSecrets } from '@platform/secrets';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { THREE_DAYS_MS } from '@utils/config/constants';
@@ -144,8 +147,13 @@ export function killActiveRecording(): void {
   }
 }
 
-/** Stop the current recording and transcribe it using OpenAI. */
-export async function stopRecordingAndTranscribe(): Promise<{
+/**
+ * Stop the current recording and transcribe it using OpenAI. `secrets` is the
+ * process secret store the OpenAI key is read from.
+ */
+export async function stopRecordingAndTranscribe(
+  secrets: PlatformSecrets,
+): Promise<{
   success: boolean;
   text: string;
   error?: string;
@@ -179,10 +187,20 @@ export async function stopRecordingAndTranscribe(): Promise<{
       return { success: false, text: '', error: 'Recording file is empty' };
     }
 
-    const { ModelHandlerOpenAI } =
-      await import('@agent/modelHandlers/openai/modelHandlerOpenAI');
-    const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt4o']);
-    const client = await handler.getClient();
+    // The transcription endpoint is an OpenAI SDK operation the llm package
+    // does not model, so the client is built here. The direct OpenAI route is
+    // deliberate and does not follow the global OpenRouter preference the run
+    // loop applies to gpt-4o: `gpt-4o-transcribe` is an OpenAI-only endpoint
+    // model with no OpenRouter route, so a proxied client could only fail.
+    const credential = await resolveRouteCredential(
+      MODEL_CONFIGS['gpt4o'],
+      false,
+      secrets,
+    );
+    const client = new OpenAI({
+      apiKey: credential.apiKey,
+      baseURL: credential.endpoint,
+    });
     const result = await client.audio.transcriptions.create({
       file: AbsoluteFS.createReadStream(recordingPath),
       model: 'gpt-4o-transcribe',

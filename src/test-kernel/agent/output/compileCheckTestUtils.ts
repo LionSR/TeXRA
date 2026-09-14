@@ -7,12 +7,13 @@ import type { OutputState } from '@agent/implementations/flows/reflection/output
 import type { RunId, FileLocation, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
-export const storagePath = '/storage';
-export const workspacePath = '/workspace';
+export const storagePath = fakePath('storage');
+export const workspacePath = fakePath('workspace');
 
 export function runDir(runId: RunId): string {
   return path.join(storagePath, 'executions', runId);

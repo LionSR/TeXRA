@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 import {
   ToolError,
@@ -14,7 +15,7 @@ import {
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { ensureError } from '@utils/errors/errorMessage';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
 export function texPathField(description: string): z.ZodString {
@@ -54,10 +55,15 @@ const ATTACHMENT_CONCURRENCY = 8;
 
 export const resolveLatexFile = Effect.fn('tools.resolveLatexFile')(function* (
   texPath: string,
-): Effect.fn.Return<LatexFileResolution, ToolError | Error> {
-  const { path, display } = resolveAndFormat(texPath);
+): Effect.fn.Return<LatexFileResolution, ToolError | Error, ToolCall> {
+  const call = yield* ToolCall;
+  const { path, display } = yield* Effect.try({
+    try: () =>
+      call.inScope(() => resolveAndFormat(texPath, call.workingDirectory)),
+    catch: ensureError,
+  });
   const exists = yield* Effect.tryPromise({
-    try: () => WorkspaceFS.exists(path.relative),
+    try: () => AbsoluteFS.exists(path.absolute),
     catch: ensureError,
   });
   if (!exists) {
@@ -74,7 +80,7 @@ export const buildLimitedAttachments = Effect.fn(
 )(function* (
   paths: readonly string[],
   { limit, describe, mimeType }: AttachmentLimitOptions,
-): Effect.fn.Return<AttachmentLimitResult, ToolError> {
+): Effect.fn.Return<AttachmentLimitResult, ToolError, ToolCall> {
   if (paths.length === 0 || limit <= 0) {
     return { attachments: [], limitedPaths: [], limitReached: false };
   }

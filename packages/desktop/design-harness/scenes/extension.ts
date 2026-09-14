@@ -15,7 +15,6 @@ import {
   type Surface,
   type SurfaceAction,
 } from '@shared/session/surface';
-import { FILE_SELECT_CONFIGS } from '@shared/launcher/fileSelectConfigs';
 import {
   BOARD_NOW,
   CHILD,
@@ -68,7 +67,6 @@ function host(): HostSnapshot {
       },
     ],
     workspaceRoots: [{ value: '/paper', label: 'ldt-lean' }],
-    fileConfigs: [...FILE_SELECT_CONFIGS],
     fileOptions: {
       baseFile: ['main.tex', 'section2.tex', 'appendixB.tex'],
       editedFile: ['main_polish.tex', 'main_review.tex'],

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveAgentForLaunch, type AgentEntry } from '@agent/index';
-import type { ResolvedAgent } from '@agent/index/agentEntry';
 import {
   applyInitialCliAgentSelection,
   chatToolUseAgentUsageError,
@@ -33,11 +32,6 @@ function registryAgent(category: AgentCategory): AgentEntry {
   };
 }
 
-function registryResolution(category: AgentCategory): ResolvedAgent {
-  const entry = registryAgent(category);
-  return { entry };
-}
-
 beforeEach(() => {
   mockedResolveAgentForLaunch.mockReset();
 });
@@ -45,7 +39,7 @@ beforeEach(() => {
 describe('CLI chat run config', () => {
   it('leaves team mode when the root agent is changed explicitly', () => {
     mockedResolveAgentForLaunch.mockReturnValue(
-      registryResolution(AgentCategory.ToolUse),
+      registryAgent(AgentCategory.ToolUse),
     );
     patchSessionMeta({
       teamName: 'Physicist',
@@ -82,7 +76,7 @@ describe('CLI chat run config', () => {
   it('rejects workflow agents as root chat agents', () => {
     mockedResolveAgentForLaunch.mockImplementation((category) =>
       category === AgentCategory.Workflow
-        ? registryResolution(AgentCategory.Workflow)
+        ? registryAgent(AgentCategory.Workflow)
         : undefined,
     );
 

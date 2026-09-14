@@ -4,14 +4,22 @@ import * as path from 'node:path';
 import { Readable } from 'node:stream';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import {
+  processWorkspaceRoots,
+  runWithWorkspaceRoots,
+} from '@platform/workspaceRoots';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { MemoryTool } from '@tools/memory/MemoryTool';
-import { StorageFS } from '@utils/files/storageFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const TEST_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z');
 const TEST_FRONTMATTER = [
@@ -51,14 +59,20 @@ function fileStat(size: number): FileStat {
 
 function runOfEvent(
   content: string,
-): ReturnType<typeof StorageFS.createReadStream> {
+): ReturnType<typeof AbsoluteFS.createReadStream> {
   return Readable.from([Buffer.from(content)]) as unknown as ReturnType<
-    typeof StorageFS.createReadStream
+    typeof AbsoluteFS.createReadStream
   >;
 }
 
+function memoryRoot(): string {
+  return path.resolve(processWorkspaceRoots().storage, MEMORY_STORAGE_DIR);
+}
+
 function viewMemory(path?: string) {
-  return new MemoryTool().call({ command: 'view', path });
+  return new MemoryTool()
+    .call({ command: 'view', path })
+    .pipe(Effect.provide(nativeToolTestLayer()));
 }
 
 describe('MemoryTool view with an omitted path', () => {
@@ -67,125 +81,191 @@ describe('MemoryTool view with an omitted path', () => {
     vi.restoreAllMocks();
   });
 
-  it('lists the empty memory root instead of erroring on a fresh session', async () => {
-    vi.spyOn(StorageFS, 'exists').mockResolvedValue(false);
+  it.effect(
+    'lists the empty memory root instead of erroring on a fresh session',
+    () =>
+      Effect.gen(function* () {
+        vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(false);
 
-    const omitted = await viewMemory();
-    const explicitRoot = await viewMemory(MEMORY_DISPLAY_ROOT);
+        const omitted = yield* viewMemory();
+        const explicitRoot = yield* viewMemory(MEMORY_DISPLAY_ROOT);
 
-    expect(omitted).toEqual(explicitRoot);
-    expect(omitted).toMatchObject({
-      status: 'executed',
-      summary: 'Viewed empty memory directory',
-    });
-  });
+        expect(omitted).toEqual(explicitRoot);
+        expect(omitted).toMatchObject({
+          status: 'executed',
+          summary: 'Viewed empty memory directory',
+        });
+      }),
+  );
 
-  it.each([
+  it.effect.each([
     [
       '/outside.md',
       'Invalid path "/outside.md". All memory paths must start with /memories',
     ],
     ['/memories/../outside.md', 'Invalid memory path: /memories/../outside.md'],
-  ])(
-    'preserves the path validator error for %s',
-    async (inputPath, message) => {
-      const result = await viewMemory(inputPath);
+  ])('preserves the path validator error for %s', ([inputPath, message]) =>
+    Effect.gen(function* () {
+      const result = yield* viewMemory(inputPath);
 
       expect(result).toMatchObject({
         status: 'error',
         error: expect.stringContaining(message),
         diagnostics: { name: 'ToolError' },
       });
-    },
+    }),
   );
 
-  it('preserves the model-facing directory listing bytes and depth limit', async () => {
-    // Only the system clock is pinned (the MODIFIED column is relative to
-    // now); the walk runs on Effect's scheduler, which needs live
-    // setImmediate/setTimeout to make progress.
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
+  it.effect(
+    'preserves the model-facing directory listing bytes and depth limit',
+    () =>
+      Effect.gen(function* () {
+        // Only the system clock is pinned (the MODIFIED column is relative to
+        // now); the walk runs on Effect's scheduler, which needs live
+        // setImmediate/setTimeout to make progress.
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
 
-    const alphaPath = path.join(MEMORY_STORAGE_DIR, 'alpha');
-    const betaPath = path.join(alphaPath, 'beta');
-    const pinnedPath = path.join(alphaPath, 'pinned.md');
-    const rootFilePath = path.join(MEMORY_STORAGE_DIR, 'root.md');
+        const rootPath = memoryRoot();
+        const alphaPath = path.join(rootPath, 'alpha');
+        const betaPath = path.join(alphaPath, 'beta');
+        const pinnedPath = path.join(alphaPath, 'pinned.md');
+        const rootFilePath = path.join(rootPath, 'root.md');
 
-    vi.spyOn(StorageFS, 'exists').mockResolvedValue(true);
-    vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
-      if (target === MEMORY_STORAGE_DIR) {
-        return [
-          ['alpha', FileType.Directory],
-          ['root.md', FileType.File],
-        ];
-      }
-      if (target === alphaPath) {
-        return [
-          ['pinned.md', FileType.File],
-          ['beta', FileType.Directory],
-        ];
-      }
-      if (target === betaPath) {
-        throw new Error('The depth-2 directory must not be traversed');
-      }
-      throw new Error(`Unexpected readDir target: ${target}`);
-    });
-    vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
-      if (target === pinnedPath) {
-        return fileStat(Buffer.byteLength(PINNED_FRONTMATTER));
-      }
-      if (target === rootFilePath) {
-        return fileStat(Buffer.byteLength(TEST_FRONTMATTER));
-      }
-      return dirStat();
-    });
-    vi.spyOn(StorageFS, 'createReadStream').mockImplementation((target) =>
-      runOfEvent(target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER),
-    );
+        vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(true);
+        vi.spyOn(AbsoluteFS, 'readDir').mockImplementation(async (target) => {
+          if (target === rootPath) {
+            return [
+              ['alpha', FileType.Directory],
+              ['root.md', FileType.File],
+            ];
+          }
+          if (target === alphaPath) {
+            return [
+              ['pinned.md', FileType.File],
+              ['beta', FileType.Directory],
+            ];
+          }
+          if (target === betaPath) {
+            throw new Error('The depth-2 directory must not be traversed');
+          }
+          throw new Error(`Unexpected readDir target: ${target}`);
+        });
+        vi.spyOn(AbsoluteFS, 'stat').mockImplementation(async (target) => {
+          if (target === pinnedPath) {
+            return fileStat(Buffer.byteLength(PINNED_FRONTMATTER));
+          }
+          if (target === rootFilePath) {
+            return fileStat(Buffer.byteLength(TEST_FRONTMATTER));
+          }
+          return dirStat();
+        });
+        vi.spyOn(AbsoluteFS, 'createReadStream').mockImplementation((target) =>
+          runOfEvent(
+            target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER,
+          ),
+        );
 
-    const result = await viewMemory(MEMORY_DISPLAY_ROOT);
+        const result = yield* viewMemory(MEMORY_DISPLAY_ROOT);
 
-    expect(result).toEqual({
-      status: 'executed',
-      summary: 'Listed directory: /memories (1–5 of 5)',
-      output: [
-        'Contents of /memories (showing 1–5 of 5, up to 2 levels deep):',
-        'SIZE\tMODIFIED\tBY\tPATH',
-        '0 B\tyesterday\t-\t/memories',
-        '0 B\tyesterday\t-\t/memories/alpha',
-        `${Buffer.byteLength(PINNED_FRONTMATTER)} B\tyesterday\tpin-agent (run-7)\t/memories/alpha/pinned.md [pinned]`,
-        '0 B\tyesterday\t-\t/memories/alpha/beta',
-        `${Buffer.byteLength(TEST_FRONTMATTER)} B\tyesterday\ttest-agent\t/memories/root.md`,
-      ].join('\n'),
-    });
-  });
+        expect(result).toEqual({
+          status: 'executed',
+          summary: 'Listed directory: /memories (1–5 of 5)',
+          output: [
+            'Contents of /memories (showing 1–5 of 5, up to 2 levels deep):',
+            'SIZE\tMODIFIED\tBY\tPATH',
+            '0 B\tyesterday\t-\t/memories',
+            '0 B\tyesterday\t-\t/memories/alpha',
+            `${Buffer.byteLength(PINNED_FRONTMATTER)} B\tyesterday\tpin-agent (run-7)\t/memories/alpha/pinned.md [pinned]`,
+            '0 B\tyesterday\t-\t/memories/alpha/beta',
+            `${Buffer.byteLength(TEST_FRONTMATTER)} B\tyesterday\ttest-agent\t/memories/root.md`,
+          ].join('\n'),
+        });
+      }),
+  );
 
-  it('skips a symlink cycle when listing memory directories', async () => {
-    const cyclePath = path.join(MEMORY_STORAGE_DIR, 'cycle');
+  it.effect('skips a symlink cycle when listing memory directories', () =>
+    Effect.gen(function* () {
+      const rootPath = memoryRoot();
+      const cyclePath = path.join(rootPath, 'cycle');
 
-    vi.spyOn(StorageFS, 'exists').mockResolvedValue(true);
-    vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
-      if (target === MEMORY_STORAGE_DIR) {
-        return [['cycle', FileType.Directory | FileType.SymbolicLink]];
-      }
-      if (target === cyclePath) {
-        throw new Error('The symlink cycle must not be traversed');
-      }
-      throw new Error(`Unexpected readDir target: ${target}`);
-    });
-    vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
-      if (target === cyclePath) {
-        throw new Error('The symlink cycle must not be statted');
-      }
-      return dirStat();
-    });
+      vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(true);
+      vi.spyOn(AbsoluteFS, 'readDir').mockImplementation(async (target) => {
+        if (target === rootPath) {
+          return [['cycle', FileType.Directory | FileType.SymbolicLink]];
+        }
+        if (target === cyclePath) {
+          throw new Error('The symlink cycle must not be traversed');
+        }
+        throw new Error(`Unexpected readDir target: ${target}`);
+      });
+      vi.spyOn(AbsoluteFS, 'stat').mockImplementation(async (target) => {
+        if (target === cyclePath) {
+          throw new Error('The symlink cycle must not be statted');
+        }
+        return dirStat();
+      });
 
-    const result = await viewMemory(MEMORY_DISPLAY_ROOT);
+      const result = yield* viewMemory(MEMORY_DISPLAY_ROOT);
 
-    expect(result).toMatchObject({
-      status: 'executed',
-      summary: 'Listed directory: /memories (1–1 of 1)',
-    });
-    expect(result.output).not.toContain('cycle');
-  });
+      expect(result).toMatchObject({
+        status: 'executed',
+        summary: 'Listed directory: /memories (1–1 of 1)',
+      });
+      expect(result.output).not.toContain('cycle');
+    }),
+  );
+});
+
+describe('MemoryTool invocation storage root', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.effect(
+    'keeps concurrent projects in their own captured memory roots',
+    () =>
+      Effect.gen(function* () {
+        const first = createFakeWorkspaceRoots({ storagePath: '/storage/one' });
+        const second = createFakeWorkspaceRoots({
+          storagePath: '/storage/two',
+        });
+        const writes: string[] = [];
+        vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(false);
+        vi.spyOn(AbsoluteFS, 'ensureDir').mockResolvedValue();
+        vi.spyOn(AbsoluteFS, 'writeAtomic').mockImplementation(
+          async (target) => {
+            writes.push(target);
+          },
+        );
+
+        yield* Effect.forEach(
+          [
+            [first, 'one.md'],
+            [second, 'two.md'],
+          ] as const,
+          ([roots, file]) =>
+            new MemoryTool()
+              .call({
+                command: 'create',
+                path: `/memories/${file}`,
+                file_text: file,
+              })
+              .pipe(
+                Effect.provide(
+                  nativeToolTestLayer({
+                    inScope: (operation) =>
+                      runWithWorkspaceRoots(roots, operation),
+                  }),
+                ),
+              ),
+          { concurrency: 'unbounded' },
+        );
+
+        expect(writes.toSorted()).toEqual(
+          [
+            path.resolve(first.storage, 'memories/one.md'),
+            path.resolve(second.storage, 'memories/two.md'),
+          ].toSorted(),
+        );
+      }),
+  );
 });

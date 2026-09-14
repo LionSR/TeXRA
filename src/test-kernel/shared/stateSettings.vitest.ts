@@ -79,7 +79,7 @@ const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
 const SETTING_HOSTS: readonly SettingHost[] = ['vscode', 'cli', 'desktop'];
 
 const CLI_RUNTIME_COMMAND_PATTERN =
-  /^texra\s+(?:chat|run|agents run|multi-agent run|orchestrate)\b/;
+  /^texra\s+(?:chat|run|multi-agent run|orchestrate)\b/;
 
 function entryByKey(key: string): StateSettingEntry {
   const entry = stateSettingByKey(key);
@@ -129,7 +129,6 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [WorkspaceStateKey.LATEX_FORMATTER]: LATEX_CONFIG_DEFAULTS.latexFormatter,
   [GlobalStateKey.WEBSOCKET_OPENAI]: false,
   ...PROVIDER_ENDPOINT_DEFAULTS,
-  [GlobalStateKey.STREAMING_GLOBAL]: true,
   [GlobalStateKey.HELPER_MODEL]: DEFAULT_HELPER_MODEL,
   [GlobalStateKey.PREFER_SHORT_MODEL_NAMES]: false,
   [GlobalStateKey.USE_OPENROUTER]: false,

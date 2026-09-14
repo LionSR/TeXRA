@@ -1,9 +1,9 @@
 // Local imports
+import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import type {
-  ITool,
-  IToolRegistry,
-  ToolHost,
-} from '@agent/core/tools/ToolTypes';
+  RuntimeTool as ITool,
+  RuntimeToolRegistry as IToolRegistry,
+} from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {

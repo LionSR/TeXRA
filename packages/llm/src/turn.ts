@@ -1,5 +1,6 @@
 // Third-party imports
 import { Cause, Data, Effect, Exit, type Scope, Stream } from 'effect';
+import { Sse } from 'effect/unstable/encoding';
 import { z } from 'zod';
 
 const TextPartSchema = z
@@ -41,20 +42,27 @@ const BindingSchema = z.strictObject({
     })
     .readonly(),
 });
+/**
+ * Every wire surface the package speaks. Usage is billed per surface, so a
+ * usage record's provider is the protocol of the turn that produced it.
+ */
+export const TurnProtocolSchema = z.enum([
+  'openai-chat',
+  'google-interactions',
+  'openai-responses',
+  'anthropic-messages',
+  'deepseek-chat',
+  'kimi-chat',
+  'glm-chat',
+  'xai-chat',
+  'dashscope-chat',
+  'minimax-chat',
+  'openrouter-chat',
+  'vscode-lm',
+]);
+
 const OriginSchema = BindingSchema.extend({
-  protocol: z.enum([
-    'openai-chat',
-    'google-interactions',
-    'openai-responses',
-    'anthropic-messages',
-    'deepseek-chat',
-    'kimi-chat',
-    'glm-chat',
-    'xai-chat',
-    'dashscope-chat',
-    'minimax-chat',
-    'openrouter-chat',
-  ]),
+  protocol: TurnProtocolSchema.exclude(['vscode-lm']),
   codecVersion: z.literal(1),
 });
 const EditorBindingSchema = BindingSchema.pick({ requestedModel: true }).extend(
@@ -65,7 +73,7 @@ const EditorBindingSchema = BindingSchema.pick({ requestedModel: true }).extend(
   },
 );
 const EditorOriginSchema = EditorBindingSchema.extend({
-  protocol: z.literal('vscode-lm'),
+  protocol: TurnProtocolSchema.extract(['vscode-lm']),
   codecVersion: OriginSchema.shape.codecVersion,
 });
 
@@ -616,6 +624,9 @@ const ToolChoiceSchema = z.union([
   z.literal('auto'),
   z.strictObject({ name: z.string().min(1) }).readonly(),
 ]);
+// This package speaks its own protocol vocabulary and takes no llm-zoo
+// dependency; the registry's enum is checked against this one by assignment at
+// the `modelBinding.ts` call sites that feed it.
 const ReasoningEffortSchema = z
   .enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
   .nullable();
@@ -717,6 +728,7 @@ const AnthropicControlsSchema = z.strictObject({
 const ChatReasoningControlsSchema = z.strictObject({
   maxOutputTokens: z.int().positive(),
   temperature: z.number().min(0).max(2).nullable(),
+  parallelToolCalls: z.boolean(),
   thinking: z
     .strictObject({ mode: z.enum(['enabled', 'disabled']) })
     .readonly(),
@@ -1417,6 +1429,22 @@ const ResponsesOperationSchema = z
     }).readonly(),
     providerResponseId: z.string().min(1),
     afterSequence: z.int().nonnegative().nullable(),
+    /**
+     * The inputs the provider was given, hashed by the same function a
+     * continuation's prefix fingerprint uses: origin, system text and the
+     * admitted history. A resume rebuilds the turn from the caller's current
+     * system text, so an observation compares this digest before it lets the
+     * completion leave an anchor the next round would chain on. A digest is
+     * not a transcript: the handle still carries no history.
+     */
+    admittedFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    /**
+     * The storage mode the turn was admitted under. An observation re-prepares
+     * with this rather than the current setting: a temporary background
+     * response leaves nothing to chain on, so re-preparing it as stored would
+     * mint an anchor for a response the provider never kept.
+     */
+    store: z.boolean(),
   })
   .readonly();
 export const RemoteOperationSchema = z.union([
@@ -1556,6 +1584,176 @@ export class ModelError extends Data.TaggedError('ModelError')<
 > {}
 
 /**
+ * Rebuild a `ModelError` with `patch` applied over the fields it already
+ * carries.
+ *
+ * `message` and `cause` live on `Error` as own non-enumerable properties, so
+ * the spread that carries every other field silently drops both. Restating
+ * them is what keeps a re-thrown error's text and origin, and every adapter
+ * that annotates an error with the response/request it belongs to was
+ * restating them by hand.
+ */
+export const enrichModelError = (
+  error: ModelError,
+  patch: Partial<
+    z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }
+  >,
+): ModelError =>
+  new ModelError({
+    ...error,
+    message: error.message,
+    cause: error.cause,
+    ...patch,
+  });
+
+/**
+ * Every provider's failure mapping treats HTTP 401/403 (or the equivalent
+ * error code carried in a rejection body) as `authentication` and anything
+ * else the provider rejected as `provider-rejection`. Pass every status-like
+ * value a given failure carries; a match on any of them is `authentication`.
+ */
+export const authOrRejectionKind = (
+  ...statuses: ReadonlyArray<number | string | undefined>
+): 'authentication' | 'provider-rejection' =>
+  statuses.some((status) => status === 401 || status === 403)
+    ? 'authentication'
+    : 'provider-rejection';
+
+/**
+ * Parses JSON out of provider stream/error text, mapping a parse failure to
+ * the caller's own `ModelError` instead of throwing a raw `SyntaxError`.
+ */
+export const parseJsonOrModelError = (
+  text: string,
+  onMalformed: (cause: unknown) => ModelError,
+): Effect.Effect<unknown, ModelError> =>
+  Effect.try({ try: () => JSON.parse(text) as unknown, catch: onMalformed });
+
+/** True when a parsed provider payload embeds an `{ error }` field. */
+export const hasErrorField = (value: unknown): value is { error: unknown } =>
+  typeof value === 'object' && value !== null && 'error' in value;
+
+/**
+ * The server-sent events carried by a byte stream, ending at the `[DONE]`
+ * sentinel that terminates an OpenAI-compatible chat stream.
+ *
+ * The parser is fed per decoded chunk and drained into the events it
+ * completed, so an event split across chunks emits once it is whole.
+ * `maxEventSize` is uncapped to preserve the prior no-added-cap policy — it
+ * is not a bounded-memory claim — and a `retry` field is only a reconnect
+ * hint, which these one-shot operations never act on.
+ */
+export const sseEvents = <E>(
+  bytes: Stream.Stream<Uint8Array, E>,
+  malformedMessage: string,
+): Stream.Stream<Sse.Event, E | ModelError> => {
+  let parsedEvents: Sse.Event[] = [];
+  const parser = Sse.makeParser(
+    (event) => {
+      if (event._tag === 'Event') parsedEvents.push(event);
+    },
+    { maxEventSize: Number.POSITIVE_INFINITY },
+  );
+  return bytes.pipe(
+    Stream.decodeText,
+    Stream.mapEffect((text) =>
+      Effect.gen(function* () {
+        parsedEvents = [];
+        const failure = parser.feed(text);
+        if (failure !== undefined)
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message: malformedMessage,
+            cause: failure,
+          });
+        return parsedEvents;
+      }),
+    ),
+    Stream.flattenIterable,
+    Stream.takeUntil((event) => event.data === '[DONE]'),
+  );
+};
+
+/**
+ * The value a pull source yields while it is not done: the `value` of the
+ * not-done member of a `ReadableStreamReadResult` or `IteratorResult`. Taking
+ * it from that member alone is what keeps the done member's `undefined` out
+ * of the stream's element type.
+ */
+type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
+
+/**
+ * A stream over a pull source — a `ReadableStreamDefaultReader` or an async
+ * iterator — that ends when the source reports `done`.
+ *
+ * Every streaming adapter reaches its provider through one of those two, and
+ * each had spelled out the same `Stream.fromPull` / `tryPromise` / `done`
+ * ladder. Only the source and the failure classifier ever differed, so those
+ * are the parameters.
+ */
+export const pullStream = <
+  R extends { readonly done?: boolean; readonly value?: unknown },
+  E,
+>(
+  pull: () => PromiseLike<R>,
+  onError: (cause: unknown) => E,
+): Stream.Stream<PullValue<R>, E> =>
+  Stream.fromPull(
+    Effect.succeed(
+      Effect.tryPromise({ try: () => pull(), catch: onError }).pipe(
+        Effect.flatMap((next) =>
+          next.done
+            ? Cause.done()
+            : // `done` is false here, so the result is the value-carrying
+              // member of the union `PullValue` picked the type from.
+              Effect.succeed([
+                (next as { readonly value: PullValue<R> }).value,
+              ] as const),
+        ),
+      ),
+    ),
+  );
+
+/**
+ * Parses a persisted local-call's argument text back into the JSON object a
+ * provider request carries. This process authored the history, so a
+ * malformed payload is our bug, not the model's: every protocol reports it
+ * as `invalid-request`.
+ */
+export const parseOutboundToolArguments = (
+  argumentsText: string,
+): Effect.Effect<z.infer<typeof JsonObjectSchema>, ModelError> =>
+  Effect.try({
+    try: () => JsonObjectSchema.parse(JSON.parse(argumentsText)),
+    catch: (cause) =>
+      new ModelError({
+        kind: 'invalid-request',
+        message:
+          'History carries local-call arguments that are not a JSON object.',
+        cause,
+      }),
+  });
+
+/**
+ * Parses a tool call's argument text as a provider just returned it. The
+ * model authored this output, so a malformed payload reports as
+ * `malformed-output`; `provider` names the source in the surfaced message.
+ */
+export const parseInboundToolArguments = (
+  argumentsText: string,
+  provider: string,
+): Effect.Effect<z.infer<typeof JsonObjectSchema>, ModelError> =>
+  Effect.try({
+    try: () => JsonObjectSchema.parse(JSON.parse(argumentsText)),
+    catch: (cause) =>
+      new ModelError({
+        kind: 'malformed-output',
+        message: `${provider} returned tool call arguments that are not a JSON object.`,
+        cause,
+      }),
+  });
+
+/**
  * The request signal for a streamed body, with the body reader cancelled at
  * scope close. The cancel finalizer is registered before the signal's abort
  * finalizer, so LIFO order aborts the request before cancellation joins a
@@ -1625,7 +1823,19 @@ export interface Model {
     submit(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,
     ): Effect.Effect<BackgroundSubmission, ModelError>;
+    /**
+     * Observe the remote work `operation` names. The admitted turn is passed
+     * back because a completion's continuation anchors to the exact history
+     * prefix it covers, which the handle deliberately does not copy: an
+     * accepted operation is a handle, and the ledger keeps no second
+     * transcript. The caller owns that history and re-derives the same
+     * admitted turn when a resume observes an operation it did not submit.
+     * Re-derivation can drift: when the turn no longer fingerprints as the
+     * one the operation admitted, the result is still delivered and the
+     * completion simply leaves no continuation.
+     */
     observe(
+      turn: Extract<ResolvedTurn, { mode: 'background' }>,
       operation: RemoteOperation,
       policy: z.infer<typeof ObservationPolicySchema>,
     ): Stream.Stream<BackgroundEvent, ModelError>;

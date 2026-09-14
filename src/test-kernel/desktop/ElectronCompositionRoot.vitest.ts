@@ -1,8 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import { Effect, FileSystem } from 'effect';
+import { Cause, Effect, Exit, FileSystem } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -14,6 +13,8 @@ import {
   nodeProcesses,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
+import { effectRuntime } from '@platform/processRuntime';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
@@ -77,7 +78,7 @@ describe('desktop composition root and launch environment', () => {
           expect(yield* reopened.read).toEqual(['/first']);
           expect(yield* fs.readFileString(oldState)).toBe(previous);
         }),
-      ).pipe(Effect.provide(NodeFileSystem.layer)),
+      ).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   effectIt.live(
@@ -120,15 +121,15 @@ describe('desktop composition root and launch environment', () => {
             processRoots: host.roots,
             globalConfigStore: config,
             records,
+            runtime: effectRuntime(),
+            runWrite: (write) => Effect.runPromise(write),
             stores: {
-              secrets: host.platform.secrets,
-              globalState: host.platform.globalState,
+              secrets: host.secrets,
+              globalState: host.roots.globalState,
             },
             warn: vi.fn(),
           });
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => registry.dispose()),
-          );
+          yield* Effect.addFinalizer(() => registry.dispose());
           const successorRoot = join(profile, 'successor');
           yield* fs.makeDirectory(successorRoot);
           const successor = yield* registry.open(successorRoot);
@@ -151,7 +152,95 @@ describe('desktop composition root and launch environment', () => {
           expect(registry.active()).toBe(successor);
           expect(yield* records.read).toEqual([successor.root]);
         }),
-      ).pipe(Effect.provide(NodeFileSystem.layer)),
+      ).pipe(Effect.provide(nodePlatformLayer)),
+  );
+
+  effectIt.live('releases every project when one project disposal fails', () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const profile = yield* fs.makeTempDirectoryScoped({
+          prefix: 'texra-dispose-projects-',
+        });
+        const firstRoot = join(profile, 'first');
+        const secondRoot = join(profile, 'second');
+        yield* Effect.all(
+          [fs.makeDirectory(firstRoot), fs.makeDirectory(secondRoot)],
+          { concurrency: 'unbounded' },
+        );
+        const opener = vi
+          .spyOn(agentRuntime, 'openSessionEffect')
+          .mockImplementation((init) =>
+            Effect.sync(() =>
+              createTestSession({
+                ...init,
+                transcriptMode: {
+                  kind: 'ephemeral',
+                  reason: 'project disposal regression',
+                },
+              }),
+            ),
+          );
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => opener.mockRestore()),
+        );
+        const owner = processOwnerId(
+          yield* Effect.promise(() => nodeProcesses.selfIdentity()),
+        );
+        const records = yield* openDesktopProjectRecords(profile, owner);
+        const config = yield* JsonStore.open(join(profile, 'config.json'));
+        const host = createFakeHost({
+          storagePath: join(profile, 'no-project'),
+        });
+        const registry = yield* openDesktopProjectRegistry({
+          dataRoot: profile,
+          processRoots: host.roots,
+          globalConfigStore: config,
+          records,
+          runtime: effectRuntime(),
+          runWrite: (write) => Effect.runPromise(write),
+          stores: {
+            secrets: host.secrets,
+            globalState: host.roots.globalState,
+          },
+          warn: vi.fn(),
+        });
+        yield* Effect.addFinalizer(() =>
+          registry.dispose().pipe(Effect.ignore),
+        );
+        const first = yield* registry.open(firstRoot);
+        const second = yield* registry.open(secondRoot);
+        const disposed: string[] = [];
+        const firstDispose = first.dispose.bind(first);
+        const secondDispose = second.dispose.bind(second);
+        const fallback = registry.fallback();
+        const fallbackDispose = fallback.dispose.bind(fallback);
+        const failure = new Error('second project disposal failed');
+        vi.spyOn(first, 'dispose').mockImplementation(() =>
+          firstDispose().pipe(
+            Effect.tap(() => Effect.sync(() => disposed.push('first'))),
+          ),
+        );
+        vi.spyOn(second, 'dispose').mockImplementation(() =>
+          secondDispose().pipe(
+            Effect.tap(() => Effect.sync(() => disposed.push('second'))),
+            Effect.andThen(Effect.die(failure)),
+          ),
+        );
+        vi.spyOn(fallback, 'dispose').mockImplementation(() =>
+          fallbackDispose().pipe(
+            Effect.tap(() => Effect.sync(() => disposed.push('fallback'))),
+          ),
+        );
+
+        const exit = yield* Effect.exit(registry.dispose());
+        expect(Exit.isFailure(exit)).toBe(true);
+        if (Exit.isFailure(exit))
+          expect(Cause.squash(exit.cause)).toBe(failure);
+        expect(disposed).toEqual(['second', 'first', 'fallback']);
+        expect(registry.list()).toEqual([]);
+      }),
+    ).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it('keeps platform initialization in the Electron composition root', async () => {

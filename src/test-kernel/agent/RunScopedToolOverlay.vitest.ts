@@ -20,13 +20,14 @@ import { agentRunLayer } from '@agent/runtime/run/AgentRun';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 
 import { sessionWithInteractions } from './progressTestUtils';
-import { testModelCell } from './modelCellTestUtils';
 import { createTestLaunchContext } from './runtime/launchContextTestUtils';
 
 function tool(name: string): ITool {
@@ -42,24 +43,21 @@ function approvalGatedTool(name: string): ITool {
 
 /**
  * A launch whose model binds without a credential: the run layer reads the
- * compatibility key off the launch handler, and the validation key binds the
+ * compatibility key off the launch context, and the validation key binds the
  * deterministic in-process model.
  */
 function validationLaunch(
   init: Parameters<typeof createTestLaunchContext>[0],
   config: AgentLaunchContext['config'],
 ): AgentLaunchContext {
-  const handler = {
-    config: buildTestModelConfig(),
-    __texraModelHandlerCompatibilityKey: 'ModelHandlerValidation',
-  };
   return {
     ...createTestLaunchContext(init),
     config,
     prompt: AgentPromptSchema.parse({ userRequest: 'Do the thing.' }),
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
-    modelCell: testModelCell(handler, config.model),
+    modelConfig: buildTestModelConfig(),
+    modelCompatibilityKey: 'Validation',
   };
 }
 
@@ -81,10 +79,7 @@ describe('run-scoped tool resolution', () => {
     'adds the run-scoped tools and submit_output to the model-facing list',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions({
-          emit: () => {},
-          cancel: () => {},
-        });
+        const session = sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const warn = vi.fn<typeof noopTrace.warn>();
@@ -105,7 +100,11 @@ describe('run-scoped tool resolution', () => {
 
         yield* runToolUse({ resume: false }).pipe(
           Effect.provide(
-            Layer.mergeAll(observingInvokerLayer(seen), followUpsLayer).pipe(
+            Layer.mergeAll(
+              observingInvokerLayer(seen),
+              followUpsLayer,
+              nativeToolTestLayer(),
+            ).pipe(
               Layer.provideMerge(
                 agentRunLayer(ctx, {
                   setting: ctx.setting,
@@ -133,7 +132,7 @@ describe('run-scoped tool resolution', () => {
         expect(warn).toHaveBeenCalledWith(
           'Run-scoped tool "bash" shadows an existing tool.',
         );
-        session.dispose();
+        yield* session.dispose();
       }),
   );
 
@@ -162,6 +161,7 @@ describe('run-scoped tool resolution', () => {
       runtimeUnavailableTools: ['inquiry'],
       // No conditional injections: this pins the declared-tool gates alone.
       toolInjections: new ToolInjectionRegistry(),
+      config: new FakeConfigProvider(),
       stores: hostStores(),
     });
 

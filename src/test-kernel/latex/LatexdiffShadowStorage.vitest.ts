@@ -47,10 +47,13 @@ describe('LaTeXdiffService shadow output', () => {
   ): Promise<void> {
     const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
     return installPlatform(
-      { workspacePath: workspaceDir, storagePath: storage.getStoragePath() },
+      {
+        workspacePath: workspaceDir,
+        storagePath: storage.getStoragePath(),
+        globalStoragePath: storage.getGlobalStoragePath(),
+      },
       {
         fs: nodeFilesystem,
-        storage,
         globalState: new MemoryStateStore(),
         workspaceState: new MemoryStateStore(),
       },

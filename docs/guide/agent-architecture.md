@@ -7,7 +7,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue'
 
 # Workflow agents: how they work
 
-Every time you select **Run agent** in TeXRA, an **agent** takes your files and instructions, asks an AI model to do the work, and delivers the result. This page explains what happens underneath: enough to understand the system, customize it, and troubleshoot when a run goes wrong.
+Whenever you execute an agent in TeXRA, the runtime orchestrates your input files, context references, and instructions into a structured prompt, coordinates LLM inference across deliberate reasoning rounds, and yields versioned diffs. This page examines the architectural machinery underneath: YAML configurations, prompt compilation, execution stages, and reflection cycles.
 
 ::: tip When to use workflow mode
 Workflow agents are built for **deep, single-shot thinking**: deriving or checking equations step by step, rewriting a whole section, converting a paper to slides, or merging edits. They plan in a `<scratchpad>`, produce a full XML-wrapped output, and optionally reflect on it for another round, so runs with frontier reasoning models can take **10–30 minutes** to finish.

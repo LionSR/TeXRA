@@ -17,6 +17,7 @@ import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import * as AgentRunner from '@agent/runtime/runAgent';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   aggregateId,
@@ -130,7 +131,7 @@ function attachResultPresenter(session: SessionHandle): {
   const emit = vi.fn();
   return {
     emit,
-    detach: session.interactions.use({ emit, cancel: vi.fn() }),
+    detach: session.interactions.use({ emit }),
   };
 }
 
@@ -138,7 +139,7 @@ function attachResultPresenter(session: SessionHandle): {
 async function createResumeHarness(): Promise<{
   owner: DesktopProcessResumeOwner;
   session: SessionHandle;
-  dispose(): void;
+  dispose(): Promise<void>;
 }> {
   const session = testSession;
   session.publish([
@@ -149,13 +150,16 @@ async function createResumeHarness(): Promise<{
     },
   ]);
   await session.settlePublications();
-  const owner = new DesktopProcessResumeOwner({ sessions: () => [session] });
+  const owner = new DesktopProcessResumeOwner({
+    sessions: () => [session],
+    runtime: effectRuntime,
+  });
   let disposed = false;
-  const dispose = (): void => {
+  const dispose = async (): Promise<void> => {
     if (disposed) return;
     disposed = true;
     owner.disable();
-    session.dispose();
+    await Effect.runPromise(session.dispose());
   };
   onTestFinished(dispose);
   return { owner, session, dispose };
@@ -168,7 +172,7 @@ async function mockWorkflowResume(): Promise<void> {
       type: 'workflow',
       agentConfig: workflowConfig,
       runId,
-      modelHandlerCompatibilityKey: null,
+      modelCompatibilityKey: null,
     }),
   );
 }
@@ -190,7 +194,7 @@ async function gateWorkflowResume(): Promise<{
           type: 'workflow' as const,
           agentConfig: workflowConfig,
           runId,
-          modelHandlerCompatibilityKey: null,
+          modelCompatibilityKey: null,
         };
       },
       catch: ensureError,
@@ -201,7 +205,7 @@ async function gateWorkflowResume(): Promise<{
 
 describe('desktop process resume owner', () => {
   beforeEach(async () => {
-    testSession = createProcessSession();
+    testSession = await Effect.runPromise(createProcessSession());
     publishTestRunStart(testSession, runId);
     await testSession.settlePublications();
     retrieveSessionResumeData.mockReset();
@@ -350,7 +354,7 @@ describe('desktop process resume owner', () => {
   it('rejects a termination-triggered wake after shutdown disables resume', async () => {
     const harness = await createResumeHarness();
 
-    harness.dispose();
+    await harness.dispose();
     await expect(harness.owner.tryResumeRun(runId)).resolves.toBe(false);
     expect(retrieveSessionResumeData).not.toHaveBeenCalled();
   });
@@ -361,7 +365,7 @@ describe('desktop process resume owner', () => {
 
     const resume = harness.owner.tryResumeRun(runId);
     await retrieval.started;
-    harness.dispose();
+    await harness.dispose();
     retrieval.release();
 
     await expect(resume).resolves.toBe(false);
@@ -388,10 +392,9 @@ describe('desktop process resume owner', () => {
   it('rejects a stale process store after another process deletes the run', async () => {
     await mockWorkflowResume();
     const harness = await createResumeHarness();
-    vi.spyOn(
-      harness.session.transcripts,
-      'hasAuthoritativeRun',
-    ).mockReturnValue(Effect.succeed(false));
+    vi.spyOn(harness.session.transcripts, 'readEvents').mockReturnValue(
+      Effect.succeed([]),
+    );
 
     await expect(harness.owner.tryResumeRun(runId)).resolves.toBe(false);
     expect(runAgent).not.toHaveBeenCalled();

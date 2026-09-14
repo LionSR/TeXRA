@@ -9,7 +9,7 @@
  * Two owners of retry, as before. Owner A is automatic and route-scoped: a
  * bounded batch of attempts under the session's `ModelRetryGate`, so sibling
  * runs on one credential share cooling. Owner B is a human and indefinite,
- * and it is durable here: the prompt is admitted by an `approval.requested`
+ * and it is durable here: the prompt is admitted by a `request.opened`
  * row bound through a `flow.snapshot` whose `pendingRetry` walks
  * `waiting` -> `authorized` -> `started`. A decision survives a restart, an
  * unused permit survives one, and a consumed permit never buys a second
@@ -24,6 +24,7 @@ import {
   Exit,
   Layer,
   Ref,
+  Result,
   Scope,
   Stream,
   SynchronizedRef,
@@ -37,7 +38,6 @@ import {
   logProgressStatus,
   type StreamHandle,
 } from '@agent/trace';
-import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
@@ -55,23 +55,32 @@ import {
   MESSAGE_TYPES,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
-  RUN_PHASE,
   toRetryErrorInfo,
+  type DeclinableUsageRoute,
   type InvocationRef,
   type NormalizedUsage,
   type ProviderError,
+  type RequestDecision,
   type RetryErrorInfo,
   type SnapshotRuntime,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
-import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import {
+  foldRunState,
+  type RunLedgerDraft,
+  type RunState,
+} from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
-import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
+import { getValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
-import { bindModel, type BoundModel } from './run/modelBinding';
+import {
+  backgroundDelivery,
+  bindModel,
+  type BoundModel,
+} from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
 import { priceTurnUsage } from './run/pricing';
 import { dispatchFactsFor } from './run/tools';
@@ -81,6 +90,16 @@ import {
   runtimeSnapshotRow,
   stepRow,
 } from './loop/rows';
+import type { RoutePolicy } from './ModelRetryGate';
+
+/**
+ * Credential source a retry decision picked: the account the run is already
+ * configured with, or the user's personal credential. Derived from the one
+ * request vocabulary so the retry arm stays the only definition.
+ */
+type RetryCredentials = NonNullable<
+  Extract<RequestDecision, { action: 'retry' }>['credentials']
+>;
 
 /** Base delay between automatic attempts; the gate scales its own on top. */
 const RETRY_BACKOFF_MS = 1000;
@@ -110,6 +129,13 @@ const BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000;
 
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
+
+/**
+ * How much of a failed attempt's streamed output the failure carries. The
+ * retry surface shows the tail so the user sees the work was not lost; the
+ * bound keeps a long generation out of the error and off the ledger row.
+ */
+const PARTIAL_TEXT_TAIL_MAX = 4096;
 
 /**
  * One initial attempt plus the configured number of automatic retries. The
@@ -275,33 +301,77 @@ export const modelInvokerLayer: Layer.Layer<
      *  written family state, references from the folded rows. */
     const retrySnapshot = (
       state: RunState,
-      runtime: Pick<SnapshotRuntime, 'pendingRetry' | 'lastError'>,
+      runtime: Partial<
+        Pick<SnapshotRuntime, 'pendingRetry' | 'lastError' | 'declinedRoutes'>
+      >,
     ): RunLedgerDraft => runtimeSnapshotRow(runId, state, runtime);
 
     /**
      * Whether a turn runs as background work: a workflow turn on a binding
-     * that supports it, under the provider's toggle. Tool-use turns stream
-     * (per-step output); the OpenAI toggle applies to GPT models as its
-     * description says, the Google one to any route with server-side state.
+     * that supports it, under the provider's toggle. The binding owns the
+     * rule (it decides the Responses transport by the same answer); this
+     * asks it per turn with the run's category.
      */
-    const backgroundRequested = (bound: BoundModel): boolean => {
-      if (!bound.backgroundCapable) return false;
-      if (run.config.agentCategory !== AgentCategory.Workflow) return false;
-      if (bound.origin.protocol === 'google-interactions') {
-        return getConfig<boolean>('texra.model.useGoogleBackgroundResponses');
-      }
-      return (
-        bound.config.name.toLowerCase().startsWith('gpt') &&
-        getConfig<boolean>('texra.model.useBackgroundResponses')
-      );
-    };
+    const backgroundRequested = (bound: BoundModel): boolean =>
+      backgroundDelivery({
+        backgroundCapable: bound.backgroundCapable,
+        protocol: bound.origin.protocol,
+        modelName: bound.config.name,
+        agentCategory: run.config.agentCategory,
+      });
 
-    const failAttempt = (cause: unknown, at: RunState) =>
-      Effect.fail(new AttemptFailed(classifyModelFailure(cause), at));
+    /**
+     * The semantic request an attempt admits: this run's history as the
+     * ledger folded it, plus the caller's system, tools and stop sequences
+     * and the continuation the last response left, when the binding still
+     * matches its origin. A resume rebuilds the admitted turn from the same
+     * inputs, so no row has to carry a second copy of the history.
+     */
+    const turnRequestFor = (
+      state: RunState,
+      request: InvokeRequest,
+      bound: BoundModel,
+      mode: TurnRequest['mode'],
+    ): TurnRequest => ({
+      mode,
+      ...(request.system !== undefined ? { system: request.system } : {}),
+      messages: state.messages,
+      ...(request.tools !== undefined ? { tools: request.tools } : {}),
+      ...(request.toolChoice !== undefined
+        ? { toolChoice: request.toolChoice }
+        : {}),
+      ...(request.stopSequences !== undefined
+        ? { stopSequences: request.stopSequences }
+        : {}),
+      ...(state.continuation !== null &&
+      state.continuation.origin.protocol === bound.origin.protocol &&
+      state.continuation.origin.requestedModel === bound.origin.requestedModel
+        ? { continuation: state.continuation }
+        : {}),
+    });
+
+    const failAttempt = (
+      cause: unknown,
+      at: RunState,
+      bound: BoundModel,
+      partialText?: string,
+    ) =>
+      Effect.fail(
+        new AttemptFailed(
+          classifyModelFailure(cause, bound.usageRoute, partialText),
+          at,
+        ),
+      );
 
     interface AttemptTrace {
       readonly thinking: StreamHandle;
       readonly output: StreamHandle;
+    }
+    /** What one attempt's events leave behind: the completed turn if it
+     *  arrived, and the tail of the output text seen so far. */
+    interface AttemptOutcome {
+      value: TurnResult | null;
+      streamedText: string;
     }
     const openTrace = (): AttemptTrace => ({
       thinking: logger.openRun(MESSAGE_TYPES.THINKING, { deferStart: true }),
@@ -322,7 +392,7 @@ export const modelInvokerLayer: Layer.Layer<
         invocation: InvocationRef,
         stateRef: Ref.Ref<RunState>,
         trace: AttemptTrace,
-        completed: { value: TurnResult | null },
+        completed: AttemptOutcome,
       ) =>
       (event: TurnEvent | BackgroundEvent) =>
         Effect.gen(function* () {
@@ -351,8 +421,16 @@ export const modelInvokerLayer: Layer.Layer<
               return;
             }
             case 'delta':
-              if (event.part === 'reasoning') trace.thinking.append(event.text);
-              else trace.output.append(event.text);
+              if (event.part === 'reasoning') {
+                trace.thinking.append(event.text);
+              } else {
+                trace.output.append(event.text);
+                // Kept for the failure path only: a completed turn reports its
+                // own text, so this tail is read when the stream dies.
+                completed.streamedText = (
+                  completed.streamedText + event.text
+                ).slice(-PARTIAL_TEXT_TAIL_MAX);
+              }
               return;
             case 'phase':
             case 'cursor':
@@ -378,7 +456,7 @@ export const modelInvokerLayer: Layer.Layer<
       trace: AttemptTrace,
       started: number,
       streamed: Exit.Exit<void, unknown>,
-      completed: { value: TurnResult | null },
+      completed: AttemptOutcome,
     ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
       if (Exit.isFailure(streamed)) {
         trace.thinking.finalize(undefined);
@@ -394,7 +472,7 @@ export const modelInvokerLayer: Layer.Layer<
         logRetryLifecycle(operationId, 'attempt_failed', bound, {
           attempt: invocation.attempt,
         });
-        return yield* failAttempt(cause, state);
+        return yield* failAttempt(cause, state, bound, completed.streamedText);
       }
       const responseTimeMs = Date.now() - started;
       const turn = completed.value;
@@ -407,6 +485,8 @@ export const modelInvokerLayer: Layer.Layer<
             message: EMPTY_RESPONSE_ERROR_MESSAGE,
           }),
           state,
+          bound,
+          completed.streamedText,
         );
       }
       const text = turnText(turn);
@@ -472,7 +552,7 @@ export const modelInvokerLayer: Layer.Layer<
       bound: BoundModel,
       stateRef: Ref.Ref<RunState>,
       onEvent: (event: BackgroundEvent) => Effect.Effect<void, InvokeError>,
-      completed: { value: TurnResult | null },
+      completed: AttemptOutcome,
     ): Effect.fn.Return<void, ModelError | InvokeError> {
       const background = bound.model.background;
       if (background === undefined) {
@@ -515,7 +595,7 @@ export const modelInvokerLayer: Layer.Layer<
       );
       yield* Ref.set(stateRef, next);
       yield* Stream.runForEach(
-        background.observe(submission.operation, { deadlineAtMs }),
+        background.observe(resolved, submission.operation, { deadlineAtMs }),
         onEvent,
       );
     });
@@ -535,27 +615,16 @@ export const modelInvokerLayer: Layer.Layer<
       operationId: string,
     ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
       let state = initial;
-      const turnRequest: TurnRequest = {
-        mode: backgroundRequested(bound) ? 'background' : 'foreground',
-        ...(request.system !== undefined ? { system: request.system } : {}),
-        messages: state.messages,
-        ...(request.tools !== undefined ? { tools: request.tools } : {}),
-        ...(request.toolChoice !== undefined
-          ? { toolChoice: request.toolChoice }
-          : {}),
-        ...(request.stopSequences !== undefined
-          ? { stopSequences: request.stopSequences }
-          : {}),
-        ...(state.continuation !== null &&
-        state.continuation.origin.protocol === bound.origin.protocol &&
-        state.continuation.origin.requestedModel === bound.origin.requestedModel
-          ? { continuation: state.continuation }
-          : {}),
-      };
+      const turnRequest = turnRequestFor(
+        state,
+        request,
+        bound,
+        backgroundRequested(bound) ? 'background' : 'foreground',
+      );
       const prepared = yield* Effect.exit(bound.model.prepareTurn(turnRequest));
       if (Exit.isFailure(prepared)) {
         if (Cause.hasInterrupts(prepared.cause)) return yield* Effect.interrupt;
-        return yield* failAttempt(Cause.squash(prepared.cause), state);
+        return yield* failAttempt(Cause.squash(prepared.cause), state, bound);
       }
       let resolved = prepared.value;
       yield* saveDebug(
@@ -591,6 +660,7 @@ export const modelInvokerLayer: Layer.Layer<
               message: `Input is ${estimate.value.inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
             }),
             state,
+            bound,
           );
         } else {
           const inputTokens = estimate.value.inputTokens;
@@ -636,7 +706,11 @@ export const modelInvokerLayer: Layer.Layer<
               if (Cause.hasInterrupts(clamped.cause)) {
                 return yield* Effect.interrupt;
               }
-              return yield* failAttempt(Cause.squash(clamped.cause), state);
+              return yield* failAttempt(
+                Cause.squash(clamped.cause),
+                state,
+                bound,
+              );
             }
             resolved = clamped.value;
           }
@@ -665,7 +739,7 @@ export const modelInvokerLayer: Layer.Layer<
       const trace = openTrace();
       const stateRef = yield* Ref.make(state);
       const started = Date.now();
-      const completed: { value: TurnResult | null } = { value: null };
+      const completed: AttemptOutcome = { value: null, streamedText: '' };
       const onEvent = eventSink(invocation, stateRef, trace, completed);
       const streamed = yield* Effect.exit(
         resolved.mode === 'foreground'
@@ -697,7 +771,9 @@ export const modelInvokerLayer: Layer.Layer<
      * A resumed attempt whose background operation the ledger holds: observe
      * it under the deadline recorded with its `accepted` row, never resubmit,
      * even if the background settings changed since. Unbilled, so it runs
-     * outside the route gate.
+     * outside the route gate. The admitted turn is rebuilt from the rows
+     * below the attempt, which are its history, so the observed completion
+     * can anchor the next round exactly as a live submission does.
      */
     const observeAccepted = Effect.fn('ModelInvoker.observeAccepted')(
       function* (
@@ -717,6 +793,46 @@ export const modelInvokerLayer: Layer.Layer<
                 'The run resumed onto a model that cannot observe its accepted background operation.',
             }),
             initial,
+            bound,
+          );
+        }
+        // The admitted storage mode governs the observation turn, not the
+        // current setting: re-preparing a temporary background turn as stored
+        // would let the completion mint an anchor for a response the provider
+        // never kept. The prior continuation stays out: observing needs no
+        // anchor, and its fingerprint check would reject the turn before
+        // observe can compare the admitted fingerprint and deliver the result.
+        const { continuation: _prior, ...admitted } = turnRequestFor(
+          initial,
+          request,
+          bound,
+          'background',
+        );
+        const prepared = yield* Effect.exit(
+          bound.model.prepareTurn({
+            ...admitted,
+            store: accepted.operation.store,
+          }),
+        );
+        if (Exit.isFailure(prepared)) {
+          if (Cause.hasInterrupts(prepared.cause))
+            return yield* Effect.interrupt;
+          return yield* failAttempt(
+            Cause.squash(prepared.cause),
+            initial,
+            bound,
+          );
+        }
+        const resolved = prepared.value;
+        if (resolved.mode !== 'background') {
+          return yield* failAttempt(
+            new ModelError({
+              kind: 'unsupported',
+              message:
+                'The resumed background operation re-prepared as a foreground turn.',
+            }),
+            initial,
+            bound,
           );
         }
         logRetryLifecycle(operationId, 'attempt_started', bound, {
@@ -727,10 +843,10 @@ export const modelInvokerLayer: Layer.Layer<
         const trace = openTrace();
         const stateRef = yield* Ref.make(initial);
         const started = Date.now();
-        const completed: { value: TurnResult | null } = { value: null };
+        const completed: AttemptOutcome = { value: null, streamedText: '' };
         const streamed = yield* Effect.exit(
           Stream.runForEach(
-            background.observe(accepted.operation, {
+            background.observe(resolved, accepted.operation, {
               deadlineAtMs: accepted.deadlineAtMs,
             }),
             eventSink(invocation, stateRef, trace, completed),
@@ -752,10 +868,10 @@ export const modelInvokerLayer: Layer.Layer<
     );
 
     /**
-     * One attempt under the session's route gate. The gate is Promise-tier
-     * session state by design (sibling runs share cooling); the attempt runs
-     * inside its permit on this fiber's services, and the fiber's abort
-     * signal is the one the gate waits and the request abort on.
+     * One attempt under the session's route gate: the gate is session state
+     * by design (sibling runs share cooling), and the attempt runs inside its
+     * permits on this fiber. Cancelling the run interrupts the fiber, which
+     * the gate reads as the waiting or in-flight attempt being abandoned.
      */
     const gatedAttempt = (
       state: RunState,
@@ -763,82 +879,66 @@ export const modelInvokerLayer: Layer.Layer<
       request: InvokeRequest,
       bound: BoundModel,
       operationId: string,
-    ): Effect.Effect<InvocationResponse, AttemptFailed | InvokeError> =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const signal = yield* Effect.abortSignal;
-          const gate = session.modelRetries;
-          const verdictFor = (error: Error) =>
-            error instanceof AttemptFailed
-              ? error.failure.verdict
-              : classifyModelFailure(error).verdict;
-          const routes = [
-            {
-              key: bound.modelRetryRouteKey,
-              classifyFailure: (error: Error) => {
-                const verdict = verdictFor(error);
-                return verdict.rateLimitScope === 'model'
-                  ? { retryAfterMs: verdict.retryAfterMs }
-                  : undefined;
-              },
-            },
-            {
-              key: bound.wireRouteKey,
-              classifyFailure: (error: Error) => {
-                const verdict = verdictFor(error);
-                return verdict.wireRouteFailure
-                  ? { retryAfterMs: verdict.retryAfterMs }
-                  : undefined;
-              },
-              isReachableFailure: (error: Error) =>
-                verdictFor(error).rateLimitScope === 'model',
-            },
-          ];
-          // The permits: an abort or a disposed gate while waiting rejects,
-          // which is this fiber being stopped or the session torn down, and
-          // only those two reasons become an interrupt. Any other rejection
-          // is a bug in the gate and dies with its cause rather than reading
-          // to the user as a stop.
-          const acquired = yield* Effect.tryPromise({
-            try: () =>
-              gate.acquireAll(routes, {
-                signal,
-                onWait: (delayMs) =>
-                  logger.debug(
-                    `Waiting ${delayMs}ms for the model recovery probe.`,
-                  ),
-              }),
-            catch: (cause) => cause,
-          }).pipe(
-            Effect.catchIf(
-              (cause) => isUserAbort(cause) || cause === signal.reason,
-              () => Effect.interrupt,
-            ),
-            Effect.catch((cause) => Effect.die(ensureError(cause))),
-          );
-          const exit = yield* Effect.exit(
-            attemptOnce(state, invocation, request, bound, operationId),
-          );
-          if (Exit.isSuccess(exit)) {
-            gate.settle(acquired, { kind: 'success' }, RETRY_BACKOFF_MS);
-            return exit.value;
-          }
-          if (Cause.hasInterrupts(exit.cause)) {
-            gate.settle(acquired, { kind: 'abandoned' }, RETRY_BACKOFF_MS);
-            return yield* Effect.interrupt;
-          }
-          const error = Cause.squash(exit.cause);
-          gate.settle(
-            acquired,
-            { kind: 'failure', error: ensureError(error) },
-            RETRY_BACKOFF_MS,
-          );
-          return yield* exit;
-        }),
-      );
+    ): Effect.Effect<InvocationResponse, AttemptFailed | InvokeError> => {
+      const verdictFor = (error: Error) =>
+        error instanceof AttemptFailed
+          ? error.failure.verdict
+          : classifyModelFailure(error).verdict;
+      const routes: [RoutePolicy, RoutePolicy] = [
+        {
+          key: bound.modelRetryRouteKey,
+          classifyFailure: (error: Error) => {
+            const verdict = verdictFor(error);
+            return verdict.rateLimitScope === 'model'
+              ? { retryAfterMs: verdict.retryAfterMs }
+              : undefined;
+          },
+        },
+        {
+          key: bound.wireRouteKey,
+          classifyFailure: (error: Error) => {
+            const verdict = verdictFor(error);
+            return verdict.wireRouteFailure
+              ? { retryAfterMs: verdict.retryAfterMs }
+              : undefined;
+          },
+          isReachableFailure: (error: Error) =>
+            verdictFor(error).rateLimitScope === 'model',
+        },
+      ];
+      return session.modelRetries.withRoutes(routes, {
+        baseBackoffMs: RETRY_BACKOFF_MS,
+        onWait: (delayMs) =>
+          logger.debug(`Waiting ${delayMs}ms for the model recovery probe.`),
+      })(attemptOnce(state, invocation, request, bound, operationId));
+    };
+
+    /**
+     * The routes the run declines after this decision. Answering a retry
+     * with the user's own API key turns this run away from the subscription
+     * route the failed attempt billed — for this run only, on its own
+     * ledger, so a concurrent run's fallback is untouched and the user's
+     * stored preference stays theirs to change in settings.
+     */
+    const declinedAfter = (
+      state: RunState,
+      selection: RetryCredentials,
+      failed: BoundModel,
+    ): readonly DeclinableUsageRoute[] => {
+      if (selection !== 'personal' || failed.usageRoute === 'api-key') {
+        return state.declinedRoutes;
+      }
+      return state.declinedRoutes.includes(failed.usageRoute)
+        ? state.declinedRoutes
+        : [...state.declinedRoutes, failed.usageRoute];
+    };
 
     /** Rebuild the model binding a retry runs on. */
-    const rebind = (selection: ModelCredentialSelection, failed: BoundModel) =>
+    const rebind = (
+      selection: RetryCredentials,
+      failed: BoundModel,
+      declinedRoutes: readonly DeclinableUsageRoute[],
+    ) =>
       SynchronizedRef.updateEffect(run.model, (current) =>
         Effect.gen(function* () {
           // A switch may have landed while the panel waited; never undo it.
@@ -846,10 +946,7 @@ export const modelInvokerLayer: Layer.Layer<
           const config =
             selection === 'personal' && failed.routedOnKimiCode
               ? ((yield* Effect.tryPromise({
-                  try: () =>
-                    run.inScope(() =>
-                      resolveRuntimeModelConfig(failed.modelId),
-                    ),
+                  try: () => resolveRuntimeModelConfig(failed.modelId),
                   catch: ensureError,
                 })) ?? failed.config)
               : failed.config;
@@ -857,6 +954,7 @@ export const modelInvokerLayer: Layer.Layer<
             config,
             stores: run.stores,
             compatibilityKey: failed.compatibilityKey,
+            declinedRoutes,
             agentCategory: run.config.agentCategory,
             temperature: run.setting.temperature,
             inScope: run.inScope,
@@ -897,7 +995,6 @@ export const modelInvokerLayer: Layer.Layer<
         model: failed.modelId,
         errorMessage: info.message,
         errorDetails: info,
-        kimiCodeRoutedOnFailure: failed.routedOnKimiCode,
       };
       const pendingRetry = (substate: 'waiting' | 'authorized' | 'started') =>
         ({
@@ -921,14 +1018,15 @@ export const modelInvokerLayer: Layer.Layer<
         state = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
             {
-              type: 'approval.requested',
+              type: 'request.opened',
               aggregateId,
               requestId,
-              // The row is committed here rather than at the interaction
-              // owner's publish door (`requestRowCommitted`), so the scrub
-              // that door applies happens here: a provider message echoing
-              // an `Authorization` header never reaches a durable row.
+              // The row is committed here rather than at the session's door
+              // (`openRequest`), so the scrub that door applies happens here:
+              // a provider message echoing an `Authorization` header never
+              // reaches a durable row.
               payload: redactedForFact({ kind: 'retry', data: request }),
+              thread: null,
             },
             retrySnapshot(state, {
               pendingRetry: pendingRetry('waiting'),
@@ -937,45 +1035,56 @@ export const modelInvokerLayer: Layer.Layer<
           ]),
         );
       }
-      session.status.transition(runId, RUN_PHASE.WAITING, 'wait');
       logger.debug('Waiting for manual retry', { data: info.message });
-      // The host's credential selection is recorded here and the binding is
-      // rebuilt on this fiber once the decision lands: the rebind is part of
-      // the admitted attempt, never a side effect of the prompt.
-      let selection: ModelCredentialSelection = 'configured';
-      const result = yield* Effect.tryPromise({
-        try: () =>
-          session.interactions.requestRetry(request, {
-            requestRowCommitted: true,
-            prepareRetry: (selected) => {
-              selection = selected;
-              return Promise.resolve();
-            },
-          }),
-        catch: ensureError,
-      }).pipe(
-        // A rejected prompt (a host torn down mid-wait) is a cancellation.
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            logger.warn('The retry prompt failed', { data: error });
-            return { action: 'cancel' as const };
-          }),
-        ),
-      );
-      const decisionSource =
-        result.action === 'retry' ? (result.decisionSource ?? 'human') : null;
+      // The decision is the `request.decided` row (R5): one a surface already
+      // landed for an outstanding request (a crash after the decision keeps
+      // its unused consent), else the one the decide command lands on the
+      // tail while this fiber waits. A plane that closes first is a
+      // cancellation.
+      let decision = state.requests[requestId]?.decision ?? null;
+      if (decision === null) {
+        const row = yield* session
+          .decisionFor(runId, requestId, state.commit)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                logger.warn('The retry prompt closed before a decision', {
+                  data: error,
+                });
+                return null;
+              }),
+            ),
+          );
+        if (row === null) {
+          decision = { action: 'cancel', cause: 'The session closed.' };
+        } else {
+          const folded = foldRunState(state, [row]);
+          if (Result.isFailure(folded) || folded.success === null) {
+            return yield* Effect.die(
+              new Error(
+                `The retry decision does not fold onto the run: ${
+                  Result.isFailure(folded) ? folded.failure.detail : 'no state'
+                }`,
+              ),
+            );
+          }
+          state = folded.success;
+          decision = row.decision;
+        }
+      }
       logRetryLifecycle(operationId, 'retry_decided', failed, {
-        action: result.action,
-        decisionSource:
-          decisionSource ?? (result.action === 'deny' ? 'denied' : 'cancelled'),
+        action: decision.action,
       });
-      if (result.action === 'retry') {
+      if (decision.action === 'retry') {
         logger.debug('Manual retry triggered');
-        session.status.transition(runId, RUN_PHASE.RUNNING, 'resume');
+        const selection = decision.credentials ?? 'configured';
+        const declinedRoutes = declinedAfter(state, selection, failed);
         // Always rebuild the binding on a manual retry: the user may have set
-        // a new key or toggled a route preference while the panel waited. A
-        // rebind that fails leaves the run on the binding it has, loudly.
-        yield* rebind(selection, failed).pipe(
+        // a new key or toggled a route preference while the panel waited, and
+        // a personal-credentials answer declines the exhausted route for the
+        // rest of this run. A rebind that fails leaves the run on the binding
+        // it has, loudly.
+        yield* rebind(selection, failed, declinedRoutes).pipe(
           Effect.catch((error) =>
             Effect.sync(() =>
               logger.warn('Failed to refresh the model binding before retry', {
@@ -986,50 +1095,27 @@ export const modelInvokerLayer: Layer.Layer<
         );
         state = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
-            {
-              type: 'approval.resolved',
-              aggregateId,
-              requestId,
-              decision: 'approved',
-            },
             retrySnapshot(state, {
               pendingRetry: pendingRetry('authorized'),
               lastError: info,
+              declinedRoutes,
             }),
           ]),
         );
         return { kind: 'retry', state };
       }
-      if (result.action === 'deny') {
-        logProgressStatus(
-          logger,
-          result.reason ?? 'Retry denied (no human input available)',
-        );
-        session.status.transition(runId, RUN_PHASE.RUNNING, 'resume');
+      if (decision.action === 'deny') {
+        logProgressStatus(logger, decision.reason);
         state = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
-            {
-              type: 'approval.resolved',
-              aggregateId,
-              requestId,
-              decision: 'denied',
-              ...(result.reason !== undefined ? { cause: result.reason } : {}),
-            },
             retrySnapshot(state, { pendingRetry: null, lastError: info }),
           ]),
         );
         return { kind: 'deny', state };
       }
       logProgressStatus(logger, 'Retry cancelled by user');
-      session.status.transition(runId, RUN_PHASE.CANCELLED, 'user-stop');
       state = yield* Effect.uninterruptible(
         ledger.appendBatch(runId, state, [
-          {
-            type: 'approval.resolved',
-            aggregateId,
-            requestId,
-            decision: 'cancelled',
-          },
           retrySnapshot(state, { pendingRetry: null, lastError: info }),
         ]),
       );

@@ -180,9 +180,10 @@ export class ToolUseFollowUpQueue {
     }
 
     // Replay suppression is synchronous check-and-add: concurrent submissions
-    // of one delivery id admit at most once (#9531). Ids are minted by the
-    // child-run loop per accepted turn; identical text under a distinct id is
-    // a distinct delivery.
+    // of one delivery id admit at most once (#9531). Ids are minted per
+    // logical delivery by their producer (an accepted child-run turn, an
+    // inquiry turn); identical text under a distinct id is a distinct
+    // delivery.
     const deliveryId = followUp.deliveryId;
     if (deliveryId !== undefined) {
       if (entry.admittedDeliveryIds.has(deliveryId)) {

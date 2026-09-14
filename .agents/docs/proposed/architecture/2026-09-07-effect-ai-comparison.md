@@ -25,7 +25,7 @@ study without adopting their model, tool, or persistence frameworks.
 The effect-agent revision differs from the historical revision in the earlier
 architecture studies. Conclusions below concern these exact checkouts. The
 [current delivery plan](2026-09-06-effect-runtime-delivery-plan.md),
-[runtime proposal §0.1](2026-09-04-agent-runtime-on-effect.md), and
+[runtime proposal §0.1](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md), and
 [joint contract](2026-09-06-llm-runtime-contract.md) govern the remaining work;
 superseded sketches do not introduce an old-flow importer or an internal Promise
 adapter.
@@ -73,7 +73,8 @@ requirements apply to workflow scripts; their separate journal is still present.
 
 ### Connect the canonical contract to actual model callers
 
-`ModelFactory.ts` still selects the old handlers. At the reviewed revision,
+`modelRoutes.ts` resolves the route and credential and `run/modelBinding.ts`
+binds the `packages/llm` model the callers run. At the reviewed revision,
 `helperModel.ts` also needed a session to construct its handler/client. A subsequent
 fix removes that dependency from all four helper callers: auxiliary output no
 longer inherits document replacement rules. This does not switch generation to

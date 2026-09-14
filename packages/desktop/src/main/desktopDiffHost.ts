@@ -5,7 +5,7 @@ import { Cause, Effect, Exit } from 'effect';
 import { nanoid } from 'nanoid';
 
 import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
@@ -15,6 +15,7 @@ import { createTexraTempDir } from '@utils/files/tempDir';
 
 import {
   DESKTOP_DIFF_COMMANDS,
+  type DesktopCloseDiffMessage,
   type DesktopShowDiffMessage,
 } from '../shared/desktopDiffMessages.js';
 import {
@@ -36,15 +37,48 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
    * removes the recorded directories once during quit.
    */
   recordPatchDir(tempDir: string): void;
+  /** The process runtime the window was handed; the external-editor fallback
+   *  settles its file work on it. */
+  runtime: ProcessRuntime;
+}
+
+/** The pair of Review-tab verbs the main process owns. */
+interface DesktopDiffHost extends Pick<DiffViewHost, 'openDiff'> {
+  /**
+   * Show a diff in the Review workbench under `previewId`, the key
+   * {@link DesktopDiffHost.closeDiff} closes it by. A caller with nothing to
+   * close later (the progress view's compare) omits it and the host mints
+   * one, so every diff the renderer holds is named and no close can dismiss
+   * a diff its sender did not open. Omitting it also keeps this assignable
+   * to `DiffViewHost['openDiff']`, which is how the window wires it.
+   */
+  openDiff(
+    original: DiffSource,
+    proposed: DiffSource,
+    title: string,
+    previewId?: string,
+  ): Promise<void>;
+  /**
+   * Close the diff `previewId` names: the renderer's `desktop:closeDiff`,
+   * the counterpart of the `desktop:showDiff` that opened it. The Review
+   * pane holds a review per path, so this takes off the ones this diff
+   * opened and leaves the rest standing; the workbench tab goes only once
+   * the pane is empty.
+   */
+  closeDiff(previewId: string): Promise<void>;
 }
 
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
-): Pick<DiffViewHost, 'openDiff'> {
+): DesktopDiffHost {
+  /** The window's Review surface, which both messages below address. */
+  const reviewSession = (): string => workspaceRoots().storage;
+
   async function openDiff(
     original: DiffSource,
     proposed: DiffSource,
     title: string,
+    previewId: string = nanoid(),
   ): Promise<void> {
     const [originalContent, proposedContent] = await Promise.all([
       readFile(original.filePath, 'utf8'),
@@ -62,7 +96,8 @@ export function createDesktopDiffHost(
       { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
       {
         command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
-        session: workspaceRoots().storage,
+        session: reviewSession(),
+        previewId,
         title,
         displayPath: title.replace(/^Tool edit:\s*/, ''),
         originalText: originalContent,
@@ -83,7 +118,7 @@ export function createDesktopDiffHost(
     options.recordPatchDir(tempDir);
     const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
-    const opened = await effectRuntime().runPromiseExit(
+    const opened = await options.runtime.runPromiseExit(
       Effect.tryPromise({
         try: async () => {
           await writeFile(diffPath, patch, 'utf8');
@@ -97,7 +132,7 @@ export function createDesktopDiffHost(
       // until quit, and preserve the original failure for the caller. The
       // directory stays recorded, so a failed removal is retried by the
       // process-level removal, and the failure is logged instead of swallowed.
-      const removed = await effectRuntime().runPromiseExit(
+      const removed = await options.runtime.runPromiseExit(
         Effect.tryPromise({
           try: () => rm(tempDir, { recursive: true, force: true }),
           catch: (error) => error,
@@ -114,5 +149,26 @@ export function createDesktopDiffHost(
     }
   }
 
-  return { openDiff };
+  /**
+   * Nothing is posted when the renderer is unreachable, which is the
+   * external-editor fallback's own path: a patch file opened in the OS
+   * editor is not a view this host can close, and the directory holding it
+   * is removed at quit.
+   */
+  async function closeDiff(previewId: string): Promise<void> {
+    tryShowInRenderer(
+      {
+        ...options,
+        source: 'desktopDiffHost',
+        fallback: 'no in-app review tab to close',
+      },
+      {
+        command: DESKTOP_DIFF_COMMANDS.CLOSE_DIFF,
+        session: reviewSession(),
+        previewId,
+      } satisfies DesktopCloseDiffMessage,
+    );
+  }
+
+  return { openDiff, closeDiff };
 }

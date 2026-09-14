@@ -127,6 +127,15 @@ export default defineConfig({
   test: {
     testTimeout: kernelTimeoutMs,
     hookTimeout: kernelTimeoutMs,
+    // The Node child-process spawner is the library's, so the suite that
+    // hands it an in-memory child mocks `node:child_process` underneath it.
+    // A dependency Vitest externalises imports Node builtins natively and
+    // never sees that mock, so these two are processed by the module runner.
+    server: {
+      deps: {
+        inline: ['@effect/platform-node', '@effect/platform-node-shared'],
+      },
+    },
     projects: [
       {
         extends: true,

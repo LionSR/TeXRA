@@ -17,6 +17,7 @@ import {
   type RunId,
   type RunOutcome,
   AgentCategory,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import {
@@ -86,13 +87,13 @@ async function writeRun(
 
 type AssembleTraceResult = Effect.Success<ReturnType<typeof assembleTrace>>;
 
-/** Assert the ok branch and hand back the trace, narrowing for the caller. */
-function unwrapOkTrace(result: AssembleTraceResult) {
+/** Assert the ok branch and hand back the result, narrowing for the caller. */
+function unwrapOk(result: AssembleTraceResult) {
   expect(result.status).toBe('ok');
   if (result.status !== 'ok') {
     throw new Error(`expected an ok trace, got ${result.status}`);
   }
-  return result.trace;
+  return result;
 }
 
 describe('assembleTrace', () => {
@@ -117,7 +118,7 @@ describe('assembleTrace', () => {
     await releaseOwnedRunLease(runId);
     await appendLogEntry(runId, 'registered row');
 
-    const trace = unwrapOkTrace(
+    const { trace } = unwrapOk(
       await Effect.runPromise(assembleTrace(runId, session)),
     );
 
@@ -146,21 +147,30 @@ describe('assembleTrace', () => {
     ]);
     await settleSessionEvents();
 
-    const trace = unwrapOkTrace(
+    const { trace, record } = unwrapOk(
       await Effect.runPromise(assembleTrace(runId, session)),
     );
 
     expect(trace.runId).toBe(runId);
-    expect(trace.config).toMatchObject({
-      agent: 'review',
-      model: 'sonnet46T',
+    expect(record).toMatchObject({ agent: 'review', model: 'sonnet46T' });
+    // The creation row is authored, not copied: an exported file has no
+    // producer, no siblings and no writable host.
+    expect(trace.events[0]).toMatchObject({
+      type: 'run.start',
+      ownerId: null,
+      parent: null,
+      checkpointId: null,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     });
-    expect(trace.entries).toHaveLength(1);
-    expect(trace.entries[0]).toMatchObject({
-      text: 'hello',
-    });
-    expect(trace.meta.outcome).toBe('completed');
-    expect(trace.meta.todos).toEqual(todos);
+    expect(trace.events).toContainEqual(
+      expect.objectContaining({ type: 'log', message: 'hello' }),
+    );
+    expect(trace.events).toContainEqual(
+      expect.objectContaining({ type: 'run.end', outcome: 'completed' }),
+    );
+    expect(trace.events).toContainEqual(
+      expect.objectContaining({ type: 'updateTodos', todos }),
+    );
   });
 
   it('returns config_missing when no config was ever written', async () => {
@@ -176,6 +186,9 @@ describe('assembleTrace', () => {
 
     const result = await Effect.runPromise(assembleTrace(runId, session));
 
-    expect(unwrapOkTrace(result).entries).toEqual([]);
+    // Only the creation row: a run that recorded nothing still exports.
+    expect(unwrapOk(result).trace.events.map((event) => event.type)).toEqual([
+      'run.start',
+    ]);
   });
 });

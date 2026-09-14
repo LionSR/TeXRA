@@ -20,11 +20,11 @@ It does not chat, compile LaTeX, or verify citations.
 
 ## When to use it
 
-Use polish when the content is in place and the prose needs work.
+Use `polish` when technical content and mathematical arguments are settled, but the prose requires tightening before submission:
 
-- Tighten loose paragraphs before submission.
-- Fix repetition, hedging, generic phrasing.
-- Improve flow between sentences and sections.
+- Eliminate hedging, verbosity, and repetitive phrasing.
+- Sharpen precision and flow between sentences and sections.
+- Enforce consistent terminology across sections.
 
 Do not use polish to add content, change math, or restructure sections.
 For those, use the [Orchestrator](../built-in-agents.md) or the
@@ -74,7 +74,7 @@ texra run polish --input intro.tex --output intro.polished.tex
 2. Select the TeXRA icon in the Secondary Side Bar.
 3. In the **Input** section, select <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick `intro.tex` from the file picker.
 4. Pick **polish** as the agent. Pick a model.
-5. Type the instruction. Select **Run agent** (the arrow button; Enter also runs it).
+5. Type the instruction. Select **Execute** (<wa-icon library="texra" name="play"></wa-icon>; Enter also runs it).
 6. When the run completes, open the diff from the **ProgressBoard**.
 
 Same run, same history, same output files, whichever surface you used.

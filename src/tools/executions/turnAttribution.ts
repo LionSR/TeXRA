@@ -1,9 +1,11 @@
 import { Effect } from 'effect';
-import type { RunKVStore } from '@agent/storage';
+import {
+  readChildTurnState,
+  type ChildTurnKey,
+} from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runInSession } from '@agent/runtime/RunContext';
 import { isInFlightPhase } from '@shared/runs/runStatus';
-import { ensureError } from '@utils/errors/errorMessage';
+import type { RunId } from '@shared/schemas';
 /**
  * Turn attribution for the executions tool's single latest-value slots.
  */
@@ -12,25 +14,30 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { resolveRunLiveness, type RunLiveness } from './runLiveness';
 
+/** How a turn is named in the note: its index within its attempt. */
+const turnLabel = (turn: ChildTurnKey): string =>
+  `turn ${turn.turnIndex} of attempt ${turn.attemptId}`;
+
 /** How the accepted turn's fate reads, given what owns the run. */
-function turnFate(token: string, liveness: RunLiveness): string {
+function turnFate(turn: ChildTurnKey, liveness: RunLiveness): string {
+  const label = turnLabel(turn);
   switch (liveness.kind) {
     case 'live':
       // A handle this process still tracks past its stream's terminal phase
       // is not a running turn: word it from the phase the registry reports,
       // the same way the process-output footer does.
       return isInFlightPhase(liveness.info.status)
-        ? `turn ${token} is still running`
-        : `turn ${token} ended with its run (${liveness.info.status})`;
+        ? `${label} is still running`
+        : `${label} ended with its run (${liveness.info.status})`;
     case 'unsettled':
       // Something alive owns the run elsewhere, or ownership could not be
       // read: either way nothing here may call the turn finished.
-      return `turn ${token} is ${liveness.reason}`;
+      return `${label} is ${liveness.reason}`;
     case 'interrupted':
     case 'settled':
       // No live owner anywhere and no result for this turn: the turn ended
       // with the process that was running it.
-      return `turn ${token} was interrupted before producing a result`;
+      return `${label} was interrupted before producing a result`;
   }
 }
 
@@ -49,22 +56,15 @@ function turnFate(token: string, liveness: RunLiveness): string {
  * (or the run has no turn identity at all).
  */
 export const turnAttributionNote = Effect.fn('turnAttributionNote')(function* (
-  store: RunKVStore,
+  runId: RunId,
   session: SessionHandle,
 ) {
-  const turnState = yield* Effect.tryPromise({
-    try: () => runInSession(session, () => store.readTurnState()),
-    catch: ensureError,
-  });
-  const active = turnState?.activeTurn;
-  const completed = turnState?.lastCompletedTurn?.token;
-  if (!active || active.token === completed) {
-    return null;
-  }
-  const liveness = yield* resolveRunLiveness(store.getRunId(), session);
-  const fate = turnFate(active.token, liveness);
-  const showing = completed
-    ? `showing the latest completed turn (${completed}).`
+  const { active, lastCompleted } = yield* readChildTurnState(session, runId);
+  if (active === null) return null;
+  const liveness = yield* resolveRunLiveness(runId, session);
+  const fate = turnFate(active, liveness);
+  const showing = lastCompleted
+    ? `showing the latest completed turn (${turnLabel(lastCompleted)}).`
     : 'no turn has completed yet.';
   return `[Note: ${fate}; ${showing}]`;
 });

@@ -1,6 +1,4 @@
 // Test composition imports
-import * as os from 'node:os';
-
 import '@test/support/defaultSessionTestSetup';
 
 // E2E fixtures for the promoted "one loop, N strategies" child-run driver.
@@ -11,9 +9,9 @@ import '@test/support/defaultSessionTestSetup';
 // Identical assertions apply regardless of which strategy is plugged in,
 // since delivery/interrupt/terminal choreography all live in the loop.
 
-import { Effect, Fiber } from 'effect';
-import pDefer, { type DeferredPromise } from 'p-defer';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Deferred, Effect, Fiber } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
@@ -24,8 +22,8 @@ const mocks = vi.hoisted(() => ({
   assertOwnedRunLease: vi.fn((_runId: RunId) => undefined),
 }));
 
-// Turn-state persistence runs against the real (memfs-backed) run store:
-// the loop writes it best-effort and no assertion here depends on it.
+// Turn attribution is committed as `child.turn` rows on the run aggregate,
+// so the fixtures read it back through the fold rather than a store mock.
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   finalizeRun: mocks.finalizeRun,
@@ -46,7 +44,8 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   submitFollowUp: mocks.submitFollowUp,
 }));
 
-import { getRunRecords, getRunStore } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
+import { readChildTurnState } from '@agent/storage/runRecords';
 import type { WorkflowJournalEntry } from '@agent/workflowScript/types';
 const { submitFollowUp: realSubmitFollowUp } = await vi.importActual<
   typeof import('@agent/followUp/ToolUseFollowUp')
@@ -57,19 +56,16 @@ import {
   type ChildRunPorts,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
-import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
+  aggregateId as qualifyAggregateId,
+  emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
-  type RunPhase,
   AgentCategory,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
@@ -80,7 +76,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import {
   claudeAgentSessionsFor,
@@ -89,7 +84,6 @@ import {
 import { createChildRun } from '@tools/delegation/childRun';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 import { generateRunId } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 let session: SessionHandle;
 const trackedRunIds = new Set<RunId>();
@@ -109,21 +103,48 @@ function loopRunId(): RunId {
   return runId;
 }
 
-function trackChildHandle(
-  runId: RunId,
-  parentRunId: RunId,
-  status: RunPhase = RUN_PHASE.RUNNING,
-): RunHandle {
+function trackChildHandle(runId: RunId, parentRunId: RunId): RunHandle {
   const handle = testRunHandle({
     runId,
     parent: parentRunId,
     agent: 'fake',
     trace: { emit: vi.fn() } as never,
   });
-  session.runs.trackAgentRun(handle, { status });
+  session.runs.track(handle);
   trackedRunIds.add(runId);
   return handle;
 }
+
+/**
+ * Move the parent run's folded phase, the way the runtime does: an
+ * activation row makes it running, the terminal row ends it. The fold is
+ * the one phase authority, so a follow-up test states its premise in rows.
+ */
+const foldParentPhase = (active: boolean) =>
+  Effect.gen(function* () {
+    const aggregateId = qualifyAggregateId('run', PARENT_RUN_ID);
+    session.publish([
+      active
+        ? {
+            type: 'run.activate',
+            aggregateId,
+            category: AgentCategory.ToolUse,
+            isRemote: false,
+          }
+        : {
+            type: 'run.end',
+            aggregateId,
+            outcome: RUN_OUTCOME.COMPLETED,
+            output: emptyRunEndOutput(AgentCategory.ToolUse),
+          },
+    ]);
+    yield* Effect.promise(() => session.settlePublications());
+  });
+
+/** Lets a forked loop reach its budget permit wait or its queue block. */
+const settle = Effect.promise(
+  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+);
 
 /** A turn the fake strategy can produce: interim (loop continues) or terminal. */
 interface FakeTurn {
@@ -135,34 +156,49 @@ interface FakeStrategyHandle {
   readonly strategy: ChildRunStrategy<FakeTurn>;
   /** Number of launch/runTurn calls made so far. */
   callCount: () => number;
+  /** Wait for the Nth (1-indexed) launch/runTurn call to have started. */
+  turnStarted: (callIndex: number) => Effect.Effect<void>;
   /** Resolve the Nth (1-indexed) launch/runTurn call — waits for it to have started. */
-  resolveTurn: (callIndex: number, turn: FakeTurn) => Promise<void>;
+  resolveTurn: (callIndex: number, turn: FakeTurn) => Effect.Effect<void>;
   /** Reject the Nth (1-indexed) launch/runTurn call — waits for it to have started. */
-  rejectTurn: (callIndex: number, err: unknown) => Promise<void>;
+  rejectTurn: (callIndex: number, err: Error) => Effect.Effect<void>;
   readonly errors: unknown[];
 }
 
 /**
  * A minimal strategy whose `launch`/`runTurn` are both driven by externally-
- * resolved deferreds, one per call, indexed 1-based by call order — lets a
+ * completed Deferreds, one per call, indexed 1-based by call order — lets a
  * test control exactly when a specific turn "completes" (not just
  * "whichever turn is currently pending", which races against the loop
- * re-invoking runTurn) and observe every delivery.
+ * re-invoking runTurn) and observe every delivery. A second Deferred per call
+ * is the loop's own "this turn has started" signal, so a test waits on the
+ * turn instead of polling the call count.
  */
 function createFakeStrategy(): FakeStrategyHandle {
-  const pendings: DeferredPromise<FakeTurn>[] = [];
+  const pendings: Deferred.Deferred<FakeTurn, Error>[] = [];
+  const started: Deferred.Deferred<void>[] = [];
   const errors: unknown[] = [];
 
-  const runTurn = (): Promise<FakeTurn> => {
-    const deferred = pDefer<FakeTurn>();
+  /** The start gate for the Nth call, created before that call exists. */
+  const startedAt = (callIndex: number) =>
+    Effect.gen(function* () {
+      while (started.length < callIndex) {
+        started.push(yield* Deferred.make<void>());
+      }
+      return started[callIndex - 1]!;
+    });
+
+  const runTurn = Effect.gen(function* () {
+    const deferred = yield* Deferred.make<FakeTurn, Error>();
     pendings.push(deferred);
-    return deferred.promise;
-  };
+    yield* Deferred.succeed(yield* startedAt(pendings.length), undefined);
+    return yield* Deferred.await(deferred);
+  });
 
   const strategy: ChildRunStrategy<FakeTurn> = {
     stageLabel: 'Fake child run',
-    launch: () => Effect.tryPromise({ try: runTurn, catch: ensureError }),
-    runTurn: () => Effect.tryPromise({ try: runTurn, catch: ensureError }),
+    launch: () => runTurn,
+    runTurn: () => runTurn,
     isTerminal: (turn) => turn.kind === 'terminal',
     isTurnError: (turn) => turn.kind === 'error-turn',
     formatDelivery: (turn) => `delivered:${turn.value}`,
@@ -172,23 +208,23 @@ function createFakeStrategy(): FakeStrategyHandle {
     },
   };
 
-  const waitForCall = async (callIndex: number): Promise<void> => {
-    await vi.waitFor(() =>
-      expect(pendings.length).toBeGreaterThanOrEqual(callIndex),
-    );
-  };
+  const turnStarted = (callIndex: number) =>
+    Effect.flatMap(startedAt(callIndex), (gate) => Deferred.await(gate));
 
   return {
     strategy,
     callCount: () => pendings.length,
-    resolveTurn: async (callIndex, turn) => {
-      await waitForCall(callIndex);
-      pendings[callIndex - 1]?.resolve(turn);
-    },
-    rejectTurn: async (callIndex, err) => {
-      await waitForCall(callIndex);
-      pendings[callIndex - 1]?.reject(err);
-    },
+    turnStarted,
+    resolveTurn: (callIndex, turn) =>
+      Effect.gen(function* () {
+        yield* turnStarted(callIndex);
+        yield* Deferred.succeed(pendings[callIndex - 1]!, turn);
+      }),
+    rejectTurn: (callIndex, err) =>
+      Effect.gen(function* () {
+        yield* turnStarted(callIndex);
+        yield* Deferred.fail(pendings[callIndex - 1]!, err);
+      }),
     errors,
   };
 }
@@ -206,58 +242,42 @@ function createTerminalStrategy(
   launch: (
     ports: ChildRunPorts,
     signal: AbortSignal,
-  ) => Promise<FakeTurn> = async () => ({
-    kind: 'terminal',
-    value: 'done',
-  }),
+  ) => Effect.Effect<FakeTurn, Error> = () =>
+    Effect.succeed({ kind: 'terminal', value: 'done' }),
   formatDelivery: ChildRunStrategy<FakeTurn>['formatDelivery'] = (turn) =>
     `delivered:${turn.value}`,
 ): ChildRunStrategy<FakeTurn> {
   return {
     stageLabel,
-    launch: (ports, signal) =>
-      Effect.tryPromise({
-        try: () => launch(ports, signal),
-        catch: ensureError,
-      }),
+    launch,
     isTerminal: () => true,
     formatDelivery,
     formatError: () => 'error',
   };
 }
 
-/** Start the loop with the fixture defaults; extras override any param. */
-function startLoop(
+/**
+ * Start the loop with the fixture defaults; extras override any param. Setup
+ * is synchronous through the queue claim, so the loop owns the run's queue by
+ * the time the returned fiber is in hand; the fiber itself is detached, so
+ * every test joins it before its body ends.
+ */
+const startLoop = (
   runId: RunId,
   strategy: ChildRunStrategy<FakeTurn>,
   extras: Partial<ChildRunLoopParams<FakeTurn>> = {},
-): Promise<void> {
-  return Effect.runPromise(
-    startChildRunLoop({
-      session,
-      runId,
-      parentRunId: PARENT_RUN_ID,
-      agentName: 'fake',
-      strategy,
-      ...extras,
-    }).pipe(Effect.flatMap(Fiber.join)),
-  );
-}
-
-async function waitForLiveOwner(runId: RunId): Promise<void> {
-  await vi.waitFor(() =>
-    expect(session.followUps.hasLiveOwner(runId)).toBe(true),
-  );
-}
-
-async function waitForLoopEnd(runId: RunId): Promise<void> {
-  await vi.waitFor(() =>
-    expect(session.followUps.hasLiveOwner(runId)).toBe(false),
-  );
-}
+) =>
+  startChildRunLoop({
+    session,
+    runId,
+    parentRunId: PARENT_RUN_ID,
+    agentName: 'fake',
+    strategy,
+    ...extras,
+  });
 
 beforeEach(async () => {
-  session = createProcessSession();
+  session = await Effect.runPromise(createProcessSession());
   publishTestRunStart(session, PARENT_RUN_ID);
   await session.settlePublications();
   vi.clearAllMocks();
@@ -278,83 +298,94 @@ afterEach(() => {
 });
 
 describe('childRunLoop E2E fixtures', () => {
-  it('validates the captured lease before registering loop resources', async () => {
-    const runId = loopRunId();
-    const { strategy, callCount } = createFakeStrategy();
-    mocks.assertOwnedRunLease.mockImplementationOnce(() => {
-      throw new Error('lease generation lost');
-    });
+  it.effect(
+    'validates the captured lease before registering loop resources',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const { strategy, callCount } = createFakeStrategy();
+        mocks.assertOwnedRunLease.mockImplementationOnce(() => {
+          throw new Error('lease generation lost');
+        });
 
-    await expect(startLoop(runId, strategy)).rejects.toThrow(
-      'lease generation lost',
-    );
+        const error = yield* Effect.flip(startLoop(runId, strategy));
+        expect(error.message).toContain('lease generation lost');
 
-    expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-    expect(callCount()).toBe(0);
-  });
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(callCount()).toBe(0);
+      }),
+  );
 
-  it('revalidates the lease when claiming a new queue generation', async () => {
-    const runId = loopRunId();
-    const { strategy, callCount } = createFakeStrategy();
-    const claimChildRun = vi.spyOn(session.followUps, 'claimChildRun');
-    mocks.assertOwnedRunLease
-      .mockImplementationOnce(() => undefined)
-      .mockImplementationOnce(() => {
-        throw new Error('lease generation lost during setup');
-      });
+  it.effect('revalidates the lease when claiming a new queue generation', () =>
+    Effect.gen(function* () {
+      const runId = loopRunId();
+      const { strategy, callCount } = createFakeStrategy();
+      const claimChildRun = vi.spyOn(session.followUps, 'claimChildRun');
+      mocks.assertOwnedRunLease
+        .mockImplementationOnce(() => undefined)
+        .mockImplementationOnce(() => {
+          throw new Error('lease generation lost during setup');
+        });
 
-    await expect(startLoop(runId, strategy)).rejects.toThrow(
-      'lease generation lost during setup',
-    );
+      const error = yield* Effect.flip(startLoop(runId, strategy));
+      expect(error.message).toContain('lease generation lost during setup');
 
-    expect(claimChildRun).not.toHaveBeenCalled();
-    expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-    expect(callCount()).toBe(0);
-  });
-
-  it('unwinds provider ownership and loop resources when synchronous setup fails', async () => {
-    const runId = loopRunId();
-    const registry = new AgentCliSessionRegistry(session.runs);
-    const releaseSessionOwnership = vi.fn(() => registry.releaseByRunId(runId));
-    const handle = trackChildHandle(runId, PARENT_RUN_ID);
-    const interruptHandle = vi.spyOn(handle, 'interrupt');
-    const registerLoop = vi
-      .spyOn(session.followUps, 'claimChildRun')
-      .mockImplementationOnce(() => {
-        throw new Error('loop registration failed');
-      });
-    const { strategy } = createFakeStrategy();
-
-    try {
-      await expect(
-        startLoop(
-          runId,
-          {
-            ...strategy,
-            onLoopStart: () => {
-              registry.trackInFlight({ runId });
-            },
-            releaseSessionOwnership,
-          },
-          { agentName: 'fake-cli' },
-        ),
-      ).rejects.toThrow('loop registration failed');
-
-      expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+      expect(claimChildRun).not.toHaveBeenCalled();
       expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-      expect(handle.interrupt()).toBe(false);
-      interruptHandle.mockClear();
-      registry.interruptAll();
-      expect(interruptHandle).not.toHaveBeenCalled();
-      expect(session.followUps.getAll(runId)).toEqual([]);
-    } finally {
-      registerLoop.mockRestore();
-      interruptHandle.mockRestore();
-      registry.releaseByRunId(runId);
-    }
-  });
+      expect(callCount()).toBe(0);
+    }),
+  );
 
-  it.each([
+  it.effect(
+    'unwinds provider ownership and loop resources when synchronous setup fails',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const registry = new AgentCliSessionRegistry(session.runs);
+        const releaseSessionOwnership = vi.fn(() =>
+          registry.releaseByRunId(runId),
+        );
+        const handle = trackChildHandle(runId, PARENT_RUN_ID);
+        const interruptHandle = vi.spyOn(handle, 'interrupt');
+        const registerLoop = vi
+          .spyOn(session.followUps, 'claimChildRun')
+          .mockImplementationOnce(() => {
+            throw new Error('loop registration failed');
+          });
+        const { strategy } = createFakeStrategy();
+
+        try {
+          const error = yield* Effect.flip(
+            startLoop(
+              runId,
+              {
+                ...strategy,
+                onLoopStart: () => {
+                  registry.trackInFlight({ runId });
+                },
+                releaseSessionOwnership,
+              },
+              { agentName: 'fake-cli' },
+            ),
+          );
+          expect(error.message).toContain('loop registration failed');
+
+          expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+          expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+          expect(handle.interrupt()).toBe(false);
+          interruptHandle.mockClear();
+          registry.interruptAll();
+          expect(interruptHandle).not.toHaveBeenCalled();
+          expect(session.followUps.getAll(runId)).toEqual([]);
+        } finally {
+          registerLoop.mockRestore();
+          interruptHandle.mockRestore();
+          registry.releaseByRunId(runId);
+        }
+      }),
+  );
+
+  it.effect.each([
     {
       name: 'CodexThreads',
       track: (runId: RunId, runSession: SessionHandle) =>
@@ -372,853 +403,1022 @@ describe('childRunLoop E2E fixtures', () => {
     },
   ])(
     '$name interrupts a real initial-turn loop and releases ownership once',
-    async ({ name, track, interruptAll, release }) => {
-      const runId = loopRunId();
-      const events: string[] = [];
-      const aborted = vi.fn();
-      const releaseSessionOwnership = vi.fn(() => release(runId));
-      trackChildHandle(runId, PARENT_RUN_ID);
+    ({ name, track, interruptAll, release }) =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const events: string[] = [];
+        const aborted = vi.fn();
+        const releaseSessionOwnership = vi.fn(() => release(runId));
+        trackChildHandle(runId, PARENT_RUN_ID);
+        const launched = yield* Deferred.make<void>();
 
-      const strategy: ChildRunStrategy<FakeTurn> = {
-        stageLabel: `${name} session`,
-        launch: (_ports, signal) => {
-          events.push('launch');
-          return Effect.tryPromise({
-            try: () =>
-              new Promise<never>((_resolve, reject) => {
+        const strategy: ChildRunStrategy<FakeTurn> = {
+          stageLabel: `${name} session`,
+          launch: (_ports, signal) =>
+            Effect.gen(function* () {
+              events.push('launch');
+              yield* Deferred.succeed(launched, undefined);
+              return yield* Effect.callback<never, Error>((resume) => {
                 const rejectAbort = () => {
                   aborted();
-                  reject(createAbortError());
+                  resume(Effect.fail(createAbortError()));
                 };
                 if (signal.aborted) rejectAbort();
                 else {
                   signal.addEventListener('abort', rejectAbort, { once: true });
                 }
-              }),
-            catch: ensureError,
+              });
+            }),
+          isTerminal: () => false,
+          formatDelivery: () => 'unexpected delivery',
+          formatError: () => 'unexpected error',
+          onLoopStart: (runSession) => {
+            events.push('registered');
+            track(runId, runSession);
+          },
+          releaseSessionOwnership,
+        };
+
+        try {
+          const loop = yield* startLoop(runId, strategy, {
+            agentName: name,
           });
-        },
-        isTerminal: () => false,
-        formatDelivery: () => 'unexpected delivery',
-        formatError: () => 'unexpected error',
-        onLoopStart: (runSession) => {
-          events.push('registered');
-          track(runId, runSession);
-        },
-        releaseSessionOwnership,
-      };
 
-      try {
-        startLoop(runId, strategy, {
-          agentName: name,
-        });
+          expect(events).toEqual(['registered']);
+          expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+          // The loop body is a generation on the run's lane: it starts
+          // once the lane admits it, not inside `startChildRunLoop`.
+          yield* Deferred.await(launched);
+          expect(events).toEqual(['registered', 'launch']);
+          interruptAll();
 
-        expect(events).toEqual(['registered']);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
-        // The loop body is a generation on the run's lane: it starts
-        // once the lane admits it, not inside `startChildRunLoop`.
-        await vi.waitFor(() =>
-          expect(events).toEqual(['registered', 'launch']),
-        );
-        interruptAll();
-
-        await vi.waitFor(() => {
+          yield* Fiber.join(loop);
           expect(aborted).toHaveBeenCalledOnce();
           expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-        });
-        expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-        expect(session.runs.getHandle(runId)).toBeUndefined();
-      } finally {
-        release(runId);
-      }
-    },
+          expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+          expect(session.runs.getHandle(runId)).toBeUndefined();
+        } finally {
+          release(runId);
+        }
+      }),
   );
 
-  it('drains accepted-turn attribution before releasing the run lease', async () => {
-    const runId = loopRunId();
-    const { strategy, rejectTurn } = createFakeStrategy();
-    const writeBarrier = pDefer<void>();
-    const writeStarted = pDefer<void>();
-    const store = getRunStore(runId);
-    const writeTurnState = vi
-      .spyOn(store, 'writeTurnState')
-      .mockImplementationOnce(async () => {
-        writeStarted.resolve();
-        await writeBarrier.promise;
-      });
+  it.effect(
+    'commits accepted-turn attribution before releasing the run lease',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const { strategy, rejectTurn, turnStarted } = createFakeStrategy();
 
-    try {
-      const completion = startLoop(runId, strategy);
-      await writeStarted.promise;
-      // Interrupt the loop through its parent lineage: no turn handle is
-      // tracked in this fixture, so the stop reaches the loop via its
-      // child activation.
-      const stopSettlement = Effect.runPromise(
-        session.runs.stopAgentRun(PARENT_RUN_ID),
-      );
-      await rejectTurn(1, createAbortError());
-      await stopSettlement;
+        const loop = yield* startLoop(runId, strategy);
+        yield* turnStarted(1);
+        // Acceptance is committed before the turn is dispatched, so the run's
+        // report/result slots are attributable while the turn is still running.
+        expect(yield* readChildTurnState(session, runId)).toEqual({
+          active: { attemptId: expect.any(String), turnIndex: 1 },
+          lastCompleted: null,
+        });
+        expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
 
-      await vi.waitFor(() =>
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true),
-      );
-      expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+        // Interrupt the loop through its parent lineage: no turn handle is
+        // tracked in this fixture, so the stop reaches the loop via its
+        // child activation.
+        const stopping = yield* Effect.forkChild(
+          session.runs.stopAgentRun(PARENT_RUN_ID),
+          { startImmediately: true },
+        );
+        yield* rejectTurn(1, createAbortError());
+        yield* Fiber.join(stopping);
+        yield* Fiber.join(loop);
 
-      writeBarrier.resolve();
-      await completion;
-      expect(writeTurnState).toHaveBeenCalledOnce();
-      expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
-        session,
-        runId,
-      );
-    } finally {
-      writeBarrier.resolve();
-      writeTurnState.mockRestore();
-    }
-  });
-
-  it('keeps follow-up ownership distinct across child-stream and native child lifecycles', async () => {
-    const runId = generateRunId();
-    const turn = pDefer<FakeTurn>();
-    const launchStarted = pDefer<void>();
-    const formatStarted = pDefer<void>();
-    const formattedDelivery = pDefer<string>();
-    let notifyProgress: ChildRunPorts['notify'] = () => {};
-    const strategy = createTerminalStrategy(
-      'Follow-up ownership',
-      (ports) => {
-        notifyProgress = ports.notify;
-        launchStarted.resolve();
-        return turn.promise;
-      },
-      () => {
-        formatStarted.resolve();
-        return formattedDelivery.promise;
-      },
-    );
-    publishTestRunStart(session, runId);
-    const childRun = await Effect.runPromise(
-      createChildRun(session, runId, PARENT_RUN_ID, {
-        run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-        userFollowUpSupport: 'terminalBacked',
-        description: 'Keep a background child running',
-        config: childRunConfig,
+        // An interrupted turn never settles, so the acceptance row stands and
+        // the lease is released only once the loop is done with it.
+        expect(yield* readChildTurnState(session, runId)).toEqual({
+          active: { attemptId: expect.any(String), turnIndex: 1 },
+          lastCompleted: null,
+        });
+        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+          session,
+          runId,
+        );
       }),
-    );
-    trackedRunIds.add(runId);
-    const completion = startLoop(runId, strategy, {
-      childRun,
-    });
-    const tryResumeRun = vi.fn(async () => false);
-    const resumePort = { tryResumeRun };
-    await launchStarted.promise;
+  );
 
-    try {
-      seedRunStatusForTest(session.status, PARENT_RUN_ID, {
-        phase: RUN_PHASE.RUNNING,
-      });
-      await expect(
-        Effect.runPromise(
-          realSubmitFollowUp(PARENT_RUN_ID, 'active parent', {
-            session,
-            resumePort,
-          }),
-        ),
-      ).resolves.toEqual({ status: 'queued', wake: 'failed' });
+  it.effect(
+    'keeps follow-up ownership distinct across child-stream and native child lifecycles',
+    () =>
+      Effect.gen(function* () {
+        const runId = generateRunId();
+        const turn = yield* Deferred.make<FakeTurn, Error>();
+        const launchStarted = yield* Deferred.make<void>();
+        const formatStarted = yield* Deferred.make<void>();
+        // `formatDelivery` is a synchronous production callback returning a
+        // Promise, so this gate stays a captured-resolve Promise and the
+        // "formatting has started" signal is completed unsafely from inside it.
+        let resolveFormattedDelivery!: (value: string) => void;
+        const formattedDelivery = new Promise<string>((resolve) => {
+          resolveFormattedDelivery = resolve;
+        });
+        let notifyProgress: ChildRunPorts['notify'] = () => {};
+        const strategy = createTerminalStrategy(
+          'Follow-up ownership',
+          (ports) =>
+            Effect.gen(function* () {
+              notifyProgress = ports.notify;
+              yield* Deferred.succeed(launchStarted, undefined);
+              return yield* Deferred.await(turn);
+            }),
+          () => {
+            Deferred.doneUnsafe(formatStarted, Effect.void);
+            return formattedDelivery;
+          },
+        );
+        publishTestRunStart(session, runId);
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+          userFollowUpSupport: 'terminalBacked',
+          description: 'Keep a background child running',
+          config: childRunConfig,
+        });
+        trackedRunIds.add(runId);
+        const loop = yield* startLoop(runId, strategy, {
+          childRun,
+        });
+        const tryResumeRun = vi.fn(async () => false);
+        const resumePort = { tryResumeRun };
+        yield* Deferred.await(launchStarted);
 
-      seedRunStatusForTest(session.status, PARENT_RUN_ID, {
-        phase: RUN_PHASE.COMPLETED,
-      });
-      const userAdmission = vi.fn();
-      await expect(
-        Effect.runPromise(
-          realSubmitFollowUp(PARENT_RUN_ID, 'restore me', {
-            session,
-            resumePort,
-            onAdmitted: userAdmission,
-          }),
-        ),
-      ).resolves.toMatchObject({ status: 'failed' });
-      expect(userAdmission).toHaveBeenCalledWith(false);
-      await expect(
-        Effect.runPromise(
-          realSubmitFollowUp(
-            PARENT_RUN_ID,
-            { text: 'late child result', origin: 'subagent_result' },
-            { session, resumePort },
-          ),
-        ),
-      ).resolves.toMatchObject({ status: 'failed' });
-      expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual([
-        'active parent',
-      ]);
-
-      const releaseNativeChild = session.runs.reserveChildActivation({
-        runId: 'da7a01' as RunId,
-        parentRunId: PARENT_RUN_ID,
-        interrupt: vi.fn(),
-        detach: vi.fn(),
-        isDetached: () => false,
-      });
-      try {
-        await expect(
-          Effect.runPromise(
-            realSubmitFollowUp(PARENT_RUN_ID, 'native child result', {
+        try {
+          yield* foldParentPhase(true);
+          expect(
+            yield* realSubmitFollowUp(PARENT_RUN_ID, 'active parent', {
               session,
               resumePort,
             }),
-          ),
-        ).resolves.toEqual({ status: 'queued', wake: 'failed' });
-      } finally {
-        releaseNativeChild();
-      }
+          ).toEqual({ status: 'queued', wake: 'failed' });
 
-      const terminalQueue = session.followUps.getAll(PARENT_RUN_ID);
-      notifyProgress({ kind: 'started' });
-      expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual(terminalQueue);
+          yield* foldParentPhase(false);
+          const userAdmission = vi.fn();
+          expect(
+            yield* realSubmitFollowUp(PARENT_RUN_ID, 'restore me', {
+              session,
+              resumePort,
+              onAdmitted: userAdmission,
+            }),
+          ).toMatchObject({ status: 'failed' });
+          expect(userAdmission).toHaveBeenCalledWith(false);
+          expect(
+            yield* realSubmitFollowUp(
+              PARENT_RUN_ID,
+              { text: 'late child result', origin: 'subagent_result' },
+              { session, resumePort },
+            ),
+          ).toMatchObject({ status: 'failed' });
+          expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual([
+            'active parent',
+          ]);
 
-      seedRunStatusForTest(session.status, PARENT_RUN_ID, {
-        phase: RUN_PHASE.RUNNING,
-      });
-      notifyProgress({ kind: 'started' });
-      const progressQueue = session.followUps.getAll(PARENT_RUN_ID);
-      expect(progressQueue).toHaveLength(terminalQueue.length + 1);
+          const releaseNativeChild = session.runs.reserveChildActivation({
+            runId: 'da7a01' as RunId,
+            parentRunId: PARENT_RUN_ID,
+            interrupt: vi.fn(),
+            detach: vi.fn(),
+            isDetached: () => false,
+          });
+          try {
+            expect(
+              yield* realSubmitFollowUp(PARENT_RUN_ID, 'native child result', {
+                session,
+                resumePort,
+              }),
+            ).toEqual({ status: 'queued', wake: 'failed' });
+          } finally {
+            releaseNativeChild();
+          }
 
-      turn.resolve({ kind: 'terminal', value: 'done' });
-      await formatStarted.promise;
-      session.runs.detachActiveChildren(PARENT_RUN_ID);
-      notifyProgress({ kind: 'started' });
-      formattedDelivery.resolve('delivered:done');
-      await completion;
-
-      expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual(progressQueue);
-      expect(mocks.submitFollowUp).not.toHaveBeenCalled();
-    } finally {
-      session.followUps.terminalize(PARENT_RUN_ID);
-      session.runs.detachActiveChildren(PARENT_RUN_ID);
-      turn.resolve({ kind: 'terminal', value: 'done' });
-      formattedDelivery.resolve('delivered:done');
-      await completion;
-    }
-  });
-
-  it('persists without parent delivery in persist-only mode', async () => {
-    const runId = loopRunId();
-    const { strategy, resolveTurn } = createFakeStrategy();
-
-    const completion = startLoop(
-      runId,
-      { ...strategy, deliveryMode: 'persistOnly' },
-      { parentRunId: 'headless-parent' as RunId },
-    );
-    await resolveTurn(1, { kind: 'terminal', value: 'saved' });
-    await completion;
-
-    expect(
-      await Effect.runPromise(getRunRecords(session, runId).readReport()),
-    ).toBe('delivered:saved');
-    expect(mocks.submitFollowUp).not.toHaveBeenCalled();
-  });
-
-  it('reuses a terminal child stream for a separately authorized retry', async () => {
-    const retryRunId = loopRunId();
-    const parentLease = session.followUps.claimLive(PARENT_RUN_ID, 'flow')!;
-    const admissions: string[] = [];
-    mocks.submitFollowUp.mockImplementation((targetRunId, followUp, options) =>
-      Effect.tryPromise({
-        try: async () => {
-          const admission = options.session.followUps.submit(
-            targetRunId,
-            followUp,
-            'live_owner',
+          const terminalQueue = session.followUps.getAll(PARENT_RUN_ID);
+          notifyProgress({ kind: 'started' });
+          expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual(
+            terminalQueue,
           );
-          admissions.push(admission.kind);
-          return admission.kind === 'duplicate' || admission.kind === 'refused'
-            ? { status: 'failed' as const, reason: 'not_resumable' as const }
-            : { status: 'sent' as const };
-        },
-        catch: (error) => error,
+
+          yield* foldParentPhase(true);
+          notifyProgress({ kind: 'started' });
+          const progressQueue = session.followUps.getAll(PARENT_RUN_ID);
+          expect(progressQueue).toHaveLength(terminalQueue.length + 1);
+
+          yield* Deferred.succeed<FakeTurn, Error>(turn, {
+            kind: 'terminal',
+            value: 'done',
+          });
+          yield* Deferred.await(formatStarted);
+          yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
+          notifyProgress({ kind: 'started' });
+          resolveFormattedDelivery('delivered:done');
+          yield* Fiber.join(loop);
+
+          expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual(
+            progressQueue,
+          );
+          expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+        } finally {
+          session.followUps.terminalize(PARENT_RUN_ID);
+          yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
+          yield* Deferred.succeed<FakeTurn, Error>(turn, {
+            kind: 'terminal',
+            value: 'done',
+          });
+          resolveFormattedDelivery('delivered:done');
+          yield* Fiber.join(loop);
+        }
       }),
-    );
+  );
 
-    try {
-      await startLoop(retryRunId, createTerminalStrategy('First attempt'));
-      expect(session.followUps.hasLiveOwner(retryRunId)).toBe(false);
+  it.effect('persists without parent delivery in persist-only mode', () =>
+    Effect.gen(function* () {
+      const runId = loopRunId();
+      const { strategy, resolveTurn } = createFakeStrategy();
 
-      await expect(
-        startLoop(retryRunId, createTerminalStrategy('Retry attempt')),
-      ).resolves.toBeUndefined();
-      expect(admissions).toEqual(['delivered_live', 'delivered_live']);
-      const delivered = session.followUps.queue(parentLease).drainItems();
-      expect(delivered.map((item) => item.text)).toEqual([
-        'delivered:done',
-        'delivered:done',
-      ]);
-      expect(delivered[0]?.deliveryId).toBeDefined();
-      expect(delivered[1]?.deliveryId).toBeDefined();
-      expect(delivered[1]?.deliveryId).not.toBe(delivered[0]?.deliveryId);
-      expect(session.followUps.hasLiveOwner(retryRunId)).toBe(false);
-    } finally {
-      session.followUps.release(parentLease, 'recoverable');
-    }
-  });
+      const loop = yield* startLoop(
+        runId,
+        { ...strategy, deliveryMode: 'persistOnly' },
+        { parentRunId: 'headless-parent' as RunId },
+      );
+      yield* resolveTurn(1, { kind: 'terminal', value: 'saved' });
+      yield* Fiber.join(loop);
 
-  it('releases session ownership before delivering a failed turn', async () => {
-    const runId = loopRunId();
-    const { strategy, rejectTurn } = createFakeStrategy();
-    const releaseSessionOwnership = vi.fn();
-    mocks.submitFollowUp.mockImplementation(() =>
-      Effect.tryPromise({
-        try: async () => {
+      expect(yield* getRunRecords(session, runId).readReport()).toBe(
+        'delivered:saved',
+      );
+      expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect(
+    'reuses a terminal child stream for a separately authorized retry',
+    () =>
+      Effect.gen(function* () {
+        const retryRunId = loopRunId();
+        const parentLease = session.followUps.claimLive(PARENT_RUN_ID, 'flow')!;
+        const admissions: string[] = [];
+        mocks.submitFollowUp.mockImplementation(
+          (targetRunId, followUp, options) =>
+            Effect.sync(() => {
+              const admission = options.session.followUps.submit(
+                targetRunId,
+                followUp,
+                'live_owner',
+              );
+              admissions.push(admission.kind);
+              return admission.kind === 'duplicate' ||
+                admission.kind === 'refused'
+                ? {
+                    status: 'failed' as const,
+                    reason: 'not_resumable' as const,
+                  }
+                : { status: 'sent' as const };
+            }),
+        );
+
+        try {
+          yield* Fiber.join(
+            yield* startLoop(
+              retryRunId,
+              createTerminalStrategy('First attempt'),
+            ),
+          );
+          expect(session.followUps.hasLiveOwner(retryRunId)).toBe(false);
+
+          expect(
+            yield* Fiber.join(
+              yield* startLoop(
+                retryRunId,
+                createTerminalStrategy('Retry attempt'),
+              ),
+            ),
+          ).toBeUndefined();
+          expect(admissions).toEqual(['delivered_live', 'delivered_live']);
+          const delivered = session.followUps.queue(parentLease).drainItems();
+          expect(delivered.map((item) => item.text)).toEqual([
+            'delivered:done',
+            'delivered:done',
+          ]);
+          expect(delivered[0]?.deliveryId).toBeDefined();
+          expect(delivered[1]?.deliveryId).toBeDefined();
+          expect(delivered[1]?.deliveryId).not.toBe(delivered[0]?.deliveryId);
+          expect(session.followUps.hasLiveOwner(retryRunId)).toBe(false);
+        } finally {
+          session.followUps.release(parentLease, 'recoverable');
+        }
+      }),
+  );
+
+  it.effect('releases session ownership before delivering a failed turn', () =>
+    Effect.gen(function* () {
+      const runId = loopRunId();
+      const { strategy, rejectTurn } = createFakeStrategy();
+      const releaseSessionOwnership = vi.fn();
+      // The in-mock assertion now fails the delivery as a defect rather than
+      // being swallowed by a rejected promise the loop logs.
+      mocks.submitFollowUp.mockImplementation(() =>
+        Effect.sync(() => {
           expect(releaseSessionOwnership).toHaveBeenCalledOnce();
           return { status: 'sent' };
-        },
-        catch: (error) => error,
-      }),
-    );
-
-    startLoop(
-      runId,
-      { ...strategy, releaseSessionOwnership },
-      { agentName: 'fake-cli' },
-    );
-
-    await waitForLiveOwner(runId);
-    await rejectTurn(1, new Error('initial turn failed'));
-    await waitForLoopEnd(runId);
-    expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-  });
-
-  it('delegate → interrupt mid-run: an interrupt during the first turn ends the run without a terminal delivery for that turn', async () => {
-    const runId = loopRunId();
-    const { strategy, rejectTurn, callCount } = createFakeStrategy();
-    const handle = trackChildHandle(runId, PARENT_RUN_ID);
-
-    const completion = startLoop(runId, strategy);
-
-    await waitForLiveOwner(runId);
-    await vi.waitFor(() => expect(callCount()).toBe(1));
-
-    expect(handle.interrupt()).toBe(true);
-    // Simulate the in-flight call rejecting with an AbortError-shaped
-    // rejection, matching what a real strategy's abortController produces.
-    await rejectTurn(1, createAbortError());
-
-    await completion;
-    expect(mocks.submitFollowUp).not.toHaveBeenCalled();
-    expect(session.runs.getHandle(runId)).toBeUndefined();
-  });
-
-  it('delegate → complete → follow-up delivery: an interim turn delivers, then the loop picks up a queued follow-up for the next turn', async () => {
-    const runId = loopRunId();
-    const { strategy, callCount, resolveTurn } = createFakeStrategy();
-    const onLoopStart = vi.fn();
-    const onTurnSuccess = vi.fn();
-    const parentWake = vi.fn();
-    const deliveryCompleted = pDefer<{ status: 'sent' }>();
-    mocks.submitFollowUp.mockImplementation(() =>
-      Effect.tryPromise({
-        try: async () => {
-          parentWake();
-          return deliveryCompleted.promise;
-        },
-        catch: (error) => error,
-      }),
-    );
-
-    startLoop(runId, { ...strategy, onLoopStart, onTurnSuccess });
-
-    expect(onLoopStart).toHaveBeenCalledOnce();
-    expect(onLoopStart).toHaveBeenCalledWith(session);
-    await waitForLiveOwner(runId);
-    await resolveTurn(1, { kind: 'interim', value: 'first' });
-
-    await vi.waitFor(() => {
-      expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-        PARENT_RUN_ID,
-        expect.objectContaining({ text: 'delivered:first' }),
-        expect.anything(),
-      );
-    });
-    // The loop starts delivery for turn N before reading the queue for turn
-    // N+1. Even input already queued during delivery must not begin another
-    // model turn until the parent has received this result.
-    expect(onTurnSuccess).toHaveBeenCalledOnce();
-    expect(onTurnSuccess.mock.invocationCallOrder[0]).toBeLessThan(
-      parentWake.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
-    );
-
-    // Enqueue a follow-up on the same queue the loop is now blocked on.
-    expect(
-      session.followUps.submit(
-        runId,
-        { text: 'keep going', origin: 'user' },
-        'live_owner',
-      ),
-    ).toEqual({ kind: 'queued' });
-    expect(callCount()).toBe(1);
-
-    deliveryCompleted.resolve({ status: 'sent' });
-    await vi.waitFor(() => expect(callCount()).toBe(2));
-
-    // Waits for the loop to have actually invoked runTurn a second time —
-    // NOT for the queue to read empty, which can happen synchronously on
-    // enqueue (the fast "someone is already waiting" path never pushes to
-    // the backing array at all) well before the loop's own continuation runs.
-    await resolveTurn(2, { kind: 'terminal', value: 'final' });
-
-    await vi.waitFor(() => {
-      expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ text: 'delivered:final' }),
-        expect.anything(),
-      );
-    });
-    await waitForLoopEnd(runId);
-  });
-
-  it('late result after parent stop: a turn that resolves after interruption is persisted but not delivered', async () => {
-    const runId = loopRunId();
-    const { strategy, resolveTurn, callCount } = createFakeStrategy();
-    const handle = trackChildHandle(runId, PARENT_RUN_ID);
-    const releaseSessionOwnership = vi.fn();
-    startLoop(runId, { ...strategy, releaseSessionOwnership });
-
-    await waitForLiveOwner(runId);
-    await vi.waitFor(() => expect(callCount()).toBe(1));
-    // Interrupt the loop, then let the in-flight turn resolve normally
-    // (not aborted) — mirrors a turn that was already past its own
-    // interruption checkpoints when the stop landed.
-    expect(handle.interrupt()).toBe(true);
-    await resolveTurn(1, { kind: 'terminal', value: 'late' });
-
-    await waitForLoopEnd(runId);
-    expect(
-      await Effect.runPromise(getRunRecords(session, runId).readReport()),
-    ).toBe('delivered:late');
-    expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-    expect(mocks.submitFollowUp).not.toHaveBeenCalled();
-  });
-
-  it('kill during WAITING: interrupting the loop while it is blocked between turns ends the run without a hang', async () => {
-    const runId = loopRunId();
-    const { strategy, resolveTurn } = createFakeStrategy();
-    const handle = trackChildHandle(runId, PARENT_RUN_ID);
-
-    startLoop(runId, strategy);
-
-    await waitForLiveOwner(runId);
-    await resolveTurn(1, { kind: 'interim', value: 'first' });
-
-    await vi.waitFor(() => {
-      expect(mocks.submitFollowUp).toHaveBeenCalled();
-    });
-    // The loop is now blocked in queue.waitAndDrainAll; the loop's handler on
-    // the run handle is the live stop target.
-    expect(handle.interrupt()).toBe(true);
-
-    await waitForLoopEnd(runId);
-    // Only the one interim delivery — the kill did not spawn another turn.
-    expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
-  });
-
-  it('stop between turns settles the ghost handle when terminal metadata fails', async () => {
-    // Regression: for a native strategy (no ChildRun — each turn owns its
-    // own RunHandle via runFlowWithLifecycle, not the loop), a
-    // stop landing BETWEEN turns interrupts the loop through the run handle
-    // and transitions the stream to CANCELLED — but assumes a live flow will
-    // notice and self-finalize.
-    // Nothing is running here (the loop is just blocked on a queue wait), so
-    // without the loop's own finalize-on-interrupt fallback, the most
-    // recently tracked handle for this stream — still WAITING, still
-    // resumable-looking — would never settle or untrack.
-    const runId = loopRunId();
-    const { strategy, resolveTurn } = createFakeStrategy();
-    mocks.finalizeRun.mockReturnValueOnce(
-      Effect.succeed({
-        ok: false,
-        error: new Error('metadata disk full'),
-        outcomePersisted: false,
-      }),
-    );
-
-    startLoop(runId, strategy);
-
-    await waitForLiveOwner(runId);
-
-    // Mirrors what a real native turn's runFlowWithLifecycle does: track a
-    // fresh handle for this runId/runId, WAITING, once the
-    // turn suspends.
-    const handle = trackChildHandle(runId, PARENT_RUN_ID, RUN_PHASE.WAITING);
-
-    await resolveTurn(1, { kind: 'interim', value: 'first' });
-    await vi.waitFor(() =>
-      expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1),
-    );
-
-    // Loop is now between turns. Interrupt it through the run handle.
-    expect(handle.interrupt()).toBe(true);
-
-    await waitForLoopEnd(runId);
-
-    // Untracked: no longer resumable — a later delegate_agent(execution_id=…)
-    // would correctly report "not found" instead of finding a ghost handle.
-    expect(session.runs.getHandle(runId)).toBeUndefined();
-    // The loop routes the cancellation through the durable outcome's only
-    // writer; the interim result envelope is left exactly as its turn wrote
-    // it, and reads project the durable outcome onto it.
-    expect(mocks.finalizeRun).toHaveBeenCalledWith(session, {
-      runId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      error: undefined,
-      usage: undefined,
-      output: { category: 'toolUse', response: '', files: [] },
-    });
-  });
-
-  it('leaves no interruptible child continuation while terminal delivery is in flight', async () => {
-    // Terminal delivery (persist report / persist manifest / deliver
-    // follow-up) runs after child finalization and lease release, so a
-    // stop/kill landing in that window finds nothing left to interrupt. The
-    // test inspects the run handle while delivery is deliberately held open.
-    const runId = loopRunId();
-    const handle = trackChildHandle(runId, PARENT_RUN_ID);
-    let deliveryGate: DeferredPromise<void> | undefined;
-    mocks.submitFollowUp.mockImplementation(() =>
-      Effect.tryPromise({
-        try: async () => {
-          deliveryGate = pDefer<void>();
-          await deliveryGate.promise;
-          return { status: 'sent' };
-        },
-        catch: (error) => error,
-      }),
-    );
-
-    const strategy = createTerminalStrategy('Reregister test');
-
-    startLoop(runId, strategy);
-
-    // Poll until delivery is mid-flight (blocked on our gate).
-    await vi.waitFor(() => expect(deliveryGate).toBeDefined());
-
-    expect(handle.interrupt()).toBe(false);
-
-    deliveryGate?.resolve();
-    await waitForLoopEnd(runId);
-  });
-
-  it('#8093 regression: a terminal turn finalizes this child before its wake step is even reached, so a resumed parent never self-stalls waiting on it', async () => {
-    // Regression: parent continuation submission can await the ENTIRE resumed
-    // turn (`agentResume.tryResumeRun` → … → `resumeToolUseFromResumeData`).
-    // Before #8093, the loop awaited split enqueue/wake work inline in the
-    // turn loop, and only finalized this child (untracking its run
-    // handle) afterward in the outer `finally` — so a resumed parent that
-    // immediately calls `executions` with action=wait on this same run
-    // could find it still RUNNING and block on itself for the whole wait
-    // budget. Prove the fixed ordering: by the moment the wake step is even
-    // reached, this run is already untracked (terminal in the registry)
-    // — a resumed parent's wait would resolve immediately instead of racing
-    // its own wake.
-    const runId = loopRunId();
-    trackChildHandle(runId, PARENT_RUN_ID);
-
-    let releaseWake: (() => void) | undefined;
-    let handleAtWakeTime: unknown;
-    mocks.submitFollowUp.mockImplementation(() =>
-      Effect.tryPromise({
-        try: async () => {
-          // Snapshot registry state the instant the wake step is reached. The
-          // same moment a resumed parent's own turn would begin running.
-          handleAtWakeTime = session.runs.getHandle(runId);
-          await new Promise<void>((resolve) => {
-            releaseWake = resolve;
-          });
-          return { status: 'sent' };
-        },
-        catch: (error) => error,
-      }),
-    );
-
-    const strategy = createTerminalStrategy('Finalize-before-wake test');
-
-    startLoop(runId, strategy);
-
-    await vi.waitFor(() => expect(releaseWake).toBeDefined());
-    expect(handleAtWakeTime).toBeUndefined();
-    expect(session.runs.getHandle(runId)).toBeUndefined();
-
-    releaseWake?.();
-    await waitForLoopEnd(runId);
-  });
-
-  it('preserves #7491: a failed runTurn (thrown, not a value) delivers formatError to the parent', async () => {
-    const runId = loopRunId();
-    const { strategy, resolveTurn, rejectTurn, errors } = createFakeStrategy();
-
-    startLoop(runId, strategy);
-
-    await waitForLiveOwner(runId);
-    await resolveTurn(1, { kind: 'interim', value: 'first' });
-    await vi.waitFor(() => {
-      expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
-    });
-
-    expect(
-      session.followUps.submit(
-        runId,
-        { text: 'resume please', origin: 'user' },
-        'live_owner',
-      ),
-    ).toEqual({ kind: 'queued' });
-
-    const resumeFailure = new Error('resume storage unreadable');
-    await rejectTurn(2, resumeFailure);
-
-    await vi.waitFor(() => {
-      expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ text: 'error:thrown' }),
-        expect.anything(),
-      );
-    });
-    expect(errors).toContain(resumeFailure);
-    await waitForLoopEnd(runId);
-  });
-
-  it('an application-level failure (isTurnError, not thrown) also delivers formatError and stops the run', async () => {
-    const runId = loopRunId();
-    const { strategy, resolveTurn } = createFakeStrategy();
-
-    startLoop(runId, strategy);
-
-    await waitForLiveOwner(runId);
-    await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
-
-    await vi.waitFor(() => {
-      expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ text: 'error:oops' }),
-        expect.anything(),
-      );
-    });
-    await waitForLoopEnd(runId);
-  });
-
-  it('finalizes a dangling native handle with non-null error metadata after a non-throwing turn failure', async () => {
-    const runId = loopRunId();
-    const { strategy, resolveTurn } = createFakeStrategy();
-
-    startLoop(runId, strategy);
-
-    await waitForLiveOwner(runId);
-
-    trackChildHandle(runId, PARENT_RUN_ID, RUN_PHASE.WAITING);
-
-    await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
-
-    await waitForLoopEnd(runId);
-    expect(mocks.finalizeRun).toHaveBeenCalledWith(
-      session,
-      expect.objectContaining({
-        runId,
-        outcome: RUN_OUTCOME.FAILED,
-        error: expect.objectContaining({
-          message: expect.stringContaining('reported a failed turn'),
         }),
-      }),
-    );
-    expect(session.runs.getHandle(runId)).toBeUndefined();
-  });
-
-  it('keeps the failing turn diagnosis when an interrupt lands after the failure', async () => {
-    const runId = 'fa11ed01' as RunId;
-    publishTestRunStart(session, runId);
-    const childRun = await Effect.runPromise(
-      createChildRun(session, runId, PARENT_RUN_ID, {
-        run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-        userFollowUpSupport: 'terminalBacked',
-        description: 'Fail a turn, then take an interrupt',
-        config: childRunConfig,
-      }),
-    );
-    trackedRunIds.add(runId);
-    const { strategy, rejectTurn } = createFakeStrategy();
-    // Fires between the turn failure landing FAILED on the stream phase and
-    // the loop's finalize, so the loop reports an interrupted run for a stream
-    // whose phase already carries the failure.
-    const stopSettlements: Promise<void>[] = [];
-    const interruptAfterFailure = vi.fn(() => {
-      stopSettlements.push(
-        Effect.runPromise(session.runs.kill(runId).settlement),
       );
-    });
 
-    startLoop(runId, strategy, {
-      childRun,
-      agentName: 'fake-cli',
-      recordCost: interruptAfterFailure,
-    });
-
-    await waitForLiveOwner(runId);
-    await rejectTurn(1, new Error('turn blew up'));
-    await waitForLoopEnd(runId);
-
-    await Promise.all(stopSettlements);
-    expect(interruptAfterFailure).toHaveBeenCalledOnce();
-    expect(session.status.get(runId)).toBe(RUN_PHASE.FAILED);
-    expect(mocks.finalizeRun).toHaveBeenCalledWith(
-      session,
-      expect.objectContaining({
+      const loop = yield* startLoop(
         runId,
-        outcome: RUN_OUTCOME.FAILED,
-        error: expect.objectContaining({
-          message: expect.stringContaining('turn blew up'),
-        }),
+        { ...strategy, releaseSessionOwnership },
+        { agentName: 'fake-cli' },
+      );
+
+      expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+      yield* rejectTurn(1, new Error('initial turn failed'));
+      yield* Fiber.join(loop);
+      expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+      expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect(
+    'delegate → interrupt mid-run: an interrupt during the first turn ends the run without a terminal delivery for that turn',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const { strategy, rejectTurn, turnStarted } = createFakeStrategy();
+        const handle = trackChildHandle(runId, PARENT_RUN_ID);
+
+        const loop = yield* startLoop(runId, strategy);
+
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        yield* turnStarted(1);
+
+        expect(handle.interrupt()).toBe(true);
+        // Simulate the in-flight call failing with an AbortError-shaped
+        // failure, matching what a real strategy's abortController produces.
+        yield* rejectTurn(1, createAbortError());
+
+        yield* Fiber.join(loop);
+        expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+        expect(session.runs.getHandle(runId)).toBeUndefined();
       }),
-    );
-  });
+  );
 
-  it('gates budgeted child turns through the session child-run budget', async () => {
-    const config = workspaceRoots().config as FakeConfigProvider;
-    config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 1);
-    try {
-      const first = loopRunId();
-      const second = loopRunId();
-      const started: string[] = [];
-      let releaseFirst: ((turn: FakeTurn) => void) | undefined;
-
-      const firstStrategy = createTerminalStrategy(
-        'Budgeted first child',
-        () =>
-          new Promise<FakeTurn>((resolve) => {
-            started.push('first');
-            releaseFirst = resolve;
+  it.effect(
+    'delegate → complete → follow-up delivery: an interim turn delivers, then the loop picks up a queued follow-up for the next turn',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const { strategy, callCount, resolveTurn, turnStarted } =
+          createFakeStrategy();
+        const onLoopStart = vi.fn();
+        const onTurnSuccess = vi.fn();
+        const parentWake = vi.fn();
+        const deliveryStarted = yield* Deferred.make<void>();
+        const deliveryCompleted = yield* Deferred.make<void>();
+        mocks.submitFollowUp.mockImplementation(() =>
+          Effect.gen(function* () {
+            parentWake();
+            yield* Deferred.succeed(deliveryStarted, undefined);
+            yield* Deferred.await(deliveryCompleted);
+            return { status: 'sent' as const };
           }),
-      );
-      const secondStrategy = createTerminalStrategy(
-        'Budgeted second child',
-        async () => {
-          started.push('second');
-          return { kind: 'terminal', value: 'done' };
+        );
+
+        const loop = yield* startLoop(runId, {
+          ...strategy,
+          onLoopStart,
+          onTurnSuccess,
+        });
+
+        expect(onLoopStart).toHaveBeenCalledOnce();
+        expect(onLoopStart).toHaveBeenCalledWith(session);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        yield* resolveTurn(1, { kind: 'interim', value: 'first' });
+
+        yield* Deferred.await(deliveryStarted);
+        expect(mocks.submitFollowUp).toHaveBeenCalledWith(
+          PARENT_RUN_ID,
+          expect.objectContaining({ text: 'delivered:first' }),
+          expect.anything(),
+        );
+        // The loop starts delivery for turn N before reading the queue for turn
+        // N+1. Even input already queued during delivery must not begin another
+        // model turn until the parent has received this result.
+        expect(onTurnSuccess).toHaveBeenCalledOnce();
+        expect(onTurnSuccess.mock.invocationCallOrder[0]).toBeLessThan(
+          parentWake.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+        );
+
+        // Enqueue a follow-up on the same queue the loop is now blocked on.
+        expect(
+          session.followUps.submit(
+            runId,
+            { text: 'keep going', origin: 'user' },
+            'live_owner',
+          ),
+        ).toEqual({ kind: 'queued' });
+        expect(callCount()).toBe(1);
+
+        yield* Deferred.succeed(deliveryCompleted, undefined);
+        // Waits for the loop to have actually invoked runTurn a second time —
+        // NOT for the queue to read empty, which can happen synchronously on
+        // enqueue (the fast "someone is already waiting" path never pushes to
+        // the backing array at all) well before the loop's own continuation runs.
+        yield* turnStarted(2);
+        yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
+
+        yield* Fiber.join(loop);
+        expect(mocks.submitFollowUp).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ text: 'delivered:final' }),
+          expect.anything(),
+        );
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+      }),
+  );
+
+  // it.live: the WAITING status is the session fold projecting the waiting row
+  // that `commitFlowStep` commits after delivery returns, and the loop offers
+  // no in-fiber hook between the two, so the one surviving poll observes a
+  // process-runtime fact under the live clock.
+  it.live(
+    'parks a child-stream loop on a waiting row, so the next turn is admitted onto its queue',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+          userFollowUpSupport: 'terminalBacked',
+          description: 'Keep an agent-CLI child running',
+          config: childRunConfig,
+        });
+        trackedRunIds.add(runId);
+        const loop = yield* startLoop(runId, strategy, { childRun });
+
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        yield* resolveTurn(1, { kind: 'interim', value: 'first' });
+
+        // Blocked between turns the run is idle, and the phase row says so: a
+        // run that only looked busy is refused as `no_session` and its session
+        // can never take another turn.
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(session.runView(runId)?.status).toBe(RUN_PHASE.WAITING),
+          ),
+        );
+        expect(session.runs.getToolUseFollowUpTarget(runId)).toEqual({
+          kind: 'queue',
+        });
+
+        session.followUps.submit(
+          runId,
+          { text: 'keep going', origin: 'user' },
+          'live_owner',
+        );
+        yield* turnStarted(2);
+        yield* Effect.promise(() => session.settlePublications());
+        expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
+        yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
+        yield* Fiber.join(loop);
+      }),
+  );
+
+  it.effect(
+    'late result after parent stop: a turn that resolves after interruption is persisted but not delivered',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
+        const handle = trackChildHandle(runId, PARENT_RUN_ID);
+        const releaseSessionOwnership = vi.fn();
+        const loop = yield* startLoop(runId, {
+          ...strategy,
+          releaseSessionOwnership,
+        });
+
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        yield* turnStarted(1);
+        // Interrupt the loop, then let the in-flight turn resolve normally
+        // (not aborted) — mirrors a turn that was already past its own
+        // interruption checkpoints when the stop landed.
+        expect(handle.interrupt()).toBe(true);
+        yield* resolveTurn(1, { kind: 'terminal', value: 'late' });
+
+        yield* Fiber.join(loop);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(yield* getRunRecords(session, runId).readReport()).toBe(
+          'delivered:late',
+        );
+        expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+        expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'kill during WAITING: interrupting the loop while it is blocked between turns ends the run without a hang',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const { strategy, resolveTurn } = createFakeStrategy();
+        const handle = trackChildHandle(runId, PARENT_RUN_ID);
+        const delivered = yield* Deferred.make<void>();
+        mocks.submitFollowUp.mockImplementation(() =>
+          Effect.as(Deferred.succeed(delivered, undefined), { status: 'sent' }),
+        );
+
+        const loop = yield* startLoop(runId, strategy);
+
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        yield* resolveTurn(1, { kind: 'interim', value: 'first' });
+
+        yield* Deferred.await(delivered);
+        // One macrotask lets the loop enter queue.waitAndDrainAll; either way
+        // the loop ends with exactly one delivery.
+        yield* settle;
+        // The loop is now blocked in queue.waitAndDrainAll; the loop's handler on
+        // the run handle is the live stop target.
+        expect(handle.interrupt()).toBe(true);
+
+        yield* Fiber.join(loop);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        // Only the one interim delivery — the kill did not spawn another turn.
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+      }),
+  );
+
+  it.effect(
+    'stop between turns settles the ghost handle when terminal metadata fails',
+    () =>
+      Effect.gen(function* () {
+        // Regression: for a native strategy (no ChildRun — each turn owns its
+        // own RunHandle via runFlowWithLifecycle, not the loop), a
+        // stop landing BETWEEN turns interrupts the loop through the run handle
+        // and transitions the stream to CANCELLED — but assumes a live flow will
+        // notice and self-finalize.
+        // Nothing is running here (the loop is just blocked on a queue wait), so
+        // without the loop's own finalize-on-interrupt fallback, the most
+        // recently tracked handle for this stream — still WAITING, still
+        // resumable-looking — would never settle or untrack.
+        const runId = loopRunId();
+        const { strategy, resolveTurn } = createFakeStrategy();
+        const delivered = yield* Deferred.make<void>();
+        mocks.submitFollowUp.mockImplementation(() =>
+          Effect.as(Deferred.succeed(delivered, undefined), { status: 'sent' }),
+        );
+        mocks.finalizeRun.mockReturnValueOnce(
+          Effect.succeed({
+            ok: false,
+            error: new Error('metadata disk full'),
+            outcomePersisted: false,
+          }),
+        );
+
+        const loop = yield* startLoop(runId, strategy);
+
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+
+        // Mirrors what a real native turn's runFlowWithLifecycle does: track a
+        // fresh handle for this run once the turn suspends.
+        const handle = trackChildHandle(runId, PARENT_RUN_ID);
+
+        yield* resolveTurn(1, { kind: 'interim', value: 'first' });
+        yield* Deferred.await(delivered);
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+        // One macrotask lets the loop reach its queue wait before the stop lands.
+        yield* settle;
+
+        // Loop is now between turns. Interrupt it through the run handle.
+        expect(handle.interrupt()).toBe(true);
+
+        yield* Fiber.join(loop);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+
+        // Untracked: no longer resumable — a later delegate_agent(execution_id=…)
+        // would correctly report "not found" instead of finding a ghost handle.
+        expect(session.runs.getHandle(runId)).toBeUndefined();
+        // The loop routes the cancellation through the durable outcome's only
+        // writer; the interim result envelope is left exactly as its turn wrote
+        // it, and reads project the durable outcome onto it.
+        expect(mocks.finalizeRun).toHaveBeenCalledWith(session, {
+          runId,
+          outcome: RUN_OUTCOME.CANCELLED,
+          error: undefined,
+          usage: undefined,
+          output: { category: 'toolUse', response: '', files: [] },
+        });
+      }),
+  );
+
+  it.effect(
+    'leaves no interruptible child continuation while terminal delivery is in flight',
+    () =>
+      Effect.gen(function* () {
+        // Terminal delivery (persist report / persist manifest / deliver
+        // follow-up) runs after child finalization and lease release, so a
+        // stop/kill landing in that window finds nothing left to interrupt. The
+        // test inspects the run handle while delivery is deliberately held open.
+        const runId = loopRunId();
+        const handle = trackChildHandle(runId, PARENT_RUN_ID);
+        const deliveryStarted = yield* Deferred.make<void>();
+        const deliveryGate = yield* Deferred.make<void>();
+        mocks.submitFollowUp.mockImplementation(() =>
+          Effect.gen(function* () {
+            yield* Deferred.succeed(deliveryStarted, undefined);
+            yield* Deferred.await(deliveryGate);
+            return { status: 'sent' as const };
+          }),
+        );
+
+        const strategy = createTerminalStrategy('Reregister test');
+
+        const loop = yield* startLoop(runId, strategy);
+
+        // Wait until delivery is mid-flight (blocked on our gate).
+        yield* Deferred.await(deliveryStarted);
+
+        expect(handle.interrupt()).toBe(false);
+
+        yield* Deferred.succeed(deliveryGate, undefined);
+        yield* Fiber.join(loop);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+      }),
+  );
+
+  it.effect(
+    '#8093 regression: a terminal turn finalizes this child before its wake step is even reached, so a resumed parent never self-stalls waiting on it',
+    () =>
+      Effect.gen(function* () {
+        // Regression: parent continuation submission can await the ENTIRE resumed
+        // turn (`agentResume.tryResumeRun` → … → `resumeToolUseFromResumeData`).
+        // Before #8093, the loop awaited split enqueue/wake work inline in the
+        // turn loop, and only finalized this child (untracking its run
+        // handle) afterward in the outer `finally` — so a resumed parent that
+        // immediately calls `executions` with action=wait on this same run
+        // could find it still RUNNING and block on itself for the whole wait
+        // budget. Prove the fixed ordering: by the moment the wake step is even
+        // reached, this run is already untracked (terminal in the registry)
+        // — a resumed parent's wait would resolve immediately instead of racing
+        // its own wake.
+        const runId = loopRunId();
+        trackChildHandle(runId, PARENT_RUN_ID);
+
+        const wakeReached = yield* Deferred.make<void>();
+        const releaseWake = yield* Deferred.make<void>();
+        let handleAtWakeTime: unknown;
+        mocks.submitFollowUp.mockImplementation(() =>
+          Effect.gen(function* () {
+            // Snapshot registry state the instant the wake step is reached. The
+            // same moment a resumed parent's own turn would begin running.
+            handleAtWakeTime = session.runs.getHandle(runId);
+            yield* Deferred.succeed(wakeReached, undefined);
+            yield* Deferred.await(releaseWake);
+            return { status: 'sent' as const };
+          }),
+        );
+
+        const strategy = createTerminalStrategy('Finalize-before-wake test');
+
+        const loop = yield* startLoop(runId, strategy);
+
+        yield* Deferred.await(wakeReached);
+        expect(handleAtWakeTime).toBeUndefined();
+        expect(session.runs.getHandle(runId)).toBeUndefined();
+
+        yield* Deferred.succeed(releaseWake, undefined);
+        yield* Fiber.join(loop);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+      }),
+  );
+
+  it.effect(
+    'preserves #7491: a failed runTurn (thrown, not a value) delivers formatError to the parent',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const { strategy, resolveTurn, rejectTurn, errors } =
+          createFakeStrategy();
+        const firstDelivered = yield* Deferred.make<void>();
+        mocks.submitFollowUp.mockImplementation(() =>
+          Effect.as(Deferred.succeed(firstDelivered, undefined), {
+            status: 'sent',
+          }),
+        );
+
+        const loop = yield* startLoop(runId, strategy);
+
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        yield* resolveTurn(1, { kind: 'interim', value: 'first' });
+        yield* Deferred.await(firstDelivered);
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+
+        expect(
+          session.followUps.submit(
+            runId,
+            { text: 'resume please', origin: 'user' },
+            'live_owner',
+          ),
+        ).toEqual({ kind: 'queued' });
+
+        const resumeFailure = new Error('resume storage unreadable');
+        yield* rejectTurn(2, resumeFailure);
+
+        yield* Fiber.join(loop);
+        expect(mocks.submitFollowUp).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ text: 'error:thrown' }),
+          expect.anything(),
+        );
+        expect(errors).toContain(resumeFailure);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+      }),
+  );
+
+  it.effect(
+    'an application-level failure (isTurnError, not thrown) also delivers formatError and stops the run',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const { strategy, resolveTurn } = createFakeStrategy();
+
+        const loop = yield* startLoop(runId, strategy);
+
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        yield* resolveTurn(1, { kind: 'error-turn', value: 'oops' });
+
+        yield* Fiber.join(loop);
+        expect(mocks.submitFollowUp).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ text: 'error:oops' }),
+          expect.anything(),
+        );
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+      }),
+  );
+
+  it.effect(
+    'finalizes a dangling native handle with non-null error metadata after a non-throwing turn failure',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const { strategy, resolveTurn } = createFakeStrategy();
+
+        const loop = yield* startLoop(runId, strategy);
+
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+
+        trackChildHandle(runId, PARENT_RUN_ID);
+
+        yield* resolveTurn(1, { kind: 'error-turn', value: 'oops' });
+
+        yield* Fiber.join(loop);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(mocks.finalizeRun).toHaveBeenCalledWith(
+          session,
+          expect.objectContaining({
+            runId,
+            outcome: RUN_OUTCOME.FAILED,
+            error: expect.objectContaining({
+              message: expect.stringContaining('reported a failed turn'),
+            }),
+          }),
+        );
+        expect(session.runs.getHandle(runId)).toBeUndefined();
+      }),
+  );
+
+  // The handle's stop latch is the one precedence authority
+  // (`finalizeRunTerminal`): a stop that reached the run before its exit
+  // outranks the turn's own report, so the terminal row says cancelled even
+  // though the turn failed first.
+  it.effect(
+    'lets a stop landing after a turn failure win the terminal outcome',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'fa11ed01' as RunId;
+        publishTestRunStart(session, runId);
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+          userFollowUpSupport: 'terminalBacked',
+          description: 'Fail a turn, then take an interrupt',
+          config: childRunConfig,
+        });
+        trackedRunIds.add(runId);
+        const { strategy, rejectTurn } = createFakeStrategy();
+        // Fires between the turn failure and the loop's finalize, which is the
+        // window the stop latch has to win. Kill admission is synchronous, so
+        // the stop latch is already set here and only the settlement is left
+        // for the test to run once the loop is done.
+        const stopSettlements: Effect.Effect<void, Error>[] = [];
+        const interruptAfterFailure = vi.fn(() => {
+          stopSettlements.push(session.runs.kill(runId).settlement);
+        });
+
+        const loop = yield* startLoop(runId, strategy, {
+          childRun,
+          agentName: 'fake-cli',
+          recordCost: interruptAfterFailure,
+        });
+
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        yield* rejectTurn(1, new Error('turn blew up'));
+        yield* Fiber.join(loop);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+
+        yield* Effect.all(stopSettlements, { discard: true });
+        expect(interruptAfterFailure).toHaveBeenCalledOnce();
+        expect(mocks.finalizeRun).toHaveBeenCalledWith(
+          session,
+          expect.objectContaining({
+            runId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            // Error facts classified for a failure the stop outranked are not
+            // facts about this run's outcome.
+            error: undefined,
+          }),
+        );
+      }),
+  );
+
+  it.effect(
+    'gates budgeted child turns through the session child-run budget',
+    () =>
+      Effect.gen(function* () {
+        const config = workspaceRoots().config as FakeConfigProvider;
+        config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 1);
+        try {
+          const first = loopRunId();
+          const second = loopRunId();
+          const started: string[] = [];
+          const firstStarted = yield* Deferred.make<void>();
+          const firstRelease = yield* Deferred.make<FakeTurn>();
+
+          const firstStrategy = createTerminalStrategy(
+            'Budgeted first child',
+            () =>
+              Effect.gen(function* () {
+                started.push('first');
+                yield* Deferred.succeed(firstStarted, undefined);
+                return yield* Deferred.await(firstRelease);
+              }),
+          );
+          const secondStrategy = createTerminalStrategy(
+            'Budgeted second child',
+            () =>
+              Effect.sync((): FakeTurn => {
+                started.push('second');
+                return { kind: 'terminal', value: 'done' };
+              }),
+          );
+
+          const firstLoop = yield* startLoop(first, firstStrategy, {
+            budgeted: true,
+          });
+          const secondLoop = yield* startLoop(second, secondStrategy, {
+            budgeted: true,
+          });
+
+          yield* Deferred.await(firstStarted);
+          // One slot: the second child's turn must not start while the first
+          // holds it — even after its loop has acquired its queue lease.
+          expect(session.followUps.hasLiveOwner(second)).toBe(true);
+          // The loop offers no in-fiber hook for "parked on the permit", so one
+          // macrotask is the window this negative assertion needs.
+          yield* settle;
+          expect(started).toEqual(['first']);
+
+          yield* Deferred.succeed<FakeTurn, never>(firstRelease, {
+            kind: 'terminal',
+            value: 'done',
+          });
+          yield* Fiber.join(secondLoop);
+          yield* Fiber.join(firstLoop);
+          expect(started).toEqual(['first', 'second']);
+        } finally {
+          config.set(
+            CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+            CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
+          );
+        }
+      }),
+  );
+
+  it.effect(
+    'recordCost commits exactly once with the greatest observed value',
+    () =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        const firstTurn = yield* Deferred.make<FakeTurn>();
+        const nextTurn = yield* Deferred.make<FakeTurn>();
+        const recordCost = vi.fn();
+        const firstDelivered = yield* Deferred.make<void>();
+        mocks.submitFollowUp.mockImplementation(() =>
+          Effect.as(Deferred.succeed(firstDelivered, undefined), {
+            status: 'sent',
+          }),
+        );
+
+        const strategy: ChildRunStrategy<FakeTurn> = {
+          stageLabel: 'Fake cost-tracking run',
+          launch: (ports: ChildRunPorts) =>
+            Effect.gen(function* () {
+              const turn = yield* Deferred.await(firstTurn);
+              ports.recordCost(0.2);
+              return turn;
+            }),
+          runTurn: (_items, ports: ChildRunPorts) =>
+            Effect.gen(function* () {
+              const turn = yield* Deferred.await(nextTurn);
+              ports.recordCost(undefined);
+              ports.recordCost(0.1);
+              return turn;
+            }),
+          isTerminal: (turn) => turn.kind === 'terminal',
+          formatDelivery: (turn) => `delivered:${turn.value}`,
+          formatError: (turn) => `error:${turn?.value ?? 'thrown'}`,
+        };
+
+        const loop = yield* startLoop(runId, strategy, { recordCost });
+
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        yield* Deferred.succeed<FakeTurn, never>(firstTurn, {
+          kind: 'interim',
+          value: 'first',
+        });
+        yield* Deferred.await(firstDelivered);
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+
+        expect(
+          session.followUps.submit(
+            runId,
+            { text: 'go on', origin: 'user' },
+            'live_owner',
+          ),
+        ).toEqual({ kind: 'queued' });
+        yield* Deferred.succeed<FakeTurn, never>(nextTurn, {
+          kind: 'terminal',
+          value: 'final',
+        });
+
+        yield* Fiber.join(loop);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(recordCost).toHaveBeenCalledTimes(1);
+        expect(recordCost).toHaveBeenCalledWith(0.2);
+      }),
+  );
+
+  it.effect('settles mixed workflow attempt spend to the parent once', () =>
+    Effect.gen(function* () {
+      const entry = (
+        index: number,
+        key: string,
+        cost: number,
+      ): WorkflowJournalEntry => ({
+        index,
+        key,
+        result: {
+          outcome: 'completed',
+          usage: { totalCost: cost },
+          output: {
+            category: 'workflow',
+            outputs: [],
+            compileFailures: [],
+            diffs: [],
+          },
         },
+      });
+      const historical = entry(0, 'historical', 0.8);
+      const completed = entry(1, 'completed', 0.5);
+      const recovered = entry(2, 'recovered', 0.5);
+      const tracker = createWorkflowAttemptCostTracker();
+      const recordCost = vi.fn();
+      const strategy = createTerminalStrategy(
+        'Workflow attempt cost',
+        (ports) =>
+          Effect.sync((): FakeTurn => {
+            ports.recordCost(tracker.record(completed, 0.1));
+            ports.recordCost(tracker.record(completed, 0));
+            ports.recordCost(tracker.record({ index: 3, key: 'skipped' }, 0.2));
+            ports.recordCost(tracker.record({ index: 4, key: 'failed' }, 0.15));
+            ports.recordCost(tracker.total([historical, completed, recovered]));
+            return { kind: 'terminal', value: 'done' };
+          }),
+        () => 'delivered',
       );
 
-      startLoop(first, firstStrategy, { budgeted: true });
-      startLoop(second, secondStrategy, { budgeted: true });
+      const loop = yield* startLoop(loopRunId(), strategy, {
+        recordCost,
+      });
 
-      await vi.waitFor(() => expect(started).toEqual(['first']));
-      // One slot: the second child's turn must not start while the first
-      // holds it — even after its loop has acquired its queue lease.
-      await waitForLiveOwner(second);
-      expect(started).toEqual(['first']);
+      expect(yield* Fiber.join(loop)).toBeUndefined();
+      expect(recordCost).toHaveBeenCalledOnce();
+      expect(recordCost.mock.calls[0]?.[0]).toBeCloseTo(0.95);
+    }),
+  );
 
-      releaseFirst?.({ kind: 'terminal', value: 'done' });
-      await waitForLoopEnd(second);
-      expect(started).toEqual(['first', 'second']);
-    } finally {
-      config.set(
-        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-        CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
-      );
-    }
-  });
-
-  it('recordCost commits exactly once with the greatest observed value', async () => {
-    const runId = loopRunId();
-    const firstTurn = pDefer<FakeTurn>();
-    const nextTurn = pDefer<FakeTurn>();
-    const recordCost = vi.fn();
-
-    const strategy: ChildRunStrategy<FakeTurn> = {
-      stageLabel: 'Fake cost-tracking run',
-      launch: (ports: ChildRunPorts) =>
-        Effect.gen(function* () {
-          const turn = yield* Effect.promise(() => firstTurn.promise);
-          ports.recordCost(0.2);
-          return turn;
-        }),
-      runTurn: (_items, ports: ChildRunPorts) =>
-        Effect.gen(function* () {
-          const turn = yield* Effect.promise(() => nextTurn.promise);
-          ports.recordCost(undefined);
-          ports.recordCost(0.1);
-          return turn;
-        }),
-      isTerminal: (turn) => turn.kind === 'terminal',
-      formatDelivery: (turn) => `delivered:${turn.value}`,
-      formatError: (turn) => `error:${turn?.value ?? 'thrown'}`,
-    };
-
-    startLoop(runId, strategy, { recordCost });
-
-    await waitForLiveOwner(runId);
-    firstTurn.resolve({ kind: 'interim', value: 'first' });
-    await vi.waitFor(() =>
-      expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1),
-    );
-
-    expect(
-      session.followUps.submit(
-        runId,
-        { text: 'go on', origin: 'user' },
-        'live_owner',
-      ),
-    ).toEqual({ kind: 'queued' });
-    nextTurn.resolve({ kind: 'terminal', value: 'final' });
-
-    await waitForLoopEnd(runId);
-    expect(recordCost).toHaveBeenCalledTimes(1);
-    expect(recordCost).toHaveBeenCalledWith(0.2);
-  });
-
-  it('settles mixed workflow attempt spend to the parent once', async () => {
-    const entry = (
-      index: number,
-      key: string,
-      cost: number,
-    ): WorkflowJournalEntry => ({
-      index,
-      key,
-      result: {
-        outcome: 'completed',
-        usage: { totalCost: cost },
-        output: {
-          category: 'workflow',
-          outputs: [],
-          compileFailures: [],
-          diffs: [],
-        },
-      },
-    });
-    const historical = entry(0, 'historical', 0.8);
-    const completed = entry(1, 'completed', 0.5);
-    const recovered = entry(2, 'recovered', 0.5);
-    const tracker = createWorkflowAttemptCostTracker();
-    const recordCost = vi.fn();
-    const strategy = createTerminalStrategy(
-      'Workflow attempt cost',
-      async (ports) => {
-        ports.recordCost(tracker.record(completed, 0.1));
-        ports.recordCost(tracker.record(completed, 0));
-        ports.recordCost(tracker.record({ index: 3, key: 'skipped' }, 0.2));
-        ports.recordCost(tracker.record({ index: 4, key: 'failed' }, 0.15));
-        ports.recordCost(tracker.total([historical, completed, recovered]));
-        return { kind: 'terminal', value: 'done' };
-      },
-      () => 'delivered',
-    );
-
-    const completion = startLoop(loopRunId(), strategy, {
-      recordCost,
-    });
-
-    await expect(completion).resolves.toBeUndefined();
-    expect(recordCost).toHaveBeenCalledOnce();
-    expect(recordCost.mock.calls[0]?.[0]).toBeCloseTo(0.95);
-  });
-
-  it.each([
+  it.effect.each([
     {
       failure: 'throws',
       recordCost: () => {
@@ -1231,22 +1431,26 @@ describe('childRunLoop E2E fixtures', () => {
     },
   ])(
     'finalizes and wakes when the parent cost observer $failure',
-    async ({ failure, recordCost: observe }) => {
-      const strategy = createTerminalStrategy(
-        `${failure} cost observer`,
-        async (ports) => {
-          ports.recordCost(0.4);
-          return { kind: 'terminal', value: 'done' };
-        },
-        () => 'delivered',
-      );
-      const recordCost = vi.fn(observe);
+    ({ failure, recordCost: observe }) =>
+      Effect.gen(function* () {
+        const strategy = createTerminalStrategy(
+          `${failure} cost observer`,
+          (ports) =>
+            Effect.sync((): FakeTurn => {
+              ports.recordCost(0.4);
+              return { kind: 'terminal', value: 'done' };
+            }),
+          () => 'delivered',
+        );
+        const recordCost = vi.fn(observe);
 
-      const completion = startLoop(loopRunId(), strategy, { recordCost });
+        const loop = yield* startLoop(loopRunId(), strategy, { recordCost });
 
-      await expect(completion).resolves.toBeUndefined();
-      await vi.waitFor(() => expect(recordCost).toHaveBeenCalledOnce());
-      expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
-    },
+        // The cost observer is forked with `startImmediately` inside the
+        // terminal block, so its thunk has already run when the loop exits.
+        expect(yield* Fiber.join(loop)).toBeUndefined();
+        expect(recordCost).toHaveBeenCalledOnce();
+        expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
+      }),
   );
 });

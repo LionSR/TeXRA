@@ -10,7 +10,7 @@
  * here and nowhere below it.
  */
 // Third-party imports
-import { Effect, Exit, Fiber, Stream } from 'effect';
+import { Effect, Exit, Fiber, Stream, type Context } from 'effect';
 
 // Local imports - agent runtime
 //
@@ -34,25 +34,25 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // Local imports - host services this boundary wires
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { effectRuntime } from '@platform/processRuntime';
 import type { SessionCloseReport } from '@shared/schemas';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 
 // Local imports - the Effect surface this entry renders
 import { RunFailure } from './effect/errors.js';
 import { composeProcess, type AgentPlatform } from './effect/runtime.js';
-import {
-  admitTools,
-  makeSessions,
-  type SessionView,
-} from './effect/sessions.js';
+import { admitTools } from './effect/sessionPrograms.js';
+import type { Sessions, SessionView } from './effect/sessions.js';
 
 /**
  * The owner's session effects supply their own context, so every run site
  * below runs on Effect's own runtime rather than borrowing the process
  * runtime the composition installs. That is what lets `closeSession`
  * answer for a process no run has initialized, and for one whose shutdown
- * has already disposed that runtime, exactly as its contract says.
+ * has already disposed that runtime, exactly as its contract says. The one
+ * exception is the shutdown settlement, which is the session owner's own
+ * program: it runs on the runtime this entry's composition handed back
+ * (`ProcessHold.processRuntime`), which is the runtime those sessions were
+ * built on.
  */
 
 export type { AgentEvent } from '@agent/trace';
@@ -63,8 +63,8 @@ export type {
   ToolHost,
 } from '@agent/core/tools/ToolTypes';
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-export { defineTool } from '@tools/core/define';
-export type { DefinedToolClass } from '@tools/core/define';
+export { defineTool } from '@tools/core/definition';
+export type { DefinedToolClass } from '@tools/core/definition';
 export type {
   AgentFlowResult,
   ToolUseFlowResult,
@@ -155,7 +155,7 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
 let composition:
   | {
       readonly platform: AgentPlatform;
-      readonly sessions: ReturnType<typeof makeSessions>;
+      readonly sessions: Context.Service.Shape<typeof Sessions>;
     }
   | undefined;
 
@@ -179,7 +179,7 @@ let composition:
  */
 function agentServices(
   platform: AgentPlatform,
-): ReturnType<typeof makeSessions> {
+): Context.Service.Shape<typeof Sessions> {
   if (platform.lifecycle.shutdownRan) {
     throw new Error(
       "This platform's shutdown has already run, and it runs once: a session opened now would have no shutdown path to close and flush it, and the runtime under it none to dispose it. Run further agents in a new process, or take the Effect surface (@texra-ai/agent/effect), whose scope owns each composition.",
@@ -189,10 +189,10 @@ function agentServices(
   // A different platform reaches `composeProcess`, which is what states the
   // refusal.
   const hold = composeProcess(platform);
-  const sessions = makeSessions(hold.runtime);
+  const sessions = hold.sessions;
   composition = { platform, sessions };
   registerRuntimeShutdownHandlers(platform.lifecycle, {
-    runSettlement: (settlement) => effectRuntime().runPromise(settlement),
+    runSettlement: (settlement) => hold.processRuntime.runPromise(settlement),
     flushArtifacts: async (signal) => {
       await Effect.runPromise(sessions.close(platform.roots, signal));
     },

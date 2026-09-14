@@ -1,7 +1,7 @@
 import { lstat, mkdir, readlink, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { it } from '@effect/vitest';
 import { afterEach, describe, expect, vi } from 'vitest';
 
@@ -16,6 +16,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { FileLocation, RunId, ToolConfig } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
@@ -155,7 +156,7 @@ describe('LatexMediaManager PDF compilation', () => {
       expect(
         workspaceState.media.files.map((file) => file.absolutePath),
       ).toEqual([compiledPdfPath]);
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
 
@@ -163,8 +164,10 @@ type LatexMediaManagerFigureInternals = {
   extractFiguresFromFiles(
     files: FileLocation[],
     workspaceState: MediaWorkspaceState,
-  ): Effect.Effect<void, Error>;
-  mirrorFiguresForFiles(files: FileLocation[]): Effect.Effect<void>;
+  ): Effect.Effect<void, Error, FileSystem.FileSystem>;
+  mirrorFiguresForFiles(
+    files: FileLocation[],
+  ): Effect.Effect<void, never, FileSystem.FileSystem>;
 };
 
 describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
@@ -194,8 +197,12 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
 
     const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
     await installPlatform(
-      { workspacePath: workspaceDir, storagePath: storage.getStoragePath() },
-      { fs: nodeFilesystem, storage },
+      {
+        workspacePath: workspaceDir,
+        storagePath: storage.getStoragePath(),
+        globalStoragePath: storage.getGlobalStoragePath(),
+      },
+      { fs: nodeFilesystem },
     );
     return { texPath, figurePath };
   }
@@ -242,6 +249,6 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
           figurePath,
         ]);
         yield* Effect.promise(() => expectFigureMirrored(runId, figurePath));
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

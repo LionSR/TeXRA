@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { pathSeparatorVariants } from '@desktop/main/desktopPathVariants';
 import { PROVIDER_KEY_REDACTION_RULES, redactSecrets } from '@logger/redaction';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 
@@ -49,5 +50,27 @@ describe('desktop log redaction', () => {
     expect(Object.keys(PROVIDER_KEY_REDACTION_RULES).toSorted()).toEqual(
       [...API_KEY_PROVIDER_IDS].toSorted(),
     );
+  });
+});
+
+// The redactor feeds every prefix it scrubs through pathSeparatorVariants, so
+// a path whose variants are wrong silently stops being redacted from the
+// desktop log file.
+describe('pathSeparatorVariants', () => {
+  it('spells a path both ways, trimming and deduplicating', () => {
+    expect(pathSeparatorVariants('  /Users/alice/paper  ')).toEqual([
+      '/Users/alice/paper',
+      '\\Users\\alice\\paper',
+    ]);
+    expect(pathSeparatorVariants('C:\\Users\\alice/paper')).toEqual([
+      'C:\\Users\\alice/paper',
+      'C:/Users/alice/paper',
+      'C:\\Users\\alice\\paper',
+    ]);
+  });
+
+  it('drops blank input and keeps the POSIX root single-spelled', () => {
+    expect(pathSeparatorVariants('   ')).toEqual([]);
+    expect(pathSeparatorVariants('/')).toEqual(['/']);
   });
 });

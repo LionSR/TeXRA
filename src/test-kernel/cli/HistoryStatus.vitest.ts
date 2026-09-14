@@ -1,5 +1,6 @@
 import '@test/support/sessionGraphTestSetup';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { Effect } from 'effect';
 
 import { registerRun } from '@agent/storage';
@@ -10,8 +11,9 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
-  initializeDefaultSession,
   currentSession,
+  defaultSession,
+  initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
 import {
@@ -19,6 +21,7 @@ import {
   listResumableCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId,
   CLI_RUN_STATUS,
@@ -28,7 +31,7 @@ import {
   resolveHistoryRunStatus,
 } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -51,9 +54,9 @@ const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse({
 const tempDirs = useTempDirs();
 setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
 
-beforeEach(() => {
-  teardownDefaultSession();
-  initializeDefaultSession({});
+beforeEach(async () => {
+  await Effect.runPromise(teardownDefaultSession());
+  await Effect.runPromise(initializeDefaultSession({}));
 });
 
 const SNAPSHOT_RUNTIME = {
@@ -62,9 +65,10 @@ const SNAPSHOT_RUNTIME = {
   turn: 0,
   continuationIndex: 0,
   modelId: 'deepseekT',
-  modelHandlerCompatibilityKey: null,
+  modelCompatibilityKey: null,
   lastError: null,
   pendingRetry: null,
+  declinedRoutes: [],
 };
 const SNAPSHOT_REFERENCES = { pendingIntents: [], pendingResponse: null };
 
@@ -199,7 +203,11 @@ describe('CLI history status formatting', () => {
     const id = 'bad-f10' as RunId;
     await seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator', 'toolUse');
 
-    const details = await readCliHistoryDetails(hostStores(), id);
+    const details = await readCliHistoryDetails(
+      effectRuntime(),
+      Effect.succeed(defaultSession()),
+      id,
+    );
 
     expect(details?.hasFlowRecord).toBe(true);
     expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
@@ -213,7 +221,11 @@ describe('CLI history status formatting', () => {
     const id = 'c0ffee-f10' as RunId;
     await seedSnapshot(id, WORKFLOW_CONFIG, 'correct', 'reflection');
 
-    const details = await readCliHistoryDetails(hostStores(), id);
+    const details = await readCliHistoryDetails(
+      effectRuntime(),
+      Effect.succeed(defaultSession()),
+      id,
+    );
 
     expect(details?.hasFlowRecord).toBe(true);
     expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
@@ -249,7 +261,11 @@ describe('CLI history status formatting', () => {
       ]),
     );
 
-    const details = await readCliHistoryDetails(hostStores(), id);
+    const details = await readCliHistoryDetails(
+      effectRuntime(),
+      Effect.succeed(defaultSession()),
+      id,
+    );
 
     expect(details?.hasFlowRecord).toBe(true);
     expect(details?.status).not.toBe(HISTORY_RUN_STATUS.RESUMABLE);

@@ -139,6 +139,10 @@ export function findExternalRoot(
   absolutePath: string,
 ): MatchedExternalRoot | null {
   if (!path.isAbsolute(absolutePath)) return null;
+  // Nothing registered means nothing can match. Checked before
+  // canonicalisation so hosts that register no roots do not pay a realpath
+  // syscall on every path a tool resolves.
+  if (roots.size === 0) return null;
 
   let resolved: string;
   try {

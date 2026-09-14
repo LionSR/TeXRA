@@ -29,11 +29,7 @@ import {
 } from '../errorPredicates';
 import { isContextWindowError, isUserAbort } from './errorPatterns';
 import {
-  detectPartialText,
-  detectSdkErrorMetadata,
-  detectStreamDiagnostics,
   hasContextWindowErrorMarker,
-  hasManualRetryOnlyErrorMarker,
   hasMissingApiKeyErrorMarker,
   providerErrorMetadata,
 } from './errorMetadata';
@@ -64,7 +60,6 @@ import { parseXaiSubscriptionLimit } from './xaiSubscriptionDetection';
 import {
   type SdkErrorEntry,
   SDK_ERRORS,
-  SDK_ERRORS_BY_KIND,
   isRetryableStatusCode,
 } from './sdkErrorKinds';
 
@@ -233,7 +228,11 @@ function resolveErrorStatusCode(
   );
 }
 
-function matchLegacySdkError(err: unknown): SdkErrorEntry | undefined {
+/** The SDK error entry whose class name the thrown error carries. The
+ *  provider SDK class is the only signal: the package rethrows the SDK's own
+ *  `APIError` subclass as `ModelError.cause`, so the prototype chain names the
+ *  failure kind without a side channel. */
+function matchSdkErrorEntry(err: unknown): SdkErrorEntry | undefined {
   const errorClassNames = getErrorClassNames(err);
   return SDK_ERRORS.find(({ classNames }) =>
     classNames.some((className) => errorClassNames.includes(className)),
@@ -245,15 +244,12 @@ function matchSdkError(
   err: unknown,
   rawErrorBody: unknown,
 ): SdkMatchResult | undefined {
-  const metadata = detectSdkErrorMetadata(err);
-  const entry =
-    (metadata ? SDK_ERRORS_BY_KIND.get(metadata.kind) : undefined) ??
-    matchLegacySdkError(err);
+  const entry = matchSdkErrorEntry(err);
   if (!entry) {
     return undefined;
   }
 
-  const provider = metadata?.provider ?? detectProvider(err);
+  const provider = detectProvider(err);
   const requestId = detectRequestId(err);
 
   // Message-only errors (connection, abort) - use the entry's message
@@ -268,7 +264,7 @@ function matchSdkError(
 
   // HTTP errors - detect status code from error object, SDK class, or error body.
   const statusCode = resolveErrorStatusCode(
-    metadata?.statusCode ?? detectStatusCode(err),
+    detectStatusCode(err),
     rawErrorBody,
     entry.fallbackStatusCode,
   );
@@ -308,10 +304,7 @@ function matchSdkError(
  */
 export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
-  const streamDiagnostics = detectStreamDiagnostics(err);
-  const partialText = detectPartialText(err);
   const extractedMessage = extractErrorMessage(err);
-  const sdkExhaustionReason = detectSdkErrorMetadata(err)?.exhaustionReason;
   // Credit exhaustion wants the "Use your own API key" affordance so the
   // user can switch credentials — e.g. a direct Anthropic 400 "credit
   // balance is too low".
@@ -327,10 +320,8 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // `HTTP 429 – The usage limit has been reached`.
   const subscriptionLimitMessage =
     quotaLimit?.message ?? glmCodingPlanRateLimitMessage;
-  // Priority: an explicit SDK stamp wins; then the first matching
-  // quota-fallback detector; then upstream-credit.
+  // Priority: the first matching quota-fallback detector, then upstream-credit.
   const exhaustionReason: ExhaustionReason | undefined =
-    sdkExhaustionReason ??
     quotaLimit?.exhaustionReason ??
     (isUpstreamCreditDepleted ? 'upstream-credit' : undefined);
   const isCredentialExhausted = exhaustionReason !== undefined;
@@ -345,7 +336,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   }
 
   // Terminal failures (user abort, local disk-full): never retryable and never
-  // a credential affordance. Carries diagnostics but deliberately opts
+  // a credential affordance. Carries the raw body but deliberately opts
   // out of the credential classification computed below.
   function terminalError(
     message: string,
@@ -356,8 +347,6 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       userRetryable: false,
       classification,
       rawErrorBody,
-      streamDiagnostics,
-      partialText,
     };
   }
 
@@ -411,8 +400,6 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const providerDetails = {
     classification: markerClassification,
     rawErrorBody,
-    streamDiagnostics,
-    partialText,
   };
 
   // Try matching a known SDK error type (connection, abort, HTTP errors)
@@ -473,12 +460,12 @@ export function normalizeProviderError(err: unknown): ProviderError {
     return cached;
   }
 
-  // Compute fresh but DO NOT cache the result: a caller may format an error for
-  // logging before later metadata (streamDiagnostics / partialText) is attached
-  // to it, and a deliberately status-stripped wrapper (e.g. background-polling
-  // 404) must not inherit a status cached by an incidental normalize on its
-  // cause. Only explicit `attachProviderError` at provider/flow boundaries seeds
-  // the cache the lookup above recovers.
+  // Compute fresh but DO NOT cache the result: a caller may format an error
+  // for logging before the route stamp is attached to it, and a deliberately
+  // status-stripped wrapper (e.g. background-polling 404) must not inherit a
+  // status cached by an incidental normalize on its cause. Only explicit
+  // `attachProviderError` at provider/flow boundaries seeds the cache the
+  // lookup above recovers.
   return formatProviderHttpError(err);
 }
 
@@ -579,12 +566,15 @@ export function classifyModelRouteFailure(error: Error): ModelRouteVerdict {
   const hasStructuredUndiciFailure = candidates.some(({ code }) =>
     code.startsWith('UND_ERR_'),
   );
-  const taggedTransportFailure = chain.some((current) => {
-    const kind = detectSdkErrorMetadata(current)?.kind;
+  // The SDK's own connection classes, read off the prototype chain by the
+  // same table `matchSdkError` uses — an `APIConnectionError` carries neither
+  // an errno nor a `…ConnectionError` `name`, so the heuristics below miss it.
+  const sdkTransportFailure = chain.some((current) => {
+    const kind = matchSdkErrorEntry(current)?.kind;
     return kind === 'connection' || kind === 'connection_timeout';
   });
   const transportFailure =
-    taggedTransportFailure ||
+    sdkTransportFailure ||
     candidates.some(({ code, name, message }) => {
       if (
         TRANSPORT_ERROR_CODES.has(code) ||
@@ -614,11 +604,7 @@ export function classifyModelRouteFailure(error: Error): ModelRouteVerdict {
 
 /** Whether repeating the same provider request can recover without user action. */
 export function isProviderErrorAutoRetryable(err: unknown): boolean {
-  if (
-    isUserAbort(err) ||
-    isContextWindowError(err) ||
-    hasManualRetryOnlyErrorMarker(err)
-  ) {
+  if (isUserAbort(err) || isContextWindowError(err)) {
     return false;
   }
 

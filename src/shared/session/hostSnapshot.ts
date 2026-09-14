@@ -15,7 +15,6 @@ import {
   ApiKeyBannerDataSchema,
   DependencyBannerDataSchema,
   FileOptionsSchema,
-  FileSelectConfigSchema,
   ModelOptionDataSchema,
   OnboardingFunnelStateSchema,
   TeamOptionDataSchema,
@@ -72,8 +71,6 @@ export const HostSnapshotSchema = z.object({
   modelOptions: z.array(ModelOptionDataSchema),
   teamOptions: z.array(TeamOptionDataSchema),
   workspaceRoots: z.array(WorkspaceRootOptionDataSchema),
-  /** The launcher's multi-file groups (input, context, media). */
-  fileConfigs: z.array(FileSelectConfigSchema),
   fileOptions: FileOptionsSchema,
   isGitRepo: z.boolean(),
   /** The one recorder per process and where its take is going. */
@@ -98,7 +95,6 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     modelOptions: [],
     teamOptions: [],
     workspaceRoots: [],
-    fileConfigs: [],
     fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
     isGitRepo: false,
     recording: null,

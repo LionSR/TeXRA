@@ -20,9 +20,9 @@
  * install itself, so a second caller joins the first rather than racing it to
  * build a second runtime, and it is cleared once that install settles.
  *
- * The process identity is read before installing: the CLI's default session
- * opens through the synchronous `open`, which a pending identity would turn
- * into an asynchronous layer build.
+ * The process identity is read before installing, so the map's entries
+ * never wait on it and `initCliPlatform`'s open of the default session is
+ * the first thing built on the runtime.
  *
  * The process services every entry provides the same way: `Secrets` over the
  * one `CliSecrets` of this storage root, `SetupPlatform` over the CLI's
@@ -35,45 +35,53 @@
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import type { StateStore } from '@platform/interfaces';
-import { tryProcessRuntime } from '@platform/processRuntime';
+import {
+  tryProcessRuntime,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import type { SetupPlatformShape } from '@tools/setup/platform';
+import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 import { getCliSecrets } from './cliSecrets';
 import { signInCliSupabase } from './supabaseAuth';
 
-let pending: Promise<void> | null = null;
+let pending: Promise<ProcessRuntime> | null = null;
 let globalState: StateStore | undefined;
 
-const cliSetupPlatform: SetupPlatformShape = {
-  host: 'cli',
-  signIn: async () => {
-    await signInCliSupabase({ openBrowser: true });
-    return SupabaseClient.isAuthenticated();
-  },
-};
-
-export function installCliProcessRuntime(storageRoot?: string): Promise<void> {
-  if (tryProcessRuntime()) return Promise.resolve();
+/**
+ * Install the process runtime, or join the one already installed, and hand
+ * it back: every entry that awaits this holds the runtime it runs on in a
+ * local and threads it on, so nothing below the entry looks it up again.
+ */
+export function installCliProcessRuntime(
+  storageRoot?: string,
+): Promise<ProcessRuntime> {
+  const installed = tryProcessRuntime();
+  if (installed) return Promise.resolve(installed);
   if (pending) return pending;
   const storage = createNodeStorageProvider({ storageRoot });
   pending = (async () => {
-    installProcessRuntime({
-      processStart: await nodeProcesses.selfIdentity(),
+    const processStart = await nodeProcesses.selfIdentity();
+    // The services below close over the runtime they are provided by: the
+    // secret store and the setup sign-in run their programs on it, and none
+    // of these thunks runs before the layer builds, after the install.
+    const runtime: ProcessRuntime = installProcessRuntime({
+      processStart,
       globalStorage: () => storage.getGlobalStoragePath(),
       updateCheckStorage: () => storage.getGlobalStoragePath(),
-      secrets: () => getCliSecrets(storageRoot),
-      appState: () => {
-        if (!globalState) {
-          throw new Error(
-            'CLI global state is not open: initCliPlatform() has not bound its store to the process runtime yet.',
-          );
-        }
-        return globalState;
+      secrets: () => getCliSecrets(runtime, storageRoot),
+      appState: () => cliGlobalState(),
+      setup: {
+        host: 'cli',
+        signIn: async () => {
+          await signInCliSupabase(runtime, { openBrowser: true });
+          return SupabaseClient.isAuthenticated();
+        },
       },
-      setup: cliSetupPlatform,
+      lean: directLeanLanguageServices(),
     });
+    return runtime;
   })().finally(() => {
     pending = null;
   });
@@ -96,4 +104,18 @@ export function installCliProcessRuntime(storageRoot?: string): Promise<void> {
  */
 export function bindCliGlobalState(store: StateStore): void {
   globalState = store;
+}
+
+/**
+ * The store {@link bindCliGlobalState} bound, for the composition root's own
+ * services bag and for the `AppState` thunk above. A read before the bind
+ * throws rather than reading a default.
+ */
+export function cliGlobalState(): StateStore {
+  if (!globalState) {
+    throw new Error(
+      'CLI global state is not open: initCliPlatform() has not bound its store to the process runtime yet.',
+    );
+  }
+  return globalState;
 }

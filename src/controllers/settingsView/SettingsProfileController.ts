@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { API_PROVIDERS } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
-import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   modelsTabSettings,
   type ProviderKeyStatus,
@@ -13,7 +13,6 @@ import {
 import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
-  getGlobalStreaming,
   getProviderDisplayName,
   getProviderEndpoint,
   getProviderKeyUrl,
@@ -52,9 +51,8 @@ export class SettingsProfileController {
       this.getProviderKeyStatuses(),
     ]);
     const base = {
-      command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       providerKeyStatuses,
-      globalStreamingDefault: getGlobalStreaming(),
     };
 
     // Preserve the distinction between an authoritatively rejected refresh

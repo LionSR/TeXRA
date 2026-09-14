@@ -43,19 +43,25 @@ export const AGENT_SOURCE = {
   BUILT_IN_WORKFLOW: 'builtInWorkflow',
   BUILT_IN_TOOL_USE: 'builtInToolUse',
   REMOTE: 'remote',
-  /**
-   * Definition supplied as a value rather than read from a YAML file — the
-   * embedding-API counterpart of `remote`, which likewise fabricates a registry
-   * entry with an empty `path` and skips the loader's filesystem read. Entries
-   * come from `registerInlineAgents` (`@agent/index/agentRegistry`).
-   */
-  INLINE: 'inline',
 } as const;
 
 /** Single source of truth for agent source identifiers. */
 export const AgentSourceSchema = z.enum(AGENT_SOURCE);
 
 export type AgentSource = z.infer<typeof AgentSourceSchema>;
+
+/**
+ * True for the two sources whose definitions ship inside the host bundle and
+ * are read in place. Every surface that offers to open one presents it
+ * read-only and points edits at the custom copy; the extension additionally
+ * registers those directories `writable: false` for its file tools.
+ */
+export function isPackagedAgentSource(source: AgentSource): boolean {
+  return (
+    source === AGENT_SOURCE.BUILT_IN_WORKFLOW ||
+    source === AGENT_SOURCE.BUILT_IN_TOOL_USE
+  );
+}
 
 const AGENT_NAME_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
 

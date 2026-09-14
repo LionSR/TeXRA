@@ -30,7 +30,7 @@ import {
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
 import {
-  ancestorPhaseLabel,
+  ancestorPositionLabel,
   sessionView,
   runPhaseOf,
   runViewOf,
@@ -264,17 +264,17 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // same list the modal and the title read.
   const attention = attentionRequests(view);
 
-  // Nested-session location: the nearest workflow-script ancestor's open
-  // phase, then the focused stream's label.
+  // Nested-session location: the nearest ancestor's open phase or loop
+  // position, then the focused stream's label.
   const focusedRunId = target.isChildRun ? displayRunId : undefined;
   const focusedLabel =
     focusedRunId === undefined
       ? undefined
       : (runViewOf(view, focusedRunId)?.label ?? focusedRunId);
-  const focusedPhaseHeading =
+  const focusedRoundHeading =
     focusedRunId === undefined
       ? undefined
-      : ancestorPhaseLabel(view, focusedRunId);
+      : ancestorPositionLabel(view, focusedRunId);
 
   const display = buildStatusBarDisplay({
     status: displayStatus,
@@ -298,7 +298,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         : (view.queuedFollowUps.get(displayRunId) ?? []),
     usage: displayUsage,
     contextState: displayRun?.context ?? undefined,
-    stage: displayRun?.stage ?? undefined,
+    flow: displayRun?.flow ?? undefined,
     subagents: subagentCount,
     runningSessions: props.runningSessions ?? 0,
     approvalDepth: attention.length,
@@ -315,7 +315,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     location:
       focusedLabel === undefined
         ? undefined
-        : { context: focusedPhaseHeading, label: focusedLabel },
+        : { context: focusedRoundHeading, label: focusedLabel },
     foreground: {
       inputActive: props.foregroundInputActive,
       escapeAction: props.foregroundEscapeAction,

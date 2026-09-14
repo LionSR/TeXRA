@@ -160,17 +160,14 @@ describe('runtime model registry', () => {
     expect(getRuntimeModelDirectFallback('gemini31p', false)).toEqual({
       model: 'gemini31p',
       provider: 'google',
-      chatGptSubscriptionEligible: false,
     });
     expect(getRuntimeModelDirectFallback('gemini31p', true)).toEqual({
       model: 'gemini31p',
       provider: 'openRouter',
-      chatGptSubscriptionEligible: false,
     });
     expect(getRuntimeModelDirectFallback('gpt56', false)).toEqual({
       model: 'gpt56',
       provider: 'openai',
-      chatGptSubscriptionEligible: true,
     });
   });
 
@@ -186,7 +183,7 @@ describe('runtime model registry', () => {
     );
 
     await refreshRuntimeModelRegistry();
-    const { globalState } = installedHost().platform;
+    const { globalState } = installedHost().roots;
     expect(
       copilotRouteUnavailableReason('gemini31p', globalState),
     ).toBeUndefined();
@@ -285,13 +282,10 @@ describe('Copilot route in model pickers', () => {
       expect.objectContaining({
         value: 'gemini31p',
         availability: 'copilot-access',
-        availabilityLabel: 'Copilot subscription',
         routeLabel: 'Via Copilot',
         reasoning: 'Default (provider managed)',
         context: '160K',
         cost: '$0.000/$0.000',
-        disabled: false,
-        requiresKey: false,
       }),
     );
   });
@@ -341,8 +335,6 @@ describe('Copilot route in model pickers', () => {
       expect.objectContaining({
         value: 'gemini31p',
         availability: 'copilot-consent-required',
-        availabilityLabel: 'Copilot approval required',
-        disabled: true,
       }),
     );
   });
@@ -366,8 +358,6 @@ describe('Copilot route in model pickers', () => {
       expect.objectContaining({
         value: 'gemini31p',
         availability: 'copilot-unavailable',
-        availabilityLabel: 'Copilot unavailable',
-        disabled: true,
       }),
     );
   });

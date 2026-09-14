@@ -6,7 +6,8 @@
  * {@link WorkspaceStorageProvider}, so the derivations live here once: which
  * store backs workspace configuration (the project `.texra/config.json` when
  * it is usable, the internal workspace store otherwise), where global
- * configuration lives, and where workspace state lives.
+ * configuration lives. Workspace and global state are not here: they are rows
+ * in the root's database (`@controllers/session/appStateStore`), not files.
  */
 
 // Node imports
@@ -23,16 +24,13 @@ import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { JsonStore } from './jsonStore';
+import { JsonStore, type JsonStoreRuntime } from './jsonStore';
 import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from './nodeStorage';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type { WorkspaceStorageProvider } from './workspaceStorage';
-
-/** File name of a state store inside a storage directory. */
-const STATE_FILE_NAME = 'state.json';
 
 /**
  * Whether a write through a `JsonStore` at `filePath` could succeed:
@@ -78,6 +76,10 @@ const canCreateOrWrite = Effect.fn('nodeStores.canCreateOrWrite')(function* (
  * config, and projects whose config file cannot be read (missing permissions,
  * malformed JSON) fall back to the internal workspace store so settings stay
  * readable and writable — degraded, never fatal.
+ *
+ * `runtime` is the caller's own: a config store is a `ConfigStore`, whose
+ * `update` is a Promise, so the host that opens it says where that write
+ * runs rather than leaving the store to find a runtime for itself.
  */
 export const openTexraWorkspaceConfigStore = Effect.fn(
   'nodeStores.openTexraWorkspaceConfigStore',
@@ -85,10 +87,13 @@ export const openTexraWorkspaceConfigStore = Effect.fn(
   workspaceStoragePath: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
+  runtime: JsonStoreRuntime,
 ) {
   if (workspaceRoot) {
     const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
-    const projectStore = yield* JsonStore.open(projectConfigPath).pipe(
+    const projectStore = yield* JsonStore.open(projectConfigPath, {
+      runtime,
+    }).pipe(
       Effect.catch((error) =>
         Effect.sync(() => {
           warn(
@@ -112,6 +117,7 @@ export const openTexraWorkspaceConfigStore = Effect.fn(
   }
   return yield* JsonStore.open(
     path.join(workspaceStoragePath, TEXRA_CONFIG_FILE_NAME),
+    { runtime },
   );
 });
 
@@ -122,6 +128,7 @@ export const openTexraConfigStores = Effect.fn(
   storage: WorkspaceStorageProvider,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
+  runtime: JsonStoreRuntime,
 ) {
   const [workspace, global] = yield* Effect.all(
     [
@@ -129,25 +136,14 @@ export const openTexraConfigStores = Effect.fn(
         storage.getStoragePath(),
         workspaceRoot,
         warn,
+        runtime,
       ),
       JsonStore.open(
         path.join(storage.getGlobalStoragePath(), TEXRA_CONFIG_FILE_NAME),
+        { runtime },
       ),
     ],
     { concurrency: 'unbounded' },
   );
   return { workspace, global } satisfies JsonConfigProviderOptions;
-});
-
-/**
- * Open the workspace state store. The CLI and desktop hosts address the same
- * physical `<storageRoot>/v1/workspace-storage/<id>/state.json` in production, so
- * the path is derived once here.
- */
-export const openNodeWorkspaceStateStore = Effect.fn(
-  'nodeStores.openNodeWorkspaceStateStore',
-)(function* (workspaceStoragePath: string) {
-  return yield* JsonStore.open(
-    path.join(workspaceStoragePath, STATE_FILE_NAME),
-  );
 });

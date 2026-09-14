@@ -3,10 +3,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - latex
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { ArxivProcessor } from '@latex/arxivProcessor';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   type ArxivPaperMetadata,
@@ -32,7 +30,7 @@ const ArxivMetadataInputSchema = z.strictObject({
     .describe('Maximum number of authors to include before truncating.'),
 });
 
-export type ArxivMetadataInput = z.infer<typeof ArxivMetadataInputSchema>;
+type ArxivMetadataInput = z.infer<typeof ArxivMetadataInputSchema>;
 
 const fetchMetadata = Effect.fn('ArxivMetadataTool.execute')(function* (
   input: ArxivMetadataInput,
@@ -82,15 +80,10 @@ const fetchMetadata = Effect.fn('ArxivMetadataTool.execute')(function* (
   );
 });
 
-export class ArxivMetadataTool extends defineTool({
+export const ArxivMetadataTool = defineTool({
   name: 'arxiv_metadata',
   parallelSafe: true,
   description: 'Fetch bibliographic metadata for an arXiv paper.',
   schema: ArxivMetadataInputSchema,
-}) {
-  protected execute(input: ArxivMetadataInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(fetchMetadata(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
-  }
-}
+  execute: fetchMetadata,
+});

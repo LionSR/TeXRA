@@ -13,22 +13,44 @@ import type {
   ToolEditPreview,
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
-import { effectRuntime } from '@platform/processRuntime';
+import type { DiffSource } from '@hosts/uiHosts';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { createTexraTempDir } from '@utils/files/tempDir';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
-type DesktopToolEditApprovalUi = Pick<
+export type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,
-  'openPath' | 'openBuildDisplay' | 'openDiff' | 'showErrorMessage'
->;
+  'openPath' | 'openBuildDisplay' | 'showErrorMessage'
+> & {
+  /**
+   * Show the staged diff under `previewId`, the key `closeDiff` below closes
+   * it by. Each request names its own preview, so the Review workbench can
+   * tell one request's diff from another's.
+   */
+  openDiff(
+    original: DiffSource,
+    proposed: DiffSource,
+    title: string,
+    previewId: string,
+  ): Promise<void>;
+  /**
+   * Take this request's staged diff off the Review workbench and nothing
+   * else: settling here must not dismiss another request's pending preview
+   * or an unrelated review, whichever of them the user is looking at.
+   */
+  closeDiff(previewId: string): Promise<void>;
+};
 
 interface DesktopToolEditApprovalHostOptions {
   ui: DesktopToolEditApprovalUi;
+  /** The window's `request.decide`: where a staged request's decision goes. */
+  decide: ToolEditApprovalHost['decide'];
+  /** The process runtime this window's run wiring was handed. */
+  runtime: ProcessRuntime;
 }
 
 export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
@@ -38,19 +60,24 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
     return this.options.ui.openBuildDisplay;
   }
 
+  get decide(): ToolEditApprovalHost['decide'] {
+    return this.options.decide;
+  }
+
   async stagePreview(
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
   ): Promise<ToolEditPreview> {
     const tempDir = await createTexraTempDir('texra-tool-edit-');
-    const { originalPath, proposedPath } = await effectRuntime().runPromise(
-      writeApprovalTempFiles({
-        directory: tempDir,
-        targetPath: request.path,
-        originalContent: request.originalContent,
-        proposedContent: request.proposedContent,
-      }),
-    );
+    const { originalPath, proposedPath } =
+      await this.options.runtime.runPromise(
+        writeApprovalTempFiles({
+          directory: tempDir,
+          targetPath: request.path,
+          originalContent: request.originalContent,
+          proposedContent: request.proposedContent,
+        }),
+      );
     return new DesktopToolEditPreview(this.options.ui, context, {
       tempDir,
       originalPath,
@@ -90,12 +117,15 @@ class DesktopToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  /** The prompt carries the request on its own, so the diff opens alongside it. */
+  /**
+   * The prompt carries the request on its own, but the diff beside it is
+   * part of the presentation the controller tracks: returning before it is
+   * open would let a release resolve, and the temp directory below go, while
+   * the Review tab was still reading the staged files. A failure here
+   * propagates to the `present` call the host awaits, which reports it.
+   */
   async present(): Promise<void> {
-    void this.showDiff().catch((error: unknown) => {
-      if (this.context.isSettled()) return;
-      void this.ui.showErrorMessage(toErrorMessage(error));
-    });
+    await this.showDiff();
   }
 
   async showDiff(): Promise<void> {
@@ -103,6 +133,7 @@ class DesktopToolEditPreview implements ToolEditPreview {
       { filePath: this.staged.originalPath },
       { filePath: this.staged.proposedPath },
       `Tool edit: ${this.context.relativePath}`,
+      this.context.requestId,
     );
   }
 
@@ -114,7 +145,13 @@ class DesktopToolEditPreview implements ToolEditPreview {
     return readFile(this.staged.proposedPath, 'utf8');
   }
 
+  /**
+   * Close the view before the files behind it go, in that order. The close
+   * names this request's preview, so a request settling while the user reads
+   * another diff takes only its own off the Review workbench.
+   */
   async dispose(): Promise<void> {
+    await this.ui.closeDiff(this.context.requestId);
     await rm(this.staged.tempDir, { recursive: true, force: true });
   }
 }

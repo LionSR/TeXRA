@@ -14,10 +14,6 @@ import {
   isAgentRunRecord,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
 import type { RunHandle, RunStatusInfo } from '@agent/runtime/RunHandle';
 import type {
   AgentCategory,
@@ -241,12 +237,10 @@ export interface RunSummaryOptions {
 export function shouldSuppressAutoDeliveredSubagentReport(
   options: RunSummaryOptions,
   handle: RunHandle,
+  callerRunId: RunId | undefined,
 ): boolean {
   if (!options.suppressAutoDeliveredSubagentReport) return false;
-  return (
-    handle.category === 'toolUse' &&
-    handle.isOwnedBy(getRunContextRunId(tryUseRunContext()))
-  );
+  return handle.category === 'toolUse' && handle.isOwnedBy(callerRunId);
 }
 
 /** Format a single child run as a summary line. */

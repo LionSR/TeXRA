@@ -1,6 +1,9 @@
+import { Effect } from 'effect';
+
 import {
-  createHelperModelKit,
-  runHelperModelCompletion,
+  helperCompletion,
+  helperModel,
+  HelperModelUnavailable,
 } from '@agent/runtime/helperModel';
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
@@ -45,15 +48,10 @@ const SYSTEM_PROMPT =
 export function createAgentResponseTextConnector(
   stores: ModelOptionStores,
 ): ResponseTextConnector {
-  return async (previous, next) => {
-    try {
-      const helperResult = await createHelperModelKit(stores);
-      if (!helperResult.kit) {
-        log.debug(`Skipping connector helper call: ${helperResult.reason}`);
-        return DEFAULT_CONNECTOR;
-      }
-
-      const text = await runHelperModelCompletion(helperResult.kit, {
+  return (previous, next) =>
+    Effect.gen(function* () {
+      const bound = yield* helperModel(stores);
+      const text = yield* helperCompletion(bound, {
         userPrompt: buildPrompt(previous, next),
         systemPrompt: SYSTEM_PROMPT,
       });
@@ -64,11 +62,19 @@ export function createAgentResponseTextConnector(
         return DEFAULT_CONNECTOR;
       }
       return connector;
-    } catch (err) {
-      const write =
-        classifyAgentError(err) === 'missing-api-key' ? log.debug : log.error;
-      write(`Error resolving text connector: ${getSdkErrorMessage(err)}`);
-      return DEFAULT_CONNECTOR;
-    }
-  };
+    }).pipe(
+      Effect.scoped,
+      Effect.catch((err) => {
+        if (err instanceof HelperModelUnavailable) {
+          log.debug(`Skipping connector helper call: ${err.message}`);
+        } else {
+          const write =
+            classifyAgentError(err) === 'missing-api-key'
+              ? log.debug
+              : log.error;
+          write(`Error resolving text connector: ${getSdkErrorMessage(err)}`);
+        }
+        return Effect.succeed(DEFAULT_CONNECTOR);
+      }),
+    );
 }

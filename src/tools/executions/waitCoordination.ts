@@ -4,11 +4,7 @@
  * break a blocking wait early.
  */
 
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 
@@ -25,8 +21,7 @@ import { isInFlightPhase } from '@shared/runs/runStatus';
  *
  * One getHandle + one getStatus per call — no redundant lookups.
  */
-export function shouldSkipWait(runId: RunId): boolean {
-  const session = currentSession();
+export function shouldSkipWait(session: SessionHandle, runId: RunId): boolean {
   const handle = session.runs.getHandle(runId);
   if (!handle) return true;
 
@@ -57,12 +52,14 @@ export function shouldSkipWait(runId: RunId): boolean {
  *
  * Returns a cleanup function that removes the listener.
  */
-export function listenForFollowUp(onFollowUp: () => void): () => void {
-  const context = tryUseRunContext();
-  const runId = getRunContextRunId(context);
+export function listenForFollowUp(
+  session: SessionHandle,
+  runId: RunId | undefined,
+  onFollowUp: () => void,
+): () => void {
   if (!runId) return () => {};
 
-  return currentSession().followUps.onSent((sentRunId) => {
+  return session.followUps.onSent((sentRunId) => {
     if (sentRunId === runId) onFollowUp();
   });
 }

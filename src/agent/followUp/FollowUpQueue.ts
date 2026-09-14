@@ -19,9 +19,11 @@ export interface FollowUpQueueInput {
   readonly mediaFiles?: readonly string[];
   readonly origin?: VisibleFollowUpQueueItemOrigin;
   /**
-   * Stable logical identity of one child-run result delivery (#9531). The
-   * admission boundary suppresses replays of an id it already admitted;
-   * inputs without one are never suppressed.
+   * Stable logical identity of one delivery its producer may repeat: a
+   * child-run result (#9531), an inquiry continuation re-delivered after a
+   * decision that failed before the queue saw it. The admission boundary
+   * suppresses replays of an id it already admitted; inputs without one are
+   * never suppressed.
    */
   readonly deliveryId?: string;
 }

@@ -251,6 +251,9 @@ describe('CLI agents command', () => {
       textContain: 'rounds: 2',
     },
     {
+      // Remote, and so listing-derived — but a tool-use agent declares no
+      // `defaultOutputFiles`, so this renders without loading the definition.
+      // An attempted load would fetch the remote agent and fail here.
       name: 'renders the agent returned by the resolver regardless of source',
       agent: {
         name: 'lean',

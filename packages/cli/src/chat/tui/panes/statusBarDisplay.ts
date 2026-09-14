@@ -18,7 +18,6 @@ import {
   type SubscriptionUsageSnapshot,
   type SubscriptionUsageProvider,
   type RunPhase,
-  type RunStage,
   type ApprovalPolicySnapshot,
   type RunId,
   type TokenUsageStats,
@@ -32,8 +31,11 @@ import {
   SUBAGENT,
 } from '@shared/copy/nestedRuns';
 import { isActivePhase } from '@shared/runs/runStatus';
-import { formatStageLabel } from '@shared/runs/runStatusDisplay';
-import type { SessionView } from '@shared/session/sessionView';
+import {
+  flowPosition,
+  formatFlowPositionLabel,
+} from '@shared/runs/runStatusDisplay';
+import type { RunView, SessionView } from '@shared/session/sessionView';
 import {
   assertNever,
   filterNotNullish,
@@ -48,7 +50,7 @@ import { type TransientNotice } from '../state/cliState';
 import { runPhaseOf, runViewOf } from '../state/sessionView';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
-/** The approval bypass flags a stream's policy snapshot carries. */
+/** The approval bypass flags a run's policy snapshot carries. */
 export type BypassState = ApprovalPolicySnapshot['bypasses'];
 
 /** What the pending-interaction count names: approvals, questions, or both. */
@@ -121,24 +123,26 @@ interface StatusBarSegment {
 
 export interface StatusBarDisplayInput {
   readonly status: RunPhase | undefined;
-  /** The fold's label for `status` (G4, one table); undefined with no stream. */
+  /** The fold's label for `status` (G4, one table); undefined with no run. */
   readonly statusLabel: string | undefined;
   /** Liveness of the running turn — omitted entirely in tests/headless runs,
    *  same as each of its fields individually. */
   readonly turn?: StatusBarTurnInput;
   readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
-  /** The stream's policy snapshot bypasses; absent before `approval.policy` folds. */
+  /** The run's policy snapshot bypasses; absent before `approval.policy` folds. */
   readonly bypass?: BypassState;
   readonly queuedFollowUpMessages: readonly string[];
   /** Latest usage snapshot — read for `usageRoute` (which subscription quota
    *  to show), never for context occupancy: that is `contextState`. */
   readonly usage: TokenUsageStats | undefined;
-  /** Model-handler-authoritative context occupancy for the displayed stream
+  /** Run-authoritative context occupancy for the displayed run
    *  (`RunView.context`). */
   readonly contextState: ContextStateData | undefined;
-  readonly stage: RunStage | undefined;
-  /** Retained and active direct subagents owned by the displayed stream. */
+  /** The displayed run's loop position (`RunView.flow`); undefined before
+   *  its first step. */
+  readonly flow: RunView['flow'] | undefined;
+  /** Retained and active direct subagents owned by the displayed run. */
   readonly subagents: number;
   /** Visible child sessions still in flight (see RUNNING_SESSION copy). */
   readonly runningSessions: number;
@@ -154,7 +158,7 @@ export interface StatusBarDisplayInput {
   /** Terminal width in columns. */
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
-  /** True when `status` belongs to a focused child/subagent stream rather
+  /** True when `status` belongs to a focused child/subagent run rather
    *  than the root session — see `statusBarRunTarget`. */
   readonly isChildRun?: boolean;
   /** Nested-session location (`Survey (1/1) › Agent runtime`). Omitted on
@@ -203,17 +207,17 @@ interface StatusBarShortcutsInput {
   readonly agentSelectionAvailable?: boolean;
   /** True when slash commands and text entry are actionable in this view. */
   readonly chatInputAvailable: boolean;
-  /** True when bare Escape can focus the active stream's immediate parent. */
+  /** True when bare Escape can focus the active run's immediate parent. */
   readonly parentNavigationAvailable?: boolean;
   /** True when the persistent child list has a session row. */
   readonly childNavigationAvailable?: boolean;
-  /** True when Alt/Esc-1..9 has at least one stream target. */
+  /** True when Alt/Esc-1..9 has at least one run target. */
   readonly runFocusAvailable?: boolean;
   readonly modifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; otherwise the universal Ctrl-J is the only reliable binding. */
   readonly shiftEnterNewline?: boolean;
-  /** True when the focused stream has output that can be printed in full. */
+  /** True when the focused run has output that can be printed in full. */
   readonly transcriptAvailable?: boolean;
 }
 
@@ -267,12 +271,12 @@ function subscriptionQuotaSegment(
   };
 }
 
-// The gauge renders `RunView.context` — the model handler's
-// own reading of the window it served the last response under, which is the
-// only value that stays right across subscription caps and compaction. The
-// `usage` fallback covers the pre-first-response window, where the handler has
-// reported no occupancy yet: show the input-token count bare rather than
-// substituting a registry window the run may never have used.
+// The gauge renders `RunView.context` — the run's own reading of the window it
+// served the last response under, which is the only value that stays right
+// across subscription caps and compaction. The `usage` fallback covers the
+// pre-first-response window, where the run has reported no occupancy yet: show
+// the input-token count bare rather than substituting a registry window the run
+// may never have used.
 function formatUsage(
   contextState: ContextStateData | undefined,
   usage: TokenUsageStats | undefined,
@@ -286,11 +290,11 @@ function formatUsage(
 
   // Occupancy is input tokens only — the prompt that fills the window. Output
   // tokens are the generated response, not part of the context, which is why
-  // the handler reports `inputTokens` here.
+  // the run reports `inputTokens` here.
   const { inputTokens: used, contextWindow, utilizationPercent } = contextState;
   const percent = Math.max(1, Math.round(utilizationPercent));
   // Bands match the progress view's context gauge (`fillColor` in UsagePanel),
-  // and read the handler's own `utilizationPercent` rather than re-dividing
+  // and read the run's own `utilizationPercent` rather than re-dividing
   // used/contextWindow — the same number told two ways drifts.
   let color: StatusBarColor;
   if (utilizationPercent > 80) color = COLOR_ERROR;
@@ -323,29 +327,24 @@ function locationSegment(
   };
 }
 
-// One status-bar slot carries whichever stage this stream has (mirrors the
-// SubagentList row's `stageLabel`).
-function stageSegment(
-  stage: RunStage | undefined,
+// One status-bar slot carries the loop position this run is at, in the
+// coordinate its family counts (mirrors the SubagentList row's `flowLabel`).
+function flowSegment(
+  flow: RunView['flow'] | undefined,
 ): StatusBarSegment | undefined {
-  if (stage === undefined) return undefined;
-  const text = formatStageLabel(stage);
+  const text = formatFlowPositionLabel(flowPosition(flow));
   if (text === undefined) return undefined;
   return {
     text,
-    // Keep stage visibility on narrow terminals: degrade to the bare
-    // current round/phase label instead of dropping the planned total's
-    // context.
-    compactText: formatStageLabel({ ...stage, total: undefined }),
     color: 'dim',
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.stage,
+    compactPriority: STATUS_BAR_COMPACT_PRIORITY.flow,
   };
 }
 
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeSubagent: 20,
-  stage: 30,
+  flow: 30,
   usage: 40,
   queuedFollowUp: 50,
   approvalPolicy: 55,
@@ -862,7 +861,7 @@ interface StatusBarRunTarget {
 }
 
 /**
- * Which stream the status bar describes (the active stream when the view
+ * Which run the status bar describes (the active run when the view
  * holds it), and what Ctrl-C does there.
  */
 export function statusBarRunTarget({
@@ -959,7 +958,7 @@ export function buildStatusBarDisplay(
   ];
   const turn = input.turn;
 
-  // No stream yet: a child row has no status column, the root keeps its slot.
+  // No run yet: a child row has no status column, the root keeps its slot.
   const statusLabel = input.statusLabel ?? (input.isChildRun ? '' : '-');
   const spinPrefix =
     isActivePhase(input.status) && turn?.runningFrame
@@ -1041,7 +1040,7 @@ export function buildStatusBarDisplay(
       subscriptionQuotaSegment(input.subscriptionQuota),
       approvalPolicySegment(input.approvalPolicy),
       locationSegment(input.location),
-      stageSegment(input.stage),
+      flowSegment(input.flow),
       formatUsage(input.contextState, input.usage),
       queuedFollowUpsCountSegment(input.queuedFollowUpMessages),
       subagentsSegment(input.subagents),

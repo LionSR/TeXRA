@@ -59,7 +59,6 @@ import { saveProviderApiKey } from '../runtime/providerApiKey';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
-import type { CliPlatformServices } from '../runtime/initPlatform';
 
 /**
  * Human-facing "we stored your key here" line. Naming the exact secret entry
@@ -129,7 +128,7 @@ interface OnboardingResolution extends CliOnboardingResult {
  */
 export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
   function* (
-    services: CliPlatformServices,
+    services: ModelOptionStores,
     context: OnboardingGateContext,
   ): Effect.fn.Return<CliOnboardingResult, Error> {
     // context.* carries the parsed intent (headless / non-TTY / dumb); the final
@@ -194,7 +193,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
  * rejects headless before calling this.
  */
 export const runCliOnboarding = Effect.fn('runCliOnboarding')(function* (
-  services: CliPlatformServices,
+  services: ModelOptionStores,
   colorEnabled = true,
 ): Effect.fn.Return<CliOnboardingResult, Error> {
   if (!process.stdout.isTTY) return NO_ONBOARDING_RESULT;

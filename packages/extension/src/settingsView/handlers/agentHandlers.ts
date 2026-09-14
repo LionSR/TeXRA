@@ -33,7 +33,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKey,
@@ -48,6 +48,8 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
+import { chooseTeamAvailabilityViaDialog } from '../../common/teamAvailabilityDialog';
+
 import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,
@@ -58,7 +60,7 @@ export class AgentHandlers {
   private readonly catalogController: SettingsAgentCatalogController;
   private readonly directoryController: SettingsAgentDirectoryController;
   private readonly roster: AgentRosterController;
-  private readonly agentActions;
+  readonly agentActions;
   private readonly activeCustomAgentDeletions = new Set<string>();
 
   constructor(
@@ -68,6 +70,7 @@ export class AgentHandlers {
       agentCatalogAlreadyFresh?: boolean,
     ) => Promise<void>,
     globalState: StateStore,
+    private readonly runtime: ProcessRuntime,
   ) {
     const controllers = createSettingsAgentControllers({
       workspaceState: workspaceRoots().workspaceState,
@@ -85,6 +88,15 @@ export class AgentHandlers {
       getSourceDirectory: (source) => agentDirectories.getDirectory(source),
       openDocument: async (filePath) => {
         const doc = await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(doc, { preview: false });
+      },
+      // An untitled buffer holds the text, so Ctrl+S prompts for a new
+      // location instead of writing back into the packaged resources.
+      openReadOnlyDocument: async (filePath) => {
+        const doc = await vscode.workspace.openTextDocument({
+          content: await AbsoluteFS.read(filePath),
+          language: 'yaml',
+        });
         await vscode.window.showTextDocument(doc, { preview: false });
       },
       revealFile: async (filePath) => {
@@ -109,7 +121,7 @@ export class AgentHandlers {
   // ── Agent selection data ──
 
   async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
-    await effectRuntime().runPromise(loadAgents());
+    await this.runtime.runPromise(loadAgents());
     await webview.postMessage(
       buildAgentSelectionMessage({
         buildSelectionItems: () => this.catalogController.buildSelectionItems(),
@@ -119,12 +131,6 @@ export class AgentHandlers {
   }
 
   // ── Agent selection handlers ──
-
-  async handleOpenAgentYaml(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
-  ): Promise<void> {
-    await this.agentActions.openAgentYaml(data);
-  }
 
   async handleSetAgentEnabled(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
@@ -186,12 +192,6 @@ export class AgentHandlers {
     );
   }
 
-  async handleRevealAgentFile(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.REVEAL_AGENT_FILE>,
-  ): Promise<void> {
-    await this.agentActions.revealAgentFile(data);
-  }
-
   async handleViewRemoteAgentPrompt(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.VIEW_REMOTE_AGENT_PROMPT>,
   ): Promise<void> {
@@ -227,12 +227,6 @@ export class AgentHandlers {
     }
 
     await this.refreshAfterAgentMutation();
-  }
-
-  async handleCustomizeAgent(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.CUSTOMIZE_AGENT>,
-  ): Promise<void> {
-    await this.agentActions.customizeAgent(data);
   }
 
   async handleDeleteCustomAgent(
@@ -302,7 +296,7 @@ export class AgentHandlers {
       'Failed to apply agent team',
       async () => {
         await withAgentCatalogAuthRefreshDeferred(() =>
-          effectRuntime().runPromise(
+          this.runtime.runPromise(
             applySettingsTeamRoster(data.presetId, {
               catalog: this.catalogController,
               loadLocalCatalog: () => loadAgents({ includeRemote: false }),
@@ -350,7 +344,7 @@ export class AgentHandlers {
         });
         if (!name) return; // cancelled
 
-        await effectRuntime().runPromise(loadAgents());
+        await this.runtime.runPromise(loadAgents());
 
         await this.catalogController.saveCurrentPreset(name);
 
@@ -389,17 +383,7 @@ export class AgentHandlers {
   // ── Private helpers ──
 
   private async chooseTeamAvailability(prompt: TeamAvailabilityPrompt) {
-    const items = prompt.actions.map((action) => ({
-      title: action.label,
-      isCloseAffordance: action.choice === 'cancel',
-    }));
-    const choice = await vscode.window.showWarningMessage(
-      prompt.message,
-      { modal: true },
-      ...items,
-    );
-    return prompt.actions.find((action) => action.label === choice?.title)
-      ?.choice;
+    return chooseTeamAvailabilityViaDialog(prompt, { modal: true });
   }
 
   private async createAgentFromTemplate(

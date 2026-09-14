@@ -15,6 +15,7 @@
 
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 import {
   createWorkspaceAgentRosterController,
@@ -28,8 +29,6 @@ import {
 } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { appSignals } from '@eventBus/AppSignals';
-import { effectRuntime } from '@platform/processRuntime';
-import type { ToolResult } from '@shared/schemas';
 import {
   AGENT_MODE_PRESETS,
   AGENT_MODE_PRESETS_BY_ID,
@@ -75,8 +74,9 @@ type ApplyTeamInput = z.infer<typeof ApplyTeamInputSchema>;
 const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   input: ApplyTeamInput,
 ) {
+  const call = yield* ToolCall;
   const state = { getAgents: getAgentsByCategory };
-  const roster = createWorkspaceAgentRosterController();
+  const roster = call.inScope(() => createWorkspaceAgentRosterController());
   const { signIn } = yield* SetupPlatform;
   const authStatus = yield* getSetupAuthStatus();
 
@@ -96,23 +96,26 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
         resolution: resolveTeamRoster(state, preset),
       };
     },
-    commitPreset: async (preset) => {
-      await roster.setTeam(preset.id);
-      await roster.setDefaultTeam(preset.id);
-      // The setup agent runs this mid-conversation, so an open settings
-      // view is showing a roster this call just replaced.
-      appSignals.emit('agentRosterChanged', undefined);
-    },
+    commitPreset: (preset) =>
+      call.inScope(async () => {
+        await roster.setTeam(preset.id);
+        await roster.setDefaultTeam(preset.id);
+        // The setup agent runs this mid-conversation, so an open settings
+        // view is showing a roster this call just replaced.
+        appSignals.emit('agentRosterChanged', undefined);
+      }),
   };
 
   const result = yield* applyTeamRosterWithPreflight(input.teamId, {
     catalog,
-    loadLocalCatalog: () => loadAgents({ includeRemote: false }),
+    loadLocalCatalog: () =>
+      call.inScope(() => loadAgents({ includeRemote: false })),
     canAccessRemoteCatalog: async () => authStatus.authenticated,
     providedChoice: input.unavailableAction ?? undefined,
     choose: async () => undefined,
     signIn,
-    forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
+    forceRefreshRemoteCatalog: () =>
+      call.inScope(() => refresh({ includeRemote: true })),
   });
 
   if (result.status === 'unknown') {
@@ -197,7 +200,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   return executed(lines.join('\n'), summary);
 });
 
-export class ApplyTeamTool extends defineTool({
+export const ApplyTeamTool = defineTool({
   name: 'apply_team',
   description: `Apply an agent team (a discipline roster) to this workspace and record it as the user's default team.
 
@@ -206,8 +209,5 @@ Sets which workflow agents and assistants appear in this workspace's pickers, an
 Teams:
 ${describeTeams()}`,
   schema: ApplyTeamInputSchema,
-}) {
-  protected execute(input: ApplyTeamInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(applyTeam(input));
-  }
-}
+  execute: applyTeam,
+});

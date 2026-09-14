@@ -3,13 +3,16 @@ import { z } from 'zod';
 import {
   WorkflowCallIdentitySchema,
   type RunId,
+  type RunOutcome,
   type WorkflowCallIdentity,
+  type WorkflowCallProgress,
   type WorkflowControlAction,
-  type WorkflowRunSnapshot,
+  type WorkflowDeclaredPlan,
   type WorkflowScriptFiles,
 } from '@shared/schemas';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { Effect, Scope } from 'effect';
 
 /** One title form for `meta.phases` entries and runtime `phase()` calls. */
 export const WorkflowScriptPhaseTitleSchema = z
@@ -243,7 +246,7 @@ export type WorkflowAgentCallOptions = z.infer<
 export interface WorkflowAgentInvocation {
   /** 0-based call sequence number: ordering only, never identity. */
   index: number;
-  /** Stable logical call identity within the workflow run snapshot. */
+  /** Stable logical call identity within the workflow run (the card id). */
   progressId: WorkflowScriptProgressId;
   /** Stable hash of the prompt and normalized run-affecting options. */
   key: string;
@@ -269,10 +272,7 @@ export interface WorkflowAgentInvocation {
  * field leaves the engine's current value in place.
  */
 export interface WorkflowAttemptFacts {
-  /**
-   * The child model the runner resolved, stamped onto the call and its
-   * latest attempt in the run snapshot for progress UIs.
-   */
+  /** The child model the runner resolved, stamped onto the call's card. */
   readonly model?: string;
   /** The resolved agent the host selected. */
   readonly agent?: string;
@@ -296,10 +296,15 @@ export interface WorkflowAttemptFacts {
  * engine receives the typed `RunEnd`, never the XML follow-up delivery
  * string. The journal records that result; the script sees
  * {@link WorkflowScriptRunOptions.toScriptValue} of it.
+ *
+ * The engine, not the runner, owns the call's `Scope`: whatever a runner holds
+ * to keep the child it inspected from being resumed under it is released only
+ * after this call's journal entry has committed, since until then the result
+ * the parent is persisting is one another host could still invalidate.
  */
-export type WorkflowAgentRunner = (
+type WorkflowAgentRunner<R = never> = (
   invocation: WorkflowAgentInvocation,
-) => Promise<unknown>;
+) => Effect.Effect<unknown, Error, R | Scope.Scope>;
 
 /**
  * One completed agent() call, cached for resume. Identity is `key` alone;
@@ -318,15 +323,41 @@ export interface WorkflowJournalEntry {
 type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
 
 /**
- * The facts the canonical run snapshot cannot carry. Everything else a
- * progress projection needs — plan, phases, per-call status, stream identity,
- * model, cost, timing, errors — lives on {@link WorkflowRunSnapshot}
- * and arrives through {@link WorkflowScriptRunOptions.onTransition}; the
- * event stream no longer restates it (that dual-stamping is exactly the sync
- * tax A7 retired). `log` remains an event because a script's `log()` line is
- * transient activity, not run state.
+ * The engine's account of a run, published once per transition through
+ * {@link WorkflowScriptRunOptions.onEvent}: the one owner of every board fact
+ * (A7). Nothing restates them — no snapshot beside the stream, no re-seeding
+ * on resume — so the host records each event as the row it is (`plan` and
+ * `call` as `workflow.plan` / `workflow.call`, `phase.open` / `phase.close` as
+ * `stage.start` / `stage.end`) and every board folds those rows.
+ *
+ * - `plan`: the declared `meta.phases` and `meta.tasks`, first, exactly once.
+ * - `phase.open`: the script entered a stage; `index` is its position among
+ *   the run's stages and `total` the declared count for a declared stage.
+ * - `phase.close`: every call the stage owns has settled and the script has
+ *   moved on (or the run ended); `outcome` is the worst of those calls.
+ * - `call`: one call's card after a transition — a plan label declared under
+ *   an entered stage, an issued call queued, running (re-sent as the host
+ *   resolves its child run, agent and model), or settled. The host stamps
+ *   `attemptId`; the engine never knows it.
+ * - `log`: a script `log()` line, transient activity rather than run state.
+ *
+ * A throw from the handler propagates into the engine and aborts the run.
  */
-export type WorkflowScriptEvent = { type: 'log'; message: string };
+export type WorkflowScriptEvent =
+  | { readonly type: 'log'; readonly message: string }
+  | { readonly type: 'plan'; readonly plan: WorkflowDeclaredPlan }
+  | {
+      readonly type: 'phase.open';
+      readonly title: string;
+      readonly index: number;
+      readonly total?: number;
+    }
+  | {
+      readonly type: 'phase.close';
+      readonly title: string;
+      readonly outcome: RunOutcome;
+    }
+  | { readonly type: 'call'; readonly call: WorkflowCallProgress };
 
 /**
  * Guest-visible result of a call cancelled via `control(childRunId,
@@ -352,14 +383,14 @@ export type WorkflowScriptControl = (
   action: WorkflowControlAction,
 ) => boolean;
 
-export interface WorkflowScriptRunOptions {
+export interface WorkflowScriptRunOptions<R = never> {
   /** Full script source, starting with `export const meta = {...}`. */
   script: string;
   /** Exposed verbatim to the script as the global `args`. */
   args?: unknown;
   /** Exposed to the script as the immutable global `files` object. */
   files?: WorkflowScriptFiles;
-  runAgent: WorkflowAgentRunner;
+  runAgent: WorkflowAgentRunner<R>;
   /**
    * Host projection from a runner result (live, or replayed from the journal)
    * to the value `agent()` resolves to in the script. The journal keeps the
@@ -375,7 +406,7 @@ export interface WorkflowScriptRunOptions {
    */
   fingerprintAgentDependencies?: (
     options: WorkflowAgentCallOptions,
-  ) => Promise<string>;
+  ) => Effect.Effect<string, Error, R>;
   /** Parent cancellation signal; aborts guest run and active agents. */
   signal?: AbortSignal;
   /** Max concurrently running agent() calls. The host passes the session's
@@ -383,37 +414,35 @@ export interface WorkflowScriptRunOptions {
   concurrency?: number;
   /** Journal from a prior run; matching keys replay regardless of call position. */
   journal?: WorkflowJournalEntry[];
-  /** Recovery snapshot from the prior attempt, re-published after reconciliation. */
-  initialSnapshot?: WorkflowRunSnapshot;
   /**
    * Durable checkpoint hook for a successfully validated live call. The
    * engine awaits it before the result becomes visible to the script, so a
    * host restart cannot expose work whose journal entry was never persisted.
    */
-  onJournalEntry?: (entry: WorkflowJournalEntry) => void | Promise<void>;
+  onJournalEntry?: (
+    entry: WorkflowJournalEntry,
+  ) => Effect.Effect<void, Error, R>;
+  /**
+   * Durable checkpoint hook for an interactive retry: the child the user
+   * superseded, awaited before the engine asks the runner for its
+   * replacement. A retried child can already have started work, which every
+   * recovery rule otherwise refuses to repeat, so the authorization has to
+   * outlive this process for the runner's probe to advance past it.
+   */
+  onSupersededAttempt?: (superseded: {
+    readonly key: string;
+    readonly childRunId: RunId;
+  }) => Effect.Effect<void, Error, R>;
   /**
    * Synchronous observer for every validated result this invocation consumes,
    * whether replayed or live. It fires after the call reaches its terminal
    * cached/completed status and before the result becomes visible to the
-   * script; an onTransition throw during that status prevents both this
+   * script; an onEvent throw during that status prevents both this
    * callback and consumption. A live entry is already durably committed by
    * onJournalEntry when this observer fires.
    */
   onJournalEntryConsumed?: (entry: WorkflowJournalEntry) => void;
-  /**
-   * Durable-persistence hook: receives an isolated copy of the canonical
-   * snapshot after a transition, with writes coalesced under backpressure —
-   * intermediate states may be skipped, the latest always lands.
-   */
-  onSnapshot?: (snapshot: WorkflowRunSnapshot) => void | Promise<void>;
-  /**
-   * Synchronous per-transition observer for live projections: fires on every
-   * state transition, never coalesced, with the LIVE snapshot reference —
-   * read it synchronously and never retain it (clone if you must). A throw
-   * propagates into the engine and aborts the run, so consumers guard their
-   * own folds.
-   */
-  onTransition?: (snapshot: WorkflowRunSnapshot) => void;
+  /** Synchronous observer of every {@link WorkflowScriptEvent}, in order. */
   onEvent?: (event: WorkflowScriptEvent) => void;
   /**
    * Handed the per-call control handle once, synchronously, before the script
@@ -431,6 +460,4 @@ export interface WorkflowScriptRunResult {
   result: unknown;
   /** Completed calls in index order, for resume. Failed calls are omitted. */
   journal: WorkflowJournalEntry[];
-  /** Final canonical run snapshot. */
-  snapshot: WorkflowRunSnapshot;
 }

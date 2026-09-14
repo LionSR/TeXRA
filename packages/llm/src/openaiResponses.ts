@@ -16,10 +16,14 @@ import {
   CancellationEvidenceSchema,
   ContinuationSchema,
   InputTokenEstimateSchema,
-  JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  authOrRejectionKind,
+  enrichModelError,
+  pullStream,
   ObservationPolicySchema,
+  parseInboundToolArguments,
+  parseJsonOrModelError,
   RemoteOperationSchema,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -243,17 +247,7 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
           message: 'Incomplete local calls are not dispatchable.',
         });
       }
-      yield* Effect.try({
-        try: () => {
-          JsonObjectSchema.parse(JSON.parse(item.arguments));
-        },
-        catch: (cause) =>
-          new ModelError({
-            kind: 'malformed-output',
-            message: 'The model returned invalid local-call arguments.',
-            cause,
-          }),
-      });
+      yield* parseInboundToolArguments(item.arguments, 'The model');
       return {
         kind: 'local-call',
         providerCallId: item.call_id,
@@ -505,6 +499,30 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   return input;
 });
 
+const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
+
+/**
+ * The digest a submission records on its accepted operation: origin, system
+ * text and admitted history, hashed with the function a continuation's prefix
+ * fingerprint uses. It covers the input half of that prefix, which is the half
+ * a resume rebuilds and can therefore get wrong; the reply does not exist yet.
+ */
+export function openaiResponsesAdmittedFingerprint(
+  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+): string {
+  return prefixFingerprint(
+    RESPONSES_PREFIX_DOMAIN,
+    {
+      protocol: turn.protocol,
+      codecVersion: turn.codecVersion,
+      requestedModel: turn.requestedModel,
+      deployment: turn.deployment,
+    },
+    turn.system,
+    turn.messages,
+  );
+}
+
 /** Builds only a stored anchor, using the same selected configuration as admission. */
 export const openaiResponsesContinuation = Effect.fn(
   'llm.responses.continuation',
@@ -558,7 +576,7 @@ export const openaiResponsesContinuation = Effect.fn(
     origin: result.requestedOrigin,
     coveredMessages: prefix.length,
     prefixFingerprint: prefixFingerprint(
-      'texra-openai-responses-prefix-v1',
+      RESPONSES_PREFIX_DOMAIN,
       result.requestedOrigin,
       turn.system,
       prefix,
@@ -585,7 +603,7 @@ const responseInput = Effect.fn('llm.responses.input')(function* (
     continuation.anchor.coveredItems !== encodedPrefix.length ||
     continuation.prefixFingerprint !==
       prefixFingerprint(
-        'texra-openai-responses-prefix-v1',
+        RESPONSES_PREFIX_DOMAIN,
         continuation.origin,
         turn.system,
         prefix,
@@ -626,10 +644,7 @@ function responseEvents(
     let responseId: string | undefined;
     let returnedModel: string | undefined;
     const enrich = (error: ModelError) =>
-      new ModelError({
-        ...error,
-        message: error.message,
-        cause: error.cause,
+      enrichModelError(error, {
         responseId,
         model: returnedModel ?? origin.requestedModel,
       });
@@ -930,26 +945,18 @@ const sdkEvents = Effect.fn('llm.responses.sdkEvents')(function* (
         yield* close.pipe(Effect.orDie);
       }),
   );
-  return Stream.fromPull(
-    Effect.succeed(
-      Effect.tryPromise({
-        try: () => iterator.next(),
-        catch: (cause) =>
-          enrich(
-            cause instanceof SyntaxError
-              ? new ModelError({
-                  kind: 'malformed-output',
-                  message: 'The model returned malformed stream data.',
-                  cause,
-                })
-              : openaiFailure(cause),
-          ),
-      }).pipe(
-        Effect.flatMap((next) =>
-          next.done ? Cause.done() : Effect.succeed([next.value] as const),
-        ),
+  return pullStream(
+    () => iterator.next(),
+    (cause) =>
+      enrich(
+        cause instanceof SyntaxError
+          ? new ModelError({
+              kind: 'malformed-output',
+              message: 'The model returned malformed stream data.',
+              cause,
+            })
+          : openaiFailure(cause),
       ),
-    ),
   );
 });
 
@@ -1199,10 +1206,7 @@ const estimateResponseInput = Effect.fn('llm.responses.estimateInputTokens')(
 
     let requestId: string | undefined;
     const enrich = (error: ModelError) =>
-      new ModelError({
-        ...error,
-        message: error.message,
-        cause: error.cause,
+      enrichModelError(error, {
         requestId: error.requestId ?? requestId,
         model: error.model ?? origin.requestedModel,
       });
@@ -1388,10 +1392,7 @@ export function openaiResponsesModel(
       let responseId: string | undefined;
       let returnedModel: string | undefined;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           requestId: error.requestId ?? requestId,
           responseId: error.responseId ?? responseId,
           model: error.model ?? returnedModel ?? config.requestedModel,
@@ -1449,10 +1450,7 @@ export function openaiResponsesModel(
     let returnedModel: string | undefined;
     let requestId: string | undefined;
     const enrich = (error: ModelError) =>
-      new ModelError({
-        ...error,
-        message: error.message,
-        cause: error.cause,
+      enrichModelError(error, {
         operation,
         responseId: operation?.providerResponseId,
         requestId: error.requestId ?? requestId,
@@ -1526,6 +1524,8 @@ export function openaiResponsesModel(
           origin,
           providerResponseId: response.id,
           afterSequence: sequence_number,
+          admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
+          store: turn.controls.store,
         });
         if (
           (type === 'response.completed' && response.status === 'completed') ||
@@ -1572,12 +1572,41 @@ export function openaiResponsesModel(
   });
 
   const observe: NonNullable<Model['background']>['observe'] = (
+    admitted,
     input,
     policy,
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
         const operation = yield* boundOperation(input);
+        const parsedTurn = ResolvedTurnSchema.safeParse(admitted);
+        if (
+          !parsedTurn.success ||
+          parsedTurn.data.protocol !== 'openai-responses' ||
+          parsedTurn.data.mode !== 'background' ||
+          !sameModelOrigin(parsedTurn.data, operation.origin)
+        )
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message: 'The admitted turn belongs to another model binding.',
+          });
+        const turn = parsedTurn.data;
+        // The operation records what the provider was actually given. A
+        // resume rebuilds the turn from the caller's current system text, so
+        // a drifted rebuild still gets its result but must leave no anchor:
+        // the next round then resends the transcript instead of chaining on
+        // instructions the answer never saw.
+        // The admitted storage mode is part of what makes an anchor safe: a
+        // turn re-derived stored for a temporary operation must not chain.
+        const chains =
+          turn.controls.store === operation.store &&
+          openaiResponsesAdmittedFingerprint(turn) ===
+            operation.admittedFingerprint;
+        if (!chains) {
+          yield* Effect.logWarning(
+            `The admitted inputs of background operation ${operation.providerResponseId} changed since it was accepted; its completion leaves no continuation.`,
+          );
+        }
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
           return yield* new ModelError({
@@ -1597,10 +1626,7 @@ export function openaiResponsesModel(
         let returnedModel: string | undefined;
         let requestId: string | undefined;
         const enrich = (error: ModelError) =>
-          new ModelError({
-            ...error,
-            message: error.message,
-            cause: error.cause,
+          enrichModelError(error, {
             operation,
             responseId: operation.providerResponseId,
             requestId: error.requestId ?? requestId,
@@ -1863,7 +1889,22 @@ export function openaiResponsesModel(
                       kind: 'malformed-output',
                       message: 'Observation ended without a terminal response.',
                     });
-                  return { kind: 'completed', ...terminal };
+                  // The same anchor the foreground completion builds: an
+                  // observed turn chains on `previous_response_id` too.
+                  const continuation = chains
+                    ? yield* openaiResponsesContinuation(
+                        config,
+                        turn,
+                        terminal.result,
+                      )
+                    : undefined;
+                  return {
+                    kind: 'completed',
+                    afterSequence: terminal.afterSequence,
+                    result: continuation
+                      ? { ...terminal.result, continuation }
+                      : terminal.result,
+                  };
                 }),
               ),
             ).pipe(
@@ -1885,10 +1926,7 @@ export function openaiResponsesModel(
     const operation = yield* boundOperation(input);
     let requestId: string | undefined;
     const enrich = (error: ModelError) =>
-      new ModelError({
-        ...error,
-        message: error.message,
-        cause: error.cause,
+      enrichModelError(error, {
         operation,
         responseId: operation.providerResponseId,
         requestId: error.requestId ?? requestId,
@@ -2185,10 +2223,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
     ) => {
       const status = response.statusCode;
       const error = new ModelError({
-        kind:
-          status === 401 || status === 403
-            ? 'authentication'
-            : 'provider-rejection',
+        kind: authOrRejectionKind(status),
         message: `The Responses WebSocket handshake was rejected${status === undefined ? '' : ` (${status})`}.`,
         status,
         requestId:
@@ -2229,10 +2264,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       let returnedModel: string | undefined;
       let completed = false;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId: error.responseId ?? responseId,
           model: error.model ?? returnedModel ?? config.requestedModel,
         });
@@ -2301,16 +2333,16 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                     message:
                       'The Responses connection returned a binary frame.',
                   });
-                const raw: unknown = yield* Effect.try({
-                  try: () => JSON.parse(next.value as string),
-                  catch: (cause) =>
+                const raw = yield* parseJsonOrModelError(
+                  next.value as string,
+                  (cause) =>
                     new ModelError({
                       kind: 'malformed-output',
                       message:
                         'The Responses connection returned invalid JSON.',
                       cause,
                     }),
-                });
+                );
                 const envelope = WebSocketEnvelopeSchema.safeParse(raw);
                 if (!envelope.success)
                   return yield* new ModelError({
@@ -2329,11 +2361,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                       cause: rejected.error,
                     });
                   return yield* new ModelError({
-                    kind:
-                      rejected.data.status === 401 ||
-                      rejected.data.status === 403
-                        ? 'authentication'
-                        : 'provider-rejection',
+                    kind: authOrRejectionKind(rejected.data.status),
                     message: rejected.data.error.message,
                     status: rejected.data.status,
                     cause: rejected.data.error,

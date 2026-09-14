@@ -26,10 +26,10 @@ import {
   PlanSchema,
   RoundKeyedOutputSidecarValueSchemas,
   RunIdentitySchema,
+  RunFlowSchema,
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
   RunPhaseSchema,
-  RunStageSchema,
   RunSubstateSchema,
   RunIdSchema,
   TaskGroupSchema,
@@ -88,7 +88,7 @@ const RunViewCommonSchema = z.object({
   isRemote: z.boolean(),
   /** Current sequence-row owner; null when unclaimed. */
   ownerId: OwnerIdSchema.nullable(),
-  /** Agent name, or the id-prefix fallback for an identity-less run. */
+  /** The run identity's display name: agent, tool, or workflow name. */
   label: z.string(),
   /** The AI one-liner; title when present. */
   description: z.string().nullable(),
@@ -99,10 +99,15 @@ const RunViewCommonSchema = z.object({
   /** The run's input files, from `run.config`. */
   inputFiles: z.array(z.string()),
   worktree: WorktreeInfoSchema.nullable(),
-  /** The durable phase, or `ready` before the first `status` folds. An
+  /** The durable phase, folded from `run.activate` (running), `flow.step`
+   *  (`waiting` parks, any other step runs), and `run.end` (the outcome);
+   *  `ready` before the first activation folds (one run model, 3.3). An
    *  interrupted run keeps it and reads as interrupted through the copy;
    *  unavailability is `readOnly`, never a status (5.2). */
   status: z.union([RunPhaseSchema, z.literal(RUN_LIFECYCLE_READY)]),
+  /** Derived from the activation's position (ruling A9-1): a first
+   *  activation is starting, a later one resuming, cleared by the first
+   *  step. Only a run whose loop steps carries one. */
   substate: RunSubstateSchema.nullable(),
   /**
    * The terminal status once nothing can move it: for a run this process
@@ -129,7 +134,9 @@ const RunViewCommonSchema = z.object({
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
   conversationProgress: ConversationProgressSchema,
-  stage: RunStageSchema.nullable(),
+  /** The loop's latest `flow.step`: family, step, and coordinates. Null
+   *  before the first step and after every activation. */
+  flow: RunFlowSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
   /** A native tool-use resume can target this run: a plain agent identity in
    *  the tool-use category. The rule lives here so no host restates it. */
@@ -198,14 +205,16 @@ const RunViewSchema = z.discriminatedUnion('category', [
 ]);
 export type RunView = z.infer<typeof RunViewSchema>;
 
-/** A pending approval: which run is asking, and the request the UI shows.
- *  The list is a set keyed by `requestId` (5.2). */
-const ApprovalRequestSchema = z.object({
+/** A pending request: which run is asking, the payload the UI shows (its
+ *  `kind` is the request's kind), and the earlier request it continues (an
+ *  inquiry's thread). The list is a set keyed by `requestId` (5.2): opened
+ *  without decided. */
+const PendingRequestSchema = z.object({
   runId: RunIdSchema,
   requestId: z.string(),
   payload: PermissionPayloadSchema,
+  thread: z.string().nullable(),
 });
-export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
 
 const SessionViewSchema = z.object({
   key: SessionKeySchema,
@@ -226,7 +235,7 @@ const SessionViewSchema = z.object({
     waiting: z.int().nonnegative(),
     interrupted: z.int().nonnegative(),
   }),
-  approvals: z.array(ApprovalRequestSchema),
+  requests: z.array(PendingRequestSchema),
   /** Latest snapshot per run. */
   policy: z.map(RunIdSchema, ApprovalPolicySnapshotSchema),
   inquiries: z.array(InquiryThreadUpdatedEventSchema),
@@ -247,7 +256,7 @@ export function emptySessionView(key: string, cursor = 0): SessionView {
     cursor,
     folded: new Map(),
     rollup: { running: 0, waiting: 0, interrupted: 0 },
-    approvals: [],
+    requests: [],
     policy: new Map(),
     inquiries: [],
     queuedFollowUps: new Map(),

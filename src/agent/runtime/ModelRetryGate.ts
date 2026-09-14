@@ -1,16 +1,35 @@
-import pDefer from 'p-defer';
+import { Cause, Clock, Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 
 import { jitteredExponentialBackoffMs } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
 
 type RoutePhase = 'healthy' | 'cooling' | 'probing';
 
-interface WaitingAttempt {
-  readonly resolve: (permit: RetryPermit) => void;
-  readonly reject: (error: unknown) => void;
-  readonly signal: AbortSignal;
-  readonly onAbort: () => void;
+interface RetryPermit {
+  readonly version: number;
+  readonly probe: boolean;
+}
+
+/** One call waiting on a route; it leaves the queue when its fiber is interrupted. */
+interface Waiter {
+  readonly permit: Deferred.Deferred<RetryPermit>;
+  /**
+   * The permit the gate handed this waiter, recorded before `permit`
+   * completes: an interruption landing between the grant and the waiter
+   * resuming still returns a probe to the cohort instead of losing it.
+   */
+  granted: RetryPermit | undefined;
+}
+
+/**
+ * One scheduled probe. The slot is taken before the fiber exists, so a
+ * probe that completes during its own fork still clears it, and a stale
+ * fiber recognizes it was superseded.
+ */
+interface ScheduledProbe {
+  fiber: Fiber.Fiber<void> | undefined;
 }
 
 interface RouteState {
@@ -18,13 +37,8 @@ interface RouteState {
   phase: RoutePhase;
   failures: number;
   retryAt: number;
-  timer: ReturnType<typeof setTimeout> | undefined;
-  readonly waiters: WaitingAttempt[];
-}
-
-interface RetryPermit {
-  readonly version: number;
-  readonly probe: boolean;
+  probe: ScheduledProbe | undefined;
+  readonly waiters: Waiter[];
 }
 
 interface RouteFailure {
@@ -37,18 +51,13 @@ export interface RoutePolicy {
   readonly isReachableFailure?: (error: Error) => boolean;
 }
 
-interface RunOptions {
-  readonly signal: AbortSignal;
+interface RouteOptions {
   readonly baseBackoffMs: number;
   readonly onWait?: (delayMs: number) => void;
 }
 
-export interface AcquiredRoute extends RoutePolicy {
-  permit: RetryPermit;
-}
-
-function abortReason(signal: AbortSignal): unknown {
-  return signal.reason ?? new DOMException('Operation cancelled', 'AbortError');
+interface AcquiredRoute extends RoutePolicy {
+  readonly permit: RetryPermit;
 }
 
 /**
@@ -59,123 +68,126 @@ function abortReason(signal: AbortSignal): unknown {
  * becomes the recovery probe. A successful probe releases the other calls;
  * another route failure increases the shared backoff. The gate does not decide
  * how many times a node retries—that remains the node retry loop's concern.
+ *
+ * Route state is mutated only from within Effect steps on one runtime, so a
+ * plain map is atomic here; the probe timer is a fiber in the gate's scope
+ * that sleeps on the runtime `Clock`, and a waiting call is a `Deferred` the
+ * probe fiber or a healthy success completes.
  */
 export class ModelRetryGate {
+  /**
+   * Build the gate in a scope: its probe fibers die with the scope, and
+   * every call still waiting on a permit when it closes is interrupted.
+   */
+  static readonly make: Effect.Effect<ModelRetryGate, never, Scope.Scope> =
+    Effect.gen(function* () {
+      const gate = new ModelRetryGate(yield* Effect.scope);
+      yield* Effect.addFinalizer(() => gate.close());
+      return gate;
+    });
+
   private readonly routes = new Map<string, RouteState>();
-  private disposed = false;
+  private closed = false;
+
+  private constructor(private readonly scope: Scope.Scope) {}
 
   /**
-   * Run `operation` gated on every route in `routes`, narrowest first (see
-   * {@link acquireAll}). The tuple type is non-empty because an empty list
-   * would run the operation entirely ungated.
+   * Run `attempt` gated on every route in `routes`, narrowest first (see
+   * {@link acquireAll}), then record what its exit proved about them: a
+   * success marks every route reachable, an interruption hands the permits
+   * back, a failure is classified per route. The tuple type is non-empty
+   * because an empty list would run the attempt entirely ungated.
    */
-  async run<T>(
+  withRoutes(
     routes: readonly [RoutePolicy, ...RoutePolicy[]],
-    options: RunOptions,
-    operation: () => Promise<T>,
-  ): Promise<T> {
-    const acquired = await this.acquireAll(routes, options);
-    const outcome = await operation().then(
-      (value) => ({ ok: true as const, value }),
-      (error: unknown) => ({ ok: false as const, error }),
-    );
-    if (outcome.ok) {
-      this.settle(acquired, { kind: 'success' }, options.baseBackoffMs);
-      return outcome.value;
-    }
-    this.settle(
-      acquired,
-      options.signal.aborted
-        ? { kind: 'abandoned' }
-        : { kind: 'failure', error: outcome.error as Error },
-      options.baseBackoffMs,
-    );
-    throw outcome.error;
+    options: RouteOptions,
+  ): <A, E, R>(attempt: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
+    return (attempt) =>
+      Effect.uninterruptibleMask((restore) =>
+        Effect.gen({ self: this }, function* () {
+          const acquired = yield* restore(
+            this.acquireAll(routes, options.onWait),
+          );
+          const exit = yield* Effect.exit(restore(attempt));
+          yield* this.settle(acquired, exit, options.baseBackoffMs);
+          return yield* exit;
+        }),
+      );
   }
 
-  /**
-   * Record what one gated attempt proved about its routes. A success marks
-   * every route reachable; an abandoned attempt (the run stopped) hands its
-   * permits back; a failure is classified per route.
-   */
-  settle(
+  private settle(
     acquired: readonly AcquiredRoute[],
-    outcome:
-      | { readonly kind: 'success' }
-      | { readonly kind: 'abandoned' }
-      | { readonly kind: 'failure'; readonly error: Error },
+    exit: Exit.Exit<unknown, unknown>,
     baseBackoffMs: number,
-  ): void {
-    if (outcome.kind === 'success') {
-      for (const entry of acquired) {
-        this.markReachable(entry.key, entry.permit);
-      }
-      return;
+  ): Effect.Effect<void> {
+    if (Exit.isSuccess(exit)) {
+      return Effect.forEach(
+        acquired,
+        (entry) => this.markReachable(entry.key, entry.permit),
+        { discard: true },
+      );
     }
-    if (outcome.kind === 'abandoned') {
-      for (const entry of acquired) {
-        this.abandon(entry.key, entry.permit);
-      }
-      return;
-    }
-    for (const entry of acquired) {
-      const failure = entry.classifyFailure(outcome.error);
-      if (failure) {
-        this.markRouteFailure(entry.key, entry.permit, baseBackoffMs, failure);
-      } else if (entry.isReachableFailure?.(outcome.error)) {
-        this.markReachable(entry.key, entry.permit);
-      } else if (entry.permit.probe) {
-        // An unclassified failure does not prove that a recovering route is
-        // reachable. Keep the cohort closed and hand probe ownership to one
-        // waiter; shared credential failures can otherwise release every
-        // peer before their out-of-gate recovery finishes.
-        this.abandon(entry.key, entry.permit);
-      } else {
+    if (Cause.hasInterrupts(exit.cause)) return this.abandonAll(acquired);
+    const error = ensureError(Cause.squash(exit.cause));
+    return Effect.forEach(
+      acquired,
+      (entry) => {
+        const failure = entry.classifyFailure(error);
+        if (failure) {
+          return this.markRouteFailure(
+            entry.key,
+            entry.permit,
+            baseBackoffMs,
+            failure,
+          );
+        }
+        if (entry.isReachableFailure?.(error)) {
+          return this.markReachable(entry.key, entry.permit);
+        }
+        if (entry.permit.probe) {
+          // An unclassified failure does not prove that a recovering route is
+          // reachable. Keep the cohort closed and hand probe ownership to one
+          // waiter; shared credential failures can otherwise release every
+          // peer before their out-of-gate recovery finishes.
+          return this.abandon(entry.key, entry.permit);
+        }
         // A current healthy permit reached the operation boundary. Even when
         // its error is local to that request, it proves that an older
         // shared-route failure streak no longer describes this route.
-        this.markReachable(entry.key, entry.permit);
-      }
-    }
+        return this.markReachable(entry.key, entry.permit);
+      },
+      { discard: true },
+    );
   }
 
   /**
    * Acquires narrower additional scopes before the primary route. A
    * model-specific probe may wait for its shared wire route without blocking
    * healthy sibling models. A later wait can also make an earlier permit
-   * stale, so validate the complete set before sending. Rejects with the
-   * signal's reason when the wait is aborted, and with an AbortError when
-   * the gate is disposed.
+   * stale, so validate the complete set before sending. An interruption while
+   * waiting hands every permit already held back.
    */
-  async acquireAll(
+  private acquireAll(
     routes: readonly RoutePolicy[],
-    options: Pick<RunOptions, 'signal' | 'onWait'>,
-  ): Promise<AcquiredRoute[]> {
-    while (true) {
-      const acquired: AcquiredRoute[] = [];
-      try {
+    onWait: RouteOptions['onWait'],
+  ): Effect.Effect<AcquiredRoute[]> {
+    const held: AcquiredRoute[] = [];
+    return Effect.gen({ self: this }, function* () {
+      while (true) {
         for (const route of routes) {
-          acquired.push({
+          held.push({
             ...route,
-            permit: await this.acquire(route.key, options),
+            permit: yield* this.acquire(route.key, onWait),
           });
         }
-      } catch (error) {
-        for (const entry of acquired) {
-          this.abandon(entry.key, entry.permit);
+        if (
+          held.every((entry) => this.isCurrentPermit(entry.key, entry.permit))
+        ) {
+          return held.splice(0);
         }
-        throw error;
+        yield* this.abandonAll(held.splice(0));
       }
-
-      if (
-        acquired.every((entry) => this.isCurrentPermit(entry.key, entry.permit))
-      ) {
-        return acquired;
-      }
-      for (const entry of acquired) {
-        this.abandon(entry.key, entry.permit);
-      }
-    }
+    }).pipe(Effect.onInterrupt(() => this.abandonAll(held.splice(0))));
   }
 
   private isCurrentPermit(route: string, permit: RetryPermit): boolean {
@@ -184,62 +196,67 @@ export class ModelRetryGate {
     return permit.probe ? state.phase === 'probing' : state.phase === 'healthy';
   }
 
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    const error = new DOMException('Model retry gate disposed', 'AbortError');
-    for (const state of this.routes.values()) {
-      if (state.timer) clearTimeout(state.timer);
-      for (const waiter of state.waiters.splice(0)) {
-        waiter.signal.removeEventListener('abort', waiter.onAbort);
-        waiter.reject(error);
-      }
-    }
-    this.routes.clear();
+  /** Interrupt every call still waiting; the scope interrupts the probe fibers. */
+  private close(): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      this.closed = true;
+      const waiting = [...this.routes.values()].flatMap((state) =>
+        state.waiters.splice(0),
+      );
+      this.routes.clear();
+      return Effect.forEach(
+        waiting,
+        (waiter) => Deferred.interrupt(waiter.permit),
+        { discard: true },
+      );
+    });
   }
 
+  /**
+   * A healthy route admits immediately. Otherwise the call joins the route's
+   * waiters until the probe fiber picks it or a success releases the cohort;
+   * joining and waiting are one uninterruptible step, so an interruption
+   * always finds the waiter registered and removes it.
+   */
   private acquire(
     route: string,
-    options: Pick<RunOptions, 'signal' | 'onWait'>,
-  ): Promise<RetryPermit> {
-    if (this.disposed) {
-      return Promise.reject(
-        new DOMException('Model retry gate disposed', 'AbortError'),
-      );
-    }
+    onWait: RouteOptions['onWait'],
+  ): Effect.Effect<RetryPermit> {
+    return Effect.uninterruptibleMask((restore) =>
+      Effect.gen({ self: this }, function* () {
+        if (this.closed) return yield* Effect.interrupt;
+        const healthyPermit = this.acquireHealthy(route);
+        if (healthyPermit) return healthyPermit;
+        // Safe: acquireHealthy only returns undefined when it found an
+        // existing, non-healthy state for `route` (the create-on-miss branch
+        // always returns a permit), so the state it read is still in the map.
+        const state = this.routes.get(route)!;
 
-    const healthyPermit = this.acquireHealthy(route);
-    if (healthyPermit) return Promise.resolve(healthyPermit);
-    // Safe: acquireHealthy only returns undefined when it found an existing,
-    // non-healthy state for `route` (the create-on-miss branch always returns
-    // a permit), so the state it read is still in the map here.
-    const state = this.routes.get(route)!;
+        const now = yield* Clock.currentTimeMillis;
+        onWait?.(Math.max(0, state.retryAt - now));
+        const waiter: Waiter = {
+          permit: Deferred.makeUnsafe<RetryPermit>(),
+          granted: undefined,
+        };
+        state.waiters.push(waiter);
+        yield* this.scheduleProbe(state);
+        return yield* restore(Deferred.await(waiter.permit)).pipe(
+          Effect.onInterrupt(() => this.leave(state, waiter)),
+        );
+      }),
+    );
+  }
 
-    if (options.signal.aborted) {
-      return Promise.reject(abortReason(options.signal));
-    }
-
-    const delayMs = Math.max(0, state.retryAt - Date.now());
-    options.onWait?.(delayMs);
-    const permit = pDefer<RetryPermit>();
-    const waiter: WaitingAttempt = {
-      resolve: permit.resolve,
-      reject: permit.reject,
-      signal: options.signal,
-      onAbort: () => {
-        const index = state.waiters.indexOf(waiter);
-        if (index >= 0) state.waiters.splice(index, 1);
-        if (state.waiters.length === 0 && state.timer) {
-          clearTimeout(state.timer);
-          state.timer = undefined;
-        }
-        permit.reject(abortReason(options.signal));
-      },
-    };
-    options.signal.addEventListener('abort', waiter.onAbort, { once: true });
-    state.waiters.push(waiter);
-    this.scheduleProbe(state);
-    return permit.promise;
+  /** The interrupted waiter leaves its route; a probe it was granted moves on. */
+  private leave(state: RouteState, waiter: Waiter): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      const index = state.waiters.indexOf(waiter);
+      if (index >= 0) state.waiters.splice(index, 1);
+      if (waiter.granted?.probe) {
+        return this.abandonRoute(state, waiter.granted);
+      }
+      return state.waiters.length === 0 ? this.cancelProbe(state) : Effect.void;
+    });
   }
 
   private acquireHealthy(route: string): RetryPermit | undefined {
@@ -250,7 +267,7 @@ export class ModelRetryGate {
       phase: 'healthy' as const,
       failures: 0,
       retryAt: 0,
-      timer: undefined,
+      probe: undefined,
       waiters: [],
     };
     this.routes.set(route, healthyState);
@@ -265,98 +282,144 @@ export class ModelRetryGate {
     permit: RetryPermit,
     baseBackoffMs: number,
     failure: RouteFailure,
-  ): void {
-    const state = this.routes.get(route);
-    if (!state || permit.version !== state.version) return;
-    if (state.phase !== 'healthy' && !permit.probe) return;
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const state = this.routes.get(route);
+      if (!state || permit.version !== state.version) return;
+      if (state.phase !== 'healthy' && !permit.probe) return;
 
-    state.version += 1;
-    state.phase = 'cooling';
-    state.failures += 1;
-    state.retryAt =
-      Date.now() +
-      Math.max(
-        jitteredExponentialBackoffMs(
-          baseBackoffMs,
-          state.failures,
-          MAX_BACKOFF_MS,
-        ),
-        failure.retryAfterMs ?? 0,
-      );
-    this.scheduleProbe(state);
+      state.version += 1;
+      state.phase = 'cooling';
+      state.failures += 1;
+      state.retryAt =
+        (yield* Clock.currentTimeMillis) +
+        Math.max(
+          jitteredExponentialBackoffMs(
+            baseBackoffMs,
+            state.failures,
+            MAX_BACKOFF_MS,
+          ),
+          failure.retryAfterMs ?? 0,
+        );
+      yield* this.scheduleProbe(state);
+    });
   }
 
-  private markReachable(route: string, permit: RetryPermit): void {
-    const state = this.routes.get(route);
-    if (!state) return;
-    if (state.phase === 'healthy') {
-      // A success admitted while the route was already healthy proves a clean
-      // round-trip, so the failure streak ends here — not on probe success,
-      // whose released cohort may immediately re-fail (a rate window that fits
-      // one probe rarely fits the herd). Resetting on probe success would cap
-      // the shared backoff at its base forever in exactly that cycle.
-      if (permit.version === state.version) {
-        state.failures = 0;
+  private markReachable(
+    route: string,
+    permit: RetryPermit,
+  ): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      const state = this.routes.get(route);
+      if (!state) return Effect.void;
+      if (state.phase === 'healthy') {
+        // A success admitted while the route was already healthy proves a
+        // clean round-trip, so the failure streak ends here — not on probe
+        // success, whose released cohort may immediately re-fail (a rate
+        // window that fits one probe rarely fits the herd). Resetting on probe
+        // success would cap the shared backoff at its base forever in exactly
+        // that cycle.
+        if (permit.version === state.version) {
+          state.failures = 0;
+        }
+        return Effect.void;
       }
-      return;
-    }
-    if (permit.version !== state.version) return;
-    if (state.phase === 'probing' && !permit.probe) return;
+      if (permit.version !== state.version) return Effect.void;
+      if (state.phase === 'probing' && !permit.probe) return Effect.void;
 
-    state.version += 1;
-    state.phase = 'healthy';
-    state.retryAt = 0;
-    if (state.timer) clearTimeout(state.timer);
-    state.timer = undefined;
-    for (const waiter of state.waiters.splice(0)) {
-      waiter.signal.removeEventListener('abort', waiter.onAbort);
-      waiter.resolve({
-        version: state.version,
-        probe: false,
-      });
-    }
+      state.version += 1;
+      state.phase = 'healthy';
+      state.retryAt = 0;
+      const released: RetryPermit = { version: state.version, probe: false };
+      const waiting = state.waiters.splice(0);
+      return this.cancelProbe(state).pipe(
+        Effect.andThen(
+          Effect.forEach(
+            waiting,
+            (waiter) => {
+              waiter.granted = released;
+              return Deferred.succeed(waiter.permit, released);
+            },
+            { discard: true },
+          ),
+        ),
+      );
+    });
   }
 
-  private abandon(route: string, permit: RetryPermit): void {
-    const state = this.routes.get(route);
-    if (
-      !state ||
-      !permit.probe ||
-      permit.version !== state.version ||
-      state.phase !== 'probing'
-    ) {
-      return;
-    }
-
-    state.phase = 'cooling';
-    state.retryAt = Date.now();
-    this.scheduleProbe(state);
+  private abandonAll(acquired: readonly AcquiredRoute[]): Effect.Effect<void> {
+    return Effect.forEach(
+      acquired,
+      (entry) => this.abandon(entry.key, entry.permit),
+      { discard: true },
+    );
   }
 
-  private scheduleProbe(state: RouteState): void {
+  private abandon(route: string, permit: RetryPermit): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      const state = this.routes.get(route);
+      return state ? this.abandonRoute(state, permit) : Effect.void;
+    });
+  }
+
+  /** An unused probe permit reopens cooling so the next waiter probes at once. */
+  private abandonRoute(
+    state: RouteState,
+    permit: RetryPermit,
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (
+        !permit.probe ||
+        permit.version !== state.version ||
+        state.phase !== 'probing'
+      ) {
+        return;
+      }
+      state.phase = 'cooling';
+      state.retryAt = yield* Clock.currentTimeMillis;
+      yield* this.scheduleProbe(state);
+    });
+  }
+
+  private cancelProbe(state: RouteState): Effect.Effect<void> {
+    const probe = state.probe;
+    state.probe = undefined;
+    return probe?.fiber ? Fiber.interrupt(probe.fiber) : Effect.void;
+  }
+
+  /**
+   * Fork the route's one probe fiber into the gate's scope: it sleeps until
+   * `retryAt` on the runtime clock, then hands the probe permit to the
+   * oldest waiter still queued.
+   */
+  private scheduleProbe(state: RouteState): Effect.Effect<void> {
     if (
-      this.disposed ||
       state.phase !== 'cooling' ||
-      state.timer ||
+      state.probe ||
       state.waiters.length === 0
     ) {
-      return;
+      return Effect.void;
     }
-
-    state.timer = setTimeout(
-      () => {
-        state.timer = undefined;
-        if (this.disposed || state.phase !== 'cooling') return;
-        const waiter = state.waiters.shift();
-        if (!waiter) return;
-        waiter.signal.removeEventListener('abort', waiter.onAbort);
-        state.phase = 'probing';
-        waiter.resolve({
-          version: state.version,
-          probe: true,
-        });
-      },
-      Math.max(0, state.retryAt - Date.now()),
+    const scheduled: ScheduledProbe = { fiber: undefined };
+    state.probe = scheduled;
+    const probe = Effect.gen(function* () {
+      // A probe handed on by an abandoning holder is due now: grant it on
+      // this fiber's first step rather than through a zero-length sleep.
+      const delayMs = state.retryAt - (yield* Clock.currentTimeMillis);
+      if (delayMs > 0) yield* Effect.sleep(delayMs);
+      if (state.probe !== scheduled) return;
+      state.probe = undefined;
+      if (state.phase !== 'cooling') return;
+      const waiter = state.waiters.shift();
+      if (!waiter) return;
+      state.phase = 'probing';
+      waiter.granted = { version: state.version, probe: true };
+      yield* Deferred.succeed(waiter.permit, waiter.granted);
+    });
+    return Effect.forkIn(probe, this.scope).pipe(
+      Effect.map((fiber) => {
+        scheduled.fiber = fiber;
+      }),
     );
   }
 }

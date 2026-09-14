@@ -1,21 +1,17 @@
 /**
- * MainView state and data schemas (option rows, banners,
- * file state, and event detail shapes). Kept free of any IPC message wrappers
- * so the message modules can compose these without circular dependencies.
+ * MainView state and data schemas (option rows, banners, and file state).
+ * Kept free of any IPC message wrappers so the message modules can compose
+ * these without circular dependencies.
  */
 import { z } from 'zod';
 
+import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { AgentCategorySchema, AgentSourceSchema } from '@shared/schemas/agent';
 import {
   TEXRA_ICON_CANONICAL_NAMES,
   type TeXRAIconName,
 } from '@shared/wa/iconNames';
-import { requiredFileListFields } from '../fileFields';
-import {
-  CurrentFileTypeSchema,
-  DocumentFileTypeSchema,
-  MultipleDocumentFileTypeSchema,
-} from '../fileTypes';
+import { DocumentFileTypeSchema } from '../fileTypes';
 import { ToolConfigFieldsSchema } from '../toolConfig';
 
 // ============================================================
@@ -58,6 +54,8 @@ const ModelAvailabilityKindSchema = z.enum([
   'retired',
   // ChatGPT-subscription (Codex) access via the user's own OAuth session.
   'subscription-access',
+  // The same, on the user's Grok (xAI) subscription.
+  'xai-subscription-access',
   // Editor-hosted Copilot access is keyless but distinct from ChatGPT.
   // Permission state is reported by the VS Code host.
   'copilot-access',
@@ -71,17 +69,90 @@ const ModelAvailabilityKindSchema = z.enum([
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 
 /**
+ * What a kind means: the label a surface shows for it, whether a run can use
+ * the model, and whether the block is a missing key. Declared once here, next
+ * to the kind, so the answer is carried on the wire as the kind alone and
+ * every host reads the same table instead of four pre-fanned fields.
+ *
+ * Written with `as const satisfies` so each `available` literal survives for
+ * `computeModelOptions`'s derivation of the unavailable kinds, while a missing
+ * or misshapen kind is still a compile error, and frozen to the depth it is
+ * read at: the table crosses into every host that decides whether a model can
+ * run, and `readonly` is compile-time only.
+ */
+export const MODEL_AVAILABILITY_STATUS = {
+  'openrouter-key': {
+    label: 'OpenRouter key',
+    available: true,
+    requiresKey: false,
+  },
+  'provider-key': { label: 'API key set', available: true, requiresKey: false },
+  'missing-key': {
+    label: 'Missing API key',
+    available: false,
+    requiresKey: true,
+  },
+  'subscription-access': {
+    label: CHATGPT_AUTH.subscriptionLabel,
+    available: true,
+    requiresKey: false,
+  },
+  'xai-subscription-access': {
+    label: GROK_AUTH.subscriptionLabel,
+    available: true,
+    requiresKey: false,
+  },
+  'copilot-access': {
+    label: 'Copilot subscription',
+    available: true,
+    requiresKey: false,
+  },
+  'copilot-consent-required': {
+    label: 'Copilot approval required',
+    available: false,
+    requiresKey: false,
+  },
+  'copilot-unavailable': {
+    label: 'Copilot unavailable',
+    available: false,
+    requiresKey: false,
+  },
+  // Only the OpenRouter route produces this kind (`computeModelOptions`
+  // resolves it from `isOpenRouterRoutingUnsupported`), so the one label the
+  // kind carries names that route.
+  'provider-unavailable': {
+    label: 'Unavailable through OpenRouter',
+    available: false,
+    requiresKey: false,
+  },
+  retired: { label: 'Retired', available: false, requiresKey: false },
+  'unknown-model': {
+    label: 'Unknown model',
+    available: false,
+    requiresKey: false,
+  },
+} as const satisfies Record<
+  ModelAvailabilityKind,
+  {
+    readonly label: string;
+    readonly available: boolean;
+    readonly requiresKey: boolean;
+  }
+>;
+for (const status of Object.values(MODEL_AVAILABILITY_STATUS))
+  Object.freeze(status);
+Object.freeze(MODEL_AVAILABILITY_STATUS);
+
+/**
  * Resolved per-model access. Computed once by `computeModelOptionsData` and
  * shared verbatim across hosts (CLI picker, extension Models tab) so
- * availability and routing are never re-derived at render time.
+ * availability and routing are never re-derived at render time: the kind is
+ * the whole verdict, and {@link MODEL_AVAILABILITY_STATUS} words it.
  */
 export const ModelAvailabilityFieldsSchema = z.object({
   availability: ModelAvailabilityKindSchema.optional(),
-  availabilityLabel: z.string().optional(),
   /** Effective request route for a model that can use multiple backends. */
   routeLabel: z.string().optional(),
-  requiresKey: z.boolean().optional(),
-  disabled: z.boolean().optional(),
 });
 export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
   provider: z.string().optional(),
@@ -101,7 +172,10 @@ export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
  * picker can never drift apart on what "available" means.
  */
 export function isModelOptionAvailable(model: ModelOptionData): boolean {
-  return model.disabled !== true && model.requiresKey !== true;
+  return (
+    model.availability === undefined ||
+    MODEL_AVAILABILITY_STATUS[model.availability].available
+  );
 }
 
 export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
@@ -149,7 +223,6 @@ export type BannerState = z.infer<typeof BannerStateSchema>;
 
 export const ApiKeyBannerDataSchema = z.object({
   provider: z.string().nullish(),
-  requiresKey: z.boolean().nullish(),
 });
 const ApiKeyBannerStateSchema = BannerStateSchema.extend(
   ApiKeyBannerDataSchema.shape,
@@ -182,7 +255,7 @@ export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 // File State Schemas
 // ============================================================
 
-export const FileSelectConfigSchema = z.object({
+const FileSelectConfigSchema = z.object({
   type: DocumentFileTypeSchema,
   label: z.string(),
   icon: z.enum(TEXRA_ICON_CANONICAL_NAMES),
@@ -207,77 +280,6 @@ export const FileOptionsSchema = z.object({
   commit: z.array(z.string()),
 });
 export type FileOptions = z.infer<typeof FileOptionsSchema>;
-
-// Enumerates the four multi-file keys so listId fields below name a file list.
-const MultiFilesKeySchema = z.object(requiredFileListFields).keyof();
-
-const StringValueDetailSchema = z.object({
-  value: z.string(),
-});
-type StringValueDetail = z.infer<typeof StringValueDetailSchema>;
-
-export type BaseFileChangeDetail = StringValueDetail;
-export type EditedFileChangeDetail = StringValueDetail;
-export type CommitChangeDetail = StringValueDetail;
-
-const FileActionDetailSchema = z.object({
-  type: CurrentFileTypeSchema,
-});
-export type FileActionDetail = z.infer<typeof FileActionDetailSchema>;
-
-const MultipleFilesActionDetailSchema = z.object({
-  listId: MultiFilesKeySchema,
-});
-export type MultipleFilesActionDetail = z.infer<
-  typeof MultipleFilesActionDetailSchema
->;
-
-const MultipleFilesTypeActionDetailSchema = z.object({
-  type: MultipleDocumentFileTypeSchema,
-});
-export type MultipleFilesTypeActionDetail = z.infer<
-  typeof MultipleFilesTypeActionDetailSchema
->;
-
-const RemoveFileDetailSchema = z.object({
-  listId: MultiFilesKeySchema,
-  file: z.string(),
-});
-export type RemoveFileDetail = z.infer<typeof RemoveFileDetailSchema>;
-
-const ReorderFilesDetailSchema = z.object({
-  listId: MultiFilesKeySchema,
-  files: z.array(z.string()),
-});
-export type ReorderFilesDetail = z.infer<typeof ReorderFilesDetailSchema>;
-
-const CheckboxChangeDetailSchema = z.object({
-  id: z.string(),
-  checked: z.boolean(),
-});
-export type CheckboxChangeDetail = z.infer<typeof CheckboxChangeDetailSchema>;
-
-/**
- * Per-banner action details. Each banner's detail carries its own action
- * literal set plus only the fields that banner fills, so handlers receive a
- * closed union instead of a shared loose `{ action: string }` type that
- * required casts at every dispatch site.
- */
-const ApiKeyBannerActionDetailSchema = z.object({
-  action: z.enum(['set', 'guide']),
-  provider: z.string().nullish(),
-});
-export type ApiKeyBannerActionDetail = z.infer<
-  typeof ApiKeyBannerActionDetailSchema
->;
-
-const AgentConfigBannerActionDetailSchema = z.object({
-  action: z.enum(['edit', 'dir', 'docs']),
-  customDirSet: z.boolean().nullish(),
-});
-export type AgentConfigBannerActionDetail = z.infer<
-  typeof AgentConfigBannerActionDetailSchema
->;
 
 export const GettingStartedActionSchema = z.enum([
   'runSetup',
@@ -320,31 +322,4 @@ export const GETTING_STARTED_ACTION_PRESENTATION = {
 } as const satisfies Record<
   GettingStartedAction,
   { readonly label: string; readonly icon: TeXRAIconName }
->;
-
-const GettingStartedActionDetailSchema = z.object({
-  action: GettingStartedActionSchema,
-});
-export type GettingStartedActionDetail = z.infer<
-  typeof GettingStartedActionDetailSchema
->;
-
-const InstallGuideDetailSchema = z.object({
-  tool: z.string(),
-});
-export type InstallGuideDetail = z.infer<typeof InstallGuideDetailSchema>;
-
-const LatexDiffsActionDetailSchema = z.object({
-  action: z.enum([
-    'latexdiff',
-    'latexdiffvc',
-    'packLatexdiffvc',
-    'cleanLatexdiffvc',
-    'merge',
-    'compare',
-    'accept',
-  ]),
-});
-export type LatexDiffsActionDetail = z.infer<
-  typeof LatexDiffsActionDetailSchema
 >;

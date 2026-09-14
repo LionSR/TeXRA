@@ -6,7 +6,7 @@ import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
-import { MainViewEvents } from '../events';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 
 @customElement('login-banner')
 export class LoginBanner extends LitElement {
@@ -63,11 +63,13 @@ export class LoginBanner extends LitElement {
   @property({ type: Boolean, reflect: true }) visible = false;
 
   private handleSignIn(): void {
-    this.dispatchEvent(MainViewEvents.signIn());
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'signIn' }));
   }
 
   private handleDismiss(): void {
-    this.dispatchEvent(MainViewEvents.dismissLogin());
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'dismissBanner', banner: 'login' }),
+    );
   }
 
   override render(): TemplateResult {

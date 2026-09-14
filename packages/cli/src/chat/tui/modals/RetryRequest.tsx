@@ -1,9 +1,6 @@
 import { Text, useWindowSize } from 'ink';
 
-import {
-  cliRetryApiSwitchDecision,
-  isCliApiSwitchableRetry,
-} from '@cli/runtime/approval/approvalPrompts';
+import { isCliApiSwitchableRetry } from '@cli/runtime/approval/approvalPrompts';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
@@ -12,20 +9,18 @@ import {
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '@cli/tui/ui/theme';
 import { isApiProvider } from '@model/apiProviders';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import {
-  type ApprovalDecision,
-  type RetryApprovalPayload,
-} from '../state/approvalQueue';
+import { type RetryApprovalPayload } from '../state/approvalQueue';
 
 interface RetryRequestProps {
   readonly availableRows?: number;
   readonly payload: RetryApprovalPayload;
-  readonly onDecide: (decision: ApprovalDecision) => void;
+  readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
 const RETRY_REQUEST_TITLE = 'Retry the failed call?';
@@ -47,9 +42,15 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const isApiSwitchable = isCliApiSwitchableRetry(data);
   const canSwitchToPersonalKey =
     isApiSwitchable && tui.personalApiKeyAvailable === true;
-  // Which subscription/plan toggle the switch disables is decided next to the
-  // classifiers in approvalPrompts.ts; the modal only renders the action.
-  const switchDecision: ApprovalDecision = cliRetryApiSwitchDecision(data);
+  // The modal only names the answer. `y` retries on the credentials the run
+  // already has; `approvalDecisionArms` turns a retry on personal credentials
+  // into the host's `useOwnApiKey`, which stores the key and turns the quota
+  // route off before retrying.
+  const retryDecision: SurfaceDecision = { action: 'retry' };
+  const switchDecision: SurfaceDecision = {
+    action: 'retry',
+    credentials: 'personal',
+  };
   let guidanceText: string | undefined;
   if (isApiSwitchable && !canSwitchToPersonalKey) {
     const requestedProvider = data.errorDetails?.provider;
@@ -82,6 +83,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
       color={COLOR_WARNING}
       title={RETRY_REQUEST_TITLE}
       approveLabel="retry"
+      approveDecision={retryDecision}
       rejectLabel="dismiss"
       rejectionMode="immediate"
       extraActions={

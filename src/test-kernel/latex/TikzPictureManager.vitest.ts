@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { installPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { pathToLocation } from '@utils/files/fileLocation';
 
 async function extractFromPaper(content: string) {
   await installPlatform({
-    workspacePath: '/workspace',
+    workspacePath: fakePath('workspace'),
     files: { '/workspace/paper.tex': content },
   });
   return TikzPictureManager.extract(pathToLocation('paper.tex'));

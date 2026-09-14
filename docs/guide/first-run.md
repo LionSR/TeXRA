@@ -6,9 +6,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 
 # First run
 
-You have TeXRA installed. This page walks you through running one
-agent, `polish`, on a real `.tex` file. It takes about five minutes and
-covers the extension and the CLI side by side.
+With TeXRA installed, this walkthrough guides you through running your first agent—`polish`—on a `.tex` document. The process takes under five minutes and illustrates both the VS Code extension and the terminal CLI side by side.
 
 If you don't have TeXRA yet, read the [installation guide](./installation.md).
 
@@ -39,13 +37,13 @@ A credential is the one step no agent can do for you. Three ways in:
 
 ## What you'll do
 
-1. Get a sample `.tex` file.
-2. Run the `polish` agent with one instruction.
-3. Read the diff.
+1.  Get a sample `.tex` file.
+2.  Run the `polish` agent with one instruction.
+3.  Read the diff.
 
 ## Get a sample file
 
-If you already have a draft you want to polish, skip this step.
+If you already have a working draft, skip this step.
 Otherwise:
 
 ### In VS Code
@@ -133,8 +131,9 @@ rereads its own output and revises again.
 
 Workflow agents like `polish` do not call tools. They read input, run
 their pipeline, and write a diff. The next step up, tool-use agents,
-can read across your project, search literature, compile LaTeX, and
-verify their work. Read the [built-in agents catalog](./built-in-agents.md).
+can read across your project, search literature, verify algebra in
+Wolfram, prove theorems in Lean 4, and compile LaTeX. Read the
+[built-in agents catalog](./built-in-agents.md).
 
 ## Next steps
 

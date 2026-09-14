@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LOG_LEVELS,
+  MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
@@ -33,6 +34,7 @@ function entry(
     type,
     level: LOG_LEVELS.INFO,
     timestamp: type === STREAM_LOG_ENTRY_TYPES.GROUP_START ? 100 : 200,
+    messageType: MESSAGE_TYPES.DEFAULT,
     ...overrides,
   });
 }
@@ -91,7 +93,7 @@ describe('task-group StreamLog projection', () => {
     const taskGroups = projectTaskGroupsFromStreamLog([
       entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
         text: 'Run: auditor',
-        data: {},
+        data: { status: RUN_PHASE.RUNNING },
       }),
     ]);
     const staleIndex = new Map([['run-1', 4]]);
@@ -141,6 +143,7 @@ describe('task-group StreamLog projection', () => {
         level: LOG_LEVELS.INFO,
         timestamp: 100,
         text: 'ordinary message',
+        messageType: MESSAGE_TYPES.DEFAULT,
       },
     ]);
 

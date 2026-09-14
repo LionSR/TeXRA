@@ -1,6 +1,6 @@
 // Node imports
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
@@ -123,7 +123,7 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // `installCliProcessRuntime`), so no process runtime exists to borrow; the
   // programs are service-free. The readers themselves are Effects, and their
   // post-init callers (`resolveChatDefaults`, `readCliAgentRoster`) settle
-  // them on `effectRuntime()` instead of coming through here.
+  // them on the process runtime instead of coming through here.
   'packages/cli/src/runtime/cliConfig.ts': 1,
 };
 
@@ -163,26 +163,6 @@ function importsHostLayer(file: string): boolean {
       ) ||
       HOST_LAYER_IMPORT_PREFIXES.some((prefix) => specifier.startsWith(prefix)),
   );
-}
-
-function importsAgentModelHandlers(file: string): boolean {
-  return importSpecifiers(file).some((specifier) => {
-    if (
-      specifier === '@agent/modelHandlers' ||
-      specifier.startsWith('@agent/modelHandlers/')
-    ) {
-      return true;
-    }
-    if (!specifier.startsWith('.')) {
-      return false;
-    }
-
-    const repoRelative = toRepoPath(resolve(dirname(file), specifier));
-    return (
-      repoRelative === 'src/agent/modelHandlers' ||
-      repoRelative.startsWith('src/agent/modelHandlers/')
-    );
-  });
 }
 
 describe('VS Code-free zones never import vscode', () => {
@@ -239,17 +219,6 @@ describe('Production core never imports host layers', () => {
 
   it('actually scans production src files', () => {
     expect(productionSrcFiles().length).toBeGreaterThan(500);
-  });
-});
-
-describe('Agent core dependency direction', () => {
-  it('does not import model handler implementations', () => {
-    const offenders = sourceFilesUnder('src/agent/core')
-      .filter(importsAgentModelHandlers)
-      .map(toRepoPath)
-      .toSorted();
-
-    expect(offenders).toEqual([]);
   });
 });
 

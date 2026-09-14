@@ -7,9 +7,9 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { property, state } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 
-import { isOwnDetailsToggle } from '@shared/litControllers/detailsToggle';
+import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -24,14 +24,14 @@ export abstract class CollapsiblePanel extends LitElement {
    *  open state on context switches (e.g. switching runs). */
   @property({ type: String }) collapseKey = '';
 
-  @state() private open = false;
+  private readonly details = new DetailsOpenController(this);
 
   protected override willUpdate(changed: PropertyValues): void {
     if (
       changed.has('collapseKey') &&
       changed.get('collapseKey') !== undefined
     ) {
-      this.open = false;
+      this.details.open = false;
     }
   }
 
@@ -46,22 +46,12 @@ export abstract class CollapsiblePanel extends LitElement {
         id=${options.id}
         class="panel-collapsible is-boxed"
         summary=${options.summary}
-        ?open=${this.open}
-        @wa-show=${this.handleShow}
-        @wa-hide=${this.handleHide}
+        ?open=${this.details.open}
+        @wa-show=${this.details.handleShow}
+        @wa-hide=${this.details.handleHide}
       >
         ${options.body}
       </wa-details>
     `;
-  }
-
-  private handleShow(e: Event): void {
-    if (!isOwnDetailsToggle(e)) return;
-    this.open = true;
-  }
-
-  private handleHide(e: Event): void {
-    if (!isOwnDetailsToggle(e)) return;
-    this.open = false;
   }
 }

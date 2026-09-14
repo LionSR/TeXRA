@@ -2,7 +2,7 @@
  * Shared async polling utilities for test suites.
  */
 
-import { setImmediate, setTimeout as sleep } from 'node:timers/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 interface PollOptions {
   readonly timeoutMs?: number;
@@ -37,19 +37,6 @@ export async function pollForCondition(
     await sleep(intervalMs);
   }
   return predicate();
-}
-
-/** Poll until a recorded event with the given name appears, or throw after 10 attempts. */
-export async function waitForRecordedEvent<TEvent extends string>(
-  events: { event: TEvent; payload: unknown }[],
-  eventName: TEvent,
-): Promise<{ event: TEvent; payload: any }> {
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const event = events.find((entry) => entry.event === eventName);
-    if (event) return event;
-    await setImmediate();
-  }
-  throw new Error(`Timed out waiting for ${eventName}`);
 }
 
 /** Create a promise together with the resolvers that settle it, for tests that need to control timing externally. */

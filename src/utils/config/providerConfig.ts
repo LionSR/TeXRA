@@ -32,14 +32,6 @@ function regionSet(provider: string): boolean | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Streaming
-// ---------------------------------------------------------------------------
-
-export function getGlobalStreaming(): boolean {
-  return readPlatformSetting<boolean>(GlobalStateKey.STREAMING_GLOBAL);
-}
-
-// ---------------------------------------------------------------------------
 // Endpoint
 // ---------------------------------------------------------------------------
 
@@ -105,12 +97,6 @@ export function setGLMCodingPlan(enabled: boolean): Promise<void> {
  */
 export function getPreferKimiCode(): boolean {
   return readPlatformSetting<boolean>(GlobalStateKey.KIMI_CODE_PREFER);
-}
-
-export function getWebSocketEnabled(): boolean {
-  // WEBSOCKET_OPENAI is catalog-modeled, so its default comes from the schema
-  // via the shared accessor.
-  return readPlatformSetting<boolean>(GlobalStateKey.WEBSOCKET_OPENAI);
 }
 
 /**

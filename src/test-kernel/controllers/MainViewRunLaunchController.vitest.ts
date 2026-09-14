@@ -1,14 +1,15 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { MainViewExecuteMessage } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
+import type { HostRequest } from '@shared/session/hostRequest';
+import { LaunchSurfaceSchema } from '@shared/session/surface';
 
 const mocks = vi.hoisted(() => ({
   createTeamCatalogPorts: vi.fn(() => ({ catalog: true })),
-  prepareMainViewRunRequest: vi.fn(),
-  prepareMainViewTeamRunRequest: vi.fn(),
   resolveTeamLaunch: vi.fn(),
 }));
 
@@ -26,12 +27,8 @@ vi.mock('@common/teams/TeamPlan', () => ({
 vi.mock('@controllers/mainView/teamCatalogPorts', () => ({
   createTeamCatalogPorts: mocks.createTeamCatalogPorts,
 }));
-vi.mock('@controllers/mainView/MainViewRunController', () => ({
-  prepareMainViewRunRequest: mocks.prepareMainViewRunRequest,
-  prepareMainViewTeamRunRequest: mocks.prepareMainViewTeamRunRequest,
-}));
 
-const { prepareMainViewRunLaunch } =
+const { prepareSurfaceLaunch } =
   await import('@controllers/mainView/backend/MainViewRunLaunchController');
 
 function createHost() {
@@ -42,14 +39,21 @@ function createHost() {
   };
 }
 
-function teamMessage(teamId = 'physicist'): MainViewExecuteMessage {
+function launchRequest(
+  patch: Record<string, unknown> = {},
+): Extract<HostRequest, { kind: 'launch' }> {
   return {
-    session: { launchTarget: 'team', teamId },
+    kind: 'launch',
+    launch: LaunchSurfaceSchema.parse(patch),
+    instruction: 'Improve the draft.',
   };
 }
 
 function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
-  return Effect.runPromise(prepareMainViewRunLaunch(teamMessage(teamId), host));
+  return prepareSurfaceLaunch(
+    launchRequest({ launchTarget: 'team', selectedTeamId: teamId }),
+    host,
+  );
 }
 
 describe('main-view run launch controller', () => {
@@ -57,31 +61,70 @@ describe('main-view run launch controller', () => {
     vi.clearAllMocks();
   });
 
-  it('prepares ordinary launches without loading the team catalog', async () => {
-    const message: MainViewExecuteMessage = {};
-    const request = { agentName: 'ordinary' };
-    mocks.prepareMainViewRunRequest.mockReturnValue({
-      valid: true,
-      request,
-    });
+  it.effect('prepares ordinary launches without loading the team catalog', () =>
+    Effect.gen(function* () {
+      const { config } = yield* prepareSurfaceLaunch(
+        launchRequest({ agent: { toolUse: 'orchestrator' } }),
+        createHost(),
+      );
 
-    await expect(
-      Effect.runPromise(prepareMainViewRunLaunch(message, createHost())),
-    ).resolves.toEqual(request);
-    expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
-  });
+      expect(config).toMatchObject({
+        agent: 'orchestrator',
+        agentCategory: AgentCategory.ToolUse,
+        instruction: 'Improve the draft.',
+        outputFiles: [],
+      });
+      expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('rejects a team launch without a selected team', async () => {
-    const host = createHost();
+  it.effect(
+    'keeps missing selections explicit before schema prefaults apply',
+    () =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(
+          prepareSurfaceLaunch(launchRequest({ model: '' }), createHost()),
+        );
 
-    await expect(launchTeam(host, '')).rejects.toMatchObject({
-      _tag: 'Rejected',
-      reason: 'Select a team',
-    });
-    expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
-  });
+        expect(error).toMatchObject({
+          _tag: 'Rejected',
+          reason: 'Choose an agent, a model, and a run type first.',
+        });
+      }),
+  );
 
-  it.each([
+  it.effect('requires an input file for workflow runs', () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        prepareSurfaceLaunch(
+          launchRequest({ sessionType: 'workflow' }),
+          createHost(),
+        ),
+      );
+
+      expect(error).toMatchObject({
+        _tag: 'Rejected',
+        reason: 'Choose an input file first.',
+        docsCommand: 'file-management',
+      });
+    }),
+  );
+
+  it.effect('rejects a team launch without a selected team', () =>
+    Effect.gen(function* () {
+      const host = createHost();
+
+      const error = yield* Effect.flip(launchTeam(host, ''));
+
+      expect(error).toMatchObject({
+        _tag: 'Rejected',
+        reason: 'Select a team',
+      });
+      expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect.each([
     {
       resolution: { status: 'unknown-team' },
       expected: 'Unknown physicist',
@@ -97,86 +140,108 @@ describe('main-view run launch controller', () => {
       },
       expected: 'Unavailable physicist: critic, writer',
     },
-  ])(
-    'returns $resolution.status team failures',
-    async ({ resolution, expected }) => {
+  ])('returns $resolution.status team failures', ({ resolution, expected }) =>
+    Effect.gen(function* () {
       const host = createHost();
       mocks.resolveTeamLaunch.mockReturnValue(Effect.succeed(resolution));
 
-      await expect(launchTeam(host)).rejects.toMatchObject({
+      const error = yield* Effect.flip(launchTeam(host));
+
+      expect(error).toMatchObject({
         _tag: 'Rejected',
         reason: expected,
       });
-      expect(mocks.prepareMainViewTeamRunRequest).not.toHaveBeenCalled();
-    },
+    }),
   );
 
-  it('returns without presenting an error when team launch is cancelled', async () => {
-    const host = createHost();
-    mocks.resolveTeamLaunch.mockReturnValue(
-      Effect.succeed({ status: 'cancelled' }),
-    );
+  it.effect(
+    'returns without presenting an error when team launch is cancelled',
+    () =>
+      Effect.gen(function* () {
+        const host = createHost();
+        mocks.resolveTeamLaunch.mockReturnValue(
+          Effect.succeed({ status: 'cancelled' }),
+        );
 
-    await expect(launchTeam(host)).rejects.toMatchObject({ _tag: 'Cancelled' });
-  });
+        const error = yield* Effect.flip(launchTeam(host));
 
-  it('returns partial membership and prepares the resolved team fields', async () => {
-    const host = createHost();
-    const fields = {
-      agent: 'team-root',
-      delegationAgentScope: {
-        workflowAgentKeys: ['workflow:critic'],
-        toolUseAgentKeys: ['toolUse:team-root'],
-      },
-      cli: { multiAgentPresetId: 'physicist' },
-    };
-    const request = { agentName: 'team-root' };
-    mocks.resolveTeamLaunch.mockReturnValue(
-      Effect.succeed({
-        status: 'ready',
-        fields,
-        partial: true,
-        missingNames: ['writer'],
+        expect(error).toMatchObject({ _tag: 'Cancelled' });
       }),
-    );
-    mocks.prepareMainViewTeamRunRequest.mockReturnValue({
-      valid: true,
-      request,
-    });
-    const message = teamMessage();
+  );
 
-    await expect(
-      Effect.runPromise(prepareMainViewRunLaunch(message, host)),
-    ).resolves.toEqual(request);
-    expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');
-    expect(mocks.prepareMainViewTeamRunRequest).toHaveBeenCalledWith(
-      message,
-      fields,
-    );
-    expect(mocks.resolveTeamLaunch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        teamId: 'physicist',
-        catalog: true,
-        choose: expect.any(Function),
-        signIn: expect.any(Function),
+  it.effect(
+    'returns partial membership and builds the resolved team fields',
+    () =>
+      Effect.gen(function* () {
+        const host = createHost();
+        mocks.resolveTeamLaunch.mockReturnValue(
+          Effect.succeed({
+            status: 'ready',
+            fields: {
+              agent: 'builtInToolUse:lead',
+              delegationAgentScope: {
+                workflow: ['builtInWorkflow:writer'],
+                toolUse: ['builtInToolUse:lead'],
+              },
+              cli: { multiAgentPresetId: 'custom-team' },
+            },
+            partial: true,
+            missingNames: ['writer'],
+          }),
+        );
+
+        // The renderer's selected agent is ignored in favour of the team plan.
+        const { config } = yield* prepareSurfaceLaunch(
+          launchRequest({
+            launchTarget: 'team',
+            selectedTeamId: 'physicist',
+            agent: { toolUse: 'stale-renderer-agent' },
+          }),
+          host,
+        );
+
+        expect(config).toMatchObject({
+          agent: 'builtInToolUse:lead',
+          agentCategory: AgentCategory.ToolUse,
+          delegationAgentScope: {
+            workflow: ['builtInWorkflow:writer'],
+            toolUse: ['builtInToolUse:lead'],
+          },
+          cli: { multiAgentPresetId: 'custom-team' },
+        });
+        expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');
+        expect(mocks.resolveTeamLaunch).toHaveBeenCalledWith(
+          expect.objectContaining({
+            teamId: 'physicist',
+            catalog: true,
+            choose: expect.any(Function),
+            signIn: expect.any(Function),
+          }),
+        );
+        // The host ports stay Promise-shaped: assert them as the caller sees them.
+        const launchPorts = mocks.resolveTeamLaunch.mock.calls[0]![0];
+        expect(
+          yield* Effect.promise(() => launchPorts.choose(['writer'])),
+        ).toBe('continue');
+        expect(yield* Effect.promise(() => launchPorts.signIn())).toBe(true);
+        expect(host.chooseTeamAvailability).toHaveBeenCalledWith(['writer']);
+        expect(host.signInForRemoteAgentCatalog).toHaveBeenCalledOnce();
       }),
-    );
-    const launchPorts = mocks.resolveTeamLaunch.mock.calls[0]![0];
-    await expect(launchPorts.choose(['writer'])).resolves.toBe('continue');
-    await expect(launchPorts.signIn()).resolves.toBe(true);
-    expect(host.chooseTeamAvailability).toHaveBeenCalledWith(['writer']);
-    expect(host.signInForRemoteAgentCatalog).toHaveBeenCalledOnce();
-  });
+  );
 
-  it('surfaces catalog errors as a launch error', async () => {
-    const host = createHost();
-    mocks.resolveTeamLaunch.mockReturnValue(
-      Effect.fail(new Error('catalog unavailable')),
-    );
+  it.effect('surfaces catalog errors as a launch error', () =>
+    Effect.gen(function* () {
+      const host = createHost();
+      mocks.resolveTeamLaunch.mockReturnValue(
+        Effect.fail(new Error('catalog unavailable')),
+      );
 
-    await expect(launchTeam(host)).rejects.toMatchObject({
-      _tag: 'Rejected',
-      reason: 'Team launch failed: catalog unavailable',
-    });
-  });
+      const error = yield* Effect.flip(launchTeam(host));
+
+      expect(error).toMatchObject({
+        _tag: 'Rejected',
+        reason: 'Team launch failed: catalog unavailable',
+      });
+    }),
+  );
 });

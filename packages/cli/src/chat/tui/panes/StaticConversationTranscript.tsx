@@ -23,7 +23,7 @@ import {
   type SessionMeta,
 } from '../state/cliState';
 import {
-  ancestorPhaseLabel,
+  ancestorPositionLabel,
   sessionView,
   runLabelOf,
   runPhaseOf,
@@ -124,7 +124,8 @@ interface ChildHeader {
   readonly label: string;
   readonly modelLabel: string | null;
   readonly childKind: 'workflow script' | 'subagent';
-  readonly phaseText: string | undefined;
+  /** The ancestor's open phase or loop position, when it has one. */
+  readonly positionText: string | undefined;
   readonly parentLabel: string;
 }
 
@@ -160,7 +161,7 @@ function childHeaderFor(
       child.identity?.kind === 'multiAgentWorkflow'
         ? 'workflow script'
         : 'subagent',
-    phaseText: ancestorPhaseLabel(view, child.id),
+    positionText: ancestorPositionLabel(view, child.id),
     parentLabel: parent === undefined ? 'main' : runLabelOf(parent),
   };
 }
@@ -171,8 +172,8 @@ export function sessionHeaderIdentityLine(
 ): string {
   if (child) {
     const model = child.modelLabel ?? getModelLabel(meta.model || '-');
-    return child.phaseText
-      ? `${child.childKind}: ${child.label} · ${child.phaseText} · parent: ${child.parentLabel} · model: ${model}`
+    return child.positionText
+      ? `${child.childKind}: ${child.label} · ${child.positionText} · parent: ${child.parentLabel} · model: ${model}`
       : `${child.childKind}: ${child.label} · parent: ${child.parentLabel} · model: ${model}`;
   }
   const model = getModelLabel(meta.model || '-');

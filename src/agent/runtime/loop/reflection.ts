@@ -27,11 +27,10 @@
  * nothing can settle. A workflow that needs tools runs in the tool-use
  * family, and the reflection run's tool registry is empty by construction.
  */
-import { Cause, Effect, Exit, Ref, SynchronizedRef } from 'effect';
+import { dirname } from 'node:path';
+import { Cause, Effect, Exit, FileSystem, Ref, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { K_SLICE } from '@agent/core/constants';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import {
   compileFailuresOf,
@@ -68,7 +67,6 @@ import {
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import { supersedeLegacyFlowRecord } from '@agent/storage/resumability';
 import { logUserMessage, type StageHandle } from '@agent/trace';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
@@ -80,6 +78,7 @@ import { deriveRunOutcome } from '@shared/runs/runStatus';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   fileLocationDisplayPath,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
@@ -93,9 +92,10 @@ import {
   type RoundOutput,
   type RunOutcome,
   type RunStorageFileLocation,
+  type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -110,6 +110,7 @@ import { ModelInvoker, turnText } from '../ModelInvoker';
 import {
   appendRow,
   haltedStepRow,
+  NOT_RESUMABLE_MESSAGE,
   reflectionFlowState,
   reflectionSnapshotRow,
   runtimeSnapshotRow,
@@ -120,11 +121,11 @@ import {
 import type { BoundModel } from '../run/modelBinding';
 
 // Reflection owns conversation limits and document completion, not the provider.
+/** Length for preview slices of tool output and responses. */
+const K_SLICE = 200;
 const CONTINUE_LIMIT = 10;
 const INPUT_TOKEN_LIMIT = 1500000;
 const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
-const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release. Start a new run instead.';
 
 export interface ReflectionStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
@@ -174,7 +175,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 ): Effect.fn.Return<
   ReflectionResult,
   Error,
-  AgentRun | RunLedger | ModelInvoker
+  AgentRun | RunLedger | ModelInvoker | FileSystem.FileSystem
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -209,7 +210,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     runId,
     fileService,
   );
-  const promptBuilder = new PromptBuilder(prompt, run.userVarChannels, logger);
+  const promptBuilder = new PromptBuilder(
+    prompt,
+    run.userVarChannels,
+    run.session.roots.workspace,
+    logger,
+  );
   const latexMediaManager = new LatexMediaManager(logger, fileService);
   const totalRounds = Math.max(
     setting.rounds ?? 2,
@@ -328,29 +334,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   };
 
   const fresh = (bound: BoundModel): RunState => ({
-    commit: 0,
-    snapshotCommit: null,
-    rowsBeforeSnapshot: 0,
+    ...freshRunState(0),
     family: 'reflection',
-    step: null,
-    outcome: null,
-    phase: null,
-    round: 0,
-    turn: 0,
-    continuationIndex: 0,
     modelId: bound.modelId,
-    modelHandlerCompatibilityKey: bound.compatibilityKey,
-    lastError: null,
-    pendingRetry: null,
-    messages: [],
-    continuation: null,
-    openAttempt: null,
-    lastTurn: null,
-    pendingResponse: null,
-    pendingIntents: {},
-    approvals: {},
-    usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
-    flow: null,
+    modelCompatibilityKey: bound.compatibilityKey,
+    // The launch's own-API-key choice enters the ledger with the opening
+    // snapshot, so every later binding and every resume reads it back.
+    declinedRoutes: run.declinedRoutes,
   });
 
   // -------------------------------------------------------------- opening
@@ -367,7 +357,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
     }
-    yield* supersedeLegacyFlowRecord(runId, session, logger);
     const bound = yield* SynchronizedRef.get(run.model);
     const opened = yield* ledger.appendBatch(runId, null, [
       reflectionSnapshotRow(runId, fresh(bound), {
@@ -375,7 +364,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         round: 0,
         runtime: {
           modelId: bound.modelId,
-          modelHandlerCompatibilityKey: bound.compatibilityKey,
+          modelCompatibilityKey: bound.compatibilityKey,
         },
         state: flowState(),
       }),
@@ -430,7 +419,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** The round prompt, its media and TeX count, committed with `round.begin`. */
   const prepareRound = Effect.fn('reflection.prepareRound')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RunState, Error> {
+  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem> {
     const round = flow.currentRound;
     const bound = yield* SynchronizedRef.get(run.model);
     contextWindowRecoveryAttempted = false;
@@ -460,7 +449,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     let requestText: string;
     if (round === 0) {
       const initialPrompts = yield* Effect.tryPromise({
-        try: () => run.inScope(() => promptBuilder.buildInitialPrompts()),
+        try: () => promptBuilder.buildInitialPrompts(),
         catch: ensureError,
       });
       if (initialPrompts.userPrefix.trim()) {
@@ -469,7 +458,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       requestText = initialPrompts.userRequest.trim();
     } else {
       const request = yield* Effect.tryPromise({
-        try: () => run.inScope(() => promptBuilder.buildUserRequest(round)),
+        try: () => promptBuilder.buildUserRequest(round),
         catch: ensureError,
       });
       requestText = appendCompileFailureRoundContext(
@@ -576,9 +565,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           const path = location.absolutePath;
           const expected = flow.rawOutputBytes ?? 0;
           const fragmentBytes = Buffer.byteLength(fragment);
-          await AbsoluteFS.ensureDir(
-            path.slice(0, Math.max(0, path.lastIndexOf('/'))),
-          );
+          await AbsoluteFS.ensureDir(dirname(path));
           const exists = await AbsoluteFS.exists(path);
           const actual = exists ? (await AbsoluteFS.stat(path)).size : 0;
           if (
@@ -699,14 +686,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       },
     );
     if (text) {
-      const connector = yield* Effect.tryPromise({
-        try: () =>
-          session.responseTextProcessing.connectResponseText(
-            workspace.assembly.lastResponse.slice(-K_SLICE),
-            text.slice(0, K_SLICE),
-          ),
-        catch: ensureError,
-      });
+      const connector =
+        yield* session.responseTextProcessing.connectResponseText(
+          workspace.assembly.lastResponse.slice(-K_SLICE),
+          text.slice(0, K_SLICE),
+        );
       yield* writeOutputFragment(
         location,
         workspace.assembly.accumulatedOutput ? connector + text : text,
@@ -1013,7 +997,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** One round inside its trace stage: prompt, response cycles, output. */
   const runRound = Effect.fn('reflection.round')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RoundExit, Error> {
+  ): Effect.fn.Return<RoundExit, Error, FileSystem.FileSystem> {
     const round = flow.currentRound;
     // The stage closes with the round's own verdict; an exit that never set
     // one is a stop (interrupt) or a defect.
@@ -1053,11 +1037,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           if (!unprocessed) {
             const system = yield* Effect.tryPromise({
               try: () =>
-                run.inScope(() =>
-                  getSystemPromptWithRules(
-                    prompt.systemPrompt,
-                    run.userVarChannels,
-                  ),
+                getSystemPromptWithRules(
+                  prompt.systemPrompt,
+                  run.userVarChannels,
+                  run.session.roots.workspace,
                 ),
               catch: ensureError,
             });
@@ -1105,12 +1088,14 @@ export const runReflection = Effect.fn('reflection.run')(function* (
                   outcome.responseTimeMs,
               },
             };
+            // Priced against the binding that served the round: a manual
+            // retry may have rebound the model inside the invoker.
+            const served = yield* SynchronizedRef.get(run.model);
             yield* Effect.tryPromise({
               try: () =>
-                run.inScope(() =>
-                  run.usageMonitor.recordUsage(
-                    usageSnapshot(state, outcome.usage),
-                  ),
+                run.usageMonitor.recordUsage(
+                  usageSnapshot(state, outcome.usage),
+                  served,
                 ),
               catch: ensureError,
             });
@@ -1173,8 +1158,18 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     );
     normalizeCompileRejectionPolicy();
 
-    const nextRound = Effect.fn('reflection.nextRound')(function* (
+    /**
+     * Advance onto the next round: reset the per-round flow facts and
+     * workspace, then commit the `round.ready` snapshot.
+     *
+     * `closePrevious` says whether a round is actually being closed. Ending
+     * one emits `round.end` against the coordinates captured *before* the
+     * advance; relaunching a halted run enters a round without a predecessor
+     * to close, and that is the only difference between the two entries.
+     */
+    const enterRound = Effect.fn('reflection.enterRound')(function* (
       current: RunState,
+      closePrevious: boolean,
     ): Effect.fn.Return<RunState, Error> {
       const ended = coordinates(current);
       flow = {
@@ -1187,7 +1182,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       workspace = AgentWorkspaceState.create();
       return yield* commit(
         yield* ledger.appendBatch(runId, current, [
-          stepRow(runId, ended, 'round.end'),
+          ...(closePrevious ? [stepRow(runId, ended, 'round.end')] : []),
           snapshot(current, {
             phase: 'round.ready',
             round: flow.currentRound,
@@ -1227,23 +1222,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           return { state, outcome: resolveOutcome() } satisfies LoopExit;
         }
         lastError = undefined;
-        flow = {
-          ...flow,
-          currentRound: flow.currentRound + 1,
-          endTurn: false,
-          outputLocation: null,
-          rawOutputBytes: 0,
-        };
-        workspace = AgentWorkspaceState.create();
-        state = yield* commit(
-          yield* ledger.appendBatch(runId, state, [
-            snapshot(state, {
-              phase: 'round.ready',
-              round: flow.currentRound,
-              continuationIndex: 0,
-            }),
-          ]),
-        );
+        state = yield* enterRound(state, false);
       }
       // The configured total may have been lowered since the snapshot; the
       // hard round limit takes precedence over continuing that round.
@@ -1259,7 +1238,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         return { state, outcome: RUN_OUTCOME.FAILED } satisfies LoopExit;
       }
       if (!shouldContinueNextRound()) return yield* finish(state, true);
-      state = yield* nextRound(state);
+      state = yield* enterRound(state, true);
     }
   });
 
@@ -1269,9 +1248,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   ): ReflectionResult => ({
     outcome,
     roundOutputs: roundsToPersisted(outputState),
-    usage:
-      at?.usage ??
-      AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+    usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
     ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
       ? { error: lastError }
       : {}),

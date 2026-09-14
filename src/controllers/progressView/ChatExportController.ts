@@ -29,7 +29,6 @@ import type { ChatExportInput } from '@agent/export/schemas';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import {
@@ -176,12 +175,7 @@ export class ChatExportController {
       if (traceResult.status !== 'ok') {
         return { status: traceResult.status };
       }
-      const { trace } = traceResult;
-
-      const exportTrace = {
-        ...trace,
-        entries: projectWorkflowCallEntries(trace.entries),
-      };
+      const { trace, record } = traceResult;
 
       if (
         !(yield* Effect.tryPromise({
@@ -200,12 +194,21 @@ export class ChatExportController {
         try: () => AbsoluteFS.read(standaloneTemplatePath),
         catch: ensureError,
       });
-      const html = injectStandaloneTrace(template, exportTrace);
+      const html = injectStandaloneTrace(template, trace);
 
       const filename = generateExportFilename(
         {
-          timestamp: new Date(trace.meta.launchedAt).toISOString(),
-          config: trace.config,
+          // The creation row's publish clock is the run's launch time. Found
+          // by type rather than by position: an aggregate always opens with
+          // `run.start`, but that ordering is another file's invariant, and
+          // the assembler only guarantees the document is non-empty.
+          timestamp: new Date(
+            (
+              trace.events.find((event) => event.type === 'run.start') ??
+              trace.events[0]!
+            ).at,
+          ).toISOString(),
+          config: record,
         },
         'html',
       );

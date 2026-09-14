@@ -16,7 +16,7 @@ import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
 function streamEntries(store: StreamLog): StreamLogEntry[] {
-  return store.getRange(0);
+  return store.toJSON();
 }
 
 function openDeferredThinking(
@@ -202,7 +202,7 @@ describe('per-trace stage scope (cross-trace isolation)', () => {
       subagent.openStage('Run: subagent');
     });
 
-    const entries = store.getRange(0);
+    const entries = store.toJSON();
     const runStage = entries.find((e) => e.text === 'Run: subagent');
     expect(runStage).toBeDefined();
     expect(runStage?.groupId).toBeUndefined();

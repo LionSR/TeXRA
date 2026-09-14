@@ -4,7 +4,6 @@
  * generator, subscription, filesystem handle, or durable write.
  */
 // Shared contracts and utilities
-import { redactSecrets } from '@logger/redaction';
 import {
   ActiveSkillsSnapshotSchema,
   MESSAGE_TYPES,
@@ -28,8 +27,6 @@ import type {
   StreamLogAppendInput,
   StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
-import { isObject } from '@utils/core';
-import { redactLogData } from './traceRedaction';
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -59,7 +56,10 @@ type StageMetadata = Pick<
 
 /** Build the transcript projection for one subscribed aggregate. */
 export function createTranscriptFold(
-  writer: Pick<StreamLog, 'append' | 'appendSettled' | 'update' | 'settle'>,
+  writer: Pick<
+    StreamLog,
+    'append' | 'appendSettled' | 'has' | 'update' | 'settle'
+  >,
 ) {
   /** Stream rows opened by `stream.start` that nothing has settled yet. */
   const runs = new Set<string>();
@@ -85,8 +85,8 @@ export function createTranscriptFold(
         timestamp: stamp.at,
         groupId: params.groupId,
         messageType: params.messageType,
-        text: redactSecrets(params.text),
-        data: redactLogData(params.data),
+        text: params.text,
+        data: params.data,
         verbose: params.verbose ?? stamp.debug,
       });
     };
@@ -134,7 +134,7 @@ export function createTranscriptFold(
           timestamp: stamp.at,
           groupId: event.parentId ?? undefined,
           messageType: MESSAGE_TYPES.DEFAULT,
-          text: redactSecrets(event.label),
+          text: event.label,
           data: {
             status: RUN_PHASE.RUNNING,
             ...metadata,
@@ -158,6 +158,12 @@ export function createTranscriptFold(
         return;
       }
 
+      // A card is a monotone machine: it opens once, takes progress while
+      // it is open, and closes once. A second start reopens a running card
+      // (a re-run attempt) and is a no-op on a closed one; progress after
+      // the close and a close without an open are dropped. Under the one
+      // publisher those rows cannot arrive out of order, so nothing here
+      // compensates for a race; the shape is the card's definition.
       case 'tool.start': {
         if (transcriptBoundaryClosed) return;
         pendingModelResponseId = undefined;
@@ -169,6 +175,16 @@ export function createTranscriptFold(
           input: event.input,
           status: TOOL_CALL_STATUS.IN_PROGRESS,
         } satisfies ToolUseLog;
+        if (writer.has(event.logId)) {
+          if (activeToolEntries.has(event.logId)) {
+            writer.update(event.logId, {
+              messageType: MESSAGE_TYPES.TOOL_USE,
+              data,
+            });
+            activeToolEntries.set(event.logId, data);
+          }
+          return;
+        }
         writer.append({
           id: event.logId,
           type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -186,9 +202,8 @@ export function createTranscriptFold(
       case 'tool.end': {
         if (transcriptBoundaryClosed) return;
         const result = (event.result ?? {}) as Partial<ToolUseLog>;
-        // Omit groupId on update: undefined would clobber the canonical
-        // value stamped at tool.start (deferred tools never copy the
-        // resolved id back into their ref).
+        // Omit groupId on update: undefined would clobber the value stamped
+        // at tool.start.
         const patch = {
           messageType: MESSAGE_TYPES.TOOL_USE,
           data: {
@@ -197,6 +212,7 @@ export function createTranscriptFold(
           } as ToolUseLog,
         } satisfies StreamLogUpdatePatch;
         if (event.status === TOOL_CALL_STATUS.IN_PROGRESS) {
+          if (!activeToolEntries.has(event.logId)) return;
           writer.update(event.logId, patch);
           activeToolEntries.set(event.logId, patch.data);
         } else {
@@ -208,21 +224,11 @@ export function createTranscriptFold(
 
       case 'workflow.plan': {
         workflowAttemptId = event.attemptId;
-        // Display strings pass through record-time redaction like every
-        // stage label and card the recorder persists; ids stay verbatim.
         const marker = {
           kind: 'workflowPlan',
           attemptId: event.attemptId,
-          phases: event.phases.map((phase) => ({
-            title: redactSecrets(phase.title),
-          })),
-          tasks: event.tasks.map((task) => ({
-            ...task,
-            label: redactSecrets(task.label),
-            ...(task.phase !== undefined && {
-              phase: redactSecrets(task.phase),
-            }),
-          })),
+          phases: [...event.phases],
+          tasks: [...event.tasks],
         } satisfies WorkflowPlanMarker;
         writer.appendSettled({
           id: `workflow-plan-${event.attemptId}`,
@@ -240,17 +246,7 @@ export function createTranscriptFold(
       case 'workflow.call': {
         const level: LogLevel =
           event.call.status === 'failed' ? 'error' : 'info';
-        // A failed call carries a provider error body in `error`, which
-        // hosts render next to the label, so it needs the same treatment as
-        // an error row's `data.message`.
-        const task: WorkflowCallProgress =
-          event.call.status === 'failed'
-            ? {
-                ...event.call,
-                label: redactSecrets(event.call.label),
-                error: redactSecrets(event.call.error),
-              }
-            : { ...event.call, label: redactSecrets(event.call.label) };
+        const task: WorkflowCallProgress = event.call;
         const entry = {
           level,
           groupId: event.stageId,
@@ -345,9 +341,7 @@ export function createTranscriptFold(
       case 'stream.end': {
         if (!runs.has(event.id) || transcriptBoundaryClosed) return;
         writer.settle(event.id, {
-          ...(event.finalText !== undefined && {
-            text: redactSecrets(event.finalText),
-          }),
+          ...(event.finalText !== undefined && { text: event.finalText }),
           data: { status: 'completed' },
         });
         runs.delete(event.id);
@@ -367,7 +361,7 @@ export function createTranscriptFold(
         if (correlatorId) {
           runs.delete(correlatorId);
           writer.settle(correlatorId, {
-            text: redactSecrets(event.text),
+            text: event.text,
             data: { status: 'completed' },
           });
           return;
@@ -380,7 +374,7 @@ export function createTranscriptFold(
           timestamp: stamp.at,
           groupId: event.stageId,
           messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-          text: redactSecrets(event.text),
+          text: event.text,
           data: { status: 'completed' },
           verbose: stamp.debug,
         });

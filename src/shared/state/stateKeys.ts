@@ -56,22 +56,10 @@ export enum WorkspaceStateKey {
 }
 
 export enum GlobalStateKey {
-  LAST_KNOWN_VERSION = 'lastKnownVersion',
-  /**
-   * CLI-only bundled-agent sync marker.
-   *
-   * This is not a cross-host install-age signal. Before the CLI's first
-   * bundled-agent sync, startup seeding may combine its absence with an absent
-   * `DISABLED_TOOLS` value to recognize a fresh CLI profile.
-   */
-  CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION = 'texra.cli.bundledAgents.lastKnownVersion',
   MEMORY_ENABLED = 'texra.memory.enabled',
 
   // Child-work policy. Global rather than per-workspace: these describe how the
   // user wants their own child runs handled, not anything about a checkout.
-  // The string values are unchanged from when they lived in
-  // `WorkspaceStateKey`; a value written before the slot move is abandoned
-  // there rather than migrated.
   ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
   DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
 
@@ -81,9 +69,6 @@ export enum GlobalStateKey {
   HELPER_MODEL = 'polishModel',
   REASONING_LEVELS = 'texra.reasoningLevels',
   PREFER_SHORT_MODEL_NAMES = 'texra.preferShortModelNames',
-
-  // Streaming settings
-  STREAMING_GLOBAL = 'texra.streaming.global',
 
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR = 'texra.customAgentDir',

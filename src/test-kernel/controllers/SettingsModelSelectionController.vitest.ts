@@ -34,9 +34,6 @@ const resolveModelOptions = async (
     .map((option) => ({
       ...option,
       availability: 'provider-key',
-      availabilityLabel: 'API key set',
-      requiresKey: false,
-      disabled: false,
     }));
 
 function createController(

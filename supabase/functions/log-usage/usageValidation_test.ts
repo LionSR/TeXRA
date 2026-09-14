@@ -12,7 +12,7 @@ function usageEntry() {
   return {
     timestamp: '2026-07-12T12:00:00.000Z',
     model: 'gpt-5',
-    provider: 'openai',
+    provider: 'openai-responses',
     inputTokens: 10,
     outputTokens: 5,
     cost: 0.01,
@@ -45,7 +45,7 @@ Deno.test(
     const parsed = UsageLogEntrySchema.parse({
       ...usageEntry(),
       model: 'k3',
-      provider: 'moonshot',
+      provider: 'kimi-chat',
       usageRoute: 'kimi-code-subscription',
     });
 
@@ -57,7 +57,7 @@ Deno.test('classifies GLM Coding Plan usage under the GLM source', () => {
   const parsed = UsageLogEntrySchema.parse({
     ...usageEntry(),
     model: 'glm-5',
-    provider: 'glm',
+    provider: 'glm-chat',
     usageRoute: 'glm-coding-plan-subscription',
   });
 
@@ -68,7 +68,7 @@ Deno.test('classifies Grok usage under the grok subscription source', () => {
   const parsed = UsageLogEntrySchema.parse({
     ...usageEntry(),
     model: 'grok-5',
-    provider: 'xai',
+    provider: 'xai-chat',
     usageRoute: 'xai-subscription',
   });
 

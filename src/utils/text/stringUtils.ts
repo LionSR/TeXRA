@@ -251,27 +251,6 @@ export function formatTimestamp(isoTimestamp: string): string {
 }
 
 /**
- * Extract the subtype from a MIME type string (e.g. `'wav'` from `'audio/wav'`).
- * A string with no `/` is returned unchanged, since it is already the subtype.
- */
-export function extractMimeSubtype(mimeType: string): string {
-  return mimeType.split('/').pop() ?? mimeType;
-}
-
-/**
- * Join non-empty strings with `sep` (default `'\n'`).
- * Returns `undefined` when no non-empty parts remain, so callers can
- * distinguish "no content" from an empty string.
- */
-export function joinNonEmpty(
-  parts: string[],
-  sep: string = '\n',
-): string | undefined {
-  const nonempty = parts.filter(Boolean);
-  return nonempty.length > 0 ? nonempty.join(sep) : undefined;
-}
-
-/**
  * Split command/tool output on newlines, discarding blank lines.
  * Handles both Unix (`\n`) and Windows (`\r\n`) line endings.
  *

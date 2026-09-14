@@ -1,38 +1,59 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
-import { teardownDefaultSession, tryDefaultSession } from '@agent/runtime';
+import {
+  createAgentResponseTextConnector,
+  initializeDefaultSession,
+  teardownDefaultSession,
+  tryDefaultSession,
+  type SessionHandle,
+} from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { consoleLogSink, setLogSink } from '@logger/logSink';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
-import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
-import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
-import { DisposableStore } from '@platform/disposable';
-import { effectRuntime } from '@platform/processRuntime';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
-  bootstrapNodeAgentDirectories,
+  initProcessWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
+import type {
+  AgentResumePort,
+  LifecycleHost,
+  StateStore,
+} from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
+import { DisposableStore } from '@platform/disposable';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
+import {
   createNodePlatform,
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
+import {
+  createNodeStorageProvider,
+  DEFAULT_NODE_STORAGE_ROOT,
+} from '@platform/defaults/nodeStorage';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
+import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
   bindCliGlobalState,
+  cliGlobalState,
   installCliProcessRuntime,
 } from './cliProcessRuntime';
 import { getCliSecrets } from './cliSecrets';
@@ -55,6 +76,11 @@ type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // (the chat TUI) is about to install its own. Undefined means no platform
 // handlers are currently installed.
 let shutdownHandlers: DisposableStore | undefined;
+// The one memoized open of the process session (`CliPlatformServices.session`),
+// built by the first init beside the roots it installs; undefined only when
+// another root installed the platform before this init ran (a test harness's
+// fake host), in which case the session is whichever one that root opened.
+let sessionOpen: Effect.Effect<SessionHandle> | undefined;
 
 type CliPlatformInitOptions = Pick<
   CliContext,
@@ -72,10 +98,36 @@ type CliPlatformInitOptions = Pick<
  * leaving each caller to re-enter the ambient `platform()` singleton for a
  * value the composition root was holding all along.
  */
-export type CliPlatformServices = Pick<
-  Platform,
-  'globalState' | 'secrets' | 'lifecycle' | 'storage'
->;
+export type CliPlatformServices = Pick<Platform, 'lifecycle'> & {
+  /**
+   * The one Effect runtime of this process, built (or joined) by this root:
+   * every entry point runs its programs on it and threads it to the modules
+   * that run programs at a Promise edge, instead of looking it up.
+   */
+  readonly runtime: ProcessRuntime;
+  /** The process's cross-workspace storage root, from the roots built below. */
+  readonly globalStorage: string;
+  /** The stores this root opened, handed over rather than read back. */
+  readonly globalState: StateStore;
+  readonly secrets: PlatformSecrets;
+  /**
+   * The process roots this init installed: one process, one project (the
+   * `--cwd` workspace). Undefined only when another root installed the
+   * platform before this init ran (a test harness's fake host), so the
+   * caller that needs them reports their absence rather than reading the
+   * ambient roots.
+   */
+  readonly roots?: WorkspaceRoots;
+  /**
+   * The process session over the process roots: one CLI process, one
+   * project, one persistent session, opened by the first entry point that
+   * runs this Effect (`chat`, `run`, `orchestrate`, `resume`, `history`) and
+   * handed to every later one as the same handle. `auth`, `doctor`,
+   * `models`, `skills`, `tools` and `init` never run it, so a storage root
+   * nothing can write to fails a command only when it asks for a transcript.
+   */
+  readonly session: Effect.Effect<SessionHandle>;
+};
 
 function logAt(
   level: 'debug' | 'info' | 'warn' | 'error',
@@ -116,7 +168,7 @@ const cliPlatformLog: SupabaseSessionLog = {
  * same sequence the platform's own (now handed-off) handlers would have. One
  * definition means the two paths can't drift.
  *
- * Runs on the default runtime rather than `effectRuntime()`: the lifecycle
+ * Runs on the default runtime rather than the process runtime: the lifecycle
  * shutdown below disposes the process runtime (`disposeProcessRuntime`)
  * before the flushes run, and a teardown path must not depend on the thing
  * it is tearing down.
@@ -200,10 +252,11 @@ export function setCliAgentResumeHandler(
 }
 
 export async function setCliHelperModel(
+  state: StateStore,
   model: string | undefined,
 ): Promise<void> {
   if (!model) return;
-  await tryPlatform()?.globalState.update(GlobalStateKey.HELPER_MODEL, model);
+  await state.update(GlobalStateKey.HELPER_MODEL, model);
 }
 
 /**
@@ -254,6 +307,10 @@ export async function initInteractiveCliPlatform(
   return initCliPlatform(context);
 }
 
+/** The process roots the first init installed; later inits return them
+ *  beside the already-installed platform. */
+let installedRoots: WorkspaceRoots | undefined;
+
 export async function initCliPlatform(
   context: CliPlatformInitOptions & Pick<CliContext, 'quietLogs'>,
 ): Promise<CliPlatformServices> {
@@ -264,162 +321,218 @@ export async function initCliPlatform(
     trusted: true,
   });
 
+  // The one Effect runtime of this process (PRD 7.7) comes first: the stores
+  // below open as Effect programs, and the session graph and every
+  // Promise-facing fiber run on it. Disposed after the default session has
+  // released its graph. An entry that ran before any platform existed -- the
+  // update check, `clone` -- may already have installed it, and every later
+  // init finds it installed; each then adopts that one rather than building a
+  // second and leaving the first undisposed.
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+
   // Double init is the normal path (every command calls one of these), so the
   // already-installed platform is the value returned on the second and later
   // calls; the first call keeps the one it builds below.
   let services = tryPlatform();
   if (!services) {
-    // The one Effect runtime of this process (PRD 7.7) comes first: the
-    // stores below open as Effect programs, and the session graph and every
-    // Promise-facing fiber run on it. Disposed after the default session has
-    // released its graph. An entry that ran before any platform existed --
-    // the update check, `clone` -- may already have installed it; this then
-    // adopts that one rather than building a second and leaving the first
-    // undisposed.
-    await installCliProcessRuntime(context.storageRoot);
+    installLongRunningModelDispatcher();
     // The project `.texra/config.json` backs the workspace target and
     // user-level config (`~/.texra/v1/global-storage/config.json`, the same file
     // chatDefaults reads) backs the global target — the same pair of stores
     // the extension and desktop hosts open, including the fallback to the
     // internal workspace store when the project file cannot be read or its
     // directory cannot be written.
-    const { stateStores, configStores } = await effectRuntime().runPromise(
-      Effect.gen(function* () {
-        const stores = yield* createCliStateStores({
-          storageRoot: context.storageRoot,
-          workspacePath: context.cwd,
-        });
-        return {
-          stateStores: stores,
-          configStores: yield* openTexraConfigStores(
-            stores.storage,
-            context.cwd,
-            showPersistentConfigWarning,
+    // Everything below is the first init's own work on that runtime. A step
+    // that fails after the runtime exists (a store that will not open, a
+    // seed that will not write) must not leave the runtime installed with
+    // nothing registered to dispose it: the failure disposes it and is
+    // re-raised, so the caller reports the cause rather than a half-built
+    // platform. Keep the platform, roots, and lazy session private until the
+    // fallible setup has succeeded: their ports have no reset operation.
+    const install = async () => {
+      const { stateStores, configStores } = await runtime.runPromise(
+        Effect.gen(function* () {
+          const stores = yield* createCliStateStores({
+            storageRoot: context.storageRoot,
+            workspacePath: context.cwd,
+            runWrite: (write) => runtime.runPromise(write),
+          });
+          return {
+            stateStores: stores,
+            configStores: yield* openTexraConfigStores(
+              stores.storage,
+              context.cwd,
+              showPersistentConfigWarning,
+              runtime,
+            ),
+          };
+        }),
+      );
+      // The store the process runtime's `AppState` reads from here on: it opened
+      // on that runtime, so it could not be threaded into the install above.
+      bindCliGlobalState(stateStores.globalState);
+      // Same severity and wording as the extension/desktop hosts: a shutdown
+      // handler failure is an error everywhere, not a warning in one host.
+      const lifecycle = createLifecycleHost({
+        onError: (phase, error) => {
+          showLifecycleError(
+            `Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
+          );
+        },
+      });
+      const agentDirectories = createPlatformAgentDirectories({
+        channel: 'cli',
+        // Built-in agents are read straight out of the CLI package's shipped
+        // `dist/resources`, never copied into the shared `~/.texra` root.
+        resourcesPath: context.resourcesPath,
+        customDirectoryStore: { get: () => undefined },
+      });
+      const cliSecrets = getCliSecrets(runtime, context.storageRoot);
+      const platform = createNodePlatform({
+        lifecycle,
+        agentResume: {
+          tryResumeRun: async (runId, recovery) =>
+            (await cliResumeHandler?.(runId, recovery)) ?? false,
+        },
+        agentDirectories,
+      });
+      // One process, one project: the process roots are the `--cwd` workspace.
+      const roots = createNodeWorkspaceRoots({
+        workspacePath: context.cwd,
+        storage: stateStores.storage.getStoragePath(),
+        globalStorage: stateStores.storage.getGlobalStoragePath(),
+        config: configStores,
+        workspaceState: stateStores.workspaceState,
+        globalState: stateStores.globalState,
+      });
+      // The one open of the process session, over the roots published below,
+      // memoized so the first entry point that needs a session opens it and
+      // every later one gets the same handle; an entry that needs none never
+      // opens one. The latex text connector asks a helper model how to join
+      // two strings; that model is resolved against the stores this root
+      // opened.
+      const openSession = runtime.runSync(
+        Effect.cached(
+          initializeDefaultSession({
+            responseTextProcessing: createTexraResponseTextProcessing(
+              createAgentResponseTextConnector({
+                secrets: cliSecrets,
+                globalState: stateStores.globalState,
+              }),
+            ),
+          }).pipe(
+            Effect.tap((session) =>
+              Effect.sync(() => {
+                const cleared = session.storeCleared;
+                if (cleared) {
+                  writeTextStderr(sessionStoreClearedMessage(cleared));
+                }
+              }),
+            ),
           ),
-        };
-      }),
-    );
-    // The store the process runtime's `AppState` reads from here on: it opened
-    // on that runtime, so it could not be threaded into the install above.
-    bindCliGlobalState(stateStores.globalState);
-    // Same severity and wording as the extension/desktop hosts: a shutdown
-    // handler failure is an error everywhere, not a warning in one host.
-    const lifecycle = createLifecycleHost({
-      onError: (phase, error) => {
-        showLifecycleError(
-          `Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
-        );
-      },
-    });
-    const agentDirectories = createPlatformAgentDirectories({
-      channel: 'cli',
-      customDirectoryStore: { get: () => undefined },
-    });
-    services = createNodePlatform({
-      globalState: stateStores.globalState,
-      storage: stateStores.storage,
-      secrets: getCliSecrets(context.storageRoot),
-      lifecycle,
-      agentResume: {
-        tryResumeRun: async (runId, recovery) =>
-          (await cliResumeHandler?.(runId, recovery)) ?? false,
-      },
-      agentDirectories,
-    });
-    initPlatform(services);
-    // One process, one paper: the process roots are the `--cwd` workspace.
-    const roots = createNodeWorkspaceRoots({
-      workspacePath: context.cwd,
-      storage: stateStores.storage.getStoragePath(),
-      config: configStores,
-      workspaceState: stateStores.workspaceState,
-    });
-    initProcessWorkspaceRoots(roots);
-    initProcessSettingHost('cli');
-    // TeXRA's account plane (ChatGPT / Grok sign-in). Without
-    // this the model layer is bring-your-own-key. See installTexraAccountProbes.
-    installTexraAccountProbes();
+        ),
+      );
 
-    // Seed first-install defaults (e.g. disabled tools) before anything
-    // writes CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION (the bundled-agent sync
-    // below), so upgrading users are not affected. Mirrors the
-    // extension/desktop ordering — same seeding function, CLI's own version
-    // key since the CLI tracks its bundled-agent version independently.
-    await effectRuntime().runPromise(
-      seedDisabledToolDefaults(
-        stateStores.globalState,
-        GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-      ),
-    );
+      // Seed first-install defaults (e.g. disabled tools). No-ops for anyone
+      // whose DISABLED_TOOLS list already exists, so upgrading users keep the
+      // tools they enabled.
+      await runtime.runPromise(
+        seedDisabledToolDefaults(stateStores.globalState),
+      );
 
-    if (context.installSignalHandlers !== false) {
-      installCliShutdownSignalHandlers(lifecycle);
+      // Kill agent-spawned OS children before the process dies, exactly as the
+      // extension and desktop hosts do. Background `bash` runs are spawned
+      // `detached` (their own process group, see execUtils) so they survive
+      // `texra` exiting and can never deliver their follow-up result — without
+      // this drain they are orphaned. Registered before the usage-log flush
+      // below so the kills (all synchronous) land first, matching the other
+      // hosts' ordering.
+      registerRuntimeShutdownHandlers(lifecycle, {
+        runSettlement: (settlement) => runtime.runPromise(settlement),
+        // The session is opened lazily (`sessionOpen`); a process that never
+        // asked for one has nothing to flush.
+        flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
+        afterFlushArtifacts: [
+          () => runtime.runPromise(UsageLogService.dispose()),
+        ],
+        afterRunSettlement: [
+          () => runtime.runPromise(teardownDefaultSession()),
+          () => flushNdjsonStdout(),
+          () => disposeProcessRuntime(),
+        ],
+      });
+
+      // Route CLI model traffic to the same Supabase usage log the extension
+      // writes to, tagged with editorType 'cli' and the CLI version.
+      // dispose() flushes any queued entries; it
+      // runs on normal exit (bin/texra.ts finally) and on signals, both of
+      // which call lifecycle.runShutdown().
+      await runtime.runPromise(
+        UsageLogService.initialize(runtime.scope, {}, context.version, 'cli'),
+      );
+      initPlatform(platform);
+      initProcessWorkspaceRoots(roots);
+      installedRoots = roots;
+      sessionOpen = openSession;
+      initProcessSettingHost('cli');
+      // TeXRA's account plane (ChatGPT / Grok sign-in). Without
+      // this the model layer is bring-your-own-key. See installTexraAccountProbes.
+      installTexraAccountProbes(cliSecrets);
+      if (context.installSignalHandlers !== false) {
+        installCliShutdownSignalHandlers(lifecycle);
+      }
+      return platform;
+    };
+    const initialized = await runtime.runPromiseExit(
+      Effect.tryPromise({ try: install, catch: ensureError }),
+    );
+    if (Exit.isFailure(initialized)) {
+      // The initialization fiber must exit before its owning runtime closes.
+      await disposeProcessRuntime();
+      throw Cause.squash(initialized.cause);
     }
-    // Register the shared Node-host agent runtime: the direct Lean language
-    // services (errors surface via the Tools dashboard if `lake` isn't on
-    // PATH).
-    initNodeAgentRuntime(lifecycle);
-
-    // Kill agent-spawned OS children before the process dies, exactly as the
-    // extension and desktop hosts do. Background `bash` runs are spawned
-    // `detached` (their own process group, see execUtils) so they survive
-    // `texra` exiting and can never deliver their follow-up result — without
-    // this drain they are orphaned. Registered before the usage-log flush
-    // below so the kills (all synchronous) land first, matching the other
-    // hosts' ordering.
-    registerRuntimeShutdownHandlers(lifecycle, {
-      runSettlement: (settlement) => effectRuntime().runPromise(settlement),
-      // The default session is installed later by whichever entry point opens
-      // transcripts, so its shutdown lookup remains lazy.
-      flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
-      afterFlushArtifacts: [
-        () => effectRuntime().runPromise(UsageLogService.dispose()),
-      ],
-      afterRunSettlement: [
-        () => teardownDefaultSession(),
-        () => flushNdjsonStdout(),
-        () => disposeProcessRuntime(),
-      ],
-    });
-
-    // Route CLI model traffic to the same Supabase usage log the extension
-    // writes to, tagged with editorType 'cli' and the CLI version.
-    // dispose() flushes any queued entries; it
-    // runs on normal exit (bin/texra.ts finally) and on signals, both of
-    // which call lifecycle.runShutdown().
-    await effectRuntime().runPromise(
-      UsageLogService.initialize(
-        effectRuntime().scope,
-        {},
-        context.version,
-        'cli',
-      ),
-    );
+    services = initialized.value;
   }
+
+  // The stores this root opened, handed back rather than read off a
+  // process-wide singleton: the secret store is the same stateless view over
+  // this process's storage root the composition block installed, and the
+  // application state is the store `bindCliGlobalState` latched there.
+  const cliServices: CliPlatformServices = {
+    runtime,
+    // The pure path calculator over this process's storage root (no mkdir),
+    // so every CLI entry, including the ones that find the platform already
+    // installed, names one root without touching the filesystem again.
+    globalStorage: resolveGlobalStoragePath(
+      context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
+    ),
+    globalState: cliGlobalState(),
+    secrets: getCliSecrets(runtime, context.storageRoot),
+    session:
+      sessionOpen ??
+      Effect.suspend(() => {
+        const opened = tryDefaultSession();
+        return opened
+          ? Effect.succeed(opened)
+          : Effect.die(
+              new Error(
+                'The CLI platform was installed by another root and no process session is open.',
+              ),
+            );
+      }),
+    lifecycle: services.lifecycle,
+    roots: installedRoots,
+  };
 
   if (!supabaseAuthInitialized) {
-    initializeCliSupabaseAuth(services.secrets, cliPlatformLog);
+    initializeCliSupabaseAuth(runtime, cliServices.secrets, cliPlatformLog);
     supabaseAuthInitialized = true;
   }
-
-  await effectRuntime().runPromise(
-    bootstrapNodeAgentDirectories({
-      channel: 'cli',
-      resourcesPath: context.resourcesPath,
-      currentVersion: context.version,
-      versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-    }),
-  );
 
   initializeNodeRuntimeSkills({
     resourcesPath: context.resourcesPath,
     skillSourceOptions: context.skillSourceOptions,
   });
 
-  return {
-    storage: services.storage,
-    globalState: services.globalState,
-    secrets: services.secrets,
-    lifecycle: services.lifecycle,
-  };
+  return cliServices;
 }

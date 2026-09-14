@@ -28,7 +28,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -86,8 +86,9 @@ async function handleRunWithOptions(): Promise<void> {
 
 export function registerAgentReviewCommands(
   context: vscode.ExtensionContext,
+  runtime: ProcessRuntime,
 ): void {
-  AgentReviewService.initialize(context);
+  AgentReviewService.initialize(context, runtime);
 
   // The Agent Review tree lives in VS Code's Source Control (git) panel,
   // GitKraken/Cursor-style.
@@ -119,7 +120,7 @@ export function registerAgentReviewCommands(
     ),
   );
 
-  registerAgentReviewCommitWatcher(context);
+  registerAgentReviewCommitWatcher(context, runtime);
 
   registerCommandEntries(context, [
     {
@@ -132,7 +133,7 @@ export function registerAgentReviewCommands(
     },
     {
       id: 'texra.agentReview.stop',
-      handler: () => effectRuntime().runPromise(AgentReviewService.stop()),
+      handler: () => runtime.runPromise(AgentReviewService.stop()),
     },
     {
       id: 'texra.agentReview.fixAllIssues',
@@ -143,7 +144,7 @@ export function registerAgentReviewCommands(
     { id: 'texra.agentReview.openIssue', handler: handleOpenIssue },
     {
       id: 'texra.agentReview.clear',
-      handler: () => effectRuntime().runPromise(AgentReviewService.clear()),
+      handler: () => runtime.runPromise(AgentReviewService.clear()),
     },
   ]);
 }

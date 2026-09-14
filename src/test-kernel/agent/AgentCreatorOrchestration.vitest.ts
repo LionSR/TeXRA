@@ -12,19 +12,20 @@ import {
   type CreatorConfig,
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
+import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { fakeStores } from '@test/support/FakePlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const mocks = vi.hoisted(() => ({
-  createHelperModelKit: vi.fn(),
-  runHelperModelCompletion: vi.fn(),
+  helperModel: vi.fn(),
+  helperCompletion: vi.fn(),
   validateAgentYamlContent: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/helperModel', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
-  createHelperModelKit: mocks.createHelperModelKit,
-  runHelperModelCompletion: mocks.runHelperModelCompletion,
+  helperModel: mocks.helperModel,
+  helperCompletion: mocks.helperCompletion,
 }));
 
 vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
@@ -33,8 +34,8 @@ vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
 }));
 
 /**
- * The creator only forwards its stores to `createHelperModelKit`, which this
- * suite mocks, so empty stores are enough to exercise the orchestration.
+ * The creator only forwards its stores to `helperModel`, which this suite
+ * mocks, so empty stores are enough to exercise the orchestration.
  */
 const STORES = fakeStores();
 
@@ -95,12 +96,10 @@ describe('agent creator orchestration', () => {
   }
 
   beforeEach(() => {
-    mocks.createHelperModelKit.mockReset();
-    mocks.runHelperModelCompletion.mockReset();
+    mocks.helperModel.mockReset();
+    mocks.helperCompletion.mockReset();
     mocks.validateAgentYamlContent.mockReset();
-    mocks.createHelperModelKit.mockResolvedValue({
-      kit: { handler: {}, client: {} },
-    });
+    mocks.helperModel.mockReturnValue(Effect.succeed({} as BoundModel));
     fetchModel
       .mockReset()
       .mockImplementation(async () =>
@@ -126,36 +125,32 @@ describe('agent creator orchestration', () => {
       { apiKey: 'synthetic', fetch: fetchModel },
     );
     // Development proof only: the production helper's configured routes remain unchanged.
-    mocks.runHelperModelCompletion.mockImplementation(
+    mocks.helperCompletion.mockImplementation(
       (
-        _kit: unknown,
+        _bound: unknown,
         options: {
           userPrompt: string;
           systemPrompt: string;
-          signal?: AbortSignal;
         },
       ) =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const turn = yield* model.prepareTurn({
-              system: options.systemPrompt,
-              messages: [
-                {
-                  role: 'user',
-                  content: [{ kind: 'text', text: options.userPrompt }],
-                },
-              ],
-            });
-            assert(turn.mode === 'foreground');
-            const result = yield* model.generateTurn(turn);
-            return result.content
-              .flatMap((part) => (part.kind === 'message' ? part.content : []))
-              .filter((part) => part.kind === 'text')
-              .map((part) => part.text)
-              .join('');
-          }),
-          { signal: options.signal },
-        ),
+        Effect.gen(function* () {
+          const turn = yield* model.prepareTurn({
+            system: options.systemPrompt,
+            messages: [
+              {
+                role: 'user',
+                content: [{ kind: 'text', text: options.userPrompt }],
+              },
+            ],
+          });
+          assert(turn.mode === 'foreground');
+          const result = yield* model.generateTurn(turn);
+          return result.content
+            .flatMap((part) => (part.kind === 'message' ? part.content : []))
+            .filter((part) => part.kind === 'text')
+            .map((part) => part.text)
+            .join('');
+        }),
     );
     mocks.validateAgentYamlContent.mockImplementation(() => undefined);
     vi.spyOn(AbsoluteFS, 'write').mockResolvedValue(undefined);
@@ -172,7 +167,7 @@ describe('agent creator orchestration', () => {
       events.push('write');
     });
 
-    await runAgentCreator(CONFIG, 'workflow', ui, STORES);
+    await Effect.runPromise(runAgentCreator(CONFIG, 'workflow', ui, STORES));
 
     expect(ui.promptAgentName).toHaveBeenCalledWith('Workflow');
     expect(ui.promptDescription).toHaveBeenCalledWith(
@@ -206,11 +201,11 @@ describe('agent creator orchestration', () => {
       })
       .mockImplementationOnce(() => undefined);
 
-    await runAgentCreator(CONFIG, 'workflow', ui, STORES);
+    await Effect.runPromise(runAgentCreator(CONFIG, 'workflow', ui, STORES));
 
-    expect(mocks.runHelperModelCompletion).toHaveBeenCalledTimes(2);
+    expect(mocks.helperCompletion).toHaveBeenCalledTimes(2);
     expect(fetchModel).toHaveBeenCalledTimes(2);
-    expect(mocks.runHelperModelCompletion.mock.calls[1]?.[1]).toEqual(
+    expect(mocks.helperCompletion.mock.calls[1]?.[1]).toEqual(
       expect.objectContaining({
         userPrompt: expect.stringContaining('Retry workflow: missing prompts'),
       }),
@@ -227,10 +222,10 @@ describe('agent creator orchestration', () => {
       new TypeError('synthetic network unavailable'),
     );
 
-    await runAgentCreator(CONFIG, 'workflow', ui, STORES);
+    await Effect.runPromise(runAgentCreator(CONFIG, 'workflow', ui, STORES));
 
-    expect(mocks.createHelperModelKit).toHaveBeenCalledTimes(2);
-    expect(mocks.runHelperModelCompletion).toHaveBeenCalledTimes(2);
+    expect(mocks.helperModel).toHaveBeenCalledTimes(2);
+    expect(mocks.helperCompletion).toHaveBeenCalledTimes(2);
     expect(fetchModel).toHaveBeenCalledTimes(2);
     expect(ui.renderTemplate).toHaveBeenCalledWith('workflow fallback', {
       AGENT_NAME: 'editor',

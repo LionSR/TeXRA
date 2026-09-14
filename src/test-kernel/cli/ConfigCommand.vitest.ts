@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InvalidAgentTeamError } from '@agent/index';
+import { effectRuntime } from '@platform/processRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 const mocks = vi.hoisted(() => ({
@@ -39,7 +40,7 @@ vi.mock('@agent/index', async (importOriginal) => ({
 
 vi.mock('@cli/runtime/agentRoster', () => ({
   formatCliAgentRoster: () => 'Agent roster',
-  readCliAgentRoster: mocks.readCliAgentRoster,
+  readCliAgentRoster: Effect.promise(() => mocks.readCliAgentRoster()),
 }));
 
 vi.mock('@cli/runtime/cliConfig', async (importOriginal) => ({
@@ -55,7 +56,7 @@ describe('CLI config command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.initLocalCliPlatform.mockResolvedValue(undefined);
+    mocks.initLocalCliPlatform.mockResolvedValue({ runtime: effectRuntime() });
     mocks.getVisibleAgents.mockReturnValue([
       {
         category: 'toolUse',

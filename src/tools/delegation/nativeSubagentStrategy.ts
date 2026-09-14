@@ -52,12 +52,9 @@ import {
   AgentCategory,
   emptyRunEndOutput,
   RUN_OUTCOME,
-  RUN_PHASE,
-  RUN_SUBSTATE,
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
 import { onAbort, unique } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -361,12 +358,6 @@ export function createNativeSubagentStrategy(
           // Hand it directly to the persisted WAITING cursor instead. Any item
           // that races into the queue after this drain remains there for the
           // loop's next turn.
-          params.session.status.transition(
-            runId,
-            RUN_PHASE.RUNNING,
-            RUN_TRANSITION_CAUSE.RESUME,
-            { substate: RUN_SUBSTATE.RESUMING },
-          );
           return yield* engine().resumeToolUseTurn(resume, {
             session: params.session,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,

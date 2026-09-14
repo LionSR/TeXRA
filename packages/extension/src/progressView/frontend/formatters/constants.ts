@@ -120,15 +120,9 @@ export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
   // Search/find
   glob: 'magnifying-glass',
   grep: 'magnifying-glass',
-  // These tools are no longer registered, but persisted progress entries from
-  // past runs still reference them — keep their icons so historical runs
-  // render with the right glyphs instead of the generic fallback.
-  // `str_replace_editor` is also Anthropic's native text-editor tool name, so
-  // a delegated sub-agent can still report it live.
+  // Anthropic's native text-editor tool name, which a delegated sub-agent can
+  // report even though TeXRA registers no tool of that name.
   str_replace_editor: 'pencil',
-  apply_path: 'code-compare',
-  crossref_doi: 'link',
-  ls: 'folder-open',
 
   // Shell
   bash: 'terminal',
@@ -176,7 +170,6 @@ export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
 
   // Run history
   executions: 'clock-rotate-left',
-  runs: 'clock-rotate-left',
   accept_run_files: 'check',
 
   // External agents

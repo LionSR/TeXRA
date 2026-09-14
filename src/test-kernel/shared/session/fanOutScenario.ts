@@ -11,8 +11,6 @@ import {
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
-  RUN_PHASE,
   RunIdSchema,
   ToolConfigSchema,
   type ApprovalPolicySnapshot,
@@ -20,7 +18,6 @@ import {
   type LocalRuntimeState,
   type RunIdentity,
   type DisplaySessionEvent,
-  type StreamLogEntry,
   type RunId,
   type RunParent,
   type WorkflowCallProgress,
@@ -47,7 +44,7 @@ const sec = (n: number): number => n * 1000;
 /** The fan-out's beats: the root started 12m ago, the child 4m ago, the
  *  grandchild finished 1m ago, the process leads the order at 30s ago; the
  *  tail that closes the run lands in the last 20s. */
-const T = {
+export const T = {
   root: BOARD_NOW - min(12),
   child: BOARD_NOW - min(4),
   childProgress: BOARD_NOW - min(3),
@@ -79,13 +76,6 @@ export const ROOT_POLICY: ApprovalPolicySnapshot = {
   bypasses: { bash: false, toolEdit: true, superYolo: false },
 };
 
-/** `Omit` over each member of a union, so a fixture keeps its arm. */
-type EntryFixture = StreamLogEntry extends infer E
-  ? E extends unknown
-    ? Omit<E, 'seqNo' | 'timestamp' | 'level'>
-    : never
-  : never;
-
 /** A durable arm without its envelope: what a publisher builds before the
  *  aggregate, seq, commit, owner, and clock are stamped on. */
 type DisplaySessionEventBody = DisplaySessionEvent extends infer E
@@ -99,7 +89,6 @@ type DisplaySessionEventBody = DisplaySessionEvent extends infer E
 export class Log {
   readonly events: DisplaySessionEvent[] = [];
   private readonly seq = new Map<string, number>();
-  private readonly entrySeq = new Map<RunId, number>();
   /** Each run's creation commit: what the database stamps on a child's
    *  `run.start.parent` (one run model, section 3.2). */
   private readonly startCommit = new Map<RunId, number>();
@@ -170,23 +159,10 @@ export class Log {
       },
     };
   }
-
-  entry(runId: RunId, at: number, entry: EntryFixture): StreamLogEntry {
-    const seqNo = (this.entrySeq.get(runId) ?? 0) + 1;
-    this.entrySeq.set(runId, seqNo);
-    const full: StreamLogEntry = {
-      ...entry,
-      seqNo,
-      timestamp: at,
-      level: 'info',
-    };
-    this.emit(runId, at, { type: 'transcript.entry', entry: full });
-    return full;
-  }
 }
 
 function call(
-  status: 'planned' | 'running' | 'completed',
+  status: 'queued' | 'running' | 'completed',
   childRunId?: RunId,
 ): WorkflowCallProgress {
   return {
@@ -230,7 +206,6 @@ export function foldAll(
  */
 export function buildScenario({ proposal = false } = {}) {
   const log = new Log();
-  const rootEntries: StreamLogEntry[] = [];
 
   log.emit(ROOT, T.root, {
     type: 'run.start',
@@ -258,26 +233,12 @@ export function buildScenario({ proposal = false } = {}) {
       inputFiles: ['draft.tex'],
     }),
   });
-  log.emit(ROOT, T.root, {
-    type: 'status',
-    phase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: T.root,
-  });
   log.emit(ROOT, T.root + 1, {
     type: 'workflow.plan',
     attemptId: 'attempt-1',
     phases: [{ title: 'Map' }],
     tasks: [{ id: 'inspect', label: 'inspect', phase: 'Map' }],
   });
-  rootEntries.push(
-    log.entry(ROOT, T.root + 1, {
-      id: 'phase-Map',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      text: 'Map',
-      data: { kind: 'phase', index: 0, total: 1, attemptId: 'attempt-1' },
-    }),
-  );
   log.emit(ROOT, T.root + 1, {
     type: 'stage.start',
     id: 'phase-Map',
@@ -286,15 +247,12 @@ export function buildScenario({ proposal = false } = {}) {
     index: 0,
     total: 1,
   });
-  rootEntries.push(
-    log.entry(ROOT, T.root + 2, {
-      id: 'call-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: 'phase-Map',
-      data: call('planned'),
-    }),
-  );
+  log.emit(ROOT, T.root + 2, {
+    type: 'workflow.call',
+    logId: 'call-1',
+    stageId: 'phase-Map',
+    call: call('queued'),
+  });
 
   // The child agent run: its run.start carries the whole parent edge.
   log.emit(CHILD, T.child, {
@@ -314,26 +272,28 @@ export function buildScenario({ proposal = false } = {}) {
     }),
   });
   log.emit(CHILD, T.child, {
-    type: 'status',
-    phase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: T.child,
+    type: 'run.activate',
+    category: AgentCategory.ToolUse,
+    isRemote: false,
   });
-  rootEntries.push(
-    log.entry(ROOT, T.child + 1, {
-      id: 'call-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: 'phase-Map',
-      data: call('running', CHILD),
-    }),
-  );
+  log.emit(ROOT, T.child + 1, {
+    type: 'workflow.call',
+    logId: 'call-1',
+    stageId: 'phase-Map',
+    call: call('running', CHILD),
+  });
+  // The loop's position: an agent run reads as initializing until its first
+  // step, so a mid-flight fixture carries one (one run model, 3.3).
+  log.emit(CHILD, T.childProgress, {
+    type: 'flow.step',
+    payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
+  });
   log.emit(CHILD, T.childProgress, {
     type: 'conversation.progress',
     progress: { toolCallCount: 3 },
   });
   log.emit(CHILD, T.childApproval, {
-    type: 'approval.requested',
+    type: 'request.opened',
     requestId: 'req-1',
     payload: {
       kind: 'bash',
@@ -353,12 +313,11 @@ export function buildScenario({ proposal = false } = {}) {
     toolName: 'delegate_agent',
     input: { agent: 'lint', instruction: 'lint appendix B' },
   };
-  const dispatched = log.entry(CHILD, T.grandchild - 1, {
-    id: 'dispatch-lint',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    messageType: MESSAGE_TYPES.TOOL_USE,
-    text: 'delegate_agent',
-    data: { ...dispatchData, status: 'in_progress' },
+  log.emit(CHILD, T.grandchild - 1, {
+    type: 'tool.start',
+    logId: 'dispatch-lint',
+    toolName: dispatchData.toolName,
+    input: dispatchData.input,
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.start',
@@ -369,10 +328,13 @@ export function buildScenario({ proposal = false } = {}) {
     parent: log.parent(CHILD),
   });
   log.emit(GRANDCHILD, T.grandchild, {
-    type: 'status',
-    phase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: T.grandchild,
+    type: 'run.activate',
+    category: AgentCategory.ToolUse,
+    isRemote: false,
+  });
+  log.emit(GRANDCHILD, T.grandchild, {
+    type: 'flow.step',
+    payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
   });
   log.emit(GRANDCHILD, T.grandchildFiles, {
     type: 'addOutputFiles',
@@ -383,25 +345,14 @@ export function buildScenario({ proposal = false } = {}) {
     outcome: 'completed',
     output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
-  // The tool's result lands the way the recorder's `update` lands it: the
-  // patch merged over the stored entry, so the row keeps its id, seqNo, and
+  // The tool's result lands the way the recorder settles it: the outcome
+  // merged over the stored row, so the row keeps its id, seqNo, and
   // timestamp under a later commit.
   log.emit(CHILD, T.grandchildDone + 1, {
-    type: 'transcript.entry',
-    entry: {
-      id: 'dispatch-lint',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      text: 'delegate_agent',
-      seqNo: dispatched.seqNo,
-      timestamp: dispatched.timestamp,
-      level: dispatched.level,
-      data: {
-        ...dispatchData,
-        output: 'Appendix B: no findings.',
-        status: 'completed',
-      },
-    },
+    type: 'tool.end',
+    logId: 'dispatch-lint',
+    status: 'completed',
+    result: { ...dispatchData, output: 'Appendix B: no findings.' },
   });
 
   // A top-level process run, newer than the root: leads the order.
@@ -429,16 +380,17 @@ export function buildScenario({ proposal = false } = {}) {
     ' ✓ src/test-kernel/latex/Compile.vitest.ts (12 tests) 340ms\n',
     ' ✓ src/test-kernel/shared/session/sessionFold.vitest.ts (31 tests) 1.2s\n',
   ].entries()) {
-    log.entry(PROCESS, T.process + sec(1 + offset), {
-      id: `out-${offset}`,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      text,
+    log.emit(PROCESS, T.process + sec(1 + offset), {
+      type: 'log',
+      level: 'info',
+      messageType: MESSAGE_TYPES.DEFAULT,
+      message: text,
     });
   }
 
   if (proposal) {
     log.emit(ROOT, T.proposal, {
-      type: 'approval.requested',
+      type: 'request.opened',
       requestId: 'req-plan',
       payload: {
         kind: 'proposal',
@@ -482,31 +434,26 @@ export function buildScenario({ proposal = false } = {}) {
   const pending = log.events.length;
 
   log.emit(CHILD, T.approvalResolved, {
-    type: 'approval.resolved',
+    type: 'request.decided',
     requestId: 'req-1',
+    decision: { action: 'approve' },
   });
   log.emit(CHILD, T.childDone, {
     type: 'run.end',
     outcome: 'completed',
     output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
-  rootEntries.push(
-    log.entry(ROOT, T.childDone + 1, {
-      id: 'call-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: 'phase-Map',
-      data: call('completed', CHILD),
-    }),
-  );
-  rootEntries.push(
-    log.entry(ROOT, T.childDone + 2, {
-      id: 'phase-Map',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      text: 'Map',
-      data: { kind: 'phase', status: 'completed', endTime: T.childDone + 2 },
-    }),
-  );
+  log.emit(ROOT, T.childDone + 1, {
+    type: 'workflow.call',
+    logId: 'call-1',
+    stageId: 'phase-Map',
+    call: call('completed', CHILD),
+  });
+  log.emit(ROOT, T.childDone + 2, {
+    type: 'stage.end',
+    id: 'phase-Map',
+    status: 'completed',
+  });
   log.emit(ROOT, T.rootDone, {
     type: 'run.end',
     outcome: 'completed',
@@ -516,7 +463,6 @@ export function buildScenario({ proposal = false } = {}) {
   const events = log.events.map(tail);
   return {
     log,
-    rootEntries,
     /** The replay a subscriber of every transcript folds. */
     events: [
       subscribe(ROOT, CHILD, GRANDCHILD, PROCESS),
@@ -575,7 +521,7 @@ export function withoutApproval(): SessionView {
   return foldAll([
     ...buildScenario().pending.filter(
       (input) =>
-        !(input._tag === 'event' && input.event.type === 'approval.requested'),
+        !(input._tag === 'event' && input.event.type === 'request.opened'),
     ),
     local({ self: [OWNER] }),
   ]);
@@ -594,20 +540,19 @@ export function withInterruptedChild(): SessionView {
  *  the waiting row is a grandchild of the root. */
 export function withWaitingGrandchild(): SessionView {
   const { pending } = buildScenario();
-  const settled = new Set(['result', 'status']);
   const inputs = pending.filter(
     (input) =>
       !(
         input._tag === 'event' &&
         ((input.event.aggregateId === qualifyAggregateId('run', GRANDCHILD) &&
-          settled.has(input.event.type) &&
+          input.event.type === 'run.end' &&
           input.event.at === T.grandchildDone) ||
-          input.event.type === 'approval.requested')
+          input.event.type === 'request.opened')
       ),
   );
   const log = new Log();
   log.emit(GRANDCHILD, T.grandchildDone, {
-    type: 'approval.requested',
+    type: 'request.opened',
     requestId: 'req-lint',
     payload: {
       kind: 'bash',
@@ -774,8 +719,8 @@ const BOARD_CALLS: readonly BoardCall[] = [
     costUsd: 0.09,
   },
   { id: 'review:legal', phase: 'Review', status: 'cached' },
-  { id: 'review:relay', phase: 'Review', status: 'planned' },
-  { id: 'review:auth', phase: 'Review', status: 'planned' },
+  { id: 'review:relay', phase: 'Review', status: 'queued' },
+  { id: 'review:auth', phase: 'Review', status: 'queued' },
 ];
 
 function boardProgress(entry: BoardCall): WorkflowCallProgress {
@@ -807,7 +752,6 @@ function boardProgress(entry: BoardCall): WorkflowCallProgress {
       return { ...base, status: 'skipped', reason: 'user', ...terminal };
     case 'cached':
     case 'declared':
-    case 'planned':
     case 'queued':
     case 'running':
       return { ...base, status: entry.status };
@@ -892,76 +836,50 @@ function boardView({
     }),
   });
   log.emit(ROOT, startedAt, {
-    type: 'status',
-    phase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: startedAt,
-  });
-  log.emit(ROOT, startedAt, {
     type: 'usage',
     runId: ROOT,
     usage: { inputTokens: 210_000, outputTokens: 41_000, cost: 1.84 },
   });
   const phases = ['Scout', 'Review', 'Verify', 'Report'];
-  log.entry(ROOT, startedAt + 1, {
-    id: 'plan',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    messageType: MESSAGE_TYPES.INTERNAL,
-    text: '',
-    data: {
-      kind: 'workflowPlan',
-      attemptId: 'attempt-1',
-      phases: phases.map((title) => ({ title })),
-      tasks: [
-        ...calls.map((entry) => ({
-          id: entry.id,
-          label: entry.id,
-          phase: entry.phase,
-        })),
-        { id: 'review:release', label: 'review:release', phase: 'Review' },
-        { id: 'verify', label: 'verify', phase: 'Verify' },
-        { id: 'report', label: 'report', phase: 'Report' },
-      ],
-    },
+  log.emit(ROOT, startedAt + 1, {
+    type: 'workflow.plan',
+    attemptId: 'attempt-1',
+    phases: phases.map((title) => ({ title })),
+    tasks: [
+      ...calls.map((entry) => ({
+        id: entry.id,
+        label: entry.id,
+        phase: entry.phase,
+      })),
+      { id: 'review:release', label: 'review:release', phase: 'Review' },
+      { id: 'verify', label: 'verify', phase: 'Verify' },
+      { id: 'report', label: 'report', phase: 'Report' },
+    ],
   });
 
   const openPhase = (title: string, at: number): void => {
-    const index = phases.indexOf(title);
-    log.entry(ROOT, at, {
-      id: `phase-${title}`,
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      text: title,
-      data: {
-        kind: 'phase',
-        index,
-        total: phases.length,
-        attemptId: 'attempt-1',
-      },
-    });
     log.emit(ROOT, at, {
       type: 'stage.start',
       id: `phase-${title}`,
       label: title,
       kind: 'phase',
-      index,
+      index: phases.indexOf(title),
       total: phases.length,
     });
   };
   const closePhase = (title: string, at: number): void => {
-    log.entry(ROOT, at, {
+    log.emit(ROOT, at, {
+      type: 'stage.end',
       id: `phase-${title}`,
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      text: title,
-      data: { kind: 'phase', status: 'completed', endTime: at },
+      status: 'completed',
     });
   };
   const card = (entry: BoardCall, at: number): void => {
-    log.entry(ROOT, at, {
-      id: `call-${entry.id}`,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: `phase-${entry.phase}`,
-      data: boardProgress(entry),
+    log.emit(ROOT, at, {
+      type: 'workflow.call',
+      logId: `call-${entry.id}`,
+      stageId: `phase-${entry.phase}`,
+      call: boardProgress(entry),
     });
   };
 
@@ -993,17 +911,20 @@ function boardView({
         }),
       });
       log.emit(kid.id, kid.startedAt, {
-        type: 'status',
-        phase: RUN_PHASE.RUNNING,
-        cause: 'lifecycle',
-        runStartedAt: kid.startedAt,
+        type: 'run.activate',
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+      });
+      log.emit(kid.id, kid.startedAt, {
+        type: 'flow.step',
+        payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
       });
       if (kid.latest) {
-        log.entry(kid.id, kid.startedAt + 1, {
-          id: `${entry.id}-instruction`,
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
+        log.emit(kid.id, kid.startedAt + 1, {
+          type: 'log',
+          level: 'info',
           messageType: MESSAGE_TYPES.USER_MESSAGE,
-          text: kid.latest,
+          message: kid.latest,
         });
       }
       if (kid.toolCalls !== undefined) {
@@ -1025,7 +946,7 @@ function boardView({
       }
       if (kid.wantsBash) {
         log.emit(kid.id, kid.startedAt + 4, {
-          type: 'approval.requested',
+          type: 'request.opened',
           requestId: `req-${entry.id}`,
           payload: {
             kind: 'bash',
@@ -1061,8 +982,9 @@ function boardView({
         const { child: kid } = entry;
         if (kid.wantsBash) {
           log.emit(kid.id, closedAt - 2, {
-            type: 'approval.resolved',
+            type: 'request.decided',
             requestId: `req-${entry.id}`,
+            decision: { action: 'approve' },
           });
         }
         log.emit(kid.id, closedAt - 1, {
@@ -1079,16 +1001,15 @@ function boardView({
           },
           closedAt,
         );
-      } else if (entry.status === 'planned') {
+      } else if (entry.status === 'queued') {
         card({ ...entry, status: 'cancelled' }, closedAt);
       }
     }
     const outcome = failed ? 'failed' : 'completed';
-    log.entry(ROOT, closedAt + 1, {
+    log.emit(ROOT, closedAt + 1, {
+      type: 'stage.end',
       id: 'phase-Review',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      text: 'Review',
-      data: { kind: 'phase', status: outcome, endTime: closedAt + 1 },
+      status: outcome,
     });
     log.emit(ROOT, closedAt + 2, {
       type: 'run.end',

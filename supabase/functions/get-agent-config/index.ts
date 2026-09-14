@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
     // Description comes from YAML (parsed client-side), not DB
     const { data: agent, error: agentError } = await userClient
       .from('remote_agents')
-      .select('name, storage_path, visibility, agent_category')
+      .select('storage_path')
       .eq('name', body.agentName)
       .single();
 
@@ -88,16 +88,7 @@ Deno.serve(async (req: Request) => {
     // 6. Return config (client parses YAML and extracts description)
     const yamlContent = await fileData.text();
 
-    return jsonResponse(
-      req,
-      {
-        config: yamlContent,
-        name: agent.name,
-        visibility: agent.visibility,
-        agentCategory: agent.agent_category,
-      },
-      200,
-    );
+    return jsonResponse(req, { config: yamlContent }, 200);
   } catch (err) {
     console.error('[GET_AGENT_CONFIG] Error:', err);
     return errorResponse(req, 'Internal server error', 500);

@@ -20,7 +20,7 @@ const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
 export const TOOL_RESULT_TRUNCATION_HEAD_CHARS = 4_000;
 export const TOOL_RESULT_TRUNCATION_TAIL_CHARS = 50_000;
 
-export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
+const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
 
 function describeAttachments(
   attachments: readonly ToolFileAttachment[],
@@ -35,7 +35,7 @@ function describeAttachments(
 type AttachmentSummaryVariant =
   'metadata-only' | 'included-inline' | 'metadata-fallback';
 
-export function formatAttachmentSummary(
+function formatAttachmentSummary(
   attachments: readonly ToolFileAttachment[],
   variant: AttachmentSummaryVariant = 'metadata-only',
 ): string {

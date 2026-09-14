@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
+  JsonValue,
   CommitOrdinal,
   RunId,
   OwnerId,
@@ -96,9 +97,23 @@ export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   override readonly message = toErrorMessage(this.cause);
 }
 
+/**
+ * What opening a store of another event format left behind: the file, the
+ * rows it held, and the format they were written under. Null when the store
+ * was this build's or empty. The one fact a host presents about it; the
+ * database keeps no other memory of the rows.
+ */
+export interface SessionStoreCleared {
+  readonly path: string;
+  readonly rows: number;
+  readonly storedFormat: number;
+}
+
 export class Database extends Context.Service<
   Database,
   {
+    /** Set when this open cleared a store of another event format. */
+    readonly cleared: SessionStoreCleared | null;
     /**
      * C6: append an ordered batch, possibly across several aggregates, in one
      * `BEGIN IMMEDIATE` under the process's single permit. Each target's
@@ -163,6 +178,16 @@ export class Database extends Context.Service<
     readonly readDesktopProjects: (
       id: AggregateId,
     ) => Effect.Effect<SessionEvent | undefined, DatabaseReadFailed>;
+    /**
+     * Every application-state key's latest value in this root, as one map:
+     * the whole store's open-time snapshot in one query, keyed by the state
+     * key its aggregate is named for. A key whose latest row is the delete is
+     * absent from the map.
+     */
+    readonly readAppState: () => Effect.Effect<
+      ReadonlyMap<string, JsonValue>,
+      DatabaseReadFailed
+    >;
     readonly readUpdateCheck: (
       host: UpdateCheckHost,
     ) => Effect.Effect<UpdateCheckRecord | null, DatabaseReadFailed>;

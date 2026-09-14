@@ -1,82 +1,18 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentTrace } from '@agent/trace';
 import { createLog } from '@logger/logUtils';
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   type FlowSnapshotPayload,
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { StorageFS } from '@utils/files/storageFS';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { getRunRecords } from './RunKVStore';
+import { getRunRecords } from './runRecords';
 
 const log = createLog('Resumability');
-
-/**
- * The retired engine's checkpoint, `flow_<id>.json` beside the run's other
- * files. It is never read: it is statted so a run whose only durable state
- * is that file can say so (R10), and renamed `.superseded` before the run's
- * first ledger row so a reverted release cannot resume from a cursor the
- * ledger has moved past. The `.superseded` file stays on disk for the D8
- * sweep.
- */
-const RETIRED_CHECKPOINT_PREFIX = 'flow_';
-const SUPERSEDED_SUFFIX = '.superseded';
-
-const retiredCheckpointPath = (runId: RunId): string =>
-  resolveRunStoragePath(runId, `${RETIRED_CHECKPOINT_PREFIX}${runId}.json`);
-
-/** A retired checkpoint, renamed or not, is internal and never a run output. */
-export function isLegacyFlowRecordFile(name: string): boolean {
-  return (
-    name.startsWith(RETIRED_CHECKPOINT_PREFIX) &&
-    (name.endsWith('.json') || name.endsWith(`.json${SUPERSEDED_SUFFIX}`))
-  );
-}
-
-/**
- * The user-visible fact a listing states for a run whose only durable state
- * is a retired checkpoint (R10).
- */
-const RETIRED_CHECKPOINT_NOTICE =
-  'This run was recorded before the run ledger and is not resumable under this release.';
-
-/**
- * The rename, never silent: the transcript names the file, its new name, and
- * the fact that this release cannot resume it. Both loops call it before the
- * first ledger append of a fresh run.
- */
-export const supersedeLegacyFlowRecord = Effect.fn('supersedeLegacyFlowRecord')(
-  function* (
-    runId: RunId,
-    session: SessionHandle,
-    logger: AgentTrace,
-  ): Effect.fn.Return<void, Error> {
-    const path = retiredCheckpointPath(runId);
-    // One session frame for the stat and the rename: the second read would
-    // resolve the same workspace roots the first already entered.
-    const renamed = yield* Effect.tryPromise({
-      try: () =>
-        runInSession(session, async () => {
-          if (!(await StorageFS.exists(path))) return false;
-          await StorageFS.rename(path, `${path}${SUPERSEDED_SUFFIX}`);
-          return true;
-        }),
-      catch: ensureError,
-    });
-    if (!renamed) return;
-    const fileName = `${RETIRED_CHECKPOINT_PREFIX}${runId}.json`;
-    logger.warn(
-      `A checkpoint from an earlier release (${fileName}) was found for this run. ${RETIRED_CHECKPOINT_NOTICE} It was renamed ${fileName}${SUPERSEDED_SUFFIX}.`,
-    );
-  },
-);
 
 /**
  * Which durable fact was unreadable. The checkpoint's own content is never
@@ -91,8 +27,7 @@ export type ResumabilityFault =
  * What the durable run facts alone say about continuing a run: a
  * `flow.snapshot` exists on the run aggregate, nothing is left to resume, or
  * the storage itself could not be read (reported with its cause, never
- * guessed). A `none` decision carries the R10 notice when the run's only
- * durable state is a retired checkpoint.
+ * guessed).
  */
 export type ResumabilityDecision =
   | {
@@ -103,7 +38,6 @@ export type ResumabilityDecision =
   | {
       readonly kind: 'none';
       readonly outcome?: RunOutcome;
-      readonly notice?: string;
     }
   | {
       readonly kind: 'unreadable';
@@ -166,29 +100,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
       ...metaFields,
     };
   }
-  const retired = yield* Effect.tryPromise({
-    try: () =>
-      runInSession(session, () =>
-        StorageFS.exists(retiredCheckpointPath(runId)),
-      ),
-    catch: ensureError,
-  }).pipe(Effect.result);
-  if (retired._tag === 'Failure') {
-    const error = retired.failure;
-    log.debug(
-      `Failed to stat the retired checkpoint of ${runId}: ${toErrorMessage(error)}`,
-    );
-    return {
-      kind: 'unreadable',
-      fault: 'checkpoint-unreadable',
-      cause: `checkpoint could not be read (${toErrorMessage(error)})`,
-    };
-  }
-  return {
-    kind: 'none',
-    ...metaFields,
-    ...(retired.success ? { notice: RETIRED_CHECKPOINT_NOTICE } : {}),
-  };
+  return { kind: 'none', ...metaFields };
 });
 
 /**

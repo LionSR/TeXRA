@@ -38,6 +38,7 @@ import type {
 } from '@shared/transcript';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
+import { pluralize } from '@utils/text/stringUtils';
 
 import { buildToolSection } from './helpers';
 
@@ -106,7 +107,7 @@ function renderFileListSection(section: ToolFileListSection): TemplateResult {
   // prettier-ignore
   const fileItems = html`${section.files.map((file) => {
     const diffStats = file.lineChanges
-      ? html` <span class="file-stats"><span class="visually-hidden">${file.lineChanges.added} ${file.lineChanges.added === 1 ? 'line' : 'lines'} added, ${file.lineChanges.removed} ${file.lineChanges.removed === 1 ? 'line' : 'lines'} removed</span><span class="added" aria-hidden="true">+${file.lineChanges.added}</span><span class="removed" aria-hidden="true">-${file.lineChanges.removed}</span></span>`
+      ? html` <span class="file-stats"><span class="visually-hidden">${file.lineChanges.added} ${pluralize(file.lineChanges.added, 'line', 'lines')} added, ${file.lineChanges.removed} ${pluralize(file.lineChanges.removed, 'line', 'lines')} removed</span><span class="added" aria-hidden="true">+${file.lineChanges.added}</span><span class="removed" aria-hidden="true">-${file.lineChanges.removed}</span></span>`
       : nothing;
     // prettier-ignore
     return html`<li class="detail-item">${waIcon('file')} ${buildFileLinkSpan(file.path, html`<bdi dir="auto">${file.path}</bdi>`)}${file.from ? html` <span class="file-source">(from <bdi dir="auto">${file.from}</bdi>)</span>` : nothing}${file.note ? html` <span class="file-source">(<bdi dir="auto">${file.note}</bdi>)</span>` : nothing}${diffStats}</li>`;

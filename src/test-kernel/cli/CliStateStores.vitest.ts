@@ -31,6 +31,7 @@ describe('CLI state stores', () => {
       const first = yield* createCliStateStores({
         storageRoot: path.join(root, 'storage'),
         workspacePath,
+        runWrite: (write) => Effect.runPromise(write),
       });
       yield* Effect.promise(() =>
         first.workspaceState.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
@@ -41,6 +42,7 @@ describe('CLI state stores', () => {
       const second = yield* createCliStateStores({
         storageRoot: path.join(root, 'storage'),
         workspacePath,
+        runWrite: (write) => Effect.runPromise(write),
       });
 
       expect(

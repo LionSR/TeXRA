@@ -82,6 +82,7 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
+import { effectRuntime } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -124,7 +125,8 @@ type RefreshSurface = {
 const subscriptions: vscode.Disposable[] = [];
 
 function createHandler(): SettingsViewMessageHandler {
-  const { globalState, secrets } = installedHost().platform;
+  const { secrets, roots } = installedHost();
+  const { globalState } = roots;
   const handler = new SettingsViewMessageHandler(
     {
       subscriptions,
@@ -133,6 +135,7 @@ function createHandler(): SettingsViewMessageHandler {
       languageModelAccessInformation: { canSendRequest: mocks.canSendRequest },
     } as unknown as vscode.ExtensionContext,
     secrets,
+    effectRuntime(),
   );
   vi.spyOn(
     handler as unknown as RefreshSurface,
@@ -198,7 +201,7 @@ describe('Copilot route preference handler', () => {
       expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
         'gemini31p',
         true,
-        installedHost().platform.globalState,
+        installedHost().roots.globalState,
       );
       expect(port.sendRequest).not.toHaveBeenCalled();
       expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
@@ -477,7 +480,7 @@ describe('Copilot route preference handler', () => {
     expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
       'gemini31p',
       false,
-      installedHost().platform.globalState,
+      installedHost().roots.globalState,
     );
     expect(port.selectModels).not.toHaveBeenCalled();
     expect(mocks.selectChatModels).not.toHaveBeenCalled();

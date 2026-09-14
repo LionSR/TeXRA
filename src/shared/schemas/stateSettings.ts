@@ -399,9 +399,9 @@ const CORE_SETTING_ROWS: Record<
     category: 'multi-agent',
     honoredBy: everyHost('src/agent/runtime/childRunBudget.ts', {
       command:
-        'texra agents run <tool-use-agent> --instruction "dispatch two subagents"',
+        'texra run <tool-use-agent> --instruction "dispatch two subagents"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/delegation/detachedChildRun.ts -> src/agent/runtime/childRunLoop.ts -> src/agent/runtime/childRunBudget.ts',
+        'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/delegation/detachedChildRun.ts -> src/agent/runtime/childRunLoop.ts -> src/agent/runtime/childRunBudget.ts',
     }),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
@@ -424,9 +424,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'GPT-5 reasoning summary',
     description:
       "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-    honoredBy: everyHost(
-      'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
-    ),
+    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     model: {
       provider: 'openai',
       label: 'GPT-5 reasoning summary',
@@ -439,27 +437,12 @@ const CORE_SETTING_ROWS: Record<
       warningUrlLabel: 'Check your tier',
     },
   }),
-  'model.useOpenAIResponsesAPI': modelProviderToggle({
-    default: true,
-    title: 'Use the Responses API',
-    description:
-      "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
-    honoredBy: everyHost('src/agent/runtime/ModelFactory.ts'),
-    model: {
-      provider: 'openai',
-      label: 'Use the Responses API',
-      description:
-        'Use the OpenAI Responses API instead of Chat Completions when available.',
-    },
-  }),
   'model.useGoogleInteractionsServerState': modelProviderToggle({
     default: true,
     title: 'Server-side conversation state',
     description:
       "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
-    honoredBy: everyHost(
-      'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
-    ),
+    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     model: {
       provider: 'google',
       label: 'Server-side conversation state',
@@ -471,13 +454,13 @@ const CORE_SETTING_ROWS: Record<
     default: false,
     title: 'Google background responses',
     description:
-      'Run Google workflow generations as background Interactions (submit + poll). When this and the global streaming toggle (Enable streaming) are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The global streaming toggle (Enable streaming) avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
+      'Run Google workflow generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
     honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
     model: {
       provider: 'google',
       label: 'Background responses',
       description:
-        'Run workflow generations as background Interactions (submit + poll). When this and the global streaming toggle (Enable streaming) are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The global streaming toggle (Enable streaming) avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
+        'Run workflow generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
     },
   }),
   'model.useBackgroundResponses': modelProviderToggle({
@@ -498,9 +481,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Parallel tool calls',
     description:
       'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
-    honoredBy: everyHost(
-      'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts',
-    ),
+    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     model: {
       provider: 'openai',
       label: 'Parallel tool calls',
@@ -519,9 +500,9 @@ const CORE_SETTING_ROWS: Record<
     category: 'model',
     honoredBy: everyHost('src/agent/runtime/run/compaction.ts', {
       command:
-        'texra agents run <tool-use-agent> --instruction "answer a short question"',
+        'texra run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/loop/toolUse.ts -> src/agent/runtime/run/compaction.ts',
+        'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/loop/toolUse.ts -> src/agent/runtime/run/compaction.ts',
     }),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
@@ -532,9 +513,9 @@ const CORE_SETTING_ROWS: Record<
     category: 'model',
     honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts', {
       command:
-        'texra agents run <tool-use-agent> --instruction "answer a short question"',
+        'texra run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/ModelInvoker.ts',
+        'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/ModelInvoker.ts',
     }),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
@@ -553,9 +534,9 @@ const CORE_SETTING_ROWS: Record<
     category: 'model',
     honoredBy: everyHost('src/model/providerCapabilities.ts', {
       command:
-        'texra agents run <tool-use-agent> --instruction "answer a short question"',
+        'texra run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/openai/modelHandlerCodex.ts -> src/model/providerCapabilities.ts',
+        'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/model/providerCapabilities.ts',
     }),
     // This bucket controls snapshot/rebroadcast routing, not tab placement;
     // reuse it for the Subscriptions control because no subscriptions bucket exists.
@@ -730,9 +711,9 @@ const CORE_SETTING_ROWS: Record<
     category: 'tools',
     honoredBy: everyHost('src/agent/prompt/userVars.ts', {
       command:
-        'texra agents run <tool-use-agent> --instruction "answer a short question"',
+        'texra run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts',
+        'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts',
     }),
     surfaces: { settingsView: 'skills', cliConfig: true },
   },
@@ -820,9 +801,9 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
         reader: 'packages/cli/src/runtime/cliConfig.ts',
         reachability: {
           command:
-            'texra agents run <tool-use-agent> --instruction "run a shell command"',
+            'texra run <tool-use-agent> --instruction "run a shell command"',
           through:
-            'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> packages/cli/src/runtime/cliContext.ts -> packages/cli/src/runtime/cliConfig.ts -> src/agent/runtime/SessionHandle.ts -> src/tools/approval/bashApproval.ts',
+            'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> packages/cli/src/runtime/cliContext.ts -> packages/cli/src/runtime/cliConfig.ts -> src/agent/runtime/SessionHandle.ts -> src/tools/approval/bashApproval.ts',
         },
       },
     },
@@ -841,21 +822,19 @@ const CODEX_CONFIG_READER = 'src/tools/codexConfig.ts';
 const CLAUDE_AGENT_CONFIG_READER = 'src/tools/claudeAgentConfig.ts';
 const WORKFLOW_COMPILE_READER =
   'src/agent/implementations/flows/reflection/output/compileCheck.ts';
-const PROXY_CONFIG_READER =
-  'src/agent/modelHandlers/support/ProxyConfigResolver.ts';
+const ROUTE_ENDPOINT_READER = 'src/agent/runtime/run/routeEndpoint.ts';
 const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
 
 const GIT_AUTHOR_RUNTIME_REACHABILITY = {
-  command:
-    'texra agents run <tool-use-agent> --instruction "create a git commit"',
+  command: 'texra run <tool-use-agent> --instruction "create a git commit"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/utils/system/execUtils.ts -> src/utils/system/gitAuthorEnv.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/utils/system/execUtils.ts -> src/utils/system/gitAuthorEnv.ts',
 } satisfies CliRuntimeReachability;
 const GIT_WORKTREE_RUNTIME_REACHABILITY = {
   command:
-    'texra agents run <tool-use-agent> --instruction "delegate a task to a subagent"',
+    'texra run <tool-use-agent> --instruction "delegate a task to a subagent"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/delegation/DelegationTools.ts -> src/tools/delegation/inputFields.ts -> src/utils/config/worktreeConfig.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/delegation/DelegationTools.ts -> src/tools/delegation/inputFields.ts -> src/utils/config/worktreeConfig.ts',
 } satisfies CliRuntimeReachability;
 const DETACH_SUBAGENTS_RUNTIME_REACHABILITY = {
   command: 'texra chat',
@@ -864,9 +843,9 @@ const DETACH_SUBAGENTS_RUNTIME_REACHABILITY = {
 } satisfies CliRuntimeReachability;
 const ORCHESTRATOR_KILL_RUNTIME_REACHABILITY = {
   command:
-    'texra agents run <tool-use-agent> --instruction "delegate two tasks, then stop the slower subagent"',
+    'texra run <tool-use-agent> --instruction "delegate two tasks, then stop the slower subagent"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> src/agent/runtime/runAgent.ts -> src/tools/ExecutionsTool.ts',
+    'packages/cli/src/commands/workflow.ts -> src/agent/runtime/runAgent.ts -> src/tools/ExecutionsTool.ts',
 } satisfies CliRuntimeReachability;
 const WORKFLOW_COMPILE_RUNTIME_REACHABILITY = {
   command:
@@ -884,63 +863,65 @@ const OPENAI_WEBSOCKET_RUNTIME_REACHABILITY = {
   command:
     'texra run <workflow-agent> --model <openai-model> --input paper.tex --instruction "summarize the paper"',
   through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
+    'packages/cli/src/commands/workflow.ts -> src/agent/runtime/run/modelBinding.ts',
 } satisfies CliRuntimeReachability;
 const OPENROUTER_ROUTING_RUNTIME_REACHABILITY = {
   command:
-    'texra agents run <tool-use-agent> --model <openrouter-routable-model> --instruction "answer a short question"',
+    'texra run <tool-use-agent> --model <openrouter-routable-model> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/utils/config/providerConfig.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/utils/config/providerConfig.ts',
 } satisfies CliRuntimeReachability;
 const KIMI_CODE_ROUTING_RUNTIME_REACHABILITY = {
   // Requires a Kimi Code API key (`texra chat` /key flow or KIMI_CODE_API_KEY).
   command:
-    'texra agents run <tool-use-agent> --model kimi3 --instruction "answer a short question"',
+    'texra run <tool-use-agent> --model kimi3 --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/model/kimiCodeSubscriptionRouting.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/model/kimiCodeSubscriptionRouting.ts',
 } satisfies CliRuntimeReachability;
 const PROVIDER_REGION_RUNTIME_REACHABILITY = {
   command:
-    'texra agents run <tool-use-agent> --model <dashscope/minimax/moonshot/glm-model> --instruction "answer a short question"',
+    'texra run <tool-use-agent> --model <dashscope/minimax/moonshot/glm-model> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/ModelHandler.ts -> src/agent/modelHandlers/support/ProxyConfigResolver.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/agent/runtime/run/routeEndpoint.ts',
 } satisfies CliRuntimeReachability;
 const PROVIDER_ENDPOINT_RUNTIME_REACHABILITY = {
   command:
-    'texra agents run <tool-use-agent> --model <provider-model> --instruction "answer a short question"',
+    'texra run <tool-use-agent> --model <provider-model> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/support/ProxyConfigResolver.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/agent/runtime/run/routeEndpoint.ts',
 } satisfies CliRuntimeReachability;
 const CODEX_AGENT_RUNTIME_REACHABILITY = {
-  command:
-    'texra agents run <tool-use-agent> --instruction "launch a Codex subagent"',
+  command: 'texra run <tool-use-agent> --instruction "launch a Codex subagent"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/codex.ts -> src/tools/codexConfig.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/codex.ts -> src/tools/codexConfig.ts',
 } satisfies CliRuntimeReachability;
 const CLAUDE_AGENT_RUNTIME_REACHABILITY = {
   command:
-    'texra agents run <tool-use-agent> --instruction "launch a Claude Code subagent"',
+    'texra run <tool-use-agent> --instruction "launch a Claude Code subagent"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/claudeAgent.ts -> src/tools/claudeAgentConfig.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/claudeAgent.ts -> src/tools/claudeAgentConfig.ts',
 } satisfies CliRuntimeReachability;
 const TOOL_AVAILABILITY_RUNTIME_REACHABILITY = {
-  command:
-    'texra agents run <tool-use-agent> --instruction "use an external tool"',
+  command: 'texra run <tool-use-agent> --instruction "use an external tool"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/agentToolResolution.ts -> src/tools/toolAvailability.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/agentToolResolution.ts -> src/tools/toolAvailability.ts',
 } satisfies CliRuntimeReachability;
 const TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY = {
   command:
-    'texra agents run <tool-use-agent> --instruction "read a file outside the working directory"',
+    'texra run <tool-use-agent> --instruction "read a file outside the working directory"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/pathResolution.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/pathResolution.ts',
 } satisfies CliRuntimeReachability;
 
 /**
- * The one documented slot divergence in the catalog, shared by the git
- * identity and skill availability rows: the extension and desktop store them
- * in worktree-shared WorkspaceState while the CLI reads them from
- * `.texra/config.json`, which is where an existing user's values already live.
+ * The one documented slot divergence in the catalog, carried by the git
+ * identity rows: the extension and desktop store them in WorkspaceState —
+ * where `WorktreeStateStore` additionally shares them across every worktree of
+ * a repository, so one clone has one agent commit identity — while the CLI
+ * reads them from `.texra/config.json`, which is where an existing user's
+ * values already live. Do not move these rows to `config`: `.texra/` is
+ * gitignored by default, so the project config file is per-checkout, not
+ * repository-level, and the move would silently drop the worktree sharing.
  */
 const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
   vscode: 'workspaceState',
@@ -949,10 +930,9 @@ const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
 };
 
 const SKILL_AVAILABILITY_REACHABILITY = {
-  command:
-    'texra agents run <tool-use-agent> --instruction "answer a short question"',
+  command: 'texra run <tool-use-agent> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts -> src/skills/runtimeSkills.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts -> src/skills/runtimeSkills.ts',
 } satisfies CliRuntimeReachability;
 
 const GIT_AUTHOR_HONORED_BY = everyHost(
@@ -987,7 +967,7 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
       category: 'model',
       slots: sameSlot('globalState'),
       honoredBy: everyHost(
-        PROXY_CONFIG_READER,
+        ROUTE_ENDPOINT_READER,
         PROVIDER_ENDPOINT_RUNTIME_REACHABILITY,
       ),
       surfaces: { settingsView: 'profile', cliConfig: true },
@@ -995,7 +975,7 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
 );
 
 /**
- * Region/routing toggles resolved by `ProxyConfigResolver`, each also a Models
+ * Region/routing toggles resolved by `run/routeEndpoint`, each also a Models
  * tab control for its provider. The rows differ only in key, default, and
  * copy, so the shared fields are written once.
  */
@@ -1061,7 +1041,7 @@ const PROVIDER_ROUTING_SETTINGS = (
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(
-      PROXY_CONFIG_READER,
+      ROUTE_ENDPOINT_READER,
       PROVIDER_REGION_RUNTIME_REACHABILITY,
     ),
     surfaces: {
@@ -1399,7 +1379,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(
-      'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
+      'src/agent/runtime/run/modelBinding.ts',
       OPENAI_WEBSOCKET_RUNTIME_REACHABILITY,
     ),
     surfaces: {
@@ -1416,18 +1396,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     },
   }),
 
-  // --- Provider endpoints & streaming ---------------------------------------
+  // --- Provider endpoints -----------------------------------------------------
   ...PROVIDER_ENDPOINT_SETTINGS,
-  surfacedSetting({
-    key: GlobalStateKey.STREAMING_GLOBAL,
-    schema: z.boolean().prefault(true),
-    title: 'Enable streaming',
-    description: 'Global default for all providers.',
-    category: 'model',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost(PROVIDER_CONFIG_READER),
-    surfaces: { settingsView: 'profile' },
-  }),
 
   // --- Model picker preferences ---------------------------------------------
   surfacedSetting({
@@ -1448,7 +1418,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Show compact model names in pickers.',
     category: 'model',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/runtime/ModelFactory.ts'),
+    honoredBy: everyHost('src/agent/runtime/modelRoutes.ts'),
     surfaces: { settingsView: 'models' },
   }),
 
@@ -1490,7 +1460,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(
-      'src/agent/runtime/ModelFactory.ts',
+      'src/agent/runtime/run/modelBinding.ts',
       KIMI_CODE_ROUTING_RUNTIME_REACHABILITY,
     ),
     // Kimi Code and OpenRouter are alternative routes for the same dual-backend
@@ -1522,7 +1492,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(
-      PROXY_CONFIG_READER,
+      ROUTE_ENDPOINT_READER,
       PROVIDER_REGION_RUNTIME_REACHABILITY,
     ),
     onWrite: { invalidatesModelOptions: true },
@@ -1567,7 +1537,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Skills',
     description: 'Enable or disable individual skills in this workspace.',
     category: 'tools',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: sameSlot('config'),
     honoredBy: everyHost(
       'src/skills/runtimeSkills.ts',
       SKILL_AVAILABILITY_REACHABILITY,
@@ -1581,7 +1551,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Skill sources',
     description: 'Enable or disable skill source groups in this workspace.',
     category: 'tools',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: sameSlot('config'),
     honoredBy: everyHost(
       'src/skills/runtimeSkills.ts',
       SKILL_AVAILABILITY_REACHABILITY,

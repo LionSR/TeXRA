@@ -1,8 +1,9 @@
+import { ModelProvider } from 'llm-zoo';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import type { RunModelHandler } from '@agent/runtime/ModelCell';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -13,7 +14,6 @@ import {
 import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local file imports
-import { testModelCell } from '../modelCellTestUtils';
 import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
 import { testModelInfo } from '../runtime/launchContextTestUtils';
 
@@ -51,15 +51,12 @@ function createMonitorWithEvents() {
   const logger = new TraceEmitter();
   const runId = 'usage-last-totals' as RunId;
   const recorded = recordTraceEvents(logger);
-  const modelCell = testModelCell({ ...testModelInfo, dispose: vi.fn() });
   const monitor = new UsageMonitor(
-    modelCell,
-    { logger, runId, runStageId: undefined },
+    { logger, runId, runStageId: undefined, config: workspaceRoots().config },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );
   return {
     monitor,
-    modelCell,
     logger,
     events: recorded.events,
     dispose: () => {},
@@ -84,7 +81,7 @@ describe('UsageMonitor', () => {
       expect(monitor.lastTotals()).toBeUndefined();
 
       const state = AgentRunStateSnapshotSchema.parse({});
-      await monitor.recordUsage(state);
+      await monitor.recordUsage(state, testModelInfo);
 
       // The cache holds the exact totals object the accumulator exposed, so a
       // failed run's terminal `result` event can report usage from the catch arm.
@@ -100,11 +97,11 @@ describe('UsageMonitor', () => {
         outputTokens: 2,
         cost: 0,
         responseTimeMs: 50,
-        provider: 'openai-response',
+        provider: 'openai-responses',
         usageRoute: 'chatgpt-subscription',
       });
 
-      await monitor.recordUsage(state);
+      await monitor.recordUsage(state, testModelInfo);
 
       const usageEvent = traceEventsOfType(events, 'usage').at(0);
       expect(usageEvent).toMatchObject({
@@ -125,12 +122,12 @@ describe('UsageMonitor', () => {
         outputTokens: 10,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openai' as const,
+        provider: 'openai-chat' as const,
       };
       recordRound(state, 50, round);
-      await monitor.recordUsage(state);
+      await monitor.recordUsage(state, testModelInfo);
       recordRound(state, 50, round);
-      await monitor.recordUsage(state);
+      await monitor.recordUsage(state, testModelInfo);
 
       // The session row is a snapshot of the run's spend (the fold replaces
       // the run's total with the newest row), so the second round's row
@@ -157,14 +154,14 @@ describe('UsageMonitor', () => {
         outputTokens: 2,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openai' as const,
+        provider: 'openai-chat' as const,
       };
       recordRound(state, 50, usage);
-      await monitor.recordUsage(state);
+      await monitor.recordUsage(state, testModelInfo);
 
       recordRound(state, 25, null);
       expect(state.usageAccumulator.latestUsage).toBeNull();
-      await monitor.recordUsage(state);
+      await monitor.recordUsage(state, testModelInfo);
 
       expect(traceEventsOfType(events, 'usage')).toHaveLength(1);
       expect(log).toHaveBeenCalledTimes(1);
@@ -177,16 +174,11 @@ describe('UsageMonitor', () => {
   });
 
   it('bills a round against the model the run switched to', async () => {
-    await withMonitor(async ({ monitor, modelCell }) => {
+    await withMonitor(async ({ monitor }) => {
       const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
-      modelCell.swap(
-        {
-          ...testModelInfo,
-          config: { ...testModelInfo.config, fullName: 'Switched Model' },
-          dispose: vi.fn(),
-        } as unknown as RunModelHandler,
-        'switched-model',
-      );
+      const switched = {
+        config: { ...testModelInfo.config, fullName: 'Switched Model' },
+      };
 
       const state = AgentRunStateSnapshotSchema.parse({});
       recordRound(state, 50, {
@@ -194,43 +186,40 @@ describe('UsageMonitor', () => {
         outputTokens: 2,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openai' as const,
+        provider: 'openai-chat' as const,
       });
-      await monitor.recordUsage(state);
+      await monitor.recordUsage(state, switched);
 
-      // Nothing pushes the new model in: the monitor reads the live handler
-      // out of the run's ModelCell on every round.
+      // The loop passes the binding that served the round, so the round is
+      // billed against it and not against the launch model.
       expect(log).toHaveBeenCalledWith(
         expect.objectContaining({ model: 'Switched Model' }),
+        expect.anything(),
       );
     });
   });
 
   it('uses the normalized provider for backend usage accounting', async () => {
-    await withMonitor(async ({ logger, monitor, modelCell }) => {
+    await withMonitor(async ({ logger, monitor }) => {
       const warn = vi.spyOn(logger, 'warn');
       const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
-      modelCell.swap(
-        {
-          ...testModelInfo,
-          config: { ...testModelInfo.config, provider: 'others' },
-          dispose: vi.fn(),
-        } as unknown as RunModelHandler,
-        'other-provider-model',
-      );
+      const other = {
+        config: { ...testModelInfo.config, provider: ModelProvider.OTHERS },
+      };
       const state = AgentRunStateSnapshotSchema.parse({});
       recordRound(state, 50, {
         inputTokens: 10,
         outputTokens: 2,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openrouter' as const,
+        provider: 'openrouter-chat' as const,
       });
 
-      await monitor.recordUsage(state);
+      await monitor.recordUsage(state, other);
 
       expect(log).toHaveBeenCalledWith(
-        expect.objectContaining({ provider: 'openrouter' }),
+        expect.objectContaining({ provider: 'openrouter-chat' }),
+        expect.anything(),
       );
       expect(warn).not.toHaveBeenCalled();
     });

@@ -34,15 +34,12 @@ import {
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import {
+  CLI_LOCAL_RUN_ID,
   activeForm,
   requestDraftRestore,
   resetCliState,
 } from '@cli/chat/tui/state/cliState';
-import {
-  CLI_LOCAL_RUN_ID,
-  notices,
-  noticesFor,
-} from '@cli/chat/tui/state/transcript';
+import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import {
   loadInk,
   renderInteractive,

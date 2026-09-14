@@ -64,14 +64,17 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   MESSAGE_TYPES,
+  TOOL_CALL_STATUS,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
+  RUN_SUBSTATE,
   STREAMING_TEXT_MESSAGE_TYPES,
   isPlainAgentIdentity,
   listingTypeOf,
   isTranscriptEvent,
   ownerPid,
+  requestParksItsCaller,
   runIdentityDisplayName,
   emptyUsageStats,
   sumUsageStats,
@@ -79,7 +82,6 @@ import {
   type FoldInput,
   type ExistenceReconciliation,
   type LocalRuntimeState,
-  type RoundIndexed,
   type DisplaySessionEvent,
   type StreamLogEntry,
   type RunId,
@@ -110,7 +112,6 @@ import {
   type CompactionActivityProjection,
 } from '@shared/runs/compactionActivityProjection';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
-import { runStageFromStageStart } from '@shared/runs/stage';
 import {
   compareByNewestCreationTime,
   compareBySeqNo,
@@ -133,6 +134,7 @@ import {
   workflowMarkerOf,
   workflowRunModel,
   type ChildRunProgress,
+  type WorkflowRunModel,
 } from '@shared/runs/workflowRunModel';
 import { isObject } from '@utils/core';
 import { createTranscriptFold } from './traceFold';
@@ -141,10 +143,6 @@ import { StreamLog } from './traceEntries';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
-type TranscriptEntryEvent = Extract<
-  DisplaySessionEvent,
-  { type: 'transcript.entry' }
->;
 
 /** Workflow-script run ids whose run model a batch derives at its end. */
 type DeferredRunModels = Set<RunId> | null;
@@ -251,7 +249,12 @@ function reconcileExistence(
   }
   for (const id of existence.removedAggregateIds) {
     claims.delete(id);
-    if (view.folded.has(id)) writableMap(view, 'folded').delete(id);
+    // The transcript tier belongs to the subscription set alone (5.2,
+    // "Residency"): `foldSubscriptions` opens the `folded` entry and closes
+    // it, and the tombstone below ends it with its run. A reader reports an
+    // aggregate with no sequence row as absent whether it was removed or has
+    // not started yet, so ending the tier here would drop the rows of a
+    // stream a subscription named before its `run.start` committed.
     const target = aggregateTarget(id);
     if (target.kind === 'run') foldRunRemoved(view, target.id, deferred);
     if (
@@ -503,7 +506,7 @@ function createRun(
     runStartedAt: null,
     lastTimestamp: event.at,
     conversationProgress: { toolCallCount: 0 },
-    stage: null,
+    flow: null,
     followUpSupport: event.userFollowUpSupport,
     resumeEligible:
       event.category === AgentCategory.ToolUse &&
@@ -702,10 +705,10 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
  * local snapshot, and its children (5.2). Interrupted is owner loss: a
  * non-terminal run nobody holds, whether or not an approval is pending.
  * Somebody holds it when its owner is this process or a process whose lease
- * this one may not touch. Waiting needs a held owner: without one the same
- * pending request reads as interrupted, never waiting, because nothing is
- * listening for the answer; the durable phase and the listed approval stay,
- * so a resume can re-ask.
+ * this one may not touch. Waiting needs a held owner and a request that parks
+ * its tool: without an owner the same pending request reads as interrupted,
+ * never waiting, because nothing is listening for the answer; the durable
+ * phase and the listed request stay, so a resume can re-ask.
  */
 function withAggregates(view: SessionView, run: RunView): RunView {
   const { local } = sessionIndexesOf(view);
@@ -715,7 +718,12 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
   const heldElsewhere = heldBy !== null;
   const held = own || heldElsewhere;
-  const pendingOwn = view.approvals.some((a) => a.runId === run.id);
+  // Only a request that parks its tool is a wait: a dispatched inquiry left
+  // its run working, so it stays listed for the panel without moving the run
+  // out of Running.
+  const pendingOwn = view.requests.some(
+    (r) => r.runId === run.id && requestParksItsCaller(r.payload),
+  );
   const interrupted = !isTerminalOutcomePhase(run.status) && !held;
   const waiting = pendingOwn && held;
   const durableOutcome =
@@ -821,16 +829,6 @@ function childProgressChanged(prev: RunView, next: RunView): boolean {
   );
 }
 
-/** Whether a transcript entry is one the run model reads: a group boundary
- *  (phases), a workflow card, or a plan marker. */
-function entryAffectsRunModel(entry: StreamLogEntry): boolean {
-  return (
-    entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
-    entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK ||
-    workflowMarkerOf(entry) !== undefined
-  );
-}
-
 /**
  * The run model's residency (PRD 5.2, section 4 of the build note): the
  * newest dashboard rows up to the cap, and the phase groups those rows still
@@ -886,6 +884,16 @@ function withRunModel(view: SessionView, run: RunView): RunView {
     ...run,
     transcript: replaceTranscript(transcript, { run: runModel }),
   };
+}
+
+/** Re-derive one workflow run model from a folded view on demand. */
+export function deriveWorkflowRunModel(
+  view: SessionView,
+  runId: RunId,
+): WorkflowRunModel | null {
+  const run = view.runs.get(runId);
+  if (!run || !isWorkflowScriptRun(run)) return null;
+  return withRunModel(view, run).transcript.run;
 }
 
 /** Derive the run model now, or note the run for the end of the batch. */
@@ -980,10 +988,30 @@ function reconcileCompactionRows(
 function isStreamingEntry(entry: StreamLogEntry): boolean {
   return (
     entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
-    STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType ?? '') &&
+    STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType) &&
     isObject(entry.data) &&
     entry.data.status === 'running'
   );
+}
+
+/** A tool card still running: what it prints reaches the fold as live text
+ *  keyed by the card id, like a streaming row's chunks, and projects as the
+ *  card's output until the terminal row replaces it (C3: never a row). */
+function isRunningToolEntry(entry: StreamLogEntry): boolean {
+  return (
+    entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
+    entry.messageType === MESSAGE_TYPES.TOOL_USE &&
+    isObject(entry.data) &&
+    entry.data.status === TOOL_CALL_STATUS.IN_PROGRESS
+  );
+}
+
+/** The card's entry with its live output in place of the durable one. */
+function withToolOutput(entry: StreamLogEntry, output: string): StreamLogEntry {
+  return {
+    ...entry,
+    data: { ...(isObject(entry.data) ? entry.data : {}), output },
+  } as StreamLogEntry;
 }
 
 type StreamingTextRow = Extract<
@@ -1065,15 +1093,19 @@ function applyEntry(
   // from offset zero (the bridge seeds one for every running row it
   // publishes) ends within the length held and is dropped (5.2, "In-flight
   // text").
-  if (isStreamingEntry(entry) && entry.text && !inflight.has(key)) {
+  const streamingText = isStreamingEntry(entry);
+  const runningTool = isRunningToolEntry(entry);
+  if (streamingText && entry.text && !inflight.has(key)) {
     inflight.set(key, entry.text);
   }
-  const live = isStreamingEntry(entry) ? inflight.get(key) : undefined;
-  projectRow(
-    next,
-    live === undefined ? entry : { ...entry, text: live },
-    lifecycleToTaskGroups(run),
-  );
+  const live = streamingText || runningTool ? inflight.get(key) : undefined;
+  let projected = entry;
+  if (live !== undefined) {
+    projected = streamingText
+      ? { ...entry, text: live }
+      : withToolOutput(entry, live);
+  }
+  projectRow(next, projected, lifecycleToTaskGroups(run));
   const row = rowById(next, entry.id);
   if (row?.kind === 'thinking') {
     const newest = indexes.thinkingRowId;
@@ -1082,13 +1114,17 @@ function applyEntry(
       indexes.thinkingRowId = row.id;
     }
   }
-  if (isStreamingEntry(entry)) {
+  if (streamingText) {
     const text = live ?? '';
     indexes.streaming.set(entry.id, {
       entry,
       // The projected row already measured the text; a blank entry has none.
       text: row && isStreamingTextRow(row) ? row.text : transcriptText(text),
     });
+  } else if (runningTool) {
+    // A card's cursor holds the entry alone: its output projects from the
+    // held text, never from a measured cursor.
+    indexes.streaming.set(entry.id, { entry, text: transcriptText('') });
   } else {
     indexes.streaming.delete(entry.id);
     inflight.delete(key);
@@ -1305,6 +1341,16 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
   inflight.set(key, text);
   // The row projects when its entry folds, joined with this entry.
   if (!cursor) return true;
+  if (isRunningToolEntry(cursor.entry)) {
+    const transcript = replaceTranscript(run.transcript, {});
+    projectRow(
+      transcript,
+      withToolOutput(cursor.entry, text),
+      lifecycleToTaskGroups(run),
+    );
+    setRun(view, { ...run, transcript });
+    return true;
+  }
   cursor.text =
     chunk.from === held.length
       ? appendTranscriptText(cursor.text, chunk.text, held.at(-1) ?? '')
@@ -1350,12 +1396,10 @@ function wrongArm(run: RunView, event: DisplaySessionEvent): never {
 
 /** The event's own arm applied to its run (topology, session slices, and
  *  the transcript tier are handled by the caller). */
-function applyOwnArm(
-  run: RunView,
-  event: Exclude<DisplaySessionEvent, TranscriptEntryEvent>,
-): RunView {
+function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
   switch (event.type) {
     case 'log':
+    case 'stage.start':
     case 'stage.end':
     case 'tool.start':
     case 'tool.end':
@@ -1371,10 +1415,28 @@ function applyOwnArm(
       // Existence cannot become more true (5.2, "Duplicates"): a second
       // start for a run the view holds is a no-op.
       return run;
-    case 'run.activate':
-      // Ownership moves with the envelope the caller stamps; the activation
-      // metadata repeats the launch facts the run already carries.
-      return run;
+    case 'run.activate': {
+      // Every activation, the launch and each resume, opens a running window
+      // (one run model, 3.3): the phase, the run window, and a fresh
+      // incarnation's progress are folded from it. A first activation is
+      // starting and a later one resuming (ruling A9-1), for a run whose
+      // loop steps; the first `flow.step` clears it.
+      let substate: RunView['substate'] = null;
+      if (isPlainAgentIdentity(run.identity)) {
+        substate =
+          run.status === RUN_LIFECYCLE_READY
+            ? RUN_SUBSTATE.STARTING
+            : RUN_SUBSTATE.RESUMING;
+      }
+      return {
+        ...run,
+        status: RUN_PHASE.RUNNING,
+        substate,
+        runStartedAt: event.at,
+        flow: null,
+        conversationProgress: { toolCallCount: 0 },
+      };
+    }
     case 'run.config': {
       const model = run.identity.kind === 'agent' ? event.config.model : null;
       return {
@@ -1385,32 +1447,6 @@ function applyOwnArm(
           run.identity.kind === 'process' ? event.config.instruction : null,
         inputFiles: event.config.inputFiles,
       };
-    }
-    case 'status': {
-      const freshRun =
-        event.phase === RUN_PHASE.RUNNING &&
-        event.previousPhase !== RUN_PHASE.RUNNING;
-      return withSettledTranscript(
-        {
-          ...run,
-          status: event.phase,
-          substate: event.substate ?? null,
-          runStartedAt: event.runStartedAt ?? null,
-          ...(freshRun
-            ? { stage: null, conversationProgress: { toolCallCount: 0 } }
-            : {}),
-        },
-        event.at,
-      );
-    }
-    case 'stage.start': {
-      const stage = runStageFromStageStart({
-        kind: event.kind ?? undefined,
-        label: event.label,
-        index: event.index ?? undefined,
-        total: event.total ?? undefined,
-      });
-      return stage ? { ...run, stage } : run;
     }
     case 'conversation.progress':
       return { ...run, conversationProgress: event.progress };
@@ -1485,17 +1521,40 @@ function applyOwnArm(
         },
         event.at,
       );
-    case 'approval.requested':
-    case 'approval.resolved':
+    case 'request.opened':
+    case 'request.decided':
     case 'approval.policy':
     case 'inquiryThreadUpdated':
     case 'updateQueuedFollowUps':
     case 'run.removed':
       return run;
-    case 'flow.step':
-      // Inert in PR 1: `listingTypeOf` returns null, so `foldDurable`
-      // returns before this switch. PR 3 gives it real handling.
-      return run;
+    case 'flow.step': {
+      // The loop's position (one run model, 3.3): `waiting` parks the run
+      // and closes its run window, any other step is running with the
+      // window kept open from the activation; `halted` is the loop's own
+      // word and moves nothing, the terminal phase is `run.end`'s alone.
+      const { outcome: _outcome, ...flow } = event.payload;
+      if (flow.step === 'halted') return { ...run, flow };
+      if (flow.step === 'waiting') {
+        return withSettledTranscript(
+          {
+            ...run,
+            flow,
+            status: RUN_PHASE.WAITING,
+            substate: null,
+            runStartedAt: null,
+          },
+          event.at,
+        );
+      }
+      return {
+        ...run,
+        flow,
+        status: RUN_PHASE.RUNNING,
+        substate: null,
+        runStartedAt: run.runStartedAt ?? event.at,
+      };
+    }
   }
 }
 
@@ -1508,28 +1567,31 @@ function applySessionSlices(
 ): void {
   switch (event.type) {
     case 'run.start':
-      // The initial snapshot rides the existence fact (PRD 6, item 2); a
-      // legacy import carries none and leaves the entry to `approval.policy`.
+      // The initial snapshot rides the existence fact (PRD 6, item 2). The
+      // one production writer (`runLifecycle.ts`) always stamps it; the trace
+      // viewer's synthetic envelope carries no policy and leaves the entry to
+      // `approval.policy`, which is why the field stays optional.
       if (event.approvalPolicy && runId !== null) {
         writableMap(view, 'policy').set(runId, event.approvalPolicy);
       }
       return;
-    case 'approval.requested':
+    case 'request.opened':
       // A set keyed by request id (5.2); a replayed request is below the
       // pair's `latest` entry and never reaches here.
       if (runId === null) return;
-      view.approvals = [
-        ...view.approvals,
+      view.requests = [
+        ...view.requests,
         {
           runId,
           requestId: event.requestId,
           payload: event.payload,
+          thread: event.thread ?? null,
         },
       ];
       return;
-    case 'approval.resolved':
-      view.approvals = view.approvals.filter(
-        (a) => a.requestId !== event.requestId,
+    case 'request.decided':
+      view.requests = view.requests.filter(
+        (r) => r.requestId !== event.requestId,
       );
       return;
     case 'approval.policy':
@@ -1621,13 +1683,11 @@ function foldDurable(
   deferred: DeferredRunModels,
   read: 'listing' | 'aggregate' | 'all',
 ): boolean {
-  if (event.type === 'transcript.entry') {
-    return foldTranscriptRow(view, event, deferred);
-  }
   const traceChanged =
     read !== 'listing' &&
     (isTranscriptEvent(event) ||
-      event.type === 'status' ||
+      event.type === 'run.activate' ||
+      event.type === 'flow.step' ||
       event.type === 'run.end')
       ? foldTraceEvent(view, event, deferred)
       : false;
@@ -1665,12 +1725,8 @@ function foldDurable(
     sessionIndexesOf(view).ended.add(runId);
     clearInflight(view, own);
   }
-  // A fresh run can end again.
-  if (
-    event.type === 'status' &&
-    own.status === RUN_PHASE.RUNNING &&
-    before.status !== own.status
-  ) {
+  // A fresh incarnation can end again.
+  if (event.type === 'run.activate') {
     sessionIndexesOf(view).ended.delete(runId);
   }
   let next: RunView = {
@@ -1724,8 +1780,14 @@ function foldTraceEvent(
   let run = runId === null ? undefined : view.runs.get(runId);
   if (!run) return false;
   const indexes = indexesOf(run.transcript);
-  if (event.type === 'status') indexes.trace.status(event.phase);
-  else if (event.type === 'run.end') indexes.trace.status(event.outcome);
+  if (event.type === 'run.activate') indexes.trace.status(RUN_PHASE.RUNNING);
+  else if (event.type === 'flow.step') {
+    if (event.payload.step === 'waiting') {
+      indexes.trace.status(RUN_PHASE.WAITING);
+    } else if (event.payload.step !== 'halted') {
+      indexes.trace.status(RUN_PHASE.RUNNING);
+    }
+  } else if (event.type === 'run.end') indexes.trace.status(event.outcome);
   else if (isTranscriptEvent(event))
     indexes.trace.record(event, {
       at: event.at,
@@ -1752,35 +1814,6 @@ function foldTraceEvent(
 }
 
 /**
- * The transcript tier (5.2, "Residency"): a row folds only for an aggregate
- * in the subscription set and only above the seq the view has retained for
- * it, which it then advances. A dropped row never touches `folded`.
- */
-function foldTranscriptRow(
-  view: SessionView,
-  event: TranscriptEntryEvent,
-  deferred: DeferredRunModels,
-): boolean {
-  const retained = view.folded.get(event.aggregateId);
-  if (retained === undefined || event.seq <= retained) return false;
-  const runId = runIdOf(event.aggregateId);
-  const run = runId === null ? undefined : view.runs.get(runId);
-  if (!run) return false;
-  writableMap(view, 'folded').set(event.aggregateId, event.seq);
-  const withEntry: RunView = {
-    ...run,
-    lastTimestamp: event.at,
-    transcript: applyEntry(view, run, event.entry),
-  };
-  const next = withTranscriptFacts(withEntry);
-  setRun(view, next);
-  if (entryAffectsRunModel(event.entry)) {
-    setRun(view, runModelAt(view, next, deferred));
-  }
-  return true;
-}
-
-/**
  * The tombstone (5.2, "Existence" and "Durable text wins"): final, clears
  * every session-level entry keyed by the run, re-roots its children, and
  * ends its transcript tier. The run's `latest` entries stay: the
@@ -1803,8 +1836,8 @@ function foldRunRemoved(
     writableMap(view, 'queuedFollowUps').delete(run.id);
   }
   writableMap(view, 'folded').delete(qualifyAggregateId('run', run.id));
-  if (view.approvals.some((a) => a.runId === run.id)) {
-    view.approvals = view.approvals.filter((a) => a.runId !== run.id);
+  if (view.requests.some((r) => r.runId === run.id)) {
+    view.requests = view.requests.filter((r) => r.runId !== run.id);
   }
   if (view.inquiries.some((i) => i.parentRunId === run.id)) {
     view.inquiries = view.inquiries.filter((i) => i.parentRunId !== run.id);

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { attachSdkUsageRoute } from '@common/errors/sdkError/errorMetadata';
 import { parseKimiCodeSubscriptionLimit } from '@common/errors/sdkError/kimiCodeSubscriptionDetection';
 import { formatProviderHttpError } from '@common/errors/sdkError/providerErrorFormat';
-import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
+import { type UsageRoute } from '@shared/schemas';
 
 const USAGE_LIMIT_MESSAGE =
   "You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/code/#pricing";
@@ -15,27 +16,26 @@ const USAGE_LIMIT_BODY = {
   },
 } as const;
 
-/** Build an OpenAI-SDK-style error carrying the Kimi Code coding endpoint. */
+/** Build an OpenAI-SDK-style error stamped with the credential route the run
+ *  bound the attempt to, the way `classifyModelFailure` stamps it. */
 function kimiCodeError(
   message: string,
   body: unknown,
   status = 403,
-  baseURL = KIMI_CODE_BASE_URL,
+  usageRoute: UsageRoute = 'kimi-code-subscription',
 ): Error & {
   status: number;
-  request: { baseURL: string };
   error: unknown;
   provider?: string;
 } {
   const error = new Error(message) as Error & {
     status: number;
-    request: { baseURL: string };
     error: unknown;
     provider?: string;
   };
   error.status = status;
-  error.request = { baseURL };
   error.error = body;
+  attachSdkUsageRoute(error, usageRoute);
   return error;
 }
 
@@ -48,12 +48,12 @@ describe('parseKimiCodeSubscriptionLimit', () => {
     expect(limit).not.toBeNull();
   });
 
-  it('returns null when the error is not on the Kimi Code coding endpoint', () => {
+  it('returns null when the attempt was bound to the API-key route', () => {
     const error = kimiCodeError(
       USAGE_LIMIT_MESSAGE,
       USAGE_LIMIT_BODY,
       403,
-      'https://api.moonshot.cn/v1',
+      'api-key',
     );
     expect(parseKimiCodeSubscriptionLimit(error, USAGE_LIMIT_BODY)).toBeNull();
   });
@@ -103,7 +103,7 @@ describe('formatProviderHttpError for Kimi Code subscription limits', () => {
       'Rate limit reached',
       { error: { message: 'Rate limit reached', type: 'rate_limit' } },
       429,
-      'https://api.moonshot.cn/v1',
+      'api-key',
     );
     error.provider = 'moonshot';
 

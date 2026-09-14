@@ -11,9 +11,6 @@ export function createFakeAgentCliChildRun(childRunId: RunId): ChildRun {
   return {
     childRunId,
     logger,
-    waitForInput: () => {},
-    beginTurn: () => {},
-    failTurn: () => {},
     finalize: () => Effect.void,
   };
 }

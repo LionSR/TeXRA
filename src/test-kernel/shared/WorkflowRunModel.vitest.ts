@@ -276,74 +276,6 @@ describe('workflow run model', () => {
     expect(model.phases.map((phase) => phase.key)).toStrictEqual([current.id]);
   });
 
-  it('uses a call-less tagged phase as the latest fallback boundary', () => {
-    const oldMap = {
-      ...phaseGroup('Map', 0, 2),
-      id: 'old-map',
-      startTime: 10,
-      attemptId: 'a1',
-    };
-    const currentReview = {
-      ...phaseGroup('Review', 1, 2),
-      id: 'current-review',
-      startTime: 30,
-      attemptId: 'a2',
-    };
-    const oldCard = {
-      ...taskRow({ id: 'old-card', phase: 'Map', attemptId: 'a1' }),
-      groupId: oldMap.id,
-      seqNo: 10,
-      timestamp: 20,
-    };
-
-    const model = workflowRunModel({
-      taskGroups: [oldMap, currentReview],
-      rows: [oldCard],
-      plan: undefined,
-      runPhase: undefined,
-      runDurablyFinal: false,
-      childProgress: new Map(),
-    });
-
-    expect(model.tasks).toStrictEqual([]);
-    expect(model.phases.map((phase) => phase.key)).toStrictEqual([
-      currentReview.id,
-    ]);
-  });
-
-  it('selects an attempt deterministically across clock-skewed row generations', () => {
-    const oldChild = {
-      ...taskRow({ id: 'old-child', phase: 'Map', attemptId: 'a1' }),
-      seqNo: 10,
-      timestamp: 300,
-    };
-    const currentChild = {
-      ...taskRow({ id: 'current-child', phase: 'Map', attemptId: 'a2' }),
-      seqNo: 20,
-      timestamp: 100,
-    };
-    const currentLegacyRoot = {
-      ...taskRow({ id: 'current-legacy-root', attemptId: 'a2' }),
-      timestamp: 200,
-    };
-
-    const model = workflowRunModel({
-      taskGroups: [],
-      // Root-first input plus 300 > 200 > 100 creates a cycle for pairwise
-      // seqNo/timestamp sorting. Attempt selection must not depend on that sort.
-      rows: [currentLegacyRoot, currentChild, oldChild],
-      plan: undefined,
-      runPhase: undefined,
-      runDurablyFinal: false,
-      childProgress: new Map(),
-    });
-
-    expect(model.tasks.map((row) => row.call.id)).toStrictEqual([
-      'current-child',
-      'current-legacy-root',
-    ]);
-  });
-
   it('leads a phase with what needs attention and collapses the rest into counted groups', () => {
     const model = modelOf(
       ['Derive'],
@@ -352,7 +284,7 @@ describe('workflow run model', () => {
         { id: 'ok1', phase: 'Derive', status: 'completed' },
         { id: 'r1', phase: 'Derive', status: 'running' },
         { id: 'bad', phase: 'Derive', status: 'failed' },
-        { id: 'q2', phase: 'Derive', status: 'planned' },
+        { id: 'q2', phase: 'Derive', status: 'queued' },
         { id: 'r2', phase: 'Derive', status: 'running' },
         { id: 'ok2', phase: 'Derive', status: 'cached' },
       ],

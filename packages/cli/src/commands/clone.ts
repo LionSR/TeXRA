@@ -17,7 +17,7 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -39,11 +39,12 @@ import { emitCliResult } from './_helpers/output';
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
 function buildOverleafClonePorts(
+  runtime: ProcessRuntime,
   context: CliContext,
   remote: OverleafRemote,
   workspacePath: string,
 ): OverleafCloneWorkflowPorts {
-  const secrets = getCliSecrets();
+  const secrets = getCliSecrets(runtime);
   let canonicalWorkspacePath = workspacePath;
   return {
     getStoredToken: (key) => Effect.promise(() => secrets.get(key)),
@@ -104,15 +105,19 @@ function buildOverleafClonePorts(
 
     runClone: (remoteUrl, cloneInto) =>
       Effect.tryPromise({
-        try: async () => {
+        try: async (signal) => {
           await mkdir(cloneInto, { recursive: true });
           canonicalWorkspacePath = await realpath(cloneInto);
+          // execa starts its child before observing an already-aborted
+          // cancelSignal, so do not enter it after the fiber is interrupted.
+          signal.throwIfAborted();
           await execa('git', ['clone', remoteUrl, '.'], {
             cwd: canonicalWorkspacePath,
             // extendEnv: false is required — makeMachineGitEnv omits the
             // helper-invoking keys, and execa's default merge re-adds them.
             env: makeMachineGitEnv(),
             extendEnv: false,
+            cancelSignal: signal,
           });
         },
         catch: ensureError,
@@ -197,13 +202,13 @@ export const cloneCommand = withUsageSections(
       // `CliSecrets`, whose reads and writes are Effect programs run at this
       // host edge. Install the process runtime before the first one, the same
       // way the update check does for the entry that precedes any platform.
-      await installCliProcessRuntime(context.storageRoot);
+      const runtime = await installCliProcessRuntime(context.storageRoot);
 
-      const outcome = await effectRuntime().runPromise(
+      const outcome = await runtime.runPromise(
         cloneOverleafProject(
           remote,
           workspacePath,
-          buildOverleafClonePorts(context, remote, workspacePath),
+          buildOverleafClonePorts(runtime, context, remote, workspacePath),
         ),
       );
       switch (outcome.status) {

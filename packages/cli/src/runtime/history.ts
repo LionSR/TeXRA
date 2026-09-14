@@ -1,4 +1,4 @@
-import { cp, readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { Effect, Result, Stream } from 'effect';
@@ -17,8 +17,7 @@ import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { redactDisplayValue } from '@logger/redaction';
-import type { ModelOptionStores } from '@model/computeModelOptions';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   RunIdSchema,
   aggregateTarget,
@@ -42,7 +41,6 @@ import {
 import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { initializeCliTranscriptSession } from './transcriptSession';
 import { CliUsageError } from './cliContext';
 import { isCliRunResumable, readCliResumedModel } from './toolUseResumeData';
 import {
@@ -156,36 +154,39 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
   return RunIdSchema.safeParse(raw).data;
 }
 
+/**
+ * The history readers take the process session as the open that yields it
+ * (`CliPlatformServices.session`): a listing is the first thing `history`
+ * asks of the session, so the open runs inside the reader's own program, on
+ * the runtime the caller holds (`CliPlatformServices.runtime`).
+ */
 export async function listCliHistoryEntries(
-  stores: ModelOptionStores,
+  runtime: ProcessRuntime,
+  session: Effect.Effect<SessionHandle>,
 ): Promise<CliHistoryEntry[]> {
-  const session = await initializeCliTranscriptSession(stores);
   // A row's resumability comes from the checkpoint `stat` the listing already
   // did; only a failed workflow row still reads its persisted state. That read
   // is bounded here so a history full of failed workflow runs cannot open one
   // file handle burst per run. `Effect.forEach` preserves input order.
-  return effectRuntime().runPromise(
-    listRuns(session).pipe(
-      Effect.flatMap((entries) =>
-        Effect.forEach(
-          entries.filter(isUserVisibleRun),
-          (entry) => toCliHistoryEntry(entry, session),
-          {
-            concurrency: HISTORY_ENTRY_CONCURRENCY,
-          },
-        ),
-      ),
-    ),
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const opened = yield* session;
+      const entries = yield* listRuns(opened);
+      return yield* Effect.forEach(
+        entries.filter(isUserVisibleRun),
+        (entry) => toCliHistoryEntry(entry, opened),
+        { concurrency: HISTORY_ENTRY_CONCURRENCY },
+      );
+    }),
   );
 }
 
 export async function readCliHistoryDetails(
-  stores: ModelOptionStores,
+  runtime: ProcessRuntime,
+  sessionOpen: Effect.Effect<SessionHandle>,
   id: RunId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
-  const session = await initializeCliTranscriptSession(stores);
-  const store = getRunRecords(session, id);
   const [
     run,
     config,
@@ -198,8 +199,10 @@ export async function readCliHistoryDetails(
     checkpointPresent,
     currentModel,
     resumable,
-  ] = await effectRuntime().runPromise(
+  ] = await runtime.runPromise(
     Effect.gen(function* () {
+      const session = yield* sessionOpen;
+      const store = getRunRecords(session, id);
       const values = yield* Effect.all(
         [
           session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
@@ -324,12 +327,14 @@ type CliHistoryExportInputResult =
  * run simply never produced a conversation.
  */
 export async function readCliHistoryExportInput(
-  stores: ModelOptionStores,
+  runtime: ProcessRuntime,
+  session: Effect.Effect<SessionHandle>,
   id: RunId,
 ): Promise<CliHistoryExportInputResult> {
-  const session = await initializeCliTranscriptSession(stores);
   const { run, config, conversation, hasTranscriptEvidence, exportInput } =
-    await effectRuntime().runPromise(loadChatExportInput(id, session));
+    await runtime.runPromise(
+      Effect.flatMap(session, (opened) => loadChatExportInput(id, opened)),
+    );
   if (exportInput) return { status: 'ok', exportInput };
   if (!run && !config && !conversation && !hasTranscriptEvidence) {
     return { status: 'not_found' };
@@ -352,6 +357,7 @@ const TRACE_VIEWER_DIR_NAME = 'traceViewer';
  * real cause.
  */
 export async function readCliHistoryStandaloneTemplate(
+  runtime: ProcessRuntime,
   resourcesPath: string,
 ): Promise<string | null> {
   const templatePath = path.join(
@@ -359,7 +365,7 @@ export async function readCliHistoryStandaloneTemplate(
     TRACE_VIEWER_DIR_NAME,
     'index.html',
   );
-  return effectRuntime().runPromise(
+  return runtime.runPromise(
     Effect.tryPromise({
       try: () => readFile(templatePath, 'utf8'),
       catch: (cause) => cause,
@@ -374,57 +380,6 @@ export async function readCliHistoryStandaloneTemplate(
             ),
       ),
     ),
-  );
-}
-
-/**
- * Stage the trace-viewer's single-file `index.html` into `destDir` for the
- * shared-assets export mode (`--assets-dir`) — a site hosting many traces
- * points every trace's `?trace=` query param at one shared copy instead of
- * duplicating it per trace. Without an injected trace the page fetches the
- * `?trace=` file itself, which works whenever the directory is served over
- * http(s).
- *
- * `fs.cp`'s recursive copy merges into an existing `destDir` rather than
- * nesting under it, so staging is safe to repeat across multiple exports
- * pointed at the same shared directory.
- *
- * Returns `'missing'` (without throwing) only when the bundled assets are
- * absent — e.g. a dev checkout where `copy:resources` hasn't run — so the
- * caller can warn instead of failing the export outright. Any other probe
- * failure (EACCES, a transient I/O error) is a different problem and surfaces
- * as a usage error naming the real cause rather than a "rebuild the CLI" hint.
- */
-export async function stageCliHistoryTraceViewerAssets(params: {
-  readonly resourcesPath: string;
-  readonly destDir: string;
-}): Promise<'staged' | 'missing'> {
-  const assetsSrc = path.join(params.resourcesPath, TRACE_VIEWER_DIR_NAME);
-  return effectRuntime().runPromise(
-    Effect.gen(function* () {
-      const sourceExists = yield* Effect.tryPromise({
-        try: async () => (await stat(assetsSrc)).isDirectory(),
-        catch: (cause) => cause,
-      }).pipe(
-        Effect.catch((error) =>
-          isFileNotFoundError(error) || isNotADirectoryError(error)
-            ? Effect.succeed(false)
-            : Effect.fail(
-                new CliUsageError(
-                  `history export: cannot read ${assetsSrc}: ${toErrorMessage(error)}`,
-                ),
-              ),
-        ),
-      );
-      // A plain file where the bundle should be is also "this install lacks it".
-      if (!sourceExists) return 'missing' as const;
-
-      yield* Effect.tryPromise({
-        try: () => cp(assetsSrc, params.destDir, { recursive: true }),
-        catch: (cause) => cause as Error,
-      });
-      return 'staged' as const;
-    }),
   );
 }
 

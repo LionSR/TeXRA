@@ -4,10 +4,16 @@ body {
   height: 100%;
 }
 
-progress-app.trace-viewer-shell {
+/* The shell fills the page above the scrubber's footer. */
+body {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+}
+
+progress-app.trace-viewer-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-height: 0;
 }
 
@@ -25,4 +31,35 @@ body .trace-viewer-error {
 body .trace-viewer-error h1 {
   margin-block: 0 var(--wa-space-m);
   font-size: 1.25em;
+}
+
+/* The scrubber over the run's flow.step rows (main.ts): a footer under the
+   shell, hidden for a run whose loop never stepped. */
+body .trace-scrubber {
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-m);
+  padding: var(--wa-space-xs) var(--wa-space-m);
+  border-top: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
+  font-family: var(--wa-font-family-body);
+  font-size: var(--wa-font-size-s);
+}
+
+body .trace-scrubber label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--wa-space-s);
+}
+
+body .trace-scrubber input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+
+body .trace-scrubber output {
+  white-space: nowrap;
+  color: var(--wa-color-text-quiet);
 }

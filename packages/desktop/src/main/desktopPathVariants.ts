@@ -5,7 +5,7 @@ import { normalizeFilePath, unique } from '@utils/core';
  * Every separator spelling of a sensitive filesystem path — the trimmed raw
  * form, forward-slash, and back-slash — so redaction matches mixed-separator
  * text. Returns [] for blank input. The root path '/' keeps its single
- * spelling: turning it into '\' would never match real log or crash text.
+ * spelling: turning it into '\' would never match real log text.
  */
 export function pathSeparatorVariants(path: string): string[] {
   const trimmed = path.trim();

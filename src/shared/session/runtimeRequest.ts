@@ -16,22 +16,12 @@ import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import {
-  InquiryThreadIdSchema,
+  RequestDecisionSchema,
   RunIdSchema,
-  UserQuestionAnswersSchema,
+  WorkflowControlActionSchema,
 } from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
-
-/** A decision names the run its `approval.requested` carries and the
- *  `approvalId` that fact carries: domain identity, never the envelope's
- *  correlation id. */
-const decision = { ...runScoped, approvalId: z.string().min(1) };
-
-const RejectionSchema = z.object({
-  action: z.literal('reject'),
-  feedback: z.string().nullish(),
-});
 
 export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -48,83 +38,19 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     displayText: z.string().nullish(),
     mediaFiles: z.array(z.string()).nullish(),
   }),
+  /**
+   * The one answer to a `request.opened` (one run model, section 3.7): the
+   * decision lands as that run's `request.decided` row, which is what the
+   * waiting run, the recovery bindings, and every surface read. A decision
+   * for a request its run is not parked on is delivered as a follow-up.
+   * `useOwnApiKey` is the host command that ends in
+   * `{ action: 'retry', credentials: 'personal' }` here.
+   */
   z.object({
-    kind: z.literal('decision.bash'),
-    ...decision,
-    decision: z.discriminatedUnion('action', [
-      z.object({ action: z.literal('approve') }),
-      RejectionSchema,
-    ]),
-  }),
-  z.object({
-    kind: z.literal('decision.plan'),
-    ...decision,
-    decision: z.discriminatedUnion('action', [
-      z.object({ action: z.literal('approve') }),
-      z.object({
-        action: z.literal('approve_and_goal'),
-        autoApproveAll: z.literal(true).nullish(),
-      }),
-      RejectionSchema,
-    ]),
-  }),
-  z.object({
-    kind: z.literal('decision.proposal'),
-    ...decision,
-    decision: z.discriminatedUnion('action', [
-      z.object({
-        action: z.literal('approve'),
-        model: z.string().nullish(),
-        agent: z.string().nullish(),
-      }),
-      RejectionSchema,
-      z.object({ action: z.literal('setup') }),
-    ]),
-  }),
-  z.object({
-    kind: z.literal('decision.userQuestion'),
-    ...decision,
-    decision: z.discriminatedUnion('action', [
-      z.object({
-        action: z.literal('submit'),
-        answers: UserQuestionAnswersSchema,
-      }),
-      RejectionSchema,
-      z.object({ action: z.literal('skip'), feedback: z.string().nullish() }),
-    ]),
-  }),
-  /** A retry runs the run's client preparation before it settles: on the
-   *  configured credentials, or on the user's own key once the host has
-   *  stored one (`credentials: 'personal'`, the host's `useOwnApiKey`). */
-  z.object({
-    kind: z.literal('decision.retry'),
-    ...decision,
-    decision: z.discriminatedUnion('action', [
-      z.object({
-        action: z.literal('retry'),
-        feedback: z.string().nullish(),
-        credentials: z.enum(['configured', 'personal']).nullish(),
-      }),
-      z.object({ action: z.literal('cancel') }),
-    ]),
-  }),
-  /** An external inquiry's terminal answers: persisted on the thread, then
-   *  the run continues from it. The aggregate is the thread; the `runId`
-   *  names the run the thread belongs to. */
-  z.object({
-    kind: z.literal('externalInquiry.submit'),
+    kind: z.literal('request.decide'),
     ...runScoped,
-    threadId: InquiryThreadIdSchema,
-    turnIndex: z.int().positive(),
-    answer: z.string(),
-    sessionLinks: z.array(z.string()).nullish(),
-  }),
-  z.object({
-    kind: z.literal('externalInquiry.drop'),
-    ...runScoped,
-    threadId: InquiryThreadIdSchema,
-    turnIndex: z.int().positive(),
-    feedback: z.string().nullish(),
+    requestId: z.string().min(1),
+    decision: RequestDecisionSchema,
   }),
   /** The field-level mutation, not a snapshot: the authority applies it and
    *  publishes the resulting `approval.policy` (PRD 6, item 2). */
@@ -146,7 +72,7 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('workflow.control'),
     ...runScoped,
     childRunId: RunIdSchema,
-    action: z.enum(['skip', 'retry']),
+    action: WorkflowControlActionSchema,
   }),
 ]);
 export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;

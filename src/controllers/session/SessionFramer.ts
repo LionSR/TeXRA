@@ -21,9 +21,8 @@
  *
  * Display redaction (contract C3): every framer to a renderer process
  * applies display redaction and truncation. The rows this plane carries
- * today are listing facts, approval payloads scrubbed at publish
- * (`redactedForFact`), and `transcript.entry` rows the transcript recorder
- * scrubbed at record time; the byte-exact flow rows of the run
+ * today are listing facts and approval payloads scrubbed at publish
+ * (`redactedForFact`); the byte-exact flow rows of the run
  * aggregate arrive with the persistence cutover, and that cutover lands the
  * redaction map here, in `cutFrame`, as the obligation it makes
  * load-bearing. Nothing is framed that is not already display-safe.

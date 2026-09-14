@@ -162,7 +162,6 @@ export const COMPACTION_ACTIVITY_STATUS_STYLE = {
  *  `WORKFLOW_CALL_STATUS_GLYPH`, read directly wherever a row is painted. */
 export const WORKFLOW_TASK_STATUS_COLOR = {
   declared: COLOR_BORDER,
-  planned: undefined,
   queued: undefined,
   running: COLOR_HINT,
   completed: COLOR_SUCCESS,

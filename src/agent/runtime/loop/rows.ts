@@ -23,6 +23,11 @@ import type { z } from 'zod';
 
 export type Message = z.infer<typeof MessageSchema>;
 
+/** Why a run the ledger holds no rows for cannot be continued. Both run
+ *  programs refuse a resume with it. */
+export const NOT_RESUMABLE_MESSAGE =
+  'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
+
 type ToolUseSnapshot = Extract<FlowSnapshotPayload, { family: 'toolUse' }>;
 type ReflectionSnapshot = Extract<
   FlowSnapshotPayload,
@@ -124,7 +129,11 @@ interface SnapshotCoordinates {
   readonly runtime?: Partial<
     Pick<
       SnapshotRuntime,
-      'modelId' | 'modelHandlerCompatibilityKey' | 'lastError' | 'pendingRetry'
+      | 'modelId'
+      | 'modelCompatibilityKey'
+      | 'lastError'
+      | 'pendingRetry'
+      | 'declinedRoutes'
     >
   >;
   /**
@@ -166,11 +175,10 @@ function buildSnapshot(
     turn: patch.turn ?? state.turn,
     continuationIndex: patch.continuationIndex ?? state.continuationIndex,
     modelId,
-    modelHandlerCompatibilityKey:
-      patch.runtime !== undefined &&
-      'modelHandlerCompatibilityKey' in patch.runtime
-        ? (patch.runtime.modelHandlerCompatibilityKey ?? null)
-        : state.modelHandlerCompatibilityKey,
+    modelCompatibilityKey:
+      patch.runtime !== undefined && 'modelCompatibilityKey' in patch.runtime
+        ? (patch.runtime.modelCompatibilityKey ?? null)
+        : state.modelCompatibilityKey,
     lastError:
       patch.runtime !== undefined && 'lastError' in patch.runtime
         ? (patch.runtime.lastError ?? null)
@@ -179,6 +187,7 @@ function buildSnapshot(
       patch.runtime !== undefined && 'pendingRetry' in patch.runtime
         ? (patch.runtime.pendingRetry ?? null)
         : state.pendingRetry,
+    declinedRoutes: patch.runtime?.declinedRoutes ?? state.declinedRoutes,
   };
   const pending = state.pendingResponse;
   const references = {
@@ -277,9 +286,9 @@ export function displayRow(
  * provider error, whose body can echo the request URL or an `Authorization`
  * header, so the raw body is dropped and the text fields are scrubbed before
  * the row is written. Bash commands and question text are what the user
- * typed and stay as they are. Every writer of an `approval.requested` row
- * passes its payload through here, whether the row is published by the
- * interaction owner or appended by a loop that already committed it.
+ * typed and stay as they are. Every writer of a `request.opened` row passes
+ * its payload through here, whether the session opens the request or a loop
+ * commits it with its recovery binding.
  */
 export function redactedForFact(payload: PermissionPayload): PermissionPayload {
   if (payload.kind !== 'retry') return payload;

@@ -124,6 +124,13 @@ substrate. Not #11867, whose SQLite cutover has landed, and not #11869.
 
 ## 3. The TUI never adopted `Surface`
 
+**The narrow proposal below has landed** (`resolveSelected` split into
+`resolveSelectedId` plus the `keepWhenViewEmpty` arm; `cliState.ts`'s
+`selectedRunId` now calls it instead of reimplementing the rule). The rest of
+this section — `Surface.expanded` vs. `expandedStreams`, `Surface.launch` vs.
+`sessionMeta`, `Surface.phase` vs. `WORKFLOW_POPUP_VIEW`, and the full
+`Surface` adoption in #11866 — is unchanged and still open.
+
 PRD §10.1 says in writing that the TUI "Gains a `Surface`." It did not.
 `rg -c "shared/session/surface" packages/cli/src` returns zero: the TUI imports
 no part of the shared record, not `applySurfaceAction`, not `pruneSurface`, not

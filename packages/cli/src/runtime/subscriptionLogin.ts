@@ -12,6 +12,7 @@ import {
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
 import type { ConfigTarget } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -137,8 +138,9 @@ export const signOutCliSubscription = Effect.fn(
   'subscriptionLogin.signOutCliSubscription',
 )(function* (providerId: SubscriptionProviderId) {
   const provider = subscriptionProvider(providerId);
+  const secrets = yield* Secrets;
   yield* Effect.tryPromise({
-    try: () => provider.signOut(),
+    try: () => provider.signOut(secrets),
     catch: (cause) => ensureError(cause),
   });
   return yield* Effect.tryPromise({

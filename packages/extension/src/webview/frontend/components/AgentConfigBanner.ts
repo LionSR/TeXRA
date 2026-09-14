@@ -3,11 +3,15 @@ import { html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
-import type { AgentConfigBannerState } from '@shared/schemas';
+import {
+  AgentCategory,
+  type AgentConfigBannerState,
+  type SessionType,
+} from '@shared/schemas';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@shared/wa/bannerFrame';
 import { StateVisibleBanner } from './StateVisibleBanner';
-import { MainViewEvents } from '../events';
 
 @customElement('agent-config-banner')
 export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState> {
@@ -17,10 +21,15 @@ export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState
     visible: false,
   };
 
+  /** The category this banner's actions edit; its container resolves it. */
+  @property() sessionType: SessionType = AgentCategory.Workflow;
+
   private handleAction(action: 'edit' | 'dir' | 'docs'): void {
     this.dispatchEvent(
-      MainViewEvents.agentConfigAction({
+      SessionUiEvents.host({
+        kind: 'agentConfigBanner',
         action,
+        sessionType: this.sessionType,
         customDirSet: this.state.customDirSet,
       }),
     );

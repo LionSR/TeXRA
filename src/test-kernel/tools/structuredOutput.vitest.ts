@@ -1,5 +1,7 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
@@ -21,29 +23,31 @@ function makeCapture() {
 }
 
 describe('normalizeStructuredOutputSchema', () => {
-  it('normalizes a JSON Schema object through the pinned Zod API', async () => {
-    const jsonSchema = {
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        count: { type: 'integer' },
-      },
-      required: ['title', 'count'],
-      additionalProperties: false,
-    };
+  it.effect('normalizes a JSON Schema object through the pinned Zod API', () =>
+    Effect.gen(function* () {
+      const jsonSchema = {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          count: { type: 'integer' },
+        },
+        required: ['title', 'count'],
+        additionalProperties: false,
+      };
 
-    const normalized = normalizeStructuredOutputSchema(jsonSchema);
-    const capture = makeCapture();
-    const tool = buildTerminalTool(jsonSchema, capture);
+      const normalized = normalizeStructuredOutputSchema(jsonSchema);
+      const capture = makeCapture();
+      const tool = buildTerminalTool(jsonSchema, capture);
 
-    expect(normalized.jsonSchema).toMatchObject(jsonSchema);
-    await expect(
-      tool.call({ title: 'Lemma', count: 2 }),
-    ).resolves.toMatchObject({ status: 'executed' });
-    await expect(tool.call({ title: 'Lemma' })).resolves.toMatchObject({
-      status: 'error',
-    });
-  });
+      expect(normalized.jsonSchema).toMatchObject(jsonSchema);
+      expect(yield* tool.call({ title: 'Lemma', count: 2 })).toMatchObject({
+        status: 'executed',
+      });
+      expect(yield* tool.call({ title: 'Lemma' })).toMatchObject({
+        status: 'error',
+      });
+    }),
+  );
 
   it('rejects non-object and unconstrained roots at normalization time', () => {
     expect(() => normalizeStructuredOutputSchema({})).toThrow(/object.*root/);
@@ -139,27 +143,35 @@ describe('normalizeStructuredOutputSchema', () => {
 describe('buildTerminalTool', () => {
   const schema = z.strictObject({ title: z.string(), count: z.number() });
 
-  it('captures already-validated input and returns a success result', async () => {
-    const capture = makeCapture();
-    const tool = buildTerminalTool(schema, capture);
+  it.effect(
+    'captures already-validated input and returns a success result',
+    () =>
+      Effect.gen(function* () {
+        const capture = makeCapture();
+        const tool = buildTerminalTool(schema, capture);
 
-    expect(tool.definition.name).toBe(SUBMIT_OUTPUT_TOOL_NAME);
+        expect(tool.definition.name).toBe(SUBMIT_OUTPUT_TOOL_NAME);
 
-    const result = await tool.call({ title: 'Lemma', count: 2 });
+        const result = yield* tool.call({ title: 'Lemma', count: 2 });
 
-    expect(result).toMatchObject({ status: 'executed', endTurn: true });
-    expect(capture).toHaveBeenCalledWith({ title: 'Lemma', count: 2 });
-  });
+        expect(result).toMatchObject({ status: 'executed', endTurn: true });
+        expect(capture).toHaveBeenCalledWith({ title: 'Lemma', count: 2 });
+      }),
+  );
 
-  it('rejects invalid input via its own schema before execute (repair path)', async () => {
-    const capture = makeCapture();
-    const tool = buildTerminalTool(schema, capture);
+  it.effect(
+    'rejects invalid input via its own schema before execute (repair path)',
+    () =>
+      Effect.gen(function* () {
+        const capture = makeCapture();
+        const tool = buildTerminalTool(schema, capture);
 
-    const result = await tool.call({ title: 'Lemma', count: 'two' });
+        const result = yield* tool.call({ title: 'Lemma', count: 'two' });
 
-    expect(result.status).toBe('error');
-    expect(capture).not.toHaveBeenCalled();
-  });
+        expect(result.status).toBe('error');
+        expect(capture).not.toHaveBeenCalled();
+      }),
+  );
 
   it('rejects a non-object root schema so provider tool inputs stay valid', () => {
     expect(() => buildTerminalTool(z.array(z.string()), vi.fn())).toThrow(
@@ -167,46 +179,56 @@ describe('buildTerminalTool', () => {
     );
   });
 
-  it('supports async Zod validation through the canonical tool boundary', async () => {
-    const capture = makeCapture();
-    const tool = buildTerminalTool(
-      z.strictObject({
-        title: z.string().refine(async (value) => value === 'accepted'),
+  it.effect(
+    'supports async Zod validation through the canonical tool boundary',
+    () =>
+      Effect.gen(function* () {
+        const capture = makeCapture();
+        const tool = buildTerminalTool(
+          z.strictObject({
+            title: z.string().refine(async (value) => value === 'accepted'),
+          }),
+          capture,
+        );
+
+        expect(yield* tool.call({ title: 'rejected' })).toMatchObject({
+          status: 'error',
+        });
+        expect(yield* tool.call({ title: 'accepted' })).toMatchObject({
+          status: 'executed',
+        });
       }),
-      capture,
-    );
+  );
 
-    await expect(tool.call({ title: 'rejected' })).resolves.toMatchObject({
-      status: 'error',
-    });
-    await expect(tool.call({ title: 'accepted' })).resolves.toMatchObject({
-      status: 'executed',
-    });
-  });
+  it.effect(
+    'rejects transformed values that cannot cross the JSON boundary',
+    () =>
+      Effect.gen(function* () {
+        const capture = makeCapture();
+        const tool = buildTerminalTool(
+          z.strictObject({ value: z.string().transform(() => 1n) }),
+          capture,
+        );
 
-  it('rejects transformed values that cannot cross the JSON boundary', async () => {
-    const capture = makeCapture();
-    const tool = buildTerminalTool(
-      z.strictObject({ value: z.string().transform(() => 1n) }),
-      capture,
-    );
+        expect(yield* tool.call({ value: 'one' })).toMatchObject({
+          status: 'error',
+        });
+        expect(capture).not.toHaveBeenCalled();
+      }),
+  );
 
-    await expect(tool.call({ value: 'one' })).resolves.toMatchObject({
-      status: 'error',
-    });
-    expect(capture).not.toHaveBeenCalled();
-  });
+  it.effect('accepts only one structured result per run', () =>
+    Effect.gen(function* () {
+      const capture = makeCapture();
+      const tool = buildTerminalTool(schema, capture);
 
-  it('accepts only one structured result per run', async () => {
-    const capture = makeCapture();
-    const tool = buildTerminalTool(schema, capture);
-
-    await expect(
-      tool.call({ title: 'First', count: 1 }),
-    ).resolves.toMatchObject({ status: 'executed' });
-    await expect(
-      tool.call({ title: 'Second', count: 2 }),
-    ).resolves.toMatchObject({ status: 'error' });
-    expect(capture).toHaveBeenCalledTimes(1);
-  });
+      expect(yield* tool.call({ title: 'First', count: 1 })).toMatchObject({
+        status: 'executed',
+      });
+      expect(yield* tool.call({ title: 'Second', count: 2 })).toMatchObject({
+        status: 'error',
+      });
+      expect(capture).toHaveBeenCalledTimes(1);
+    }),
+  );
 });

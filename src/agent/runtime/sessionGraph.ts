@@ -8,8 +8,8 @@
  * (`installProcessRuntime`), which installs the owner here beside
  * `initPlatform()`, exactly as it installs the process roots. `src/agent`
  * never imports `src/controllers`, so the owner arrives through this port
- * rather than by import; the runtime itself is reached through
- * `effectRuntime()` (`@platform/processRuntime`).
+ * rather than by import; the runtime itself is handed to each
+ * `SessionHandle` by the owner that built it, never looked up.
  */
 
 import {
@@ -24,6 +24,7 @@ import {
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
 import type {
+  AggregateId,
   CommitOrdinal,
   RunId,
   LocalRuntimeState,
@@ -36,27 +37,51 @@ import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RunLedger } from '@shared/session/runLedger';
-import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import type {
+  SessionEventReads,
+  SessionEventsShape,
+} from '@shared/session/sessionEvents';
+import type { SessionStoreCleared } from '@shared/session/database';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { SessionHandle, SessionHandleInit } from './SessionHandle';
 
 /** What a session holds of its graph, resolved once at construction. */
 export interface SessionGraph {
-  /** The plane's reads. Publishing is the session's alone (`publish`
+  /** The plane's reads. Publishing is the session's alone (the four doors
    *  below), so nothing holding a session can append past its bookkeeping. */
-  readonly events: Omit<SessionEventsShape, 'publish'>;
+  readonly events: SessionEventReads;
+  /** Append one batch in publication order and return once the view has
+   *  folded it: what a caller that reads the view next awaits. */
   readonly publish: SessionEventsShape['publish'];
   readonly publishRegistration: SessionEventsShape['publish'];
+  /** A read of committed rows and the append that depends on it, as one
+   *  job of the publisher, settled like `publish`. */
+  readonly exclusive: SessionEventsShape['exclusive'];
+  /** Enqueue a job in publication order and return: the door for a
+   *  producer with no fiber of its own to wait on. */
+  readonly detach: SessionEventsShape['detach'];
+  /** Every detached job enqueued before this call has run and the view has
+   *  folded what they committed; fails with their aggregated refusals. */
+  readonly settle: Effect.Effect<void, Error>;
   /** The run ledger over this root's event plane: the run loop's one
    *  writer of run rows, provided to each run's program from here. */
   readonly ledger: Context.Service.Shape<typeof RunLedger>;
-  /** The run's one claim, acquired before a resume reads or mutates. Private
-   *  record reads never enter display transport. */
-  readonly acquireRunClaims: (
-    runId: RunId,
+  /** One aggregate's claim, acquired before a resume reads or mutates a run
+   *  and before a relaunch appends to a workflow checkpoint. Private record
+   *  reads never enter display transport. */
+  readonly acquireClaims: (
+    id: AggregateId,
   ) => Effect.Effect<Effect.Effect<void>>;
-  readonly releaseRunClaims: (runId: RunId) => Effect.Effect<void>;
+  /** Drop this process's claim on one aggregate: a run's when its lease
+   *  ends, a workflow checkpoint's when its invocation does. */
+  readonly releaseClaims: (id: AggregateId) => Effect.Effect<void>;
   readonly runRecords: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
+  /** Every committed row of one aggregate, ledger-private rows included:
+   *  the read behind the keyed private records and the checkpoint journal,
+   *  which fold over the whole aggregate rather than the latest of a type. */
+  readonly aggregateRows: (
+    id: AggregateId,
+  ) => Effect.Effect<readonly SessionEvent[]>;
   readonly runChildren: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
   readonly recordListing: () => Effect.Effect<readonly SessionEvent[]>;
   /** Transient text shares the existing session-input source, never the event table. */
@@ -71,6 +96,9 @@ export interface SessionGraph {
   /** `view` as a level stream (PRD 7.2): ends as the fold does, with its
    *  defect when the fold died, so a reader waiting on a view never hangs. */
   readonly viewChanges: Stream.Stream<SessionView>;
+  /** The store this graph opened held another build's rows and was
+   *  cleared (`Database.cleared`): the one fact a host tells the user. */
+  readonly storeCleared: SessionStoreCleared | null;
   /** The plane's tail as `view` has folded it (PRD 7.2): every row above
    *  `fromCommit`, released once the view holds the state that folded it,
    *  and local reconciliation has completed, for a reader that queries the
@@ -104,8 +132,9 @@ export interface SessionGraph {
    *  starts its `all` read (PRD 10.3). */
   readonly now: () => CommitOrdinal;
   /** Release the session from its owner: the owner unwinds the session and
-   *  frees the root's graph after it. */
-  readonly close: () => void;
+   *  frees the root's graph after it. Settles once the root's entry has
+   *  unwound, on the caller's own fiber. */
+  readonly close: () => Effect.Effect<void>;
 }
 
 /** What opening a session supplies, with its roots resolved. */
@@ -115,17 +144,13 @@ export type SessionOpen = SessionHandleInit & {
 
 /** The process's session owner, as `installProcessRuntime` installs it. */
 export interface SessionOwner {
-  /** The hosts' synchronous face of {@link SessionOwner.open}: the
-   *  extension, the desktop, and the CLI still open from Promise-native
-   *  code. It is scheduled for deletion when those lanes convert, and no
-   *  new caller may take it. */
-  openSync(open: SessionOpen): SessionHandle;
   /** The session of `open.roots`' storage root: the one already open there,
    *  or built now over what `open` supplies. The root's entry is registered
    *  with the owner before this Effect's first yield, so a close issued
    *  after it finds the session and waits for its build. */
   open(open: SessionOpen): Effect.Effect<SessionHandle>;
-  /** The session open on a storage root, if one is; never builds one. */
+  /** The session open on a storage root, if one is; never builds one, and
+   *  does not see an entry still building or already releasing. */
   current(root: string): SessionHandle | undefined;
   /** Every session the owner holds, in no particular order. */
   list(): Effect.Effect<readonly SessionHandle[]>;
@@ -170,25 +195,20 @@ function sessions(): SessionOwner {
 
 /**
  * Open the session of `init`'s workspace root, or return the one already
- * open there: one session per storage root in a process. Process roots
- * unless the opener names a folder: the extension, the CLI, and the SDK
- * open exactly one session over the process roots; the desktop opens one
- * session per paper and passes that paper's roots. What `init` supplies
- * beyond the roots (the transcript store, the sidecar store, the response
- * text policy) is read only when the root's session is built: a later
- * opener of the same root gets the session the first opener built.
+ * open there: one session per storage root in a process, built on the
+ * caller's own fiber. Process roots unless the opener names a folder: the
+ * extension, the CLI, and the SDK open exactly one session over the process
+ * roots; the desktop opens one session per project and passes that project's
+ * roots. What `init` supplies beyond the roots (the transcript store, the
+ * sidecar store, the response text policy) is read only when the root's
+ * session is built: a later opener of the same root gets the session the
+ * first opener built.
  *
  * The returned handle is borrowed access to an owner-held session
  * (PR #11893, agent SDK architecture proposal, section 3): holding it
  * carries no disposal obligation, and {@link closeSession} is how the
  * session ends.
  */
-export function openSession(init: SessionHandleInit): SessionHandle {
-  return sessions().openSync(resolveRoots(init));
-}
-
-/** {@link openSession} for a caller that already speaks Effect: the same
- *  one-session-per-root open, on the caller's own fiber. */
 export function openSessionEffect(
   init: SessionHandleInit,
 ): Effect.Effect<SessionHandle> {
@@ -204,7 +224,21 @@ export function listSessions(): Effect.Effect<readonly SessionHandle[]> {
 }
 
 function resolveRoots(init: SessionHandleInit): SessionOpen {
-  return { ...init, roots: init.roots ?? processWorkspaceRoots() };
+  // The owner keys and releases a session by this root, so neither a live
+  // process-root view nor a caller's mutable root record may change it later.
+  // Read the structural fields so inherited or non-enumerable getters work too.
+  const roots = init.roots ?? processWorkspaceRoots();
+  return {
+    ...init,
+    roots: {
+      workspace: roots.workspace,
+      storage: roots.storage,
+      globalStorage: roots.globalStorage,
+      config: roots.config,
+      workspaceState: roots.workspaceState,
+      globalState: roots.globalState,
+    },
+  };
 }
 
 /**

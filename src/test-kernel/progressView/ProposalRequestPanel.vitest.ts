@@ -83,13 +83,27 @@ describe('proposal-request-panel file-name keyboard activation', () => {
         enabled: true,
       },
     };
-    const approve = {
-      kind: 'decision.proposal',
+    // Approve-all carries the (unselected) overrides beside the bypass; the
+    // one-off `y` is the plain approve arm.
+    const approveAll = {
+      kind: 'request.decide',
       runId: 'run-a',
-      approvalId: 'proposal-1',
+      requestId: 'proposal-1',
       decision: { action: 'approve', model: null, agent: null },
     };
-    expect(actions).toEqual([superYolo, approve, superYolo, approve, approve]);
+    const approve = {
+      kind: 'request.decide',
+      runId: 'run-a',
+      requestId: 'proposal-1',
+      decision: { action: 'approve' },
+    };
+    expect(actions).toEqual([
+      superYolo,
+      approveAll,
+      superYolo,
+      approveAll,
+      approve,
+    ]);
   });
 
   it('attaches selected overrides only to approval decisions', async () => {
@@ -130,7 +144,7 @@ describe('proposal-request-panel file-name keyboard activation', () => {
       'policy.set',
       { action: 'approve', model: 'opus', agent: 'reviewer' },
       { action: 'setup' },
-      { action: 'reject', feedback: null },
+      { action: 'reject' },
     ]);
   });
 

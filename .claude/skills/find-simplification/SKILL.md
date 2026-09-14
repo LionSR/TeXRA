@@ -44,7 +44,9 @@ Thin candidates are not enough: deleting one typo, a single `knip` run's raw out
 Use parallel subagents when the user asks for breadth or many candidates. Give each agent a domain and require evidence, not guesses. Useful domains for this repo:
 
 - Agent runtime: the run loops, `ModelInvoker` retry, session resume paths, `src/agent/runtime/`.
-- Model handlers and tools: `src/agent/modelHandlers/<provider>/`, `src/tools/`, delegation, tool schema defaults.
+- Model protocol and binding: `packages/llm/src/`, `src/agent/runtime/run/modelBinding.ts`,
+  `src/agent/runtime/modelRoutes.ts`.
+- Tools: `src/tools/`, delegation, tool schema defaults.
 - Platform and hosts: port interfaces versus their actual consumers, `src/hosts/`, per-host wiring in `packages/*/`.
 - Webviews: the three parallel view trees (`webview`, `progressView`, `settingsView`) — duplicated manager or slice logic across them is a recurring find, but keep their directory structures aligned.
 - Storage and compatibility: `src/common/storage/`, persisted-state schemas, format readers with introduction dates.

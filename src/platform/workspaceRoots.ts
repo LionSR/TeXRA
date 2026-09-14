@@ -33,10 +33,24 @@ export interface WorkspaceRoots {
    * hosts must keep this separate from earlier release storage directories;
    * session services use this exact root without importing previous state. */
   readonly storage: string;
+  /**
+   * Cross-workspace global storage root. Process-wide by construction — every
+   * host derives it from the one storage root it opened — and carried here
+   * rather than on `platform()` so the storage paths have a single carrier.
+   */
+  readonly globalStorage: string;
   /** Workspace-scoped configuration (project `.texra/config.json` plus global). */
   readonly config: ConfigProvider;
   /** Workspace-scoped key-value state. */
   readonly workspaceState: StateStore;
+  /**
+   * Process-wide application state: the third of the three slots the settings
+   * catalog resolves a row against (`config`, `workspaceState`, `globalState`).
+   * Process-wide by construction like {@link globalStorage}, and carried here
+   * rather than on `platform()` so a caller that has resolved its roots holds
+   * every slot. Inside Effect the owner is the `AppState` service.
+   */
+  readonly globalState: StateStore;
 }
 
 let processRoots: WorkspaceRoots | null = null;
@@ -65,12 +79,8 @@ function requireProcessRoots(): WorkspaceRoots {
   return processRoots;
 }
 
-/**
- * The process roots, read at each access rather than copied: a session built
- * without roots of its own is rooted in the process, and stays so if the
- * process roots are installed after it (test suites swap the fake platform
- * per test around one process-default session).
- */
+/** The current process roots for unscoped callers. Session opening snapshots
+ * this view so its owner key and storage root stay stable for its lifetime. */
 const PROCESS_ROOTS_VIEW: WorkspaceRoots = Object.freeze({
   get workspace() {
     return requireProcessRoots().workspace;
@@ -78,15 +88,21 @@ const PROCESS_ROOTS_VIEW: WorkspaceRoots = Object.freeze({
   get storage() {
     return requireProcessRoots().storage;
   },
+  get globalStorage() {
+    return requireProcessRoots().globalStorage;
+  },
   get config() {
     return requireProcessRoots().config;
   },
   get workspaceState() {
     return requireProcessRoots().workspaceState;
   },
+  get globalState() {
+    return requireProcessRoots().globalState;
+  },
 });
 
-/** The live process roots, for a session that names no folder of its own. */
+/** The live process roots for callers that need the current process root. */
 export function processWorkspaceRoots(): WorkspaceRoots {
   return PROCESS_ROOTS_VIEW;
 }

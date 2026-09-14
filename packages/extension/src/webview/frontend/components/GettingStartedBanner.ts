@@ -11,7 +11,7 @@ import {
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
-import { MainViewEvents } from '../events';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 
 /** Slim project-bootstrap row shown when the workspace has no LaTeX files. */
 @customElement('getting-started-banner')
@@ -69,11 +69,15 @@ export class GettingStartedBanner extends LitElement {
   @property({ type: Boolean, reflect: true }) visible = false;
 
   private handleDismiss(): void {
-    this.dispatchEvent(MainViewEvents.dismissGettingStarted());
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'dismissBanner', banner: 'gettingStarted' }),
+    );
   }
 
   private handleAction(action: GettingStartedAction): void {
-    this.dispatchEvent(MainViewEvents.gettingStartedAction({ action }));
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'gettingStarted', action }),
+    );
   }
 
   private renderAction(

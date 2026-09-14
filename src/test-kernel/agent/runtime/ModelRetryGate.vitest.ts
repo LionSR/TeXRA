@@ -1,17 +1,14 @@
 // Third-party imports
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-  type Mock,
-} from 'vitest';
+import { it } from '@effect/vitest';
+import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
+import { TestClock } from 'effect/testing';
+import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
-import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import { createDeferred } from '@test/support/asyncTestUtils';
+import {
+  ModelRetryGate,
+  type RoutePolicy,
+} from '@agent/runtime/ModelRetryGate';
 
 const ROUTE = 'openai:subscription:gpt-5.6';
 const MODEL_ROUTE = `${ROUTE}:model`;
@@ -24,413 +21,506 @@ const UNAUTHORIZED = Object.assign(new Error('credential expired'), {
   status: 401,
 });
 
-function options(
-  signal: AbortSignal = new AbortController().signal,
-  baseBackoffMs = 1000,
-) {
-  return { signal, baseBackoffMs };
-}
-
-/** Structural view of the gate's own (unexported) RoutePolicy. */
-type TestRoute = {
-  key: string;
-  classifyFailure: (error: Error) => { retryAfterMs?: number } | undefined;
-  isReachableFailure?: (error: Error) => boolean;
-};
-
 /** The default single wire route: every failure cools the shared route. */
 function wireRoutes(
-  classifyFailure: TestRoute['classifyFailure'] = () => ({}),
-): [TestRoute] {
+  classifyFailure: RoutePolicy['classifyFailure'] = () => ({}),
+): [RoutePolicy] {
   return [{ key: ROUTE, classifyFailure }];
 }
 
-async function throwTransient(): Promise<never> {
-  throw TRANSIENT;
+/** Run `attempt` through `gate` on `routes` with the test's base backoff. */
+function gated<A, E>(
+  gate: ModelRetryGate,
+  routes: readonly [RoutePolicy, ...RoutePolicy[]],
+  attempt: Effect.Effect<A, E>,
+  baseBackoffMs = 1000,
+): Effect.Effect<A, E> {
+  return gate.withRoutes(routes, { baseBackoffMs })(attempt);
 }
 
-/** Holds the gate's probe open until `complete()` is called. */
-function pendingOperation() {
-  const deferred = createDeferred();
+/** An attempt that succeeds at once and counts its admissions. */
+function admitted(): { readonly attempt: Effect.Effect<void>; calls: Mock } {
+  const calls = vi.fn();
+  return { attempt: Effect.sync(calls), calls };
+}
+
+/**
+ * Holds the gate's probe open: `started` completes when the gate admits the
+ * attempt, and the attempt ends when `complete` or `fail` runs.
+ */
+function pendingAttempt() {
+  const started = Deferred.makeUnsafe<void>();
+  const ended = Deferred.makeUnsafe<void, Error>();
+  const calls = vi.fn();
   return {
-    operation: vi.fn(() => deferred.promise),
-    complete(): void {
-      deferred.resolve();
-    },
+    calls,
+    attempt: Effect.suspend(() => {
+      calls();
+      return Deferred.succeed(started, undefined).pipe(
+        Effect.andThen(Deferred.await(ended)),
+      );
+    }),
+    started: Deferred.await(started),
+    complete: Deferred.succeed(ended, undefined),
+    fail: (error: Error) => Deferred.fail(ended, error),
   };
 }
 
-async function openGate(gate: ModelRetryGate): Promise<void> {
-  await expect(gate.run(wireRoutes(), options(), throwTransient)).rejects.toBe(
-    TRANSIENT,
-  );
-}
+const openGate = (gate: ModelRetryGate) =>
+  Effect.gen(function* () {
+    expect(
+      yield* Effect.flip(gated(gate, wireRoutes(), Effect.fail(TRANSIENT))),
+    ).toBe(TRANSIENT);
+  });
 
-/** Asserts the pending call stays queued until exactly `delayMs` elapses. */
-async function expectAdmittedAfter(
-  pending: Promise<unknown>,
-  operation: Mock,
+/** Asserts the forked call stays queued until exactly `delayMs` elapses. */
+const expectAdmittedAfter = (
+  pending: Fiber.Fiber<unknown, unknown>,
+  calls: Mock,
   delayMs: number,
-): Promise<void> {
-  await vi.advanceTimersByTimeAsync(delayMs - 1);
-  expect(operation).not.toHaveBeenCalled();
-  await vi.advanceTimersByTimeAsync(1);
-  await pending;
-  expect(operation).toHaveBeenCalledOnce();
-}
+) =>
+  Effect.gen(function* () {
+    yield* TestClock.adjust(delayMs - 1);
+    expect(calls).not.toHaveBeenCalled();
+    yield* TestClock.adjust(1);
+    yield* Fiber.join(pending);
+    expect(calls).toHaveBeenCalledOnce();
+  });
 
 /** Recovers ROUTE with a successful probe after its base-backoff cooldown. */
-async function recoverRoute(gate: ModelRetryGate): Promise<void> {
-  const probe = gate.run(wireRoutes(), options(), async () => undefined);
-  await vi.advanceTimersByTimeAsync(1000);
-  await probe;
-}
+const recoverRoute = (gate: ModelRetryGate) =>
+  Effect.gen(function* () {
+    const probe = yield* Effect.forkChild(
+      gated(gate, wireRoutes(), Effect.void),
+    );
+    yield* TestClock.adjust(1000);
+    yield* Fiber.join(probe);
+  });
 
 /** Fails ROUTE's recovery probe after the base-backoff cooldown. */
-async function failRecoveryProbe(gate: ModelRetryGate): Promise<void> {
-  const failedProbe = gate.run(wireRoutes(), options(), throwTransient);
-  const failedProbeResult = expect(failedProbe).rejects.toBe(TRANSIENT);
-  await vi.advanceTimersByTimeAsync(1000);
-  await failedProbeResult;
-}
+const failRecoveryProbe = (gate: ModelRetryGate) =>
+  Effect.gen(function* () {
+    const failedProbe = yield* Effect.forkChild(
+      gated(gate, wireRoutes(), Effect.fail(TRANSIENT)),
+    );
+    yield* TestClock.adjust(1000);
+    expect(yield* Effect.flip(Fiber.join(failedProbe))).toBe(TRANSIENT);
+  });
 
 describe('ModelRetryGate', () => {
-  let gate: ModelRetryGate;
-
   beforeEach(() => {
-    vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
-    gate = new ModelRetryGate();
   });
 
   afterEach(() => {
-    gate.dispose();
-    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  it('admits one recovery probe and releases siblings after success', async () => {
-    await openGate(gate);
+  it.effect(
+    'admits one recovery probe and releases siblings after success',
+    () =>
+      Effect.gen(function* () {
+        const gate = yield* ModelRetryGate.make;
+        yield* openGate(gate);
 
-    const probe = pendingOperation();
-    const siblingOperation = vi.fn(async () => undefined);
-    const first = gate.run(wireRoutes(), options(), probe.operation);
-    const sibling = gate.run(wireRoutes(), options(), siblingOperation);
+        const probe = pendingAttempt();
+        const sibling = admitted();
+        const first = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), probe.attempt),
+        );
+        const second = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), sibling.attempt),
+        );
 
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(probe.operation).toHaveBeenCalledOnce();
-    expect(siblingOperation).not.toHaveBeenCalled();
+        yield* TestClock.adjust(1000);
+        yield* probe.started;
+        expect(probe.calls).toHaveBeenCalledOnce();
+        expect(sibling.calls).not.toHaveBeenCalled();
 
-    probe.complete();
-    await Promise.all([first, sibling]);
-    expect(siblingOperation).toHaveBeenCalledOnce();
-  });
-
-  it('grows the shared backoff when the released herd re-fails after a probe', async () => {
-    // Regression: resetting the failure streak on probe success capped the
-    // backoff at its base forever on capacity-limited (429) routes — the rate
-    // window fits one probe, the released herd re-fails, and the counter
-    // restarts from zero every round.
-    await openGate(gate);
-
-    const probeOperation = vi.fn(async () => undefined);
-    const probe = gate.run(wireRoutes(), options(), probeOperation);
-    const herdOperation = vi.fn(throwTransient);
-    const herd = gate.run(wireRoutes(), options(), herdOperation);
-
-    const herdResult = expect(herd).rejects.toBe(TRANSIENT);
-    await vi.advanceTimersByTimeAsync(1000);
-    await probe;
-    await herdResult;
-    expect(probeOperation).toHaveBeenCalledOnce();
-    expect(herdOperation).toHaveBeenCalledOnce();
-
-    // Second failure on the route: backoff must now be 2x the base, not base.
-    const nextOperation = vi.fn(async () => undefined);
-    const next = gate.run(wireRoutes(), options(), nextOperation);
-    await expectAdmittedAfter(next, nextOperation, 2000);
-
-    // Third failure keeps growing: 4x the base.
-    await expect(
-      gate.run(wireRoutes(), options(), throwTransient),
-    ).rejects.toBe(TRANSIENT);
-    const finalOperation = vi.fn(async () => undefined);
-    const final = gate.run(wireRoutes(), options(), finalOperation);
-    await expectAdmittedAfter(final, finalOperation, 4000);
-  });
-
-  it('keeps model rate limits off the shared wire route', async () => {
-    const modelRoutes = (modelRoute: string): [TestRoute, TestRoute] => [
-      {
-        key: modelRoute,
-        classifyFailure: (error: Error) =>
-          error === RATE_LIMIT ? {} : undefined,
-      },
-      {
-        key: ROUTE,
-        classifyFailure: () => undefined,
-        isReachableFailure: (error: Error) => error === RATE_LIMIT,
-      },
-    ];
-
-    await expect(
-      gate.run(modelRoutes(MODEL_ROUTE), options(), async () => {
-        throw RATE_LIMIT;
+        yield* probe.complete;
+        yield* Fiber.join(first);
+        yield* Fiber.join(second);
+        expect(sibling.calls).toHaveBeenCalledOnce();
       }),
-    ).rejects.toBe(RATE_LIMIT);
+  );
 
-    const limitedOperation = vi.fn(async () => undefined);
-    const limited = gate.run(
-      modelRoutes(MODEL_ROUTE),
-      options(),
-      limitedOperation,
-    );
-    const otherModelOperation = vi.fn(async () => undefined);
-    await gate.run(
-      modelRoutes(OTHER_MODEL_ROUTE),
-      options(),
-      otherModelOperation,
-    );
+  it.effect(
+    'grows the shared backoff when the released herd re-fails after a probe',
+    () =>
+      Effect.gen(function* () {
+        // Regression: resetting the failure streak on probe success capped the
+        // backoff at its base forever on capacity-limited (429) routes — the
+        // rate window fits one probe, the released herd re-fails, and the
+        // counter restarts from zero every round.
+        const gate = yield* ModelRetryGate.make;
+        yield* openGate(gate);
 
-    expect(otherModelOperation).toHaveBeenCalledOnce();
-    expect(limitedOperation).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1000);
-    await limited;
-    expect(limitedOperation).toHaveBeenCalledOnce();
-  });
+        const probeAttempt = admitted();
+        const probe = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), probeAttempt.attempt),
+        );
+        const herdAttempt = vi.fn(() => Effect.fail(TRANSIENT));
+        const herd = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), Effect.suspend(herdAttempt)),
+        );
 
-  it('does not reserve the wire probe while waiting for a model cooldown', async () => {
-    const modelRoutes = (
-      modelRoute: string,
-      modelRetryAfterMs?: number,
-    ): [TestRoute, TestRoute] => [
-      {
-        key: modelRoute,
-        classifyFailure: (error: Error) =>
-          error === RATE_LIMIT
-            ? { retryAfterMs: modelRetryAfterMs }
-            : undefined,
-      },
-      {
-        key: ROUTE,
-        classifyFailure: (error: Error) =>
+        yield* TestClock.adjust(1000);
+        yield* Fiber.join(probe);
+        expect(yield* Effect.flip(Fiber.join(herd))).toBe(TRANSIENT);
+        expect(probeAttempt.calls).toHaveBeenCalledOnce();
+        expect(herdAttempt).toHaveBeenCalledOnce();
+
+        // Second failure on the route: backoff must now be 2x the base.
+        const nextAttempt = admitted();
+        const next = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), nextAttempt.attempt),
+        );
+        yield* expectAdmittedAfter(next, nextAttempt.calls, 2000);
+
+        // Third failure keeps growing: 4x the base.
+        yield* openGate(gate);
+        const finalAttempt = admitted();
+        const final = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), finalAttempt.attempt),
+        );
+        yield* expectAdmittedAfter(final, finalAttempt.calls, 4000);
+      }),
+  );
+
+  it.effect('keeps model rate limits off the shared wire route', () =>
+    Effect.gen(function* () {
+      const gate = yield* ModelRetryGate.make;
+      const modelRoutes = (modelRoute: string): [RoutePolicy, RoutePolicy] => [
+        {
+          key: modelRoute,
+          classifyFailure: (error) => (error === RATE_LIMIT ? {} : undefined),
+        },
+        {
+          key: ROUTE,
+          classifyFailure: () => undefined,
+          isReachableFailure: (error) => error === RATE_LIMIT,
+        },
+      ];
+
+      expect(
+        yield* Effect.flip(
+          gated(gate, modelRoutes(MODEL_ROUTE), Effect.fail(RATE_LIMIT)),
+        ),
+      ).toBe(RATE_LIMIT);
+
+      const limitedAttempt = admitted();
+      const limited = yield* Effect.forkChild(
+        gated(gate, modelRoutes(MODEL_ROUTE), limitedAttempt.attempt),
+      );
+      const otherModelAttempt = admitted();
+      yield* gated(
+        gate,
+        modelRoutes(OTHER_MODEL_ROUTE),
+        otherModelAttempt.attempt,
+      );
+
+      expect(otherModelAttempt.calls).toHaveBeenCalledOnce();
+      expect(limitedAttempt.calls).not.toHaveBeenCalled();
+      yield* TestClock.adjust(1000);
+      yield* Fiber.join(limited);
+      expect(limitedAttempt.calls).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect(
+    'does not reserve the wire probe while waiting for a model cooldown',
+    () =>
+      Effect.gen(function* () {
+        const gate = yield* ModelRetryGate.make;
+        const modelRoutes = (
+          modelRoute: string,
+          modelRetryAfterMs?: number,
+        ): [RoutePolicy, RoutePolicy] => [
+          {
+            key: modelRoute,
+            classifyFailure: (error) =>
+              error === RATE_LIMIT
+                ? { retryAfterMs: modelRetryAfterMs }
+                : undefined,
+          },
+          {
+            key: ROUTE,
+            classifyFailure: (error) => (error === TRANSIENT ? {} : undefined),
+            isReachableFailure: (error) => error === RATE_LIMIT,
+          },
+        ];
+
+        expect(
+          yield* Effect.flip(
+            gated(
+              gate,
+              modelRoutes(MODEL_ROUTE, 10_000),
+              Effect.fail(RATE_LIMIT),
+            ),
+          ),
+        ).toBe(RATE_LIMIT);
+        expect(
+          yield* Effect.flip(
+            gated(gate, modelRoutes(OTHER_MODEL_ROUTE), Effect.fail(TRANSIENT)),
+          ),
+        ).toBe(TRANSIENT);
+
+        const limitedAttempt = admitted();
+        const limited = yield* Effect.forkChild(
+          gated(gate, modelRoutes(MODEL_ROUTE, 10_000), limitedAttempt.attempt),
+        );
+        const siblingAttempt = admitted();
+        const sibling = yield* Effect.forkChild(
+          gated(gate, modelRoutes(OTHER_MODEL_ROUTE), siblingAttempt.attempt),
+        );
+
+        yield* TestClock.adjust(1000);
+        yield* Fiber.join(sibling);
+        expect(siblingAttempt.calls).toHaveBeenCalledOnce();
+        expect(limitedAttempt.calls).not.toHaveBeenCalled();
+
+        yield* TestClock.adjust(9000);
+        yield* Fiber.join(limited);
+        expect(limitedAttempt.calls).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'ends the failure streak after a clean round-trip on the healthy route',
+    () =>
+      Effect.gen(function* () {
+        const gate = yield* ModelRetryGate.make;
+        yield* openGate(gate);
+
+        // Recover the route via a successful probe (streak carries over)...
+        yield* recoverRoute(gate);
+
+        // ...then a success admitted while the route is already healthy resets it.
+        yield* gated(gate, wireRoutes(), Effect.void);
+        yield* openGate(gate);
+
+        // Cooling restarts at the base backoff, not the previous streak's tier.
+        const nextAttempt = admitted();
+        const next = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), nextAttempt.attempt),
+        );
+        yield* TestClock.adjust(1000);
+        yield* Fiber.join(next);
+        expect(nextAttempt.calls).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect('honors an explicitly disabled shared backoff', () =>
+    Effect.gen(function* () {
+      const gate = yield* ModelRetryGate.make;
+      expect(
+        yield* Effect.flip(
+          gated(gate, wireRoutes(), Effect.fail(TRANSIENT), 0),
+        ),
+      ).toBe(TRANSIENT);
+
+      const retryAttempt = admitted();
+      const retry = yield* Effect.forkChild(
+        gated(gate, wireRoutes(), retryAttempt.attempt, 0),
+      );
+      expect(retryAttempt.calls).not.toHaveBeenCalled();
+      yield* TestClock.adjust(0);
+      yield* Fiber.join(retry);
+      expect(retryAttempt.calls).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect('increases the shared backoff after a failed probe', () =>
+    Effect.gen(function* () {
+      const gate = yield* ModelRetryGate.make;
+      yield* openGate(gate);
+      yield* failRecoveryProbe(gate);
+
+      const nextAttempt = admitted();
+      const next = yield* Effect.forkChild(
+        gated(gate, wireRoutes(), nextAttempt.attempt),
+      );
+      yield* expectAdmittedAfter(next, nextAttempt.calls, 2000);
+    }),
+  );
+
+  it.effect('keeps peers queued after an unclassified probe failure', () =>
+    Effect.gen(function* () {
+      const gate = yield* ModelRetryGate.make;
+      yield* openGate(gate);
+
+      const probe = pendingAttempt();
+      const failedProbe = yield* Effect.forkChild(
+        gated(
+          gate,
+          wireRoutes((error) => (error === TRANSIENT ? {} : undefined)),
+          probe.attempt,
+        ),
+      );
+      const firstPeerAttempt = admitted();
+      const firstPeer = yield* Effect.forkChild(
+        gated(gate, wireRoutes(), firstPeerAttempt.attempt),
+      );
+      const secondPeerAttempt = admitted();
+      const secondPeer = yield* Effect.forkChild(
+        gated(gate, wireRoutes(), secondPeerAttempt.attempt),
+      );
+
+      yield* TestClock.adjust(1000);
+      yield* probe.started;
+      yield* probe.fail(UNAUTHORIZED);
+      expect(yield* Effect.flip(Fiber.join(failedProbe))).toBe(UNAUTHORIZED);
+      expect(firstPeerAttempt.calls).not.toHaveBeenCalled();
+      expect(secondPeerAttempt.calls).not.toHaveBeenCalled();
+
+      yield* TestClock.adjust(0);
+      yield* Fiber.join(firstPeer);
+      yield* Fiber.join(secondPeer);
+      expect(firstPeerAttempt.calls).toHaveBeenCalledOnce();
+      expect(secondPeerAttempt.calls).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect(
+    'resets an old failure streak after a healthy unclassified failure',
+    () =>
+      Effect.gen(function* () {
+        const gate = yield* ModelRetryGate.make;
+        yield* openGate(gate);
+        const scopedRoutes = wireRoutes((error) =>
           error === TRANSIENT ? {} : undefined,
-        isReachableFailure: (error: Error) => error === RATE_LIMIT,
-      },
-    ];
+        );
 
-    await expect(
-      gate.run(modelRoutes(MODEL_ROUTE, 10_000), options(), async () => {
-        throw RATE_LIMIT;
+        const probe = yield* Effect.forkChild(
+          gated(gate, scopedRoutes, Effect.void),
+        );
+        const healthyFailure = yield* Effect.forkChild(
+          gated(gate, scopedRoutes, Effect.fail(UNAUTHORIZED)),
+        );
+        yield* TestClock.adjust(1000);
+        yield* Fiber.join(probe);
+        expect(yield* Effect.flip(Fiber.join(healthyFailure))).toBe(
+          UNAUTHORIZED,
+        );
+
+        expect(
+          yield* Effect.flip(gated(gate, scopedRoutes, Effect.fail(TRANSIENT))),
+        ).toBe(TRANSIENT);
+        const recoveredAttempt = admitted();
+        const recovered = yield* Effect.forkChild(
+          gated(gate, scopedRoutes, recoveredAttempt.attempt),
+        );
+        yield* expectAdmittedAfter(recovered, recoveredAttempt.calls, 1000);
       }),
-    ).rejects.toBe(RATE_LIMIT);
-    await expect(
-      gate.run(modelRoutes(OTHER_MODEL_ROUTE), options(), throwTransient),
-    ).rejects.toBe(TRANSIENT);
+  );
 
-    const limitedOperation = vi.fn(async () => undefined);
-    const limited = gate.run(
-      modelRoutes(MODEL_ROUTE, 10_000),
-      options(),
-      limitedOperation,
-    );
-    const siblingOperation = vi.fn(async () => undefined);
-    const sibling = gate.run(
-      modelRoutes(OTHER_MODEL_ROUTE),
-      options(),
-      siblingOperation,
-    );
+  it.effect('does not let a stale success erase a newer failed probe', () =>
+    Effect.gen(function* () {
+      const gate = yield* ModelRetryGate.make;
+      const stale = pendingAttempt();
+      const stalePending = yield* Effect.forkChild(
+        gated(gate, wireRoutes(), stale.attempt),
+      );
+      yield* stale.started;
+      yield* openGate(gate);
+      yield* failRecoveryProbe(gate);
 
-    await vi.advanceTimersByTimeAsync(1000);
-    await sibling;
-    expect(siblingOperation).toHaveBeenCalledOnce();
-    expect(limitedOperation).not.toHaveBeenCalled();
+      const currentAttempt = admitted();
+      const current = yield* Effect.forkChild(
+        gated(gate, wireRoutes(), currentAttempt.attempt),
+      );
+      yield* stale.complete;
+      yield* Fiber.join(stalePending);
+      yield* expectAdmittedAfter(current, currentAttempt.calls, 2000);
+    }),
+  );
 
-    await vi.advanceTimersByTimeAsync(9000);
-    await limited;
-    expect(limitedOperation).toHaveBeenCalledOnce();
-  });
+  it.effect(
+    'does not let a stale healthy success reset recovered backoff',
+    () =>
+      Effect.gen(function* () {
+        const gate = yield* ModelRetryGate.make;
+        const stale = pendingAttempt();
+        const stalePending = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), stale.attempt),
+        );
+        yield* stale.started;
+        yield* openGate(gate);
+        yield* recoverRoute(gate);
 
-  it('ends the failure streak after a clean round-trip on the healthy route', async () => {
-    await openGate(gate);
+        yield* stale.complete;
+        yield* Fiber.join(stalePending);
+        yield* openGate(gate);
 
-    // Recover the route via a successful probe (streak carries over)...
-    await recoverRoute(gate);
+        const nextAttempt = admitted();
+        const next = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), nextAttempt.attempt),
+        );
+        yield* expectAdmittedAfter(next, nextAttempt.calls, 2000);
+      }),
+  );
 
-    // ...then a success admitted while the route is already healthy resets it.
-    await gate.run(wireRoutes(), options(), async () => undefined);
+  it.effect('hands an abandoned probe to the next waiting call', () =>
+    Effect.gen(function* () {
+      const gate = yield* ModelRetryGate.make;
+      yield* openGate(gate);
 
-    await expect(
-      gate.run(wireRoutes(), options(), throwTransient),
-    ).rejects.toBe(TRANSIENT);
+      const probe = pendingAttempt();
+      const first = yield* Effect.forkChild(
+        gated(gate, wireRoutes(), probe.attempt),
+      );
+      const nextAttempt = admitted();
+      const next = yield* Effect.forkChild(
+        gated(gate, wireRoutes(), nextAttempt.attempt),
+      );
 
-    // Cooling restarts at the base backoff, not the previous streak's tier.
-    const nextOperation = vi.fn(async () => undefined);
-    const next = gate.run(wireRoutes(), options(), nextOperation);
-    await vi.advanceTimersByTimeAsync(1000);
-    await next;
-    expect(nextOperation).toHaveBeenCalledOnce();
-  });
+      yield* TestClock.adjust(1000);
+      yield* probe.started;
+      yield* Fiber.interrupt(first);
+      expect(Exit.hasInterrupts(yield* Fiber.await(first))).toBe(true);
+      yield* Fiber.join(next);
+      expect(nextAttempt.calls).toHaveBeenCalledOnce();
+    }),
+  );
 
-  it('honors an explicitly disabled shared backoff', async () => {
-    const controller = new AbortController();
-    await expect(
-      gate.run(wireRoutes(), options(controller.signal, 0), throwTransient),
-    ).rejects.toBe(TRANSIENT);
+  it.effect('interrupts calls waiting when the session scope closes', () =>
+    Effect.gen(function* () {
+      const scope = yield* Scope.make();
+      const gate = yield* ModelRetryGate.make.pipe(Scope.provide(scope));
+      yield* openGate(gate);
 
-    const operation = vi.fn(async () => undefined);
-    const retry = gate.run(wireRoutes(), options(undefined, 0), operation);
-    expect(operation).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(0);
-    await retry;
-    expect(operation).toHaveBeenCalledOnce();
-  });
+      const waitingAttempt = admitted();
+      const waiting = yield* Effect.forkChild(
+        gated(gate, wireRoutes(), waitingAttempt.attempt),
+      );
+      yield* TestClock.adjust(0);
+      yield* Scope.close(scope, Exit.void);
 
-  it('increases the shared backoff after a failed probe', async () => {
-    await openGate(gate);
-    await failRecoveryProbe(gate);
+      expect(Exit.hasInterrupts(yield* Fiber.await(waiting))).toBe(true);
+      expect(waitingAttempt.calls).not.toHaveBeenCalled();
+    }),
+  );
 
-    const nextOperation = vi.fn(async () => undefined);
-    const next = gate.run(wireRoutes(), options(), nextOperation);
-    await expectAdmittedAfter(next, nextOperation, 2000);
-  });
+  it.effect(
+    'frees the cooldown probe when its final waiter is interrupted',
+    () =>
+      Effect.gen(function* () {
+        const gate = yield* ModelRetryGate.make;
+        yield* openGate(gate);
+        const waiting = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), Effect.void),
+        );
+        yield* TestClock.adjust(400);
+        yield* Fiber.interrupt(waiting);
+        expect(Exit.hasInterrupts(yield* Fiber.await(waiting))).toBe(true);
 
-  it('keeps peers queued after an unclassified probe failure', async () => {
-    await openGate(gate);
-
-    let rejectProbe = (_error: Error): void => undefined;
-    const probeResult = new Promise<void>((_resolve, reject) => {
-      rejectProbe = reject;
-    });
-    const failedProbe = gate.run(
-      wireRoutes((error: Error) => (error === TRANSIENT ? {} : undefined)),
-      options(),
-      () => probeResult,
-    );
-    const failedProbeResult = expect(failedProbe).rejects.toBe(UNAUTHORIZED);
-    const firstPeerOperation = vi.fn(async () => undefined);
-    const firstPeer = gate.run(wireRoutes(), options(), firstPeerOperation);
-    const secondPeerOperation = vi.fn(async () => undefined);
-    const secondPeer = gate.run(wireRoutes(), options(), secondPeerOperation);
-
-    await vi.advanceTimersByTimeAsync(1000);
-    rejectProbe(UNAUTHORIZED);
-    await failedProbeResult;
-    expect(firstPeerOperation).not.toHaveBeenCalled();
-    expect(secondPeerOperation).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(0);
-    await Promise.all([firstPeer, secondPeer]);
-    expect(firstPeerOperation).toHaveBeenCalledOnce();
-    expect(secondPeerOperation).toHaveBeenCalledOnce();
-  });
-
-  it('resets an old failure streak after a healthy unclassified failure', async () => {
-    await openGate(gate);
-    const scopedRoutes = wireRoutes((error: Error) =>
-      error === TRANSIENT ? {} : undefined,
-    );
-
-    const probe = gate.run(scopedRoutes, options(), async () => undefined);
-    const healthyFailure = gate.run(scopedRoutes, options(), async () => {
-      throw UNAUTHORIZED;
-    });
-    const healthyFailureResult =
-      expect(healthyFailure).rejects.toBe(UNAUTHORIZED);
-    await vi.advanceTimersByTimeAsync(1000);
-    await probe;
-    await healthyFailureResult;
-
-    await expect(
-      gate.run(scopedRoutes, options(), throwTransient),
-    ).rejects.toBe(TRANSIENT);
-    const recoveredOperation = vi.fn(async () => undefined);
-    const recovered = gate.run(scopedRoutes, options(), recoveredOperation);
-    await expectAdmittedAfter(recovered, recoveredOperation, 1000);
-  });
-
-  it('does not let a stale success erase a newer failed probe', async () => {
-    const stale = pendingOperation();
-    const stalePending = gate.run(wireRoutes(), options(), stale.operation);
-    await openGate(gate);
-    await failRecoveryProbe(gate);
-
-    const currentProbe = vi.fn(async () => undefined);
-    const current = gate.run(wireRoutes(), options(), currentProbe);
-    stale.complete();
-    await stalePending;
-    await expectAdmittedAfter(current, currentProbe, 2000);
-  });
-
-  it('does not let a stale healthy success reset recovered backoff', async () => {
-    const stale = pendingOperation();
-    const stalePending = gate.run(wireRoutes(), options(), stale.operation);
-    await openGate(gate);
-    await recoverRoute(gate);
-
-    stale.complete();
-    await stalePending;
-    await expect(
-      gate.run(wireRoutes(), options(), throwTransient),
-    ).rejects.toBe(TRANSIENT);
-
-    const nextOperation = vi.fn(async () => undefined);
-    const next = gate.run(wireRoutes(), options(), nextOperation);
-    await expectAdmittedAfter(next, nextOperation, 2000);
-  });
-
-  it('hands an abandoned probe to the next waiting call', async () => {
-    await openGate(gate);
-
-    const firstController = new AbortController();
-    const first = gate.run(
-      wireRoutes(),
-      options(firstController.signal),
-      () =>
-        new Promise<void>((_resolve, reject) => {
-          firstController.signal.addEventListener(
-            'abort',
-            () => reject(firstController.signal.reason),
-            { once: true },
-          );
-        }),
-    );
-    const nextOperation = vi.fn(async () => undefined);
-    const next = gate.run(wireRoutes(), options(), nextOperation);
-
-    await vi.advanceTimersByTimeAsync(1000);
-    firstController.abort(new DOMException('cancelled', 'AbortError'));
-    await expect(first).rejects.toMatchObject({ name: 'AbortError' });
-    await vi.advanceTimersByTimeAsync(0);
-    await next;
-    expect(nextOperation).toHaveBeenCalledOnce();
-  });
-
-  it('rejects calls waiting when the session is disposed', async () => {
-    await openGate(gate);
-
-    const waiting = gate.run(wireRoutes(), options(), async () => undefined);
-    gate.dispose();
-
-    await expect(waiting).rejects.toMatchObject({
-      name: 'AbortError',
-      message: 'Model retry gate disposed',
-    });
-  });
-
-  it('cancels the cooldown timer when its final waiter aborts', async () => {
-    await openGate(gate);
-    const controller = new AbortController();
-    const waiting = gate.run(
-      wireRoutes(),
-      options(controller.signal),
-      async () => undefined,
-    );
-
-    expect(vi.getTimerCount()).toBe(1);
-    controller.abort(new DOMException('cancelled', 'AbortError'));
-
-    await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
-    expect(vi.getTimerCount()).toBe(0);
-  });
+        // The next call schedules its own probe for the rest of the cooldown;
+        // a probe slot the interrupted waiter left occupied would never admit it.
+        const nextAttempt = admitted();
+        const next = yield* Effect.forkChild(
+          gated(gate, wireRoutes(), nextAttempt.attempt),
+        );
+        yield* expectAdmittedAfter(next, nextAttempt.calls, 600);
+      }),
+  );
 });

@@ -237,7 +237,6 @@ export const workflowRunBoardStyles = css`
     color: var(--wa-color-danger-on-quiet);
   }
 
-  .row.status-planned .row-icon,
   .row.status-queued .row-icon,
   .row.status-declared .row-icon,
   .row.status-skipped .row-icon,

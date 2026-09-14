@@ -78,7 +78,7 @@ The current runtime proposal's comparison table rejects Workflow partly because 
 
 ## 4. Proposed durable phase model
 
-The [joint runtime/LLM implementation contract](../../proposed/architecture/2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package)
+The [joint runtime/LLM implementation contract](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package)
 supplies the preparation/acceptance barriers, continuation validity and tool
 state/attachment settlement required by this table. Read it before implementing
 the ledger rows; the phase names below are illustrative, not another schema.
@@ -134,7 +134,7 @@ The LLM package classifies transport/provider failures and reports what became o
 
 Queued input requires two decisions: when an input becomes model-visible, and when the queue item is consumed. Commit those together. A wait primitive is just the notification mechanism; the durable queue is the authority. Child runs and workflow-script checkpoints need the same accepted-command and attempt identity, not a second journal under another API.
 
-The [runtime proposal](../../proposed/architecture/2026-09-04-agent-runtime-on-effect.md) already specifies full history replacement plus post-compaction context in one durable decision, and an `output.pending` artifact plan with reconciliation. Preserve and sharpen those rules rather than replacing them with vague `compact()` and `writeOutput()` helpers. Their clocks, digests, approvals, and uncertain external outcomes are the actual continuation contract.
+The [runtime proposal](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md) already specifies full history replacement plus post-compaction context in one durable decision, and an `output.pending` artifact plan with reconciliation. Preserve and sharpen those rules rather than replacing them with vague `compact()` and `writeOutput()` helpers. Their clocks, digests, approvals, and uncertain external outcomes are the actual continuation contract.
 
 ## 7. Relation to September proposals and active work
 

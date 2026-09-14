@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, type Scope } from 'effect';
 
 // Third-party imports
 import { z } from 'zod';
@@ -10,19 +10,12 @@ import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
 } from '@agent/runtime/run/toolResultText';
-import {
-  getCurrentToolContexts,
-  type ToolCallContext,
-} from '@agent/followUp/ToolFileInteractionContext';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
-import { getRunContextWorkingDirectory } from '@agent/runtime/RunContext';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { effectRuntime } from '@platform/processRuntime';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
@@ -36,7 +29,6 @@ import {
   type ToolResult,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { requireLiveRun } from '@tools/contextHelpers';
 import {
   formatBashDelivery,
   formatBashError,
@@ -47,6 +39,7 @@ import {
   requestBashApproval,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
+import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { formatDuration, generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
@@ -358,138 +351,155 @@ export class BashTool extends defineTool({
   name: 'bash',
   requiresApproval: true,
   slow: true,
-  deferLogUntilApproval: true,
-  streamsOutput: true,
   description:
     'Execute shell commands directly in the workspace directory. Commands run from the project root automatically. Available environment variables: $PROJECT_DIR (workspace path), $PROJECT_NAME (project name). Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands.',
   schema: BashInputSchema,
 }) {
-  protected async execute(input: BashInput): Promise<ToolResult> {
-    if (
-      !input.run_in_background &&
-      SHELL_BACKGROUNDING_PATTERN.test(input.command)
-    ) {
-      throw new ToolError(SHELL_BACKGROUNDING_MESSAGE);
-    }
+  protected execute(input: BashInput) {
+    return Effect.gen({ self: this }, function* () {
+      const toolCall = yield* ToolCall;
+      if (
+        !input.run_in_background &&
+        SHELL_BACKGROUNDING_PATTERN.test(input.command)
+      ) {
+        return yield* Effect.fail(new ToolError(SHELL_BACKGROUNDING_MESSAGE));
+      }
 
-    const contexts = getCurrentToolContexts();
-    const callContext = contexts?.callContext;
-    const runContext = contexts?.runContext;
+      // A background shell delivers its result as a follow-up message; a
+      // one-shot run ends after the current cycle, so nothing is left to collect
+      // it. Every other child type already answers this case — agent-CLI
+      // refuses, native subagents degrade to the parent trace, workflow-script
+      // awaits — and a background shell cannot degrade, because the follow-up
+      // IS its delivery. Refuse before requesting approval: in the SDK path
+      // (`packages/agent/src/index.ts`) the `finally` kills the process group,
+      // so launching here would run the user's command and then discard its
+      // result with nothing reported.
+      if (input.run_in_background && toolCall.stopAfterCycle) {
+        return yield* Effect.fail(
+          new ToolError(
+            'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
+          ),
+        );
+      }
 
-    // A background shell delivers its result as a follow-up message; a
-    // one-shot run ends after the current cycle, so nothing is left to collect
-    // it. Every other child type already answers this case — agent-CLI
-    // refuses, native subagents degrade to the parent trace, workflow-script
-    // awaits — and a background shell cannot degrade, because the follow-up
-    // IS its delivery. Refuse before requesting approval: in the SDK path
-    // (`packages/agent/src/index.ts`) the `finally` kills the process group,
-    // so launching here would run the user's command and then discard its
-    // result with nothing reported.
-    if (input.run_in_background && runContext?.stopAfterCycle) {
-      throw new ToolError(
-        'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
-      );
-    }
+      const cwd =
+        parseWorkingDirectory(toolCall.workingDirectory) ??
+        toolCall.roots.workspace;
 
-    const cwd =
-      parseWorkingDirectory(getRunContextWorkingDirectory(runContext)) ??
-      workspaceRoots().workspace;
+      const approval = yield* requestBashApproval({
+        command: input.command,
+        cwd,
+      });
 
-    // Request approval before executing the command.
-    const approval = await requestBashApproval({ command: input.command, cwd });
+      if (approval.action !== 'approve') {
+        return buildBashApprovalRejectedResult(input.command, approval);
+      }
 
-    if (approval.action !== 'approve') {
-      return buildBashApprovalRejectedResult(input.command, approval);
-    }
+      const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
 
-    // Signal run starting (triggers in-progress log after approval)
-    callContext?.hooks?.onRunReady?.();
-
-    const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
-
-    if (input.run_in_background) {
-      const { runId } = requireLiveRun('bash run_in_background', runContext);
-      return effectRuntime().runPromise(
-        this.executeBackground(
-          currentSession(),
+      if (input.run_in_background) {
+        if (!toolCall.run) {
+          return yield* Effect.fail(
+            new ToolError(
+              'bash run_in_background must be called from within an agent stream.',
+            ),
+          );
+        }
+        return yield* this.executeBackground(
+          toolCall.run.session,
           input.command,
           timeoutMs,
-          runId,
+          toolCall.run.runId,
           cwd,
-        ),
+        );
+      }
+
+      return yield* this.executeForeground(
+        input.command,
+        timeoutMs,
+        toolCall,
+        cwd,
       );
-    }
-
-    return this.executeForeground(input.command, timeoutMs, callContext, cwd);
-  }
-
-  private async executeForeground(
-    command: string,
-    timeoutMs: number,
-    ctx: ToolCallContext | undefined,
-    cwd?: string,
-  ): Promise<ToolResult> {
-    const stdout = createBoundedOutputCapture(
-      FOREGROUND_OUTPUT_HEAD_CHARS,
-      FOREGROUND_OUTPUT_TAIL_CHARS,
-    );
-    const stderr = createBoundedOutputCapture(
-      FOREGROUND_OUTPUT_HEAD_CHARS,
-      FOREGROUND_OUTPUT_TAIL_CHARS,
-    );
-    const startedAt = Date.now();
-    const result = await executeCommand(command, {
-      cwd,
-      buffer: false,
-      timeout: timeoutMs,
-      // The string command form gets shell teardown: abort/timeout signal the
-      // whole process group so piped children and backgrounded jobs are torn
-      // down.
-      onStdout: (chunk) => {
-        stdout.append(chunk);
-        ctx?.hooks?.onToolOutput?.(chunk);
-      },
-      onStderr: (chunk) => {
-        stderr.append(chunk);
-        ctx?.hooks?.onToolOutput?.(chunk);
-      },
-      signal: ctx?.signal,
     });
-    // Spawn/cancellation diagnostics can come from executeCommand itself
-    // rather than either subprocess stream, so retain those as a fallback.
-    const retainedStdout = stdout.text('stdout') ?? result.stdout;
-    const retainedStderr = stderr.text('stderr') ?? result.stderr;
-
-    if (result.timedOut) {
-      const parts: string[] = [
-        `Foreground command timed out after ${timeoutMs / 1000}s.`,
-      ];
-      if (retainedStdout) parts.push(`<stdout>${retainedStdout}</stdout>`);
-      if (retainedStderr) parts.push(`<stderr>${retainedStderr}</stderr>`);
-      parts.push(
-        `To fix, either:\n` +
-          `- Increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }\n` +
-          `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }\n` +
-          `Do not use shell-level backgrounding such as \`nohup ... &\` inside a foreground call.`,
-      );
-      throw new ToolError(parts.join('\n'));
-    }
-
-    const duration = formatDuration(Date.now() - startedAt);
-
-    if (result.success) {
-      const preview = previewLabel(command);
-      return executed(
-        retainedStdout ?? '',
-        `Executed: ${preview} (exit 0, ${duration})`,
-      );
-    }
-    // Many CLI tools (including latexmk) write errors to stdout, not stderr
-    const errorOutput =
-      [retainedStderr, retainedStdout].filter(Boolean).join('\n') ||
-      'No error output available';
-    throw new ToolError(`Command failed (${duration}): ${errorOutput}`);
   }
+
+  private readonly executeForeground = Effect.fn('BashTool.executeForeground')(
+    function* (
+      this: BashTool,
+      command: string,
+      timeoutMs: number,
+      toolCall: import('@agent/runtime/ToolCall').ToolCallShape,
+      cwd?: string,
+    ): Effect.fn.Return<ToolResult, Error, Scope.Scope> {
+      const stdout = createBoundedOutputCapture(
+        FOREGROUND_OUTPUT_HEAD_CHARS,
+        FOREGROUND_OUTPUT_TAIL_CHARS,
+      );
+      const stderr = createBoundedOutputCapture(
+        FOREGROUND_OUTPUT_HEAD_CHARS,
+        FOREGROUND_OUTPUT_TAIL_CHARS,
+      );
+      const startedAt = Date.now();
+      const signal = yield* Effect.abortSignal;
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          executeCommand(command, {
+            cwd,
+            buffer: false,
+            timeout: timeoutMs,
+            // The string command form gets shell teardown: abort/timeout signal the
+            // whole process group so piped children and backgrounded jobs are torn
+            // down.
+            onStdout: (chunk) => {
+              stdout.append(chunk);
+              toolCall.hooks?.onToolOutput?.(chunk);
+            },
+            onStderr: (chunk) => {
+              stderr.append(chunk);
+              toolCall.hooks?.onToolOutput?.(chunk);
+            },
+            signal,
+          }),
+        catch: ensureError,
+      });
+      // Spawn/cancellation diagnostics can come from executeCommand itself
+      // rather than either subprocess stream, so retain those as a fallback.
+      const retainedStdout = stdout.text('stdout') ?? result.stdout;
+      const retainedStderr = stderr.text('stderr') ?? result.stderr;
+
+      if (result.timedOut) {
+        const parts: string[] = [
+          `Foreground command timed out after ${timeoutMs / 1000}s.`,
+        ];
+        if (retainedStdout) parts.push(`<stdout>${retainedStdout}</stdout>`);
+        if (retainedStderr) parts.push(`<stderr>${retainedStderr}</stderr>`);
+        parts.push(
+          `To fix, either:\n` +
+            `- Increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }\n` +
+            `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }\n` +
+            `Do not use shell-level backgrounding such as \`nohup ... &\` inside a foreground call.`,
+        );
+        return yield* Effect.fail(new ToolError(parts.join('\n')));
+      }
+
+      const duration = formatDuration(Date.now() - startedAt);
+
+      if (result.success) {
+        const preview = previewLabel(command);
+        return executed(
+          retainedStdout ?? '',
+          `Executed: ${preview} (exit 0, ${duration})`,
+        );
+      }
+      // Many CLI tools (including latexmk) write errors to stdout, not stderr
+      const errorOutput =
+        [retainedStderr, retainedStdout].filter(Boolean).join('\n') ||
+        'No error output available';
+      return yield* Effect.fail(
+        new ToolError(`Command failed (${duration}): ${errorOutput}`),
+      );
+    },
+  );
 
   private readonly executeBackground = Effect.fn('BashTool.executeBackground')(
     function* (
@@ -504,10 +514,9 @@ export class BashTool extends defineTool({
           const runId = generateRunId();
           const preview = previewLabel(command);
 
-          const syntheticConfig = AgentConfigSchema.parse({
+          const syntheticConfig = buildSyntheticToolUseConfig({
             agent: 'bash',
             instruction: command,
-            agentCategory: AgentCategory.ToolUse,
           });
 
           // The durable record states only what a shell command has: no run

@@ -49,15 +49,12 @@ const readGitignoreFile = (
 
 const readWorkspaceGitignore = (
   relativePath: string,
+  workspacePath: string,
 ): Effect.Effect<GitignoreSource | null, unknown> => {
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) {
-    return Effect.succeed(null);
-  }
   const normalized = relativePath.replace(/^\/+/, '');
   return readGitignoreFile(
     path.join(workspacePath, normalized),
-    hostPort(() => WorkspaceFS.read(normalized)),
+    hostPort(() => AbsoluteFS.read(path.join(workspacePath, normalized))),
   );
 };
 
@@ -82,48 +79,47 @@ const readGlobalGitignore = (): Effect.Effect<
  * process can serve several projects, and each call should see the policy as
  * it is on disk now.
  */
-export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(
-  function* () {
-    const workspacePath = WorkspaceFS.getPath();
-    if (!workspacePath) {
-      return EMPTY_GITIGNORE_MATCHER;
-    }
+export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(function* (
+  workspacePath: string | undefined = WorkspaceFS.getPath(),
+) {
+  if (!workspacePath) {
+    return EMPTY_GITIGNORE_MATCHER;
+  }
 
-    const sources = (yield* Effect.all(
-      [
-        readGlobalGitignore(),
-        readWorkspaceGitignore('.gitignore_global'),
-        readWorkspaceGitignore('.gitignore'),
-      ],
-      // The three policies were read together and fail fast, as Promise.all did.
-      { concurrency: 'unbounded' },
-    )).filter(filterNotNull);
+  const sources = (yield* Effect.all(
+    [
+      readGlobalGitignore(),
+      readWorkspaceGitignore('.gitignore_global', workspacePath),
+      readWorkspaceGitignore('.gitignore', workspacePath),
+    ],
+    // The three policies were read together and fail fast, as Promise.all did.
+    { concurrency: 'unbounded' },
+  )).filter(filterNotNull);
 
-    if (sources.length === 0) {
-      return EMPTY_GITIGNORE_MATCHER;
-    }
+  if (sources.length === 0) {
+    return EMPTY_GITIGNORE_MATCHER;
+  }
 
-    const ig = ignore();
-    for (const source of sources) {
-      ig.add(source.content);
-    }
+  const ig = ignore();
+  for (const source of sources) {
+    ig.add(source.content);
+  }
 
-    return {
-      ignores: (relativePath: string): boolean => {
-        if (!relativePath || relativePath === '.') {
-          return false;
-        }
-        const normalized = toPosixPath(relativePath);
-        // Try plain path first; also try with trailing slash so that
-        // directory-only rules (e.g. "dist/") match bare directory names
-        // ("dist") the same way the old minimatch-based parser did.
-        // Known deviation from strict git spec: a *file* named "dist" would
-        // also be ignored by a "dist/" rule, because we cannot distinguish
-        // files from directories without a stat call. The old parser had the
-        // same behaviour (it expanded "dist/" → ["dist", "dist/**"]).
-        return ig.ignores(normalized) || ig.ignores(normalized + '/');
-      },
-      ignoreFiles: sources.map((source) => source.absolutePath),
-    };
-  },
-);
+  return {
+    ignores: (relativePath: string): boolean => {
+      if (!relativePath || relativePath === '.') {
+        return false;
+      }
+      const normalized = toPosixPath(relativePath);
+      // Try plain path first; also try with trailing slash so that
+      // directory-only rules (e.g. "dist/") match bare directory names
+      // ("dist") the same way the old minimatch-based parser did.
+      // Known deviation from strict git spec: a *file* named "dist" would
+      // also be ignored by a "dist/" rule, because we cannot distinguish
+      // files from directories without a stat call. The old parser had the
+      // same behaviour (it expanded "dist/" → ["dist", "dist/**"]).
+      return ig.ignores(normalized) || ig.ignores(normalized + '/');
+    },
+    ignoreFiles: sources.map((source) => source.absolutePath),
+  };
+});

@@ -7,9 +7,8 @@ import { customElement, property } from 'lit/decorators.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
 import { ONBOARDING_SETUP_HANDOFF } from '@shared/copy/onboarding';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-
-import { MainViewEvents } from '../events';
 
 const { runSetup: RUN_SETUP, openWalkthrough: OPEN_WALKTHROUGH } =
   GETTING_STARTED_ACTION_PRESENTATION;
@@ -58,15 +57,24 @@ export class OnboardingSetupCard extends LitElement {
   @property({ attribute: false }) headingLevel: 1 | 2 = 1;
 
   private handleRunSetup(): void {
-    this.dispatchEvent(MainViewEvents.onboardingRunSetup());
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'onboarding', action: 'runSetup' }),
+    );
   }
 
   private handleOpenGettingStarted(): void {
-    this.dispatchEvent(MainViewEvents.onboardingOpenGettingStarted());
+    this.dispatchEvent(
+      SessionUiEvents.host({
+        kind: 'onboarding',
+        action: 'openGettingStarted',
+      }),
+    );
   }
 
   private handleSkipSetup(): void {
-    this.dispatchEvent(MainViewEvents.onboardingSkipSetup());
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'onboarding', action: 'skipSetup' }),
+    );
   }
 
   override render(): TemplateResult {

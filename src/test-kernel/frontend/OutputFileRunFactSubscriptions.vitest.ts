@@ -2,6 +2,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { effectRuntime } from '@platform/processRuntime';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -188,6 +189,7 @@ describe('output-file run fact frontend subscriptions', () => {
     const context = fakeExtensionContext();
     registerFileDecorations(
       context as unknown as VSCode.ExtensionContext,
+      effectRuntime(),
       session,
     );
     const provider = mocks.registeredProviders.at(-1) as {
@@ -229,6 +231,7 @@ describe('output-file run fact frontend subscriptions', () => {
     const context = fakeExtensionContext();
     registerInlineCriticism(
       context as unknown as VSCode.ExtensionContext,
+      effectRuntime(),
       session,
     );
 

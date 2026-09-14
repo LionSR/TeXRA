@@ -41,7 +41,7 @@ import {
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { FileLocation } from '@shared/schemas';
@@ -245,12 +245,13 @@ async function prepareLatexdiffResultsAndScheduleViewer(
 async function runDiffAndOpen(
   toolLabel: string,
   runDiff: (mathMarkup: MathMarkupOption) => Effect.Effect<LaTeXdiffResult>,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   const mathMarkup = await promptForLatexdiffMathMarkup();
   if (!mathMarkup) return;
   log.info(`Running ${toolLabel} with math markup mode: ${mathMarkup}`);
 
-  const result = await effectRuntime().runPromise(runDiff(mathMarkup));
+  const result = await runtime.runPromise(runDiff(mathMarkup));
   if (!result.success) {
     throw new Error(result.message);
   }
@@ -266,13 +267,26 @@ function reportLatexdiff(result: LatexdiffPackResult): void {
 
 export function registerLatexdiffCommands(
   context: vscode.ExtensionContext,
+  runtime: ProcessRuntime,
 ): void {
   registerCommandEntries(context, [
-    { id: 'texra.latexdiff', handler: handleLatexdiff },
-    { id: 'texra.latexdiffvc', handler: handleLatexdiffvc },
+    {
+      id: 'texra.latexdiff',
+      handler: (inputFile: string, baseFile: string, editedFile: string) =>
+        handleLatexdiff(inputFile, baseFile, editedFile, runtime),
+    },
+    {
+      id: 'texra.latexdiffvc',
+      handler: (inputFile: string, baseFile: string, commitHash: string) =>
+        handleLatexdiffvc(inputFile, baseFile, commitHash, runtime),
+    },
     { id: 'texra.packLatexdiffvc', handler: handlePackLatexdiffvc },
     { id: 'texra.cleanLatexdiffvc', handler: handleCleanLatexdiffvc },
-    { id: 'texra.runLatexdiff', handler: handleRunLatexdiff },
+    {
+      id: 'texra.runLatexdiff',
+      handler: (config: RunLatexdiffCommandConfig) =>
+        handleRunLatexdiff(config, runtime),
+    },
   ]);
 }
 
@@ -302,6 +316,7 @@ async function handleLatexdiff(
   inputFile: string,
   baseFile: string,
   editedFile: string,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   const fileToUse = await resolveDiffBase(inputFile, baseFile);
   if (!fileToUse) return;
@@ -317,13 +332,16 @@ async function handleLatexdiff(
 
   await withLatexdiffTool('latexdiff', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
-    return runDiffAndOpen('latexdiff', (mathMarkup) =>
-      latexdiffService.runDiff(
-        fileToUseLocation,
-        pathToLocation(editedFile),
-        '_diff',
-        mathMarkup,
-      ),
+    return runDiffAndOpen(
+      'latexdiff',
+      (mathMarkup) =>
+        latexdiffService.runDiff(
+          fileToUseLocation,
+          pathToLocation(editedFile),
+          '_diff',
+          mathMarkup,
+        ),
+      runtime,
     );
   });
 }
@@ -332,13 +350,17 @@ async function handleLatexdiffvc(
   inputFile: string,
   baseFile: string,
   commitHash: string,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   const fileToUse = await resolveDiffBase(inputFile, baseFile);
   if (!fileToUse) return;
   await withLatexdiffTool('latexdiff-vc', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
-    return runDiffAndOpen('latexdiff-vc', (mathMarkup) =>
-      latexdiffService.runDiffVc(fileToUseLocation, commitHash, mathMarkup),
+    return runDiffAndOpen(
+      'latexdiff-vc',
+      (mathMarkup) =>
+        latexdiffService.runDiffVc(fileToUseLocation, commitHash, mathMarkup),
+      runtime,
     );
   });
 }
@@ -384,6 +406,7 @@ async function handleCleanLatexdiffvc(
 
 async function handleRunLatexdiff(
   config: RunLatexdiffCommandConfig,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   await withLatexdiffTool(
     'latexdiff',
@@ -429,7 +452,7 @@ async function handleRunLatexdiff(
             message: 'Preparing LaTeX diffs...',
           });
           const session = defaultSession();
-          return effectRuntime().runPromise(
+          return runtime.runPromise(
             runLatexdiffForRun({
               filesystem: nodeFilesystem,
               ...config,

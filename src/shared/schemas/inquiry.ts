@@ -62,31 +62,6 @@ export type InquiryThreadUpdatedEvent = z.infer<
 >;
 
 // ============================================================================
-// Action payloads — sent from inquiry panel to the host (keyed by threadId)
-// ============================================================================
-
-const InquirySubmitActionSchema = z.object({
-  action: z.literal('submit'),
-  threadId: InquiryThreadIdSchema,
-  turnIndex: z.int().positive(),
-  answer: z.string().min(1),
-  sessionLinks: InquirySessionLinksSchema.nullish(),
-});
-
-const InquiryDropActionSchema = z.object({
-  action: z.literal('drop'),
-  threadId: InquiryThreadIdSchema,
-  turnIndex: z.int().positive(),
-  feedback: z.string().optional(),
-});
-
-const InquiryActionMessageSchema = z.discriminatedUnion('action', [
-  InquirySubmitActionSchema,
-  InquiryDropActionSchema,
-]);
-export type InquiryActionMessage = z.infer<typeof InquiryActionMessageSchema>;
-
-// ============================================================================
 // Draft persistence — open-turn textarea state, debounced
 // ============================================================================
 

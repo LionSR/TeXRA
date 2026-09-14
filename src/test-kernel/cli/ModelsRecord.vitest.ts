@@ -17,9 +17,6 @@ function model(overrides: Partial<ModelOptionData> = {}): ModelOptionData {
     cost: '$3.000/$15.000',
     hint: '1M context',
     availability: 'provider-key',
-    availabilityLabel: 'API key set',
-    requiresKey: false,
-    disabled: false,
     ...overrides,
   } as ModelOptionData;
 }
@@ -45,9 +42,6 @@ function unavailableAccess(value: string): CliModelAccess {
       value,
       label: value,
       availability: 'missing-key',
-      availabilityLabel: 'Missing API key',
-      disabled: true,
-      requiresKey: true,
     }),
   });
 }
@@ -68,8 +62,7 @@ describe('CLI model JSON record', () => {
     const m = model({
       provider: 'openai',
       cost: '$1.250/$10.000',
-      availabilityLabel: 'Personal key',
-      requiresKey: true,
+      availability: 'missing-key',
     });
     const record = cliModelRecord(m);
 

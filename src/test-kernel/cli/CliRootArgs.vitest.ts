@@ -1,13 +1,15 @@
-import '@test/support/sessionGraphTestSetup';
+import '@test/support/defaultSessionTestSetup';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
 import { hasMagic } from 'glob';
-import { Effect, Exit, Scope } from 'effect';
 import stripAnsi from 'strip-ansi';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
+import { initializeDefaultSession } from '@agent/runtime';
 import { rootCommand, runCli } from '@cli/commands/root';
 import {
   normalizeRootShortcuts,
@@ -31,7 +33,7 @@ import {
   rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
 import {
-  expandRunInputs as expandInputs,
+  expandRunInputs,
   hasMixedStdinWorkflowInputSpecs,
   workflowInputGlobOptions,
 } from '@cli/runtime/workflowInputs';
@@ -53,6 +55,7 @@ import {
   makeTempDir,
   useTempDirs,
   withTempDir,
+  withTempDirEffect,
 } from '@test/support/tempDirPlatform';
 
 type StoredResumeConfig = Parameters<typeof resumeWorkflowOutputFile>[0];
@@ -89,22 +92,37 @@ async function initNodeBackedPlatform(options: {
     },
     { fs: nodeFilesystem },
   );
+  await bindFakeCliGlobalState();
+  await Effect.runPromise(initializeDefaultSession({}));
 }
 
 async function initDefaultFakePlatform(): Promise<void> {
   const { installPlatform } = await import('@test/support/setupPlatform');
   await installPlatform();
+  await bindFakeCliGlobalState();
 }
 
-async function withExternalDirs(
-  run: (root: string, externalDir: string) => Promise<void>,
-): Promise<void> {
-  await withTempDir('texra-cli-inputs-', async (root) => {
-    await withTempDir('texra-cli-external-', async (externalDir) => {
-      await run(root, externalDir);
-    });
-  });
+/**
+ * The CLI composition root latches the store it opens; these suites install a
+ * fake host instead of running that root, so the latch is bound to the fake
+ * host's store here.
+ */
+async function bindFakeCliGlobalState(): Promise<void> {
+  const [{ bindCliGlobalState }, { installedHost }] = await Promise.all([
+    import('@cli/runtime/cliProcessRuntime'),
+    import('@test/support/setupPlatform'),
+  ]);
+  bindCliGlobalState(installedHost().roots.globalState);
 }
+
+const withExternalDirs = <A, E, R>(
+  run: (root: string, externalDir: string) => Effect.Effect<A, E, R>,
+) =>
+  withTempDirEffect('texra-cli-inputs-', (root) =>
+    withTempDirEffect('texra-cli-external-', (externalDir) =>
+      run(root, externalDir),
+    ),
+  );
 
 const STDIN_DOCUMENT =
   '\\documentclass{article}\\begin{document}Hi\\end{document}';
@@ -123,19 +141,12 @@ function trackedStdinReader(body: string = STDIN_DOCUMENT): {
   };
 }
 
-let inputScope: Scope.Closeable;
-function expandRunInputs(...args: Parameters<typeof expandInputs>) {
-  return Effect.runPromise(
-    Effect.provideService(expandInputs(...args), Scope.Scope, inputScope),
-  );
-}
-
 /**
  * Single-list expansion for one flag, over the public `expandRunInputs` entry
  * point. `--context` expansion allows an empty `--input` list so a
  * context-only case reaches the context stage.
  */
-async function expandSpecs(
+const expandSpecs = (
   specs: readonly string[],
   cwd: string,
   flagLabel: '--input' | '--context' = '--input',
@@ -143,25 +154,20 @@ async function expandSpecs(
     readonly requireWorkspaceFiles?: boolean;
     readonly readStdinText?: () => Promise<string>;
   } = {},
-): Promise<string[]> {
-  if (flagLabel === '--context') {
-    const { contextFiles } = await expandRunInputs([], specs, cwd, {
-      ...options,
-      allowEmptyInput: true,
-    });
-    return contextFiles;
-  }
-  const { inputFiles } = await expandRunInputs(specs, [], cwd, options);
-  return inputFiles;
-}
+) =>
+  Effect.gen(function* () {
+    if (flagLabel === '--context') {
+      const { contextFiles } = yield* expandRunInputs([], specs, cwd, {
+        ...options,
+        allowEmptyInput: true,
+      });
+      return contextFiles;
+    }
+    const { inputFiles } = yield* expandRunInputs(specs, [], cwd, options);
+    return inputFiles;
+  });
 
 describe('CLI root argument routing', () => {
-  beforeEach(async () => {
-    inputScope = await Effect.runPromise(Scope.make());
-  });
-  afterEach(async () => {
-    await Effect.runPromise(Scope.close(inputScope, Exit.void));
-  });
   it('routes top-level version shortcuts to the version command', () => {
     expect(normalizeRootShortcuts(['--version'])).toEqual(['version']);
     expect(normalizeRootShortcuts(['--no-color', '-v'])).toEqual([
@@ -500,95 +506,137 @@ describe('CLI root argument routing', () => {
     ).not.toThrow();
   });
 
-  it('expands workflow input directories and globs relative to cwd', async () => {
-    await withTempDir('texra-cli-inputs-', async (root) => {
-      await fs.mkdir(path.join(root, 'paper', 'sections'), {
-        recursive: true,
-      });
-      await fs.writeFile(path.join(root, 'paper', 'Draft0.tex'), 'draft');
-      await fs.writeFile(
-        path.join(root, 'paper', 'sections', 'appendix.tex'),
-        'appendix',
-      );
-      await fs.writeFile(path.join(root, 'paper', 'notes.md'), 'notes');
+  it.effect(
+    'expands workflow input directories and globs relative to cwd',
+    () =>
+      withTempDirEffect('texra-cli-inputs-', (root) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            fs.mkdir(path.join(root, 'paper', 'sections'), {
+              recursive: true,
+            }),
+          );
+          yield* Effect.promise(() =>
+            fs.writeFile(path.join(root, 'paper', 'Draft0.tex'), 'draft'),
+          );
+          yield* Effect.promise(() =>
+            fs.writeFile(
+              path.join(root, 'paper', 'sections', 'appendix.tex'),
+              'appendix',
+            ),
+          );
+          yield* Effect.promise(() =>
+            fs.writeFile(path.join(root, 'paper', 'notes.md'), 'notes'),
+          );
 
-      await expect(expandSpecs(['paper'], root)).resolves.toEqual([
-        'paper/Draft0.tex',
-        'paper/sections/appendix.tex',
-      ]);
-      await expect(expandSpecs(['paper/**/*.tex'], root)).resolves.toEqual([
-        'paper/Draft0.tex',
-        'paper/sections/appendix.tex',
-      ]);
-      await expect(
-        expandSpecs(
-          [path.join(root, 'paper', 'sections', 'appendix.tex')],
+          expect(yield* expandSpecs(['paper'], root)).toEqual([
+            'paper/Draft0.tex',
+            'paper/sections/appendix.tex',
+          ]);
+          expect(yield* expandSpecs(['paper/**/*.tex'], root)).toEqual([
+            'paper/Draft0.tex',
+            'paper/sections/appendix.tex',
+          ]);
+          expect(
+            yield* expandSpecs(
+              [path.join(root, 'paper', 'sections', 'appendix.tex')],
+              root,
+            ),
+          ).toEqual(['paper/sections/appendix.tex']);
+        }),
+      ),
+  );
+
+  it.effect('rejects a literal --input file that does not exist', () =>
+    withTempDirEffect('texra-cli-inputs-', (root) =>
+      Effect.gen(function* () {
+        const missing = path.join(root, 'no-such.tex');
+        // A pure path (no glob magic, not a directory) is validated here rather
+        // than handed to the workflow to fail on later with a raw ENOENT.
+        const error = yield* Effect.flip(expandSpecs([missing], root));
+        expect(error.message).toMatch(/--input: file not found/);
+      }),
+    ),
+  );
+
+  it.effect('materializes stdin when --input - is passed', () =>
+    withTempDirEffect('texra-cli-stdin-', (root) =>
+      Effect.gen(function* () {
+        const { readStdinText, readCount } = trackedStdinReader(
+          '\\documentclass{article}\n\\begin{document}Hi\\end{document}\n',
+        );
+
+        const expanded = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const files = yield* expandSpecs(['-', '-'], root, '--input', {
+              readStdinText,
+            });
+
+            expect(files).toHaveLength(1);
+            expect(readCount()).toBe(1);
+            expect(path.basename(files[0])).toBe('stdin.tex');
+            expect(path.basename(path.dirname(files[0]))).toMatch(
+              /^texra-stdin-/,
+            );
+            yield* Effect.promise(() =>
+              expect(
+                fs.readFile(path.resolve(root, files[0]), 'utf8'),
+              ).resolves.toContain('\\begin{document}Hi'),
+            );
+            return files;
+          }),
+        );
+
+        // The scope above closes here, releasing the stdin temp file exactly
+        // as the CLI run scope does when the run completes.
+        yield* Effect.promise(() =>
+          expect(fs.stat(path.resolve(root, expanded[0]))).rejects.toThrow(),
+        );
+        yield* Effect.promise(() =>
+          expect(
+            fs.stat(path.dirname(path.resolve(root, expanded[0]))),
+          ).rejects.toThrow(),
+        );
+      }),
+    ),
+  );
+
+  it.effect('preserves stdin position when mixed with file inputs', () =>
+    withTempDirEffect('texra-cli-stdin-', (root) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(root, 'paper.tex'), 'paper'),
+        );
+        const { readStdinText } = trackedStdinReader();
+
+        const expanded = yield* expandSpecs(
+          ['-', 'paper.tex'],
           root,
-        ),
-      ).resolves.toEqual(['paper/sections/appendix.tex']);
-    });
-  });
+          '--input',
+          { readStdinText },
+        );
 
-  it('rejects a literal --input file that does not exist', async () => {
-    await withTempDir('texra-cli-inputs-', async (root) => {
-      const missing = path.join(root, 'no-such.tex');
-      // A pure path (no glob magic, not a directory) is validated here rather
-      // than handed to the workflow to fail on later with a raw ENOENT.
-      await expect(expandSpecs([missing], root)).rejects.toThrow(
-        /--input: file not found/,
-      );
-    });
-  });
+        expect(path.basename(expanded[0])).toBe('stdin.tex');
+        expect(path.basename(path.dirname(expanded[0]))).toMatch(
+          /^texra-stdin-/,
+        );
+        expect(expanded[1]).toBe('paper.tex');
+      }),
+    ),
+  );
 
-  it('materializes stdin when --input - is passed', async () => {
-    await withTempDir('texra-cli-stdin-', async (root) => {
-      const { readStdinText, readCount } = trackedStdinReader(
-        '\\documentclass{article}\n\\begin{document}Hi\\end{document}\n',
-      );
+  it.effect('rejects empty stdin input', () =>
+    withTempDirEffect('texra-cli-stdin-', (root) =>
+      Effect.gen(function* () {
+        const { readStdinText } = trackedStdinReader(' \n\t ');
 
-      const expanded = await expandSpecs(['-', '-'], root, '--input', {
-        readStdinText,
-      });
-
-      expect(expanded).toHaveLength(1);
-      expect(readCount()).toBe(1);
-      expect(path.basename(expanded[0])).toBe('stdin.tex');
-      expect(path.basename(path.dirname(expanded[0]))).toMatch(/^texra-stdin-/);
-      await expect(
-        fs.readFile(path.resolve(root, expanded[0]), 'utf8'),
-      ).resolves.toContain('\\begin{document}Hi');
-      await Effect.runPromise(Scope.close(inputScope, Exit.void));
-      await expect(fs.stat(path.resolve(root, expanded[0]))).rejects.toThrow();
-      await expect(
-        fs.stat(path.dirname(path.resolve(root, expanded[0]))),
-      ).rejects.toThrow();
-    });
-  });
-
-  it('preserves stdin position when mixed with file inputs', async () => {
-    await withTempDir('texra-cli-stdin-', async (root) => {
-      await fs.writeFile(path.join(root, 'paper.tex'), 'paper');
-      const { readStdinText } = trackedStdinReader();
-
-      const expanded = await expandSpecs(['-', 'paper.tex'], root, '--input', {
-        readStdinText,
-      });
-
-      expect(path.basename(expanded[0])).toBe('stdin.tex');
-      expect(path.basename(path.dirname(expanded[0]))).toMatch(/^texra-stdin-/);
-      expect(expanded[1]).toBe('paper.tex');
-    });
-  });
-
-  it('rejects empty stdin input', async () => {
-    await withTempDir('texra-cli-stdin-', async (root) => {
-      const { readStdinText } = trackedStdinReader(' \n\t ');
-
-      await expect(
-        expandSpecs(['-'], root, '--input', { readStdinText }),
-      ).rejects.toThrow(/stdin: no data on stdin/);
-    });
-  });
+        const error = yield* Effect.flip(
+          expandSpecs(['-'], root, '--input', { readStdinText }),
+        );
+        expect(error.message).toMatch(/stdin: no data on stdin/);
+      }),
+    ),
+  );
 
   it('detects stdin mixed with other raw workflow input specs', () => {
     expect(hasMixedStdinWorkflowInputSpecs(['-'])).toBe(false);
@@ -597,110 +645,154 @@ describe('CLI root argument routing', () => {
     expect(hasMixedStdinWorkflowInputSpecs(['  -  ', 'paper.tex'])).toBe(true);
   });
 
-  it('does not read stdin before later --input validation errors', async () => {
-    await withTempDir('texra-cli-stdin-', async (root) => {
-      const { readStdinText, readCount } = trackedStdinReader();
+  it.effect('does not read stdin before later --input validation errors', () =>
+    withTempDirEffect('texra-cli-stdin-', (root) =>
+      Effect.gen(function* () {
+        const { readStdinText, readCount } = trackedStdinReader();
 
-      await expect(
-        expandSpecs(['-', 'missing.tex'], root, '--input', {
-          readStdinText,
+        const error = yield* Effect.flip(
+          expandSpecs(['-', 'missing.tex'], root, '--input', {
+            readStdinText,
+          }),
+        );
+        expect(error.message).toMatch(/--input: file not found: missing\.tex/);
+        expect(readCount()).toBe(0);
+      }),
+    ),
+  );
+
+  it.effect('does not read stdin before --context validation errors', () =>
+    withTempDirEffect('texra-cli-stdin-', (root) =>
+      Effect.gen(function* () {
+        const { readStdinText, readCount } = trackedStdinReader();
+
+        const error = yield* Effect.flip(
+          expandRunInputs(['-'], ['missing-context.tex'], root, {
+            readStdinText,
+          }),
+        );
+        expect(error.message).toMatch(
+          /--context: file not found: missing-context\.tex/,
+        );
+        expect(readCount()).toBe(0);
+      }),
+    ),
+  );
+
+  it.effect(
+    'materializes stdin for --context - when input is a normal file',
+    () =>
+      withTempDirEffect('texra-cli-stdin-', (root) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            fs.writeFile(path.join(root, 'main.tex'), 'main'),
+          );
+          const { readStdinText } = trackedStdinReader('context body');
+
+          const { inputFiles, contextFiles } = yield* expandRunInputs(
+            ['main.tex'],
+            ['-'],
+            root,
+            { readStdinText },
+          );
+
+          expect(inputFiles).toEqual(['main.tex']);
+          expect(contextFiles).toHaveLength(1);
+          expect(path.basename(contextFiles[0])).toBe('stdin.tex');
+          expect(path.basename(path.dirname(contextFiles[0]))).toMatch(
+            /^texra-stdin-/,
+          );
+          yield* Effect.promise(() =>
+            expect(
+              fs.readFile(path.resolve(root, contextFiles[0]), 'utf8'),
+            ).resolves.toBe('context body'),
+          );
         }),
-      ).rejects.toThrow(/--input: file not found: missing\.tex/);
-      expect(readCount()).toBe(0);
-    });
-  });
+      ),
+  );
 
-  it('does not read stdin before --context validation errors', async () => {
-    await withTempDir('texra-cli-stdin-', async (root) => {
-      const { readStdinText, readCount } = trackedStdinReader();
-
-      await expect(
-        expandRunInputs(['-'], ['missing-context.tex'], root, {
-          readStdinText,
+  it.effect(
+    'rejects stdin across both input and context with a clear usage error',
+    () =>
+      withTempDirEffect('texra-cli-stdin-', (root) =>
+        Effect.gen(function* () {
+          const { readStdinText } = trackedStdinReader('piped body');
+          const error = yield* Effect.flip(
+            expandRunInputs(['-'], ['-'], root, { readStdinText }),
+          );
+          expect(error.message).toMatch(
+            /Use `-` for either --input or --context/,
+          );
         }),
-      ).rejects.toThrow(/--context: file not found: missing-context\.tex/);
-      expect(readCount()).toBe(0);
-    });
-  });
+      ),
+  );
 
-  it('materializes stdin for --context - when input is a normal file', async () => {
-    await withTempDir('texra-cli-stdin-', async (root) => {
-      await fs.writeFile(path.join(root, 'main.tex'), 'main');
-      const { readStdinText } = trackedStdinReader('context body');
+  it.effect(
+    'rejects external files when tool-use runs require workspace files',
+    () =>
+      withExternalDirs((root, externalDir) =>
+        Effect.gen(function* () {
+          const external = path.join(externalDir, 'problem.md');
+          yield* Effect.promise(() => fs.writeFile(external, 'outside'));
 
-      const { inputFiles, contextFiles } = await expandRunInputs(
-        ['main.tex'],
-        ['-'],
-        root,
-        { readStdinText },
-      );
-
-      expect(inputFiles).toEqual(['main.tex']);
-      expect(contextFiles).toHaveLength(1);
-      expect(path.basename(contextFiles[0])).toBe('stdin.tex');
-      expect(path.basename(path.dirname(contextFiles[0]))).toMatch(
-        /^texra-stdin-/,
-      );
-      await expect(
-        fs.readFile(path.resolve(root, contextFiles[0]), 'utf8'),
-      ).resolves.toBe('context body');
-    });
-  });
-
-  it('rejects stdin across both input and context with a clear usage error', async () => {
-    await withTempDir('texra-cli-stdin-', async (root) => {
-      const { readStdinText } = trackedStdinReader('piped body');
-      await expect(
-        expandRunInputs(['-'], ['-'], root, { readStdinText }),
-      ).rejects.toThrow(/Use `-` for either --input or --context/);
-    });
-  });
-
-  it('rejects external files when tool-use runs require workspace files', async () => {
-    await withExternalDirs(async (root, externalDir) => {
-      const external = path.join(externalDir, 'problem.md');
-      await fs.writeFile(external, 'outside');
-
-      await expect(
-        expandRunInputs([external], [], root, { requireWorkspaceFiles: true }),
-      ).rejects.toThrow(/--input: file is outside --cwd:/);
-    });
-  });
-
-  it('rejects external directories before globbing their contents', async () => {
-    await withExternalDirs(async (root, externalDir) => {
-      await expect(
-        expandRunInputs([externalDir], [], root, {
-          requireWorkspaceFiles: true,
+          const error = yield* Effect.flip(
+            expandRunInputs([external], [], root, {
+              requireWorkspaceFiles: true,
+            }),
+          );
+          expect(error.message).toMatch(/--input: file is outside --cwd:/);
         }),
-      ).rejects.toThrow(/--input: file is outside --cwd:/);
-    });
-  });
+      ),
+  );
 
-  it('attributes the missing-path error to the caller-supplied flag label', async () => {
-    // The helper is shared between --input (texra run, multi-agent run input)
-    // and --context (multi-agent run context). The error must name the flag
-    // the user actually passed, not always say --input.
-    await withTempDir('texra-cli-flag-', async (root) => {
-      const missing = path.join(root, 'no-such-context.tex');
-      await expect(expandSpecs([missing], root, '--context')).rejects.toThrow(
-        /--context: file not found/,
-      );
-    });
-  });
+  it.effect('rejects external directories before globbing their contents', () =>
+    withExternalDirs((root, externalDir) =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(
+          expandRunInputs([externalDir], [], root, {
+            requireWorkspaceFiles: true,
+          }),
+        );
+        expect(error.message).toMatch(/--input: file is outside --cwd:/);
+      }),
+    ),
+  );
 
-  it('expands a glob --context spec the same way --input does', async () => {
+  it.effect(
+    'attributes the missing-path error to the caller-supplied flag label',
+    () =>
+      // The helper is shared between --input (texra run, multi-agent run
+      // input) and --context (multi-agent run context). The error must name
+      // the flag the user actually passed, not always say --input.
+      withTempDirEffect('texra-cli-flag-', (root) =>
+        Effect.gen(function* () {
+          const missing = path.join(root, 'no-such-context.tex');
+          const error = yield* Effect.flip(
+            expandSpecs([missing], root, '--context'),
+          );
+          expect(error.message).toMatch(/--context: file not found/);
+        }),
+      ),
+  );
+
+  it.effect('expands a glob --context spec the same way --input does', () =>
     // `texra run -c '<glob>'` routes through the same expansion helper, so it
     // has the same expansion semantics as `--input` and surfaces missing-path
     // errors as Usage (exit 2) instead of a late raw ENOENT.
-    await withTempDir('texra-cli-ctx-', async (root) => {
-      await fs.writeFile(path.join(root, 'a.bib'), 'a');
-      await fs.writeFile(path.join(root, 'b.bib'), 'b');
-      await expect(
-        expandSpecs([path.join(root, '*.bib')], root, '--context'),
-      ).resolves.toEqual(['a.bib', 'b.bib']);
-    });
-  });
+    withTempDirEffect('texra-cli-ctx-', (root) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(root, 'a.bib'), 'a'),
+        );
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(root, 'b.bib'), 'b'),
+        );
+        expect(
+          yield* expandSpecs([path.join(root, '*.bib')], root, '--context'),
+        ).toEqual(['a.bib', 'b.bib']);
+      }),
+    ),
+  );
 
   it('selects platform-specific backslash glob semantics', () => {
     const pattern = String.raw`refs\*.bib`;
@@ -709,90 +801,127 @@ describe('CLI root argument routing', () => {
     expect(hasMagic(pattern, workflowInputGlobOptions('linux'))).toBe(false);
   });
 
-  it('prefers an exact filename containing glob syntax', async () => {
-    await withTempDir('texra-cli-literal-magic-', async (root) => {
-      await fs.mkdir(path.join(root, 'refs'));
-      await fs.writeFile(path.join(root, 'refs', '[ab].bib'), 'literal');
-      await fs.writeFile(path.join(root, 'refs', 'a.bib'), 'glob match');
+  it.effect('prefers an exact filename containing glob syntax', () =>
+    withTempDirEffect('texra-cli-literal-magic-', (root) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => fs.mkdir(path.join(root, 'refs')));
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(root, 'refs', '[ab].bib'), 'literal'),
+        );
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(root, 'refs', 'a.bib'), 'glob match'),
+        );
 
-      await expect(
-        expandSpecs([path.join('refs', '[ab].bib')], root),
-      ).resolves.toEqual(['refs/[ab].bib']);
-    });
-  });
+        expect(
+          yield* expandSpecs([path.join('refs', '[ab].bib')], root),
+        ).toEqual(['refs/[ab].bib']);
+      }),
+    ),
+  );
 
-  it('expands host-native globs for both --input and --context', async () => {
-    await withTempDir('texra-cli-native-glob-', async (root) => {
-      await fs.mkdir(path.join(root, 'refs'));
-      await fs.writeFile(path.join(root, 'refs', 'zeta.bib'), 'zeta');
-      await fs.writeFile(path.join(root, 'refs', 'alpha.bib'), 'alpha');
-      await fs.writeFile(path.join(root, 'refs', 'notes.md'), 'notes');
-      const pattern = path.join('refs', '*.bib');
+  it.effect('expands host-native globs for both --input and --context', () =>
+    withTempDirEffect('texra-cli-native-glob-', (root) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => fs.mkdir(path.join(root, 'refs')));
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(root, 'refs', 'zeta.bib'), 'zeta'),
+        );
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(root, 'refs', 'alpha.bib'), 'alpha'),
+        );
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(root, 'refs', 'notes.md'), 'notes'),
+        );
+        const pattern = path.join('refs', '*.bib');
 
-      await expect(
-        expandRunInputs([pattern], [pattern], root),
-      ).resolves.toEqual({
-        inputFiles: ['refs/alpha.bib', 'refs/zeta.bib'],
-        contextFiles: ['refs/alpha.bib', 'refs/zeta.bib'],
-      });
-    });
-  });
+        expect(yield* expandRunInputs([pattern], [pattern], root)).toEqual({
+          inputFiles: ['refs/alpha.bib', 'refs/zeta.bib'],
+          contextFiles: ['refs/alpha.bib', 'refs/zeta.bib'],
+        });
+      }),
+    ),
+  );
 
-  (process.platform === 'win32' ? it : it.skip)(
+  it.effect.skipIf(process.platform !== 'win32')(
     'expands an absolute drive-letter glob',
-    async () => {
-      await withTempDir('texra-cli-drive-glob-', async (root) => {
-        await fs.mkdir(path.join(root, 'refs'));
-        await fs.writeFile(path.join(root, 'refs', 'paper.bib'), 'paper');
-        const pattern = path.join(root, 'refs', '*.bib');
+    () =>
+      withTempDirEffect('texra-cli-drive-glob-', (root) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() => fs.mkdir(path.join(root, 'refs')));
+          yield* Effect.promise(() =>
+            fs.writeFile(path.join(root, 'refs', 'paper.bib'), 'paper'),
+          );
+          const pattern = path.join(root, 'refs', '*.bib');
 
-        expect(pattern).toMatch(/^[A-Za-z]:\\/);
-        await expect(expandSpecs([pattern], root)).resolves.toEqual([
-          'refs/paper.bib',
-        ]);
-      });
-    },
+          expect(pattern).toMatch(/^[A-Za-z]:\\/);
+          expect(yield* expandSpecs([pattern], root)).toEqual([
+            'refs/paper.bib',
+          ]);
+        }),
+      ),
   );
 
-  (process.platform === 'win32' ? it.skip : it)(
+  it.effect.skipIf(process.platform === 'win32')(
     'preserves POSIX glob escapes for literal metacharacters',
-    async () => {
-      await withTempDir('texra-cli-escaped-glob-', async (root) => {
-        await fs.mkdir(path.join(root, 'refs'));
-        await fs.writeFile(path.join(root, 'refs', '[ab]-one.bib'), 'literal');
-        await fs.writeFile(path.join(root, 'refs', 'a-one.bib'), 'class match');
+    () =>
+      withTempDirEffect('texra-cli-escaped-glob-', (root) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() => fs.mkdir(path.join(root, 'refs')));
+          yield* Effect.promise(() =>
+            fs.writeFile(path.join(root, 'refs', '[ab]-one.bib'), 'literal'),
+          );
+          yield* Effect.promise(() =>
+            fs.writeFile(path.join(root, 'refs', 'a-one.bib'), 'class match'),
+          );
 
-        await expect(
-          expandSpecs([String.raw`refs/\[ab]-*.bib`], root),
-        ).resolves.toEqual(['refs/[ab]-one.bib']);
-      });
-    },
+          expect(
+            yield* expandSpecs([String.raw`refs/\[ab]-*.bib`], root),
+          ).toEqual(['refs/[ab]-one.bib']);
+        }),
+      ),
   );
 
-  it('detects brace-only workflow globs', async () => {
-    await withTempDir('texra-cli-brace-glob-', async (root) => {
-      await fs.mkdir(path.join(root, 'refs'));
-      await fs.writeFile(path.join(root, 'refs', 'beta.bib'), 'beta');
-      await fs.writeFile(path.join(root, 'refs', 'alpha.bib'), 'alpha');
+  it.effect('detects brace-only workflow globs', () =>
+    withTempDirEffect('texra-cli-brace-glob-', (root) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => fs.mkdir(path.join(root, 'refs')));
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(root, 'refs', 'beta.bib'), 'beta'),
+        );
+        yield* Effect.promise(() =>
+          fs.writeFile(path.join(root, 'refs', 'alpha.bib'), 'alpha'),
+        );
 
-      await expect(
-        expandSpecs(['refs/{alpha,beta}.bib'], root),
-      ).resolves.toEqual(['refs/alpha.bib', 'refs/beta.bib']);
-    });
-  });
+        expect(yield* expandSpecs(['refs/{alpha,beta}.bib'], root)).toEqual([
+          'refs/alpha.bib',
+          'refs/beta.bib',
+        ]);
+      }),
+    ),
+  );
 
-  it('attributes unmatched globs to the original input or context flag', async () => {
-    await withTempDir('texra-cli-unmatched-glob-', async (root) => {
-      const pattern = path.join('missing refs', '*.bib');
+  it.effect(
+    'attributes unmatched globs to the original input or context flag',
+    () =>
+      withTempDirEffect('texra-cli-unmatched-glob-', (root) =>
+        Effect.gen(function* () {
+          const pattern = path.join('missing refs', '*.bib');
 
-      await expect(expandSpecs([`  ${pattern}  `], root)).rejects.toThrow(
-        `--input: no files matched: ${pattern}`,
-      );
-      await expect(
-        expandSpecs([`  ${pattern}  `], root, '--context'),
-      ).rejects.toThrow(`--context: no files matched: ${pattern}`);
-    });
-  });
+          const inputError = yield* Effect.flip(
+            expandSpecs([`  ${pattern}  `], root),
+          );
+          expect(inputError.message).toContain(
+            `--input: no files matched: ${pattern}`,
+          );
+          const contextError = yield* Effect.flip(
+            expandSpecs([`  ${pattern}  `], root, '--context'),
+          );
+          expect(contextError.message).toContain(
+            `--context: no files matched: ${pattern}`,
+          );
+        }),
+      ),
+  );
 
   it('keeps a failed workflow with no output in run storage', async () => {
     await expect(
@@ -1147,8 +1276,8 @@ describe('runCli usage output stream routing', () => {
     // of an ERROR must not land on STDOUT, or it pollutes
     // `--output-format json|ndjson` (e.g. `texra run ... | jq`).
     // Mirrors the documented repro: a usage error under --output-format json.
-    const result = await runCli(['run', 'badagent', '--output-format', 'json']);
-    expectUsageError(result, 'Missing required argument: --input');
+    const result = await runCli(['run', '--output-format', 'json']);
+    expectUsageError(result, 'Missing required positional argument: AGENT');
     // Usage banner goes to the diagnostic stream alongside the error line.
     expect(stderr).toContain('USAGE');
   });

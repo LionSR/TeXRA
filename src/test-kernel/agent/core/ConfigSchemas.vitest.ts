@@ -40,7 +40,7 @@ describe('AgentConfigSchema', () => {
  * widening `AGENT_SOURCE` is a persisted-schema change in both directions.
  */
 describe('AgentConfigSchema agentSource compatibility', () => {
-  it('round-trips every current source, including inline', () => {
+  it('round-trips every current source', () => {
     for (const source of Object.values(AGENT_SOURCE)) {
       const parsed = AgentConfigSchema.parse({
         agent: 'scratchpad',

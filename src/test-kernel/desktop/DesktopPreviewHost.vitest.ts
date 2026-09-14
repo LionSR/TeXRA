@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -97,7 +98,7 @@ describe('desktop preview host', () => {
   it.each([
     { kind: 'openFile', path: '/missing/output.pdf' },
     { kind: 'apiKeyBanner', action: 'guide' },
-    { kind: 'compileInputPdf' },
+    { kind: 'extractFigures' },
     { kind: 'latexdiffs', action: 'compare' },
     { kind: 'exportTranscript', runId: 'missing:stream' as RunId },
     { kind: 'polish', text: 'A conserved quantity.' },
@@ -111,7 +112,7 @@ describe('desktop preview host', () => {
         await import('@test/support/setupPlatform');
       const fakeHost = createFakeHost();
       await installFakeHost(fakeHost);
-      const secrets = fakeHost.platform.secrets;
+      const secrets = fakeHost.secrets;
       const globalState = new FakeStateStore();
       const { createTestSession } =
         await import('@test/support/sessionTestUtils');
@@ -119,10 +120,7 @@ describe('desktop preview host', () => {
         await import('@controllers/session/hostSnapshotSource');
       const session = createTestSession();
       const present = vi.fn<(...args: unknown[]) => boolean>(() => true);
-      const detachPresentation = session.interactions.use({
-        emit: present,
-        cancel: () => {},
-      });
+      const detachPresentation = session.interactions.use({ emit: present });
       const { createDesktopFileSelection } =
         await import('@desktop/main/desktopFileSelection');
       const { HostDraftRequests } =
@@ -142,6 +140,7 @@ describe('desktop preview host', () => {
         showOpenFileDialog: async () => undefined,
       });
       const handler = createDesktopHostRequests({
+        runtime: effectRuntime(),
         session,
         host: createStubDesktopAgentRunHost({
           ...preview,
@@ -196,7 +195,7 @@ describe('desktop preview host', () => {
       } finally {
         handler.dispose();
         detachPresentation();
-        session.dispose();
+        await Effect.runPromise(session.dispose());
       }
     },
   );

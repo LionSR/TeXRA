@@ -34,7 +34,7 @@ describe('getHelperModelName', () => {
       },
     });
 
-    expect(getHelperModelName(installedHost().platform.globalState)).toBe(
+    expect(getHelperModelName(installedHost().roots.globalState)).toBe(
       DEFAULT_HELPER_MODEL,
     );
   });

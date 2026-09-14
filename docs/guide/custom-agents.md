@@ -7,7 +7,7 @@ import OutputMappingHero from '../.vitepress/components/OutputMappingHero.vue';
 import CliAgentShowHero from '../.vitepress/components/CliAgentShowHero.vue';
 </script>
 
-Every research group has its own recurring tasks. Maybe you want an agent that checks every derivation in a section against a fixed set of conventions, one that standardizes notation across a manuscript, or a "rewrite the abstract for a Nature-style letter" pass. Custom agents let you encode these workflows once and reuse them with one selection.
+Every research discipline develops distinct methodological conventions. Whether you need an agent to verify every algebraic step in a derivation against domain invariants, standardize notation across an entire project, or enforce strict formatting for journal submissions, custom agents allow you to formalize these workflows in declarative YAML files.
 
 This guide walks you through creating your own agent definition files (`.yaml`) so TeXRA does what your research needs. No coding required.
 
@@ -172,7 +172,7 @@ You do not need to configure this yourself; it happens when an agent definition 
 
 Tool-use agents are interactive: instead of producing a single polished file, they hold a conversation and take actions on your behalf, such as reading and editing files, searching the web, and looking up papers.
 
-**Typical user story:** You are writing up results for a conference submission and realise you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than juggling browser tabs and terminal windows, you open a `research` agent (<wa-icon library="texra" name="sparkle"></wa-icon>) and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files, all in one session.
+**Typical user story:** You are writing up results for a conference submission and realize you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than juggling browser tabs and terminal windows, you open a `research` agent (<wa-icon library="texra" name="sparkle"></wa-icon>) and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files, all in one session.
 
 To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by category (matching **Dashboard → Tools** <wa-icon library="texra" name="tools"></wa-icon>). Each chip below is a token you can put straight into your `tools:` array:
 

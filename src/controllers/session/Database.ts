@@ -41,11 +41,13 @@ import { z } from 'zod';
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { createLog } from '@logger/logUtils';
 import {
   AggregateIdSchema,
   RunIdSchema,
   OwnerIdSchema,
   SessionEventDraftSchema,
+  SESSION_EVENT_FORMAT,
   SessionEventSchema,
   ownerIdentity,
   aggregateTarget,
@@ -53,6 +55,7 @@ import {
   listingTypeOf,
   referencedAggregates,
   type AggregateId,
+  type JsonValue,
   type RunParent,
   type SessionEvent,
   type SessionEventDraft,
@@ -72,11 +75,13 @@ import {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
+  type SessionStoreCleared,
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { localDatabasePath } from './localDatabasePath';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
+const log = createLog('sessionDatabase');
 /**
  * Event history and bounded current application records.
  *
@@ -86,8 +91,9 @@ const SESSION_DATABASE_FILE = 'texra.db';
  * unquoted, and every query below aliases the snake-case columns onto it.
  *
  * `event_sequence` is declared first because `event` references it, and the
- * dependency edge (an inquiry thread under the run that asked it) is
- * self-referential, so both cascades exist the moment the schema does. One
+ * dependency edge (an inquiry thread under the run that asked it, a workflow
+ * checkpoint under the run that invoked it) is self-referential, so both
+ * cascades exist the moment the schema does. One
  * run owns one row here: one sequence counter and one ownership claim (one
  * run model, section 3.1). `STRICT` makes a wrong-typed value an error at
  * insert instead of a surprise at read: on persisted data, a silent coercion
@@ -138,14 +144,14 @@ CREATE INDEX IF NOT EXISTS event_parent_start ON event(json_extract(data, '$.par
 `;
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
   e.seq, e.type, e.owner_id AS ownerId, e.at, e.data`;
-/** Listing arms of the present vocabulary; approval requests are a set. */
+/** Listing arms of the present vocabulary; pending requests are a set. */
 const LISTING_TYPES = SessionEventDraftSchema.options
   .map((schema) => schema.shape.type.value)
   .filter(
     (type) =>
       listingTypeOf({ type }) !== null &&
-      type !== 'approval.requested' &&
-      type !== 'approval.resolved',
+      type !== 'request.opened' &&
+      type !== 'request.decided',
   )
   .map((type) => `${type}.1`);
 const READ_LISTING = `
@@ -159,11 +165,11 @@ WITH latest AS (
     AND e.type = latest.type AND e.seq = latest.seq
   UNION ALL
   SELECT ${EVENT_COLUMNS} FROM event e
-  WHERE e.type = 'approval.requested.1' AND NOT EXISTS (
-    SELECT 1 FROM event resolved
-    WHERE resolved.aggregate_id = e.aggregate_id
-      AND resolved.type = 'approval.resolved.1'
-      AND json_extract(resolved.data, '$.requestId') = json_extract(e.data, '$.requestId')
+  WHERE e.type = 'request.opened.1' AND NOT EXISTS (
+    SELECT 1 FROM event decided
+    WHERE decided.aggregate_id = e.aggregate_id
+      AND decided.type = 'request.decided.1'
+      AND json_extract(decided.data, '$.requestId') = json_extract(e.data, '$.requestId')
   )
 )
 SELECT * FROM selected
@@ -181,20 +187,36 @@ WHERE s.aggregate_id IN (SELECT value FROM json_each(?))
 `;
 const PayloadSchema = z.record(z.string(), z.unknown());
 const StoredTypeSchema = z.string().endsWith('.1');
-/** Stored versions are checked before reconstructing the typed event. */
+/**
+ * Stored versions are checked before reconstructing the typed event. A row
+ * that no longer matches the current vocabulary (there are no legacy
+ * readers) fails naming itself: the aggregate, seq, and type a reader can
+ * act on, not the union's whole discriminator list.
+ */
 function decodeEvent(row: Record<string, unknown>): SessionEvent {
   const payload = Result.getOrThrow(
     parseJsonWith(z.string().parse(row.data), PayloadSchema),
   );
-  return SessionEventSchema.parse({
+  const type = StoredTypeSchema.parse(row.type).slice(0, -2);
+  const parsed = SessionEventSchema.safeParse({
     ...payload,
     aggregateId: row.aggregateId,
     seq: row.seq,
     commit: row.commit,
     ownerId: row.ownerId,
     at: row.at,
-    type: StoredTypeSchema.parse(row.type).slice(0, -2),
+    type,
   });
+  if (parsed.success) return parsed.data;
+  const issue = parsed.error.issues[0];
+  const at = issue?.path.join('.');
+  const reason =
+    at === 'type'
+      ? `unknown event type "${type}"`
+      : `${type} at ${at || 'event'}: ${issue?.message ?? parsed.error.message}`;
+  throw new Error(
+    `Stored row ${String(row.aggregateId)} seq ${String(row.seq)} does not match the current event format (${reason})`,
+  );
 }
 /** First append claims the aggregate; later appends require that same claim. */
 const NEXT_SEQ = `
@@ -204,6 +226,15 @@ ON CONFLICT(aggregate_id) DO UPDATE SET seq = event_sequence.seq + 1
 WHERE event_sequence.owner_id = excluded.owner_id AND event_sequence.closed = 0
 RETURNING seq
 `;
+/**
+ * Every application-state aggregate's latest row: one state key per
+ * aggregate, so the store's whole open-time snapshot is one join against the
+ * `(aggregate_id, seq)` index.
+ */
+const APP_STATE_ROWS = `SELECT ${EVENT_COLUMNS} FROM event e
+JOIN (SELECT aggregate_id, MAX(seq) AS seq FROM event
+  WHERE type = 'state.value.set.1' GROUP BY aggregate_id)
+  latest USING (aggregate_id, seq)`;
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
 INSERT INTO event (aggregate_id, seq, type, owner_id, at, data)
@@ -241,7 +272,9 @@ export const databaseLayer = (
         disableWAL: mode === 'ephemeral',
         busyTimeout: '5 seconds',
       }).pipe(mapDatabaseFailure(openFailed));
-      yield* configure(sql, mode).pipe(mapDatabaseFailure(openFailed));
+      const cleared = yield* configure(sql, mode, path).pipe(
+        mapDatabaseFailure(openFailed),
+      );
       const level = yield* SubscriptionRef.make(0);
       const observedCommit = yield* SubscriptionRef.make(0);
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
@@ -259,6 +292,14 @@ export const databaseLayer = (
         read: Effect.Effect<A, unknown>,
       ): Effect.Effect<A, DatabaseReadFailed> =>
         read.pipe(mapDatabaseFailure(readFailed));
+      /** The rows a read statement returns, decoded as ledger events. */
+      const decodedRows = (
+        statement: string,
+        params: Parameters<typeof sql.unsafe>[1],
+      ): Effect.Effect<SessionEvent[], unknown> =>
+        sql
+          .unsafe<Record<string, unknown>>(statement, params)
+          .pipe(Effect.map((rows) => rows.map(decodeEvent)));
       const currentCommit = sql
         .unsafe<Record<string, unknown>>(highWater, [])
         .pipe(Effect.map(commitFromRows));
@@ -334,8 +375,8 @@ export const databaseLayer = (
         ORDER BY e.seq DESC LIMIT 1`;
       const inputTypes = JSON.stringify([
         ...LISTING_TYPES,
-        'approval.requested.1',
-        'approval.resolved.1',
+        'request.opened.1',
+        'request.decided.1',
       ]);
       const inputRows = `
         SELECT ${EVENT_COLUMNS} FROM event e
@@ -455,7 +496,7 @@ export const databaseLayer = (
       const latestInquiry = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.type = 'inquiryThreadUpdated.1'
         ORDER BY e.seq DESC LIMIT 1`;
-      const reparentInquiry = `UPDATE event_sequence SET parent_id = ?
+      const reparent = `UPDATE event_sequence SET parent_id = ?
         WHERE aggregate_id = ? AND owner_id = ? AND closed = 0`;
       const cleanupLanes = new Map<AggregateId, PerKeyLane>();
       const closedTombstone = `SELECT ${EVENT_COLUMNS},
@@ -531,7 +572,8 @@ export const databaseLayer = (
             if (
               draft.type === 'desktop.projects.changed' ||
               draft.type === 'inquiry.recorded' ||
-              draft.type === 'update.check.recorded'
+              draft.type === 'update.check.recorded' ||
+              draft.type === 'state.value.set'
             ) {
               // Profile-state writes own their aggregate only during this transaction.
               yield* sql.unsafe<Record<string, unknown>>(claim, [
@@ -711,15 +753,27 @@ export const databaseLayer = (
             if (
               draft.type === 'desktop.projects.changed' ||
               draft.type === 'inquiry.recorded' ||
-              draft.type === 'update.check.recorded'
+              draft.type === 'update.check.recorded' ||
+              draft.type === 'state.value.set'
             ) {
               yield* sql.unsafe<Record<string, unknown>>(release, [
                 JSON.stringify([draft.aggregateId]),
                 identity.ownerId,
               ]);
             }
+            if (draft.type === 'workflow.script') {
+              // The checkpoint outlives the workflow run's attempts but not
+              // the run that invoked it: hang the aggregate under that run so
+              // its deletion closes and collects the journal with it, instead
+              // of stranding rows no id can reach.
+              yield* sql.unsafe<Record<string, unknown>>(reparent, [
+                qualifyAggregateId('run', draft.parentRunId),
+                draft.aggregateId,
+                identity.ownerId,
+              ]);
+            }
             if (draft.type === 'inquiryThreadUpdated') {
-              yield* sql.unsafe<Record<string, unknown>>(reparentInquiry, [
+              yield* sql.unsafe<Record<string, unknown>>(reparent, [
                 draft.parentRunId === null
                   ? null
                   : qualifyAggregateId('run', draft.parentRunId),
@@ -770,6 +824,21 @@ export const databaseLayer = (
             [id],
           )
           .pipe(Effect.map((rows) => rows[0]));
+      const readAppState = Effect.gen(function* () {
+        const rows = yield* sql.unsafe<Record<string, unknown>>(
+          APP_STATE_ROWS,
+          [],
+        );
+        const values = new Map<string, JsonValue>();
+        for (const row of rows) {
+          const event = decodeEvent(row);
+          if (event.type !== 'state.value.set')
+            throw new Error('Invalid application state row');
+          if (event.value.kind === 'undefined') continue;
+          values.set(aggregateTarget(event.aggregateId).id, event.value.value);
+        }
+        return values;
+      });
       const readUpdateCheck = (host: string) =>
         Effect.gen(function* () {
           const row = yield* latestEventRow(
@@ -790,34 +859,22 @@ export const databaseLayer = (
         });
       return {
         observedCommit,
+        cleared,
         level,
         currentCommit: query(currentCommit),
         readAll: (fromCommit, throughCommit) =>
           query(
             Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(all, [
+              return yield* decodedRows(all, [
                 fromCommit,
                 throughCommit ?? (yield* currentCommit),
-              ])).map(decodeEvent);
+              ]);
             }),
           ),
         readListing: () =>
-          query(
-            Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(READ_LISTING, [
-                JSON.stringify(LISTING_TYPES),
-              ])).map(decodeEvent);
-            }),
-          ),
+          query(decodedRows(READ_LISTING, [JSON.stringify(LISTING_TYPES)])),
         readRunRecords: (id) =>
-          query(
-            Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(runRecords, [
-                id,
-                JSON.stringify(LISTING_TYPES),
-              ])).map(decodeEvent);
-            }),
-          ),
+          query(decodedRows(runRecords, [id, JSON.stringify(LISTING_TYPES)])),
         readRunSnapshot: (id) =>
           query(
             Effect.gen(function* () {
@@ -832,16 +889,8 @@ export const databaseLayer = (
               return event;
             }),
           ),
-        readRunChildren: (id) =>
-          query(
-            Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(runChildren, [
-                id,
-                id,
-                id,
-              ])).map(decodeEvent);
-            }),
-          ),
+        readRunChildren: (id) => query(decodedRows(runChildren, [id, id, id])),
+        readAppState: () => query(readAppState),
         readUpdateCheck: (host) => query(readUpdateCheck(host)),
         recordUpdateCheck: (host, change) =>
           transact(
@@ -933,32 +982,22 @@ export const databaseLayer = (
             }),
           ),
         readAggregate: (id, fromSeq) =>
-          query(
-            Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(aggregate, [
-                id,
-                fromSeq,
-              ])).map(decodeEvent);
-            }),
-          ),
+          query(decodedRows(aggregate, [id, fromSeq])),
         aggregateState: (ids) => query(readState(ids)),
         readInputBatch: (ids, fromCommit, checkedIds = ids) =>
           transaction(
             'read',
             Effect.gen(function* () {
               const cursor = yield* currentCommit;
-              const events = (yield* sql.unsafe<Record<string, unknown>>(
-                inputRows,
-                [
-                  inputTypes,
-                  fromCommit,
-                  cursor,
-                  JSON.stringify(ids),
-                  inputTypes,
-                  fromCommit,
-                  cursor,
-                ],
-              )).map(decodeEvent);
+              const events = yield* decodedRows(inputRows, [
+                inputTypes,
+                fromCommit,
+                cursor,
+                JSON.stringify(ids),
+                inputTypes,
+                fromCommit,
+                cursor,
+              ]);
               const checked = new Set(checkedIds);
               for (const event of events) {
                 for (const id of referencedAggregates(event)) checked.add(id);
@@ -1201,7 +1240,15 @@ export const databaseLayer = (
             const at = yield* Clock.currentTimeMillis;
             // The ownership refusal leaves typed (D6 b); the transaction
             // wrapper carried it as the write failure's cause.
-            return yield* transact(appendPrepared(prepared, at)).pipe(
+            // A write from a process whose build no longer matches the store's
+            // stamp (another build cleared and re-stamped it under this one)
+            // fails here instead of appending rows of a vocabulary the store
+            // no longer holds.
+            return yield* transact(
+              assertStoreFormat(sql, path).pipe(
+                Effect.andThen(appendPrepared(prepared, at)),
+              ),
+            ).pipe(
               Effect.mapError((failure) =>
                 failure.cause instanceof DatabaseNotOwner
                   ? failure.cause
@@ -1255,6 +1302,7 @@ function payloadOf(draft: {
 const configure = Effect.fnUntraced(function* (
   sql: SqlClient.SqlClient,
   mode: 'persistent' | 'ephemeral',
+  path: string,
 ) {
   yield* sql.unsafe('PRAGMA foreign_keys = ON', []);
   yield* sql.unsafe('PRAGMA synchronous = NORMAL', []);
@@ -1264,6 +1312,93 @@ const configure = Effect.fnUntraced(function* (
     mode === 'persistent' ? 'wal' : 'memory',
   );
   yield* verifyPragma(sql, 'foreign_keys', 1);
+  // A store holds one vocabulary, stamped in SQLite's own slot for it. One
+  // written under another version is unsupported state: there are no legacy
+  // readers, so its tables are dropped here, at the boundary that owns the
+  // file, before this build's schema touches them, and a row of another
+  // vocabulary never reaches a fold. The stamp is read before the tables are
+  // created, so a layout this schema cannot extend is dropped rather than
+  // failing the open; and the reset runs under the write lock, re-reading
+  // the stamp inside it, so two processes opening the same store clear it
+  // once. The stamp is written last, inside the same transaction.
+  const cleared =
+    (yield* pragmaValue(sql, 'user_version')) === SESSION_EVENT_FORMAT
+      ? null
+      : yield* resetStore(sql, path);
+  yield* applySchema(sql);
+  if (cleared !== null) {
+    log.warn(
+      `Session store ${path} held ${cleared.rows} rows of format ${cleared.storedFormat}; this build reads format ${SESSION_EVENT_FORMAT} and keeps no compatibility with earlier persisted data, so the store was cleared.`,
+    );
+  }
+  return cleared;
+});
+
+/**
+ * Clear a store stamped with another format, under the write lock and in
+ * one transaction with the stamp: the stamp is re-read inside it, so of two
+ * processes opening the same store only the first clears it, and the
+ * second reads this build's stamp and keeps the tables. Returns what was
+ * cleared, or null when the store held no rows (a new file) or was already
+ * this build's by the time the lock was held.
+ */
+const resetStore = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  path: string,
+) {
+  yield* sql.unsafe('BEGIN IMMEDIATE', []);
+  const cleared = yield* Effect.gen(function* () {
+    const stored = yield* pragmaValue(sql, 'user_version');
+    if (stored === SESSION_EVENT_FORMAT) return null;
+    const rows = yield* storedRows(sql);
+    yield* sql.unsafe('DROP TABLE IF EXISTS event', []);
+    yield* sql.unsafe('DROP TABLE IF EXISTS event_sequence', []);
+    yield* applySchema(sql);
+    yield* sql.unsafe(`PRAGMA user_version = ${SESSION_EVENT_FORMAT}`, []);
+    return rows > 0
+      ? ({
+          path,
+          rows,
+          storedFormat: Number(stored),
+        } satisfies SessionStoreCleared)
+      : null;
+  }).pipe(Effect.onError(() => sql.unsafe('ROLLBACK', []).pipe(Effect.ignore)));
+  yield* sql.unsafe('COMMIT', []);
+  return cleared;
+});
+
+/** The event rows a store holds, or none when it has no event table yet. */
+const storedRows = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
+  const table = (yield* sql.unsafe<Record<string, unknown>>(
+    "SELECT count(*) AS present FROM sqlite_master WHERE type = 'table' AND name = 'event'",
+    [],
+  ))[0];
+  if (Number(table?.present ?? 0) === 0) return 0;
+  const counted = (yield* sql.unsafe<Record<string, unknown>>(
+    'SELECT count(*) AS rows FROM event',
+    [],
+  ))[0];
+  return Number(counted?.rows ?? 0);
+});
+
+/** Refuse a write once another build has re-stamped the store under this
+ *  process; read inside the write transaction, so the check and the append
+ *  see one stamp. */
+const assertStoreFormat = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  path: string,
+) {
+  const stored = yield* pragmaValue(sql, 'user_version');
+  if (stored !== SESSION_EVENT_FORMAT) {
+    return yield* Effect.fail(
+      new Error(
+        `Session store ${path} is stamped with event format ${String(stored)}; this process writes format ${SESSION_EVENT_FORMAT} and stops writing to it.`,
+      ),
+    );
+  }
+});
+
+const applySchema = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
   // The official driver prepares one statement at a time. This fixed schema
   // contains only DDL statements, with no semicolons inside SQL literals.
   for (const statement of SCHEMA.split(';')
@@ -1273,16 +1408,23 @@ const configure = Effect.fnUntraced(function* (
   }
 });
 
-const verifyPragma = Effect.fnUntraced(function* (
+const pragmaValue = Effect.fnUntraced(function* (
   sql: SqlClient.SqlClient,
   pragma: string,
-  expected: string | number,
 ) {
   const row = (yield* sql.unsafe<Record<string, unknown>>(
     `PRAGMA ${pragma}`,
     [],
   ))[0];
-  const value = row?.[pragma];
+  return row?.[pragma];
+});
+
+const verifyPragma = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  pragma: string,
+  expected: string | number,
+) {
+  const value = yield* pragmaValue(sql, pragma);
   if (value !== expected) {
     return yield* Effect.fail(
       new Error(

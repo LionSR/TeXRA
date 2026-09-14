@@ -6,15 +6,12 @@
  */
 
 // Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
-
 // Third-party imports
 import { Data, Deferred, Duration, Effect } from 'effect';
 
 // Local imports
 import {
   deriveResumability,
-  getRunStore,
   getRunRecords,
   readRunChildren,
   listRunWorkspaceFiles,
@@ -27,11 +24,10 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { getRunContextRunId } from '@agent/runtime/RunContext';
 import type { FileStat } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   RunIdSchema,
@@ -39,13 +35,14 @@ import {
   type RunId,
   type TodoItem,
   type ToolResult,
-  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
+import { deriveWorkflowRunModel } from '@shared/session/sessionFold';
+import type { SessionView } from '@shared/session/sessionView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -105,7 +102,7 @@ import {
   listenForFollowUp,
   shouldSkipWait,
 } from './executions/waitCoordination';
-import { workflowRunView } from './executions/workflowSummaryView';
+import { workflowBoardView } from './executions/workflowSummaryView';
 
 /**
  * Bound on the durable reads one listing page or one children block fans
@@ -162,11 +159,9 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
     const followUp = yield* Deferred.make<void>();
     yield* Effect.acquireRelease(
       Effect.sync(() =>
-        context.inRunScope(() =>
-          listenForFollowUp(() => {
-            Deferred.doneUnsafe(followUp, Effect.void);
-          }),
-        ),
+        listenForFollowUp(context.session, context.runId, () => {
+          Deferred.doneUnsafe(followUp, Effect.void);
+        }),
       ),
       (stop) => Effect.sync(stop),
     );
@@ -182,6 +177,37 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   },
   Effect.scoped,
 );
+
+/**
+ * The board of a workflow-script run (the identity the session fold derives
+ * `transcript.run` for) — the same `workflowRunModel` fold the three boards
+ * paint — folded cold so it is complete whether or not a port holds the run
+ * (`runView`'s transcript tier is complete only while one does).
+ */
+function workflowBoardLines(
+  view: SessionView | null,
+  runId: RunId,
+  board: ReturnType<typeof deriveWorkflowRunModel> | null,
+): Effect.Effect<string[]> {
+  if (board) {
+    return Effect.succeed([
+      '',
+      'Workflow:',
+      JSON.stringify(workflowBoardView(board), null, 2),
+    ]);
+  }
+  if (!view) return Effect.succeed([]);
+  const derivedBoard = deriveWorkflowRunModel(view, runId);
+  return Effect.succeed(
+    derivedBoard
+      ? [
+          '',
+          'Workflow:',
+          JSON.stringify(workflowBoardView(derivedBoard), null, 2),
+        ]
+      : [],
+  );
+}
 
 function getRunningTodos(
   session: SessionHandle,
@@ -228,28 +254,29 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   schema: ExecutionsToolInputSchema,
 }) {
   /**
-   * The one run edge of this tool (PRD run-edge category b): every line of
-   * logic below is an Effect program, run once here on the process runtime.
-   * A collaborator's rejection is re-raised as its own cause, so the tool
-   * runner still sees the error storage or the filesystem raised; a
-   * `ToolError` stays a typed failure and `runPromise` rejects with it.
+   * Every line of logic below is one Effect program. Fatal storage and
+   * filesystem failures remain failures for the invocation boundary.
    */
-  protected execute(input: ExecutionsToolInput): Promise<ToolResult> {
+  protected readonly execute = Effect.fn('ExecutionsTool.call')(function* (
+    this: ExecutionsTool,
+    input: ExecutionsToolInput,
+  ) {
+    const toolCall = yield* ToolCall;
+    if (!toolCall.run)
+      return yield* Effect.fail(
+        new ToolError('This tool requires an active agent session.'),
+      );
     const context: RunToolContext = {
-      session: currentSession(),
-      runId: getRunContextRunId(),
-      inRunScope: AsyncLocalStorage.bind(<A>(operation: () => A): A =>
-        operation(),
-      ),
+      session: toolCall.run.session,
+      runId: toolCall.run?.runId,
+      inRunScope: toolCall.inScope,
     };
-    return effectRuntime().runPromise(
-      this.run(context, input).pipe(
-        Effect.catchTag('ExecutionsReadFailed', (error) =>
-          Effect.die(error.cause),
-        ),
+    return yield* this.run(context, input).pipe(
+      Effect.catchTag('ExecutionsReadFailed', (error) =>
+        Effect.die(error.cause),
       ),
     );
-  }
+  });
 
   private readonly run = Effect.fn('ExecutionsTool.run')(function* (
     this: ExecutionsTool,
@@ -404,12 +431,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     // Exclude runs that are already effectively done
     // (completed, inactive, or tool-use subagent WAITING with result delivered).
     const pendingIds = candidateIds.filter(
-      (id) => !context.inRunScope(() => shouldSkipWait(id)),
+      (id) => !shouldSkipWait(context.session, id),
     );
     if (pendingIds.length === 0) return;
 
     yield* awaitStatusChange(context, timeout, pendingIds, () =>
-      pendingIds.every((id) => context.inRunScope(() => shouldSkipWait(id))),
+      pendingIds.every((id) => shouldSkipWait(context.session, id)),
     );
   });
 
@@ -458,13 +485,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         const records = getRunRecords(context.session, runId);
         const todos = getRunningTodos(session, handle);
         const run = session.runView(runId);
-        const [workflow, children, report] = yield* Effect.all(
-          [
-            records.readWorkflow(),
-            readRunChildren(context.session, runId),
-            records.readReport(),
-          ],
-          { concurrency: 3 },
+        const [children, report] = yield* Effect.all(
+          [readRunChildren(context.session, runId), records.readReport()],
+          { concurrency: 2 },
         );
 
         const info = session.runs.getStatus(handle);
@@ -482,6 +505,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           info,
           run,
         );
+        if (run?.identity.kind === 'multiAgentWorkflow') {
+          lines.push(
+            ...(yield* workflowBoardLines(null, runId, run.transcript.run)),
+          );
+        }
 
         yield* this.appendSummaryTail(
           context,
@@ -492,10 +520,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           todos,
           report,
           {
-            workflow: workflow ?? undefined,
             suppressReport: shouldSuppressAutoDeliveredSubagentReport(
               options,
               handle,
+              context.runId,
             ),
           },
         );
@@ -506,9 +534,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // Completed run: the view's facts beside the private records.
       const records = getRunRecords(context.session, runId);
       const run = session.runView(runId);
-      const [workflow, record, children, todos, report] = yield* Effect.all(
+      // The live projection deliberately keeps only a bounded transcript for
+      // inactive runs. Fold this completed aggregate cold so workflow cards
+      // retain their terminal statuses and board-level opened state.
+      const durableView = yield* session.readView([runId]);
+      const summaryRun = durableView.runs.get(runId) ?? run;
+      const [record, children, todos, report] = yield* Effect.all(
         [
-          records.readWorkflow(),
           records.readRunRecord(),
           readRunChildren(context.session, runId),
           readCompletedRunTodos(runId, session).pipe(
@@ -516,7 +548,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           ),
           records.readReport(),
         ],
-        { concurrency: 5 },
+        { concurrency: 4 },
       );
 
       if (!run && !record) {
@@ -531,7 +563,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
       // Identity comes only from the stamped run row; without a row the
       // display falls back to the config.
-      const identity = run?.identity;
+      const identity = summaryRun?.identity;
       const category = runDisplayCategory(identity, record);
       const info = yield* getRunStatusInfo(
         runId,
@@ -544,8 +576,17 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         identity,
         category,
         info,
-        run,
+        summaryRun,
       );
+      if (identity?.kind === 'multiAgentWorkflow') {
+        lines.push(
+          ...(yield* workflowBoardLines(
+            durableView,
+            runId,
+            summaryRun?.transcript.run ?? null,
+          )),
+        );
+      }
 
       yield* this.appendSummaryTail(
         context,
@@ -555,7 +596,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         children,
         todos,
         report,
-        { workflow: workflow ?? undefined },
       );
 
       return executed(lines.join('\n'));
@@ -577,18 +617,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     children: ChildRecord[],
     todos: readonly TodoItem[],
     report: string | null,
-    options: {
-      readonly workflow?: WorkflowRunSnapshot;
-      readonly suppressReport?: boolean;
-    } = {},
+    options: { readonly suppressReport?: boolean } = {},
   ) {
-    if (options.workflow) {
-      lines.push(
-        '',
-        'Workflow:',
-        JSON.stringify(workflowRunView(options.workflow), null, 2),
-      );
-    }
     if (children.length > 0) {
       lines.push('', `Children (${children.length}):`);
       const formatted = yield* this.formatChildren(context, children);
@@ -670,7 +700,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
             detachSubagentsOnStop(),
           ),
         });
-        return stop.settlement.pipe(Effect.as(stop.accepted));
+        // Asked after the settlement: a detaching stop interrupts the run
+        // only once its children have left it, so that is when it knows
+        // whether a live target took the stop.
+        return stop.settlement.pipe(
+          Effect.andThen(Effect.sync(() => stop.accepted())),
+        );
       }).pipe(Effect.uninterruptible);
       if (success) {
         return executed(`Run ${runId} terminated.`);
@@ -714,10 +749,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     function* (context: RunToolContext, runId: RunId) {
       const records = getRunRecords(context.session, runId);
       const [report, note] = yield* Effect.all(
-        [
-          records.readReport(),
-          turnAttributionNote(getRunStore(runId), context.session),
-        ],
+        [records.readReport(), turnAttributionNote(runId, context.session)],
         { concurrency: 2 },
       );
       if (!report) {
@@ -740,7 +772,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         [
           records.readResultMeta(),
           records.readRunEnd(),
-          turnAttributionNote(getRunStore(runId), context.session),
+          turnAttributionNote(runId, context.session),
         ],
         { concurrency: 3 },
       );

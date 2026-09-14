@@ -4,9 +4,13 @@ import { Effect } from 'effect';
 
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import {
+  openAppStateStore,
+  type RunStateWrite,
+} from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { initPlatform } from '@platform/platform';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
@@ -22,21 +26,17 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
+import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
   nodeProcesses,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
 import {
-  bootstrapNodeAgentDirectories,
   createNodePlatform,
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
-import {
-  openNodeWorkspaceStateStore,
-  openTexraConfigStores,
-} from '@platform/defaults/nodeStores';
+import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
   WorkspaceStorageProvider,
   resolveGlobalStoragePath,
@@ -44,6 +44,7 @@ import {
 import type { OwnerId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
 
@@ -65,6 +66,9 @@ export interface ElectronPlatformInitResult {
    * setting changed from one project is what the others read.
    */
   globalConfigStore: ConfigStore;
+  /** Runs a project state store's durable writes on this process's runtime:
+   *  the store is below the boundary, so its Promise face is made here. */
+  runWrite: RunStateWrite;
   lifecycle: LifecycleHost;
   /**
    * The process-wide services the composition root builds and `initPlatform`
@@ -78,9 +82,9 @@ export interface ElectronPlatformInitResult {
   agentDirectories: AgentDirectoriesPort;
   /**
    * Desktop's memory/history/executions data root (`~/.texra` in
-   * production, see `resolveDesktopDataRoot()`). Threaded out so crash
-   * reporting can scrub it from event payloads the same way it already
-   * scrubs `userData` — this root no longer lives under `userData` (#7987).
+   * production, see `resolveDesktopDataRoot()`). Threaded out so the project
+   * registry gets it from one owner instead of re-resolving it — this root no
+   * longer lives under `userData` (#7987).
    */
   dataRoot: string;
   /**
@@ -90,6 +94,12 @@ export interface ElectronPlatformInitResult {
    * each re-resolve it.
    */
   resourcesPath: string;
+  /**
+   * The one Effect runtime of this process, built here. Returned so the entry
+   * and everything it wires take it as a parameter instead of reading the
+   * process-global locator.
+   */
+  runtime: ProcessRuntime;
 }
 
 export async function initializeElectronPlatform(
@@ -116,27 +126,42 @@ export async function initializeElectronPlatform(
   // installing: an opener that uses the synchronous `open` would otherwise
   // face an asynchronous layer build.
   const processStart = await nodeProcesses.selfIdentity();
+  installLongRunningModelDispatcher();
   // The secrets and global state stores below open on this runtime, so the
   // process services bind them through thunks over this root's own locals,
   // resolved at first use — after this function has assigned them.
-  installProcessRuntime({
+  const runtime = installProcessRuntime({
     processStart,
     globalStorage: () => storage.getGlobalStoragePath(),
     updateCheckStorage: () => resolveGlobalStoragePath(userDataPath),
     secrets: () => secrets,
     appState: () => globalStateStore,
     setup: desktopSetupPlatform,
+    lean: directLeanLanguageServices(),
   });
+  // The Promise face of `StateStore.update`, run on this process's runtime:
+  // the store itself is below the boundary and never runs an Effect.
+  const runWrite = (write: Effect.Effect<void, Error>) =>
+    runtime.runPromise(write);
   const { globalStateStore, workspaceStateStore, configStores, secretsStore } =
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       Effect.gen(function* () {
         const [globalState, workspaceState, config, secrets] =
           yield* Effect.all(
             [
-              JsonStore.open(join(userDataPath, 'state', 'global.json')),
-              openNodeWorkspaceStateStore(storage.getStoragePath()),
-              openTexraConfigStores(storage, undefined, (message) =>
-                console.warn(`[desktop] ${message}`),
+              // Global state stays in the Electron profile, beside this
+              // profile's update-check records and apart from the shared
+              // `~/.texra` root the workspace scopes use.
+              openAppStateStore(
+                resolveGlobalStoragePath(userDataPath),
+                runWrite,
+              ),
+              openAppStateStore(storage.getStoragePath(), runWrite),
+              openTexraConfigStores(
+                storage,
+                undefined,
+                (message) => console.warn(`[desktop] ${message}`),
+                runtime,
               ),
               JsonStore.open(join(userDataPath, 'secrets.json')),
             ],
@@ -152,20 +177,21 @@ export async function initializeElectronPlatform(
     );
 
   repairLaunchPath();
+  const resourcesPath = resolveResourcesPath(mainDirname);
   const agentDirectories = createPlatformAgentDirectories({
     channel: 'desktop',
+    // Built-in agents are read straight out of the packaged app bundle;
+    // `resolveResourcesPath` has already asserted both directories exist.
+    resourcesPath,
     customDirectoryStore: {
       get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
     },
   });
-  const secrets = new ElectronSecrets(secretsStore, {
+  const secrets = new ElectronSecrets(secretsStore, runtime, {
     showWarningMessage: showDesktopWarningDialog,
   });
   initPlatform(
     createNodePlatform({
-      globalState: globalStateStore,
-      storage,
-      secrets,
       lifecycle,
       agentResume,
       agentDirectories,
@@ -174,14 +200,16 @@ export async function initializeElectronPlatform(
   const processRoots = createNodeWorkspaceRoots({
     workspacePath: undefined,
     storage: storage.getStoragePath(),
+    globalStorage: storage.getGlobalStoragePath(),
     config: configStores,
     workspaceState: workspaceStateStore,
+    globalState: globalStateStore,
   });
   initProcessWorkspaceRoots(processRoots);
   initProcessSettingHost('desktop');
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
-  installTexraAccountProbes();
+  installTexraAccountProbes(secrets);
 
   // Route desktop model traffic to the same Supabase usage log the extension
   // and CLI write to, tagged with editorType 'desktop' and the app version.
@@ -189,48 +217,24 @@ export async function initializeElectronPlatform(
   // carries an undefined host/version, so a queue shorter than one batch is
   // lost at quit — including plan accounting. `dispose()` drains it, from the
   // same BEFORE phase the other two hosts use.
-  await effectRuntime().runPromise(
-    UsageLogService.initialize(
-      effectRuntime().scope,
-      {},
-      app.getVersion(),
-      'desktop',
-    ),
+  await runtime.runPromise(
+    UsageLogService.initialize(runtime.scope, {}, app.getVersion(), 'desktop'),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    effectRuntime().runPromise(UsageLogService.dispose()),
+    runtime.runPromise(UsageLogService.dispose()),
   );
 
-  // Seed first-install defaults (e.g. disabled tools) before anything writes
-  // LAST_KNOWN_VERSION, so upgrading users are not affected. Mirrors the
-  // extension's ordering (extension.ts) — same key, same seeding function.
-  await effectRuntime().runPromise(
-    seedDisabledToolDefaults(
-      globalStateStore,
-      GlobalStateKey.LAST_KNOWN_VERSION,
-    ),
-  );
+  // Seed first-install defaults (e.g. disabled tools). No-ops once
+  // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
+  await runtime.runPromise(seedDisabledToolDefaults(globalStateStore));
 
-  const resourcesPath = resolveResourcesPath(mainDirname);
-
-  // Register the shared Node-host agent runtime: the direct Lean language
-  // services (lake env lean --server).
-  initNodeAgentRuntime(lifecycle);
   // Project skills follow each project's session; only the bundle is fixed.
   initializeNodeRuntimeSkills({ resourcesPath });
-
-  await effectRuntime().runPromise(
-    bootstrapNodeAgentDirectories({
-      channel: 'desktop',
-      resourcesPath,
-      currentVersion: app.getVersion(),
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    }),
-  );
 
   return {
     processRoots,
     globalConfigStore: configStores.global,
+    runWrite,
     lifecycle,
     globalState: globalStateStore,
     ownerId: processOwnerId(processStart),
@@ -238,5 +242,6 @@ export async function initializeElectronPlatform(
     agentDirectories,
     dataRoot,
     resourcesPath,
+    runtime,
   };
 }

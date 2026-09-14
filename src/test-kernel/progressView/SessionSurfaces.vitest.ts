@@ -93,12 +93,12 @@ describe('session Surface ownership', () => {
       expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
 
       const refuse = response();
-      surfaces.hostRequest(KEY, { kind: 'compileInputPdf' });
+      surfaces.hostRequest(KEY, { kind: 'extractFigures' });
       // Open another paper while the first paper's request remains pending.
       surfaces.sync([KEY, 'other-paper']);
       const error = {
         _tag: 'Rejected',
-        reason: 'Compiling the input PDF is unavailable.',
+        reason: 'Figure extraction is unavailable.',
       } as const;
       refuse({ ok: false, error });
       await Promise.resolve();

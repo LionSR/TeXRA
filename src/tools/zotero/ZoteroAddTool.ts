@@ -22,9 +22,9 @@ import { Data, Duration, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { ToolCall } from '@agent/runtime/ToolCall';
+import type { ToolServices } from '@agent/runtime/ToolServices';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { acquireRateLimitSlot } from '@tools/support/rateLimiter';
 import { CROSSREF_CONSTANTS, CrossrefClient } from '@tools/citation/constants';
@@ -32,12 +32,13 @@ import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
+import { readConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import {
   callZoteroConnector,
   checkZoteroRunning,
-  getZoteroPort,
+  ZOTERO_PORT_KEY,
   type ConnectorResult,
 } from './bbtClient';
 
@@ -379,12 +380,10 @@ const addItem = Effect.fn('ZoteroAddTool.addItem')(function* (
   return { item: itemLabel, ...result };
 });
 
-const addItems = Effect.fn('ZoteroAddTool.execute')(function* ({
-  items,
-  collection,
-}: ZoteroAddInput) {
-  const port = getZoteroPort();
-
+const addItems = Effect.fn('ZoteroAddTool.execute')(function* (
+  { items, collection }: ZoteroAddInput,
+  port: number,
+) {
   // Fails with a ToolError if Zotero is not running.
   yield* checkZoteroRunning(port);
 
@@ -419,15 +418,17 @@ const addItems = Effect.fn('ZoteroAddTool.execute')(function* ({
   return executed(output, summary);
 });
 
-export class ZoteroAddTool extends defineTool({
+export const ZoteroAddTool = defineTool({
   name: 'zotero_add',
   description:
     'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by DOI (recommended), URL, or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files).',
   schema: ZoteroAddInputSchema,
-}) {
-  protected execute(input: ZoteroAddInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(addItems(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
-  }
-}
+  execute: (
+    input: ZoteroAddInput,
+  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
+    Effect.gen(function* () {
+      const call = yield* ToolCall;
+      const port = readConfig<number>(call.roots.config, ZOTERO_PORT_KEY);
+      return yield* addItems(input, port);
+    }),
+});

@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetAgentCatalogAuthRefreshScopeForTests } from '@frontend/auth/agentCatalogRefreshScope';
+import { effectRuntime } from '@platform/processRuntime';
 import type { AgentCategory } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -111,6 +112,7 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
     },
     refreshAfterAgentMutation,
     globalState,
+    effectRuntime(),
   );
 
   return {

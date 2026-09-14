@@ -78,23 +78,13 @@ export const RunSubstateSchema = z.enum(RUN_SUBSTATE);
 export type RunSubstate = z.infer<typeof RunSubstateSchema>;
 
 /**
- * Wire-level lifecycle status of a run that has no phase in this process:
- * its run lease is held by another TeXRA process, or its run state
- * could not be read at startup. Not a `RunPhase`: phases are facts about
- * runs live here. `RunView.statusDetail` carries the reason; renderers
- * show it read-only and Delete is the only run control that applies.
- */
-export const RUN_LIFECYCLE_UNAVAILABLE = 'unavailable' as const;
-
-/**
  * Wire-level lifecycle status of a run with no lifecycle recorded yet. `as const`
  * is load-bearing: a bare `const` gives a *widening* literal type, which
  * widens back to `string` inside an object literal.
  */
 export const RUN_LIFECYCLE_READY = 'ready' as const;
 
-export type RunLifecycleStatus =
-  RunPhase | typeof RUN_LIFECYCLE_READY | typeof RUN_LIFECYCLE_UNAVAILABLE;
+export type RunLifecycleStatus = RunPhase | typeof RUN_LIFECYCLE_READY;
 
 export const WorktreeInfoSchema = z.object({
   /** Absolute path of the worktree the agent is operating in. */

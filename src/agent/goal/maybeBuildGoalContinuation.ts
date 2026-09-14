@@ -1,36 +1,35 @@
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { goalElapsedMs, type RunId } from '@shared/schemas';
-import { GoalStore, isGoalEnabled } from '@tools/goal';
+import { goalOf, isGoalEnabled, type GoalReader } from '@tools/goal';
 import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
 import { GOAL_CONTINUATION_TEMPLATE } from '../runtime/bundledPrompts';
 
 /**
- * Build the pre-wait Goal continuation for a stream.
+ * Build the pre-wait Goal continuation for a run in its session.
  *
  * Returns a rendered continuation prompt when:
- *   - the feature flag is on,
- *   - the stream has a Goal with status `active`.
+ *   - the session's workspace has the feature flag on,
+ *   - the run has a Goal with status `active`.
  *
  * Queue and subagent checks belong to the wait-node caller because it owns the
  * blocking wait. This helper is pure: no side effects, no counter, no audit
  * log. The autonomous loop runs until the model completes
- * (`plan(command="complete")` → forget) or the user stops it.
+ * (`plan(command="complete")` -> the goal is cleared) or the user stops it.
  *
  * Called from the tool-use loop BEFORE its follow-up wait — the
  * wait blocks indefinitely on an empty queue, so the continuation cannot run
  * after it.
  */
 export async function maybeBuildGoalContinuation(
+  session: GoalReader & Pick<SessionHandle, 'roots'>,
   runId: RunId,
 ): Promise<string | null> {
-  // Read the store first — it is bootstrap-tolerant (returns null before
-  // platform init), so the flag check below (which needs `platform()`) is only
-  // reached when an active record actually exists on disk.
-  const goal = GoalStore.getForRun(runId);
-  if (!goal || goal.status !== 'active') return null;
+  const goal = goalOf(session, runId);
+  if (goal?.status !== 'active') return null;
 
-  if (!isGoalEnabled()) return null;
+  if (!isGoalEnabled(session.roots.config)) return null;
 
   return renderPrompt(GOAL_CONTINUATION_TEMPLATE, {
     objective: goal.objective,

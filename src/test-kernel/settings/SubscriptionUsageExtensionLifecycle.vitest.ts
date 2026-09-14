@@ -19,16 +19,21 @@ interface Harness {
 
 function createHarness(activeView = true) {
   const posted: unknown[] = [];
+  const unavailable = (provider: SubscriptionUsageProvider) => ({
+    state: 'unavailable' as const,
+    provider,
+    providerName: provider,
+    planName: provider,
+    fetchedAt: 0,
+    windows: [] as [],
+    reason: 'missing_credentials' as const,
+  });
   const usage = {
     invalidate: vi.fn(),
-    getUsage: vi.fn(async (provider: SubscriptionUsageProvider) => ({
-      state: 'unavailable' as const,
-      provider,
-      providerName: provider,
-      planName: provider,
-      fetchedAt: 0,
-      windows: [] as [],
-      reason: 'missing_credentials' as const,
+    getAllUsage: vi.fn(async () => ({
+      chatgpt: unavailable('chatgpt'),
+      kimiCode: unavailable('kimiCode'),
+      glmCodingPlan: unavailable('glmCodingPlan'),
     })),
   };
   const handler = Object.create(
@@ -63,7 +68,7 @@ describe('extension subscription usage credential lifecycle', () => {
     await handler.refreshAfterProviderKeyChange('glm');
 
     expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('glmCodingPlan');
-    expect(usage.getUsage).toHaveBeenCalledTimes(3);
+    expect(usage.getAllUsage).toHaveBeenCalledOnce();
     expect(posted).toContainEqual(
       expect.objectContaining({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
@@ -71,10 +76,10 @@ describe('extension subscription usage credential lifecycle', () => {
     );
 
     usage.invalidate.mockClear();
-    usage.getUsage.mockClear();
+    usage.getAllUsage.mockClear();
     await handler.refreshAfterProviderKeyChange('openai');
     expect(usage.invalidate).not.toHaveBeenCalled();
-    expect(usage.getUsage).not.toHaveBeenCalled();
+    expect(usage.getAllUsage).not.toHaveBeenCalled();
   });
 
   it('invalidates coding-plan usage when no Settings view is active', async () => {
@@ -87,7 +92,7 @@ describe('extension subscription usage credential lifecycle', () => {
       ['kimiCode'],
       ['glmCodingPlan'],
     ]);
-    expect(usage.getUsage).not.toHaveBeenCalled();
+    expect(usage.getAllUsage).not.toHaveBeenCalled();
     expect(posted).toStrictEqual([]);
   });
 

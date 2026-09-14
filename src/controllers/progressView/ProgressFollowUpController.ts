@@ -6,7 +6,9 @@ import { decideRunModel } from '@model/runModelDecision';
 import {
   AgentCategory,
   fileLocationAddressPath,
+  MODEL_AVAILABILITY_STATUS,
   type CompileFailure,
+  type ModelAvailabilityKind,
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
   type RunId,
@@ -17,7 +19,18 @@ import type { RunOutputsSource } from './runOutputs';
 
 export interface ProgressFollowUpModelOption {
   value: string;
-  disabled?: boolean;
+  /** The access verdict `computeModelOptionsData` resolved, if it ran. */
+  availability?: ModelAvailabilityKind;
+}
+
+/** A row with no resolved kind came from the secret-free list and blocks nothing. */
+function isFollowUpModelAvailable(
+  option: ProgressFollowUpModelOption,
+): boolean {
+  return (
+    option.availability === undefined ||
+    MODEL_AVAILABILITY_STATUS[option.availability].available
+  );
 }
 
 interface ProgressFollowUpWorkspace {
@@ -48,7 +61,7 @@ interface CompileFixerTarget {
   missingLatexdiffArtifact?: string;
 }
 
-export type ProgressFollowUpPlan =
+type ProgressFollowUpPlan =
   | { kind: 'warning'; message: string }
   | { kind: 'info'; message: string }
   // Produced only by planCompileFixer (latexFixer). The progress view opts every
@@ -159,13 +172,14 @@ export class ProgressFollowUpController {
           fallbackMode: 'silent',
         },
         {
-          model: modelOptions.find((option) => !option.disabled)?.value,
+          model: modelOptions.find(isFollowUpModelAvailable)?.value,
           reason: 'access-list-default',
         },
       ],
       (model) =>
         modelOptions.some(
-          (option) => option.value === model && !option.disabled,
+          (option) =>
+            option.value === model && isFollowUpModelAvailable(option),
         ),
     );
     if (!decision || decision.unavailable) return null;

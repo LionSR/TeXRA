@@ -275,8 +275,6 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 2. **Response timeout**:
    - For large documents, the model might time out
    - Try breaking the task into smaller chunks
-   - Turn on **Enable streaming** in the **Models** tab so long responses
-     arrive incrementally instead of in a single large reply
 
 3. **Context length**:
    - Documents might exceed the model's context window
@@ -305,7 +303,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 3. **Use better models**:
    - Move to more capable models for complex tasks
-   - Try Claude Opus 5 or GPT-5.5 for highest quality
+   - Try Claude Opus 5 or GPT-6 / GPT-5.6 for highest quality
    - Match the model to your specific task
 
 4. **Reference materials**:
@@ -370,8 +368,6 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 1. **Incomplete generation**:
    - Check whether the AI reached the token limit
-   - Turn on **Enable streaming** in the **Models** tab for more reliable
-     completion of long outputs
 
 2. **XML parsing issues**:
    - TeXRA uses XML to structure its output (e.g., `<documents>...</documents>`).
@@ -523,13 +519,13 @@ Key points for troubleshooting:
      launcher: select the TeXRA icon, then switch to the Progress view
    - If it is not visible, open it from the Command Palette: "TeXRA: Show Progress"
 
-2. **Interpreting logs**: entries are colour-coded by severity, and nested
+2. **Interpreting logs**: entries are color-coded by severity, and nested
    entries expand to reveal detail: green for information and successful
    operations, yellow for warnings, red for errors that need attention.
 
 <ProgressLogHero />
 
-<p class="hero-caption">ProgressBoard colour-codes every entry by severity (green info/success, yellow warnings, red errors), with task-id chips and expandable nested detail.</p>
+<p class="hero-caption">ProgressBoard color-codes every entry by severity (green info/success, yellow warnings, red errors), with task-id chips and expandable nested detail.</p>
 
 3. **Finding specific information**:
    - Look for task IDs to track specific operations

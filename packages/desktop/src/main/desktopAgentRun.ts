@@ -21,8 +21,11 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { effectRuntime } from '@platform/processRuntime';
+import {
+  ToolEditApprovalController,
+  type ToolEditApprovalHost,
+} from '@controllers/approval/ToolEditApprovalController';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
   AgentCategory,
   RequestOpenFilePayload,
@@ -30,7 +33,10 @@ import type {
 } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 
-import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
+import {
+  DesktopToolEditApprovalHost,
+  type DesktopToolEditApprovalUi,
+} from './desktopToolEditApproval.js';
 import { toLogData } from './desktopLogUtils.js';
 import {
   launchDesktopAgent,
@@ -41,10 +47,7 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 export interface DesktopAgentRunOptions {
   host: DesktopAgentRunHost;
   /** Preview operations reject; the approval controller presents failures. */
-  toolEditPreview: Pick<
-    DesktopAgentRunHost,
-    'openPath' | 'openBuildDisplay' | 'openDiff'
-  >;
+  toolEditPreview: Omit<DesktopToolEditApprovalUi, 'showErrorMessage'>;
   session: SessionHandle;
   /** A run loaded an agent from the custom directory: the New-task
    *  state's agent-config banner (`HostSnapshot.banners`). */
@@ -54,6 +57,9 @@ export interface DesktopAgentRunOptions {
   }): void;
   /** Select the run launched by this window. */
   onLaunched?: (runId: RunId) => void;
+  /** The process runtime this window was handed; the run and its approval
+   *  wiring settle on it. */
+  runtime: ProcessRuntime;
   logger?: AgentTrace;
 }
 
@@ -77,7 +83,7 @@ export interface DesktopAgentRun {
 export function createDesktopAgentRun(
   options: DesktopAgentRunOptions,
 ): DesktopAgentRun {
-  const { session, host } = options;
+  const { session, host, runtime } = options;
   const logger = options.logger ?? createChannelTrace('DesktopAgentRun');
   let disposed = false;
 
@@ -90,7 +96,7 @@ export function createDesktopAgentRun(
     dialog: Promise<unknown> | void,
     logMessage: string,
   ): Promise<void> {
-    const presented = await effectRuntime().runPromiseExit(
+    const presented = await runtime.runPromiseExit(
       Effect.tryPromise({
         try: async () => dialog,
         catch: (error) => error,
@@ -141,31 +147,51 @@ export function createDesktopAgentRun(
 
   // The tool-edit preview: staged copies of the original and proposed
   // content the review pane diffs. The request itself is the session's
-  // (`approval.requested` folds into the view), and a surface's decision
+  // (`request.opened` folds into the view), and a surface's `request.decide`
   // settles it there; the staged preview is discarded when the request
   // resolves, whichever way.
+  const decideRequest: ToolEditApprovalHost['decide'] = (
+    runId,
+    requestId,
+    decision,
+  ) =>
+    runtime.runPromise(
+      session.requests
+        .request({ kind: 'request.decide', runId, requestId, decision })
+        .pipe(Effect.asVoid),
+    );
   const toolEditApprovals = new ToolEditApprovalController({
     host: new DesktopToolEditApprovalHost({
       ui: {
         ...options.toolEditPreview,
         showErrorMessage: host.showErrorMessage,
       },
+      decide: decideRequest,
+      runtime,
     }),
   });
-  const sessionEvents = effectRuntime().runFork(
+  const sessionEvents = runtime.runFork(
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => toolEditApprovals.handleSessionEvent(event)),
     ),
   );
   // Attached for the window's life, before the first run of this window
-  // asks anything. Requests this host does not present (bash, plan,
-  // proposal, retry, question) stay parked in the runtime until a surface's
-  // approval row decides them.
+  // asks anything. This host presents only the tool-edit preview; every
+  // other request (bash, plan, proposal, retry, question) is listed by the
+  // fold and answered by a surface's `request.decide`.
   const detachHostInteractions = session.interactions.use({
     emit: handlePresentationEvent,
-    requestToolEditApproval: (request) =>
-      toolEditApprovals.requestApproval(request),
-    cancel: (selector) => toolEditApprovals.cancel(selector),
+    presentToolEdit: (request) => {
+      void settleHostDialog(
+        toolEditApprovals.present(request),
+        'Failed to stage the tool-edit preview',
+      );
+    },
+    // An open that never committed leaves the staged preview with no
+    // decision to release it; this is that release, returned rather than
+    // dropped so the session waits for the diff view and the temp files
+    // behind it to go.
+    releaseToolEdit: (requestId) => toolEditApprovals.release(requestId),
   });
 
   function runValidated(
@@ -174,7 +200,7 @@ export function createDesktopAgentRun(
   ): Promise<void> {
     return launchDesktopAgent(
       { kind: 'fresh', ...request },
-      { session },
+      { session, runtime },
       {
         onRunResolved: options.onLaunched,
         ...runOptions,
@@ -199,7 +225,7 @@ export function createDesktopAgentRun(
       if (disposed) return;
       disposed = true;
       detachHostInteractions();
-      effectRuntime().runFork(Fiber.interrupt(sessionEvents));
+      runtime.runFork(Fiber.interrupt(sessionEvents));
       toolEditApprovals.dispose();
     },
   };

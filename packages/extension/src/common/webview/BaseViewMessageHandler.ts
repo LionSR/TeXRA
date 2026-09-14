@@ -26,7 +26,7 @@ type CommandMessage = { command: string };
  *
  * `withActiveWebview` is the shared "run with the active webview" accessor
  * (`vscode.Webview`). View-wrapper access (`vscode.WebviewView`) stays
- * view-specific — main-view recording needs the view, not just the webview.
+ * view-specific.
  */
 export interface ViewSliceHost {
   readonly channel: string;

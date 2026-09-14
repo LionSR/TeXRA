@@ -8,12 +8,7 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local file imports
 import { noopTrace } from './noopTrace';
-import type {
-  AgentTrace,
-  AgentTraceSubscriber,
-  LogOptions,
-} from './AgentTrace';
-import type { AgentEvent } from './events';
+import type { AgentTrace, LogOptions } from './AgentTrace';
 
 /** One log fact, in the shape both the sugar methods and the events carry. */
 interface LogFact {
@@ -47,25 +42,4 @@ export function createChannelTrace(name: string): AgentTrace {
     warn: bind('warn'),
     error: bind('error'),
   };
-}
-
-/**
- * Route a trace's public log events to one diagnostic channel.
- *
- * A run's trace does not use this: its log events already reach the durable
- * transcript through `runEventDraft`, which every host renders, so a second
- * per-run output channel would be the same facts in a worse place. This
- * remains for a trace with no session behind it — a model handler's default
- * emitter before a run swaps in the real trace.
- */
-export function attachChannelSubscriber(
-  trace: AgentTrace,
-  channel: string,
-): () => void {
-  const log = createLog(channel);
-  const subscriber: AgentTraceSubscriber = (event: AgentEvent) => {
-    if (event.type !== 'log') return;
-    forward(log, event);
-  };
-  return trace.subscribe(subscriber);
 }

@@ -14,8 +14,7 @@
  *   alive holds the lease. Continued only through the explicit Resume
  *   affordance.
  * - `finished`: no checkpoint. Its persisted outcome, when present, is the
- *   display fact; a run whose only durable state is a retired `flow_<id>.json`
- *   carries the R10 notice that this release cannot resume it.
+ *   display fact.
  * - `unclassified`: the lease or metadata could not be read or is malformed.
  *   Nothing is known, so nothing is mutated.
  *
@@ -42,15 +41,7 @@ export type RunClassification =
   | { readonly kind: 'held_elsewhere'; readonly owner: LeaseOwnerRecord }
   | { readonly kind: 'owned_here' }
   | { readonly kind: 'resumable'; readonly outcome?: RunOutcome }
-  | {
-      readonly kind: 'finished';
-      readonly outcome?: RunOutcome;
-      /**
-       * The user-visible fact for a run whose only durable state is a
-       * retired checkpoint (R10).
-       */
-      readonly notice?: string;
-    }
+  | { readonly kind: 'finished'; readonly outcome?: RunOutcome }
   | {
       readonly kind: 'unclassified';
       readonly cause: string;
@@ -79,11 +70,7 @@ const classifyRunFacts = Effect.fn('classifyRunFacts')(function* (
     return { kind: 'resumable', outcome: facts.outcome };
   }
   if (facts.kind === 'none') {
-    return {
-      kind: 'finished',
-      outcome: facts.outcome,
-      ...(facts.notice === undefined ? {} : { notice: facts.notice }),
-    };
+    return { kind: 'finished', outcome: facts.outcome };
   }
   log.warn(`Cannot classify ${runId}: ${facts.cause}`);
   return { kind: 'unclassified', cause: facts.cause, fault: facts.fault };

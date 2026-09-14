@@ -443,7 +443,6 @@ export function createChatSessionController(
   // -----------------------------------------------------------------------
 
   const interruptActiveRun = (): void => {
-    runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
     // The run id is known from the mint, but a stop can only land on a run
     // the fold holds; `onRunResolved` re-reads `stopRequested` for a stop
     // asked in the launch gap.
@@ -493,7 +492,6 @@ export function createChatSessionController(
     runtimeSession.interactions.use(
       createTuiHostInteractions(presentationHost, sessionContext, {
         secrets,
-        state,
       }),
     ),
   );
@@ -646,6 +644,10 @@ export function createChatSessionController(
         effectRuntime().runPromise(Deferred.await(claimedRun)),
       )
     ) {
+      // The slot is taken, so nothing downstream will ever complete the
+      // deferred the claim attempt already forked an awaiting fiber on.
+      // Settle it here so that fiber ends with this call.
+      Deferred.doneUnsafe(claimedRun, Effect.void);
       appendLocalAssistantTranscript(
         'Finish the active chat before resuming a previous session.',
       );
@@ -701,7 +703,7 @@ export function createChatSessionController(
       // honored by `isCancellationRequested`, which `resumeRun` re-reads once
       // this returns, rather than starting an agent the user cancelled.
       const adoptResumedRun = async (): Promise<void> => {
-        await setCliHelperModel(config.model);
+        await setCliHelperModel(state, config.model);
         adoptRunConfig(config, 'history');
         clearLocalTranscript();
         followUpQueue.clear();
@@ -825,6 +827,9 @@ export function createChatSessionController(
     // any `await` below, see tryClaimRootRunSlot and the matching comment
     // in resume().
     if (!session.tryClaimRootRunSlot(runPromise.then(() => undefined))) {
+      // Same as in resume(): settle the deferred the forked awaiting fiber
+      // is parked on, since no resume path will complete it now.
+      Deferred.doneUnsafe(autoResumeRun, Effect.succeed(false));
       return Promise.resolve(false);
     }
     const attemptCancellation = { cancellationRequested: false };
@@ -877,7 +882,7 @@ export function createChatSessionController(
         focusRun(runId);
         session.runExitCode = CliExitCode.Success;
 
-        yield* hostPort(() => setCliHelperModel(config.model));
+        yield* hostPort(() => setCliHelperModel(state, config.model));
         recoveryHandedOff = true;
         const result = yield* resumeRun(runId, {
           ...toolUseResumeOptions(runId, approvalsUnavailable),
@@ -996,10 +1001,6 @@ export function createChatSessionController(
   };
 
   const stopRun = (runId: RunId): void => {
-    runtimeSession.interactions.cancel({
-      runId,
-      cause: 'Run interrupted.',
-    });
     if (runId === session.runId) {
       requestStop();
       session.interruptedRunId = runId;
@@ -1031,7 +1032,7 @@ export function createChatSessionController(
               ),
             }),
           );
-          yield* hostPort(() => setCliHelperModel(selection.model));
+          yield* hostPort(() => setCliHelperModel(state, selection.model));
           if (session.stopRequested) {
             session.markRunCompleted();
             return;

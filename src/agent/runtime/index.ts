@@ -41,25 +41,11 @@ export {
 export { runInSession } from './RunContext';
 
 // HostInteractions
-export {
-  SessionHostInteractions,
-  matchesCancelSelector,
-} from './HostInteractions';
+export { SessionHostInteractions } from './HostInteractions';
 export type {
-  BashSettlement,
-  HostAgentProposalRequest,
   HostApprovalBypassStateUpdate,
-  HostBashApprovalRequest,
-  HostInteractionCancelSelector,
   HostInteractions,
-  HostRetryInteractionOptions,
-  HostRetryRequest,
-  HostUserQuestionRequest,
   ManualCriticismEntry,
-  PlanApprovalResult,
-  ProposalResult,
-  RetryResult,
-  UserQuestionSettlement,
 } from './HostInteractions';
 
 // runAgent
@@ -110,6 +96,11 @@ export type { AgentRunHandle } from './RunHandle';
 // AgentFlowResult
 export type { WorkflowFlowResult } from './AgentFlowResult';
 
+// agentLoad: the definition a launch actually loads, for hosts that must read
+// a declared field (a remote agent's `defaultOutputFiles`) the catalog listing
+// does not carry.
+export { loadAgentSettingAndPrompts } from './agentLoad';
+
 // core/definition config contract used by host launch/resume seams.
 export {
   AgentConfigSchema,
@@ -123,3 +114,7 @@ export {
   type RunRequest,
   type ValidatedRunRequest,
 } from '../core/state/runRequests';
+
+// Native tool host capabilities, supplied per standalone invocation.
+export { ToolCall } from './ToolCall';
+export { FileInteractionState } from '../core/state/AgentWorkspaceState';

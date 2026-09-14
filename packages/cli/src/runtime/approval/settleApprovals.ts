@@ -21,7 +21,7 @@ import {
 } from '@shared/approvalPolicy';
 import {
   isCredentialExhausted,
-  type ApprovalDecision,
+  type RequestDecision,
   type RetryPermission,
   type RunId,
 } from '@shared/schemas';
@@ -67,19 +67,17 @@ export function cliApprovalPromptsUnavailable(
   return isTexraApprovalDenied(executableDecision(context, policy));
 }
 
-/** Settle a shared executable decision into a CLI approval result, or `undefined` to prompt. */
+/** The policy's answer for a gated executable request, or `undefined` to
+ *  prompt: one arm of the request vocabulary, decided on the spot. */
 export function settleExecutable(
   context: CliContext,
   runId?: RunId | '',
-): ApprovalDecision | undefined {
+): RequestDecision | undefined {
   const decision = executableDecision(context);
-  if (decision === 'allow') return { accepted: true };
+  if (decision === 'allow') return { action: 'approve' };
   if (decision === 'present') return undefined;
   warnApprovalDenied(context, 'Approval policy', runId);
-  return {
-    accepted: false,
-    userMessage: texraApprovalDenialMessage(decision),
-  };
+  return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
 }
 
 function isCredentialRetryFailure(payload: RetryPermission): boolean {
@@ -93,7 +91,7 @@ function isCredentialRetryFailure(payload: RetryPermission): boolean {
 export function settleRetry(
   payload: RetryPermission,
   context: CliContext,
-): ApprovalDecision | undefined {
+): RequestDecision | undefined {
   const retryDecision = decideRetryApproval({
     policy: livePolicy(),
     canPresent: canPresent(context),
@@ -110,8 +108,8 @@ export function settleRetry(
     );
   }
   return {
-    accepted: false,
-    userMessage: texraRetryDenialMessage(retryDecision.deny),
+    action: 'deny',
+    reason: texraRetryDenialMessage(retryDecision.deny),
   };
 }
 

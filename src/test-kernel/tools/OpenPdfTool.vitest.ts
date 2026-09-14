@@ -1,18 +1,26 @@
+import '@test/support/sessionGraphTestSetup';
+
 // Node imports
 import * as path from 'node:path';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
 
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  initializeDefaultSession,
+} from '@agent/runtime/SessionHandle';
+import { closeSession } from '@agent/runtime/sessionGraph';
 import type { RunId } from '@shared/schemas';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { OpenPdfTool } from '@tools/OpenPdfTool';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
@@ -20,8 +28,8 @@ type OpenPdfRequest = Parameters<NonNullable<HostInteractions['openPdf']>>[0];
 
 describe('OpenPdfTool', () => {
   setupPlatform({
-    workspacePath: '/workspace',
-    storagePath: '/storage',
+    workspacePath: fakePath('workspace'),
+    storagePath: fakePath('storage'),
     files: {
       '/workspace/paper.pdf': '%PDF-1.4\n',
       '/workspace/figures/result.pdf': '%PDF-1.4\n',
@@ -32,10 +40,29 @@ describe('OpenPdfTool', () => {
   });
 
   let detachHostInteractions = (): void => {};
+  let sessionRoot: string | undefined;
 
-  afterEach(() => {
+  beforeEach(async () => {
+    const session = await Effect.runPromise(
+      initializeDefaultSession({
+        transcriptMode: { kind: 'ephemeral', reason: 'OpenPdfTool test' },
+      }),
+    );
+    sessionRoot = session.roots.storage;
+  });
+
+  afterEach(async () => {
     detachHostInteractions();
     detachHostInteractions = () => undefined;
+    const root = sessionRoot;
+    sessionRoot = undefined;
+    if (root === undefined) return;
+    const report = await Effect.runPromise(closeSession(root));
+    if (!report.settled || report.abandoned.length > 0) {
+      throw new Error(
+        `OpenPdfTool test session did not close: ${report.abandoned.join(', ')}`,
+      );
+    }
   });
 
   /** Attach a PDF viewer the way a host does: as a session capability. */
@@ -45,7 +72,6 @@ describe('OpenPdfTool', () => {
     detachHostInteractions();
     detachHostInteractions = defaultSession().interactions.use({
       openPdf,
-      cancel: () => undefined,
     });
     return openPdf;
   }
@@ -64,99 +90,194 @@ describe('OpenPdfTool', () => {
     });
   }
 
-  it('reports that PDF opening is unavailable when no host serves it', async () => {
-    const tool = new OpenPdfTool();
+  it.effect(
+    'reports that PDF opening is unavailable when no host serves it',
+    () =>
+      Effect.gen(function* () {
+        const tool = new OpenPdfTool();
 
-    const result = await tool.call({ path: 'paper.tex' });
+        const result = yield* tool.call({ path: 'paper.tex' });
 
-    expectOpenError(result, 'open_pdf is not available');
-  });
+        expectOpenError(result, 'open_pdf is not available');
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'tool-test' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
 
-  it('opens an existing PDF through the registered host callback', async () => {
-    const openPdf = installOpener();
-    const tool = new OpenPdfTool();
+  it.effect('opens an existing PDF through the registered host callback', () =>
+    Effect.gen(function* () {
+      const openPdf = installOpener();
+      const tool = new OpenPdfTool();
 
-    const result = await tool.call({
-      path: 'figures/result.pdf',
-      preserve_focus: true,
-    });
+      const result = yield* tool.call({
+        path: 'figures/result.pdf',
+        preserve_focus: true,
+      });
 
-    expectOpened(result, 'figures/result.pdf');
-    expect(openPdf).toHaveBeenCalledWith({
-      location: {
-        kind: 'workspace',
-        absolutePath: path.join(path.sep, 'workspace', 'figures', 'result.pdf'),
-        relativePath: 'figures/result.pdf',
-      },
-      preserveFocus: true,
-    });
-  });
-
-  it('allows absolute paths inside active run storage', async () => {
-    const openPdf = installOpener();
-    const tool = new OpenPdfTool();
-
-    const result = await withRunContext(
-      createRunContext({
-        runId: 'run-1' as RunId,
-      }),
-      () =>
-        tool.call({
-          path: '/storage/executions/run-1/output.pdf',
-          preserve_focus: true,
+      expectOpened(result, 'figures/result.pdf');
+      expect(openPdf).toHaveBeenCalledWith({
+        location: {
+          kind: 'workspace',
+          absolutePath: fakePath('workspace', 'figures', 'result.pdf'),
+          relativePath: 'figures/result.pdf',
+        },
+        preserveFocus: true,
+      });
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
         }),
-    );
+      ),
+    ),
+  );
 
-    expectOpened(result, 'output.pdf');
-    expect(openPdf).toHaveBeenCalledWith({
-      location: {
-        kind: 'runStorage',
-        absolutePath: '/storage/executions/run-1/output.pdf',
-        relativePath: 'output.pdf',
-        runId: 'run-1',
-      },
-      preserveFocus: true,
-    });
-  });
+  it.effect('allows absolute paths inside active run storage', () =>
+    Effect.gen(function* () {
+      const openPdf = installOpener();
+      const tool = new OpenPdfTool();
 
-  it('does not parse working_directory before checking absolute run-storage paths', async () => {
-    const openPdf = installOpener();
-    const tool = new OpenPdfTool();
+      const result = yield* tool
+        .call({
+          path: fakePath('storage/executions/run-1/output.pdf'),
+          preserve_focus: true,
+        })
+        .pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              run: {
+                session: defaultSession(),
+                runId: 'run-1' as RunId,
+                toolPolicy: {},
+              },
+            }),
+          ),
+        );
 
-    const result = await withRunContext(
-      createRunContext({
-        runId: 'run-1' as RunId,
-        workingDirectory: 'relative-path',
-      }),
-      () => tool.call({ path: '/storage/executions/run-1/output.pdf' }),
-    );
+      expectOpened(result, 'output.pdf');
+      expect(openPdf).toHaveBeenCalledWith({
+        location: {
+          kind: 'runStorage',
+          absolutePath: fakePath('storage/executions/run-1/output.pdf'),
+          relativePath: 'output.pdf',
+          runId: 'run-1',
+        },
+        preserveFocus: true,
+      });
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
-    expectOpened(result, 'output.pdf');
-    expect(openPdf).toHaveBeenCalledOnce();
-  });
+  it.effect(
+    'does not parse working_directory before checking absolute run-storage paths',
+    () =>
+      Effect.gen(function* () {
+        const openPdf = installOpener();
+        const tool = new OpenPdfTool();
 
-  it('rejects arbitrary absolute paths outside the allowed roots', async () => {
-    const openPdf = installOpener();
-    const tool = new OpenPdfTool();
+        const result = yield* tool
+          .call({ path: fakePath('storage/executions/run-1/output.pdf') })
+          .pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                workingDirectory: 'relative-path',
+                run: {
+                  session: defaultSession(),
+                  runId: 'run-1' as RunId,
+                  toolPolicy: {},
+                },
+              }),
+            ),
+          );
 
-    const result = await withRunContext(
-      createRunContext({
-        workingDirectory: '/workspace',
-      }),
-      () => tool.call({ path: '/run/paper.pdf' }),
-    );
+        expectOpened(result, 'output.pdf');
+        expect(openPdf).toHaveBeenCalledOnce();
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'tool-test' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
 
-    expectOpenError(result, 'Path must stay within the working directory');
-    expect(openPdf).not.toHaveBeenCalled();
-  });
+  it.effect('rejects arbitrary absolute paths outside the allowed roots', () =>
+    Effect.gen(function* () {
+      const openPdf = installOpener();
+      const tool = new OpenPdfTool();
 
-  it('rejects non-PDF files before invoking the host callback', async () => {
-    const openPdf = installOpener();
-    const tool = new OpenPdfTool();
+      const result = yield* tool.call({ path: fakePath('run/paper.pdf') }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            workingDirectory: fakePath('workspace'),
+            run: {
+              session: defaultSession(),
+              runId: 'tool-test' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      );
 
-    const result = await tool.call({ path: 'paper.tex' });
+      expectOpenError(result, 'Path must stay within the working directory');
+      expect(openPdf).not.toHaveBeenCalled();
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
-    expectOpenError(result, 'open_pdf only opens PDF files');
-    expect(openPdf).not.toHaveBeenCalled();
-  });
+  it.effect('rejects non-PDF files before invoking the host callback', () =>
+    Effect.gen(function* () {
+      const openPdf = installOpener();
+      const tool = new OpenPdfTool();
+
+      const result = yield* tool.call({ path: 'paper.tex' });
+
+      expectOpenError(result, 'open_pdf only opens PDF files');
+      expect(openPdf).not.toHaveBeenCalled();
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 });

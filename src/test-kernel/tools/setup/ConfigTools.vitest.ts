@@ -1,100 +1,71 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, it, vi } from 'vitest';
+import { describe } from 'vitest';
+
+// Local imports
+import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
+import { createFakeHost } from '@test/support/setupPlatform';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
 import { ReadConfigTool, UpdateConfigTool } from '@tools/setup/ConfigTools';
-
-const mocks = vi.hoisted(() => ({
-  get: vi.fn<(key: string) => unknown>(),
-  update:
-    vi.fn<
-      (
-        key: string,
-        value: unknown,
-        target: 'user' | 'workspace',
-      ) => Effect.Effect<void, unknown>
-    >(),
-}));
 
 const readTool = new ReadConfigTool();
 const updateTool = new UpdateConfigTool();
 
-vi.mock('@tools/setup/platform', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tools/setup/platform')>();
-  return {
-    ...actual,
-    texraScopedConfig: {
-      get: mocks.get,
-      update: mocks.update,
-    },
-  };
-});
-
-interface UpdateRecord {
-  key: string;
-  value: unknown;
-  target: 'user' | 'workspace';
+function createPlatform(initial: Record<string, unknown> = {}) {
+  const project = createFakeHost({ config: initial });
+  const layer = nativeToolTestLayer({
+    inScope: (operation) => runWithWorkspaceRoots(project.roots, operation),
+  });
+  return { config: project.roots.config, layer };
 }
-
-function createPlatform(initial: Record<string, unknown> = {}): {
-  store: Record<string, unknown>;
-  updates: UpdateRecord[];
-} {
-  const store: Record<string, unknown> = { ...initial };
-  const updates: UpdateRecord[] = [];
-  mocks.get.mockImplementation((key) => store[key]);
-  mocks.update.mockImplementation((key, value, target) =>
-    Effect.sync(() => {
-      updates.push({ key, value, target });
-      store[key] = value;
-    }),
-  );
-  return { store, updates };
-}
-
-afterEach(() => {
-  mocks.get.mockReset();
-  mocks.update.mockReset();
-});
 
 describe('ConfigTools — read_config', () => {
-  it('rejects keys not starting with texra.', async () => {
-    createPlatform();
+  it.effect('rejects keys not starting with texra.', () =>
+    Effect.gen(function* () {
+      const { layer } = createPlatform();
 
-    const result = await readTool.call({ key: 'editor.fontSize' });
+      const result = yield* readTool
+        .call({ key: 'editor.fontSize' })
+        .pipe(Effect.provide(layer));
 
-    assert.equal(result.status, 'error');
-  });
+      assert.equal(result.status, 'error');
+    }),
+  );
 });
 
 describe('ConfigTools — update_config allowlist', () => {
-  it('writes an allowlisted key when the value matches its schema', async () => {
-    const { store, updates } = createPlatform({
-      'texra.bib.zoteroPort': 23119,
-    });
+  it.effect('writes an allowlisted key when the value matches its schema', () =>
+    Effect.gen(function* () {
+      const { config, layer } = createPlatform({
+        'texra.bib.zoteroPort': 23119,
+      });
 
-    const result = await updateTool.call({
-      key: 'texra.bib.zoteroPort',
-      value: 23200,
-      target: 'user',
-    });
+      const result = yield* updateTool
+        .call({
+          key: 'texra.bib.zoteroPort',
+          value: 23200,
+          target: 'user',
+        })
+        .pipe(Effect.provide(layer));
 
-    assert.equal(result.status, 'executed');
-    assert.equal(updates.length, 1);
-    assert.equal(updates[0].key, 'texra.bib.zoteroPort');
-    assert.equal(updates[0].value, 23200);
-    assert.equal(updates[0].target, 'user');
-    assert.equal(store['texra.bib.zoteroPort'], 23200);
-    // Output reports both before and after values for the educative summary.
-    assert.match(result.output ?? '', /23119/);
-    assert.match(result.output ?? '', /23200/);
-  });
+      assert.equal(result.status, 'executed');
+      assert.equal(config.get('texra.bib.zoteroPort'), 23200);
+      assert.equal(config.inspect('texra.bib.zoteroPort')?.globalValue, 23200);
+      // Output reports both before and after values for the educative summary.
+      assert.match(result.output ?? '', /23119/);
+      assert.match(result.output ?? '', /23200/);
+    }),
+  );
 
-  it.each([
+  it.effect.each([
     {
       case: 'a non-allowlisted key',
-      key: 'texra.model.useOpenAIResponsesAPI',
+      key: 'texra.model.useGoogleInteractionsServerState',
       value: true,
     },
     {
@@ -106,12 +77,20 @@ describe('ConfigTools — update_config allowlist', () => {
     { case: 'port 0', key: 'texra.bib.zoteroPort', value: 0 },
     { case: 'port -1', key: 'texra.bib.zoteroPort', value: -1 },
     { case: 'port 70000', key: 'texra.bib.zoteroPort', value: 70000 },
-  ])('rejects $case without writing', async ({ key, value }) => {
-    const { updates } = createPlatform();
+  ])('rejects $case without writing', ({ key, value }) =>
+    Effect.gen(function* () {
+      const { config, layer } = createPlatform();
 
-    const result = await updateTool.call({ key, value, target: 'user' });
+      const result = yield* updateTool
+        .call({ key, value, target: 'user' })
+        .pipe(Effect.provide(layer));
 
-    assert.equal(result.status, 'error');
-    assert.equal(updates.length, 0, 'must not call platform.update');
-  });
+      assert.equal(result.status, 'error');
+      assert.equal(
+        config.isExplicitlySet(key),
+        false,
+        'must not write rejected settings',
+      );
+    }),
+  );
 });

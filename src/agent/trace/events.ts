@@ -43,15 +43,6 @@ export type ContextStateData = Pick<
 export type UsageReport = Pick<TraceArm<'usage'>, 'runId' | 'usage'>;
 
 /**
- * Stream lifecycle phase change emitted by the session-owned status machine.
- * Not an {@link AgentEvent} arm: status travels only as a canonical session
- * fact on the session's event plane (`SessionHandle.publishStatus`). The type
- * stays here because the trace package owns the event vocabulary the fact
- * reuses.
- */
-export type StatusEvent = TraceArm<'status'> & { readonly runId: RunId };
-
-/**
  * The terminal fact as the runtime hands it to in-process consumers
  * (`SessionHandle.onResult`): the `run.end` row named by
  * its run. Not an {@link AgentEvent} arm: the row is written once by the

@@ -8,7 +8,7 @@ both the reflection pipeline and the tool-use loop.** This draft proposes
 concrete resolutions to R1–R4 in the
 [architectural review](2026-09-06-agent-architecture-review.md). It refines the
 [LLM package study](2026-09-06-llm-package-architecture-study.md) and supplies
-amendments for the [runtime proposal](2026-09-04-agent-runtime-on-effect.md); it
+amendments for the [runtime proposal](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md); it
 does not introduce another runtime or persistence authority.
 
 Source inspected at `2d986504584cde8b607393b3dbdfec85ce095ee6`, which includes
@@ -358,7 +358,7 @@ empty byte array is valid content. Preserve MIME type, description and
 source-path metadata, but recovery never rereads that path to reconstruct a
 settled observation. Reuse those settled bytes for later provider
 lowering/upload. This retains the stronger existing contract in
-[runtime proposal §2.1](2026-09-04-agent-runtime-on-effect.md#21-rows),
+[runtime proposal §2.1](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md#21-rows),
 including its storage policy; it does not add another asset store.
 
 Independent safe-call settlements may commit as they complete. Their logical

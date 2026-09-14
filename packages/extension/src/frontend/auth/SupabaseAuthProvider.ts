@@ -2,17 +2,22 @@ import { randomBytes } from 'node:crypto';
 
 import { Cause, Deferred, Effect, Exit, Option, Result } from 'effect';
 import * as vscode from 'vscode';
-import { z } from 'zod';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import {
   AuthPortError,
   callPort,
-  installAuthProgramEdge,
   runAuthProgram,
   SerializedWrites,
 } from '@auth/authProgram';
+import {
+  isPendingOAuthStateFresh,
+  OAUTH_NONCE_PATTERN,
+  PendingOAuthStateSchema,
+  PKCE_FLOW_ID_PATTERN,
+  type PendingOAuthState,
+} from '@auth/pendingOAuthState';
 import { withPkcePermit } from '@auth/pkcePermit';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -32,7 +37,7 @@ import {
 import { classifyAuthFailureStatus } from '@auth/TokenProvider';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import * as logger from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/unstable/http';
@@ -43,16 +48,7 @@ const log = logger.createLog(CHANNEL);
 
 const AUTH_URI_HANDLER_NOT_INITIALIZED =
   'OAuth handler not initialized. Restart the extension.';
-const OAUTH_NONCE_PATTERN = /^[0-9a-f]{32}$/;
-const PKCE_FLOW_ID_PATTERN = /^[a-zA-Z0-9_-]{8,64}$/;
 const PENDING_OAUTH_STATE_PREFIX = 'texra.extension.pendingOAuthState.';
-
-const PendingOAuthStateSchema = z.strictObject({
-  nonce: z.string().regex(OAUTH_NONCE_PATTERN),
-  createdAt: z.number().finite(),
-  flowId: z.string().regex(PKCE_FLOW_ID_PATTERN).optional(),
-});
-type PendingOAuthState = z.infer<typeof PendingOAuthStateSchema>;
 
 interface ExtensionAuthAttempt {
   readonly nonce: string;
@@ -92,12 +88,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   constructor(
     private readonly notifier: AuthNotifier,
     private readonly secrets: PlatformSecrets,
+    private readonly runtime: ProcessRuntime,
   ) {
-    // The auth subsystem's run edge lives at this host entry (PRD R1): every
-    // Promise-facing auth surface settles on the process runtime from here.
-    installAuthProgramEdge((program) =>
-      effectRuntime().runPromiseExit(program),
-    );
     this.sessionCoordinator = createHostAuthCoordinator({
       secrets,
       whenReady: async () => {
@@ -123,7 +115,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private async settleAuthEffect<A>(
     program: Effect.Effect<A, unknown, HttpClient.HttpClient>,
   ): Promise<Exit.Exit<A, unknown>> {
-    const exit = await effectRuntime().runPromiseExit(program);
+    const exit = await this.runtime.runPromiseExit(program);
     if (Exit.isSuccess(exit)) return exit;
     return Exit.failCause(
       Cause.map(exit.cause, (error: unknown) =>
@@ -148,11 +140,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return null;
   }
 
-  private isPendingStateValid(state: PendingOAuthState): boolean {
-    const age = Date.now() - state.createdAt;
-    return age >= 0 && age <= AUTH_CALLBACK_TIMEOUT_MS;
-  }
-
   private async sweepPendingOAuthStates(): Promise<void> {
     const listed = await this.settleAuthEffect(
       callPort(() => this.secrets.listStoredKeys()),
@@ -170,7 +157,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           const state = yield* callPort(() =>
             this.readPendingOAuthState(nonce),
           );
-          if (!state?.flowId || !this.isPendingStateValid(state)) {
+          if (!state?.flowId || !isPendingOAuthStateFresh(state)) {
             yield* callPort(() => this.secrets.delete(key));
           }
         }),
@@ -188,7 +175,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     if (!flowId || !PKCE_FLOW_ID_PATTERN.test(flowId)) {
       throw new Error('OAuth initialization did not return a valid PKCE flow.');
     }
-    if (!this.isPendingStateValid(attempt)) {
+    if (!isPendingOAuthStateFresh(attempt)) {
       throw new Error(
         'Authentication attempt is no longer pending. Try again.',
       );
@@ -241,9 +228,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           if (
             !pending?.flowId ||
             pending.nonce !== nonce ||
-            !this.isPendingStateValid(pending)
+            !isPendingOAuthStateFresh(pending)
           ) {
-            if (pending && !this.isPendingStateValid(pending)) {
+            if (pending && !isPendingOAuthStateFresh(pending)) {
               yield* callPort(() => this.clearPendingAttempt(nonce));
             }
             log.warn(
@@ -718,7 +705,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private async afterLocalSessionCleared(sessionId: string): Promise<void> {
     await refreshRemoteAgentCatalogAfterSignOut(
-      () => effectRuntime().runPromise(invalidateRemoteAgentsAfterSignOut()),
+      () => this.runtime.runPromise(invalidateRemoteAgentsAfterSignOut()),
       log.warn,
     );
     this._onDidChangeSessions.fire({
@@ -769,7 +756,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           yield* Effect.acquireRelease(
             Effect.sync(() => {
               subscription = uriHandler.onDidReceiveCallback((uri) => {
-                effectRuntime().runFork(
+                this.runtime.runFork(
                   this.handleAttemptCallback(uri, attempt, outcome, () => {
                     subscription?.dispose();
                     Deferred.doneUnsafe(callbackSeen, Effect.void);

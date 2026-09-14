@@ -103,8 +103,6 @@ function missingKeyModel(value: string): CliModelAccess {
     status: 'missing api key',
     model: modelOption(value, {
       availability: 'missing-key',
-      disabled: true,
-      requiresKey: true,
     }),
   });
 }
@@ -138,9 +136,6 @@ const MISSING_KEY_ONLY_ENTRIES: CliModelAccess[] = [
 const RETIRED_HAIKU3_OPTION = modelOption('haiku3', {
   label: 'Haiku 3',
   availability: 'retired',
-  availabilityLabel: 'Retired',
-  disabled: true,
-  requiresKey: false,
 });
 
 const GLM52_MISSING_KEY_ENTRY = model('glm52', {
@@ -149,9 +144,6 @@ const GLM52_MISSING_KEY_ENTRY = model('glm52', {
   model: modelOption('glm52', {
     label: 'GLM-5.2',
     availability: 'missing-key',
-    availabilityLabel: 'Missing API key',
-    disabled: true,
-    requiresKey: true,
   }),
 });
 
@@ -240,8 +232,6 @@ describe('CLI model access resolution', () => {
         available: false,
         model: modelOption('gemini31p', {
           availability: 'missing-key',
-          disabled: true,
-          requiresKey: true,
         }),
       }),
     ];
@@ -371,7 +361,6 @@ describe('CLI model access resolution', () => {
         model: modelOption('gemini31p', {
           label: 'Gemini',
           availability: 'missing-key',
-          requiresKey: true,
         }),
         status: 'missing api key',
       }),
@@ -443,7 +432,6 @@ describe('CLI model access resolution', () => {
           available: false,
           model: modelOption('gemini31p', {
             availability: 'missing-key',
-            requiresKey: true,
           }),
           status: 'missing api key',
         }),
@@ -512,8 +500,6 @@ describe('CLI model access resolution', () => {
         model: modelOption('haiku3', {
           label: 'Haiku 3',
           availability: 'retired',
-          availabilityLabel: 'Retired',
-          disabled: true,
         }),
       }),
       contains: [
@@ -543,9 +529,6 @@ describe('CLI model access resolution', () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('gpt56', {
         availability: 'subscription-access',
-        availabilityLabel: 'ChatGPT subscription',
-        requiresKey: false,
-        disabled: false,
       }),
     ]);
 
@@ -555,8 +538,6 @@ describe('CLI model access resolution', () => {
         model: {
           value: 'gpt56',
           availability: 'subscription-access',
-          requiresKey: false,
-          disabled: false,
         },
       },
     ]);
@@ -566,9 +547,6 @@ describe('CLI model access resolution', () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('hiddenFixtureModel', {
         availability: 'missing-key',
-        availabilityLabel: 'Missing API key',
-        disabled: true,
-        requiresKey: true,
       }),
     ]);
 
@@ -581,7 +559,6 @@ describe('CLI model access resolution', () => {
         model: {
           value: 'hiddenFixtureModel',
           availability: 'missing-key',
-          availabilityLabel: 'Missing API key',
         },
       },
     ]);
@@ -592,15 +569,9 @@ describe('CLI model access resolution', () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('sonnet46T', {
         availability: 'provider-key',
-        availabilityLabel: 'API key set',
-        disabled: false,
-        requiresKey: false,
       }),
       modelOption('deepseekT', {
         availability: 'missing-key',
-        availabilityLabel: 'Missing API key',
-        disabled: true,
-        requiresKey: true,
       }),
     ]);
 
@@ -618,10 +589,10 @@ describe('CLI model access resolution', () => {
   it('checks access for explicit models hidden from the visible model list', async () => {
     computeModelOptionsDataMock
       .mockResolvedValueOnce([
-        modelOption('sonnet46T', { availabilityLabel: 'API key set' }),
+        modelOption('sonnet46T', { availability: 'provider-key' }),
       ])
       .mockResolvedValueOnce([
-        modelOption('hiddenFixtureModel', { availabilityLabel: 'API key set' }),
+        modelOption('hiddenFixtureModel', { availability: 'provider-key' }),
       ]);
 
     await expect(
@@ -639,7 +610,6 @@ describe('CLI model access resolution', () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('hiddenFixtureModel', {
         availability: 'provider-key',
-        availabilityLabel: 'API key set',
       }),
     ]);
 
@@ -674,9 +644,6 @@ describe('CLI model access resolution', () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('hiddenFixtureModel', {
         availability: 'missing-key',
-        availabilityLabel: 'Missing API key',
-        disabled: true,
-        requiresKey: true,
       }),
     ]);
 
@@ -691,7 +658,6 @@ describe('CLI model access resolution', () => {
       model: {
         value: 'hiddenFixtureModel',
         availability: 'missing-key',
-        availabilityLabel: 'Missing API key',
       },
     });
     expectModelOptionsRequested(['hiddenFixtureModel']);
@@ -709,9 +675,6 @@ describe('CLI model access resolution', () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('userFacingFixture', {
         availability: 'missing-key',
-        availabilityLabel: 'Missing API key',
-        disabled: true,
-        requiresKey: true,
       }),
     ]);
 
@@ -733,7 +696,7 @@ describe('CLI model access resolution', () => {
   it('reports stale hidden model configuration directly', async () => {
     computeModelOptionsDataMock
       .mockResolvedValueOnce([
-        modelOption('sonnet46T', { availabilityLabel: 'API key set' }),
+        modelOption('sonnet46T', { availability: 'provider-key' }),
       ])
       .mockResolvedValueOnce([]);
 

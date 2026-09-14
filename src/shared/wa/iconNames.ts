@@ -21,7 +21,6 @@
 // turns any mismatch into a type error.
 export const TEXRA_ICON_CANONICAL_NAMES = [
   'arrow-down',
-  'arrow-left',
   'arrow-right',
   'arrow-rotate-left',
   'arrow-up',
@@ -35,7 +34,6 @@ export const TEXRA_ICON_CANONICAL_NAMES = [
   'box',
   'box-archive',
   'brain',
-  'building',
   'bullseye',
   'caret-down',
   'chart-line',
@@ -92,7 +90,6 @@ export const TEXRA_ICON_CANONICAL_NAMES = [
   'globe',
   'graduation-cap',
   'hashtag',
-  'heart',
   'hexagon',
   'image',
   'key',
@@ -107,7 +104,6 @@ export const TEXRA_ICON_CANONICAL_NAMES = [
   'minus',
   'moon',
   'note-sticky',
-  'paper-plane',
   'pencil',
   'picture-in-picture',
   'plane',

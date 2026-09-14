@@ -27,9 +27,10 @@ The sections below separate minimum launch requirements from shipped-feature
 parity. A raw agent loop needs an initialized platform, usable credentials,
 agent directories, a session, and a populated registry. When response-bearing
 interactions are possible, the session also needs an interactions attachment;
-there is no separate presentation-host argument. `initNodeAgentRuntime`
-supplies the memory/plan injections and Lean integration used by the shipped
-Node hosts, but the raw loop can run without those optional features.
+there is no separate presentation-host argument. The direct Lean language
+services the shipped Node hosts pass to `installProcessRuntime` are a
+shipped-feature choice; the raw loop only needs some `LeanLanguageServices`
+layer there.
 
 ### Step 1 — `initPlatform(createNodePlatform(...))`
 
@@ -55,12 +56,13 @@ alone does not replace the port already installed in the platform.
 Only a composition root calls `initPlatform`; that rule is stated in the
 `nodeHost` module header (`src/platform/defaults/nodeHost.ts:1-14`).
 
-### Feature-parity step — `initNodeAgentRuntime(lifecycle)`
+### Feature-parity step — the `lean` layer of `installProcessRuntime`
 
-`src/platform/defaults/nodeAgentRuntime.ts`. It is exactly one registration:
+`src/tools/lean/direct/directLspAdapter.ts`. The Node hosts pass exactly one
+layer:
 
 ```ts
-registerDirectLeanLanguageServices(lifecycle);
+installProcessRuntime({ /* … */, lean: directLeanLanguageServices() });
 ```
 
 The two conditional tool injections — `memory` and the unified `plan` tool
@@ -69,21 +71,18 @@ that drives the goal loop — are not part of this step: they self-register when
 predicates: the memory setting is read later, when its predicate is evaluated.
 The platform must merely exist before injected tools are resolved.
 
-If used, call it **exactly once per process**: its doc comment records that
-the Lean registration double-registers on a second call.
+The pool the layer builds spawns nothing until a Lean tool is first used, and
+its servers stop when the process runtime is disposed.
 
-An embedder that does not want Lean can skip this step; the `memory` and `plan`
-injections are present either way.
+An embedder with its own Lean integration passes `LeanLanguageServices.layer`
+over it instead; the `memory` and `plan` injections are present either way.
 
 ### Step 2 — credential resolution
 
-There is no model-access bootstrap call. Production model-client constructors
-call `ModelHandler.resolveClientCredential` directly
-(`src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts:396`;
-`src/agent/modelHandlers/openai/modelHandlerOpenAI.ts:249`;
-`src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts:546`;
-`src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts:1165`;
-`src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts:142`).
+There is no model-access bootstrap call. A run binds its model through
+`src/agent/runtime/run/modelBinding.ts`, which resolves the route's credential
+in `src/agent/runtime/modelRoutes.ts` (`resolveRouteCredential` for API keys,
+`resolveSubscriptionCredential` for the ChatGPT and Grok subscriptions).
 
 Credential resolution uses the caller's own provider API keys or subscription
 credentials only; there is no server-side model access to configure. A
@@ -133,29 +132,19 @@ is the part the plan of record describes incorrectly.
 
 ### Prerequisite A — a default or explicit session
 
-Not part of the process bootstrap, and not in
-`packages/cli/src/runtime/initPlatform.ts` at all, but a session is still
-required.
+A session is required by `RunAgentOptions.session`. The CLI bootstrap in
+`packages/cli/src/runtime/initPlatform.ts` prepares one memoized session-opening
+Effect; commands run `services.session` when they need a session. Utility commands
+that need no session leave the store unopened.
 
-`RunAgentOptions.session` is required (`src/agent/runtime/runAgent.ts:46`);
-`runAgent` has no default-session fallback. Host code that reads the process
-default through `defaultSession()` gets
-`'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.'`
-until one exists (`src/agent/runtime/SessionHandle.ts:921-927`).
-
-Two ways out:
-
-- `initializeDefaultSession({})` — the process-default session, which builds
-  its own transcript store over the session's event database and returns the
-  handle to pass as `options.session`
-  (`src/agent/runtime/SessionHandle.ts:889-896`, called once; a second call
-  throws). This is what the CLI
-  (`packages/cli/src/runtime/transcriptSession.ts:29`) and the extension
-  (`packages/extension/src/extension.ts:529`) do, each also passing its
-  `responseTextProcessing`.
-- Construct your own `SessionHandle` and pass it as `options.session`
-  (`runAgent` forwards it to `executeAgent`). Then the process default is
-  never initialized or consulted.
+- `initializeDefaultSession({})` returns an Effect that opens the process-default
+  session over the process roots. Run it at the host boundary and pass its handle
+  as `options.session`. A second initialization while the session is open fails.
+  The CLI and extension supply their `responseTextProcessing` policy here.
+- `openSessionEffect({ roots, ... })` opens an owner-held session for explicit
+  roots, returning the existing handle when that storage root is already open.
+  Pass the handle to `runAgent`; close it through the session owner when its
+  lifetime ends.
 
 ### Prerequisite B — `await loadAgents(...)`
 
@@ -197,9 +186,9 @@ on.
 import { initPlatform } from '@platform/platform';
 import {
   createNodePlatform,
-  initNodeAgentRuntime,
   bootstrapNodeAgentDirectories,
 } from '@platform/defaults/nodeHost';
+import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -220,8 +209,11 @@ initPlatform(
     agentDirectories,
   }),
 ); // Step 1
-initNodeAgentRuntime(lifecycle); // Optional shipped-feature parity
-installProcessRuntime(await nodeProcesses.selfIdentity()); // Step 3 needs it
+installProcessRuntime({
+  processStart: await nodeProcesses.selfIdentity(),
+  /* …the other process services… */
+  lean: directLeanLanguageServices(), // Shipped-feature parity
+}); // Step 3 needs it
 await effectRuntime().runPromise(bootstrapNodeAgentDirectories({/* … */})); // Step 3
 
 const session = initializeDefaultSession({});
@@ -561,9 +553,10 @@ says so.
 - **`seedDisabledToolDefaults(key)`:** No first-install tool defaults are
   written, so no toggleable external tools are default-disabled. More tools
   are available, not fewer (`src/tools/toolAvailability.ts:77-95`).
-- **`initNodeAgentRuntime(lifecycle)`:** The raw loop still runs, but direct
-  Lean language services are absent. The `memory`/`plan` injections do not
-  depend on this step (`src/agent/runtime/toolInjection.ts`).
+- **`lean: directLeanLanguageServices()`:** The raw loop still runs over any
+  `LeanLanguageServices` layer; without the direct one, Lean tools reach
+  whatever port the embedder passed. The `memory`/`plan` injections do not
+  depend on this choice (`src/agent/runtime/toolInjection.ts`).
 
 `bootstrapNodeAgentDirectories` is safe to skip **only** if the installed
 `AgentDirectoriesPort` names directories populated by some other means (§2).
@@ -584,10 +577,11 @@ classification makes that distinction.
 
 - **`:280` — `initPlatform(createNodePlatform({…}))`:** Required.
   `platform()` throws otherwise (`src/platform/platform.ts:73-80`).
-- **`:316` — `initNodeAgentRuntime(lifecycle)`:** Shipped-feature parity, not a
-  raw-loop requirement. It registers the direct Lean services; without it Lean
-  is absent. The `memory` and `plan` injections self-register
-  (`src/agent/runtime/toolInjection.ts`).
+- **`lean: directLeanLanguageServices()`** (in
+  `packages/cli/src/runtime/cliProcessRuntime.ts`): Shipped-feature parity, not
+  a raw-loop requirement. It is the direct Lean services layer of the process
+  runtime; an embedder may pass another port. The `memory` and `plan`
+  injections self-register (`src/agent/runtime/toolInjection.ts`).
 - **`:380` — `bootstrapNodeAgentDirectories({ channel: 'cli', … })`:**
   Required only when using the packaged agent bundle; an injected port that
   names other real directories replaces it (§2).
@@ -622,12 +616,11 @@ The desktop main process makes the same three initialization choices, showing
 how a shipped host obtains full feature parity rather than proving that every
 call is a minimum runtime requirement:
 `initPlatform` at `packages/desktop/src/main/platform/index.ts:272`,
-`initNodeAgentRuntime` at `:317`, and `bootstrapNodeAgentDirectories` at
-`:324`. It also calls the optional one (`:319`). Product policy is
-not necessarily CLI-only:
-desktop also calls
-`seedDisabledToolDefaults(GlobalStateKey.LAST_KNOWN_VERSION)` at
-`packages/desktop/src/main/platform/index.ts:304-307`.
+`lean: directLeanLanguageServices()` in its `installProcessRuntime` call, and
+`bootstrapNodeAgentDirectories` at `:324`. It also calls the optional
+`initializeNodeRuntimeSkills` (`:228`). Product policy is not necessarily
+CLI-only: desktop also calls `seedDisabledToolDefaults(globalStateStore)` at
+`packages/desktop/src/main/platform/index.ts:225`.
 
 ---
 
@@ -640,9 +633,9 @@ desktop also calls
    platform is needed only when the memory predicate later runs
    (`src/agent/runtime/toolInjection.ts`;
    `src/tools/lean/direct/directLspAdapter.ts:47-52`).
-2. **Feature-parity registration is once-per-process.** A second
-   `initNodeAgentRuntime` throws or double-registers
-   (`src/platform/defaults/nodeHost.ts:129-131`).
+2. **The process runtime is once-per-process.** The Lean layer is built with
+   it and closed with it; a host passes it exactly where it calls
+   `installProcessRuntime` (`src/controllers/session/sessionLayer.ts`).
 3. **`bootstrapNodeAgentDirectories` uses an ambiguous string guard key.** A
    module-level `Map` stores `resourcesPath` under the guard key
    `${channel}:${versionStateKey}`

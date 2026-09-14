@@ -8,7 +8,7 @@ import { describe, it } from 'vitest';
 // Local imports
 import { AgentDirectoryService } from '@agent/index';
 import type { AgentDirectoryIssueReporter } from '@agent/index/AgentDirectoryService';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -27,6 +27,8 @@ class RecordingIssueReporter implements AgentDirectoryIssueReporter {
   }
 }
 
+const RESOURCES_PATH = path.resolve('/texra-resources');
+
 function createService(customDirectory = ''): {
   service: AgentDirectoryService;
   reporter: RecordingIssueReporter;
@@ -34,6 +36,7 @@ function createService(customDirectory = ''): {
   const reporter = new RecordingIssueReporter();
   const service = new AgentDirectoryService({
     channel: 'AgentDirectoryServiceTest',
+    resourcesPath: RESOURCES_PATH,
     customDirectoryStore: {
       get: () => customDirectory,
     },
@@ -49,24 +52,21 @@ describe('AgentDirectoryService', () => {
   setupPlatform(() => createTempDirPlatform('texra-agent-dirs-', tempDirs));
 
   function storageBase(): string {
-    return platform().storage.getGlobalStoragePath();
+    return workspaceRoots().globalStorage;
   }
 
-  it('resolves built-in directories from writable storage', async () => {
+  it('resolves built-in directories inside the packaged resources', async () => {
     const { service } = createService();
 
-    assert.equal(await service.builtIn(), path.join(storageBase(), 'agents'));
+    assert.equal(await service.builtIn(), path.join(RESOURCES_PATH, 'agents'));
     assert.equal(
       await service.builtInToolUse(),
-      path.join(storageBase(), 'tool_use_agents'),
+      path.join(RESOURCES_PATH, 'tool_use_agents'),
     );
+    // Packaged content is read in place: nothing is created under storage.
     assert.equal(
       await AbsoluteFS.exists(path.join(storageBase(), 'agents')),
-      true,
-    );
-    assert.equal(
-      await AbsoluteFS.exists(path.join(storageBase(), 'tool_use_agents')),
-      true,
+      false,
     );
   });
 
@@ -135,11 +135,11 @@ describe('AgentDirectoryService', () => {
     assert.deepEqual(await service.getAllLocal(), [
       { directory: customPath, source: 'custom' },
       {
-        directory: path.join(storageBase(), 'agents'),
+        directory: path.join(RESOURCES_PATH, 'agents'),
         source: 'builtInWorkflow',
       },
       {
-        directory: path.join(storageBase(), 'tool_use_agents'),
+        directory: path.join(RESOURCES_PATH, 'tool_use_agents'),
         source: 'builtInToolUse',
       },
     ]);

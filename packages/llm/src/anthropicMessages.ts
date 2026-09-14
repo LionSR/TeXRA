@@ -12,6 +12,11 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  authOrRejectionKind,
+  enrichModelError,
+  parseInboundToolArguments,
+  parseOutboundToolArguments,
+  pullStream,
   ResolvedTurnSchema,
   sameModelOrigin,
   TurnRequestSchema,
@@ -156,10 +161,7 @@ function sdkFailure(cause: unknown): ModelError {
     cause instanceof APIError &&
     !(cause instanceof APIConnectionError)
   ) {
-    kind =
-      cause.status === 401 || cause.status === 403
-        ? 'authentication'
-        : 'provider-rejection';
+    kind = authOrRejectionKind(cause.status);
   }
   return new ModelError({
     kind,
@@ -303,16 +305,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
             type: 'tool_use',
             id: part.providerCallId,
             name: part.name,
-            input: yield* Effect.try({
-              try: () => JsonObjectSchema.parse(JSON.parse(part.argumentsText)),
-              catch: (cause) =>
-                new ModelError({
-                  kind: 'invalid-request',
-                  message:
-                    'History carries local-call arguments that are not a JSON object.',
-                  cause,
-                }),
-            }),
+            input: yield* parseOutboundToolArguments(part.argumentsText),
           });
         } else if (
           part.kind === 'reasoning' &&
@@ -527,10 +520,7 @@ export function anthropicMessagesModel(
       let responseId: string | undefined;
       let returnedModel: string | null = null;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId: error.responseId ?? responseId,
           model: error.model ?? returnedModel ?? origin.requestedModel,
         });
@@ -570,20 +560,7 @@ export function anthropicMessagesModel(
           let stopped = false;
           let stop: z.infer<typeof StopSchema> = {};
           let usage: z.infer<typeof UsageSchema> = {};
-          const chunks = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => iterator.next(),
-                catch: sdkFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          );
+          const chunks = pullStream(() => iterator.next(), sdkFailure);
           const progress = chunks.pipe(
             Stream.mapEffect((raw) =>
               Effect.gen(function* (): Effect.fn.Return<
@@ -820,25 +797,7 @@ export function anthropicMessagesModel(
                   // input_json_delta carries no arguments, and '{}' is that
                   // empty object's exact text.
                   const argumentsText = open.argumentsText ?? '{}';
-                  const argumentsValue = yield* Effect.try({
-                    try: () => JSON.parse(argumentsText),
-                    catch: (cause) =>
-                      new ModelError({
-                        kind: 'malformed-output',
-                        message:
-                          'Anthropic returned incomplete function argument JSON.',
-                        cause,
-                      }),
-                  });
-                  const argumentsResult =
-                    JsonObjectSchema.safeParse(argumentsValue);
-                  if (!argumentsResult.success)
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'Anthropic function arguments must be a supported JSON object.',
-                      cause: argumentsResult.error,
-                    });
+                  yield* parseInboundToolArguments(argumentsText, 'Anthropic');
                   content.push({
                     kind: 'local-call',
                     providerCallId: block.id,
@@ -997,9 +956,7 @@ export function anthropicMessagesModel(
       let requestId: string | undefined;
       const failure = (cause: unknown) => {
         const error = sdkFailure(cause);
-        return new ModelError({
-          ...error,
-          message: error.message,
+        return enrichModelError(error, {
           cause,
           requestId: error.requestId ?? requestId,
           model: origin.requestedModel,

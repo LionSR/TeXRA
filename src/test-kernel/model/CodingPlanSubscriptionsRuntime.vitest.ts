@@ -3,16 +3,15 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { resolveProxyEndpoint } from '@agent/modelHandlers/support/ProxyConfigResolver';
+import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { resolveGlmRoute } from '@model/glmRouting';
 import {
   activeSubscriptionUsageRoute,
   codingPlanSubscriptionRuntimes,
 } from '@model/codingPlanSubscriptions';
-import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 
 describe('coding-plan subscription runtime', () => {
   setupPlatform({
@@ -30,10 +29,10 @@ describe('coding-plan subscription runtime', () => {
 
   afterEach(async () => {
     delete MODEL_CONFIGS.glm52.baseUrl;
-    await platform().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
-    await platform().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true);
-    await platform().globalState.update(GlobalStateKey.GLM_USE_CHINA, true);
-    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+    await hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
+    await hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true);
+    await hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, true);
+    await hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, true);
   });
 
   it.each([
@@ -78,13 +77,16 @@ describe('coding-plan subscription runtime', () => {
   ])(
     'resolves the exact $name route',
     async ({ useChina, codingPlan, expected }) => {
-      await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-      await platform().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
-      await platform().globalState.update(
+      await hostStores().globalState.update(
+        GlobalStateKey.USE_OPENROUTER,
+        false,
+      );
+      await hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
+      await hostStores().globalState.update(
         GlobalStateKey.GLM_CODING_PLAN,
         codingPlan,
       );
-      await platform().globalState.update(
+      await hostStores().globalState.update(
         GlobalStateKey.GLM_USE_CHINA,
         useChina,
       );
@@ -131,7 +133,7 @@ describe('coding-plan subscription runtime', () => {
       usageRoute: undefined,
     },
   ])(
-    'keeps the canonical route, proxy endpoint, and subscription usage aligned for $name',
+    'keeps the canonical route, bound endpoint, and subscription usage aligned for $name',
     async ({
       useOpenRouter,
       providerEndpoint,
@@ -140,11 +142,11 @@ describe('coding-plan subscription runtime', () => {
       baseUrl,
       usageRoute,
     }) => {
-      await platform().globalState.update(
+      await hostStores().globalState.update(
         GlobalStateKey.USE_OPENROUTER,
         useOpenRouter,
       );
-      await platform().globalState.update(
+      await hostStores().globalState.update(
         GlobalStateKey.ENDPOINT_GLM,
         providerEndpoint,
       );
@@ -154,18 +156,9 @@ describe('coding-plan subscription runtime', () => {
         baseUrl: modelBaseUrl,
         useOpenRouter,
       });
-      const proxy = resolveProxyEndpoint(
-        modelBaseUrl
-          ? {
-              route: 'custom',
-              provider: ModelProvider.GLM,
-              url: modelBaseUrl,
-            }
-          : {
-              route: 'direct',
-              provider: ModelProvider.GLM,
-              useOpenRouter,
-            },
+      const endpoint = resolveRouteEndpoint(
+        { name: 'glm52', provider: ModelProvider.GLM, baseUrl: modelBaseUrl },
+        useOpenRouter,
       );
 
       expect(canonical).toEqual({
@@ -173,28 +166,31 @@ describe('coding-plan subscription runtime', () => {
         baseUrl,
         ...(usageRoute && { usageRoute }),
       });
-      expect(proxy).toMatchObject({ baseUrl });
-      expect('usageRoute' in proxy ? proxy.usageRoute : undefined).toBe(
-        usageRoute,
-      );
+      expect(endpoint).toMatchObject({ baseUrl });
+      expect(endpoint.usageRoute).toBe(usageRoute);
       await expect(
-        activeSubscriptionUsageRoute('glm52', platform().secrets),
+        activeSubscriptionUsageRoute('glm52', hostStores().secrets),
       ).resolves.toBe(usageRoute);
     },
   );
 
-  it('restores Kimi preference without overwriting newer OpenRouter state', async () => {
-    const kimi = codingPlanSubscriptionRuntimes.find(
-      (runtime) => runtime.descriptor.id === 'kimiCode',
+  it('leaves the stored preference alone for a run that declined the plan', async () => {
+    await hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+    await hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true);
+
+    expect(resolveGlmRoute({ useOpenRouter: false }).route).toBe(
+      'official-coding-plan',
     );
-
-    await kimi?.restoreEnabled(true, platform().globalState);
-
     expect(
-      platform().globalState.get(GlobalStateKey.KIMI_CODE_PREFER, false),
-    ).toBe(true);
+      resolveGlmRoute({
+        useOpenRouter: false,
+        declinedRoutes: ['glm-coding-plan-subscription'],
+      }).route,
+    ).toBe('official');
+    // The decline is the asking run's, so the user's switch is untouched and
+    // a concurrent run still routes through the plan.
     expect(
-      platform().globalState.get(GlobalStateKey.USE_OPENROUTER, false),
+      hostStores().globalState.get(GlobalStateKey.GLM_CODING_PLAN, false),
     ).toBe(true);
   });
 });

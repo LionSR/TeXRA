@@ -4,14 +4,14 @@ import * as vscode from 'vscode';
 // Local imports
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import {
-  SecretManager,
-  ApiProvider,
-  type ApiProviderQuickPickItem,
-} from '@frontend/secretManager';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  API_PROVIDERS,
+  hasUsableApiKey,
+  type ApiProvider,
+} from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
@@ -20,6 +20,10 @@ import {
 } from '@utils/config/providerConfig';
 
 const CHANNEL = 'ApiKeyCommands';
+
+interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
+  provider: ApiProvider;
+}
 
 /**
  * Delegates the write/delete/confirm/notify sequence to the same controller
@@ -84,8 +88,15 @@ async function pickApiProvider(
   placeHolder: string,
   prompt: string,
 ): Promise<ApiProvider | undefined> {
-  const providerItems =
-    await SecretManager.getApiProviderQuickPickItems(secrets);
+  const providerItems = await Promise.all(
+    API_PROVIDERS.map(async (provider) => ({
+      label: provider,
+      description: (await hasUsableApiKey(secrets, provider))
+        ? 'key set'
+        : 'not set',
+      provider,
+    })),
+  );
   const providerPick =
     await vscode.window.showQuickPick<ApiProviderQuickPickItem>(providerItems, {
       placeHolder,

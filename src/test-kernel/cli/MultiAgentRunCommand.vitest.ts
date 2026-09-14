@@ -2,7 +2,8 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
@@ -13,7 +14,7 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
-import { Effect } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -25,6 +26,7 @@ import {
   type FakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
+import { effectRuntime } from '@platform/processRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => ({
@@ -119,12 +121,10 @@ const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
 
 const { runMultiAgentPreset: nativeRun } =
   await import('@cli/commands/multiAgent');
-const runMultiAgentPreset = (...args: Parameters<typeof nativeRun>) =>
-  Effect.runPromise(Effect.provide(nativeRun(...args), fakeProcessServices()));
 const { loadCliMultiAgentPresetPlanSet, loadCliMultiAgentRunPlan } =
   await import('@cli/runtime/multiAgentRunPlan');
 
-type MultiAgentRunInit = Parameters<typeof runMultiAgentPreset>[1];
+type MultiAgentRunInit = Parameters<typeof nativeRun>[1];
 
 const ORCHESTRATOR_AGENT = {
   name: 'orchestrator',
@@ -161,17 +161,26 @@ function teamPlan(overrides: Partial<TeamPlan> = {}): TeamPlan {
   };
 }
 
-function runPreset(
+const preset = (
   init: Partial<MultiAgentRunInit> & Pick<MultiAgentRunInit, 'instruction'>,
   context: CliContext = createRunCommandCliContext(),
+) =>
+  Effect.provide(
+    nativeRun(context, {
+      preset: 'mathematician',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'deepseekT',
+      ...init,
+    }),
+    fakeProcessServices(),
+  );
+
+function runPreset(
+  init: Partial<MultiAgentRunInit> & Pick<MultiAgentRunInit, 'instruction'>,
+  context?: CliContext,
 ): Promise<number> {
-  return runMultiAgentPreset(context, {
-    preset: 'mathematician',
-    inputFiles: [],
-    contextFiles: [],
-    model: 'deepseekT',
-    ...init,
-  });
+  return Effect.runPromise(preset(init, context));
 }
 
 async function expectBlockedLaunch(options: {
@@ -250,9 +259,9 @@ describe('CLI multi-agent run command', () => {
     vi.clearAllMocks();
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
-    const { platform } = installedHost();
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
+    const services = { ...installedHost().platform, runtime: effectRuntime() };
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(services);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(services);
     mockExpandedRunInputs({
       inputFiles: ['problem.tex'],
       contextFiles: [],
@@ -374,7 +383,7 @@ describe('CLI multi-agent run command', () => {
     mocks.teamPlanHasGaps.mockReturnValueOnce(true);
     isAuthenticatedSpy.mockResolvedValueOnce(true);
 
-    const result = await loadCliMultiAgentRunPlan({
+    const result = await loadCliMultiAgentRunPlan(effectRuntime(), {
       preset: 'mathematician',
     });
 
@@ -544,24 +553,34 @@ describe('CLI multi-agent run command', () => {
     );
   });
 
-  it('reports missing instruction files before expanding inputs', async () => {
-    await expect(
-      runPreset({
-        instruction: '',
-        instructionFile: 'missing-prompt.txt',
-      }),
-    ).rejects.toThrow(
-      /--instruction-file: file not found: missing-prompt\.txt/,
-    );
-    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
-  });
+  it.effect('reports missing instruction files before expanding inputs', () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        preset({ instruction: '', instructionFile: 'missing-prompt.txt' }),
+      );
+      expect(error.message).toMatch(
+        /--instruction-file: file not found: missing-prompt\.txt/,
+      );
+      expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('still requires an input file or instruction text', async () => {
-    await expect(runPreset({ instruction: '' })).rejects.toThrow(
-      /Provide --input, --instruction, or --instruction-file for the team task\. Example: texra multi-agent run physicist --instruction "Check this derivation"/,
-    );
-    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
-  });
+  it.effect('still requires an input file or instruction text', () =>
+    Effect.gen(function* () {
+      // The usage error is raised by a bare `throw` inside the command's
+      // generator, so it arrives as a defect, not a typed failure.
+      const exit = yield* Effect.exit(preset({ instruction: '' }));
+      expect(Exit.isFailure(exit)).toBe(true);
+      const defect = Exit.isFailure(exit)
+        ? Cause.squash(exit.cause)
+        : undefined;
+      expect(defect).toBeInstanceOf(Error);
+      expect((defect as Error).message).toMatch(
+        /Provide --input, --instruction, or --instruction-file for the team task\. Example: texra multi-agent run physicist --instruction "Check this derivation"/,
+      );
+      expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+    }),
+  );
 
   it('refuses built-in presets without a runnable root agent', async () => {
     await expectBlockedLaunch({

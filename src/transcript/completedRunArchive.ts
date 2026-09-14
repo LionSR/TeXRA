@@ -133,7 +133,6 @@ function webSearchNodes(
  */
 function conversationNodesForEntry(entry: StreamLogEntry): ExportNode[] {
   const { messageType } = entry;
-  if (messageType === undefined) return [];
   switch (messageType) {
     // ── Conversation content ────────────────────────────────────────────
     case MESSAGE_TYPES.USER_MESSAGE:

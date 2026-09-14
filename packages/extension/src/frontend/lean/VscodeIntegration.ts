@@ -34,7 +34,7 @@ import {
   unregisterLeanServer,
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
-import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import type { LeanLanguageServicesShape } from '@tools/lean/leanLanguageServices';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -458,8 +458,8 @@ function executeProjectCommand(
 }
 
 /**
- * Build the VS Code-mediated `LeanLanguageServices` adapter, installed by
- * `extension.ts` via `setLeanLanguageServices`. The single exported surface
+ * Build the VS Code-mediated `LeanLanguageServices` adapter, which
+ * `extension.ts` provides to the process runtime. The single exported surface
  * of this module's language operations: the implementing functions above are
  * module-private so the export list states exactly what the host consumes.
  * The adapter closes over the extension's own global-state store, which the
@@ -468,7 +468,7 @@ function executeProjectCommand(
  */
 export function createVscodeLeanLanguageServices(
   globalState: StateStore,
-): LeanLanguageServices {
+): LeanLanguageServicesShape {
   return Object.freeze({
     executeFileCommand: (command, filePath) =>
       executeFileCommand(globalState, command, filePath),
@@ -482,5 +482,5 @@ export function createVscodeLeanLanguageServices(
     navigateToFirstError,
     executeProjectCommand: (command) =>
       executeProjectCommand(globalState, command),
-  } satisfies LeanLanguageServices);
+  } satisfies LeanLanguageServicesShape);
 }

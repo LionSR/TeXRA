@@ -1,15 +1,12 @@
 import {
-  RUN_LIFECYCLE_UNAVAILABLE,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
-  type PhaseStage,
   type RoundStage,
+  type RunFlow,
   type RunLifecycleStatus,
-  type RunStage,
   type RunSubstate,
 } from '@shared/schemas';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { RunGroup } from '@shared/session/sessionView';
 
 export type RunStatusDisplayKey =
@@ -31,21 +28,10 @@ type RunStatusCopyKey = RunStatusDisplayKey | typeof RUN_DISPLAY_INTERRUPTED;
  * Display key for a `RunLifecycleStatus` (a `RunPhase`, or the `ready`
  * idle sentinel every host defaults an unstarted run to).
  */
-function runStatusDisplayKey(
+export function runStatusDisplayKey(
   status: RunLifecycleStatus,
   substate?: RunSubstate,
-): RunStatusDisplayKey;
-
-function runStatusDisplayKey(
-  status: RunLifecycleStatus | undefined,
-  substate?: RunSubstate,
-): RunStatusDisplayKey | undefined;
-
-function runStatusDisplayKey(
-  status: RunLifecycleStatus | undefined,
-  substate?: RunSubstate,
-): RunStatusDisplayKey | undefined {
-  if (status === undefined) return undefined;
+): RunStatusDisplayKey {
   if (status === RUN_LIFECYCLE_READY) return 'ready';
   return substate ?? status;
 }
@@ -65,7 +51,6 @@ const RUN_STATUS_LABELS: Record<RunStatusCopyKey, string> = {
   ready: 'Ready',
   [RUN_PHASE.WAITING]: 'Idle',
   [RUN_SUBSTATE.RESUMING]: 'Resuming',
-  [RUN_LIFECYCLE_UNAVAILABLE]: 'Unavailable',
   [RUN_DISPLAY_INTERRUPTED]: 'Interrupted',
 };
 
@@ -93,7 +78,6 @@ const RUN_STATUS_TONES: Record<RunStatusCopyKey, RunStatusTone> = {
   ready: RUN_STATUS_TONE.NEUTRAL,
   [RUN_PHASE.WAITING]: RUN_STATUS_TONE.NEUTRAL,
   [RUN_SUBSTATE.RESUMING]: RUN_STATUS_TONE.RUNNING,
-  [RUN_LIFECYCLE_UNAVAILABLE]: RUN_STATUS_TONE.WARNING,
   [RUN_DISPLAY_INTERRUPTED]: RUN_STATUS_TONE.WARNING,
 };
 
@@ -135,51 +119,8 @@ export function runUnreadableMessage(cause: string): string {
   return `Could not read this run's state: ${cause}. Delete removes it.`;
 }
 
-interface FormatRunStatusLabelOptions {
-  readonly missingLabel?: string;
-  readonly substate?: RunSubstate;
-}
-
-export function formatRunStatusLabel(
-  status: RunLifecycleStatus | undefined,
-  options: FormatRunStatusLabelOptions & { readonly missingLabel: string },
-): string;
-
-export function formatRunStatusLabel(
-  status: RunLifecycleStatus,
-  options?: FormatRunStatusLabelOptions,
-): string;
-
-export function formatRunStatusLabel(
-  status: RunLifecycleStatus | undefined,
-  options?: FormatRunStatusLabelOptions,
-): string | undefined;
-
-export function formatRunStatusLabel(
-  status: RunLifecycleStatus | undefined,
-  options: FormatRunStatusLabelOptions = {},
-): string | undefined {
-  if (status === undefined) return options.missingLabel;
-  return RUN_STATUS_LABELS[runStatusDisplayKey(status, options.substate)];
-}
-
-/**
- * One-stop label + display-key derivation. `formatRunStatusLabel` and
- * `runStatusDisplayKey` are the same status→vocabulary lookup seen from
- * two sides (a label and the key that drives icon/state styling), so callers
- * that need both compute them together instead of double-parsing the status.
- */
-export function progressHeaderStatus(
-  status: RunLifecycleStatus | undefined,
-  substate?: RunSubstate,
-): {
-  label: string | undefined;
-  displayKey: RunStatusDisplayKey | undefined;
-} {
-  return {
-    label: formatRunStatusLabel(status, { substate }),
-    displayKey: runStatusDisplayKey(status, substate),
-  };
+export function formatRunStatusLabel(status: RunLifecycleStatus): string {
+  return RUN_STATUS_LABELS[runStatusDisplayKey(status)];
 }
 
 /** Compact round/turn progress label: `r2/3` when the planned total is known
@@ -198,30 +139,71 @@ export function formatRoundStageLabel(
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
 }
 
-/** Phase progress label for a workflow-script run, spelled by the one owner of
- *  phase heading copy so this slot cannot drift from the transcript divider and
- *  the run-status band that render beside it. Occupies the same row slot as
- *  `formatRoundStageLabel` — a run opens phases or rounds, never both. */
-export function formatPhaseStageLabel(
-  stage: Readonly<PhaseStage> | undefined,
+/** Where a run's loop stands, in the coordinate its family counts in. */
+export interface FlowPosition {
+  readonly kind: 'round' | 'turn';
+  readonly index: number;
+}
+
+/**
+ * The coordinate a run's family counts its position in: a reflection run
+ * advances `round`, a tool-use run advances `turn` and leaves `round` at the
+ * zero it opened with. A renderer that reads `round` first therefore paints
+ * `r1` over every tool-use run for its whole life, which is why this rule has
+ * one home rather than one copy per surface. The two coordinates are not
+ * counted alike on the row: `round` is zero-based (a reflection flow opens at
+ * round 0), while `turn` is already one-based — the tool-use loop commits
+ * `state.turn + 1` from a zero start and the child loop counts its first turn
+ * as 1 — so only `round` gains one when it renders.
+ */
+export function flowPosition(
+  flow: RunFlow | null | undefined,
+): FlowPosition | undefined {
+  if (flow == null) return undefined;
+  if (flow.family === 'reflection') {
+    return flow.round == null
+      ? undefined
+      : { kind: 'round', index: flow.round };
+  }
+  return flow.turn == null ? undefined : { kind: 'turn', index: flow.turn };
+}
+
+/** Compact position label: `r2` (or `r2/3` against a planned round total) for
+ *  a round, `t2` for the row's second turn. A total counts planned rounds, so
+ *  a turn ignores it. */
+export function formatFlowPositionLabel(
+  position: Readonly<FlowPosition>,
+  total?: number,
+): string;
+
+export function formatFlowPositionLabel(
+  position: Readonly<FlowPosition> | undefined,
+  total?: number,
+): string | undefined;
+
+export function formatFlowPositionLabel(
+  position: Readonly<FlowPosition> | undefined,
+  total?: number,
 ): string | undefined {
-  if (stage === undefined) return undefined;
-  return formatWorkflowPhaseHeading({
-    phaseLabel: stage.label,
-    phaseIndex: stage.index,
-    phaseTotal: stage.total,
+  if (position === undefined) return undefined;
+  if (position.kind === 'turn') return `t${position.index}`;
+  return formatRoundStageLabel({
+    index: position.index,
+    ...(total !== undefined ? { total } : {}),
   });
 }
 
-/** Label for the one stage slot a run fills: a workflow-script run advances
- *  through named phases, a tool-use run through numbered rounds, never both,
- *  so every surface that shows the slot dispatches on the same discriminant. */
-export function formatStageLabel(
-  stage: Readonly<RunStage> | undefined,
+/** Spelled-out counterpart of {@link formatFlowPositionLabel} on the same
+ *  family-selected coordinate — `Round 2`, `Turn 2` — for the surfaces that
+ *  word the position instead of abbreviating it. Only `round` gains one, for
+ *  the reason {@link flowPosition} states. */
+export function formatFlowPositionTitle(
+  position: Readonly<FlowPosition> | undefined,
 ): string | undefined {
-  if (stage === undefined) return undefined;
-  if (stage.kind === 'round') return formatRoundStageLabel(stage);
-  return formatPhaseStageLabel(stage);
+  if (position === undefined) return undefined;
+  return position.kind === 'round'
+    ? `Round ${position.index + 1}`
+    : `Turn ${position.index}`;
 }
 
 /**

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Type imports
 import type { AgentDirectoryEntry } from '@agent/index';
+import { effectRuntime } from '@platform/processRuntime';
 import type * as vscode from 'vscode';
 
 const EXTERNAL_FIRST = '/external/first';
@@ -160,7 +161,7 @@ describe('agent directory watcher rebuilds', () => {
     mocks.heldReads.clear();
     mocks.createHandlers.clear();
     mocks.getAllLocal.mockReset();
-    agentDirectories.initialize(globalState);
+    agentDirectories.initialize(globalState, '/resources', effectRuntime());
   });
 
   function subscribe(): vscode.Disposable {

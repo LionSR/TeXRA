@@ -1,5 +1,6 @@
 // Local imports
 import { createLog } from '@logger/logUtils';
+import type { ConfigProvider } from '@platform/interfaces';
 import { tryWorkspaceRoots, workspaceRoots } from '@platform/workspaceRoots';
 import { getCoreSettingDefault } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -25,7 +26,21 @@ const log = createLog('configUtils');
  * @returns The configured, catalog-default, or caller-fallback value
  */
 export function getConfig<T>(path: string, defaultValue?: T): T {
-  const configured = workspaceRoots().config.get<T | undefined>(path);
+  return readConfig(workspaceRoots().config, path, defaultValue);
+}
+
+/**
+ * {@link getConfig} over an explicit provider: the configuration of the
+ * workspace the caller was handed (a tool call's `roots.config`), resolved
+ * the same way — configured value, else the catalog default, else the
+ * caller's fallback.
+ */
+export function readConfig<T>(
+  config: ConfigProvider,
+  path: string,
+  defaultValue?: T,
+): T {
+  const configured = config.get<T | undefined>(path);
   if (configured !== undefined) return configured;
   const catalogDefault = getCoreSettingDefault(path) as T | undefined;
   return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;

@@ -9,7 +9,6 @@ import {
   resumeRun,
 } from '@agent/runtime';
 import { runLeaseHeldMessage, getRunRecords } from '@agent/storage';
-import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -26,7 +25,6 @@ import {
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
-import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -69,9 +67,9 @@ export async function runResumeCommand(
     quietLogs: true,
   });
 
-  const session = await initializeCliTranscriptSession(stores);
-  return effectRuntime().runPromise(
+  return stores.runtime.runPromise(
     Effect.gen(function* () {
+      const session = yield* stores.session;
       const store = getRunRecords(session, id);
       const configResult = yield* Effect.result(store.readConfig());
       if (Result.isFailure(configResult)) {
@@ -105,12 +103,7 @@ export async function runResumeCommand(
           );
           return CliExitCode.AgentError;
         case 'finished':
-          // A run whose only durable state is a retired `flow_<id>.json` says
-          // so in its own words (R10) rather than being reported as an
-          // ordinary finished run.
-          writeTextStderr(
-            classification.notice ?? describeFollowUpFailure('finished'),
-          );
+          writeTextStderr(describeFollowUpFailure('finished'));
           return CliExitCode.Usage;
         case 'resumable':
           break;
@@ -152,7 +145,7 @@ export async function runResumeCommand(
 
       const agent = yield* Effect.result(
         Effect.tryPromise({
-          try: () => resolveCliLaunchAgent(config.agent, 'run'),
+          try: () => resolveCliLaunchAgent(config.agent, 'workflowResume'),
           catch: ensureError,
         }),
       );
@@ -173,7 +166,7 @@ export async function runResumeCommand(
           executeWorkflow: async (
             workflowConfig,
             runId,
-            modelHandlerCompatibilityKey,
+            modelCompatibilityKey,
           ) => {
             // Fast-fail on an unusable destination before the run restarts;
             // `executeCliWorkflowConfig` reads the same persisted `cli` block.
@@ -185,19 +178,19 @@ export async function runResumeCommand(
               resumeWorkflowOutputDirectory(workflowConfig),
               context.cwd,
             );
-            exitCode = await effectRuntime().runPromise(
+            exitCode = await stores.runtime.runPromise(
               executeCliWorkflowConfig(
                 workflowConfig,
                 buildHeadlessRunContext(context),
                 {
+                  session: stores.session,
                   runId,
-                  modelHandlerCompatibilityKey,
+                  modelCompatibilityKey,
                   recoveryInputIsDurable:
                     await workflowRecoveryInputsAreDurable(
                       workflowConfig,
                       context.cwd,
                     ),
-                  categoryMismatchMessage: `Run ${id} resolved to a non workflow run.`,
                 },
               ),
             );

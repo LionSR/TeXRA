@@ -1,5 +1,6 @@
-import { Redacted } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Redacted } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
   apiKeyEnvName,
@@ -14,6 +15,7 @@ import {
 } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
 
@@ -206,46 +208,64 @@ describe('API provider key caches', () => {
     await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('secret');
   });
 
-  it('unset_api_key invalidates stale stored-key lookups', async () => {
-    const { secrets } = createSecrets({
-      [apiKeySecretName('openai')]: 'sk-test',
-    });
-    await setupApiKeyToolPlatform(secrets);
+  it.effect('unset_api_key invalidates stale stored-key lookups', () =>
+    Effect.gen(function* () {
+      const { secrets } = createSecrets({
+        [apiKeySecretName('openai')]: 'sk-test',
+      });
+      yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
 
-    await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('secret');
-    await new UnsetApiKeyTool().call({ provider: 'openai' });
+      expect(
+        yield* Effect.promise(() => lookupApiKeyOrigin(secrets, 'openai')),
+      ).toBe('secret');
+      yield* new UnsetApiKeyTool()
+        .call({ provider: 'openai' })
+        .pipe(Effect.provide(nativeToolTestLayer()));
 
-    await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('none');
-  });
+      expect(
+        yield* Effect.promise(() => lookupApiKeyOrigin(secrets, 'openai')),
+      ).toBe('none');
+    }),
+  );
 
-  it('removes a stored key whose value can no longer be read', async () => {
-    const { secrets, store } = createSecrets({
-      [apiKeySecretName('openai')]: 'sk-test',
-    });
-    // The persisted entry is listed but unreadable: the removal path keys off
-    // the stored key *names*, so it still has something to delete.
-    vi.spyOn(secrets, 'get').mockResolvedValue(undefined);
-    vi.spyOn(secrets, 'getStored').mockResolvedValue(undefined);
-    await setupApiKeyToolPlatform(secrets);
+  it.effect('removes a stored key whose value can no longer be read', () =>
+    Effect.gen(function* () {
+      const { secrets, store } = createSecrets({
+        [apiKeySecretName('openai')]: 'sk-test',
+      });
+      // The persisted entry is listed but unreadable: the removal path keys off
+      // the stored key *names*, so it still has something to delete.
+      vi.spyOn(secrets, 'get').mockResolvedValue(undefined);
+      vi.spyOn(secrets, 'getStored').mockResolvedValue(undefined);
+      yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
 
-    const result = await new UnsetApiKeyTool().call({ provider: 'openai' });
+      const result = yield* new UnsetApiKeyTool()
+        .call({ provider: 'openai' })
+        .pipe(Effect.provide(nativeToolTestLayer()));
 
-    expect(result.status).toBe('executed');
-    expect(result.output).toContain('Removed stored API key');
-    expect(store.has(apiKeySecretName('openai'))).toBe(false);
-  });
+      expect(result.status).toBe('executed');
+      expect(result.output).toContain('Removed stored API key');
+      expect(store.has(apiKeySecretName('openai'))).toBe(false);
+    }),
+  );
 
-  it('reports the canonical Kimi Code environment variable when unsetting', async () => {
-    const { secrets } = createSecrets(
-      {},
-      { [apiKeyEnvName('kimiCode')]: 'from-env' },
-    );
-    await setupApiKeyToolPlatform(secrets);
+  it.effect(
+    'reports the canonical Kimi Code environment variable when unsetting',
+    () =>
+      Effect.gen(function* () {
+        const { secrets } = createSecrets(
+          {},
+          { [apiKeyEnvName('kimiCode')]: 'from-env' },
+        );
+        yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
 
-    const result = await new UnsetApiKeyTool().call({ provider: 'kimiCode' });
+        const result = yield* new UnsetApiKeyTool()
+          .call({ provider: 'kimiCode' })
+          .pipe(Effect.provide(nativeToolTestLayer()));
 
-    expect(result.status).toBe('executed');
-    expect(result.output).toContain('KIMI_CODE_API_KEY');
-    expect(result.output).not.toContain('KIMICODE_API_KEY');
-  });
+        expect(result.status).toBe('executed');
+        expect(result.output).toContain('KIMI_CODE_API_KEY');
+        expect(result.output).not.toContain('KIMICODE_API_KEY');
+      }),
+  );
 });

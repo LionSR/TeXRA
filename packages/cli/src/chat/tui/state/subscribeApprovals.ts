@@ -1,41 +1,20 @@
-// TUI implementation of the session-owned HostInteractions port (PRD
-// one-fold-three-renderers, 10.1).
+// TUI side of the request protocol (PRD one-fold-three-renderers, 10.1).
 //
-// The runtime publishes `approval.requested` before it dispatches a request
-// here, and the fold lists it in `view.approvals` until `approval.resolved`;
-// the modal reads that list (`approvalQueue.ts`). A hook therefore returns
-// nothing (or has no method at all) and the runtime parks the request while
-// the surface answers through a `decision.*` runtime request, which settles
-// the runtime's pending set.
-// Two kinds still settle through their hook, because the runtime has no
-// request arm for them yet or their answer is host work: a tool edit (no
-// `decision.toolEdit` arm) and a retry (its credential switch and
-// `prepareRetry` run on this host). Each takes a host reservation the modal
-// reads its presentation payload from. The TUI has no external-inquiry hook:
-// the CLI does not offer the async inquiry flow, so the inquiry tool is
-// unavailable on this host.
+// A run asks a person with `request.opened`; the fold lists it in
+// `view.requests` until a `request.decided` answers it, and the modal reads
+// that list (`approvalQueue.ts`). This module owns only what a request needs
+// before it can be shown or answered on this host: the CLI policy's own
+// answer for the kinds it settles with nobody to ask, a retry's personal-key
+// lookup and the unattended switch that lookup enables, and the credential
+// work behind a retry on the user's own key — the `useOwnApiKey` capability a
+// decision names instead of answering itself.
 //
-// Policy is honored at the shared tool boundary before a request reaches
-// this port for bash and edits; plans, proposals, retries, and human-input
-// requests keep their CLI policy decision here, answered on the spot.
+// The attached host answers nothing: it stages a tool edit's preview,
+// mirrors bypass state onto its wire, and presents events.
 
-import PQueue from 'p-queue';
+import { computed } from '@lit-labs/signals';
 
-import {
-  matchesCancelSelector,
-  type HostInteractionCancelSelector,
-  type HostInteractions,
-  type HostRetryInteractionOptions,
-  type HostRetryRequest,
-  type PlanApprovalResult,
-  type ProposalResult,
-  type RetryResult,
-  type UserQuestionSettlement,
-} from '@agent/runtime';
-import {
-  toApprovalSettlement,
-  toToolEditResult,
-} from '@cli/runtime/approvalAdapter';
+import type { HostInteractions } from '@agent/runtime';
 import {
   cliRetryQuotaRoute,
   isCliApiSwitchableRetry,
@@ -48,7 +27,6 @@ import {
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
-import { subscriptionProvider } from '@controllers/modelAccess/subscriptionProviders';
 import { warn as logWarning } from '@logger/logUtils';
 import {
   apiKeyExistsUncached,
@@ -56,379 +34,317 @@ import {
   invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
-import {
-  codingPlanSubscriptionRuntimes,
-  type CodingPlanSubscriptionRuntime,
-} from '@model/codingPlanSubscriptions';
-import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { RunId } from '@shared/schemas';
-import {
-  isCodingPlanQuotaRoute,
-  type QuotaFallbackRouteId,
-} from '@shared/quotaFallbackRoutes';
+import type { RetryPermission } from '@shared/schemas';
+import { isCodingPlanQuotaRoute } from '@shared/quotaFallbackRoutes';
+import type { HostRequest } from '@shared/session/hostRequest';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
-import { bumpCodexPreferenceVersion } from './cliState';
 import {
-  setCliCodingPlanSubscription,
-  setCliSubscriptionPreference,
-} from './subscriptionPreference';
-import {
-  approvalPayloadRunId,
+  attentionRequests,
   currentApproval,
-  reserveHostRequest,
-  settleHostRequestsWhere,
-  type ApprovalDecision,
-  type RetryApprovalPayload,
+  decidePendingRequest,
+  dropPresentation,
+  forgetSettledRequests,
+  landRequestDecision,
+  stagePresentation,
+  useHostCapability,
 } from './approvalQueue';
-
-// =========================================================================
-// Retry auto-switch: skip the modal when a usable personal key exists
-// =========================================================================
+import { currentView } from './sessionView';
 
 /**
- * When a retry is triggered by a coding-plan quota limit
- * and the stored fallback key is not the broken credential, switch to
- * the stored key and retry without showing the modal. This is what lets
- * delegated subagents recover from an exhausted Kimi Code or GLM Coding Plan
- * without a human present. ChatGPT-subscription limits always require an
- * explicit decision: changing credential ownership must not hide the quota
- * warning or silently spend API-key quota. Coding-plan switches relax that
- * for the unattended recovery they exist for, so the user instead gets a
- * terminal notification when a switch disables a plan preference, and a
- * model with no fallback route at all (Kimi Code-exclusive) keeps the modal.
- *
- * Returns the auto-switch decision, or `undefined` when the modal is needed
- * (no usable key stored, direct-key failure, no fallback route, or unknown
- * provider).
- */
-function maybeAutoSwitchRetry(
-  payload: RetryApprovalPayload,
-): ApprovalDecision | undefined {
-  // Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route that
-  // re-uses an already-stored key, so auto-switch when that key exists.
-  // OAuth subscriptions (ChatGPT, Grok) stay explicit: the user must confirm.
-  // Kimi Code-exclusive models never reach this branch: the classifier gates
-  // them to no route, keeping the modal without an API-key switch.
-  const route = cliRetryQuotaRoute(payload.data);
-  if (!route || !isCodingPlanQuotaRoute(route.id)) return undefined;
-  if (payload.tui.personalApiKeyAvailable !== true) return undefined;
-  return { accepted: true, disableQuotaRoute: route.id };
-}
-
-/**
- * The process stores a retry's credential work reads: the secret store its
- * key checks go through, and the global state a rolled-back coding-plan
- * preference is written straight into. Both come from the chat session's
- * caller, which holds them already.
+ * The process store a retry's credential work reads: the secret store its
+ * key checks go through. It comes from the chat session's caller, which
+ * holds it already.
  */
 interface TuiApprovalStores {
   readonly secrets: PlatformSecrets;
-  readonly state: StateStore;
 }
 
+/** The pending requests this surface watches, as a level it subscribes to. */
+const pendingRequests = computed(() => attentionRequests(currentView()));
+
 /**
- * Create the typed approval pipeline for the active TUI session.
+ * Create the TUI's presentation host, and answer for its lifetime the
+ * pending requests this host settles without the modal.
  */
 export function createTuiHostInteractions(
   host: CliRuntimeHost,
   context: CliContext,
   stores: TuiApprovalStores,
 ): HostInteractions {
-  // The two persisted access fields commit as one choice within this TUI
-  // lifetime. Keeping the queue session-owned prevents stale work leaking
-  // across disposed hosts or tests.
-  const retryCredentialCommitQueue = new PQueue({ concurrency: 1 });
-  // Identity of this attachment's host reservations.
-  const interactionOwner = {};
+  /** Set by `dispose`: an attachment that is gone answers for nobody, so it
+   *  must not decide a request the next owner will. */
+  let disposed = false;
+  /** Requests this attachment has already acted on, pruned as they settle. */
+  const acted = new Set<string>();
+  /** The undo this guard hands every decision it sends: a refused
+   *  `request.decide` answered nothing, and the queue drops its own decided
+   *  entry, so this entry must go too or no later level acts on the request
+   *  again — and an automatically settled plan, question, or retry has no
+   *  staged modal the user could answer it through. */
+  const actAgainOnRefusal = (requestId: string) => (): void => {
+    acted.delete(requestId);
+  };
+  /** Retries this host switched without asking, which get the notification. */
+  const automaticSwitches = new Set<string>();
+
+  const pendingRetry = (requestId: string): RetryPermission | undefined => {
+    const pending = currentView().requests.find(
+      (request) => request.requestId === requestId,
+    );
+    return pending?.payload.kind === 'retry' ? pending.payload.data : undefined;
+  };
+
+  /**
+   * A retry on the user's own key: check the stored credential, then decide
+   * the retry on personal credentials. The run rebuilds its binding when it
+   * reads that decision and declines the exhausted subscription route for
+   * itself, so nothing here writes the user's access settings.
+   */
+  const useOwnApiKey = (requestId: string): void => {
+    const permission = pendingRetry(requestId);
+    if (!permission) {
+      logWarning(
+        'cli.tui',
+        `Request ${requestId} is no longer a pending retry: no credential switch was made.`,
+      );
+      return;
+    }
+    void (async () => {
+      try {
+        await ensurePersonalApiKey(permission, stores);
+        // Re-read after the key lookup, which takes time: a retry another
+        // surface settled meanwhile is not this attachment's to decide.
+        if (disposed || pendingRetry(requestId) === undefined) {
+          logWarning(
+            'cli.tui',
+            `Request ${requestId} was settled elsewhere before its credential switch: nothing was decided here.`,
+          );
+          return;
+        }
+        // Switching without asking also skips the modal's quota warning, so
+        // say it happened.
+        if (automaticSwitches.has(requestId)) notify('credentialSwitched');
+        // The decision lands as itself, not through the surface decision
+        // vocabulary: a personal-credential retry decomposes into this very
+        // capability, so re-deciding it here would call back into this
+        // function and the request would never be answered.
+        landRequestDecision(
+          permission.runId,
+          requestId,
+          { action: 'retry', credentials: 'personal' },
+          actAgainOnRefusal(requestId),
+        );
+      } catch (error) {
+        logWarning(
+          'cli.tui',
+          `The retry could not switch to your own API key: ${toErrorMessage(error)}`,
+        );
+        landRequestDecision(
+          permission.runId,
+          requestId,
+          { action: 'deny', reason: toErrorMessage(error) },
+          actAgainOnRefusal(requestId),
+        );
+      }
+    })();
+  };
+
+  const performHostCapability = (arm: HostRequest): void => {
+    if (arm.kind === 'useOwnApiKey') {
+      useOwnApiKey(arm.requestId);
+      return;
+    }
+    // Every other capability belongs to a windowed host's surfaces; no TUI
+    // action names one, so reaching here is a defect.
+    logWarning(
+      'cli.tui',
+      `The TUI does not perform the ${arm.kind} host capability.`,
+    );
+  };
+
+  /**
+   * A retry's presentation: the keychain lookup that decides whether `k` is
+   * offered, and the switch a coding-plan quota permits without asking.
+   * Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route
+   * that re-uses an already-stored key, so this host switches when that key
+   * exists — which is what lets a delegated subagent recover with no human
+   * present. OAuth subscriptions (ChatGPT, Grok) stay explicit: changing
+   * credential ownership must not hide the quota warning or silently spend
+   * API-key quota. Kimi Code-exclusive models never reach the switch: the
+   * classifier gates them to no route, so they keep the modal.
+   */
+  const prepareRetry = (permission: RetryPermission): void => {
+    const requestId = permission.requestId;
+    if (!isCliApiSwitchableRetry(permission)) {
+      stagePresentation({ kind: 'retry', data: permission, tui: {} });
+      return;
+    }
+    void (async () => {
+      let personalApiKeyAvailable = false;
+      let missingPersonalApiKeyMessage: string | undefined;
+      // Every step of the preparation, the copy lookup included, stays inside
+      // the try: preparation only adorns the card, so a failure here must
+      // still stage it. A request whose modal never appears waits on nobody.
+      try {
+        const requestedProvider = permission.errorDetails?.provider;
+        const provider =
+          requestedProvider && isApiProvider(requestedProvider)
+            ? requestedProvider
+            : undefined;
+        missingPersonalApiKeyMessage = missingApiKeyRetryMessage(provider);
+        if (provider) {
+          try {
+            personalApiKeyAvailable = await hasUsableApiKey(
+              stores.secrets,
+              provider,
+            );
+          } catch (error) {
+            // A keychain failure must not permit a credential switch nobody asked for.
+            logWarning(
+              'cli.tui',
+              `Keychain lookup for ${provider} failed: ${toErrorMessage(error)}`,
+            );
+            personalApiKeyAvailable = false;
+            missingPersonalApiKeyMessage = missingApiKeyRetryMessage(
+              provider,
+              'unavailable',
+            );
+          }
+        }
+        const route = cliRetryQuotaRoute(permission);
+        if (
+          personalApiKeyAvailable &&
+          route &&
+          isCodingPlanQuotaRoute(route.id)
+        ) {
+          automaticSwitches.add(requestId);
+          useOwnApiKey(requestId);
+          return;
+        }
+      } catch (error) {
+        // The card shows on the payload alone: no own-key offer, since
+        // nothing here proved a stored key exists.
+        personalApiKeyAvailable = false;
+        logWarning(
+          'cli.tui',
+          `The retry card for request ${requestId} could not be prepared: ${toErrorMessage(error)}`,
+        );
+      }
+      stagePresentation({
+        kind: 'retry',
+        data: permission,
+        tui: { personalApiKeyAvailable, missingPersonalApiKeyMessage },
+      });
+    })();
+  };
+
+  /**
+   * What this host does with each newly listed request: the policy's own
+   * decision for a gated plan or delegation, the denial a run with no human
+   * input available gets for a question, and a retry's preparation. Bash and
+   * tool-edit policy is decided at the tool boundary before their request
+   * opens, so those always wait for the modal.
+   */
+  const answerPendingRequests = (): void => {
+    const pending = pendingRequests.get();
+    const live = new Set(pending.map((request) => request.requestId));
+    // Every level prunes what this host staged for requests that have left
+    // it, however they settled: a decision taken on another surface or a run
+    // interruption drops the fact without passing through this surface.
+    forgetSettledRequests(live);
+    for (const id of acted) if (!live.has(id)) acted.delete(id);
+    for (const id of automaticSwitches) {
+      if (!live.has(id)) automaticSwitches.delete(id);
+    }
+    for (const request of pending) {
+      if (acted.has(request.requestId)) continue;
+      acted.add(request.requestId);
+      const payload = request.payload;
+      switch (payload.kind) {
+        case 'bash':
+        case 'toolEdit':
+          continue;
+        case 'planApproval':
+        case 'proposal': {
+          const settled = settleExecutable(context, request.runId);
+          if (settled) {
+            decidePendingRequest(
+              request.requestId,
+              settled,
+              actAgainOnRefusal(request.requestId),
+            );
+          }
+          continue;
+        }
+        case 'userQuestion': {
+          const denial = settleHumanInputDenial(context, request.runId);
+          if (denial) {
+            decidePendingRequest(
+              request.requestId,
+              { action: 'deny', reason: denial.reason },
+              actAgainOnRefusal(request.requestId),
+            );
+          }
+          continue;
+        }
+        case 'retry': {
+          const settled = settleRetry(payload.data, context);
+          if (settled) {
+            decidePendingRequest(
+              request.requestId,
+              settled,
+              actAgainOnRefusal(request.requestId),
+            );
+            continue;
+          }
+          prepareRetry(payload.data);
+          continue;
+        }
+      }
+    }
+  };
+
+  answerPendingRequests();
+  const unsubscribe = subscribeToSignalChanges(
+    [pendingRequests],
+    answerPendingRequests,
+  );
+  const releaseCapability = useHostCapability(performHostCapability);
 
   return {
     emit: (event, payload) => host.emit(event, payload),
-    async requestToolEditApproval(request) {
-      // The prompt the tool boundary prepared is the `approval.requested`
-      // payload: presenting it keeps one requestId per request.
-      const reservation = reserveHostRequest(
-        {
-          kind: 'toolEdit',
-          data: request.permission,
-          tui: {
-            originalContent: request.originalContent,
-            proposedContent: request.proposedContent,
-          },
+    /** The preview a tool edit's durable payload cannot carry. */
+    presentToolEdit(request) {
+      stagePresentation({
+        kind: 'toolEdit',
+        data: request.permission,
+        tui: {
+          originalContent: request.originalContent,
+          proposedContent: request.proposedContent,
         },
-        { owner: interactionOwner, presentable: true },
-      );
-      try {
-        const decision = await reservation.decided;
-        return toToolEditResult(decision, request.proposedContent);
-      } finally {
-        reservation.release();
-      }
-    },
-    requestPlanApproval(request) {
-      return settleByPolicy<PlanApprovalResult>(context, request.runId);
-    },
-    requestAgentProposal(request) {
-      return settleByPolicy<ProposalResult>(context, request.runId);
-    },
-    requestRetry(request, options) {
-      return requestRetryInteraction(
-        request,
-        context,
-        {
-          owner: interactionOwner,
-          commitQueue: retryCredentialCommitQueue,
-          stores,
-        },
-        options,
-      );
-    },
-    askUserQuestion(request) {
-      const denial = settleHumanInputDenial(context, request.runId);
-      if (denial == null) return undefined;
-      return Promise.resolve<UserQuestionSettlement>({
-        action: 'reject',
-        reason: denial.reason,
       });
+    },
+    // `forgetSettledRequests` only drops a presentation whose request the
+    // fold listed at least once, so a request whose `request.opened` never
+    // committed is released by id here.
+    releaseToolEdit(requestId) {
+      dropPresentation(requestId);
     },
     // The badge reads the fold's policy snapshot; the host only mirrors the
     // change onto its NDJSON wire.
     setApprovalBypassState(update) {
       host.emitApprovalBypassState(update);
     },
-    // The runtime settles its own pending set; this drops the host's hold on
-    // the hook-settled kinds so their work stops.
-    cancel(selector: HostInteractionCancelSelector = {}) {
-      settleHostRequestsWhere(
-        (payload) =>
-          matchesCancelSelector(
-            { kind: payload.kind, runId: approvalPayloadRunId(payload) },
-            selector,
-          ),
-        {
-          accepted: false,
-          rejectionCause: selector.cause ?? 'Approval request was cancelled.',
-        },
-      );
-    },
     dispose() {
-      // Only the reservations bound to this host's work (its key lookup and
-      // credential commit queue) settle on detach; a newer host's belong to
-      // that host, and the runtime's requests stay decidable there.
-      settleHostRequestsWhere((_payload, owner) => owner === interactionOwner);
+      disposed = true;
+      unsubscribe();
+      releaseCapability();
     },
   };
-}
-
-/** The CLI policy's answer for a gated plan or proposal, or undefined to ask. */
-function settleByPolicy<T extends PlanApprovalResult | ProposalResult>(
-  context: CliContext,
-  runId: RunId | '',
-): Promise<T> | undefined {
-  const policy = settleExecutable(context, runId);
-  if (!policy) return undefined;
-  if (policy.accepted) return Promise.resolve({ action: 'approve' } as T);
-  return Promise.resolve(
-    toApprovalSettlement({
-      accepted: false,
-      rejectionReason: policy.userMessage ?? '',
-    }) as T,
-  );
-}
-
-function runRetryTask<T>(
-  start: () => Promise<T>,
-  signal: AbortSignal,
-): Promise<T> {
-  signal.throwIfAborted();
-  return new Promise<T>((resolve, reject) => {
-    const detach = onAbort(signal, () =>
-      reject(
-        signal.reason ??
-          new DOMException('Retry preparation aborted.', 'AbortError'),
-      ),
-    );
-    try {
-      start().then(
-        (value) => {
-          detach();
-          resolve(value);
-        },
-        (error: unknown) => {
-          detach();
-          reject(error);
-        },
-      );
-    } catch (error) {
-      detach();
-      reject(error);
-    }
-  });
-}
-
-function prepareRetryClient(
-  prepare: NonNullable<HostRetryInteractionOptions['prepareRetry']>,
-  selection: Parameters<
-    NonNullable<HostRetryInteractionOptions['prepareRetry']>
-  >[0],
-  signal: AbortSignal,
-): Promise<void> {
-  return runRetryTask(() => prepare(selection, signal), signal);
-}
-
-/**
- * The host reservation is this retry's liveness on this host: taking it
- * replaces whatever retry the same host held for the stream (its pre-modal
- * lookup, its modal, or the credential switch it had already started), and
- * holding it until `release` means a later cancel reaches the commit as
- * well. Nothing here re-checks whether the request is still current: a
- * settled entry ignores `present` and `settle`, and its abort signal stops
- * the work in flight.
- */
-async function requestRetryInteraction(
-  request: HostRetryRequest,
-  context: CliContext,
-  attachment: {
-    readonly owner: object;
-    readonly commitQueue: PQueue;
-    readonly stores: TuiApprovalStores;
-  },
-  options: HostRetryInteractionOptions | undefined,
-): Promise<RetryResult> {
-  settleHostRequestsWhere(
-    (payload, owner) =>
-      owner === attachment.owner &&
-      payload.kind === 'retry' &&
-      payload.data.runId === request.runId &&
-      payload.data.requestId !== request.requestId,
-  );
-  const reservation = reserveHostRequest(
-    { kind: 'retry', data: request, tui: {} },
-    { owner: attachment.owner },
-  );
-  // Written before any path that can produce a credential-changing decision:
-  // only the modal and the auto-switch produce one, and both run after this.
-  let promptRequest: RetryApprovalPayload = {
-    kind: 'retry',
-    data: request,
-    tui: {},
-  };
-  const retryDecision: { source: 'human' | 'automatic' } = {
-    source: 'human',
-  };
-
-  const immediate = settleRetry(request, context);
-  if (immediate) {
-    reservation.settle(immediate);
-  } else {
-    void (async () => {
-      let autoSwitch: ApprovalDecision | undefined;
-      try {
-        if (isCliApiSwitchableRetry(request)) {
-          const requestedProvider = request.errorDetails?.provider;
-          const provider =
-            requestedProvider && isApiProvider(requestedProvider)
-              ? requestedProvider
-              : undefined;
-          let personalApiKeyAvailable = false;
-          let missingPersonalApiKeyMessage =
-            missingApiKeyRetryMessage(provider);
-          if (provider) {
-            try {
-              personalApiKeyAvailable = await hasUsableApiKey(
-                attachment.stores.secrets,
-                provider,
-              );
-            } catch (error) {
-              // A keychain failure must not permit an automatic credential
-              // switch.
-              logWarning(
-                'cli.tui',
-                `Keychain lookup for ${provider} failed: ${toErrorMessage(error)}`,
-              );
-              missingPersonalApiKeyMessage = missingApiKeyRetryMessage(
-                provider,
-                'unavailable',
-              );
-            }
-          }
-          promptRequest = {
-            kind: 'retry',
-            data: request,
-            tui: { personalApiKeyAvailable, missingPersonalApiKeyMessage },
-          };
-        }
-        autoSwitch = maybeAutoSwitchRetry(promptRequest);
-      } catch (error) {
-        // Preparation only decides whether the modal can be skipped, so a
-        // failed lookup falls through to the modal instead of denying a retry
-        // the user never saw.
-        logWarning(
-          'cli.tui',
-          `The retry request could not be prepared: ${toErrorMessage(error)}`,
-        );
-      }
-      if (autoSwitch) {
-        retryDecision.source = 'automatic';
-        reservation.settle(autoSwitch);
-        return;
-      }
-      reservation.present(promptRequest);
-    })();
-  }
-
-  const decision = await reservation.decided;
-  try {
-    if (!decision.accepted) {
-      if (immediate) {
-        return { action: 'deny', reason: decision.userMessage };
-      }
-      return { action: 'cancel' };
-    }
-    if (decision.disableQuotaRoute !== undefined) {
-      await switchRetryToPersonalCredentials(decision, promptRequest, {
-        prepareRetry: options?.prepareRetry,
-        preparationSignal: reservation.signal,
-        commitQueue: attachment.commitQueue,
-        stores: attachment.stores,
-      });
-      // Skipping the modal also skips its quota warning, and the switch
-      // persists the plan preference as disabled. Announce it only after the
-      // switch commits: a preparation failure rolls the preference back, and
-      // the user must not be told a switch happened that did not.
-      if (
-        retryDecision.source === 'automatic' &&
-        isCodingPlanQuotaRoute(decision.disableQuotaRoute)
-      ) {
-        notify('credentialSwitched');
-      }
-    } else if (options?.prepareRetry) {
-      await prepareRetryClient(
-        options.prepareRetry,
-        'configured',
-        reservation.signal,
-      );
-    }
-    // A cancel landing while the last preparation step was already resolving
-    // has no await left to reject, so the entry's own state decides.
-    if (reservation.signal.aborted) return { action: 'cancel' };
-    return {
-      action: 'retry',
-      feedback: decision.userMessage,
-      ...(retryDecision.source === 'automatic'
-        ? { decisionSource: retryDecision.source }
-        : {}),
-    };
-  } catch (error) {
-    if (reservation.signal.aborted) return { action: 'cancel' };
-    return { action: 'deny', reason: toErrorMessage(error) };
-  } finally {
-    reservation.release();
-  }
 }
 
 /**
@@ -454,295 +370,31 @@ export function announceForegroundApprovals(): () => void {
 }
 
 /**
- * Per-setting rollback config for {@link switchRetryToPersonalCredentials}.
- * `writeStarted` / `needsRollback` gate each setting; `restore` re-applies the
- * previous value and verifies it took effect (throwing when it did not).
+ * Put the user's own credential in place for one retry: verify that a usable
+ * key for the failed provider is stored, so the caller can decide the retry
+ * on personal credentials instead of retrying onto a route that has not
+ * changed. Nothing is written: the run declines the exhausted subscription
+ * route for itself when it reads the decision, and the user's access
+ * settings stay theirs.
  */
-interface RetrySettingRollbackConfig {
-  /** Whether this attempt's write started (its per-setting flag). */
-  readonly writeStarted: boolean;
-  /** Whether the current value is still the one the failed attempt left behind. */
-  readonly needsRollback: () => boolean;
-  /** Restore the previous value and verify it took effect. */
-  readonly restore: () => Promise<void>;
-  readonly restoredInMemory: () => boolean;
-  readonly memoryRestoredContext: string;
-  readonly restoreFailedContext: string;
-}
-
-/**
- * Roll back every setting whose failed write left an unwelcome value, in
- * config order. A setting whose write never started, or whose value is already
- * the previous one, is skipped WITHOUT an await: this runs while the commit
- * queue still holds its slot, and the extra turns let a newer queued switch
- * commit ahead of the restores below.
- *
- * Each failure is contextualized rather than thrown, so a partially applied
- * switch can report every setting it could not put back rather than losing
- * all but the first. `restoredInMemory` separates "the value is back but the
- * write may not have persisted" from "the value is still the one the user
- * never asked for", because only the latter needs re-doing by hand.
- */
-async function rollbackChangedSettings(
-  configs: readonly RetrySettingRollbackConfig[],
-): Promise<Error[]> {
-  const failures: Error[] = [];
-  for (const config of configs) {
-    if (!config.writeStarted || !config.needsRollback()) continue;
-    try {
-      await config.restore();
-    } catch (rollbackError) {
-      const persistenceContext = config.restoredInMemory()
-        ? config.memoryRestoredContext
-        : config.restoreFailedContext;
-      failures.push(
-        new Error(`${persistenceContext}: ${toErrorMessage(rollbackError)}`, {
-          cause: rollbackError,
-        }),
-      );
-    }
-  }
-  return failures;
-}
-
-/**
- * Rollback config for one coding-plan preference, shared by the pre-commit
- * restore (a switch that failed before or during client preparation) and the
- * commit task's rollback (a later access-settings write failed).
- *
- * Both callers sit past the point where the plan write was attempted, so
- * `writeStarted` is always true here.
- */
-function codingPlanRollbackConfig(
-  runtime: CodingPlanSubscriptionRuntime,
-  previous: boolean,
-  state: StateStore,
-): RetrySettingRollbackConfig {
-  return {
-    writeStarted: true,
-    needsRollback: () => runtime.getEnabled() !== previous,
-    restore: async () => {
-      await runtime.restoreEnabled(previous, state);
-      bumpCodexPreferenceVersion();
-      if (runtime.getEnabled() !== previous) {
-        throw new Error(
-          `${runtime.descriptor.displayName} remained ${String(runtime.getEnabled())}.`,
-        );
-      }
-    },
-    restoredInMemory: () => runtime.getEnabled() === previous,
-    memoryRestoredContext: `The previous ${runtime.descriptor.displayName} setting appears restored in memory, but persistence could not be confirmed`,
-    restoreFailedContext: `Could not restore the ${runtime.descriptor.displayName} setting`,
-  };
-}
-
-/** Throw `error`, aggregated with any rollback failures it triggered. */
-function throwWithRollbackFailures(
-  error: unknown,
-  rollbackFailures: readonly Error[],
-): never {
-  if (rollbackFailures.length > 0) {
-    throw new AggregateError(
-      [error, ...rollbackFailures],
-      `${toErrorMessage(error)} Previous access settings could not be fully restored: ${rollbackFailures.map(toErrorMessage).join(' ')}`,
-      { cause: error },
-    );
-  }
-  throw error;
-}
-
-interface OauthCliPreference {
-  readonly label: string;
-  readonly isPrefer: () => boolean;
-  readonly setPrefer: (
-    enabled: boolean,
-  ) => Promise<{ readonly effective: boolean }>;
-}
-
-function oauthCliPreference(
-  id: QuotaFallbackRouteId | undefined,
-): OauthCliPreference | undefined {
-  if (id !== 'chatgpt' && id !== 'grok') return undefined;
-  const provider = subscriptionProvider(id);
-  return {
-    label: provider.displayName,
-    isPrefer: provider.isPreferSubscription,
-    setPrefer: (enabled) => setCliSubscriptionPreference(id, enabled),
-  };
-}
-
-/** Commit the subscription-preference writes for a retry switch.
- *
- *  Runs while the commit queue already holds its slot. On failure it rolls
- *  back everything it wrote (plus the already-disabled coding plan, when one
- *  is supplied) and rethrows; callers then surface the aggregate error.
- */
-async function applyRetryCredentialCommit(
-  decision: ApprovalDecision,
-  signal: AbortSignal,
-  codingPlanRollback?: RetrySettingRollbackConfig,
+async function ensurePersonalApiKey(
+  permission: RetryPermission,
+  stores: TuiApprovalStores,
 ): Promise<void> {
-  const oauth = oauthCliPreference(decision.disableQuotaRoute);
-  const previousOauthPreference = oauth?.isPrefer() ?? false;
-  let subscriptionWriteStarted = false;
-  try {
-    // Inside the try: a cancel landing on the coding-plan branch (where there
-    // is no oauth write and so nothing else can throw here) must still roll
-    // the already-disabled plan back rather than escape past the rollback.
-    signal.throwIfAborted();
-    if (oauth) {
-      subscriptionWriteStarted = true;
-      const update = await runRetryTask(() => oauth.setPrefer(false), signal);
-      if (update.effective) {
-        throw new Error(
-          `${oauth.label} subscription remains enabled by a more specific setting.`,
-        );
-      }
-      signal.throwIfAborted();
-    }
-    return;
-  } catch (error) {
-    // Each config is evaluated after the previous restore resolved, so a
-    // rollback sees the state its predecessor left behind. Skipped attempts
-    // must not await: this runs while the commit queue still holds its slot,
-    // and the extra turns let a newer queued switch commit ahead of the
-    // restores below.
-    const rollbackFailures = await rollbackChangedSettings([
-      ...(oauth === undefined
-        ? []
-        : [
-            {
-              writeStarted: subscriptionWriteStarted,
-              needsRollback: () => !oauth.isPrefer(),
-              restore: async () => {
-                const update = await oauth.setPrefer(previousOauthPreference);
-                if (update.effective !== previousOauthPreference) {
-                  throw new Error(
-                    `${oauth.label} subscription preference remained ${String(update.effective)}.`,
-                  );
-                }
-              },
-              restoredInMemory: () =>
-                oauth.isPrefer() === previousOauthPreference,
-              memoryRestoredContext: `The previous ${oauth.label} subscription preference appears restored in memory, but persistence could not be confirmed`,
-              restoreFailedContext: `Could not restore the ${oauth.label} subscription preference`,
-            },
-          ]),
-      ...(codingPlanRollback ? [codingPlanRollback] : []),
-    ]);
-    throwWithRollbackFailures(error, rollbackFailures);
-  }
-}
-
-async function switchRetryToPersonalCredentials(
-  decision: ApprovalDecision,
-  request: RetryApprovalPayload,
-  options: {
-    prepareRetry?: HostRetryInteractionOptions['prepareRetry'];
-    preparationSignal: AbortSignal;
-    commitQueue: PQueue;
-    stores: TuiApprovalStores;
-  },
-): Promise<void> {
-  const signal = options.preparationSignal;
-
-  const requestedProvider = request.data.errorDetails?.provider;
+  const requestedProvider = permission.errorDetails?.provider;
   if (!requestedProvider || !isApiProvider(requestedProvider)) {
     throw new Error(
-      'The failed API provider could not be identified, so TeXRA did not change access settings.',
+      'The failed API provider could not be identified, so TeXRA did not switch this retry to your own key.',
     );
   }
-  const keyExists = await runRetryTask(
-    () => apiKeyExistsUncached(options.stores.secrets, requestedProvider),
-    signal,
+  const keyExists = await apiKeyExistsUncached(
+    stores.secrets,
+    requestedProvider,
   );
   if (!keyExists) {
-    throw new Error(
-      request.tui.missingPersonalApiKeyMessage ??
-        missingApiKeyRetryMessage(requestedProvider),
-    );
+    throw new Error(missingApiKeyRetryMessage(requestedProvider));
   }
-  // The presentation check is deliberately cached. Drop that cache only after
-  // the uncached commit check so getClient() must read the current key.
+  // The presentation check is deliberately cached. Drop that cache after the
+  // uncached check so the next binding reads the current key.
   invalidateApiKeyCache();
-
-  if (!options.prepareRetry) {
-    throw new Error('The model client cannot be refreshed for this retry.');
-  }
-  const prepareRetry = options.prepareRetry;
-
-  // A coding-plan switch must take effect BEFORE the client is rebuilt:
-  // credential and endpoint resolution read the live plan preference (the GLM
-  // coding endpoint is selected from it, and dual-backend Kimi models are
-  // rerouted onto the coding endpoint only while it is on), so rebuilding
-  // first would prepare the retry against the exhausted coding route. The
-  // disable, preparation, and rollback all stay inside one commit-queue slot
-  // so a second coding-plan retry cannot interleave: its disable must wait
-  // until this retry's rollback (if any) has finished.
-  const codingPlanId =
-    decision.disableQuotaRoute !== undefined &&
-    isCodingPlanQuotaRoute(decision.disableQuotaRoute)
-      ? decision.disableQuotaRoute
-      : undefined;
-  const codingPlanRuntime = codingPlanId
-    ? codingPlanSubscriptionRuntimes.find(
-        (runtime) => runtime.descriptor.id === codingPlanId,
-      )
-    : undefined;
-  if (codingPlanId && codingPlanRuntime) {
-    const runtime = codingPlanRuntime;
-    // Wrapped so a cancel settles this retry immediately instead of waiting
-    // for an unrelated stream's commit or rollback to drain first. The task
-    // still runs, and stops at the checks below.
-    await runRetryTask(
-      () =>
-        options.commitQueue.add(async () => {
-          signal.throwIfAborted();
-          const previousCodingPlanEnabled = runtime.getEnabled();
-          try {
-            await runRetryTask(
-              () => setCliCodingPlanSubscription(codingPlanId, false),
-              signal,
-            );
-            signal.throwIfAborted();
-            await prepareRetryClient(prepareRetry, 'personal', signal);
-          } catch (error) {
-            throwWithRollbackFailures(
-              error,
-              await rollbackChangedSettings([
-                codingPlanRollbackConfig(
-                  runtime,
-                  previousCodingPlanEnabled,
-                  options.stores.state,
-                ),
-              ]),
-            );
-          }
-          await applyRetryCredentialCommit(
-            decision,
-            signal,
-            codingPlanRollbackConfig(
-              runtime,
-              previousCodingPlanEnabled,
-              options.stores.state,
-            ),
-          );
-        }),
-      signal,
-    );
-  } else {
-    await prepareRetryClient(prepareRetry, 'personal', signal);
-    // Wrapped so a cancel settles this retry immediately instead of waiting
-    // for an unrelated stream's commit or rollback to drain first. The task
-    // still runs, and stops at the check below.
-    await runRetryTask(
-      () =>
-        options.commitQueue.add(async () => {
-          // The task can wait behind another stream's rollback, so the queue
-          // may have cancelled this retry since it was scheduled.
-          await applyRetryCredentialCommit(decision, signal);
-        }),
-      signal,
-    );
-  }
 }

@@ -4,13 +4,10 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
-import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-
-const VERSION_KEY = 'test.lastKnownVersion';
 
 const EXPECTED_DEFAULTS = EXTERNAL_TOOL_DEFS.filter(
   (def) => def.toggleable,
@@ -19,24 +16,35 @@ const EXPECTED_DEFAULTS = EXTERNAL_TOOL_DEFS.filter(
 describe('seedDisabledToolDefaults', () => {
   afterEach(() => installPlatform());
 
-  it.effect.each([
-    {
-      name: 'a host with a prior-install version marker',
-      globalState: { [VERSION_KEY]: '1.2.3' },
-    },
-    {
-      name: 'an already-seeded DISABLED_TOOLS list, even an empty one',
-      globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] as string[] },
-    },
-  ])('does not seed for $name', ({ globalState }) =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() => installPlatform({ globalState }));
+  it.effect(
+    'seeds toggleable tool defaults when DISABLED_TOOLS is missing',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => installPlatform());
 
-      yield* seedDisabledToolDefaults(platform().globalState, VERSION_KEY);
+        yield* seedDisabledToolDefaults(hostStores().globalState);
 
-      expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
-        globalState[GlobalStateKey.DISABLED_TOOLS],
-      );
-    }),
+        expect(
+          hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
+        ).toEqual(EXPECTED_DEFAULTS);
+      }),
+  );
+
+  it.effect(
+    'does not seed for an already-seeded DISABLED_TOOLS list, even an empty one',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({
+            globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] as string[] },
+          }),
+        );
+
+        yield* seedDisabledToolDefaults(hostStores().globalState);
+
+        expect(
+          hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
+        ).toEqual([]);
+      }),
   );
 });

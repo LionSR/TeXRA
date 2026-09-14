@@ -11,20 +11,33 @@
  * and restores the suite-default fake platform afterward, so overrides never
  * leak into later tests in the same file.
  */
+// The two services by their own modules, not the package barrel: a setup
+// file loads before a suite's `vi.mock` registrations, and the barrel would
+// cache `NodeChildProcessSpawner`'s `node:child_process` ahead of a suite
+// that mocks it.
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import * as NodePath from '@effect/platform-node/NodePath';
+import { Effect } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { AppState } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
-import type { Secrets } from '@platform/secrets';
+import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
+import {
+  LeanLanguageServices,
+  type LeanLanguageServicesShape,
+} from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform, SetupPlatformShape } from '@tools/setup/platform';
 import {
   createFakePlatform,
   createFakeWorkspaceRoots,
+  FakeSecrets,
   type FakeHostOverrides,
   type FakePlatformOptions,
 } from './FakePlatform';
@@ -38,20 +51,63 @@ import type { Layer } from 'effect';
 export interface FakeHost {
   readonly platform: Platform;
   readonly roots: WorkspaceRoots;
+  /** The store the host's `Secrets` service reads, as a root's own local. */
+  readonly secrets: PlatformSecrets;
   readonly setup?: SetupPlatformShape;
 }
 
 type HostBuilder = () => FakeHost | Promise<FakeHost>;
+
+const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
+  executeFileCommand: () =>
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
+  getGoalState: () =>
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
+  getTermGoal: () =>
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
+  getHoverInfo: () =>
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
+  fetchDiagnosticsForFile: () =>
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
+  navigateToFirstError: () => Effect.void,
+  executeProjectCommand: () =>
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
+  stopSessionsForRun: () => Effect.void,
+};
 
 /** Build both halves of a fake host from one option bag. */
 export function createFakeHost(
   options: FakePlatformOptions = {},
   overrides: FakeHostOverrides = {},
 ): FakeHost {
-  const { config, workspaceState, setup, ...platformOverrides } = overrides;
+  const {
+    config,
+    workspaceState,
+    globalState,
+    secrets,
+    setup,
+    ...platformOverrides
+  } = overrides;
   return {
     platform: createFakePlatform(options, platformOverrides),
-    roots: createFakeWorkspaceRoots(options, { config, workspaceState }),
+    roots: createFakeWorkspaceRoots(options, {
+      config,
+      workspaceState,
+      globalState,
+    }),
+    secrets: secrets ?? new FakeSecrets(options.secrets, options.secretsEnv),
     ...(setup ? { setup } : {}),
   };
 }
@@ -75,8 +131,8 @@ export function installedHost(): FakeHost {
  * reinstalls its host mid-test sees the new one.
  */
 export function hostStores(): ModelOptionStores {
-  const { secrets, globalState } = installedHost().platform;
-  return { secrets, globalState };
+  const { secrets, roots } = installedHost();
+  return { secrets, globalState: roots.globalState };
 }
 
 function installedSetup(): SetupPlatformShape {
@@ -110,16 +166,15 @@ export const fakeSetupPlatform: SetupPlatformShape = {
   },
 };
 
-/** The four process services a fake host provides to a program. */
-export type FakeProcessServices =
-  Secrets | AppState | SetupPlatform | ToolInjections;
+/** The process services a fake host provides to a program. */
+export type FakeProcessServices = ProcessServices;
 
 type FakeProcessServicesLayer = Layer.Layer<FakeProcessServices>;
 
 let processServices: FakeProcessServicesLayer | undefined;
 
 /**
- * The four process services over the installed fake host, as
+ * The process services over the installed fake host, as
  * `installFakeHost` builds them for the bare runtime: for a suite that builds
  * a process runtime of its own, or runs a program that requires them under
  * `it.effect`. Available once the first fake host is installed, which the
@@ -170,13 +225,24 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   ]);
   current = host;
   // The process services, over whichever host is installed when a member is
-  // called: hosts change per test, the runtime does not. These four imports
+  // called: hosts change per test, the runtime does not. These imports
   // stay eager: the process runtime is built synchronously by
   // `effectRuntime().runSync` callers, so a lazily imported (asynchronous)
   // layer here fails every one of them.
   processServices ??= Layer.mergeAll(
-    Secrets.layer(() => installedHost().platform.secrets),
-    AppState.layer(() => installedHost().platform.globalState),
+    testHttpClientLayer,
+    // The same standard-library filesystem and path services the process
+    // roots provide, over the real temp roots the harness runs on.
+    NodeFileSystem.layer,
+    NodePath.layer,
+    Layer.mock(UpdateCheckRecords, {}),
+    Layer.mock(InquiryRecords, {}),
+    // A suite that exercises a Lean tool provides its own port innermost.
+    // The run-end stop is absent, as on a host whose Lean integration owns
+    // server lifetime: the mock's placeholder for it would die on every run.
+    Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
+    Secrets.layer(() => installedHost().secrets),
+    AppState.layer(() => installedHost().roots.globalState),
     SetupPlatform.layer(fakeSetupPlatform),
     // No conditional injections on the bare fake host: a suite that
     // exercises them passes its own list to `resolveAgentTools`.
@@ -193,18 +259,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   try {
     effectRuntime();
   } catch {
-    initProcessRuntime(
-      ManagedRuntime.make(
-        Layer.mergeAll(
-          testHttpClientLayer,
-          Layer.mock(UpdateCheckRecords, {}),
-          // Suites using inquiries install the real service with their session
-          // graph. Any inquiry call on this bare fake host is a test error.
-          Layer.mock(InquiryRecords, {}),
-          processServices,
-        ),
-      ),
-    );
+    initProcessRuntime(ManagedRuntime.make(processServices));
   }
   // The auth run edge, unconditionally: a suite that reset modules gets a
   // fresh `@auth/authProgram` instance, and this install must land on it.

@@ -46,9 +46,6 @@ export const RetryPermissionSchema = z.strictObject({
   model: z.string().optional(),
   errorMessage: z.string().optional(),
   errorDetails: ProviderErrorPartialSchema.optional(),
-  /** True when the failed handler was dispatched onto the Kimi Code coding
-   * endpoint, captured before the retry panel opened. */
-  kimiCodeRoutedOnFailure: z.boolean().optional(),
 });
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
@@ -157,26 +154,6 @@ export const UserQuestionAnswersSchema = z.record(
 );
 export type UserQuestionAnswers = z.infer<typeof UserQuestionAnswersSchema>;
 
-/**
- * Host-neutral core of a resolved approval decision, shared by every host
- * (CLI TUI, CLI headless, extension). Hosts that need extra host-specific
- * fields (e.g. the CLI's session bypass / credential mode) extend this rather
- * than redefining the common shape, so the accepted/feedback/answers vocabulary
- * has a single source of truth. See .agents/docs/archived/architecture/2026-05-31-tui-extension-sharing.md
- * (Rung 1).
- */
-export type ApprovalDecision = {
-  accepted: boolean;
-  /**
-   * Free-text payload carried with the decision. For rejections this is the
-   * user's reject-with-feedback note; for an ExternalInquiry accept it is the
-   * answer the agent gets back.
-   */
-  userMessage?: string | undefined;
-  /** Structured answers for an AskUserQuestion request. */
-  userQuestionAnswers?: UserQuestionAnswers | undefined;
-};
-
 export const UserQuestionPermissionSchema = PermissionBaseSchema.extend({
   questions: z.array(UserQuestionPromptSchema).min(1).max(3),
   context: z.string().nullish(),
@@ -188,8 +165,6 @@ export type UserQuestionPermission = z.infer<
 // ============================================================================
 // Plan Approval
 // ============================================================================
-
-export type PlanApprovalAction = 'approve' | 'reject' | 'approve_and_goal';
 
 export type ToolEditApprovalAction =
   'approve' | 'reject' | 'openDiff' | 'showLatexdiff' | 'previewProposed';

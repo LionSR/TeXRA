@@ -47,34 +47,6 @@ const hostSnapshot = {
   modelOptions: [{ value: 'deepseekT', label: 'DeepSeek V4 Flash' }],
   teamOptions: [],
   workspaceRoots: [],
-  fileConfigs: [
-    {
-      type: 'input',
-      label: 'Input',
-      icon: 'file-code',
-      addOpenedLabel: 'Add opened files as input',
-      emptyListLabel: 'Clear all input files',
-      selectListLabel: 'Add input files',
-      toolConfig: 'tool',
-    },
-    {
-      type: 'context',
-      label: 'Context',
-      icon: 'book',
-      addOpenedLabel: 'Add opened files as context',
-      emptyListLabel: 'Clear all context files',
-      selectListLabel: 'Add context files',
-    },
-    {
-      type: 'media',
-      label: 'Media',
-      icon: 'video',
-      addOpenedLabel: 'Add opened files as media',
-      emptyListLabel: 'Clear all media files',
-      selectListLabel: 'Add media files',
-      toolConfig: 'autoExtract',
-    },
-  ],
   fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
   isGitRepo: false,
   recording: null,
@@ -93,7 +65,6 @@ const hostSnapshot = {
 function sessionLog() {
   const events = [];
   const seqs = new Map();
-  const entrySeqs = new Map();
   let commit = 0;
   const emit = (logicalId, at, body) => {
     const aggregateId = JSON.stringify(['run', logicalId]);
@@ -103,12 +74,7 @@ function sessionLog() {
     events.push({ aggregateId, seq, commit, ownerId: OWNER, at, ...body });
   };
   const entry = (runId, at, fields) => {
-    const seqNo = (entrySeqs.get(runId) ?? 0) + 1;
-    entrySeqs.set(runId, seqNo);
-    emit(runId, at, {
-      type: 'transcript.entry',
-      entry: { seqNo, level: 'info', timestamp: at, type: 'log', ...fields },
-    });
+    emit(runId, at, { type: 'log', level: 'info', ...fields });
   };
   return { events, emit, entry };
 }
@@ -148,10 +114,8 @@ function startRun(log, { runId, agent, at, parentRunId }) {
     },
   });
   log.emit(runId, at, {
-    type: 'status',
-    phase: 'running',
-    cause: 'lifecycle',
-    runStartedAt: at,
+    type: 'flow.step',
+    payload: { family: 'toolUse', step: 'turn.begin' },
   });
 }
 
@@ -167,14 +131,12 @@ function conversationEvents({ approval = false } = {}) {
     description: 'Check citation coverage and suggest BibTeX entries.',
   });
   log.entry(RUN, NOW, {
-    id: 'msg-1',
     messageType: 'userMessage',
-    text: 'hello world',
+    message: 'hello world',
   });
   log.entry(RUN, NOW + 1000, {
-    id: 'msg-2',
     messageType: 'modelResponse',
-    text: 'I will inspect the manuscript and report missing citations.',
+    message: 'I will inspect the manuscript and report missing citations.',
   });
   log.emit(RUN, NOW + 1500, {
     type: 'conversation.progress',
@@ -188,7 +150,7 @@ function conversationEvents({ approval = false } = {}) {
       parentRunId: RUN,
     });
     log.emit(RUN, NOW + 3000, {
-      type: 'approval.requested',
+      type: 'request.opened',
       requestId: 'smoke-tool-edit-approval',
       payload: {
         kind: 'toolEdit',
@@ -204,11 +166,12 @@ function conversationEvents({ approval = false } = {}) {
           isLatex: true,
         },
       },
+      thread: null,
     });
     log.entry(RUN, NOW + 3000, {
-      id: 'msg-3',
       messageType: 'modelResponse',
-      text: 'I found a one-line correction and need approval before editing main.tex.',
+      message:
+        'I found a one-line correction and need approval before editing main.tex.',
     });
   }
   return log.events;

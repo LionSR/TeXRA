@@ -9,8 +9,9 @@
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
+import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
-import type { ManagedRuntime } from 'effect';
+import type { FileSystem, ManagedRuntime, Path } from 'effect';
 import type { HttpClient } from 'effect/unstable/http';
 
 import type { AppState } from './interfaces';
@@ -18,17 +19,26 @@ import type { Secrets } from './secrets';
 
 /**
  * The runtime over the process-lifetime services every entry provides: the
- * four cohort-A tags beside the records and the HTTP client, merged once in
- * `installProcessRuntime`'s `services` layer.
+ * four cohort-A tags beside the records, the Lean port and the HTTP client,
+ * merged once in `installProcessRuntime`'s `services` layer, plus the
+ * standard library's `FileSystem` and `Path`, which the same install provides
+ * from `@effect/platform-node` so a program that reads or resolves a file
+ * takes them from context instead of building a Node layer of its own.
  */
-export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
+export type ProcessServices =
+  | FileSystem.FileSystem
+  | Path.Path
   | HttpClient.HttpClient
   | InquiryRecords
   | UpdateCheckRecords
   | Secrets
   | AppState
   | SetupPlatform
-  | ToolInjections,
+  | ToolInjections
+  | LeanLanguageServices;
+
+export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
+  ProcessServices,
   never
 >;
 

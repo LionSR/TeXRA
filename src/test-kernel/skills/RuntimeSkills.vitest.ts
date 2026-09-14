@@ -38,11 +38,11 @@ setupPlatform({ workspacePath: '/workspace' });
 
 afterEach(async () => {
   setRuntimeSkillSources([]);
-  await workspaceRoots().workspaceState.update(
+  await workspaceRoots().config.update(
     WorkspaceStateKey.DISABLED_SKILLS,
     undefined,
   );
-  await workspaceRoots().workspaceState.update(
+  await workspaceRoots().config.update(
     WorkspaceStateKey.DISABLED_SKILL_SOURCES,
     undefined,
   );
@@ -160,7 +160,7 @@ describe('runtime skills', () => {
         { scope: 'project', path: projectRoot },
         { scope: 'user', path: userRoot },
       ]);
-      await workspaceRoots().workspaceState.update(key, value);
+      await workspaceRoots().config.update(key, value);
 
       const result = await loadRuntimeSkillCatalog();
 
@@ -204,7 +204,7 @@ describe('runtime skills', () => {
     ).not.toThrow();
     expect(
       store
-        .getRange(0)
+        .toJSON()
         .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)
         ?.data,
     ).toStrictEqual({ skills: result.skills });

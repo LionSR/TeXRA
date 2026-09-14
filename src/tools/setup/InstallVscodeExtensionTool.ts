@@ -4,8 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import { hostPort } from '@common/hostPort';
-import { effectRuntime } from '@platform/processRuntime';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
 import { executed } from '@tools/core/result';
@@ -82,15 +81,12 @@ const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
   },
 );
 
-export class InstallVscodeExtensionTool extends defineTool({
+export const InstallVscodeExtensionTool = defineTool({
   name: 'install_vscode_extension',
   // Requires VS Code extensions.
   unavailableHosts: ['cli', 'desktop'],
   requiresApproval: true,
   description: `Install a VS Code extension from the Marketplace. Allowlisted: James-Yu.latex-workshop, leanprover.lean4. Blocks other extension IDs. Use this (rather than \`invoke_command workbench.extensions.installExtension\`) so the caller gets a clean success/failure status.`,
   schema: InstallVscodeExtensionInputSchema,
-}) {
-  protected execute(input: InstallVscodeExtensionInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(installExtension(input));
-  }
-}
+  execute: installExtension,
+});

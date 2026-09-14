@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { renderAgentTemplateString } from '@agent/templates';
@@ -11,9 +12,11 @@ import {
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
+import { hostPort } from '@common/hostPort';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { AgentCategory } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -101,7 +104,7 @@ async function pickToolGroups(
   });
 }
 
-function buildVSCodeUI(): AgentCreatorUI {
+function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
   return {
     async promptAgentName(categoryLabel) {
       return vscode.window.showInputBox({
@@ -152,7 +155,7 @@ function buildVSCodeUI(): AgentCreatorUI {
     },
 
     promptAddToConfig(agentName, category) {
-      return promptToAddAgentToConfig(agentName, 'custom', category);
+      return promptToAddAgentToConfig(agentName, 'custom', category, runtime);
     },
 
     async openCreatedFile(filePath) {
@@ -174,18 +177,27 @@ function buildVSCodeUI(): AgentCreatorUI {
  * session, so there is no `AgentConfig` to hand it and no resume state to
  * keep coherent.
  */
-export async function handleCreateAgentWithAI(
+export function handleCreateAgentWithAI(
   context: vscode.ExtensionContext,
   category: AgentCategory,
   secrets: PlatformSecrets,
-): Promise<void> {
-  try {
-    const config = await loadCreatorConfig(context);
-    await runAgentCreator(config, category, buildVSCodeUI(), {
+  runtime: ProcessRuntime,
+) {
+  return Effect.gen(function* () {
+    const config = yield* hostPort(() => loadCreatorConfig(context));
+    yield* runAgentCreator(config, category, buildVSCodeUI(runtime), {
       secrets,
       globalState: context.globalState,
     });
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Failed to create agent', err);
-  }
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Effect.promise(async () => {
+        await showLoggedErrorMessage(
+          CHANNEL,
+          'Failed to create agent',
+          Cause.squash(cause),
+        );
+      }),
+    ),
+  );
 }

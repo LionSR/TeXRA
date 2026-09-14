@@ -38,12 +38,9 @@ import {
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
+import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import {
   CLI_LOCAL_RUN_ID,
-  notices,
-  noticesFor,
-} from '@cli/chat/tui/state/transcript';
-import {
   activeForm,
   activeRunId,
   closeForegroundReader,
@@ -62,6 +59,7 @@ import * as providerApiKey from '@cli/runtime/providerApiKey';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import * as codexPreference from '@model/codex/codexPreference';
+import { effectRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -152,7 +150,12 @@ function seedChildRoster(
  * The process stores the built-in commands and the slash context read, the
  * pair the chat entry point threads in from its own platform services.
  */
-const stores = { secrets: new FakeSecrets(), state: new FakeStateStore() };
+const stores = {
+  secrets: new FakeSecrets(),
+  state: new FakeStateStore(),
+  runtime: effectRuntime(),
+  runtimeSession: defaultSession(),
+};
 
 function createSession(): TuiSession {
   return new TuiSession();
@@ -557,6 +560,7 @@ describe('handleTuiSlashCommand', () => {
 
     const completion = loginFromChat(
       'chatgpt --no-browser',
+      effectRuntime(),
       createCliContext(),
       silentOutput(),
     );

@@ -19,9 +19,7 @@ import { aliases } from '../../scripts/aliases.mjs';
  * cross-origin and gets blocked by CORS (confirmed empirically; `crossorigin`
  * on the tag isn't the cause — removing it doesn't help).
  * `vite-plugin-singlefile` leaves no external file for the module to fetch,
- * so the default export opens via `file://` with no server running. The same
- * page, left un-injected, serves the CLI's `--assets-dir` site-hosting mode
- * over http(s) by fetching its `?trace=` file.
+ * so the export opens via `file://` with no server running.
  */
 const RESOURCES_OUT_DIR = resolve(
   import.meta.dirname,

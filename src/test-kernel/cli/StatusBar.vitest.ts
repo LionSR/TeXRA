@@ -55,7 +55,7 @@ function statusInput(
     queuedFollowUpMessages: [],
     usage: undefined,
     contextState: undefined,
-    stage: undefined,
+    flow: undefined,
     subagents: 0,
     runningSessions: 0,
     approvalDepth: 0,
@@ -557,7 +557,7 @@ describe('CLI StatusBar display model', () => {
           contextWindow: 1_000_000,
           utilizationPercent: 8,
         },
-        stage: { kind: 'round', index: 1 },
+        flow: { family: 'reflection', step: 'round.begin', round: 1 },
         subagents: 2,
         approvalDepth: 3,
         modelAccess: 'api-key',
@@ -583,32 +583,29 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
-  it('shows the planned round total when the workflow declares one', () => {
+  it('shows a tool-use run its turn, not the round it never advances', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: RUN_PHASE.RUNNING,
-        stage: { kind: 'round', index: 1, total: 3 },
+        // What the loop writes: the turn is one-based (`state.turn + 1`) and
+        // the round stays at the zero it opened with.
+        flow: { family: 'toolUse', step: 'turn.begin', round: 0, turn: 2 },
       }),
     );
 
-    const segment = display.left.find((item) => item.text === 'r2/3');
-    expect(segment).toBeDefined();
-    // Narrow terminals degrade to the bare current round, not to nothing.
-    expect(segment?.compactText).toBe('r2');
+    expect(leftTexts(display)).toContain('t2');
+    expect(leftTexts(display)).not.toContain('r1');
   });
 
-  it('carries a workflow-script phase in the same stage slot', () => {
+  it('leaves the flow slot empty until the loop reaches a coordinate', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: RUN_PHASE.RUNNING,
-        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
+        flow: { family: 'toolUse', step: 'waiting' },
       }),
     );
 
-    const segment = display.left.find((item) => item.text === 'Reduce (2/3)');
-    expect(segment).toBeDefined();
-    // Narrow terminals degrade to the bare current phase, not to nothing.
-    expect(segment?.compactText).toBe('Reduce (2)');
+    expect(leftTexts(display).join(' ')).not.toMatch(/\b[rt]\d/);
   });
 
   it('reports the window the model handler served, not a registry lookup', () => {

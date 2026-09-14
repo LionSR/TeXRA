@@ -22,7 +22,6 @@ import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { FileOptions, SessionType } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { FILE_SELECT_CONFIGS } from '@shared/launcher/fileSelectConfigs';
 import type {
   HostSnapshot,
   ProjectDisplay,
@@ -116,7 +115,6 @@ export function createHostSnapshotSource(
       project: options.project,
       ...catalogs,
       workspaceRoots: options.workspaceRoots?.() ?? [],
-      fileConfigs: [...FILE_SELECT_CONFIGS],
       fileOptions: { ...fileOptions, commit: ['HEAD', ...commits.commits] },
       isGitRepo: commits.isGitRepo,
       recording,

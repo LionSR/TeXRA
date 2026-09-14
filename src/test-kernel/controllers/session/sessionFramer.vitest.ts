@@ -71,37 +71,28 @@ const runStart: SessionEventDraft = {
   parent: null,
 };
 
+/** The loop parked on a request: the fold reads the phase off this row. */
 const waiting: SessionEventDraft = {
-  type: 'status',
+  type: 'flow.step',
   aggregateId: qualifyAggregateId('run', RUN),
-  phase: RUN_PHASE.WAITING,
-  cause: 'wait',
+  payload: { family: 'toolUse', step: 'waiting' },
 };
 
+/** The loop moving again, which is what makes the run running. */
 const running: SessionEventDraft = {
-  type: 'status',
+  type: 'flow.step',
   aggregateId: qualifyAggregateId('run', RUN),
-  phase: RUN_PHASE.RUNNING,
-  previousPhase: RUN_PHASE.WAITING,
-  cause: 'resume',
+  payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn: 1 },
 };
 
 /** A running model reply with no text of its own: the row the live text for
  *  `rowId` paints into once its entry folds. */
 function streamingRow(runId: RunId, rowId: string): SessionEventDraft {
   return {
-    type: 'transcript.entry',
+    type: 'stream.start',
     aggregateId: qualifyAggregateId('run', runId),
-    entry: {
-      seqNo: 1,
-      id: rowId,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: 'info',
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      timestamp: 0,
-      text: '',
-      data: { status: 'running' },
-    },
+    id: rowId,
+    kind: MESSAGE_TYPES.MODEL_RESPONSE,
   };
 }
 
@@ -168,7 +159,7 @@ function drawn(view: SessionView) {
     order: view.order,
     status: run?.status ?? null,
     group: run?.group ?? null,
-    approvals: view.approvals.map((a) => a.requestId),
+    requests: view.requests.map((request) => request.requestId),
     rows:
       run?.transcript.rows.map((row) => [row.id, rowText(view, RUN, row.id)]) ??
       [],
@@ -220,37 +211,92 @@ describe('session framer', () => {
     ).toBe(true);
   });
 
-  it('preserves run subscription keys across the webview bridge', async () => {
-    const session = createTestSession();
-    const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
-    const bridge = new SessionBridge({
-      session,
-      onPortClosed: () => {},
-      handleHostRequest: async () => {
-        throw new Error('No host request is expected.');
-      },
-    });
-    const keys = [
-      qualifyAggregateId('run', RUN),
-      qualifyAggregateId('run', SECOND),
-    ];
-    try {
-      bridge.attach({ id: PORT, send: () => {} }).receive({
+  it.live('preserves run subscription keys across the webview bridge', () =>
+    Effect.gen(function* () {
+      const session = createTestSession();
+      // Registered first, so it runs last: the bridge's ports release their
+      // transcript sets through the session before it goes.
+      yield* Effect.addFinalizer(() => session.dispose());
+      const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
+      const bridge = yield* SessionBridge.make({
+        session,
+        onPortClosed: () => {},
+        handleHostRequest: async () => {
+          throw new Error('No host request is expected.');
+        },
+      });
+      const keys = [
+        qualifyAggregateId('run', RUN),
+        qualifyAggregateId('run', SECOND),
+      ];
+      const port = yield* bridge.attach({ id: PORT, send: () => {} });
+      yield* port.receive({
         ...subscribe,
         session: session.roots.storage,
         aggregates: keys.map((id) => ({ id, fromSeq: 0 })),
       });
-      await vi.waitFor(() => {
-        expect(setSubscriptions).toHaveBeenCalledWith(
-          PORT,
-          keys.map((id) => ({ id, fromSeq: 0 })),
-        );
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(setSubscriptions).toHaveBeenCalledWith(
+            PORT,
+            keys.map((id) => ({ id, fromSeq: 0 })),
+          );
+        }),
+      );
+    }),
+  );
+  it.live('closes a superseded port before registering its replacement', () =>
+    Effect.gen(function* () {
+      const session = createTestSession();
+      yield* Effect.addFinalizer(() => session.dispose());
+      const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
+      const onPortClosed = vi.fn();
+      const bridge = yield* SessionBridge.make({
+        session,
+        onPortClosed,
+        handleHostRequest: async () => {
+          throw new Error('No host request is expected.');
+        },
       });
-    } finally {
-      bridge.dispose();
-      session.dispose();
-    }
-  });
+      const aggregates = [{ id: qualifyAggregateId('run', RUN), fromSeq: 0 }];
+      const first = yield* bridge.attach({ id: PORT, send: () => {} });
+      yield* first.receive({
+        ...subscribe,
+        session: session.roots.storage,
+        aggregates,
+      });
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(setSubscriptions).toHaveBeenCalledWith(PORT, aggregates);
+        }),
+      );
+
+      const second = yield* bridge.attach({ id: PORT, send: () => {} });
+      yield* second.receive({
+        ...subscribe,
+        session: session.roots.storage,
+        aggregates,
+      });
+
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(setSubscriptions.mock.calls).toEqual([
+            [PORT, aggregates],
+            [PORT, []],
+            [PORT, aggregates],
+          ]);
+          expect(onPortClosed).toHaveBeenCalledTimes(1);
+          expect(onPortClosed).toHaveBeenCalledWith(PORT);
+          expect(setSubscriptions.mock.invocationCallOrder[1]).toBeLessThan(
+            setSubscriptions.mock.invocationCallOrder[2]!,
+          );
+          expect(onPortClosed.mock.invocationCallOrder[0]).toBeLessThan(
+            setSubscriptions.mock.invocationCallOrder[2]!,
+          );
+        }),
+      );
+    }),
+  );
   it.effect(
     'answers a Subscribe with the replay, then frames the tail every 16 ms with one chunk per row',
     () =>
@@ -281,9 +327,9 @@ describe('session framer', () => {
           ),
         ).toEqual([
           ['listing', 'run.start'],
-          ['listing', 'status'],
+          ['listing', 'flow.step'],
           ['aggregate', 'run.start'],
-          ['aggregate', 'status'],
+          ['aggregate', 'flow.step'],
         ]);
         expect(replay.at(-1)?.local?.self).toEqual([SELF]);
         // The tail: a commit after the replay is framed as an `all` row and
@@ -570,7 +616,18 @@ describe('session framer', () => {
       }).pipe(
         Effect.provide(
           Layer.merge(
-            runtimeGraph([runStart, waiting, streamingRow(RUN, 'row-1')]),
+            // The row opens while the loop is still between steps: a parked
+            // loop closes the transcript boundary, and a closed boundary
+            // opens no streaming row for the live text to paint into.
+            runtimeGraph([
+              runStart,
+              {
+                type: 'run.description',
+                aggregateId: qualifyAggregateId('run', RUN),
+                description: 'framing',
+              },
+              streamingRow(RUN, 'row-1'),
+            ]),
             WebviewSessions.layerNoDeps,
           ),
         ),

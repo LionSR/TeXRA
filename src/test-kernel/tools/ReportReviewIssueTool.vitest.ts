@@ -1,13 +1,18 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect } from 'effect';
+import { it } from '@effect/vitest';
+// Test composition imports
+
 // Third-party imports
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { ReportReviewIssueTool } from '@tools/ReportReviewIssueTool';
+import type { RunId } from '@shared/schemas';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { getDefaultToolRegistry } from '@tools/registry';
 
 /** The review sink a host attaches, derived from the port. */
 type ReportReviewIssueSink = NonNullable<HostInteractions['reportReviewIssue']>;
@@ -27,17 +32,13 @@ function useReviewSink(sink: ReportReviewIssueSink): void {
   detachHostInteractions();
   detachHostInteractions = defaultSession().interactions.use({
     reportReviewIssue: sink,
-    cancel: () => undefined,
   });
 }
 
-function useAcceptingSink(): {
-  sink: Mock<ReportReviewIssueSink>;
-  tool: ReportReviewIssueTool;
-} {
+function useAcceptingSink() {
   const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
   useReviewSink(sink);
-  return { sink, tool: new ReportReviewIssueTool() };
+  return { sink, tool: getDefaultToolRegistry().get('report_review_issue')! };
 }
 
 describe('ReportReviewIssueTool', () => {
@@ -46,66 +47,118 @@ describe('ReportReviewIssueTool', () => {
     detachHostInteractions = () => undefined;
   });
 
-  it('runs each finding to the sink immediately and unchanged', async () => {
-    const { sink, tool } = useAcceptingSink();
-    const first = { ...REPORT, endLine: 7 };
-    const second = {
-      ...REPORT,
-      file: 'src/y.ts',
-      startLine: 11,
-      title: 'Dropped result',
-    };
+  it.effect('runs each finding to the sink immediately and unchanged', () =>
+    Effect.gen(function* () {
+      const { sink, tool } = useAcceptingSink();
+      const first = { ...REPORT, endLine: 7 };
+      const second = {
+        ...REPORT,
+        file: 'src/y.ts',
+        startLine: 11,
+        title: 'Dropped result',
+      };
 
-    await tool.call(first);
+      yield* tool.call(first);
 
-    expect(sink).toHaveBeenCalledTimes(1);
-    expect(sink).toHaveBeenLastCalledWith({
-      ...first,
-      suggestion: undefined,
-    });
+      expect(sink).toHaveBeenCalledTimes(1);
+      expect(sink).toHaveBeenLastCalledWith({
+        ...first,
+        suggestion: undefined,
+      });
 
-    await tool.call(second);
+      yield* tool.call(second);
 
-    expect(sink).toHaveBeenCalledTimes(2);
-    expect(sink).toHaveBeenLastCalledWith({
-      ...second,
-      endLine: undefined,
-      suggestion: undefined,
-    });
-  });
+      expect(sink).toHaveBeenCalledTimes(2);
+      expect(sink).toHaveBeenLastCalledWith({
+        ...second,
+        endLine: undefined,
+        suggestion: undefined,
+      });
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
-  it('reports that agent review is unavailable when no host serves it', async () => {
-    const tool = new ReportReviewIssueTool();
+  it.effect(
+    'reports that agent review is unavailable when no host serves it',
+    () =>
+      Effect.gen(function* () {
+        const tool = getDefaultToolRegistry().get('report_review_issue')!;
 
-    const result = await tool.call(REPORT);
+        const result = yield* tool.call(REPORT);
 
-    expect(result).toMatchObject({
-      summary: 'Review issue not accepted',
-      output: expect.stringContaining('not available'),
-    });
-  });
+        expect(result).toMatchObject({
+          summary: 'Review issue not accepted',
+          output: expect.stringContaining('not available'),
+        });
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'tool-test' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
 
-  it('surfaces the sink rejection reason when a review session refuses it', async () => {
-    useReviewSink(() => ({
-      accepted: false,
-      reason: 'No agent review session is collecting issues.',
-    }));
-    const tool = new ReportReviewIssueTool();
+  it.effect(
+    'surfaces the sink rejection reason when a review session refuses it',
+    () =>
+      Effect.gen(function* () {
+        useReviewSink(() => ({
+          accepted: false,
+          reason: 'No agent review session is collecting issues.',
+        }));
+        const tool = getDefaultToolRegistry().get('report_review_issue')!;
 
-    const result = await tool.call(REPORT);
+        const result = yield* tool.call(REPORT);
 
-    expect(result).toMatchObject({
-      summary: 'Review issue not accepted',
-      output: expect.stringContaining('No agent review session'),
-    });
-  });
+        expect(result).toMatchObject({
+          summary: 'Review issue not accepted',
+          output: expect.stringContaining('No agent review session'),
+        });
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'tool-test' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
 
-  it('rejects invalid input before reaching the sink', async () => {
-    const { sink, tool } = useAcceptingSink();
+  it.effect('rejects invalid input before reaching the sink', () =>
+    Effect.gen(function* () {
+      const { sink, tool } = useAcceptingSink();
 
-    const result = await tool.call({ ...REPORT, severity: 'fatal' });
+      const result = yield* tool.call({ ...REPORT, severity: 'fatal' });
 
-    expect(result).toMatchObject({ status: 'error' });
-    expect(sink).not.toHaveBeenCalled();
-  });
+      expect(result).toMatchObject({ status: 'error' });
+      expect(sink).not.toHaveBeenCalled();
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 });

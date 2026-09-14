@@ -15,6 +15,7 @@
  * an open borrows, `close` settles and releases, and the runtime's disposal
  * releases whatever is still open.
  */
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import {
   Context,
   Deferred,
@@ -32,6 +33,8 @@ import {
   SubscriptionRef,
   Fiber,
   Scope,
+  type FileSystem,
+  type Path,
 } from 'effect';
 import { FetchHttpClient } from 'effect/unstable/http';
 
@@ -45,6 +48,7 @@ import { EditorModel } from '@agent/runtime/run/modelBinding';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   initSessionOwner,
@@ -57,6 +61,8 @@ import {
   clearProcessRuntime,
   initProcessRuntime,
   tryProcessRuntime,
+  type ProcessRuntime,
+  type ProcessServices,
 } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
@@ -68,6 +74,8 @@ import {
   aggregateTarget,
   isDisplaySessionEvent,
   ownerIdentity,
+  TOOL_CALL_STATUS,
+  type CommitOrdinal,
   type OwnerId,
   type SessionCloseReport,
   type SessionEvent,
@@ -79,6 +87,8 @@ import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { SessionInputs } from '@shared/session/sessionInputs';
 
 import { Database } from '@shared/session/database';
+import { releaseRunResources } from '@tools/approval';
+import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
@@ -87,11 +97,11 @@ import { databaseLayer } from './Database';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
-import { applyCommittedRunRemoval } from './applyCommittedRunRemoval';
 import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
+  type InflightTextChunk,
 } from './sessionSources';
 import { SessionViewService } from './SessionView';
 import { sessionInputsLayer } from './sessionInputs';
@@ -132,6 +142,29 @@ class SessionKey implements Equal.Equal {
 class Session extends Context.Service<Session, SessionHandle>()(
   '@texra/session/Session',
 ) {}
+
+/**
+ * The sessions the owner holds, outside the map: what the owner's
+ * synchronous `current` reads. An entry is written once its handle exists
+ * and removed as the first step of its release, so a root whose session is
+ * still building, or already unwinding, reads as having none. Keyed by the
+ * entry's `SessionKey` and matched on its captured `key.storage` at lookup,
+ * as `heldSession` matches. A session retains the roots resolved when it opens. `heldSession` below is the map's own answer, which
+ * waits for a building entry; `closeSession` needs that, a synchronous read
+ * cannot have it.
+ */
+type HeldSessions = Map<SessionKey, SessionHandle>;
+
+/** The held session whose key names `root`, if one does. */
+function heldSessionSync(
+  held: HeldSessions,
+  root: string,
+): SessionHandle | undefined {
+  for (const [key, session] of held) {
+    if (key.storage === root) return session;
+  }
+  return undefined;
+}
 
 /** The owner ids of the non-terminal runs another process wrote. */
 function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
@@ -218,12 +251,15 @@ const ownerLiveness = Layer.effectDiscard(
  */
 const sessionHandleLayer = (
   key: SessionKey,
-  release: (key: SessionKey) => void,
+  held: HeldSessions,
+  release: (key: SessionKey) => Effect.Effect<void>,
+  runtime: ProcessRuntime,
 ) =>
   Layer.effect(
     Session,
     Effect.gen(function* () {
-      const { publish, ...reads } = yield* SessionEvents;
+      const { publish, exclusive, detach, settle, ...reads } =
+        yield* SessionEvents;
       const eventLog = yield* Database;
       const ledger = yield* RunLedger;
       const inquiryRecords = yield* InquiryRecords;
@@ -239,41 +275,45 @@ const sessionHandleLayer = (
           SubscriptionRef.getUnsafe(view.ref).cursor,
           SubscriptionRef.getUnsafe(delivered),
         );
-      const settlePublication = (rows: readonly SessionEvent[]) =>
+      /** Wait until the tail has delivered and the view has folded every
+       *  commit up to `commit`: what "published" means to a caller that
+       *  reads the view next. */
+      const settleTo = (commit: CommitOrdinal) =>
         Effect.gen(function* () {
-          const last = rows.at(-1);
-          if (last) {
-            yield* SubscriptionRef.changes(delivered).pipe(
-              Stream.filter((commit) => commit >= last.commit),
-              Stream.runHead,
-              Effect.raceFirst(
-                Deferred.await(tailEnded).pipe(
-                  Effect.andThen(
-                    Effect.die(
-                      new Error('Session committed-event consumer stopped'),
-                    ),
+          yield* SubscriptionRef.changes(delivered).pipe(
+            Stream.filter((delivered) => delivered >= commit),
+            Stream.runHead,
+            Effect.raceFirst(
+              Deferred.await(tailEnded).pipe(
+                Effect.andThen(
+                  Effect.die(
+                    new Error('Session committed-event consumer stopped'),
                   ),
                 ),
               ),
-            );
-          }
-          if (last) {
-            yield* view.changes.pipe(
-              Stream.filter((state) => state.cursor >= last.commit),
-              Stream.runHead,
-              Effect.flatMap((state) =>
-                Option.isSome(state)
-                  ? Effect.void
-                  : Effect.die(
-                      new Error(
-                        'Session view stopped before publication settled',
-                      ),
+            ),
+          );
+          yield* view.changes.pipe(
+            Stream.filter((state) => state.cursor >= commit),
+            Stream.runHead,
+            Effect.flatMap((state) =>
+              Option.isSome(state)
+                ? Effect.void
+                : Effect.die(
+                    new Error(
+                      'Session view stopped before publication settled',
                     ),
-              ),
-            );
-          }
-          return rows;
+                  ),
+            ),
+          );
         });
+      const settlePublication = (rows: readonly SessionEvent[]) => {
+        const last = rows.at(-1);
+        return last === undefined
+          ? Effect.succeed(rows)
+          : settleTo(last.commit).pipe(Effect.as(rows));
+      };
+      const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
         ledger,
@@ -301,15 +341,12 @@ const sessionHandleLayer = (
           }
           return pieces.reverse().join('');
         },
-        acquireRunClaims: (runId) =>
-          eventLog.acquireClaims([qualifyAggregateId('run', runId)]).pipe(
+        acquireClaims: (id) =>
+          eventLog.acquireClaims([id]).pipe(
             Effect.map((ids) => eventLog.releaseClaims(ids).pipe(Effect.orDie)),
             Effect.orDie,
           ),
-        releaseRunClaims: (runId) =>
-          eventLog
-            .releaseClaims([qualifyAggregateId('run', runId)])
-            .pipe(Effect.orDie),
+        releaseClaims: (id) => eventLog.releaseClaims([id]).pipe(Effect.orDie),
         runRecords: (id) =>
           eventLog
             .readRunRecords(qualifyAggregateId('run', id))
@@ -319,8 +356,36 @@ const sessionHandleLayer = (
             .readRunChildren(qualifyAggregateId('run', id))
             .pipe(Effect.orDie),
         recordListing: () => eventLog.readListing().pipe(Effect.orDie),
+        aggregateRows: (id) => eventLog.readAggregate(id, 1).pipe(Effect.orDie),
         publish: (events) =>
           publish(events).pipe(Effect.flatMap(settlePublication)),
+        // A job settles against the last commit it appended, never against
+        // whatever the publisher committed next: a job that appended nothing
+        // (a decision already taken, an empty update) returns at once.
+        exclusive: (job) =>
+          Effect.gen(function* () {
+            let committed: CommitOrdinal | null = null;
+            const value = yield* exclusive((append) =>
+              job((events) =>
+                append(events).pipe(
+                  Effect.tap((rows) =>
+                    Effect.sync(() => {
+                      const last = rows.at(-1);
+                      if (last !== undefined) committed = last.commit;
+                    }),
+                  ),
+                ),
+              ),
+            );
+            if (committed !== null) yield* settleTo(committed);
+            return value;
+          }),
+        detach,
+        settle: settle.pipe(
+          Effect.flatMap((committed) =>
+            committed === null ? Effect.void : settleTo(committed),
+          ),
+        ),
         publishRegistration: (events) =>
           Effect.gen(function* () {
             const rows = yield* publish(events);
@@ -335,6 +400,7 @@ const sessionHandleLayer = (
           }),
         view: view.ref,
         viewChanges: view.changes,
+        storeCleared: eventLog.cleared,
         // Release rows only once both the view fold and local reconciliation
         // have applied them. Readers can then query either state consistently.
         folded: (fromCommit) =>
@@ -357,7 +423,7 @@ const sessionHandleLayer = (
         subscriptions,
         // The request handler admits on the root graph's log.
         requests: sessionRequests(session, eventLog, local.ref, inquiryRecords),
-        now: () => SubscriptionRef.getUnsafe(eventLog.observedCommit),
+        now,
         close: () => release(key),
       });
       // Capture before constructing the handle: constructor publications and
@@ -376,6 +442,9 @@ const sessionHandleLayer = (
         initialListing,
         key.open.transcriptMode,
       ).pipe(Effect.orDie);
+      // The gate's probe fibers and waiting calls end with this scope, after
+      // the handle below has unwound its runs.
+      const modelRetries = yield* ModelRetryGate.make;
       const session = yield* Effect.acquireRelease(
         Effect.sync(
           () =>
@@ -383,6 +452,8 @@ const sessionHandleLayer = (
               ...key.open,
               transcripts,
               graph,
+              modelRetries,
+              runtime,
             }),
         ),
         (session) =>
@@ -408,33 +479,78 @@ const sessionHandleLayer = (
             ),
           ),
       );
+      // Registered after the handle, so it is the first thing unwound when
+      // the entry closes: `current` stops answering with this session before
+      // its owners unwind.
+      yield* Effect.acquireRelease(
+        Effect.sync(() => held.set(key, session)),
+        () => Effect.sync(() => held.delete(key)),
+      );
       yield* SubscriptionRef.set(delivered, anchor);
       yield* reads.all(anchor, delivered).pipe(
         Stream.runForEach((event) =>
           session.receiveCommittedEvent(event).pipe(
             Effect.andThen(() => {
               const target = aggregateTarget(event.aggregateId);
+              // The local half of a committed removal. The run's goal needs
+              // nothing: `run.removed` drops the run from the view, and its
+              // `goalStateChanged` row goes with it.
               return event.type === 'run.removed' && target.kind === 'run'
-                ? applyCommittedRunRemoval(session, target.id)
+                ? Effect.sync(() => {
+                    session.runs.detachChildren(target.id);
+                    releaseRunResources(target.id, session);
+                  })
                 : Effect.void;
             }),
-            Effect.andThen(
-              event.type === 'stream.end'
-                ? SubscriptionRef.update(chunks.ref, (held) => {
-                    const next = new Map(held);
-                    next.delete(
-                      `${aggregateTarget(event.aggregateId).id}/${event.id}`,
-                    );
-                    return next;
-                  })
-                : Effect.void,
-            ),
+            Effect.andThen(() => {
+              // A row that closes live text drops the held chunks: a
+              // stream's final text or a card's terminal result drop their
+              // own; the run's transcript boundary (the park, the end, the
+              // removal) drops every chunk of the run, the same rule the
+              // fold applies to its in-flight text, so a card an
+              // interrupted run closed without a terminal row holds nothing.
+              const runId = aggregateTarget(event.aggregateId).id;
+              let drop: ((key: string) => boolean) | null = null;
+              if (event.type === 'stream.end') {
+                drop = (key) => key === `${runId}/${event.id}`;
+              } else if (
+                event.type === 'tool.end' &&
+                event.status !== TOOL_CALL_STATUS.IN_PROGRESS
+              ) {
+                drop = (key) => key === `${runId}/${event.logId}`;
+              } else if (
+                event.type === 'run.end' ||
+                event.type === 'run.removed' ||
+                (event.type === 'flow.step' && event.payload.step === 'waiting')
+              ) {
+                drop = (key) => key.startsWith(`${runId}/`);
+              }
+              const dropping = drop;
+              return dropping === null
+                ? Effect.void
+                : SubscriptionRef.update(chunks.ref, (held) => {
+                    let next: Map<string, InflightTextChunk> | null = null;
+                    for (const key of held.keys()) {
+                      if (!dropping(key)) continue;
+                      next ??= new Map(held);
+                      next.delete(key);
+                    }
+                    return next ?? held;
+                  });
+            }),
             Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
           ),
         ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
       );
+      // The registry's phase notification rides the fold-gated tail, not the
+      // raw one above: its waiters and child rosters read `RunView.status`
+      // synchronously, so a row must reach them only once the view holds the
+      // state that row produced.
+      yield* Stream.runForEach(session.folded(anchor), (event) =>
+        Effect.sync(() => session.receiveFoldedEvent(event)),
+      ).pipe(Effect.forkIn(consumerScope));
       yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.catch((error) =>
           Effect.sync(() =>
@@ -502,11 +618,13 @@ const sessionGraphLayer = (key: SessionKey) => {
  */
 const sessionLayer = (
   key: SessionKey,
-  release: (key: SessionKey) => void,
+  held: HeldSessions,
+  release: (key: SessionKey) => Effect.Effect<void>,
   identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
+  runtime: ProcessRuntime,
 ) =>
   Layer.fresh(
-    sessionHandleLayer(key, release).pipe(
+    sessionHandleLayer(key, held, release, runtime).pipe(
       Layer.provide(sessionGraphLayer(key)),
       Layer.provide(identity),
     ),
@@ -526,16 +644,22 @@ class Sessions extends Context.Service<
   LayerMap.LayerMap<SessionKey, Session>
 >()('@texra/session/Sessions') {
   /** The map, releasing an entry the handle asked to be released through
-   *  the runtime that holds the map. */
+   *  the runtime that holds the map. `runtime` is that same runtime: each
+   *  entry's `SessionHandle` is handed it, so a session never looks one up
+   *  when it needs a fiber. */
   static layer(
-    release: (key: SessionKey) => void,
+    held: HeldSessions,
+    release: (key: SessionKey) => Effect.Effect<void>,
     identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
+    runtime: ProcessRuntime,
   ) {
     return Layer.effect(
       Sessions,
-      LayerMap.make((key: SessionKey) => sessionLayer(key, release, identity), {
-        idleTimeToLive: Duration.infinity,
-      }),
+      LayerMap.make(
+        (key: SessionKey) =>
+          sessionLayer(key, held, release, identity, runtime),
+        { idleTimeToLive: Duration.infinity },
+      ),
     );
   }
 }
@@ -567,7 +691,10 @@ const listSessions = Effect.gen(function* () {
 });
 
 /** The session held for `root`, if the map holds one: an entry still
- *  building is waited for, never skipped. Builds nothing. */
+ *  building is waited for, never skipped, which is what lets a close issued
+ *  right after an open find the session (`SessionOwner.open`). Builds
+ *  nothing. The owner's `current` reads the `HeldSessions` map instead: it
+ *  answers synchronously and so cannot wait for a build. */
 const heldSession = (root: string) =>
   Effect.gen(function* () {
     const sessions = yield* Sessions;
@@ -652,6 +779,10 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     if (held === undefined) return NOTHING_TO_CLOSE;
     const { key, session } = held;
     const { runs } = session;
+    const flushArtifacts = Effect.promise(
+      () =>
+        runInSession(session, () => session.flushArtifacts()) as Promise<void>,
+    );
     runs.closeAdmissions();
     // Every touch of the session's storage runs in its scope: the stop
     // writes each run's outcome under the session's roots, and the flush
@@ -662,7 +793,15 @@ const closeSession = (root: string, signal?: AbortSignal) =>
       Effect.all(
         runs.getActiveIds().flatMap((runId) => {
           if (runs.getHandle(runId)?.isChild) return [];
-          return [runs.kill(runId, { detachActiveChildren: false }).settlement];
+          // A settlement fails when a fact the stop owed storage was
+          // refused. `close` answers a `SessionCloseReport` and names no
+          // error, so that travels the same defect channel the flush below
+          // documents, rather than being widened into this close's type.
+          return [
+            runs
+              .kill(runId, { detachActiveChildren: false })
+              .settlement.pipe(Effect.orDie),
+          ];
         }),
         { concurrency: 'unbounded', discard: true },
       ),
@@ -678,9 +817,24 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     const budget = yield* Effect.forkChild(
       signal ? aborted(signal) : Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS),
     );
-    const didSettle = yield* Effect.race(
+    const didSettle = yield* Effect.raceFirst(
       settled.pipe(Effect.as(true)),
       Fiber.join(budget).pipe(Effect.as(false)),
+    ).pipe(
+      Effect.catchCause((cause) =>
+        // A refused stop fact kills the detached termination fiber. The run
+        // may still be unwinding, so retain the entry until it settles, then
+        // make the same final flush and release the ordinary close path owes.
+        // Re-raise the original defect after arming that cleanup so callers
+        // still observe the failed close instead of a false success report.
+        Effect.forkDetach(
+          untilSettled(runs).pipe(
+            Effect.andThen(flushArtifacts),
+            Effect.ensuring(sessions.invalidate(key)),
+          ),
+          { startImmediately: true },
+        ).pipe(Effect.andThen(Effect.failCause(cause))),
+      ),
     );
     const abandoned = runs.getActiveIds();
     const release = didSettle
@@ -711,12 +865,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // exactly that. Widening it into a typed failure is a contract change,
     // not a conversion.
     yield* Effect.race(
-      Effect.promise(
-        () =>
-          runInSession(session, () =>
-            session.flushArtifacts(),
-          ) as Promise<void>,
-      ),
+      flushArtifacts,
       Fiber.join(budget).pipe(
         Effect.andThen(
           Effect.sync(() =>
@@ -744,13 +893,8 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * composition root is its first run (the package): the map itself never
  * waits for it, so an open registers its root with the owner before the
  * caller's first await, and only the entry's build does. The owner it
- * installs answers in Effect except for the two synchronous faces the
- * unconverted hosts still take: `openSync` builds under `runSync`, so
- * everything a root's graph does at build time (opening the database,
- * reading the startup listing, opening the transcript store) must complete
- * inside the scheduler's yield budget (`Scheduler.MaxOpsBeforeYield` steps
- * per yield) or the open reads as asynchronous and throws; an opener whose
- * identity is still pending opens through the Effect face.
+ * installs answers in Effect, on the opener's own fiber; its one
+ * synchronous face, `current`, reads the held map and runs nothing.
  *
  * The process services (injection plan §3.1, the one process provide point)
  * are merged here from what the root hands over: `Secrets` and `AppState`
@@ -774,6 +918,17 @@ export interface ProcessRuntimeOptions {
    * one, where binding such a model fails with that fact.
    */
   readonly editorModel?: EditorModel['Service'];
+  /**
+   * The host's Lean language services: the VS Code extension's bridge to the
+   * Lean 4 extension, or the direct `lake env lean --server` pool on a Node
+   * host, over the `FileSystem`/`Path` this install provides. Built with the
+   * runtime and closed when it is disposed.
+   */
+  readonly lean: Layer.Layer<
+    LeanLanguageServices,
+    never,
+    FileSystem.FileSystem | Path.Path
+  >;
 }
 
 /**
@@ -782,7 +937,7 @@ export interface ProcessRuntimeOptions {
  * runtime, and what the agent package provides around the launches it runs
  * on an embedder's runtime (its `Sessions` API keeps them off its types).
  */
-export function processServicesLayer({
+function processServicesLayer({
   secrets,
   appState,
   setup,
@@ -805,7 +960,8 @@ export function installProcessRuntime({
   appState,
   setup,
   editorModel,
-}: ProcessRuntimeOptions): void {
+  lean,
+}: ProcessRuntimeOptions): ProcessRuntime {
   const identity =
     processStart instanceof Promise
       ? Layer.effect(
@@ -827,36 +983,61 @@ export function installProcessRuntime({
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),
   ).pipe(Layer.provideMerge(identity));
-  const release = (key: SessionKey): void => {
-    runtime.runFork(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
-  };
-  const runtime = ManagedRuntime.make(
-    Sessions.layer(release, services).pipe(
-      Layer.provideMerge(services),
-      Layer.provideMerge(
-        Layer.mergeAll(effectDiagnosticsLayer, FetchHttpClient.layer),
-      ),
-    ),
-  );
-  initProcessRuntime(runtime);
   // The map's services on the caller's own fiber: an Effect-native opener
   // (the SDK) runs these where it stands, so the owner adds no run site of
   // its own. Supply only the owned session family: the caller retains its
-  // tracer, logger, and other independently provided services. `openSync`
-  // and `current` stay synchronous for the three hosts.
+  // tracer, logger, and other independently provided services. `current`,
+  // the owner's one synchronous face, reads the held map instead.
+
   const onThisRuntime = <A, E>(
     effect: Effect.Effect<A, E, Sessions>,
   ): Effect.Effect<A, E> =>
     Effect.flatMap(runtime.contextEffect, (context) =>
       Effect.provideService(effect, Sessions, Context.get(context, Sessions)),
     );
+  const held: HeldSessions = new Map();
+  // A handle's own `dispose` releases its entry here, on the disposing
+  // fiber: the release settles when the entry has unwound.
+  const release = (key: SessionKey): Effect.Effect<void> =>
+    onThisRuntime(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
+  // Each session is handed the runtime it runs on (`SessionHandle`'s two
+  // Promise faces), so the family below names the runtime this very call is
+  // building. `Layer.suspend` is what makes that legal: an entry is built on
+  // its first open, long after `make` has returned. The type is stated
+  // because a value named inside its own initializer has none to infer.
+  const runtime: ManagedRuntime.ManagedRuntime<
+    Sessions | ProcessServices,
+    never
+  > = ManagedRuntime.make(
+    Layer.suspend(() => Sessions.layer(held, release, services, runtime)).pipe(
+      Layer.provideMerge(services),
+      // The Lean port beside `services`, not among them: `services` is also
+      // each session entry's identity layer, rebuilt fresh per root, and the
+      // Lean pool is one per process — its servers are shared across roots.
+      Layer.provideMerge(lean),
+      Layer.provideMerge(
+        Layer.mergeAll(
+          effectDiagnosticsLayer,
+          FetchHttpClient.layer,
+          // The standard library's filesystem and path services, provided
+          // once per process here rather than by each program that needs
+          // them: every root reaches this install, so a consumer (the Lean
+          // layer included) takes `FileSystem`/`Path` from context and
+          // builds no layer of its own.
+          NodeFileSystem.layer,
+          NodePath.layer,
+        ),
+      ),
+    ),
+  );
+  initProcessRuntime(runtime);
   initSessionOwner({
-    openSync: (open) => runtime.runSync(openSession(open)),
     open: (open) => onThisRuntime(openSession(open)),
-    current: (root) => runtime.runSync(heldSession(root))?.session,
+    current: (root) => heldSessionSync(held, root),
     list: () => onThisRuntime(listSessions),
     close: (root, signal) => onThisRuntime(closeSession(root, signal)),
   });
+  return runtime;
 }
 
 /**
@@ -866,13 +1047,13 @@ export function installProcessRuntime({
  * the disposed runtime.
  *
  * The runtime stays reachable for the whole of its own disposal. Its layer
- * finalizers are what release the open sessions, and they still publish
- * through `effectRuntime()` while they unwind -- `SessionHandle.unwind()`
- * disposes pending host interactions, whose `approval.resolved` facts go out
- * through `SessionHandle.publish`, which forks on this very runtime. Clearing
- * the reference first made those finalizers throw "not initialized" mid
- * shutdown. It is cleared afterwards, and only if this runtime is still the
- * installed one, so a replacement installed while this one unwound survives.
+ * finalizers are what release the open sessions, and they still publish while
+ * they unwind -- a session's release unwinds the handle and then awaits the
+ * publications that teardown left in flight
+ * (`SessionHandle.settlePublications`), which run on the very runtime the
+ * session was handed. The installed reference is cleared afterwards, and only
+ * if this runtime is still the installed one, so a replacement installed while
+ * this one unwound survives.
  *
  * Idempotent and safe to race: an absent runtime needs no disposal, and a
  * second call joins the disposal already in flight rather than reaching a

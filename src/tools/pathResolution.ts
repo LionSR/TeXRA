@@ -2,10 +2,6 @@
 import * as path from 'node:path';
 
 // Local imports
-import {
-  getRunContextWorkingDirectory,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -47,23 +43,6 @@ export function parseWorkingDirectory(
     );
   }
   return trimmed;
-}
-
-/**
- * Validated working-directory override for the current tool call.
- *
- * Reads `workingDirectory` from the active RunContext and runs it through
- * `parseWorkingDirectory`. Returns undefined when no run context is active
- * or when no override was set on the launch — callers then fall back to the
- * workspace root via `WorkspaceFS.locatePath`.
- *
- * Centralizes the active-context working-directory lookup and validation
- * pattern that every workspace-touching tool needs.
- */
-export function currentToolRoot(): string | undefined {
-  return parseWorkingDirectory(
-    getRunContextWorkingDirectory(tryUseRunContext()),
-  );
 }
 
 /** Throw when a raw tool path contains a parent-directory segment. */
@@ -187,7 +166,11 @@ export function resolveWorkspaceRelativePath(
   }
 
   const relative = resolved.relativePath || '.';
-  return { relative, absolute: resolved.absolutePath, fsPath: relative };
+  return annotateExternalPermission({
+    relative,
+    absolute: resolved.absolutePath,
+    fsPath: relative,
+  });
 }
 
 /** Permission metadata carried for a path inside a registered external root. */
@@ -202,13 +185,18 @@ function externalInfo(
 }
 
 /**
- * Attach external-root permission metadata when a resolution (from the
- * working_directory branch) happens to land inside a registered root.
+ * Attach external-root permission metadata when a resolution that stayed
+ * inside its containing root (the `working_directory` branch or the
+ * workspace branch) happens to land inside a registered root.
  *
- * Without this, a subagent launched with `working_directory` set to a
- * read-only external root (e.g. the built-in agents dir) could bypass
- * `assertWritable` by addressing files with paths relative to `root` —
- * the in-root branches return without touching the allowlist otherwise.
+ * Containment inside a root does not imply writability: a registered
+ * read-only root may itself sit inside the workspace or the working
+ * directory — the packaged agent definitions do exactly that when the
+ * extension is run from its own source checkout, where `resourcesPath`
+ * is `${workspaceFolder}/packages/extension/resources`. Without this the
+ * in-root branches return without touching the allowlist, and
+ * `assertWritable` would let `write_file`/`edit_file` overwrite files the
+ * host registered `writable: false`.
  *
  * Preserves `relative`/`absolute`/`fsPath` as the caller already built
  * them so display and I/O remain unchanged; only `external` is added.
@@ -266,7 +254,10 @@ export function resolveAndFormat(
   path: WorkspacePathResolution;
   display: string;
 } {
-  const path = resolveWorkspaceRelativePath(targetPath, root);
+  const path = resolveWorkspaceRelativePath(
+    targetPath,
+    parseWorkingDirectory(root),
+  );
   const display = toPosixPath(path.relative);
   return { path, display };
 }

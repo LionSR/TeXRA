@@ -158,7 +158,6 @@ export function formatWorkflowCallLine(call: WorkflowCallProgress): string {
  */
 export const WORKFLOW_CALL_STATUS_GLYPH = {
   declared: '□',
-  planned: '□',
   queued: '□',
   running: '☐',
   completed: '☑',
@@ -179,9 +178,8 @@ export const WORKFLOW_PHASE_GLYPH = { opened: '◆', declared: '◇' } as const;
 /**
  * A run's or a phase's tally as the run model folds it: `done` counts every
  * settled call (cancelled and skipped included — they are distinct from
- * `failed`), `declared` how many plan tasks are still unissued. Snapshot
- * consumers (`/executions`) derive their own per-status counts with
- * `deriveWorkflowCounts` over the engine's vocabulary.
+ * `failed`), `declared` how many plan tasks are still unissued. Every
+ * reader, `/executions/{id}` included, takes it from the run model.
  */
 export interface WorkflowTally {
   readonly done: number;

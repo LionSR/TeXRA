@@ -28,7 +28,10 @@ type SortableReorderCallback = (result: SortableReorderResult) => void;
  *   () => this.fileListElement,
  *   () => this.currentFiles,
  *   (result) => this.dispatchEvent(
- *     MainViewEvents.filesReordered({ listId: this.listId, files: result.items })
+ *     SessionUiEvents.surface({
+ *       kind: 'launch',
+ *       patch: { [this.listId]: result.items },
+ *     })
  *   ),
  * );
  * ```

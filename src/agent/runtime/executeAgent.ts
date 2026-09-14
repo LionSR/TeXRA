@@ -1,22 +1,21 @@
 import * as path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { Cause, Deferred, Effect, Exit, Layer } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
-import { getRunRecords } from '@agent/storage/RunKVStore';
+import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
-import type { CopilotRouteOverride } from '@model/copilotRouting';
 import {
   aggregateId as qualifyAggregateId,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type RunOutcome,
@@ -31,7 +30,7 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import { emptyRunEndOutput } from '@shared/schemas';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
-import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
+import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { ensureRunDir } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -129,6 +128,7 @@ function runLayerFor(
         parentRunId: shared.parentRunId ?? null,
         tools: shared.tools,
         toolInjections,
+        onApprovalPolicyDenial: shared.onApprovalPolicyDenial,
         inScope,
         callbacks: {
           onProgress: (update) => {
@@ -174,10 +174,10 @@ function runLayerFor(
  * request and the tool bodies that still need a signal — so the signal is
  * downstream of the stop rather than a second way to stop the run.
  */
-function runUntilStopped(
+function runUntilStopped<R>(
   ctx: AgentLaunchContext,
-  program: Effect.Effect<AgentRuntimeFlowResult, Error>,
-): Effect.Effect<AgentRuntimeFlowResult, Error> {
+  program: Effect.Effect<AgentRuntimeFlowResult, Error, R>,
+): Effect.Effect<AgentRuntimeFlowResult, Error, R> {
   const { runId } = ctx.runScope;
   return Effect.raceFirst(
     program.pipe(
@@ -221,7 +221,7 @@ function launchToolUseRun(
   },
   variant: ToolUseLaunchVariant,
   inScope: <A>(operation: () => A) => A,
-): Effect.Effect<AgentRuntimeFlowResult, Error> {
+): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx.runScope;
   const program = runToolUse({
     resume: variant.kind === 'resume',
@@ -287,7 +287,7 @@ function launchReflectionRun(
   ctx: AgentLaunchContext,
   options: ExecuteAgentOptions & { readonly setting: AgentSetting },
   inScope: <A>(operation: () => A) => A,
-): Effect.Effect<AgentRuntimeFlowResult, Error> {
+): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx.runScope;
   const program = runReflection({ resume: options.resumed === true }).pipe(
     // The reflection family injects no conditional tools (memory and plan are
@@ -323,7 +323,10 @@ function launchReflectionRun(
         if (flowResult.error || !options.openWorkflowOutput) return flowResult;
         const openWorkflowOutput = options.openWorkflowOutput;
         const outputOutcome = yield* Effect.tryPromise({
-          try: () => inScope(() => openWorkflowOutput(flowResult)),
+          try: () =>
+            inScope(() =>
+              openWorkflowOutput(flowResult, ctx.setting.defaultOutputFiles),
+            ),
           catch: ensureError,
         });
         return outputOutcome === undefined
@@ -349,7 +352,13 @@ function buildLifecycleOptions(
     workflowPhase: options.workflowPhase,
     onError: options.onRunError,
     onRun: options.onRun,
-    onRunEnd: (runId) => stopLeanServersForEndedRun(runId),
+    // Stop the Lean servers the ended run started; a host whose Lean
+    // integration owns server lifetime (the VS Code bridge) omits the stop.
+    onRunEnd: (runId) =>
+      Effect.flatMap(
+        LeanLanguageServices,
+        (lean) => lean.stopSessionsForRun?.(runId) ?? Effect.void,
+      ),
   };
 }
 
@@ -436,10 +445,22 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    */
   openWorkflowOutput?: (
     result: WorkflowFlowResult,
+    /**
+     * The `defaultOutputFiles` declared by the definition this run loaded —
+     * the only place a remote agent's are readable, and the run's own copy, so
+     * a host never re-reads a catalog entry that may have been refreshed since
+     * the launch.
+     */
+    agentDefaultOutputFiles: readonly string[],
   ) => Promise<RunOutcome | void>;
   /** Cancel launch preparation before the per-run handle is available. */
   launchSignal?: AbortSignal;
-  /** The run's `run.start` was committed by an earlier activation (a resume). */
+  /**
+   * The run's `run.start` was committed by an earlier activation (a resume).
+   * That row is also where this run's parent edge comes from: `runAgent`
+   * reads it onto the run's handle before this launch prepares, and a
+   * resumed run takes its lineage from there, never from `parentRunId`.
+   */
   resumed?: boolean;
   /**
    * Fires with the run id once its `run.start` is published, before the run
@@ -453,9 +474,10 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */
-  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
-  /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
-  copilotRouteOverride?: CopilotRouteOverride;
+  modelCompatibilityKey?: ModelCompatibilityKey | null;
+  /** This launch is the user's own-API-key fallback for a quota-exhausted
+   *  retry: it declines the Copilot route and every subscription route. */
+  ownApiKeyFallback?: boolean;
 }
 
 // A WAITING result is reachable only for a child: `{ kind: 'waiting' }` is
@@ -506,15 +528,35 @@ export function executeAgent(
     // Read here, on the Effect side of the lifecycle's Promise seam: the
     // flow drivers below resolve the run's tools from it.
     const toolInjections = yield* ToolInjections;
-    const hasParent = options.parentRunId !== undefined;
+    // A resumed run's parentage is its handle's, never the caller's word: no
+    // resume caller can name one (`RunAgentOptions` has no parent field), so
+    // reading the caller's option here would relaunch a resumed child as a
+    // root run, forcing the progress view open, toasting its failure, and
+    // shaping its result as a root's. `runAgent` put the persisted edge on
+    // that handle before this launch began preparing, which is what lets the
+    // parent's stop reach the child meanwhile: a stop that detaches severs
+    // this very handle. The edge is deliberately not copied out here: it is
+    // mutable for exactly as long as this preparation runs, so the run reads
+    // it off its own lifecycle handle below, after the registry has carried
+    // it across the replacement.
+    const resumedHandle = options.resumed
+      ? options.session.runs.getHandle(runId)
+      : undefined;
+    if (options.resumed && !resumedHandle) {
+      return yield* Effect.fail(
+        new Error(
+          `Cannot resume run ${runId}: no registered handle carries its lineage.`,
+        ),
+      );
+    }
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId,
       resumed: options.resumed,
       onRunResolved: options.onRunResolved,
       session: options.session,
-      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-      copilotRouteOverride: options.copilotRouteOverride,
+      modelCompatibilityKey: options.modelCompatibilityKey,
+      ownApiKeyFallback: options.ownApiKeyFallback,
       signal: options.launchSignal,
       toolPolicy: {
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
@@ -537,14 +579,17 @@ export function executeAgent(
             // Start description generation concurrently with the run, but join it
             // before the owner can release its run lease. This prevents the
             // metadata write from recreating a run deleted by another host.
-            const sessionDescription = runInScope(() =>
-              generateSessionDescription(
-                runId,
-                config,
-                ctx.resolvedAgentDescription,
-                runSession,
-                ctx.stores,
-                ctx.runScope.signal,
+            // The run's stop interrupts it, as it interrupts the run.
+            const sessionDescription = yield* Effect.forkChild(
+              Effect.raceFirst(
+                generateSessionDescription(
+                  runId,
+                  config,
+                  ctx.resolvedAgentDescription,
+                  runSession,
+                  ctx.stores,
+                ),
+                Deferred.await(ctx.stopped),
               ),
             );
             try {
@@ -552,6 +597,12 @@ export function executeAgent(
                 ctx,
                 (handle) =>
                   Effect.gen(function* () {
+                    // This run's lineage, derived once, from the live handle
+                    // the registry admitted: for a resume that is the edge
+                    // carried over from the provisional registration, minus a
+                    // detach committed while the launch prepared, and for a
+                    // fresh launch it is the caller's own parent.
+                    const parentRunId = handle.deliveryTarget;
                     // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
                     yield* Effect.tryPromise({
                       try: () => runInScope(() => ensureRunDir(runId)),
@@ -573,7 +624,7 @@ export function executeAgent(
                     );
                     // Subagents don't need to force-open the progress board or show notifications;
                     // the orchestrator's run is already visible.
-                    if (!hasParent) {
+                    if (parentRunId === undefined) {
                       runSession.interactions.emit(
                         'requestEnsureProgressView',
                         {
@@ -591,30 +642,40 @@ export function executeAgent(
                       return yield* launchToolUseRun(
                         ctx,
                         handle,
-                        { ...options, setting, toolInjections },
+                        { ...options, parentRunId, setting, toolInjections },
                         { kind: 'fresh', onIdle: options.onIdle },
                         runInScope,
                       );
                     }
                     return yield* launchReflectionRun(
                       ctx,
-                      { ...options, setting },
+                      { ...options, parentRunId, setting },
                       runInScope,
                     );
                   }),
-                buildLifecycleOptions(options, options.parentRunId),
+                // The edge the lifecycle's handle is born with, read as late
+                // as that handle is built. A detach landing even after this
+                // read still stands: `RunRegistry.track` carries the
+                // registration's sever onto the replacement.
+                buildLifecycleOptions(
+                  options,
+                  resumedHandle
+                    ? resumedHandle.deliveryTarget
+                    : options.parentRunId,
+                ),
               );
-              if (isWaitingFlowResult(result) && !hasParent) {
+              // The overload the caller chose is what admits WAITING, so this
+              // assertion reads the caller's own parent, not the lineage: no
+              // resume caller names one, and reading a parent off the ledger
+              // must not retype a result the caller was promised is terminal.
+              if (isWaitingFlowResult(result) && !options.parentRunId) {
                 throw new Error(
                   'executeAgent received a non-terminal WAITING result for a non-subagent run.',
                 );
               }
               return result;
             } finally {
-              yield* Effect.tryPromise({
-                try: () => sessionDescription,
-                catch: ensureError,
-              });
+              yield* Fiber.join(sessionDescription);
             }
           });
         },
@@ -658,12 +719,10 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     const toolInjections = yield* ToolInjections;
     const setup = yield* Effect.exit(
       Effect.gen(function* () {
-        // The parent edge as the fold holds it (`run.start.parent`, severed
-        // by a later `run.detach`), read cold so a resume racing the live
-        // fold's first replay still sees it.
-        const parentRunId =
-          (yield* runSession.readView([])).runs.get(resume.runId)?.parentId ??
-          undefined;
+        const parentRunId = yield* persistedParentRunId(
+          runSession,
+          resume.runId,
+        );
         const definition = yield* prepareAgentDefinition({
           config: resume.agentConfig,
           enforceCategory: true,
@@ -674,7 +733,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
           definition,
           runId: resume.runId,
           resumed: true,
-          modelHandlerCompatibilityKey: resume.modelHandlerCompatibilityKey,
+          modelCompatibilityKey: resume.modelCompatibilityKey,
           session: runSession,
           toolPolicy: {
             approvalPromptsUnavailable: options.approvalPromptsUnavailable,

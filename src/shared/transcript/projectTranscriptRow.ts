@@ -17,6 +17,7 @@ import {
   type FileListEntry,
   type StreamLogEntry,
 } from '@shared/schemas';
+import { getModelLabel } from '@shared/model/modelLabel';
 import { normalizeToolUseForRender } from '@shared/toolUse';
 import {
   hasIncompleteEmbeddedSubagentFollowup,
@@ -118,9 +119,9 @@ const STREAMING_TEXT_ROW_KIND = {
  * `ErrorLogData` so a schema rename is a compile error here rather than a
  * field that quietly stops rendering.
  *
- * `streamDiagnostics` and `partialText` are deliberately absent: they are a
- * retry surface's material, not a transcript row's. `RetryRequestPanel` reads
- * them from the approval request's own payload, never from a projected row.
+ * `partialText` is deliberately absent: it is a retry surface's material,
+ * not a transcript row's. `RetryRequestPanel` reads it from the approval
+ * request's own payload, never from a projected row.
  */
 const ERROR_DETAIL_FIELDS = [
   'message',
@@ -340,7 +341,6 @@ export function projectTranscriptRow(
   }
 
   const messageType = entry.messageType;
-  if (messageType === undefined) return projectLogRow(entry);
 
   switch (messageType) {
     case MESSAGE_TYPES.MODEL_RESPONSE:
@@ -539,7 +539,10 @@ export function projectTranscriptRow(
     }
 
     case MESSAGE_TYPES.WORKFLOW_TASK: {
-      const call = entry.data;
+      const call =
+        entry.data.model === undefined
+          ? entry.data
+          : { ...entry.data, model: getModelLabel(entry.data.model) };
       const detail = workflowCallDetail(call);
       return {
         ...rowBase(entry),

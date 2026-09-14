@@ -5,8 +5,9 @@
  * and no checkpoint file is parsed.
  */
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import {
   AgentConfigSchema,
@@ -19,7 +20,7 @@ import {
   aggregateId,
   AgentCategory,
   type FlowSnapshotPayload,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type RunId,
 } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
@@ -40,28 +41,28 @@ const WORKFLOW_CONFIG: AgentConfig = {
   ...CONFIG,
   agentCategory: AgentCategory.Workflow,
 };
-const COMPATIBILITY_KEY: ModelHandlerCompatibilityKey =
-  'ModelHandlerOpenAIResponse';
+const COMPATIBILITY_KEY: ModelCompatibilityKey = 'OpenAIResponse';
 
 const runtimeOf = (
   modelId: string,
-  compatibilityKey: ModelHandlerCompatibilityKey | null,
+  compatibilityKey: ModelCompatibilityKey | null,
 ): Extract<FlowSnapshotPayload, { family: 'toolUse' }>['runtime'] => ({
   phase: 'initial',
   round: 0,
   turn: 0,
   continuationIndex: 0,
   modelId,
-  modelHandlerCompatibilityKey: compatibilityKey,
+  modelCompatibilityKey: compatibilityKey,
   lastError: null,
   pendingRetry: null,
+  declinedRoutes: [],
 });
 
 const references = { pendingIntents: [], pendingResponse: null } as const;
 
 function toolUseSnapshot(
   modelId: string,
-  compatibilityKey: ModelHandlerCompatibilityKey | null = COMPATIBILITY_KEY,
+  compatibilityKey: ModelCompatibilityKey | null = COMPATIBILITY_KEY,
 ): FlowSnapshotPayload {
   return {
     family: 'toolUse',
@@ -93,103 +94,115 @@ describe('retrieveSessionResumeData', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
   let session: SessionHandle;
-  beforeEach(() => {
-    session = createProcessSession();
+  beforeEach(async () => {
+    session = await Effect.runPromise(createProcessSession());
   });
 
   /** Open the run aggregate the way a loop does: claim, then snapshot. */
-  async function openRun(
+  const openRun = Effect.fn('openRun')(function* (
     runId: RunId,
     payload: FlowSnapshotPayload,
-  ): Promise<void> {
+  ) {
     publishTestRunStart(session, runId);
-    await session.settlePublications();
-    await Effect.runPromise(session.ledger.acquire(runId));
-    await Effect.runPromise(
-      session.ledger.appendBatch(runId, null, [
-        {
-          type: 'flow.snapshot',
-          aggregateId: aggregateId('run', runId),
-          payload,
-        },
-      ]),
-    );
-  }
-
-  it('resumes on the model the snapshot names, under the original run id', async () => {
-    const runId = 'abc123' as RunId;
-    await openRun(runId, toolUseSnapshot('gpt55'));
-
-    await expect(
-      Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
-    ).resolves.toMatchObject({
-      type: 'toolUse',
-      runId,
-      agentConfig: { model: 'gpt55' },
-      modelHandlerCompatibilityKey: COMPATIBILITY_KEY,
-    });
+    yield* Effect.promise(() => session.settlePublications());
+    yield* session.ledger.acquire(runId);
+    yield* session.ledger.appendBatch(runId, null, [
+      {
+        type: 'flow.snapshot',
+        aggregateId: aggregateId('run', runId),
+        payload,
+      },
+    ]);
   });
 
-  it('resumes an untagged conversation format as untagged', async () => {
-    const runId = 'ab0001' as RunId;
-    await openRun(runId, toolUseSnapshot('gpt54', null));
+  it.effect(
+    'resumes on the model the snapshot names, under the original run id',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'abc123' as RunId;
+        yield* openRun(runId, toolUseSnapshot('gpt55'));
 
-    await expect(
-      Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
-    ).resolves.toMatchObject({ modelHandlerCompatibilityKey: null });
-  });
+        expect(
+          yield* retrieveSessionResumeData(runId, CONFIG, session),
+        ).toMatchObject({
+          type: 'toolUse',
+          runId,
+          agentConfig: { model: 'gpt55' },
+          modelCompatibilityKey: COMPATIBILITY_KEY,
+        });
+      }),
+  );
 
-  it('reports a run with no snapshot as nothing to resume', async () => {
-    const runId = 'ab0002' as RunId;
-    publishTestRunStart(session, runId);
-    await session.settlePublications();
+  it.effect('resumes an untagged conversation format as untagged', () =>
+    Effect.gen(function* () {
+      const runId = 'ab0001' as RunId;
+      yield* openRun(runId, toolUseSnapshot('gpt54', null));
 
-    await expect(
-      Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
-    ).resolves.toBeNull();
-  });
+      expect(
+        yield* retrieveSessionResumeData(runId, CONFIG, session),
+      ).toMatchObject({ modelCompatibilityKey: null });
+    }),
+  );
 
-  it('retrieves a workflow run from its reflection snapshot', async () => {
-    const runId = 'ab0003' as RunId;
-    await openRun(runId, reflectionSnapshot('gpt54'));
+  it.effect('reports a run with no snapshot as nothing to resume', () =>
+    Effect.gen(function* () {
+      const runId = 'ab0002' as RunId;
+      publishTestRunStart(session, runId);
+      yield* Effect.promise(() => session.settlePublications());
 
-    await expect(
-      Effect.runPromise(
-        retrieveSessionResumeData(runId, WORKFLOW_CONFIG, session),
-      ),
-    ).resolves.toMatchObject({ type: 'workflow', runId });
-  });
+      expect(
+        yield* retrieveSessionResumeData(runId, CONFIG, session),
+      ).toBeNull();
+    }),
+  );
+
+  it.effect('retrieves a workflow run from its reflection snapshot', () =>
+    Effect.gen(function* () {
+      const runId = 'ab0003' as RunId;
+      yield* openRun(runId, reflectionSnapshot('gpt54'));
+
+      expect(
+        yield* retrieveSessionResumeData(runId, WORKFLOW_CONFIG, session),
+      ).toMatchObject({ type: 'workflow', runId });
+    }),
+  );
 
   // A family the launch config contradicts is corruption, never a silent
   // "nothing to resume": the caller must be able to tell the two apart.
-  it('refuses a tool-use launch onto a reflection run', async () => {
-    const runId = 'ab0004' as RunId;
-    await openRun(runId, reflectionSnapshot('gpt54'));
+  it.effect('refuses a tool-use launch onto a reflection run', () =>
+    Effect.gen(function* () {
+      const runId = 'ab0004' as RunId;
+      yield* openRun(runId, reflectionSnapshot('gpt54'));
 
-    await expect(
-      Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
-    ).rejects.toThrow(
-      `Run ${runId} is configured as toolUse but its snapshot is a reflection run.`,
-    );
-  });
+      const error = yield* Effect.flip(
+        retrieveSessionResumeData(runId, CONFIG, session),
+      );
+      expect(error.message).toContain(
+        `Run ${runId} is configured as toolUse but its snapshot is a reflection run.`,
+      );
+    }),
+  );
 
-  it('throws when the durable run facts cannot be read', async () => {
-    const runId = 'ab0005' as RunId;
-    publishTestRunStart(session, runId);
-    await session.settlePublications();
-    vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
-      Effect.fail(
-        new DatabaseReadFailed({
-          path: 'session.db',
-          cause: new Error('KV timeout'),
-        }),
-      ),
-    );
+  it.effect('throws when the durable run facts cannot be read', () =>
+    Effect.gen(function* () {
+      const runId = 'ab0005' as RunId;
+      publishTestRunStart(session, runId);
+      yield* Effect.promise(() => session.settlePublications());
+      vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
+        Effect.fail(
+          new DatabaseReadFailed({
+            path: 'session.db',
+            cause: new Error('KV timeout'),
+          }),
+        ),
+      );
 
-    await expect(
-      Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
-    ).rejects.toThrow(
-      `Failed to retrieve toolUse resume data for run: ${runId}`,
-    );
-  });
+      const error = yield* Effect.flip(
+        retrieveSessionResumeData(runId, CONFIG, session),
+      );
+      expect(error.message).toContain(
+        `Failed to retrieve toolUse resume data for run: ${runId}`,
+      );
+    }),
+  );
 });

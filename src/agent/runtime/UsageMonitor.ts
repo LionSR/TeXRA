@@ -1,10 +1,10 @@
 import type { AgentTrace } from '@agent/trace';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
-import type { ModelCell } from '@agent/runtime/ModelCell';
+import type { ConfigProvider } from '@platform/interfaces';
 import type {
   AgentRunStateSnapshot,
   RunId,
   ExtendedTokenUsageStats,
+  RunUsageTotals,
   UsageRoute,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -43,17 +43,16 @@ interface UsageMonitorMetadata {
 /**
  * Minimal model info needed for usage tracking.
  *
- * This interface names the fields UsageMonitor reads off the run's live model
- * handler, so widening what usage accounting depends on is a visible edit here.
- * Fields are directly from ModelCapabilities and ModelConfig.
+ * This type names the fields UsageMonitor reads off the config of the run's
+ * live model binding, so widening what usage accounting depends on is a
+ * visible edit here.
  */
-interface UsageMonitorModelInfo {
-  capabilities: Pick<
+type UsageMonitorModelInfo = Pick<ModelConfig, 'fullName'> & {
+  readonly capabilities: Pick<
     ModelCapabilities,
     'supportsPromptCaching' | 'supportsAutoPromptCaching' | 'supportsReasoning'
   >;
-  config: Pick<ModelConfig, 'fullName'>;
-}
+};
 
 /**
  * Runtime dependencies for UsageMonitor — the individual run facts it reads,
@@ -68,6 +67,8 @@ interface UsageMonitorContext {
   logger: AgentTrace;
   runId: RunId;
   runStageId: string | undefined;
+  /** The run's workspace configuration, which usage logging reads consent from. */
+  config: ConfigProvider;
 }
 
 /** Label for the run flavor named in this monitor's diagnostics. */
@@ -93,26 +94,25 @@ export class UsageMonitor {
   private lastSeenTotals: RunUsageTotals | undefined;
 
   constructor(
-    private readonly modelCell: ModelCell,
     private readonly context: UsageMonitorContext,
     private readonly metadata: UsageMonitorMetadata,
   ) {}
-
-  /**
-   * The model this run is live on. Read from the cell on every use, so a
-   * mid-run model switch is priced and reported against the model that
-   * actually served the round without anyone mirroring it back in.
-   */
-  private get modelInfo(): UsageMonitorModelInfo {
-    return this.modelCell.handler;
-  }
 
   /** The last run totals recorded this run, or undefined before any round. */
   lastTotals(): RunUsageTotals | undefined {
     return this.lastSeenTotals;
   }
 
-  async recordUsage(stateGlobal: AgentRunStateSnapshot): Promise<void> {
+  /**
+   * Record one round's usage against `bound`, the run's binding that served
+   * it. The loop passes the model it actually ran, so a mid-run switch is
+   * priced and reported against it without anyone mirroring it back in.
+   */
+  async recordUsage(
+    stateGlobal: AgentRunStateSnapshot,
+    bound: { readonly config: UsageMonitorModelInfo },
+  ): Promise<void> {
+    const model = bound.config;
     const { logger, runId, runStageId } = this.context;
     const { agentCategory } = this.metadata;
     const runKind: UsageMonitorRunKind =
@@ -137,7 +137,7 @@ export class UsageMonitor {
         roundCacheReadTokens,
       );
 
-      const { capabilities } = this.modelInfo;
+      const { capabilities } = model;
       const supportsCaching =
         capabilities.supportsPromptCaching ||
         capabilities.supportsAutoPromptCaching;
@@ -146,6 +146,7 @@ export class UsageMonitor {
       const percentageCached = this.calculateCachePercentage(
         supportsCaching,
         totals,
+        model,
       );
 
       // The `usage` row is a snapshot fact, not a delta: `usage` is a
@@ -206,6 +207,7 @@ export class UsageMonitor {
           usageRoute,
         },
         latestUsage.provider,
+        model,
       );
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics`, { data: error });
@@ -218,11 +220,11 @@ export class UsageMonitor {
   private calculateCachePercentage(
     supportsCaching: boolean,
     totals: RunUsageTotals,
+    model: UsageMonitorModelInfo,
   ): number {
     if (!supportsCaching) return 0;
 
-    const totalCacheableTokens = this.modelInfo.capabilities
-      .supportsPromptCaching
+    const totalCacheableTokens = model.capabilities.supportsPromptCaching
       ? totals.totalCacheCreationInputTokens + totals.totalCacheReadInputTokens
       : totals.totalInputTokens;
 
@@ -247,29 +249,34 @@ export class UsageMonitor {
     provider: NonNullable<
       AgentRunStateSnapshot['usageAccumulator']['latestUsage']
     >['provider'],
+    model: UsageMonitorModelInfo,
   ): void {
     try {
-      const { config } = this.modelInfo;
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
 
-      UsageLogService.log({
-        model: config.fullName,
-        provider,
-        agentName: this.metadata.agentName,
-        agentCategory: this.metadata.agentCategory,
-        inputTokens: usage.cacheMissInputTokens,
-        outputTokens: usage.outputTokens,
-        cost: roundTo(usage.cost, 6),
-        responseTimeMs: Math.round(totalResponseTimeMs),
-        cachedInputTokens,
-        reasoningTokens: usage.reasoningTokens ?? 0,
-        usageRoute: usage.usageRoute,
-        // The relay's request column is still named `streamId`; this is the
-        // last production spelling of the word outside the token-stream
-        // sense, and it stays until the relay column is renamed (a
-        // server-side change, not part of this release).
-        streamId: this.context.runId,
-      });
+      UsageLogService.log(
+        {
+          model: model.fullName,
+          provider,
+          agentName: this.metadata.agentName,
+          agentCategory: this.metadata.agentCategory,
+          inputTokens: usage.cacheMissInputTokens,
+          outputTokens: usage.outputTokens,
+          cost: roundTo(usage.cost, 6),
+          responseTimeMs: Math.round(totalResponseTimeMs),
+          cachedInputTokens,
+          reasoningTokens: usage.reasoningTokens ?? 0,
+          usageRoute: usage.usageRoute,
+          // An external wire key of the usage-log edge function, the same
+          // class as the CLI's NDJSON projection keys: the relay's request
+          // column is still named `streamId`, so the key stays until that
+          // column is renamed to `run_id` (a server-side change, not part of
+          // this release). It carries the run id and no stream vocabulary
+          // survives behind it.
+          streamId: this.context.runId,
+        },
+        this.context.config,
+      );
     } catch (error) {
       this.context.logger.warn('Backend usage logging failed', {
         data: error,

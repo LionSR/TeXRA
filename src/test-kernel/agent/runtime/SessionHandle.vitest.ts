@@ -1,5 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SessionHandle, defaultSession } from '@agent/runtime/SessionHandle';
@@ -22,7 +23,7 @@ function trackAgent(session: SessionHandle, runId: RunId): RunHandle {
 }
 
 describe('SessionHandle', () => {
-  it('keeps run tracking isolated between sessions', () => {
+  it('keeps run tracking isolated between sessions', async () => {
     const a = createTestSession();
     const b = createTestSession();
     try {
@@ -34,15 +35,15 @@ describe('SessionHandle', () => {
 
       // Disposing A leaves B's separate registry untouched.
       const handleB = trackAgent(b, runB);
-      a.dispose();
+      await Effect.runPromise(a.dispose());
       expect(a.runs.getHandle(isolated)).toBeUndefined();
       expect(b.runs.getHandle(runB)).toBe(handleB);
     } finally {
-      b.dispose();
+      await Effect.runPromise(b.dispose());
     }
   });
 
-  it('finishes owner teardown before surfacing a disposal failure', () => {
+  it('finishes owner teardown before surfacing a disposal failure', async () => {
     const session = createTestSession();
     const failure = new Error('interaction disposal failed');
     const interactions = vi
@@ -51,14 +52,14 @@ describe('SessionHandle', () => {
         throw failure;
       });
     const runs = vi.spyOn(session.runs, 'dispose');
-    expect(() => session.dispose()).toThrow(failure);
+    await expect(Effect.runPromise(session.dispose())).rejects.toThrow(failure);
     expect(interactions).toHaveBeenCalledOnce();
     expect(runs).toHaveBeenCalledOnce();
   });
 
-  it('rejects run work registered after disposal', () => {
+  it('rejects run work registered after disposal', async () => {
     const session = createTestSession();
-    session.dispose();
+    await Effect.runPromise(session.dispose());
 
     expect(() => trackAgent(session, generateRunId())).toThrow(
       'Cannot register run work after session disposal.',

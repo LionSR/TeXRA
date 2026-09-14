@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import {
   generateSessionDescription,
   getDisplayedInstruction,
@@ -19,19 +20,24 @@ import { generateRunId } from '@utils/core';
 import { recordSessionEvents } from '../progressTestUtils';
 
 const mocks = vi.hoisted(() => ({
-  createHelperModelKit: vi.fn(),
+  helperModel: vi.fn(),
+  helperCompletion: vi.fn(),
 }));
 
 /**
- * The launching run's stores. `createHelperModelKit` is the only reader and it
- * is mocked here, so empty stores carry the description path.
+ * The launching run's stores. `helperModel` is the only reader and it is
+ * mocked here, so empty stores carry the description path.
  */
 const STORES = fakeStores();
 
 vi.mock('@agent/runtime/helperModel', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
-  createHelperModelKit: mocks.createHelperModelKit,
+  helperModel: mocks.helperModel,
+  helperCompletion: mocks.helperCompletion,
 }));
+
+/** A helper binding no test reads through; the completion is mocked. */
+const BOUND = {} as BoundModel;
 
 function runDescription(
   runId: RunId,
@@ -39,36 +45,26 @@ function runDescription(
   category: AgentCategory = AgentCategory.ToolUse,
   agentDescription?: string,
 ): Promise<void> {
-  return generateSessionDescription(
-    runId,
-    AgentConfigSchema.parse({
-      agent: category === AgentCategory.ToolUse ? 'chat' : 'correct',
-      model: 'gemini35f',
-      instruction: 'Fix grammar.',
-      agentCategory: category,
-    }),
-    agentDescription,
-    session,
-    STORES,
+  return Effect.runPromise(
+    generateSessionDescription(
+      runId,
+      AgentConfigSchema.parse({
+        agent: category === AgentCategory.ToolUse ? 'chat' : 'correct',
+        model: 'gemini35f',
+        instruction: 'Fix grammar.',
+        agentCategory: category,
+      }),
+      agentDescription,
+      session,
+      STORES,
+    ),
   );
 }
 
-/** A helper model that answers with `text`. */
-function helperAnswering(text: string) {
-  return {
-    createResponse: vi.fn().mockResolvedValue({ response: {} }),
-    extractResponse: vi.fn().mockReturnValue({ text }),
-    initializeMessages: vi.fn().mockResolvedValue([]),
-  };
-}
-
-/** Point the helper-model kit at one resolved answer. */
-function mockToolUseAnswer(text: string): ReturnType<typeof helperAnswering> {
-  const handler = helperAnswering(text);
-  mocks.createHelperModelKit.mockResolvedValue({
-    kit: { client: {}, handler },
-  });
-  return handler;
+/** Point the helper model at one resolved answer. */
+function mockToolUseAnswer(text: string): void {
+  mocks.helperModel.mockReturnValue(Effect.succeed(BOUND));
+  mocks.helperCompletion.mockReturnValue(Effect.succeed(text));
 }
 
 describe('session description helpers', () => {
@@ -101,7 +97,7 @@ describe('session description helpers', () => {
     publishTestRunStart(session, 'a0b0c1' as RunId);
     await session.settlePublications();
     const recorded = recordSessionEvents(session);
-    const handler = mockToolUseAnswer('Correcting derivation signs');
+    mockToolUseAnswer('Correcting derivation signs');
 
     await runDescription(
       'a0b0c1' as RunId,
@@ -110,8 +106,12 @@ describe('session description helpers', () => {
       'Corrects a draft',
     );
 
-    expect(handler.initializeMessages.mock.calls[0]?.[1]).toContain(
-      '<agent-purpose>Corrects a draft</agent-purpose>',
+    expect(mocks.helperCompletion.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        userPrompt: expect.stringContaining(
+          '<agent-purpose>Corrects a draft</agent-purpose>',
+        ),
+      }),
     );
     expect(
       (await Effect.runPromise(session.readView(['a0b0c1' as RunId]))).runs.get(
@@ -132,7 +132,7 @@ describe('session description helpers', () => {
     const session = createTestSession();
     const helperError = new Error('helper unavailable');
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    mocks.createHelperModelKit.mockRejectedValueOnce(helperError);
+    mocks.helperModel.mockReturnValueOnce(Effect.fail(helperError));
 
     await expect(
       runDescription(generateRunId(), session),

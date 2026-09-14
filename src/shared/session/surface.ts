@@ -20,6 +20,7 @@ import {
   ToolConfigFieldsSchema,
   UIFileFieldsSchema,
   RunIdSchema,
+  isModelOptionAvailable,
   type InquiryDraft,
   type RunId,
 } from '@shared/schemas';
@@ -142,12 +143,10 @@ function entries<K extends z.ZodType, V extends z.ZodType>(key: K, value: V) {
 
 /**
  * The persisted form: interaction state only, per view and session. A
- * missing field takes its default before validation (`prefault`), because
- * a surface saved by an older build is still a valid surface; a corrupt
- * field fails the parse loudly rather than becoming a silent default. A
- * surface whose `expanded` entries still hold the retired `'expanded'` /
- * `'collapsed'` strings is such a field: `PersistedState` warns with the
- * failing key and resets that session's whole record to these defaults.
+ * missing field takes its default before validation (`prefault`); a corrupt
+ * field fails the parse loudly rather than becoming a silent default —
+ * `PersistedState` warns with the failing key and resets that session's
+ * whole record to these defaults.
  */
 export const PersistedSurfaceSchema = z.object({
   selected: RunIdSchema.nullable().prefault(null),
@@ -292,9 +291,12 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
   const current = host.modelOptions.find(
     (option) => option.value === launch.model,
   );
-  if (host.modelOptions.length > 0 && !(current && !current.disabled)) {
+  if (
+    host.modelOptions.length > 0 &&
+    !(current && isModelOptionAvailable(current))
+  ) {
     const next =
-      host.modelOptions.find((option) => !option.disabled) ??
+      host.modelOptions.find((option) => isModelOptionAvailable(option)) ??
       current ??
       host.modelOptions[0];
     if (next.value !== launch.model) patch.model = next.value;
@@ -310,19 +312,29 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
 }
 
 /**
- * What a surface shows: `selected` if the view still has that stream, else
- * the first top-level stream, else `null`. The fallback applies only to a
- * non-null id that has disappeared; an explicit `null` is the New-task
- * state and resolves to itself.
+ * The PRD 9 selection rule: `selected` if the view still has that run,
+ * else the first top-level run, else `null`. The fallback applies only to
+ * a non-null id that has disappeared; an explicit `null` resolves to
+ * itself. A Surface-only id the view never holds (the CLI's pre-run local
+ * conversation) is the caller's to keep out of this rule: the view lists
+ * every run of the workspace, so a fallback from it would land on an
+ * unrelated run.
  */
+export function resolveSelectedId(
+  view: SessionView,
+  selected: RunId | null,
+): RunId | null {
+  if (selected === null) return null;
+  if (view.runs.has(selected)) return selected;
+  return view.order.at(0) ?? null;
+}
+
+/** What a surface shows: {@link resolveSelectedId} applied to `surface.selected`. */
 export function resolveSelected(
   view: SessionView,
   surface: Surface,
 ): RunId | null {
-  const { selected } = surface;
-  if (selected === null) return null;
-  if (view.runs.has(selected)) return selected;
-  return view.order.at(0) ?? null;
+  return resolveSelectedId(view, surface.selected);
 }
 
 /**

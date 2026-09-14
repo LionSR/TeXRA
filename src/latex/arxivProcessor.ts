@@ -10,12 +10,12 @@ import * as tar from 'tar';
 
 import { withLogChannel, withLogData } from '@logger/effectLog';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
+import type { LatexFormatter } from './formatter/texFormatter';
 import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 
 interface ExtractResult {
@@ -147,6 +147,8 @@ function joinedStream<T, A, E>(
 export type ArxivDownloadDestination = 'root' | 'references';
 
 export interface DownloadSourceOptions {
+  workspaceRoot: string;
+  formatter: LatexFormatter | null;
   progressCallback?: (msg: string, increment?: number) => void;
   autoIndent?: boolean;
   destination?: ArxivDownloadDestination;
@@ -430,9 +432,11 @@ class ArxivSourceProcessor {
     function* (
       this: ArxivSourceProcessor,
       input: string,
-      options: DownloadSourceOptions = {},
+      options: DownloadSourceOptions,
     ) {
       const {
+        workspaceRoot,
+        formatter,
         progressCallback,
         autoIndent = true,
         destination = 'references',
@@ -447,7 +451,7 @@ class ArxivSourceProcessor {
 
       yield* Effect.logInfo(`Downloading arXiv source for ID: ${id}`);
 
-      if (!WorkspaceFS.getPath()) {
+      if (!workspaceRoot) {
         return yield* Effect.fail(
           new ArxivSourcePermanentError({
             message: 'No workspace folder is open',
@@ -459,10 +463,9 @@ class ArxivSourceProcessor {
         destination,
       });
       const isRoot = paperDirRelative === '.';
-      const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
+      const paperDirFull = path.join(workspaceRoot, paperDirRelative);
 
       const needsDownload = !(yield* this.hasExistingSource(
-        paperDirRelative,
         isRoot,
         paperDirFull,
       ));
@@ -470,13 +473,7 @@ class ArxivSourceProcessor {
         // `Effect.scoped` closes the staging directory's finalizer here, on
         // success, failure and interruption alike.
         yield* Effect.scoped(
-          this.fetchAndPlaceSource(
-            id,
-            paperDirRelative,
-            paperDirFull,
-            isRoot,
-            progressCallback,
-          ),
+          this.fetchAndPlaceSource(id, paperDirFull, isRoot, progressCallback),
         );
       }
 
@@ -485,7 +482,12 @@ class ArxivSourceProcessor {
         progressCallback?.('Formatting LaTeX files...', 85);
 
         const indentResult = yield* permanent(() =>
-          indentLatexFilesInDirectory(paperDirRelative, progressCallback),
+          indentLatexFilesInDirectory(
+            paperDirFull,
+            progressCallback,
+            workspaceRoot,
+            formatter,
+          ),
         );
 
         progressCallback?.(`Formatted ${indentResult.count} LaTeX files`, 95);
@@ -506,7 +508,6 @@ class ArxivSourceProcessor {
    * positive.
    */
   private hasExistingSource(
-    paperDirRelative: string,
     isRoot: boolean,
     paperDirFull: string,
   ): Effect.Effect<boolean, ArxivSourceError> {
@@ -514,12 +515,10 @@ class ArxivSourceProcessor {
       if (isRoot) {
         return false;
       }
-      if (!(yield* permanent(() => WorkspaceFS.exists(paperDirRelative)))) {
+      if (!(yield* permanent(() => AbsoluteFS.exists(paperDirFull)))) {
         return false;
       }
-      const entries = yield* permanent(() =>
-        WorkspaceFS.readDir(paperDirRelative),
-      );
+      const entries = yield* permanent(() => AbsoluteFS.readDir(paperDirFull));
       const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
       if (hasTexFiles) {
         yield* Effect.logInfo(
@@ -543,19 +542,16 @@ class ArxivSourceProcessor {
     function* (
       this: ArxivSourceProcessor,
       id: string,
-      paperDirRelative: string,
       paperDirFull: string,
       isRoot: boolean,
       progressCallback: DownloadSourceOptions['progressCallback'],
     ) {
-      yield* permanent(() => WorkspaceFS.ensureDir(paperDirRelative));
+      yield* permanent(() => AbsoluteFS.ensureDir(paperDirFull));
 
       // Use a unique staging directory name to avoid clobbering an existing 'download/' folder at root
       const stagingDirName = `.arxiv-download-${id.replaceAll('/', '_')}`;
-      const downloadDirRelative = path.join(paperDirRelative, stagingDirName);
-      yield* permanent(() => WorkspaceFS.ensureDir(downloadDirRelative));
-
       const downloadDirFull = path.join(paperDirFull, stagingDirName);
+      yield* permanent(() => AbsoluteFS.ensureDir(downloadDirFull));
       // The staging directory belongs to this scope, so removing it is a scope
       // finalizer rather than a step on the happy path. Every non-success exit
       // used to leave `.arxiv-download-<id>/` behind in the paper directory: a
@@ -593,7 +589,6 @@ class ArxivSourceProcessor {
 
       yield* this.placeSourceFiles(
         downloadedPath,
-        paperDirRelative,
         paperDirFull,
         progressCallback,
       );
@@ -612,7 +607,6 @@ class ArxivSourceProcessor {
     function* (
       this: ArxivSourceProcessor,
       downloadedPath: string,
-      paperDirRelative: string,
       paperDirFull: string,
       progressCallback: DownloadSourceOptions['progressCallback'],
     ) {
@@ -669,11 +663,9 @@ class ArxivSourceProcessor {
       }
 
       // Rename to main.tex and move to paper root
-      const downloadedRel = WorkspaceFS.relativePath(sourceFilePath);
-      // Use forward slashes to match WorkspaceFS.relativePath() convention
-      const targetRel = [paperDirRelative, 'main.tex'].join('/');
-      if (downloadedRel !== targetRel) {
-        yield* permanent(() => WorkspaceFS.rename(downloadedRel, targetRel));
+      const targetPath = path.join(paperDirFull, 'main.tex');
+      if (sourceFilePath !== targetPath) {
+        yield* permanent(() => AbsoluteFS.rename(sourceFilePath, targetPath));
       }
     },
   );

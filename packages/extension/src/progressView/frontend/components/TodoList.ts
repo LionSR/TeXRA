@@ -9,20 +9,20 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { TODO_STATUS, STATUS_ICONS, type TodoItem } from '@shared/schemas';
+import {
+  TODO_STATUS,
+  STATUS_DISPLAY,
+  STATUS_ICONS,
+  type TodoItem,
+} from '@shared/schemas';
 import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { pluralize } from '@utils/text/stringUtils';
 
 import { ELEMENT_IDS } from '../constants';
 
 // Local imports - base class
 import { CollapsiblePanel } from './CollapsiblePanel';
-
-const TODO_STATUS_LABELS: Readonly<Record<TodoItem['status'], string>> = {
-  [TODO_STATUS.PENDING]: 'Pending',
-  [TODO_STATUS.IN_PROGRESS]: 'In progress',
-  [TODO_STATUS.COMPLETED]: 'Completed',
-};
 
 @customElement('todo-list')
 export class TodoList extends CollapsiblePanel {
@@ -109,7 +109,7 @@ export class TodoList extends CollapsiblePanel {
     const activeTodo = this.todos.find(
       (todo) => todo.status === TODO_STATUS.IN_PROGRESS,
     );
-    const progressText = `${completed} of ${total} ${total === 1 ? 'task' : 'tasks'} complete`;
+    const progressText = `${completed} of ${total} ${pluralize(total, 'task', 'tasks')} complete`;
 
     return html`
       <div class="visually-hidden" role="status">
@@ -157,7 +157,7 @@ export class TodoList extends CollapsiblePanel {
               ></wa-spinner>`
             : waIcon(icon, { className: 'todo-item__icon' })
         }
-        <span class="visually-hidden">${TODO_STATUS_LABELS[status]}: </span>
+        <span class="visually-hidden">${STATUS_DISPLAY[status].label}: </span>
         <bdi class="todo-item__content">${content}</bdi>
       </li>
     `;

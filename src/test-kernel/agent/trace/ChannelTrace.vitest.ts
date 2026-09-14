@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  attachChannelSubscriber,
-  createChannelTrace,
-  TraceEmitter,
-} from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import { setLogSink, type LogEntry } from '@logger/logSink';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
@@ -53,24 +49,5 @@ describe('channel trace adapters', () => {
     const output = messages(entries);
     expect(output).not.toContain('internal-only line');
     expect(output).toContain('visible line');
-  });
-
-  it('routes public emitter logs until the subscriber is detached', () => {
-    const entries = captureEntries();
-    const trace = new TraceEmitter();
-    const detach = attachChannelSubscriber(trace, 'AgentChannel');
-
-    trace.info('visible emitter line');
-    trace.info('internal emitter line', {
-      messageType: MESSAGE_TYPES.INTERNAL,
-    });
-    detach();
-    trace.info('detached emitter line');
-
-    const output = messages(entries);
-    expect(output).toContain('visible emitter line');
-    expect(output).not.toContain('internal emitter line');
-    expect(output).not.toContain('detached emitter line');
-    expect(entries[0]?.annotations['channel']).toBe('AgentChannel');
   });
 });

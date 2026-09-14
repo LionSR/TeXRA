@@ -1,18 +1,15 @@
 /**
- * The generated (non-KV) files under a run's storage directory.
+ * The generated files under a run's storage directory.
  *
  * One walk, two renderings: the agent-facing `/executions/{id}/files` listing
  * in `ExecutionsTool` and the CLI's history detail view both need "what did
  * this run produce", and previously each walked the directory itself. The two
- * walks agreed on depth and on the internal-metadata predicate
- * (`runKvFiles.isKVFile`, deliberately shared) but disagreed on order,
- * on stat/readDir failure policy, and on whether a KV-*named directory* was
- * descended into — so the same run listed differently depending on who asked.
+ * walks agreed on depth but disagreed on order, on stat/readDir failure
+ * policy, and on how deep they descended — so the same run listed
+ * differently depending on who asked.
  *
- * This module lives beside `runKvFiles` rather than under
- * `@agent/storage` on purpose: the predicate reaches into
- * `@agent/workflowScript/checkpointKey` and `@tools/delegation`, and
- * `src/tools` consumes `agent/core`, not the reverse.
+ * A run's records live in the event table, so everything left in the
+ * directory is the run's own output.
  */
 
 import * as path from 'node:path';
@@ -33,8 +30,6 @@ import { toPosixPath } from '@utils/core/pathCore';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/runStorageFs';
 import { StorageFS } from '@utils/files/storageFS';
-
-import { isKVFile } from './runKvFiles';
 
 const log = createLog('runGeneratedFiles');
 
@@ -111,11 +106,6 @@ function walkRunStorage(
 
     const files: RunGeneratedFile[] = [];
     for (const [name, type] of entries) {
-      // Skip before stat and before recursion: a KV-named *directory* is
-      // internal metadata all the way down, so its children are not generated
-      // output either.
-      if (isKVFile(name)) continue;
-
       const rawRelative = relativePath ? path.join(relativePath, name) : name;
       const childPath = path.join(basePath, rawRelative);
       const entryIsDirectory = isDirectory(type);

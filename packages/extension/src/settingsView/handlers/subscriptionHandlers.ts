@@ -16,6 +16,8 @@ import {
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import type {
   UpdateChatGptAuthStatusMessage,
   UpdateGrokAuthStatusMessage,
@@ -40,7 +42,9 @@ export class SubscriptionHandlers {
     /** Current sign-in status, already wrapped as its outbound wire message. */
     private readonly buildStatusMessage: () => Promise<SubscriptionAuthStatusMessage>,
     private readonly ctx: SettingsHandlerContext,
+    private readonly secrets: PlatformSecrets,
     private readonly refreshModelAccess: () => Promise<void>,
+    private readonly runtime: ProcessRuntime,
   ) {
     this.provider = subscriptionProvider(providerId);
   }
@@ -57,7 +61,11 @@ export class SubscriptionHandlers {
   }
 
   readonly handleSignIn = async (): Promise<void> => {
-    await signInWithSubscription(this.ctx.channel, this.providerId);
+    await signInWithSubscription(
+      this.ctx.channel,
+      this.providerId,
+      this.runtime,
+    );
     await this.refreshState();
   };
 
@@ -67,7 +75,7 @@ export class SubscriptionHandlers {
       this.ctx,
       ACCOUNT_OUTCOME.signOutFailed(displayName),
       async () => {
-        await this.provider.signOut();
+        await this.provider.signOut(this.secrets);
         void vscode.window.showInformationMessage(
           ACCOUNT_OUTCOME.signedOut(displayName),
         );

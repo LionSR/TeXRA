@@ -11,9 +11,18 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { setTimeout as delay } from 'node:timers/promises';
 
-import { Effect, Fiber, Layer, Scope, Stream, SynchronizedRef } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Exit,
+  Effect,
+  Fiber,
+  Layer,
+  Scope,
+  Stream,
+  SynchronizedRef,
+} from 'effect';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { describe, expect } from 'vitest';
@@ -25,8 +34,13 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import { ToolCall } from '@agent/runtime/ToolCall';
+import type {
+  RuntimeTool as ITool,
+  RuntimeToolRegistry,
+  ToolServices,
+} from '@agent/runtime/ToolServices';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
@@ -47,6 +61,8 @@ import {
   type ModelOrigin,
   type TurnResult,
 } from '@llm/turn';
+import { workspaceRoots } from '@platform/workspaceRoots';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -55,13 +71,13 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { recordSessionEvents } from './progressTestUtils';
-import { testModelCell } from './modelCellTestUtils';
 import { testModelInfo } from './runtime/launchContextTestUtils';
 
 setupPlatform({ workspacePath: '/workspace' });
@@ -89,18 +105,20 @@ function newProbe(): DispatchProbe {
 function probeTool(
   probe: DispatchProbe,
   name: string,
-  delayMs: number,
+  wait: number | Effect.Effect<void>,
   options: { endTurn?: boolean; parallelSafe?: boolean } = {},
 ): ITool {
   return {
     definition: { name, description: name, parameters: {} },
     parallelSafe: options.parallelSafe,
-    async call(input: unknown): Promise<ToolResult> {
+    call: Effect.fn(function* (
+      input: unknown,
+    ): Effect.fn.Return<ToolResult, never, ToolCall> {
       const tag = `${name}:${JSON.stringify(input)}`;
       probe.events.push(`start ${tag}`);
       probe.inFlight += 1;
       probe.maxInFlight = Math.max(probe.maxInFlight, probe.inFlight);
-      await delay(delayMs);
+      yield* typeof wait === 'number' ? Effect.sleep(wait) : wait;
       probe.inFlight -= 1;
       probe.events.push(`end ${tag}`);
       return {
@@ -108,7 +126,7 @@ function probeTool(
         output: `${tag} ok`,
         endTurn: options.endTurn,
       };
-    },
+    }),
   } as ITool;
 }
 
@@ -153,16 +171,14 @@ function boundModel(): BoundModel {
   return {
     modelId: 'gpt54',
     config: MODEL_CONFIGS.gpt54,
-    compatibilityKey: 'ModelHandlerOpenAI',
+    compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
     supportsVision: false,
     supportsNativePdf: false,
     supportsNativeAudio: false,
-    supportsReasoning: false,
     supportsForcedToolChoice: true,
     wireRouteKey: 'wire',
     modelRetryRouteKey: 'wire:gpt54',
@@ -188,16 +204,17 @@ const freshState = (): RunState => ({
   turn: 0,
   continuationIndex: 0,
   modelId: 'gpt54',
-  modelHandlerCompatibilityKey: 'ModelHandlerOpenAI',
+  modelCompatibilityKey: 'OpenAI',
   lastError: null,
   pendingRetry: null,
+  declinedRoutes: [],
   messages: [],
   continuation: null,
   openAttempt: null,
   lastTurn: null,
   pendingResponse: null,
   pendingIntents: {},
-  approvals: {},
+  requests: {},
   usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
   flow: null,
 });
@@ -212,7 +229,7 @@ function agentRun(
   runId: RunId,
   session: SessionHandle,
   logger: AgentTrace,
-  tools: MapToolRegistry,
+  tools: RuntimeToolRegistry,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
   rootUserInstruction: string | undefined,
 ): AgentRunShape {
@@ -245,11 +262,11 @@ function agentRun(
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
+    declinedRoutes: [],
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
-      testModelCell(testModelInfo, 'gpt54'),
-      { logger, runId, runStageId: undefined },
+      { logger, runId, runStageId: undefined, config: workspaceRoots().config },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     callbacks: { onModelChanged: () => undefined },
@@ -263,7 +280,9 @@ interface DispatchKit {
   /** The folded state with the turn's response pending and unsettled. */
   readonly state: RunState;
   readonly workspace: AgentWorkspaceState;
-  readonly layer: Layer.Layer<AgentRun | RunLedger>;
+  readonly layer: Layer.Layer<
+    AgentRun | RunLedger | Exclude<ToolServices, Scope.Scope>
+  >;
 }
 
 interface HarnessOptions {
@@ -338,6 +357,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   ]);
   const model = yield* SynchronizedRef.make(boundModel());
   const layer = Layer.mergeAll(
+    nativeToolTestLayer(),
     Layer.succeed(
       AgentRun,
       agentRun(
@@ -389,7 +409,47 @@ function countStarts(probe: DispatchProbe, toolName = ''): number {
 }
 
 describe('tool-use dispatch', () => {
-  it.effect('converts a malformed attachment result into a tool error', () =>
+  it.live.each([
+    'failure',
+    'interrupted failure',
+    'interrupted defect',
+  ] as const)('leaves a durable tool write unsettled: %s', (mode) =>
+    Effect.gen(function* () {
+      const failure = new DatabaseWriteFailed({
+        path: '/unavailable/state.sqlite',
+        cause: new Error('disk write failed'),
+      });
+      const failureCause =
+        mode === 'interrupted defect'
+          ? Cause.die(failure)
+          : Cause.fail(failure);
+      const cause =
+        mode === 'failure'
+          ? failureCause
+          : Cause.combine(Cause.interrupt(), failureCause);
+      const kit = yield* openDispatch({
+        tools: {
+          write_state: {
+            definition: { name: 'write_state' },
+            call: () => Effect.failCause(cause),
+          },
+        },
+        calls: [makeCall('failed-write', 'write_state', {})],
+      });
+      const exit = yield* Effect.exit(dispatch(kit));
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.squash(exit.cause)).toBe(failure);
+        expect(Cause.hasInterrupts(exit.cause)).toBe(mode !== 'failure');
+      }
+      const saved = yield* kit.session.ledger.load(kit.runId);
+      expect(Object.keys(saved?.pendingResponse?.settled ?? {})).toEqual([]);
+      expect(saved?.pendingResponse).not.toBeNull();
+      yield* kit.session.dispose();
+    }),
+  );
+
+  it.live('converts a malformed attachment result into a tool error', () =>
     Effect.gen(function* () {
       const malformedAttachmentTool: ITool = {
         definition: {
@@ -397,15 +457,16 @@ describe('tool-use dispatch', () => {
           description: 'malformed_attachment',
           parameters: {},
         },
-        async call(): Promise<ToolResult> {
-          // Deliberately malformed (`path` is a number): parsed from JSON so
-          // the shape reaches the dispatch boundary unchecked, as a real tool
-          // returning bad data would, without a cast asserting it is valid.
-          return JSON.parse(
-            '{"status":"executed","output":"not accepted","files":[{"path":42,"mimeType":"image/png"}]}',
-          );
-        },
-      } as ITool;
+        call: () =>
+          Effect.sync((): ToolResult => {
+            // Deliberately malformed (`path` is a number): parsed from JSON so
+            // the shape reaches the dispatch boundary unchecked, as a real tool
+            // returning bad data would, without a cast asserting it is valid.
+            return JSON.parse(
+              '{"status":"executed","output":"not accepted","files":[{"path":42,"mimeType":"image/png"}]}',
+            );
+          }),
+      };
       const kit = yield* openDispatch({
         tools: { malformed_attachment: malformedAttachmentTool },
         calls: [makeCall('c1', 'malformed_attachment', {})],
@@ -418,11 +479,11 @@ describe('tool-use dispatch', () => {
       expect(delivered?.text).toMatch(
         /malformed_attachment: Tool returned an invalid result/i,
       );
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
-  it.effect('preserves the unwrapped root instruction across delegation', () =>
+  it.live('preserves the unwrapped root instruction across delegation', () =>
     Effect.gen(function* () {
       let observedInstruction: string | undefined;
       let observedTrace: unknown;
@@ -432,12 +493,16 @@ describe('tool-use dispatch', () => {
           description: 'inspect_context',
           parameters: {},
         },
-        async call(): Promise<ToolResult> {
-          const context = getCurrentToolCallContext();
+        call: Effect.fn(function* (): Effect.fn.Return<
+          ToolResult,
+          never,
+          ToolCall
+        > {
+          const context = yield* ToolCall;
           observedInstruction = context?.userInstruction;
           observedTrace = context?.trace;
           return { status: 'executed', output: 'ok' };
-        },
+        }),
       } as ITool;
       const kit = yield* openDispatch({
         tools: { inspect_context: inspectContext },
@@ -452,11 +517,11 @@ describe('tool-use dispatch', () => {
 
       expect(observedInstruction).toBe('Do not use files or external tools.');
       expect(observedTrace).toBe(noopTrace);
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
-  it.effect('runs contiguous parallel-safe calls concurrently, in order', () =>
+  it.live('runs contiguous parallel-safe calls concurrently, in order', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({
@@ -480,11 +545,11 @@ describe('tool-use dispatch', () => {
       expect(deliveredResults(state)[0]?.text).toContain(
         'grep:{"pattern":"a"}',
       );
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
-  it.effect('treats non-safe tools as ordering barriers', () =>
+  it.live('treats non-safe tools as ordering barriers', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({
@@ -510,11 +575,11 @@ describe('tool-use dispatch', () => {
         'start read_file:{"n":3}',
         'end read_file:{"n":3}',
       ]);
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
-  it.effect('stops dispatch and ends the turn after a terminal result', () =>
+  it.live('stops dispatch and ends the turn after a terminal result', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({
@@ -543,11 +608,11 @@ describe('tool-use dispatch', () => {
       expect(delivered[1]?.text).toContain(
         'an earlier tool call ended the turn',
       );
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
-  it.effect(
+  it.live(
     'executes duplicate parallel calls once and fans the result out',
     () =>
       Effect.gen(function* () {
@@ -567,7 +632,7 @@ describe('tool-use dispatch', () => {
         const delivered = deliveredResults(state);
         expect(delivered[1]?.status).toBe('success');
         expect(delivered[1]?.text).toBe(delivered[0]?.text);
-        kit.session.dispose();
+        yield* kit.session.dispose();
       }),
   );
 
@@ -575,22 +640,23 @@ describe('tool-use dispatch', () => {
   // that reports it, and the workspace the call mutated commit together, so a
   // stop before the delivering snapshot cannot leave a settled call whose
   // edits, media and tool-call count existed only in memory.
-  it.effect('commits the card and the workspace with the tool result', () =>
+  it.live('commits the card and the workspace with the tool result', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const editingTool: ITool = {
         definition: { name: 'edit_file', description: 'edit_file' },
-        async call(): Promise<ToolResult> {
-          probe.events.push('end edit_file');
-          return {
-            status: 'executed',
-            output: 'edited',
-            edits: [
-              { path: 'notes.tex', lineChanges: { added: 3, removed: 1 } },
-            ],
-          };
-        },
-      } as ITool;
+        call: () =>
+          Effect.sync((): ToolResult => {
+            probe.events.push('end edit_file');
+            return {
+              status: 'executed',
+              output: 'edited',
+              edits: [
+                { path: 'notes.tex', lineChanges: { added: 3, removed: 1 } },
+              ],
+            };
+          }),
+      };
       const kit = yield* openDispatch({
         tools: {
           edit_file: editingTool,
@@ -610,7 +676,7 @@ describe('tool-use dispatch', () => {
       // The barriers are ordered, so the second call starting is proof the
       // first has settled; the dispatch is then stopped before delivery.
       while (!probe.events.some((event) => event.startsWith('start slow'))) {
-        yield* Effect.promise(() => delay(5));
+        yield* Effect.sleep(5);
       }
       yield* Fiber.interrupt(fiber);
 
@@ -642,19 +708,29 @@ describe('tool-use dispatch', () => {
       );
       expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
       expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
   // No fail-fast sibling interruption and no fabricated settlement: an
   // interrupted call is outcome-unknown, and resume asks rather than guesses.
-  it.effect('commits no settlement for a call interrupted in flight', () =>
+  it.live('commits no settlement for a call interrupted in flight', () =>
     Effect.gen(function* () {
       const probe = newProbe();
+      const bothStarted = yield* Deferred.make<void>();
+      const awaitInterruption = Effect.gen(function* () {
+        if (probe.inFlight === 2)
+          yield* Deferred.succeed(bothStarted, undefined);
+        yield* Effect.never;
+      });
       const kit = yield* openDispatch({
         tools: {
-          grep: probeTool(probe, 'grep', 60, { parallelSafe: true }),
-          read_file: probeTool(probe, 'read_file', 60, { parallelSafe: true }),
+          grep: probeTool(probe, 'grep', awaitInterruption, {
+            parallelSafe: true,
+          }),
+          read_file: probeTool(probe, 'read_file', awaitInterruption, {
+            parallelSafe: true,
+          }),
         },
         calls: [
           makeCall('c1', 'grep', { pattern: 'a' }),
@@ -666,9 +742,8 @@ describe('tool-use dispatch', () => {
       });
 
       const fiber = yield* Effect.forkChild(dispatch(kit));
-      // A real wait, matching the probe tools' own real timers: the point is
-      // that both calls are genuinely in flight when the interrupt lands.
-      yield* Effect.promise(() => delay(15));
+      // Interrupt only after both calls have entered and are held in flight.
+      yield* Deferred.await(bothStarted);
       expect(probe.maxInFlight).toBe(2);
       yield* Fiber.interrupt(fiber);
 
@@ -687,11 +762,11 @@ describe('tool-use dispatch', () => {
         pending?.calls.find((fact) => fact.callId === 'c3')?.duplicateOf,
       ).toBe('c1');
       expect(countStarts(probe, 'grep')).toBe(1);
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
-  it.effect('does not share read results across a mutating barrier', () =>
+  it.live('does not share read results across a mutating barrier', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({
@@ -713,38 +788,36 @@ describe('tool-use dispatch', () => {
       // model stale contents.
       expect(countStarts(probe, 'read_file')).toBe(2);
       expect(deliveredResults(state)[2]?.status).toBe('success');
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
-  it.effect(
-    'allows an identical mutation again after a different mutation',
-    () =>
-      Effect.gen(function* () {
-        const probe = newProbe();
-        const kit = yield* openDispatch({
-          tools: {
-            write_file: probeTool(probe, 'write_file', 5),
-            edit_file: probeTool(probe, 'edit_file', 5),
-          },
-          calls: [
-            makeCall('c1', 'write_file', { path: 'x', content: 'v1' }),
-            makeCall('c2', 'edit_file', { path: 'x', patch: 'p' }),
-            makeCall('c3', 'write_file', { path: 'x', content: 'v1' }),
-          ],
-        });
+  it.live('allows an identical mutation again after a different mutation', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const kit = yield* openDispatch({
+        tools: {
+          write_file: probeTool(probe, 'write_file', 5),
+          edit_file: probeTool(probe, 'edit_file', 5),
+        },
+        calls: [
+          makeCall('c1', 'write_file', { path: 'x', content: 'v1' }),
+          makeCall('c2', 'edit_file', { path: 'x', patch: 'p' }),
+          makeCall('c3', 'write_file', { path: 'x', content: 'v1' }),
+        ],
+      });
 
-        const { state } = yield* dispatch(kit);
+      const { state } = yield* dispatch(kit);
 
-        // The edit changed state, so re-issuing the identical write is a
-        // plausible restore — it must execute, not be swallowed as a glitch.
-        expect(countStarts(probe, 'write_file')).toBe(2);
-        expect(deliveredResults(state)[2]?.status).toBe('success');
-        kit.session.dispose();
-      }),
+      // The edit changed state, so re-issuing the identical write is a
+      // plausible restore — it must execute, not be swallowed as a glitch.
+      expect(countStarts(probe, 'write_file')).toBe(2);
+      expect(deliveredResults(state)[2]?.status).toBe('success');
+      yield* kit.session.dispose();
+    }),
   );
 
-  it.effect('shares the primary result for side-effect tool duplicates', () =>
+  it.live('shares the primary result for side-effect tool duplicates', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({
@@ -763,7 +836,7 @@ describe('tool-use dispatch', () => {
       // Accidental re-emissions get the primary's result, not an error.
       expect(delivered[1]?.status).toBe('success');
       expect(delivered[1]?.text).toBe(delivered[0]?.text);
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 });

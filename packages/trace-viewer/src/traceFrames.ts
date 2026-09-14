@@ -1,21 +1,18 @@
 /**
- * An exported trace as the session plane would have carried it (PRD
- * one-fold-three-renderers, 7.1): the listing facts of one finished run
- * and its transcript rows, stamped with a synthetic envelope so the same
- * fold the live hosts run folds them to the same view. The document is
- * immutable, so every `Subscribe` is answered from these rows in full.
+ * An exported trace answered through the live plane's own vocabulary (PRD
+ * one-fold-three-renderers, 7.1): the document already IS the run aggregate's
+ * display events, so this file only splits them into the two reads a
+ * `Subscribe` is answered with — the cold listing, and the named aggregate's
+ * history. No synthetic envelope and no reconstruction: the export authored
+ * the rows (`assembleTrace`). The document is immutable, so every `Subscribe`
+ * is answered from these rows in full.
  */
 import {
   aggregateId as qualifyAggregateId,
+  listingTypeOf,
   referencedAggregates,
-  AgentCategory,
-  AgentConfigFieldsSchema,
-  emptyRunEndOutput,
   runIdentityDisplayName,
-  RUN_PHASE,
-  USER_FOLLOW_UP_SUPPORT,
   type DisplaySessionEvent,
-  type DisplaySessionEventDraft,
 } from '@shared/schemas';
 import {
   emptyHostSnapshot,
@@ -24,177 +21,25 @@ import {
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { TraceDocument } from '@transcript';
 
+/** One position of the run's loop: the row the scrubber cuts the trace at. */
+export type TraceStep = Extract<DisplaySessionEvent, { type: 'flow.step' }>;
+
+/** The run's `flow.step` rows in commit order — the scrubber's positions. */
+export function traceSteps(trace: TraceDocument): TraceStep[] {
+  return trace.events.filter(
+    (event): event is TraceStep => event.type === 'flow.step',
+  );
+}
+
 /** The run's display name: the same identity rule every host's run tab
- *  labels with, so the page title and the tab cannot disagree. */
+ *  labels with, so the page title and the tab cannot disagree. A document
+ *  with no creation row folds to nothing, so its id is all there is to name. */
 export function traceDisplayName(trace: TraceDocument): string {
-  return runIdentityDisplayName(trace.meta.identity);
-}
-
-/** The listing facts of the run, in publish order, without envelopes. */
-function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
-  const { meta, runId } = trace;
-  const agentConfig =
-    'agentCategory' in trace.config ? trace.config : undefined;
-  const identity = meta.identity;
-  // Workflow-shaped for workflow agents and multi-agent-workflow containers
-  // (both have round outputs); everything else renders the tool-use shape.
-  const category =
-    agentConfig?.agentCategory === AgentCategory.Workflow ||
-    identity.kind === 'multiAgentWorkflow'
-      ? AgentCategory.Workflow
-      : AgentCategory.ToolUse;
-  const bodies: DisplaySessionEventDraft[] = [
-    {
-      type: 'run.start',
-      aggregateId: qualifyAggregateId('run', runId),
-      identity,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      category,
-      isRemote: false,
-      worktree: null,
-      parent: null,
-    },
-  ];
-  if (agentConfig) {
-    bodies.push({
-      type: 'run.config',
-      aggregateId: qualifyAggregateId('run', runId),
-      config: agentConfig,
-    });
-  } else if ('name' in trace.config) {
-    // Process and workflow-container exports persist a non-agent RunRecord
-    // (name/instruction/model, no agentCategory). Project that into the
-    // durable config arm the fold already reads for `command` / `model`.
-    const processConfig = trace.config;
-    bodies.push({
-      type: 'run.config',
-      aggregateId: qualifyAggregateId('run', runId),
-      config: AgentConfigFieldsSchema.parse({
-        agentCategory: AgentCategory.ToolUse,
-        agent: processConfig.name,
-        instruction: processConfig.instruction,
-        ...(processConfig.model === undefined
-          ? {}
-          : { model: processConfig.model }),
-        ...(processConfig.workingDirectory === undefined
-          ? {}
-          : { workingDirectory: processConfig.workingDirectory }),
-      }),
-    });
-  }
-  if (meta.description !== null) {
-    bodies.push({
-      type: 'run.description',
-      aggregateId: qualifyAggregateId('run', runId),
-      description: meta.description,
-    });
-  }
-  bodies.push(
-    {
-      type: 'conversation.progress',
-      aggregateId: qualifyAggregateId('run', runId),
-      progress: meta.conversationProgress,
-    },
-    {
-      type: 'usage',
-      aggregateId: qualifyAggregateId('run', runId),
-      runId,
-      usage: meta.usage,
-    },
-    {
-      type: 'addOutputFiles',
-      aggregateId: qualifyAggregateId('run', runId),
-      filesByRound: meta.outputs,
-    },
-    {
-      type: 'updateMissingOutputs',
-      aggregateId: qualifyAggregateId('run', runId),
-      filesByRound: meta.missingOutputs,
-    },
-    {
-      type: 'updateCompileFailures',
-      aggregateId: qualifyAggregateId('run', runId),
-      filesByRound: meta.compileFailures,
-    },
+  const start = trace.events.find(
+    (event): event is Extract<DisplaySessionEvent, { type: 'run.start' }> =>
+      event.type === 'run.start',
   );
-  if (category === AgentCategory.ToolUse) {
-    bodies.push(
-      {
-        type: 'updateTodos',
-        aggregateId: qualifyAggregateId('run', runId),
-        todos: meta.todos,
-      },
-      {
-        type: 'updatePlan',
-        aggregateId: qualifyAggregateId('run', runId),
-        plan: meta.plan,
-      },
-    );
-  }
-  // `meta.outcome` is the one terminal fact the document carries; a trace
-  // with none folds as interrupted: an exported file has no producer that
-  // could still be running it.
-  const { outcome } = meta;
-  if (outcome !== null) {
-    bodies.push(
-      // `run.end` carries the outcome but no run window; the non-terminal
-      // status row is what gives the folded view its `runStartedAt`, so an
-      // exported trace still renders an elapsed time.
-      {
-        type: 'status',
-        aggregateId: qualifyAggregateId('run', runId),
-        phase: RUN_PHASE.RUNNING,
-        previousPhase: null,
-        cause: 'trace',
-        substate: null,
-        runStartedAt: trace.entries[0]?.timestamp ?? null,
-      },
-      {
-        type: 'run.end',
-        aggregateId: qualifyAggregateId('run', runId),
-        outcome,
-        output: emptyRunEndOutput(category),
-      },
-    );
-  }
-  return bodies;
-}
-
-/**
- * The events of one trace: listing rows, then the transcript rows, one
- * aggregate (the run), seq in publish order, commit equal to seq. The
- * viewer stamps `ownerId: null` (contract C3) because an archived export has
- * no owning process, which folds every unfinished run as interrupted and every
- * finished one as durably final.
- */
-function traceEvents(trace: TraceDocument): {
-  readonly listing: DisplaySessionEvent[];
-  readonly transcript: DisplaySessionEvent[];
-} {
-  const at = trace.entries[0]?.timestamp ?? 0;
-  let seq = 0;
-  // The publisher's stamp (contract C2), as `DisplaySessionEventLog` would have
-  // applied it: a draft is a distributive omit over the union, so the
-  // spread cannot be typed back into the union without the assertion.
-  const stamp = (draft: DisplaySessionEventDraft): DisplaySessionEvent => {
-    seq += 1;
-    return {
-      ...draft,
-      seq,
-      commit: seq,
-      ownerId: null,
-      at,
-    } as DisplaySessionEvent;
-  };
-  const listing = listingBodies(trace).map(stamp);
-  const transcript = trace.entries.map((entry) =>
-    stamp({
-      type: 'transcript.entry',
-      aggregateId: qualifyAggregateId('run', trace.runId),
-      entry,
-    }),
-  );
-  return { listing, transcript };
+  return start ? runIdentityDisplayName(start.identity) : trace.runId;
 }
 
 /**
@@ -215,19 +60,35 @@ function traceHost(trace: TraceDocument): HostSnapshot {
 
 /**
  * The one frame that answers a `Subscribe` over an exported trace: the
- * listing, the transcript rows of the run when the subscriber named it,
- * the marker, an empty local snapshot, and the trace's host snapshot. A
- * trace has no tail.
+ * listing facts, the whole aggregate when the subscriber named the run, the
+ * marker, an empty local snapshot, and the trace's host snapshot. A trace has
+ * no tail.
+ *
+ * `cut` is the scrubber's position: the index of the `flow.step` the view is
+ * read at, `null` for the whole document. A cut is a commit — the prefix the
+ * live plane would have delivered at that moment — so the phase, the progress
+ * counters and the transcript are all the fold's own reading at step k, with
+ * no separate rule per tier.
+ *
+ * Sending the listing facts on both reads mirrors the live reader
+ * (`sessionInputs.ts`): `foldDurable` orders listing facts by commit per
+ * (aggregate, listing type), so the second delivery of a row changes nothing.
  */
 export function traceFrame(
   trace: TraceDocument,
   session: string,
   subscribe: Subscribe,
+  cut: number | null = null,
 ): EventsFrame {
-  const { listing, transcript } = traceEvents(trace);
+  const step = cut === null ? undefined : traceSteps(trace)[cut];
+  const events =
+    step === undefined
+      ? trace.events
+      : trace.events.filter((event) => event.commit <= step.commit);
   const named = subscribe.aggregates.some(
     (aggregate) => aggregate.id === qualifyAggregateId('run', trace.runId),
   );
+  const listing = events.filter((event) => listingTypeOf(event) !== null);
   const checkedAggregateIds = [
     ...new Set(listing.flatMap(referencedAggregates)),
   ];
@@ -235,7 +96,7 @@ export function traceFrame(
     kind: 'events',
     session,
     generation: subscribe.generation,
-    cursor: listing.length + transcript.length,
+    cursor: events.at(-1)?.commit ?? 0,
     events: [
       ...listing.map((event) => ({
         _tag: 'event' as const,
@@ -243,7 +104,7 @@ export function traceFrame(
         event,
       })),
       ...(named
-        ? transcript.map((event) => ({
+        ? events.map((event) => ({
             _tag: 'event' as const,
             read: 'aggregate' as const,
             event,

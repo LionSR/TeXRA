@@ -14,6 +14,7 @@ import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerAgentReviewCommands } from '@commands/review/agentReviewCommands';
 
 // Local imports - components
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -22,12 +23,17 @@ export function registerCommands(
   context: vscode.ExtensionContext,
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ): void {
-  registerLatexdiffCommands(context);
+  registerLatexdiffCommands(context, runtime);
   registerGitCommands(context);
-  registerAgentReviewCommands(context);
+  registerAgentReviewCommands(context, runtime);
   registerMergeCommands(context);
-  const settingsViewProvider = new SettingsViewProvider(context, secrets);
+  const settingsViewProvider = new SettingsViewProvider(
+    context,
+    secrets,
+    runtime,
+  );
   registerOpenFileCommands(context);
   registerMainViewCommands(context, progressViewProvider);
 
@@ -43,6 +49,7 @@ export function registerCommands(
       settingsViewProvider,
       progressViewProvider,
       secrets,
+      runtime,
     ),
   );
 

@@ -7,6 +7,7 @@ import {
   isTranscriptEvent,
   type SessionEvent,
   type RunId,
+  RUN_PHASE,
 } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { StreamLog } from '@shared/session/traceEntries';
@@ -43,9 +44,11 @@ function applyEvent(
   fold: ReturnType<typeof createTranscriptFold>,
   event: SessionEvent,
 ): void {
-  if (event.type === 'transcript.entry') log.record(event.entry);
-  else if (event.type === 'status') fold.status(event.phase);
-  else if (event.type === 'run.end') fold.status(event.outcome);
+  if (event.type === 'run.activate') fold.status(RUN_PHASE.RUNNING);
+  else if (event.type === 'flow.step') {
+    if (event.payload.step === 'waiting') fold.status(RUN_PHASE.WAITING);
+    else if (event.payload.step !== 'halted') fold.status(RUN_PHASE.RUNNING);
+  } else if (event.type === 'run.end') fold.status(event.outcome);
   else if (isTranscriptEvent(event))
     fold.record(event, {
       at: event.at,
@@ -110,13 +113,16 @@ export class StreamLogStore {
       .pipe(Effect.map((events) => foldEntries(events)?.log?.toJSON() ?? []));
   }
 
-  hasAuthoritativeRun(runId: RunId) {
+  /** The run aggregate's committed events; empty when the run never existed
+   *  or is tombstoned. */
+  readEvents(runId: RunId) {
     return this.database
       .readAggregate(aggregateId('run', runId), 0)
       .pipe(
-        Effect.map(
-          (events) =>
-            events.length > 0 && events.at(-1)?.type !== 'run.removed',
+        Effect.map((events) =>
+          events.length === 0 || events.at(-1)?.type === 'run.removed'
+            ? []
+            : events,
         ),
       );
   }

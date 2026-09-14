@@ -64,12 +64,12 @@ async function writeCanonicalRunFixtures(
         {
           runId: WAITING_RUN,
           agent: 'e2e-waiting',
-          phase: 'waiting' as const,
+          step: 'waiting' as const,
         },
         {
           runId: ORPHAN_RUN,
           agent: 'e2e-orphan',
-          phase: 'running' as const,
+          step: 'turn.begin' as const,
         },
       ];
       for (const runFixture of fixtures) {
@@ -85,6 +85,12 @@ async function writeCanonicalRunFixtures(
             parent: null,
           },
           {
+            type: 'run.activate',
+            aggregateId: id,
+            category: 'toolUse',
+            isRemote: false,
+          },
+          {
             type: 'stage.start',
             aggregateId: id,
             id: `${runFixture.runId}-running-group`,
@@ -97,15 +103,15 @@ async function writeCanonicalRunFixtures(
             text: `Saved history for ${runFixture.agent}.`,
           },
           {
-            type: 'status',
+            type: 'flow.step',
             aggregateId: id,
-            phase: runFixture.phase,
-            cause: runFixture.phase === 'waiting' ? 'wait' : 'lifecycle',
+            payload: { family: 'toolUse', step: runFixture.step },
           },
         ]);
       }
       // These rows belong to a stopped writer. The next process must derive
-      // interrupted presentation without rewriting the recorded phases.
+      // interrupted presentation from the recorded loop position, without
+      // rewriting a single row.
       yield* database.releaseClaims(
         fixtures.map((runFixture) =>
           fixture.aggregateId('run', runFixture.runId),

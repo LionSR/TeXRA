@@ -82,15 +82,10 @@ export class HostDraftRequests {
           secrets: yield* Secrets,
           globalState: yield* AppState,
         };
-        const result = yield* hostPort(() =>
-          polishTextWithAI(request.text, stores),
+        const text = yield* polishTextWithAI(request.text, stores).pipe(
+          Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
-        if (!result.success) {
-          return yield* new Rejected({
-            reason: result.error ?? 'Polishing failed.',
-          });
-        }
-        return { kind: 'text', text: result.text };
+        return { kind: 'text', text };
       }
       case 'savePastedImage':
         return {
@@ -159,8 +154,11 @@ export class HostDraftRequests {
     this: HostDraftRequests,
     take: Take,
   ) {
-    const takeProgram: Effect.Effect<HostOutcome, unknown> = Effect.gen(
-      function* () {
+    const takeProgram: Effect.Effect<HostOutcome, unknown, Secrets> =
+      Effect.gen(function* () {
+        // Transcription binds its OpenAI credential against the process
+        // secret store the host root provides.
+        const secrets = yield* Secrets;
         const started = yield* hostPort(async () =>
           runInSession(take.session, startRecording),
         );
@@ -177,7 +175,7 @@ export class HostDraftRequests {
           });
         }
         const result = yield* hostPort(async () =>
-          runInSession(take.session, stopRecordingAndTranscribe),
+          runInSession(take.session, () => stopRecordingAndTranscribe(secrets)),
         );
         if (!result.success) {
           return yield* new Rejected({
@@ -185,8 +183,7 @@ export class HostDraftRequests {
           });
         }
         return { kind: 'text', text: result.text };
-      },
-    );
+      });
     // A cancelled take already has its answer; `into` leaves it in place.
     yield* takeProgram.pipe(
       Deferred.into(take.result),

@@ -5,7 +5,7 @@ import DiffArtifactsHero from '../.vitepress/components/DiffArtifactsHero.vue';
 
 # LaTeX diff
 
-When an agent revises a derivation, a proof, or a section of your paper, you should be able to check every change it made. TeXRA shows each suggested change in the typeset document before you decide how to incorporate it.
+When an agent revises a derivation, proof, or section of your manuscript, you need to verify every modification. TeXRA renders each proposed change directly in the typeset document so you can evaluate edits in their full visual and mathematical context.
 
 <LatexDiffHero />
 
@@ -36,10 +36,10 @@ By default, TeXRA passes `--subtype=ONLYCHANGEDPAGE` to `latexdiff` so compiled 
 
 Standard text diff tools can be hard to read when comparing LaTeX source. LaTeX diff understands LaTeX syntax and produces readable, compilable LaTeX documents with changes highlighted. This approach has several advantages:
 
-1. **Structural awareness**: Understands LaTeX environments and commands
-2. **Visual clarity**: Shows changes within the typeset document
-3. **Compilable output**: Produces valid LaTeX documents that can be compiled
-4. **Academic focus**: Optimized for scholarly documents with equations, figures, and citations
+1. **Structural awareness**: Respects LaTeX environments, math syntax, and macro boundaries
+2. **Visual clarity**: Highlights changes directly within the compiled PDF
+3. **Compilable output**: Produces standard, standalone LaTeX markup
+4. **Scholarly focus**: Built specifically for research documents containing complex equations, figures, and citation networks
 
 ## The LaTeXDiffs section
 

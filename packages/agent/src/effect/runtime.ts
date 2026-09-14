@@ -19,7 +19,7 @@
  * the one `packages/agent/src/index.ts` takes, released by
  * `lifecycle.runShutdown()`.
  */
-import { Context, Effect, Layer } from 'effect';
+import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
 
 import {
   closeSession as closeOwnedSession,
@@ -30,19 +30,20 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
-import type { StateStore } from '@platform/interfaces';
+import { tryProcessRuntime } from '@platform/processRuntime';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
-import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
 import { PlatformConflict } from './errors.js';
-import { makeSessions, Sessions } from './sessions.js';
+import { Sessions } from './sessions.js';
+import { makeSessions } from './sessionPrograms.js';
 
 /**
  * The process platform together with the workspace roots the package's runs
@@ -51,28 +52,14 @@ import { makeSessions, Sessions } from './sessions.js';
  */
 export interface AgentPlatform extends Platform {
   readonly roots: WorkspaceRoots;
+  /** The secret store this process's `Secrets` service reads from. */
+  readonly secrets: PlatformSecrets;
 }
 
 /** The composed process, as the package's services read it. */
 export interface AgentRuntime {
   readonly platform: AgentPlatform;
   readonly roots: WorkspaceRoots;
-  /**
-   * What the process services over this platform are built from, as the
-   * process runtime holds them. The package's `Sessions` programs run on the
-   * embedder's runtime, so a launch there is given those services explicitly
-   * rather than carrying them on the public API's types.
-   *
-   * The stores rather than the layer over them: a `Layer` here would name
-   * `ToolInjections`, whose declarations reach the tool registry and through
-   * it every provider SDK's types, and the package publishes no provider
-   * type. `processServicesLayer` builds the layer where it is used.
-   */
-  readonly services: {
-    readonly secrets: () => PlatformSecrets;
-    readonly appState: () => StateStore;
-    readonly setup: SetupPlatformShape;
-  };
 }
 
 /**
@@ -97,9 +84,9 @@ const PACKAGE_SETUP: SetupPlatformShape = {
   get commands(): never {
     throw new Error(NO_SETUP_PLATFORM);
   },
-  get extensions(): never {
-    throw new Error(NO_SETUP_PLATFORM);
-  },
+  // Optional on the shape: an embedder has no editor, so probes that read
+  // `extensions?.isInstalled` see the same absence a headless host reports.
+  extensions: undefined,
   get terminal(): never {
     throw new Error(NO_SETUP_PLATFORM);
   },
@@ -109,6 +96,18 @@ const PACKAGE_SETUP: SetupPlatformShape = {
  *  end of its claim on what it found or installed. */
 export interface ProcessHold {
   readonly runtime: AgentRuntime;
+  /**
+   * The Effect runtime this composition installed, or the one it found a
+   * host had already installed. The package's Promise entry runs the
+   * shutdown settlement on it: that program is the session owner's, so it
+   * belongs on the owner's runtime rather than on a fresh default one, and
+   * the entry takes it from here instead of reading the process global.
+   *
+   * Typed by what is run on it -- programs that carry their own context --
+   * so the process service set stays out of this package's declarations.
+   */
+  readonly processRuntime: ManagedRuntime.ManagedRuntime<never, never>;
+  readonly sessions: Context.Service.Shape<typeof Sessions>;
   /**
    * End this hold (R6). The last hold to end closes every session the owner
    * holds and then disposes the runtime they ran on; every earlier one ends
@@ -174,41 +173,44 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   }
   const processServices = {
     secrets: () => platform.secrets,
-    appState: () => platform.globalState,
+    appState: () => platform.roots.globalState,
     setup: PACKAGE_SETUP,
   };
+  let processRuntime = tryProcessRuntime();
   if (!sessionOwnerInstalled()) {
     // The process-wide installations, once for the life of the process.
     if (!active) {
       initPlatform(platform);
       initProcessWorkspaceRoots(platform.roots);
     }
-    // The runtime is installed before the agent runtime, as the CLI and
-    // desktop roots do: registering the direct Lean language services
-    // builds their layer graph on it, so a registration ahead of the
-    // install throws before any agent work begins. The identity stays a
-    // pending read: the owner's map builds synchronously over it, so an
-    // open registers its root before the opener's first await and only the
-    // entry's build waits.
-    installProcessRuntime({
+    // The identity stays a pending read: the owner's map builds
+    // synchronously over it, so an open registers its root before the
+    // opener's first await and only the entry's build waits. The direct Lean
+    // language services are a layer of this runtime, as on the CLI and
+    // desktop roots.
+    processRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
-      globalStorage: () => platform.storage.getGlobalStoragePath(),
-      updateCheckStorage: () => platform.storage.getGlobalStoragePath(),
+      globalStorage: () => platform.roots.globalStorage,
+      updateCheckStorage: () => platform.roots.globalStorage,
       ...processServices,
+      lean: directLeanLanguageServices(),
     });
-    if (!active) {
-      initNodeAgentRuntime(platform.lifecycle);
-    }
     installedHere = true;
   }
+  if (!processRuntime) {
+    throw new Error('The installed session owner has no process runtime.');
+  }
+  const runtime: AgentRuntime = { platform, roots: platform.roots };
+  const sessions = makeSessions(
+    runtime,
+    Layer.effectContext(processRuntime.contextEffect),
+  );
   holds += 1;
   let held = true;
   return {
-    runtime: {
-      platform,
-      roots: platform.roots,
-      services: processServices,
-    },
+    runtime,
+    processRuntime,
+    sessions,
     release: Effect.suspend(() => {
       if (!held) return Effect.void;
       held = false;
@@ -250,34 +252,23 @@ export class Runtime extends Context.Service<Runtime, AgentRuntime>()(
   static layer(
     platform: AgentPlatform,
   ): Layer.Layer<Runtime | Sessions, PlatformConflict> {
-    return sessionsLayer.pipe(
-      Layer.provideMerge(
-        Layer.effect(
-          Runtime,
-          Effect.gen(function* () {
-            const hold = yield* Effect.try({
-              try: () => composeProcess(platform),
-              catch: (thrown) => thrown,
-            }).pipe(
-              // The one refusal this composition states; anything else
-              // thrown by an installation is a defect, not a condition.
-              Effect.catch((thrown) =>
-                thrown instanceof PlatformConflict
-                  ? Effect.fail(thrown)
-                  : Effect.die(thrown),
-              ),
-            );
-            // Registered where the hold is taken, so no path leaves the
-            // scope holding one.
-            yield* Effect.addFinalizer(() => hold.release);
-            return hold.runtime;
-          }),
-        ),
-      ),
+    return Layer.effectContext(
+      Effect.gen(function* () {
+        const hold = yield* Effect.try({
+          try: () => composeProcess(platform),
+          catch: (thrown) => thrown,
+        }).pipe(
+          Effect.catch((thrown) =>
+            thrown instanceof PlatformConflict
+              ? Effect.fail(thrown)
+              : Effect.die(thrown),
+          ),
+        );
+        yield* Effect.addFinalizer(() => hold.release);
+        return Context.make(Runtime, hold.runtime).pipe(
+          Context.add(Sessions, hold.sessions),
+        );
+      }),
     );
   }
 }
-
-/** The sessions of the composed process. They outlive no hold on it: what
- *  ends them is the last {@link ProcessHold.release}. */
-const sessionsLayer = Layer.effect(Sessions, Effect.map(Runtime, makeSessions));

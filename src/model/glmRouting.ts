@@ -2,6 +2,7 @@ import { ModelProvider } from 'llm-zoo';
 
 import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
 import { normalizeProviderEndpoint } from '@model/providerEndpoint';
+import type { DeclinableUsageRoute } from '@shared/schemas';
 import {
   getGLMCodingPlan,
   getProviderEndpoint,
@@ -22,6 +23,9 @@ type GlmRoute =
 interface GlmRoutingConfig {
   readonly baseUrl?: string | null;
   readonly useOpenRouter: boolean;
+  /** Routes the asking run declines; a declined coding plan is not taken
+   *  even while the user's preference is on. */
+  readonly declinedRoutes?: readonly DeclinableUsageRoute[];
 }
 
 /** Resolve the endpoint and usage classification for one GLM request. */
@@ -42,7 +46,10 @@ export function resolveGlmRoute(config: GlmRoutingConfig): GlmRoute {
   }
 
   const officialHost = useChinaRegion('glm') ? 'open.bigmodel.cn' : 'api.z.ai';
-  if (getGLMCodingPlan()) {
+  if (
+    getGLMCodingPlan() &&
+    !config.declinedRoutes?.includes('glm-coding-plan-subscription')
+  ) {
     return {
       route: 'official-coding-plan',
       baseUrl: `https://${officialHost}/api/coding/paas/v4`,

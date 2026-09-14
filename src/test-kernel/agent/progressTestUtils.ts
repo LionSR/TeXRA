@@ -1,30 +1,30 @@
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import {
-  matchesCancelSelector,
   SessionHostInteractions,
-  type BashSettlement,
-  type HostInteractionCancelSelector,
   type HostInteractions,
-  type PlanApprovalResult,
-  type ProposalResult,
-  type RetrySettlement,
-  type RetryResult,
-  type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import type { HostBashApprovalRequest } from '@agent/runtime/HostInteractions';
 import { effectRuntime } from '@platform/processRuntime';
 import {
+  aggregateId as qualifyAggregateId,
+  aggregateTarget,
+  AgentCategory,
+  emptyRunEndOutput,
   type ActiveChildInfo,
-  type RunId,
-  type ProgressPermissionKind,
+  type BashPermission,
   type DisplaySessionEvent,
+  type RequestDecision,
+  type RunId,
+  type RunOutcome,
 } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import {
   prepareToolEditApprovalPrompt,
   type ToolEditApprovalRequest,
@@ -33,10 +33,9 @@ import { generateShortId } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 /**
- * Loosely-typed recording of host emissions. The recording host flattens typed
- * `HostInteractions` requests and test-owned decisions into the same stream as
- * plain `emit` calls, using its own `show*`/`resolve*` names, so the event
- * vocabulary is a plain string.
+ * Loosely-typed recording of host emissions. The recording host flattens the
+ * presentation port's typed calls into the same stream as plain `emit` calls,
+ * using its own names, so the event vocabulary is a plain string.
  */
 export type RecordedProgressEvent = {
   event: string;
@@ -47,16 +46,8 @@ export interface RecordingProgressSink {
   emit(event: string, payload: unknown): void;
 }
 
-export interface RecordingHostDecisions {
-  submitBash(requestId: string, decision: BashSettlement): boolean;
-  submitPlan(requestId: string, decision: PlanApprovalResult): boolean;
-  submitProposal(requestId: string, decision: ProposalResult): boolean;
-  submitRetry(requestId: string, decision: RetrySettlement): boolean;
-  submitUserQuestion(
-    requestId: string,
-    decision: UserQuestionSettlement,
-  ): boolean;
-}
+/** A request a run opened, as the fold and every surface read it. */
+type OpenedRequest = Extract<DisplaySessionEvent, { type: 'request.opened' }>;
 
 type SessionEventReader = Pick<SessionHandle, 'events' | 'now'>;
 
@@ -171,240 +162,158 @@ export function eventsOfType<
   );
 }
 
+/**
+ * A host that records what the runtime presents to it. The port answers
+ * nothing (ruling A9-3): a request a run opens is a `request.opened` row, so
+ * a test that must answer one uses {@link decideRequest} or
+ * {@link autoDecideRequests}.
+ */
 export function createRecordingHost(): {
   events: RecordedProgressEvent[];
   interactions: HostInteractions;
-  decisions: RecordingHostDecisions;
   host: SessionHostInteractions & RecordingProgressSink;
 } {
   const events: RecordedProgressEvent[] = [];
-  const pendingPlans = new Map<
-    string,
-    { runId: RunId; settle: (result: PlanApprovalResult) => void }
-  >();
-  const pendingProposals = new Map<
-    string,
-    { runId: RunId; settle: (result: ProposalResult) => void }
-  >();
-  const pendingRetries = new Map<
-    string,
-    { runId: RunId; settle: (result: RetryResult) => void }
-  >();
-  const pendingBashes = new Map<
-    string,
-    { runId?: RunId; settle: (result: BashSettlement) => void }
-  >();
-  const pendingUserQuestions = new Map<
-    string,
-    { runId?: RunId; settle: (result: UserQuestionSettlement) => void }
-  >();
-  // Mirrors the host contract: interaction requests ensure the view is
-  // open without switching the active tab (#8246).
-  const revealRun = () => {
-    events.push({ event: 'requestEnsureProgressView', payload: {} });
-  };
-  const decisions: RecordingHostDecisions = {
-    submitBash(requestId, decision) {
-      const pending = pendingBashes.get(requestId);
-      if (!pending) return false;
-      pendingBashes.delete(requestId);
-      events.push({
-        event: 'resolveBashPermission',
-        payload: { requestId },
-      });
-      pending.settle(decision);
-      return true;
-    },
-    submitPlan(requestId, decision) {
-      const pending = pendingPlans.get(requestId);
-      if (!pending) return false;
-      pendingPlans.delete(requestId);
-      events.push({
-        event: 'resolvePlanApproval',
-        payload: { requestId },
-      });
-      pending.settle(decision);
-      return true;
-    },
-    submitProposal(requestId, decision) {
-      const pending = pendingProposals.get(requestId);
-      if (!pending) return false;
-      pendingProposals.delete(requestId);
-      events.push({
-        event: 'resolveAgentProposal',
-        payload: { requestId },
-      });
-      pending.settle(decision);
-      return true;
-    },
-    submitRetry(requestId, decision) {
-      const pending = pendingRetries.get(requestId);
-      if (!pending) return false;
-      pendingRetries.delete(requestId);
-      events.push({
-        event: 'resolveRetryRequest',
-        payload: { runId: requestId },
-      });
-      pending.settle(decision);
-      return true;
-    },
-    submitUserQuestion(requestId, decision) {
-      const pending = pendingUserQuestions.get(requestId);
-      if (!pending) return false;
-      pendingUserQuestions.delete(requestId);
-      events.push({
-        event: 'resolveUserQuestion',
-        payload: { requestId },
-      });
-      pending.settle(decision);
-      return true;
-    },
-  };
   const interactions: HostInteractions = {
     emit: (event, payload) => {
       events.push({ event, payload });
     },
     setApprovalBypassState: (update) =>
       events.push({ event: 'setApprovalBypassState', payload: update }),
-    requestBashApproval: (request) => {
-      const requestId = `bash-${pendingBashes.size + 1}`;
-      const runId = request.runId ?? '';
-      revealRun();
-      events.push({
-        event: 'showBashPermission',
-        payload: {
-          requestId,
-          command: request.command,
-          ...(request.cwd ? { cwd: request.cwd } : {}),
-          allowBypass: true,
-          runId,
-        },
-      });
-      return new Promise((resolve) => {
-        pendingBashes.set(requestId, {
-          runId: request.runId ?? undefined,
-          settle: resolve,
-        });
-      });
-    },
-    requestPlanApproval: (request) => {
-      events.push({
-        event: 'showPlanApproval',
-        payload: request,
-      });
-      return new Promise((resolve) => {
-        pendingPlans.set(request.requestId, {
-          runId: request.runId,
-          settle: resolve,
-        });
-      });
-    },
-    requestAgentProposal: (request) => {
-      events.push({
-        event: 'showAgentProposal',
-        payload: request,
-      });
-      return new Promise((resolve) => {
-        pendingProposals.set(request.requestId, {
-          runId: request.runId,
-          settle: resolve,
-        });
-      });
-    },
-    requestRetry: (request) => {
-      events.push({
-        event: 'showRetryRequest',
-        payload: request,
-      });
-      return new Promise((resolve) => {
-        pendingRetries.set(request.runId, {
-          runId: request.runId,
-          settle: resolve,
-        });
-      });
-    },
-    askUserQuestion: (request) => {
-      revealRun();
-      events.push({
-        event: 'showUserQuestion',
-        payload: request,
-      });
-      return new Promise((resolve) => {
-        pendingUserQuestions.set(request.requestId, {
-          runId: request.runId || undefined,
-          settle: resolve,
-        });
-      });
-    },
-    cancel: (selector = {}) => cancelWhere(selector),
-    dispose: () => cancelWhere({}),
+    presentToolEdit: (request) =>
+      events.push({ event: 'presentToolEdit', payload: request.permission }),
   };
-  function cancelWhere(selector: HostInteractionCancelSelector): void {
-    const match = (kind: ProgressPermissionKind, runId?: RunId) =>
-      matchesCancelSelector({ kind, runId }, selector);
-    for (const [requestId, pending] of pendingBashes) {
-      if (!match('bash', pending.runId)) continue;
-      pendingBashes.delete(requestId);
-      events.push({
-        event: 'resolveBashPermission',
-        payload: { requestId },
-      });
-      pending.settle({ action: 'reject' });
-    }
-    for (const [requestId, pending] of pendingPlans) {
-      if (!match('planApproval', pending.runId)) continue;
-      pendingPlans.delete(requestId);
-      events.push({
-        event: 'resolvePlanApproval',
-        payload: { requestId },
-      });
-      pending.settle({ action: 'reject' });
-    }
-    for (const [requestId, pending] of pendingProposals) {
-      if (!match('proposal', pending.runId)) continue;
-      pendingProposals.delete(requestId);
-      events.push({
-        event: 'resolveAgentProposal',
-        payload: { requestId },
-      });
-      pending.settle({ action: 'reject' });
-    }
-    for (const [runId, pending] of pendingRetries) {
-      if (!match('retry', pending.runId)) continue;
-      pendingRetries.delete(runId);
-      events.push({
-        event: 'resolveRetryRequest',
-        payload: { runId },
-      });
-      pending.settle({ action: 'cancel' });
-    }
-    for (const [requestId, pending] of pendingUserQuestions) {
-      if (!match('userQuestion', pending.runId)) continue;
-      pendingUserQuestions.delete(requestId);
-      events.push({
-        event: 'resolveUserQuestion',
-        payload: { requestId },
-      });
-      pending.settle({ action: 'reject' });
-    }
-  }
   const host = sessionWithInteractions(undefined)
     .interactions as SessionHostInteractions & RecordingProgressSink;
   host.use(interactions);
+  return { events, interactions, host };
+}
+
+/**
+ * Answer one open request the way a surface's `request.decide` does: the
+ * decision lands as the run's `request.decided` row, which is what the waiting
+ * run and every surface read.
+ */
+export function decideRequest(
+  session: SessionHandle,
+  request: { readonly runId: RunId; readonly requestId: string },
+  decision: RequestDecision,
+): void {
+  session.publish([
+    {
+      type: 'request.decided',
+      aggregateId: qualifyAggregateId('run', request.runId),
+      requestId: request.requestId,
+      decision,
+    },
+  ]);
+}
+
+/**
+ * Answer every request a session opens from this call on. `decide` sees the
+ * `request.opened` row and returns the decision, or null to leave the request
+ * pending — which is how a test exercises a run parked on an unanswered
+ * request.
+ */
+export function autoDecideRequests(
+  session: SessionHandle,
+  decide: (request: OpenedRequest) => RequestDecision | null,
+): { readonly opened: OpenedRequest[]; readonly detach: () => void } {
+  const opened: OpenedRequest[] = [];
+  const fiber = effectRuntime().runFork(
+    Stream.runForEach(
+      session.events
+        .all(session.now())
+        .pipe(
+          Stream.filter(
+            (event): event is OpenedRequest => event.type === 'request.opened',
+          ),
+        ),
+      (event) =>
+        Effect.sync(() => {
+          opened.push(event);
+          const decision = decide(event);
+          if (decision === null) return;
+          const target = aggregateTarget(event.aggregateId);
+          if (target.kind !== 'run') return;
+          decideRequest(
+            session,
+            { runId: target.id, requestId: event.requestId },
+            decision,
+          );
+        }),
+    ),
+  );
   return {
-    events,
-    decisions,
-    interactions,
-    host,
+    opened,
+    detach: () => {
+      effectRuntime().runFork(Fiber.interrupt(fiber));
+    },
   };
+}
+
+/** Publish the run's existence fact when the view has yet to hold it. */
+async function ensureRunStart(
+  session: SessionHandle,
+  runId: RunId,
+): Promise<void> {
+  // A start already queued has yet to reach the view, and a second one is
+  // refused by the substrate.
+  await session.settlePublications();
+  if (session.runView(runId) !== undefined) return;
+  publishTestRunStart(session, runId);
+  await session.settlePublications();
+}
+
+/**
+ * Fold a run to its running phase from the rows that carry it (one run model,
+ * 3.3): a first activation is starting, a second is the resume
+ * `RunView.substate` reports (ruling A9-1).
+ */
+export async function seedActiveRun(
+  session: SessionHandle,
+  runId: RunId,
+  options: { readonly resuming?: boolean } = {},
+): Promise<void> {
+  await ensureRunStart(session, runId);
+  const activations = options.resuming === true ? 2 : 1;
+  for (let index = 0; index < activations; index += 1) {
+    session.publish([
+      {
+        type: 'run.activate',
+        aggregateId: qualifyAggregateId('run', runId),
+        category: AgentCategory.ToolUse,
+      },
+    ]);
+    await session.settlePublications();
+  }
+}
+
+/** Fold a run to a terminal phase from its `run.end` row, the one fact that
+ *  carries it. */
+export async function seedTerminalRun(
+  session: SessionHandle,
+  runId: RunId,
+  outcome: RunOutcome,
+): Promise<void> {
+  await ensureRunStart(session, runId);
+  session.publish([
+    {
+      type: 'run.end',
+      aggregateId: qualifyAggregateId('run', runId),
+      outcome,
+      output: emptyRunEndOutput(AgentCategory.ToolUse),
+    },
+  ]);
+  await session.settlePublications();
 }
 
 /**
  * An isolated session for node tests, with the given host interactions
  * attached: run-scoped code that resolves `currentSession().interactions`
- * (plan approvals, proposals, retries) or `currentSession().approvals`
- * (bypass state, queues) reaches this session's owners. A session's facts are
- * read back with {@link recordSessionEvents}. Passing another session's
+ * (presentation) or `currentSession().approvals` (bypass state, queues)
+ * reaches this session's owners. A session's facts are read back with
+ * {@link recordSessionEvents}. Passing another session's
  * `SessionHostInteractions` makes it this session's owner too, so a
  * recording host can be shared across the sessions of one test.
  */
@@ -423,30 +332,22 @@ export function sessionWithInteractions(
     });
     return session;
   }
-  if (interactions) {
-    session.interactions.use(
-      'cancel' in interactions
-        ? interactions
-        : { ...interactions, cancel: () => {} },
-    );
-  }
+  if (interactions) session.interactions.use(interactions);
   return session;
 }
 
-/** A host bash request carrying the prompt the tool boundary prepares. */
-export function bashApprovalRequest(
-  request: Omit<HostBashApprovalRequest, 'permission'>,
-  session: SessionHandle = sessionWithInteractions(undefined),
-): HostBashApprovalRequest {
+/** The bash permission payload a `request.opened` carries. */
+export function bashApprovalRequest(request: {
+  readonly command: string;
+  readonly cwd?: string;
+  readonly runId?: RunId;
+}): BashPermission {
   return {
-    ...request,
-    permission: {
-      requestId: `bash-${generateShortId()}`,
-      command: request.command,
-      ...(request.cwd ? { cwd: request.cwd } : {}),
-      allowBypass: true,
-      runId: request.runId ?? '',
-    },
+    requestId: `bash-${generateShortId()}`,
+    command: request.command,
+    ...(request.cwd ? { cwd: request.cwd } : {}),
+    allowBypass: true,
+    runId: request.runId ?? '',
   };
 }
 

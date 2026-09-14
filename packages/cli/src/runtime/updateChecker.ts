@@ -5,7 +5,6 @@ import { z } from 'zod';
 
 import { Effect, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import { effectRuntime } from '@platform/processRuntime';
 import { ensureError } from '@utils/errors/errorMessage';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
 import { executeCommand } from '@utils/system/execUtils';
@@ -291,7 +290,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   // would only move the identical crash a few statements down while hiding
   // why. The check's own best-effort silence is the `Effect.ignoreCause`
   // below, which covers the part that actually runs on the runtime.
-  await installCliProcessRuntime(context.storageRoot);
+  const runtime = await installCliProcessRuntime(context.storageRoot);
   const check = Effect.gen(function* () {
     latest = yield* runDailyUpdateCheck({
       currentVersion: context.version,
@@ -330,7 +329,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   // Best-effort by policy: any failure — typed, defect, or interruption —
   // leaves `latest` unset and the check exits silently, as the `catch` it
   // replaces did.
-  await effectRuntime().runPromise(Effect.ignoreCause(check));
+  await runtime.runPromise(Effect.ignoreCause(check));
   if (!latest) return;
   if (!confirmed) {
     writeTextStderr(

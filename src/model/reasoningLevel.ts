@@ -9,6 +9,8 @@ import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
+import { warnModelAvailability } from './modelAvailabilityWarning';
+
 /**
  * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary.
  *
@@ -30,9 +32,15 @@ export function reasoningEffortOverrides(
     const parsed = ReasoningEffortSchema.safeParse(value);
     if (parsed.success) {
       overrides[model] = parsed.data;
+      continue;
     }
-    // A stored value outside llm-zoo's vocabulary is dropped. `src/model` has
-    // no logging edge, so this drop is silent; issue tracked separately.
+    // A stored value outside llm-zoo's vocabulary cannot route a request, so
+    // the model falls back to its catalog default; say so through the
+    // module's host sink rather than dropping the entry silently.
+    warnModelAvailability(
+      `Stored reasoning level "${value}" for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
+      parsed.error,
+    );
   }
   return overrides;
 }
@@ -56,9 +64,7 @@ function hasConfigurableReasoningEffort(
 
 /**
  * Whether the model exposes a user-selectable reasoning level. This is the one
- * definition behind both the handler getter (`ModelHandler
- * .supportsReasoningLevelOverride`, read on every handler construction) and the
- * model choices, so the controls and the runtime share the same definition.
+ * definition behind both the model binding and the model choices, so the controls and the runtime share the same definition.
  *
  * DeepSeek is the extra term: its models declare `supportsReasoning` without a
  * configurable effort range, yet still honour a level override.

@@ -80,7 +80,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
     runStartedAt: null,
     lastTimestamp: null,
     conversationProgress: { toolCallCount: 0 },
-    stage: null,
+    flow: null,
     followUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     resumeEligible:
       (over.category ?? AgentCategory.ToolUse) === AgentCategory.ToolUse &&

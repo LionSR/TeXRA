@@ -26,30 +26,28 @@ import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuati
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import {
-  activeModelHandlerCompatibilityKey,
-  resolveModelHandlerCompatibilityKey,
-} from '@agent/runtime/ModelFactory';
-import { supersedeLegacyFlowRecord } from '@agent/storage/resumability';
+import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
 import { logUserMessage } from '@agent/trace';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
+import type { ProcessServices } from '@platform/processRuntime';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
   AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   RUN_OUTCOME,
   RUN_PHASE,
   type JsonValue,
   type NormalizedUsage,
   type RetryErrorInfo,
   type RunOutcome,
+  type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
-import { GoalStore, setGoalSessionAutoApproval } from '@tools/goal';
+import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun, RunHalted } from '../run/AgentRun';
@@ -58,10 +56,11 @@ import { bindModel, type BoundModel } from '../run/modelBinding';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
-import { ModelInvoker, turnText } from '../ModelInvoker';
+import { ModelInvoker } from '../ModelInvoker';
 import {
   appendRow,
   haltedStepRow,
+  NOT_RESUMABLE_MESSAGE,
   rowAggregate,
   snapshotRow,
   stepRow,
@@ -80,13 +79,10 @@ const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
-const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release. Start a new run instead.';
 
 /** The live control surface a host reaches through the run handle. */
 export interface ToolUseFlowContext {
   readonly ownerSession: SessionHandle;
-  readonly modelHandler: { readonly supportsManualCompaction: boolean };
   interrupt(): void;
   requestImmediateCompaction(): void;
   modelSwitchDisabledReason(model: string): string | undefined;
@@ -122,7 +118,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 ): Effect.fn.Return<
   ToolUseResult,
   Error,
-  AgentRun | RunLedger | ModelInvoker | FollowUps
+  AgentRun | RunLedger | ProcessServices | ModelInvoker | FollowUps
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -150,9 +146,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const previous = toolUseFlowState(state);
     return {
       modelId: state.modelId ?? previous?.modelId,
-      ...(state.modelHandlerCompatibilityKey === null
+      ...(state.modelCompatibilityKey === null
         ? {}
-        : { modelHandlerCompatibilityKey: state.modelHandlerCompatibilityKey }),
+        : { modelCompatibilityKey: state.modelCompatibilityKey }),
       shouldSkipCycle: false,
       stateSlices: {
         runStateSnapshot: {
@@ -198,12 +194,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let live = false;
   const flowContext: ToolUseFlowContext = {
     ownerSession: session,
-    // Every bound model can summarize its own history through the run's
-    // compaction step, so the manual command is always available.
-    modelHandler: { supportsManualCompaction: true },
     interrupt(): void {
       run.interrupt();
-      session.interactions.cancel({ runId, cause: 'Run interrupted.' });
       followUps.interrupt('clear');
     },
     requestImmediateCompaction(): void {
@@ -219,7 +211,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (current.modelId === model) return undefined;
       const nextConfig = getRuntimeModelConfig(model);
       if (!nextConfig) return `Model ${model} is not registered`;
-      const nextKey = resolveModelHandlerCompatibilityKey(
+      const nextKey = resolveModelCompatibilityKey(
         nextConfig,
         run.stores.globalState,
       );
@@ -266,7 +258,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const current = yield* SynchronizedRef.get(run.model);
       if (current.modelId === model) return state;
       const nextConfig = yield* Effect.tryPromise({
-        try: () => run.inScope(() => resolveRuntimeModelConfig(model)),
+        try: () => resolveRuntimeModelConfig(model),
         catch: ensureError,
       });
       if (!nextConfig) {
@@ -278,6 +270,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         config: nextConfig,
         stores: run.stores,
         compatibilityKey: current.compatibilityKey,
+        declinedRoutes: state.declinedRoutes,
         agentCategory: run.config.agentCategory,
         temperature: run.setting.temperature,
         inScope: run.inScope,
@@ -300,7 +293,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           phase: state.phase ?? 'model.ready',
           runtime: {
             modelId: next.modelId,
-            modelHandlerCompatibilityKey: next.compatibilityKey,
+            modelCompatibilityKey: next.compatibilityKey,
           },
         }),
       ]);
@@ -324,7 +317,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     RunState,
     Error
   > {
-    yield* supersedeLegacyFlowRecord(runId, session, logger);
     const bound = yield* SynchronizedRef.get(run.model);
     const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
     const promptVars = {
@@ -333,13 +325,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     };
     const prompts = yield* Effect.tryPromise({
       try: () =>
-        run.inScope(() =>
-          buildInitialToolUsePrompts(run.prompt, promptVars, logger, {
-            resolvedToolNames,
-            hasDelegationTools: hasDelegationTool(resolvedToolNames),
-            isChild,
-          }),
-        ),
+        buildInitialToolUsePrompts(run.prompt, promptVars, logger, {
+          workspace: session.roots.workspace,
+          resolvedToolNames,
+          hasDelegationTools: hasDelegationTool(resolvedToolNames),
+          isChild,
+        }),
       catch: ensureError,
     });
     systemPrompt = prompts.systemPrompt
@@ -391,7 +382,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         phase: 'initial',
         runtime: {
           modelId: bound.modelId,
-          modelHandlerCompatibilityKey: bound.compatibilityKey,
+          modelCompatibilityKey: bound.compatibilityKey,
         },
         state: flowState(fresh(bound)),
       }),
@@ -402,29 +393,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   /** The state a fresh run's opening snapshot is authored against. */
   const fresh = (bound: BoundModel): RunState => ({
-    commit: 0,
-    snapshotCommit: null,
-    rowsBeforeSnapshot: 0,
+    ...freshRunState(0),
     family: 'toolUse',
-    step: null,
-    outcome: null,
-    phase: null,
-    round: 0,
-    turn: 0,
-    continuationIndex: 0,
     modelId: bound.modelId,
-    modelHandlerCompatibilityKey: bound.compatibilityKey,
-    lastError: null,
-    pendingRetry: null,
-    messages: [],
-    continuation: null,
-    openAttempt: null,
-    lastTurn: null,
-    pendingResponse: null,
-    pendingIntents: {},
-    approvals: {},
-    usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
-    flow: null,
+    modelCompatibilityKey: bound.compatibilityKey,
+    // The launch's own-API-key choice enters the ledger with the opening
+    // snapshot, so every later binding and every resume reads it back.
+    declinedRoutes: run.declinedRoutes,
   });
 
   const restore = (state: RunState): void => {
@@ -468,7 +443,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   const runTurn = Effect.fn('toolUse.turn')(function* (
     initial: RunState,
-  ): Effect.fn.Return<TurnExit, Error, AgentRun | RunLedger> {
+  ): Effect.fn.Return<TurnExit, Error, AgentRun | RunLedger | ProcessServices> {
     let state = initial;
     const turnContext: TurnContext = {
       workspace,
@@ -526,7 +501,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         ): Effect.fn.Return<
           { readonly state: RunState; readonly done: boolean },
           Error,
-          AgentRun | RunLedger
+          AgentRun | RunLedger | ProcessServices
         > {
           let next = at;
           const previous = next.messages.at(-2);
@@ -671,10 +646,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         lastError = undefined;
         totalResponseTimeMs += outcome.responseTimeMs;
+        // Priced against the binding that served the round: a manual retry
+        // may have rebound the model inside the invoker.
+        const served = yield* SynchronizedRef.get(run.model);
         yield* Effect.tryPromise({
           try: () =>
-            run.inScope(() =>
-              run.usageMonitor.recordUsage(usageSnapshot(state, outcome.usage)),
+            run.usageMonitor.recordUsage(
+              usageSnapshot(state, outcome.usage),
+              served,
             ),
           catch: ensureError,
         });
@@ -694,16 +673,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   const pauseActiveGoal = Effect.fn('toolUse.pauseGoal')(function* () {
-    const goal = run.inScope(() => GoalStore.getForRun(runId));
-    if (goal?.status !== 'active') return;
-    yield* Effect.tryPromise({
-      try: () =>
-        run.inScope(async () => {
-          await GoalStore.setStatus(runId, 'paused');
-          await setGoalSessionAutoApproval(runId, false, { session });
-        }),
-      catch: ensureError,
-    });
+    if (goalOf(session, runId)?.status !== 'active') return;
+    yield* pauseGoal(session, runId);
+    setGoalSessionAutoApproval(session, runId, false);
   });
 
   // ------------------------------------------------------------- the loop
@@ -762,7 +734,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             batch = yield* followUps.drain;
             if (batch === null) {
-              session.status.transitionToWaiting(runId, 'wait');
               return { state, waiting: true } as const satisfies LoopExit;
             }
           }
@@ -780,7 +751,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             if (!afterError && !followUps.hasQueued()) {
               const continuation = yield* Effect.tryPromise({
-                try: () => run.inScope(() => maybeBuildGoalContinuation(runId)),
+                try: () => maybeBuildGoalContinuation(session, runId),
                 catch: ensureError,
               });
               if (continuation && !followUps.hasQueued()) {
@@ -792,9 +763,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
           }
           if (batch === null) {
-            if (!followUps.hasQueued()) {
-              session.status.transitionToWaiting(runId, 'wait');
-            }
             detach();
             batch = yield* followUps.wait;
             if (batch === null) {
@@ -807,7 +775,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             attach();
           }
-          session.status.transition(runId, RUN_PHASE.RUNNING, 'resume');
           const consumed: ConsumedFollowUps = yield* followUps.consume(
             state,
             batch,
@@ -824,13 +791,34 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (turn.outcome === 'cancelled') {
         return finish(state, RUN_OUTCOME.CANCELLED);
       }
+      // The turn's trace rows publish fire-and-forget while the ledger
+      // appends on this fiber, so the parking row would commit ahead of
+      // them: the transcript boundary closes on `waiting`, and this turn's
+      // `stream.start`/`stream.end`/`response.finalized` are then dropped by
+      // the fold, leaving a parked run whose transcript holds no assistant
+      // answer. Settling this run's publications here is the order between
+      // the two paths, and the run id is what makes it a barrier: a
+      // session-wide settle reports session-scoped failures only, so a
+      // rolled-back transcript of this run would return successfully here and
+      // park the run over it. It observes rather than answers: the failure it
+      // throws ends the run through the loop's failure path, and the terminal
+      // row that path writes is the one that has to carry the
+      // `artifact-drain` marker, which it can only do while the drain that
+      // decides it still finds the lost fact.
+      yield* Effect.tryPromise({
+        try: () => session.settlePublications(runId, { consume: false }),
+        catch: ensureError,
+      });
       // The turn boundary: the snapshot precedes the steps in one batch, so
       // a viewer cut at either step sees the fields, and a stop between the
-      // turn and its wait cannot leave the turn unended.
+      // turn and its wait cannot leave the turn unended. The `waiting` step
+      // parks the run (one run model, 3.3), so the streaming rows still open
+      // close in its batch: a parked transcript never streams.
       state = yield* commit(
         yield* ledger.appendBatch(runId, state, [
           snapshot(state, { phase: 'waiting' }),
           stepRow(runId, state, 'turn.end'),
+          ...session.streamClosureFacts(runId),
           stepRow(runId, state, 'waiting'),
         ]),
       );
@@ -860,7 +848,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         // One child cycle per invocation: the child loop delivers this
         // turn's facts and owns the next wait.
-        session.status.transitionToWaiting(runId, 'wait');
         return { state, waiting: true } as const satisfies LoopExit;
       }
     }
@@ -877,9 +864,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     outcome,
     response,
     files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
-    usage:
-      at?.usage ??
-      AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+    usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
     structured: run.structured.value,
     ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
       ? { error: lastError }

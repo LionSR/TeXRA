@@ -25,12 +25,11 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import {
   fakeProcessServices,
   installPlatform,
 } from '@test/support/setupPlatform';
-import { clearRunStatusForTest } from '@test/support/runStatusTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
@@ -70,7 +69,7 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
 });
 
 describe('session isolation', () => {
-  it('currentSession() resolves the active run context session, default otherwise', () => {
+  it('currentSession() resolves the active run context session, default otherwise', async () => {
     const sessionB = createTestSession();
     try {
       expect(currentSession()).toBe(defaultSession());
@@ -83,57 +82,59 @@ describe('session isolation', () => {
       // Resolution falls back to the default session outside any run.
       expect(currentSession()).toBe(defaultSession());
     } finally {
-      sessionB.dispose();
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 
   it('two sessions in one process write under their own roots', async () => {
     const paperA = createFakeWorkspaceRoots({
-      workspacePath: '/papers/a',
-      storagePath: '/storage/a',
+      workspacePath: fakePath('papers/a'),
+      storagePath: fakePath('storage/a'),
     });
     const paperB = createFakeWorkspaceRoots({
-      workspacePath: '/papers/b',
-      storagePath: '/storage/b',
+      workspacePath: fakePath('papers/b'),
+      storagePath: fakePath('storage/b'),
     });
     const sessionA = createTestSession({ roots: paperA });
     const sessionB = createTestSession({ roots: paperB });
     try {
       await runInSession(sessionA, async () => {
-        expect(WorkspaceFS.getPath()).toBe('/papers/a');
+        expect(WorkspaceFS.getPath()).toBe(fakePath('papers/a'));
         await StorageFS.ensureDir('.');
         await StorageFS.write('note.txt', 'from a');
       });
       await runInSession(sessionB, async () => {
-        expect(WorkspaceFS.getPath()).toBe('/papers/b');
+        expect(WorkspaceFS.getPath()).toBe(fakePath('papers/b'));
         await StorageFS.ensureDir('.');
         await StorageFS.write('note.txt', 'from b');
       });
       const read = async (file: string) =>
         Buffer.from(await platform().fs.readFile(file)).toString('utf8');
-      expect(await read('/storage/a/note.txt')).toBe('from a');
-      expect(await read('/storage/b/note.txt')).toBe('from b');
+      expect(await read(fakePath('storage/a/note.txt'))).toBe('from a');
+      expect(await read(fakePath('storage/b/note.txt'))).toBe('from b');
       // Outside both scopes the process roots answer, not either paper.
-      expect(workspaceRoots().workspace).toBe('/workspace');
-      expect(WorkspaceFS.getPath()).toBe('/workspace');
-      expect(workspaceRoots().storage).toBe('/workspace/.texra/storage');
+      expect(workspaceRoots().workspace).toBe(fakePath('workspace'));
+      expect(WorkspaceFS.getPath()).toBe(fakePath('workspace'));
+      expect(workspaceRoots().storage).toBe(
+        fakePath('workspace/.texra/storage'),
+      );
     } finally {
-      sessionA.dispose();
-      sessionB.dispose();
+      await Effect.runPromise(sessionA.dispose());
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 
   it('the host-exit drain settles each session under its own root, outside any scope', async () => {
     const sessionA = createTestSession({
       roots: createFakeWorkspaceRoots({
-        workspacePath: '/papers/a',
-        storagePath: '/storage/a',
+        workspacePath: fakePath('papers/a'),
+        storagePath: fakePath('storage/a'),
       }),
     });
     const sessionB = createTestSession({
       roots: createFakeWorkspaceRoots({
-        workspacePath: '/papers/b',
-        storagePath: '/storage/b',
+        workspacePath: fakePath('papers/b'),
+        storagePath: fakePath('storage/b'),
       }),
     });
     const live = [
@@ -179,14 +180,18 @@ describe('session isolation', () => {
           status: RUN_OUTCOME.CANCELLED,
         });
       }
-      expect(storageMocks.settledUnder.get('a0da01')).toBe('/storage/a');
-      expect(storageMocks.settledUnder.get('b0db01')).toBe('/storage/b');
+      expect(storageMocks.settledUnder.get('a0da01')).toBe(
+        fakePath('storage/a'),
+      );
+      expect(storageMocks.settledUnder.get('b0db01')).toBe(
+        fakePath('storage/b'),
+      );
       for (const [session, runId] of live) {
         expect(runInSession(session, () => ownsRunLease(runId))).toBe(false);
       }
     } finally {
-      sessionA.dispose();
-      sessionB.dispose();
+      await Effect.runPromise(sessionA.dispose());
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 
@@ -203,12 +208,12 @@ describe('session isolation', () => {
       sessionB.runs.track(handle);
 
       const stop = sessionB.runs.kill(runId);
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
       await Effect.runPromise(stop.settlement);
       expect(interrupt).toHaveBeenCalledOnce();
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
-      sessionB.dispose();
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 
@@ -246,8 +251,7 @@ describe('session isolation', () => {
       expect(sessionB.runs.getHandle(runId)).toBeUndefined();
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
-      clearRunStatusForTest(sessionB.status, runId);
-      sessionB.dispose();
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 });

@@ -40,7 +40,6 @@ export * from './roundIndexed';
 export * from './output';
 export * from './progressEvents';
 export * from './workflowCallProgress';
-export * from './workflowRunSnapshot';
 export * from './workflowScriptDelivery';
 
 export {
@@ -67,12 +66,12 @@ export * from './workPlan';
 export * from './subagentProgress';
 export * from './inquiry';
 export * from './prompts';
+export * from './request';
 export * from './proposalInput';
 export * from './diffResult';
 
 // Layer 4: MainView schemas
 export * from './mainView/state';
-export * from './mainView/executeMessage';
 
 // Layer 5: ProgressView schemas
 export * from './progressView/data';

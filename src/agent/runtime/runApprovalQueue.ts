@@ -10,12 +10,12 @@
  * sessions queue, resolve, and clean up approvals independently.
  */
 
+import { Effect, Semaphore } from 'effect';
+
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { ApprovalPolicySnapshot, RunId } from '@shared/schemas';
-import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
 
 import type { SessionHostInteractions } from './HostInteractions';
-import type PQueue from 'p-queue';
 
 /**
  * Per-run bypass state bound to the host interaction that announces it.
@@ -129,11 +129,11 @@ function createRunApprovalBypass(
  * ahead of it with "approve and stop asking"), prompting anyway would ignore
  * the decision they just made.
  */
-interface QueuedApproval<T> {
-  /** Present the prompt and settle it. */
-  readonly prompt: () => Promise<T>;
+interface QueuedApproval<A, E, R> {
+  /** Open the request and wait for its decision. */
+  readonly prompt: Effect.Effect<A, E, R>;
   /** Result used instead when the run is bypassed by dispatch time. */
-  readonly bypassed: () => T | Promise<T>;
+  readonly bypassed: Effect.Effect<A, E, R>;
 }
 
 interface RunApprovalController {
@@ -142,24 +142,39 @@ interface RunApprovalController {
    * Serialize one prompt at a time per run, re-checking the run's bypass
    * at dispatch rather than at enqueue.
    */
-  enqueue<T>(runId: RunId | undefined, approval: QueuedApproval<T>): Promise<T>;
+  enqueue<A, E, R>(
+    runId: RunId | undefined,
+    approval: QueuedApproval<A, E, R>,
+  ): Effect.Effect<A, E, R>;
 }
 
 function createRunApprovalController(
   bypass: RunApprovalBypass,
 ): RunApprovalController {
-  const queues = new Map<RunId | undefined, PQueue>();
+  // One permit per run: the lane a run's prompts take in turn. A lane is
+  // held for the session's life, like the bypass values beside it.
+  const lanes = new Map<RunId | undefined, Semaphore.Semaphore>();
+  const laneOf = (runId: RunId | undefined): Semaphore.Semaphore => {
+    let lane = lanes.get(runId);
+    if (lane === undefined) {
+      lane = Semaphore.makeUnsafe(1);
+      lanes.set(runId, lane);
+    }
+    return lane;
+  };
 
   return {
     bypass,
-    enqueue<T>(
+    enqueue<A, E, R>(
       runId: RunId | undefined,
-      approval: QueuedApproval<T>,
-    ): Promise<T> {
-      return runOnPerKeyQueue(queues, runId, async () =>
-        runId && bypass.isBypassed(runId)
-          ? approval.bypassed()
-          : approval.prompt(),
+      approval: QueuedApproval<A, E, R>,
+    ): Effect.Effect<A, E, R> {
+      return laneOf(runId).withPermit(
+        Effect.suspend(() =>
+          runId && bypass.isBypassed(runId)
+            ? approval.bypassed
+            : approval.prompt,
+        ),
       );
     },
   };

@@ -30,7 +30,7 @@ and §15 decision 8's idiom ruling (`Context.Service` + static layers, `Effect.f
 plan](./2026-09-06-effect-runtime-delivery-plan.md) (the tree's only `accepted-direction`
 doc) owns the work order and two binding negatives: **no second runtime/session registry**
 and **no tag per existing class**. [The agent runtime
-proposal](./2026-09-04-agent-runtime-on-effect.md) §2.4 owns the only concrete tag roster.
+proposal](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md) §2.4 owns the only concrete tag roster.
 [The promise-boundary audit](./2026-09-07-promise-boundary-audit.md) §6 forbids a new lint
 rule, a `tryPromise` ratchet row, and any adapter. [The observability
 plane](./2026-09-09-observability-plane.md) owns fiber-derived identity and therefore owns
@@ -353,8 +353,16 @@ npm run check:dead-code-ratchet          # exports need consumers in the same PR
 
 ## 9. Open questions requiring an owner ruling
 
-**Q1 — RULED 2026-09-11 (owner): do not adopt `@effect/platform-node`'s `FileSystem`/`Path`
-for now.** The question was whether to adopt Effect's own (already a root production
+**Q1 — SUPERSEDED 2026-09-13.** The owner ruled for #12073 R-1 candidate B: adopt Effect's own
+`FileSystem`/`Path` "as much as possible". `Platform` is shrinking onto the Effect-native and TeXRA
+Context services (#12364, #12372, #12373, #12374 landed; slices 4b onward convert the filesystem
+consumers, the fs port last), so steps 9–10 below are **redirected onto that program**, not deferred.
+The 2026-09-11 evidence recorded here still binds the mechanics (keep `lstat` type bits and typed
+directory walks through thin TeXRA helpers over the service). The rulings ledger
+(`../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md`) is the one authority.
+
+~~**Q1 — RULED 2026-09-11 (owner): do not adopt `@effect/platform-node`'s `FileSystem`/`Path`
+for now.**~~ The question was whether to adopt Effect's own (already a root production
 dependency, already used at `src/platform/defaults/jsonStore.ts:5`) or to Effect-type
 TeXRA's `BaseFS`/`RelativeFS`/`WorkspaceFS`. This document recommended adopting Effect's;
 the owner ruled against it, provisionally ("so far" — revisitable, not settled forever).
@@ -374,9 +382,16 @@ typecheck, lint, both ratchets and 8,884 tests, and still measured:
   `succeed(false)` and seven methods fail `NotFound` for paths that exist — a
   silent-degradation defect generator under CLAUDE.md's loud-failure rule.
 
-**Consequences, which are the point of recording this here.** Steps 9 and 10 are
+**Consequences as of 2026-09-13 (current).** Steps 9 and 10 proceed as the
+Platform-shrinking program's slices 4b onward (#12073 R-1 candidate B; #12364–#12374 are the
+first four): the filesystem consumers convert onto Effect's `FileSystem`/`Path` with the fs
+port last, carrier 5 (`workspaceRoots.ts`) retires when its last reader converts, and the
+`ambient:asyncLocalStorage` row can reach zero once that lands. The `lstat`/typed-`readDirectory`
+evidence below still constrains how each consumer converts.
+
+~~**Consequences as recorded on 2026-09-11 (historical; superseded above).** Steps 9 and 10 are
 **deferred, not redirected** — the ruling does not select the "own" alternative as the way
-forward, it declines the adoption. So:
+forward, it declines the adoption. So:~~
 
 - Step 9 (`BaseFS`/`AbsoluteFS`/`RelativeFS` → Effect functions) does not proceed.
 - Step 10 is gated on 9 and therefore also does not proceed, so **carrier 5

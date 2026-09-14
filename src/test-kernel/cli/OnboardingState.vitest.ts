@@ -11,7 +11,11 @@ import {
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import {
+  FakeSecrets,
+  createFakePlatform,
+  createFakeWorkspaceRoots,
+} from '@test/support/FakePlatform';
 
 const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
 
@@ -50,11 +54,18 @@ describe('maybeRunCliOnboarding headless parity', () => {
         });
         try {
           expect(
-            yield* maybeRunCliOnboarding(createFakePlatform(), {
-              mode: 'interactive',
-              stdoutIsTty: true,
-              termIsDumb: false,
-            }),
+            yield* maybeRunCliOnboarding(
+              {
+                ...createFakePlatform(),
+                globalState: createFakeWorkspaceRoots().globalState,
+                secrets: new FakeSecrets(),
+              },
+              {
+                mode: 'interactive',
+                stdoutIsTty: true,
+                termIsDumb: false,
+              },
+            ),
           ).toEqual({ configured: false, declined: false });
         } finally {
           Object.defineProperty(process.stdout, 'isTTY', {

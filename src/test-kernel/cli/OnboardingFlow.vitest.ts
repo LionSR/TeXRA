@@ -22,7 +22,11 @@ vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStdout: mocks.writeTextStdout,
 }));
 
-import { createFakePlatform } from '@test/support/FakePlatform';
+import {
+  FakeSecrets,
+  createFakePlatform,
+  createFakeWorkspaceRoots,
+} from '@test/support/FakePlatform';
 
 const ONBOARDING_WAIT_OPTIONS = Object.freeze({
   timeoutMs: 15_000,
@@ -92,7 +96,12 @@ describe('provider-key onboarding flow', () => {
         const { runCliOnboarding } = yield* Effect.promise(
           () => import('@cli/onboarding/runOnboarding'),
         );
-        const platform = createFakePlatform();
+        const platform = {
+          ...createFakePlatform(),
+          globalStorage: createFakeWorkspaceRoots().globalStorage,
+          globalState: createFakeWorkspaceRoots().globalState,
+          secrets: new FakeSecrets(),
+        };
         const result = yield* Effect.forkChild(
           runCliOnboarding(platform, false),
         );
