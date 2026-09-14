@@ -30,7 +30,10 @@ import type { SettingsAgentDirectoryController } from '@controllers/settingsView
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { confirmModal } from '@frontend/ui/dialogs';
+import {
+  chooseTeamAvailabilityViaDialog,
+  confirmModal,
+} from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -47,8 +50,6 @@ import {
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-
-import { chooseTeamAvailabilityViaDialog } from '../../common/teamAvailabilityDialog';
 
 import {
   withHandlerErrorHandling,
