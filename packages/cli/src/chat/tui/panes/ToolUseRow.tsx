@@ -154,11 +154,15 @@ export const ToolUseRow = memo(function ToolUseRow({
             flexWrap="nowrap"
             paddingLeft={index === 0 ? 0 : 2}
           >
-            {line.spans.map((span, spanIndex) => (
-              <Text key={spanIndex} {...toolDisplaySpanTextProps(span)}>
-                {span.text}
-              </Text>
-            ))}
+            {/* A display line is one measured row. Nested spans share its
+                width; sibling Text boxes wrap and shrink independently. */}
+            <Text wrap="truncate-end">
+              {line.spans.map((span, spanIndex) => (
+                <Text key={spanIndex} {...toolDisplaySpanTextProps(span)}>
+                  {span.text}
+                </Text>
+              ))}
+            </Text>
           </Box>
         ),
       )}

@@ -16,7 +16,7 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
-import { Effect, SubscriptionRef } from 'effect';
+import { Effect, Fiber, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
@@ -203,6 +203,8 @@ const SHOW_TERMINAL_RESUME_REPAINT =
 const SHOW_ASSISTANT_TOOL_PREAMBLE =
   process.env.HARNESS_ASSISTANT_TOOL_PREAMBLE === '1';
 const SHOW_LIVE_TOOL_ONLY = process.env.HARNESS_LIVE_TOOL_ONLY === '1';
+const SHOW_STREAMING_TOOL_OUTPUT =
+  process.env.HARNESS_STREAMING_TOOL_OUTPUT === '1';
 const LIVE_TOOL_COUNT = Math.max(
   1,
   Number.parseInt(process.env.HARNESS_LIVE_TOOL_COUNT ?? '1', 10) || 1,
@@ -1274,7 +1276,7 @@ function harnessInitialEntries(): StreamLogAppendInput[] {
   if (SHOW_REJECTED_BASH_TOOL) return makeRejectedBashToolEntries();
   if (SHOW_LONG_TOOL_OUTPUT) return makeLongToolOutputEntries();
   if (SHOW_ASSISTANT_TOOL_PREAMBLE) return makeAssistantToolPreambleEntries();
-  if (SHOW_LIVE_TOOL_ONLY) return [];
+  if (SHOW_LIVE_TOOL_ONLY || SHOW_STREAMING_TOOL_OUTPUT) return [];
   return makeEntries(ENTRY_COUNT);
 }
 
@@ -2013,6 +2015,40 @@ const ink = render(renderHarnessApp(), {
   exitOnCtrlC: false,
 });
 inkRef.current = ink;
+
+if (SHOW_STREAMING_TOOL_OUTPUT) {
+  const fiber = effectRuntime().runFork(
+    Effect.gen(function* () {
+      yield* Effect.sleep('1 second');
+      seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
+      session().publishRunEvent(HARNESS_RUN_ID, {
+        type: 'stream.start',
+        id: 'streaming-thinking',
+        kind: MESSAGE_TYPES.THINKING,
+      });
+      session().publishRunEvent(HARNESS_RUN_ID, {
+        type: 'stream.chunk',
+        id: 'streaming-thinking',
+        text: 'Checking the streamed calculation.',
+      });
+      session().publishRunEvent(HARNESS_RUN_ID, {
+        type: 'tool.start',
+        logId: 'streaming-tool',
+        toolName: 'bash',
+        input: { command: 'python3 calculation.py' },
+      });
+      for (let index = 1; index <= 12; index += 1) {
+        session().publishRunEvent(HARNESS_RUN_ID, {
+          type: 'stream.chunk',
+          id: 'streaming-tool',
+          text: `output-${index}: ${'long result '.repeat(30)}\n`,
+        });
+        yield* Effect.sleep('80 millis');
+      }
+    }),
+  );
+  HARNESS_DISPOSERS.push(() => effectRuntime().runFork(Fiber.interrupt(fiber)));
+}
 
 if (SHOW_TERMINAL_RESUME_REPAINT) {
   void (async () => {
