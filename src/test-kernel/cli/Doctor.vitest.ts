@@ -1,8 +1,10 @@
+// Node.js imports
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Third-party imports
 import { describe, expect, it } from 'vitest';
 import { subset } from 'semver';
 import stripAnsi from 'strip-ansi';
