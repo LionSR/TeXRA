@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -72,10 +73,21 @@ const secrets = new FakeSecrets();
 
 function selectCredentialModel(
   includeOpenRouter?: boolean,
-): ReturnType<typeof selectSetupCredentialModelExcludingOpenRouter> {
-  return selectSetupCredentialModelExcludingOpenRouter(
-    secrets,
-    includeOpenRouter,
+): Promise<string | null> {
+  return Effect.runPromise(
+    selectSetupCredentialModelExcludingOpenRouter(secrets, includeOpenRouter),
+  );
+}
+
+function desktopSetupModel(): Promise<string | null> {
+  return Effect.runPromise(selectDesktopSetupModel(secrets));
+}
+
+function launchModel(
+  includeAccessListFallback: boolean,
+): Promise<{ model: string; reason: string } | null> {
+  return Effect.runPromise(
+    resolveSetupLaunchModel(secrets, includeAccessListFallback),
   );
 }
 
@@ -171,7 +183,7 @@ describe('selectDesktopSetupModel', () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
     mockDirectApiKey('openRouter');
 
-    await expect(selectDesktopSetupModel(secrets)).resolves.toBe(
+    await expect(desktopSetupModel()).resolves.toBe(
       SETUP_MODEL_BY_PROVIDER.openRouter,
     );
   });
@@ -180,7 +192,7 @@ describe('selectDesktopSetupModel', () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
 
-    await expect(selectDesktopSetupModel(secrets)).resolves.toBeNull();
+    await expect(desktopSetupModel()).resolves.toBeNull();
     expect(mocks.isCodexSubscriptionActive).not.toHaveBeenCalled();
     expect(mocks.isXaiSubscriptionActive).not.toHaveBeenCalled();
   });
@@ -189,7 +201,7 @@ describe('selectDesktopSetupModel', () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
     mockDirectApiKey('kimiCode');
 
-    await expect(selectDesktopSetupModel(secrets)).resolves.toBe(
+    await expect(desktopSetupModel()).resolves.toBe(
       SETUP_MODEL_BY_PROVIDER.kimiCode,
     );
   });
@@ -197,17 +209,13 @@ describe('selectDesktopSetupModel', () => {
   it('delegates to the shared credential scan when the flag is off', async () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
 
-    await expect(selectDesktopSetupModel(secrets)).resolves.toBe(
-      CHATGPT_SETUP_MODEL,
-    );
+    await expect(desktopSetupModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 
   it('launches with Grok for a Grok-only user when the flag is off', async () => {
     mocks.isXaiSubscriptionActive.mockResolvedValue(true);
 
-    await expect(selectDesktopSetupModel(secrets)).resolves.toBe(
-      XAI_SETUP_MODEL,
-    );
+    await expect(desktopSetupModel()).resolves.toBe(XAI_SETUP_MODEL);
   });
 });
 
@@ -237,7 +245,7 @@ describe('resolveSetupLaunchModel', () => {
       mocks.hasUsableApiKey.mockRejectedValueOnce(new Error('keychain locked'));
       activate();
 
-      await expect(resolveSetupLaunchModel(secrets, false)).resolves.toEqual({
+      await expect(launchModel(false)).resolves.toEqual({
         model,
         reason: 'credential',
       });
@@ -247,7 +255,7 @@ describe('resolveSetupLaunchModel', () => {
   it('falls back to the OpenRouter access-list model when no credential is available and the caller opts in', async () => {
     mockDirectApiKey('openRouter');
 
-    await expect(resolveSetupLaunchModel(secrets, true)).resolves.toEqual({
+    await expect(launchModel(true)).resolves.toEqual({
       model: SETUP_MODEL_BY_PROVIDER.openRouter,
       reason: 'access-list-default',
     });
@@ -256,6 +264,6 @@ describe('resolveSetupLaunchModel', () => {
   it('returns null instead of the access-list fallback when the caller opts out', async () => {
     mockDirectApiKey('openRouter');
 
-    await expect(resolveSetupLaunchModel(secrets, false)).resolves.toBe(null);
+    await expect(launchModel(false)).resolves.toBe(null);
   });
 });

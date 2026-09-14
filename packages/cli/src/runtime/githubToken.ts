@@ -2,18 +2,9 @@ import { Effect } from 'effect';
 
 import { storeCredential } from '@common/secrets/storeCredential';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
-import {
-  GITHUB_TOKEN_STORAGE_KEY,
-  resolveGitHubTokenSource,
-} from '@tools/github/githubAuth';
+import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 
 export type GitHubTokenStatus = 'secret' | 'env' | 'none';
-
-export function loadGitHubTokenStatus(
-  secrets: PlatformSecrets,
-): Promise<GitHubTokenStatus> {
-  return resolveGitHubTokenSource(secrets);
-}
 
 /**
  * Persist a GitHub PAT without exposing it outside the credential store. The

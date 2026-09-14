@@ -1277,7 +1277,9 @@ function createWindow(options: {
       // shared by every host (extension, desktop, CLI) so this credential-gating
       // logic can't drift between them.
       hasCredential: () =>
-        hasUsableSetupCredential(options.secrets, credentialLog.warn),
+        runtime.runPromise(
+          hasUsableSetupCredential(options.secrets, credentialLog.warn),
+        ),
       // Launch the setup conversation when the user clicks "Run Setup" on the
       // setup card, mirroring the extension's `launchSetupAssistant` →
       // launch path: resolve a model the user's credentials can call,
@@ -1300,8 +1302,8 @@ function createWindow(options: {
               }
               const { buildDesktopSetupRunRequest } =
                 await import('@controllers/onboarding/setupLaunch');
-              const request = await buildDesktopSetupRunRequest(
-                options.secrets,
+              const request = await runtime.runPromise(
+                buildDesktopSetupRunRequest(options.secrets),
               );
               if (!request) {
                 throw new Error(

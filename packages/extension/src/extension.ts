@@ -306,7 +306,10 @@ function installUnhandledRejectionSurface(
   });
 }
 
-async function refreshApiKeyStatus(secrets: PlatformSecrets) {
+async function refreshApiKeyStatus(
+  secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
+) {
   if (!apiKeyStatusBarItem) {
     return;
   }
@@ -315,7 +318,7 @@ async function refreshApiKeyStatus(secrets: PlatformSecrets) {
   // funnel, so ChatGPT subscription and direct API keys agree about whether the
   // first-run CTA should remain visible. Account sign-in is deliberately not in
   // that set: it serves the remote-agent catalog, not model access.
-  const exists = await hasAnyUsableSetupCredential(secrets);
+  const exists = await runtime.runPromise(hasAnyUsableSetupCredential(secrets));
   if (!exists) {
     statusBarItem?.hide();
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
@@ -771,7 +774,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // task always runs and resolves with `void`.
   const queueApiKeyStatusRefresh = (): Promise<void> =>
     apiKeyStatusRefreshQueue.add(() =>
-      refreshApiKeyStatus(secrets),
+      refreshApiKeyStatus(secrets, runtime),
     ) as Promise<void>;
   const safeRefreshApiKeyStatus = () =>
     queueApiKeyStatusRefresh().catch((err) =>

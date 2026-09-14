@@ -50,7 +50,10 @@ export async function runSetup(context: CliContext): Promise<number> {
   // one step no agent can do for the user. With a credential already in place
   // the picker is skipped — credentials-only (re)configuration is
   // `texra login`'s job under the new vocabulary.
-  if (!(await hasUsableSetupCredential(services.secrets, credentialLog.warn))) {
+  const hasCredential = await services.runtime.runPromise(
+    hasUsableSetupCredential(services.secrets, credentialLog.warn),
+  );
+  if (!hasCredential) {
     const { runCliOnboarding } = await import('../onboarding/runOnboarding');
     const result = await services.runtime.runPromise(
       runCliOnboarding(services, context.stdoutColorEnabled),

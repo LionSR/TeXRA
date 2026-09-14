@@ -26,14 +26,16 @@ import { Context, Data, Effect, Layer } from 'effect';
  *
  * `get` and `getStored` stay Promise-shaped for now: typing them runs through
  * the model-availability computation, which is its own slice (#12424, lane A
- * finding), not a port change.
+ * finding), not a port change. A program that reads through either member
+ * types the rejection itself, at its own store read, as `io` against the
+ * member it called.
  */
 type SecretsFailureReason =
   'enumeration-unsupported' | 'store-unavailable' | 'decrypt-failed' | 'io';
 
 /** Which member of the port failed. */
 export type SecretsOperation =
-  'getStored' | 'set' | 'delete' | 'listStoredKeys';
+  'get' | 'getStored' | 'set' | 'delete' | 'listStoredKeys';
 
 /**
  * The one failure of the Effect-typed members of {@link PlatformSecrets}.

@@ -45,7 +45,9 @@ export class GitHubSubscriptionHandlers {
   ) {}
 
   async sendGitHubTokenStatus(webview: vscode.Webview): Promise<void> {
-    const status = await resolveGitHubTokenSource(this.secrets);
+    const status = await this.runtime.runPromise(
+      resolveGitHubTokenSource(this.secrets),
+    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
       status,

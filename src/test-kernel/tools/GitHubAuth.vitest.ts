@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -77,9 +78,9 @@ describe('getGitHubToken', () => {
   ])('$name', async (tokenCase) => {
     stubProcessEnv(tokenCase);
 
-    await expect(getGitHubToken(secretsFor(tokenCase))).resolves.toBe(
-      tokenCase.expected,
-    );
+    await expect(
+      Effect.runPromise(getGitHubToken(secretsFor(tokenCase))),
+    ).resolves.toBe(tokenCase.expected);
   });
 });
 
@@ -110,8 +111,8 @@ describe('resolveGitHubTokenSource', () => {
       expected: 'env',
     },
   ])('$name', async (tokenCase) => {
-    await expect(resolveGitHubTokenSource(secretsFor(tokenCase))).resolves.toBe(
-      tokenCase.expected,
-    );
+    await expect(
+      Effect.runPromise(resolveGitHubTokenSource(secretsFor(tokenCase))),
+    ).resolves.toBe(tokenCase.expected);
   });
 });

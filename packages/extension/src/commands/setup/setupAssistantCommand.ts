@@ -26,6 +26,8 @@ import {
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import type { Effect } from 'effect';
+
 const CHANNEL = 'SetupAssistant';
 const log = createLog(CHANNEL);
 const credentialLog = createLog('Setup Credentials');
@@ -42,8 +44,11 @@ interface LaunchModelResolution {
  */
 async function selectLaunchModel(
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ): Promise<LaunchModelResolution | null> {
-  const resolution = await resolveSetupLaunchModel(secrets, true);
+  const resolution = await runtime.runPromise(
+    resolveSetupLaunchModel(secrets, true),
+  );
   if (!resolution) return null;
   return {
     model: resolution.model,
@@ -85,9 +90,9 @@ async function withOpenRouterFlagOn<T>(
  * and then fail later as "No model is available"). Host-specific setup launch
  * routing belongs to `resolveSetupLaunchModel`.
  */
-export async function hasAnyUsableSetupCredential(
+export function hasAnyUsableSetupCredential(
   secrets: PlatformSecrets,
-): Promise<boolean> {
+): Effect.Effect<boolean> {
   return hasUsableSetupCredential(secrets, credentialLog.warn);
 }
 
@@ -95,7 +100,9 @@ async function ensureCredentialOrPrompt(
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
 ): Promise<boolean> {
-  if (await hasAnyUsableSetupCredential(secrets)) return true;
+  if (await runtime.runPromise(hasAnyUsableSetupCredential(secrets))) {
+    return true;
+  }
 
   const picks = [
     {
@@ -141,15 +148,20 @@ async function ensureCredentialOrPrompt(
       return false;
   }
 
-  return hasAnyUsableSetupCredential(secrets);
+  return runtime.runPromise(hasAnyUsableSetupCredential(secrets));
 }
 
 // Routing is fine when the current configuration resolves any setup model.
 // A managed direct route can remain runnable even when global OpenRouter is
 // enabled without an OpenRouter key.
-async function isRoutingConfigured(secrets: PlatformSecrets): Promise<boolean> {
+async function isRoutingConfigured(
+  secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
+): Promise<boolean> {
   if (!getUseOpenRouter()) return true;
-  return (await resolveSetupLaunchModel(secrets, false)) !== null;
+  return (
+    (await runtime.runPromise(resolveSetupLaunchModel(secrets, false))) !== null
+  );
 }
 
 /**
@@ -160,8 +172,9 @@ async function isRoutingConfigured(secrets: PlatformSecrets): Promise<boolean> {
  */
 async function ensureRoutingConfigured(
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ): Promise<boolean> {
-  if (await isRoutingConfigured(secrets)) return true;
+  if (await isRoutingConfigured(secrets, runtime)) return true;
 
   const choice = await vscode.window.showWarningMessage(
     '"Use OpenRouter" is on, but there is no OpenRouter key and no other provider TeXRA can reach. Add an OpenRouter key, or turn off "Use OpenRouter" in the Models tab, then try again.',
@@ -179,7 +192,7 @@ async function ensureRoutingConfigured(
   // Re-check: the user may have resolved the misconfiguration (added an
   // OR key, or disabled Use OpenRouter in the Models tab), in which case
   // we can proceed without forcing them to re-invoke the command.
-  return isRoutingConfigured(secrets);
+  return isRoutingConfigured(secrets, runtime);
 }
 
 export async function launchSetupAssistant(
@@ -210,7 +223,7 @@ export async function launchSetupAssistant(
     // key would otherwise fall into the credential prompt first because
     // isCodexSubscriptionActive returns false because
     // shouldUseCodexSubscription short-circuits when useOpenRouter is true.
-    if (!(await ensureRoutingConfigured(secrets))) {
+    if (!(await ensureRoutingConfigured(secrets, runtime))) {
       void vscode.window.showInformationMessage(
         'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Dashboard → Models, then run `TeXRA: Run Setup Assistant` again.',
       );
@@ -225,7 +238,7 @@ export async function launchSetupAssistant(
       return 'not-started';
     }
 
-    const resolution = await selectLaunchModel(secrets);
+    const resolution = await selectLaunchModel(secrets, runtime);
     if (!resolution) {
       // Edge case: no setup-model candidate is usable with the current
       // credentials. Refuse launch rather than pick a model that crashes at

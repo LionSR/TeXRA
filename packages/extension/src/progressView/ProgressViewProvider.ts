@@ -148,7 +148,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       'progressView',
     );
     this.onboardingFunnel = new OnboardingFunnelRefresher({
-      hasCredential: () => hasAnyUsableSetupCredential(secrets),
+      hasCredential: () =>
+        runtime.runPromise(hasAnyUsableSetupCredential(secrets)),
       flags: context.globalState,
       apply: (transition) => {
         this.snapshot.setOnboarding(transition.state);
@@ -203,8 +204,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         })) ?? [],
       debugMode: isDebugModeEnabled,
       apiKeyBanner: async () => ({
-        visible: !(await hasUsableSetupCredential(this.secrets, (message) =>
-          log.warn(message),
+        visible: !(await this.runtime.runPromise(
+          hasUsableSetupCredential(this.secrets, (message) =>
+            log.warn(message),
+          ),
         )),
       }),
       dependencyBanner: async () => {
