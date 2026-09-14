@@ -8,7 +8,7 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -22,7 +22,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import type { MemoryViewItem } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { isOwnDetailsToggle } from '@shared/litControllers/detailsToggle';
+import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
@@ -89,7 +89,9 @@ export class MemoryItem extends LitElement {
   @property({ attribute: false }) item?: MemoryViewItem;
 
   /** Tracks whether the collapsible has been opened at least once to defer markdown rendering. */
-  @state() private contentsOpened = false;
+  private readonly contentsDetails = new DetailsOpenController(this, {
+    onShow: () => this.requestPreviewIfNeeded(),
+  });
 
   private requestedPreviewFor: string | null = null;
 
@@ -131,17 +133,6 @@ export class MemoryItem extends LitElement {
     );
   }
 
-  private handleContentsShow(event: Event): void {
-    if (!isOwnDetailsToggle(event)) return;
-    this.contentsOpened = true;
-    this.requestPreviewIfNeeded();
-  }
-
-  private handleContentsHide(event: Event): void {
-    if (!isOwnDetailsToggle(event)) return;
-    this.contentsOpened = false;
-  }
-
   private requestPreviewIfNeeded(): void {
     if (!this.item || this.item.preview !== undefined) return;
     if (this.item.previewError) return;
@@ -178,14 +169,14 @@ export class MemoryItem extends LitElement {
       }
       return;
     }
-    this.contentsOpened = this.item?.pinned ?? false;
+    this.contentsDetails.open = this.item?.pinned ?? false;
     this.requestedPreviewFor = null;
     this.cachedPreviewSource = null;
     this.cachedPreviewHtml = '';
   }
 
   protected override updated(changedProperties: PropertyValues<this>): void {
-    if (changedProperties.has('item') && this.contentsOpened) {
+    if (changedProperties.has('item') && this.contentsDetails.open) {
       this.requestPreviewIfNeeded();
     }
   }
@@ -286,12 +277,12 @@ export class MemoryItem extends LitElement {
         <wa-details
           class="collapsible-quiet memory-contents"
           summary="Contents"
-          ?open=${this.contentsOpened}
-          @wa-show=${this.handleContentsShow}
-          @wa-hide=${this.handleContentsHide}
+          ?open=${this.contentsDetails.open}
+          @wa-show=${this.contentsDetails.handleShow}
+          @wa-hide=${this.contentsDetails.handleHide}
         >
           ${
-            this.contentsOpened
+            this.contentsDetails.open
               ? html`<div class="memory-preview">
                   ${this.renderPreviewBody(this.item)}
                 </div>`

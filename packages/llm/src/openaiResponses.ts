@@ -18,10 +18,12 @@ import {
   InputTokenEstimateSchema,
   ModelConfigurationSchema,
   ModelError,
+  authOrRejectionKind,
   enrichModelError,
   pullStream,
   ObservationPolicySchema,
   parseInboundToolArguments,
+  parseJsonOrModelError,
   RemoteOperationSchema,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -2221,10 +2223,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
     ) => {
       const status = response.statusCode;
       const error = new ModelError({
-        kind:
-          status === 401 || status === 403
-            ? 'authentication'
-            : 'provider-rejection',
+        kind: authOrRejectionKind(status),
         message: `The Responses WebSocket handshake was rejected${status === undefined ? '' : ` (${status})`}.`,
         status,
         requestId:
@@ -2334,16 +2333,16 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                     message:
                       'The Responses connection returned a binary frame.',
                   });
-                const raw: unknown = yield* Effect.try({
-                  try: () => JSON.parse(next.value as string),
-                  catch: (cause) =>
+                const raw = yield* parseJsonOrModelError(
+                  next.value as string,
+                  (cause) =>
                     new ModelError({
                       kind: 'malformed-output',
                       message:
                         'The Responses connection returned invalid JSON.',
                       cause,
                     }),
-                });
+                );
                 const envelope = WebSocketEnvelopeSchema.safeParse(raw);
                 if (!envelope.success)
                   return yield* new ModelError({
@@ -2362,11 +2361,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                       cause: rejected.error,
                     });
                   return yield* new ModelError({
-                    kind:
-                      rejected.data.status === 401 ||
-                      rejected.data.status === 403
-                        ? 'authentication'
-                        : 'provider-rejection',
+                    kind: authOrRejectionKind(rejected.data.status),
                     message: rejected.data.error.message,
                     status: rejected.data.status,
                     cause: rejected.data.error,

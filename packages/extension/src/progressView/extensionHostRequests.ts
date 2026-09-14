@@ -84,6 +84,7 @@ import {
   getToolDocsCommand,
 } from '@utils/system/toolUtils';
 import { formatResultCount } from '@utils/text/stringUtils';
+import { chooseTeamAvailabilityViaDialog } from '../common/teamAvailabilityDialog';
 
 const CHANNEL = 'ExtensionHostRequests';
 const log = createLog(CHANNEL);
@@ -369,13 +370,10 @@ export function createExtensionHostRequests(
         showInfoMessage: showInfo,
         chooseTeamAvailability: async (unavailableNames) => {
           const prompt = teamAvailabilityPrompt(unavailableNames);
-          const choice = await vscode.window.showWarningMessage(
-            prompt.message,
-            ...prompt.actions.map((action) => action.label),
-          );
           return (
-            prompt.actions.find((action) => action.label === choice)?.choice ??
-            'cancel'
+            (await chooseTeamAvailabilityViaDialog(prompt, {
+              modal: false,
+            })) ?? 'cancel'
           );
         },
         signInForRemoteAgentCatalog: async () =>

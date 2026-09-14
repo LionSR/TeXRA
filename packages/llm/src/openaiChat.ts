@@ -10,7 +10,9 @@ import {
   ModelConfigurationSchema,
   ModelError,
   enrichModelError,
+  hasErrorField,
   parseInboundToolArguments,
+  parseJsonOrModelError,
   pullStream,
   sseEvents,
   readerAbortSignal,
@@ -1089,17 +1091,16 @@ export function openaiChatModel(
                   receivedSentinel = true;
                   return [];
                 }
-                const raw: unknown = yield* Effect.try({
-                  try: () => JSON.parse(event.data),
-                  catch: (cause) =>
+                const raw = yield* parseJsonOrModelError(
+                  event.data,
+                  (cause) =>
                     new ModelError({
                       kind: 'malformed-output',
                       message: 'The model returned malformed stream data.',
                       cause,
                     }),
-                });
-                const embedsError =
-                  typeof raw === 'object' && raw !== null && 'error' in raw;
+                );
+                const embedsError = hasErrorField(raw);
                 if (event.event === 'error' || embedsError) {
                   const payload = embedsError ? raw.error : raw;
                   return yield* openaiFailure(

@@ -78,6 +78,18 @@ const PROVIDER_KEY_PATTERNS = [
   ),
 ];
 
+/**
+ * Format an unowned failure for a fatal-error/startup dialog: full detail
+ * (the stack when available) with any provider secret scrubbed. Every host's
+ * "surface this to the user, then terminate" handler shares this formatting
+ * so a crash dialog is never the one surface that shows a secret unredacted.
+ */
+export function formatFatalErrorDetail(error: unknown): string {
+  const detail =
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
+  return redactSecrets(detail);
+}
+
 export function redactSecrets(text: string): string {
   let redacted = text
     .replaceAll(

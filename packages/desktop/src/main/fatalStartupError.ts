@@ -1,5 +1,7 @@
 import { app, dialog } from 'electron';
 
+import { formatFatalErrorDetail } from '@logger/redaction';
+
 let fatalStartupErrorReported = false;
 let fatalDesktopShutdownRequested = false;
 
@@ -42,8 +44,7 @@ function reportFatalDesktopError(
   error: unknown,
   options: { title: string; message: string; forceQuit?: boolean },
 ): void {
-  const detail =
-    error instanceof Error ? (error.stack ?? error.message) : String(error);
+  const detail = formatFatalErrorDetail(error);
   console.error(`Fatal TeXRA desktop error:\n${detail}`);
   if (fatalStartupErrorReported) return;
   fatalStartupErrorReported = true;

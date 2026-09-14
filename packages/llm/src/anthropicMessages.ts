@@ -12,6 +12,7 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  authOrRejectionKind,
   enrichModelError,
   parseInboundToolArguments,
   parseOutboundToolArguments,
@@ -160,10 +161,7 @@ function sdkFailure(cause: unknown): ModelError {
     cause instanceof APIError &&
     !(cause instanceof APIConnectionError)
   ) {
-    kind =
-      cause.status === 401 || cause.status === 403
-        ? 'authentication'
-        : 'provider-rejection';
+    kind = authOrRejectionKind(cause.status);
   }
   return new ModelError({
     kind,

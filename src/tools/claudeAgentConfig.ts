@@ -8,10 +8,7 @@ import { Effect } from 'effect';
 import { execa } from 'execa';
 
 // Local imports
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
@@ -22,7 +19,6 @@ import type {
   ClaudeAgentPermissionMode,
 } from '@shared/schemas';
 import {
-  AgentCategory,
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
@@ -31,6 +27,7 @@ import {
   parseClaudeAgentPermissionMode,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -263,11 +260,10 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
 // ============================================================================
 
 export function buildClaudeAgentConfig(prompt: string): AgentConfig {
-  return AgentConfigSchema.parse({
+  return buildSyntheticToolUseConfig({
     agent: CLAUDE_AGENT_NAME,
     // Fabricated label, not a routed model: Claude Code drives its own model.
     model: 'claude',
     instruction: prompt,
-    agentCategory: AgentCategory.ToolUse,
   });
 }
