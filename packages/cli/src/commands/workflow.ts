@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 import { Effect, Result } from 'effect';
 
-import { resolveAgentForLaunch } from '@agent/index';
 import {
   buildCliWorkflowResultMeta,
   deriveResumability,
@@ -382,20 +381,20 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         : undefined,
       canAdvertiseInterruptedRun,
       expectedCategory: AgentCategory.Workflow,
-      openWorkflowOutput: (result, tryCommitPublication) =>
+      openWorkflowOutput: (
+        result,
+        agentDefaultOutputFiles,
+        tryCommitPublication,
+      ) =>
         Effect.gen(function* () {
-          // Resolved here, not before the launch: the run has loaded the
-          // agent's definition by now and a remote load refreshes the catalog
-          // entry it resolved, so these are the defaults this run actually
-          // executed, read without a second load that could fetch a different
-          // revision. `cli.expectedOutputFiles` holds the input-derived names
-          // the launch computed, which stand in when an agent declares none.
-          const declaredOutputFiles = resolveAgentForLaunch(
-            AgentCategory.Workflow,
-            config.agent,
-            config.agentSource,
-          )?.defaultOutputFiles?.filter(Boolean);
-          const expectedOutputFiles = declaredOutputFiles?.length
+          // Handed over by the launch, which is the only load of this run's
+          // definition: the defaults this run actually executed, not a reread
+          // of a catalog entry a nested refresh may have replaced with a
+          // remote listing that carries none. `cli.expectedOutputFiles` holds
+          // the input-derived names the launch computed, which stand in when
+          // the agent declares none.
+          const declaredOutputFiles = agentDefaultOutputFiles.filter(Boolean);
+          const expectedOutputFiles = declaredOutputFiles.length
             ? declaredOutputFiles
             : (config.cli?.expectedOutputFiles ?? undefined);
           const outputResult = yield* Effect.result(

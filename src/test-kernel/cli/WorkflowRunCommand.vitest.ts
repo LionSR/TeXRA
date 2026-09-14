@@ -215,7 +215,12 @@ function workflowRun(
   };
 }
 
-function mockWorkflowRun(result: WorkflowExecuteResult, once = false): void {
+function mockWorkflowRun(
+  result: WorkflowExecuteResult,
+  once = false,
+  /** What the launch loaded off the agent's definition, as the run hands it on. */
+  agentDefaultOutputFiles: readonly string[] = [],
+): void {
   const implementation = (
     _config: unknown,
     _context: unknown,
@@ -227,6 +232,7 @@ function mockWorkflowRun(result: WorkflowExecuteResult, once = false): void {
       if (result.ok && options.openWorkflowOutput) {
         const outputOutcome = yield* options.openWorkflowOutput(
           result.result,
+          agentDefaultOutputFiles,
           () => true,
         );
         if (outputOutcome !== undefined) {
@@ -260,6 +266,7 @@ function mockCancellationDuringOutputFinalization(
         if (options.openWorkflowOutput)
           yield* options.openWorkflowOutput(
             provisional.result,
+            [],
             tryCommitPublication,
           );
         return {
@@ -665,7 +672,9 @@ describe('CLI run command, workflow agents', () => {
 
   // Issue #12162: a remote agent's catalog listing carries no
   // `defaultOutputFiles`, so only the definition the launch loads declares
-  // them. Finalization reads them off the entry that load refreshed.
+  // them — and the launch hands them to output finalization. The catalog
+  // entry here is the listing a refresh between launch and finalization would
+  // leave behind: the declared name still decides.
   it('expects the output files the launched definition declares', async () => {
     await withTempDir('texra-workflow-', async (root) => {
       const generated = await writeGeneratedOutput(root);
@@ -674,13 +683,13 @@ describe('CLI run command, workflow agents', () => {
           outputs: [runOutputSummary(generated, path.join(root, 'paper.tex'))],
         }),
         true,
+        ['slides.tex'],
       );
       agentCatalogMock.resolveAgentForLaunch.mockReturnValue({
         name: 'polish',
         source: 'remote',
         path: '',
         category: AgentCategory.Workflow,
-        defaultOutputFiles: ['slides.tex'],
       });
 
       const exitCode = await runWorkflow(
@@ -757,7 +766,7 @@ describe('CLI run command, workflow agents', () => {
         mocks.executeCliConfig.mockImplementationOnce(
           (_config, _context, options) =>
             options
-              .openWorkflowOutput(run.result, () => true)
+              .openWorkflowOutput(run.result, [], () => true)
               .pipe(
                 Effect.as(run),
                 Effect.ensuring(
@@ -1249,7 +1258,7 @@ describe('CLI run command, workflow agents', () => {
         Effect.gen(function* () {
           if (!run.ok) return run;
           if (options.openWorkflowOutput)
-            yield* options.openWorkflowOutput(run.result, () => true);
+            yield* options.openWorkflowOutput(run.result, [], () => true);
           options.onInterruptedRunFinalized?.('exec-signal');
           return run;
         }),

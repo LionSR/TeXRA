@@ -14,13 +14,11 @@ import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
   resolveCliAgent: vi.fn(),
-  resolveCliAgentDefaultOutputFiles: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
   resolveCliAgent: mocks.resolveCliAgent,
-  resolveCliAgentDefaultOutputFiles: mocks.resolveCliAgentDefaultOutputFiles,
 }));
 
 // Import the modules under test after the mock factories above are registered
@@ -98,7 +96,6 @@ describe('CLI agents command', () => {
     vi.clearAllMocks();
     agentCatalogMock.getAgentsByCategory.mockReturnValue([]);
     agentCatalogMock.getVisibleAgents.mockReturnValue([]);
-    mocks.resolveCliAgentDefaultOutputFiles.mockResolvedValue(undefined);
   });
 
   it('parses agent category filter spellings', () => {
@@ -254,6 +251,9 @@ describe('CLI agents command', () => {
       textContain: 'rounds: 2',
     },
     {
+      // Remote, and so listing-derived — but a tool-use agent declares no
+      // `defaultOutputFiles`, so this renders without loading the definition.
+      // An attempted load would fetch the remote agent and fail here.
       name: 'renders the agent returned by the resolver regardless of source',
       agent: {
         name: 'lean',
@@ -266,30 +266,11 @@ describe('CLI agents command', () => {
       args: 'lean',
       textContain: 'source: remote',
     },
-    {
-      // A remote listing carries no `defaultOutputFiles`; the details come
-      // from the loaded definition instead.
-      name: 'renders a remote agent default outputs from its definition',
-      agent: {
-        name: 'paper2slide',
-        source: 'remote',
-        path: '',
-        category: AgentCategory.Workflow,
-        description: 'Account-served slide builder.',
-      },
-      args: 'paper2slide',
-      defaultOutputFiles: ['slides.tex'],
-      textContain: 'defaultOutputFiles: slides.tex',
-    },
-  ])('$name', async ({ agent, args, textContain, defaultOutputFiles }) => {
+  ])('$name', async ({ agent, args, textContain }) => {
     mocks.resolveCliAgent.mockResolvedValue(agent);
-    mocks.resolveCliAgentDefaultOutputFiles.mockResolvedValue(
-      defaultOutputFiles,
-    );
 
     const exitCode = await showAgent(createRunCommandCliContext(), args);
 
-    const shown = { ...agent, defaultOutputFiles };
     expect(exitCode).toBe(0);
     expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledTimes(1);
     expect(agentCatalogMock.getAgent).not.toHaveBeenCalled();
@@ -297,8 +278,8 @@ describe('CLI agents command', () => {
     expect(cliOutputMock.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
       {
-        json: shown,
-        ndjson: { kind: 'agent', agent: shown },
+        json: agent,
+        ndjson: { kind: 'agent', agent },
         text: expect.stringContaining(textContain),
       },
     );

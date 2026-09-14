@@ -323,7 +323,10 @@ function launchReflectionRun(
         if (flowResult.error || !options.openWorkflowOutput) return flowResult;
         const openWorkflowOutput = options.openWorkflowOutput;
         const outputOutcome = yield* Effect.tryPromise({
-          try: () => inScope(() => openWorkflowOutput(flowResult)),
+          try: () =>
+            inScope(() =>
+              openWorkflowOutput(flowResult, ctx.setting.defaultOutputFiles),
+            ),
           catch: ensureError,
         });
         return outputOutcome === undefined
@@ -442,6 +445,13 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    */
   openWorkflowOutput?: (
     result: WorkflowFlowResult,
+    /**
+     * The `defaultOutputFiles` declared by the definition this run loaded —
+     * the only place a remote agent's are readable, and the run's own copy, so
+     * a host never re-reads a catalog entry that may have been refreshed since
+     * the launch.
+     */
+    agentDefaultOutputFiles: readonly string[],
   ) => Promise<RunOutcome | void>;
   /** Cancel launch preparation before the per-run handle is available. */
   launchSignal?: AbortSignal;
