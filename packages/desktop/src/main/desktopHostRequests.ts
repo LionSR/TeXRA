@@ -33,7 +33,10 @@ import {
 } from '@housekeeping/packLatexdiffvc';
 import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
+} from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
@@ -161,11 +164,13 @@ export function createDesktopHostRequests(
     createHostRunActions({
       session,
       runAgentRequest: run.runAgentRequest,
-      loadModelOptions: () =>
-        computeModelOptionsData({
-          secrets: options.secrets,
-          globalState: options.globalState,
-        }),
+      loadModelOptions: async () =>
+        modelOptionsFrom(
+          await readModelAvailabilityInputs({
+            secrets: options.secrets,
+            globalState: options.globalState,
+          }),
+        ),
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
       // The controller re-reads the secret store after this returns.

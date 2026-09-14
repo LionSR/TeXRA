@@ -82,7 +82,7 @@ export function renderAgentOptions(options: AgentOptionData[]): TemplateResult {
 
 function renderModelOption(opt: ModelOptionData): TemplateResult {
   const decorator = getModelProviderDecorator(opt.provider ?? '');
-  // `computeModelOptionsData` is the sole producer of the kind; a row without
+  // `modelOptionsFrom` is the sole producer of the kind; a row without
   // one came from the secret-free basic list, which has no availability
   // verdict to show.
   const { availability } = opt;

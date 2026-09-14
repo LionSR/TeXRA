@@ -10,7 +10,7 @@ import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
 const mocks = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
   getVisibleAgent: vi.fn(),
-  computeModelOptionsData: vi.fn(),
+  readModelAvailabilityInputs: vi.fn(),
   isWorktreeSupportEnabled: vi.fn(),
 }));
 
@@ -24,7 +24,10 @@ vi.mock('@agent/index/agentRegistry', () => ({
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
-  computeModelOptionsData: mocks.computeModelOptionsData,
+  readModelAvailabilityInputs: mocks.readModelAvailabilityInputs,
+  // Availability is read once and finished purely, so a case seeds the option
+  // rows on the read and the pure finisher hands them straight back.
+  modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
 }));
 
 vi.mock('@utils/config/worktreeConfig', () => ({
@@ -224,7 +227,7 @@ describe('delegation model availability', () => {
     'rejects an explicitly requested model that is not currently available',
     () =>
       Effect.gen(function* () {
-        mocks.computeModelOptionsData.mockResolvedValue([
+        mocks.readModelAvailabilityInputs.mockResolvedValue([
           model('sonnet46T'),
           model('deepseekT'),
         ]);
@@ -244,7 +247,7 @@ describe('delegation model availability', () => {
 
   it.effect('uses the parent model only when it is available', () =>
     Effect.gen(function* () {
-      mocks.computeModelOptionsData.mockResolvedValue([
+      mocks.readModelAvailabilityInputs.mockResolvedValue([
         model('deepseekT'),
         model('sonnet46T'),
       ]);
@@ -261,7 +264,7 @@ describe('delegation model availability', () => {
 
   it.effect('rejects delegation when no models are currently available', () =>
     Effect.gen(function* () {
-      mocks.computeModelOptionsData.mockResolvedValue([]);
+      mocks.readModelAvailabilityInputs.mockResolvedValue([]);
 
       const failure = yield* Effect.flip(
         selectAvailableDelegationModel({ parentModel: 'opus48T' }),
@@ -310,7 +313,7 @@ describe('delegation worktree availability', () => {
 describe('resolveAgentTools delegation annotation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.computeModelOptionsData.mockResolvedValue([
+    mocks.readModelAvailabilityInputs.mockResolvedValue([
       {
         value: 'deepseekT',
         label: 'DeepSeek',

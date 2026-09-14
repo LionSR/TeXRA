@@ -88,14 +88,22 @@ export interface ModelOptionStores {
 type UnavailableReason = 'openrouter-missing-key';
 
 /**
- * A resolved verdict: the kind the row ships, plus the two refinements this
+ * A resolved verdict: the kind the row ships, plus the refinements this
  * module's later steps read. What the kind *means* is
  * {@link MODEL_AVAILABILITY_STATUS}, not a field copied onto every row.
+ *
+ * The two Copilot fields are what makes the later steps pure: both are read
+ * off the live Copilot preference and route catalogue by the branch that chose
+ * the kind, so nothing after the route ladder consults either again.
  */
 interface ModelAvailabilityStatus {
   kind: ModelAvailabilityKind;
   providerCapabilities?: ProviderCapabilityProfile;
   reason?: UnavailableReason;
+  /** The discovered route's config, on `copilot-access` only. */
+  copilotConfig?: ModelConfig;
+  /** The dispatch path's own wording, on the two unavailable Copilot kinds. */
+  copilotReason?: string;
 }
 
 function availabilityStatus(
@@ -117,13 +125,16 @@ type UnavailableAvailabilityKind = {
     : K;
 }[ModelAvailabilityKind];
 
-/** Everything an unavailable-reason builder needs to word its message. */
+/**
+ * Everything an unavailable-reason builder needs to word its message — all of
+ * it data the route ladder already resolved, so no builder reads a host.
+ */
 interface UnavailableReasonContext {
   readonly model: string;
   readonly config: ModelConfig;
   readonly reason: UnavailableReason | undefined;
-  /** The process global state the Copilot preference is read from. */
-  readonly globalState: Pick<StateStore, 'get'>;
+  /** The Copilot wording captured when this model was routed, if it took that branch. */
+  readonly copilotReason: string | undefined;
 }
 
 /**
@@ -132,10 +143,10 @@ interface UnavailableReasonContext {
  */
 function copilotUnavailableReason({
   model,
-  globalState,
+  copilotReason,
 }: UnavailableReasonContext): string {
   return (
-    copilotRouteUnavailableReason(model, globalState) ??
+    copilotReason ??
     `Model "${model}" is currently unavailable through Copilot in VS Code.`
   );
 }
@@ -162,14 +173,15 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     const providerName = providerDisplayName(modelSource);
     return `Model "${model}" requires your ${providerName} API key. Provide it to continue.`;
   },
-  // Both Copilot arms defer to the dispatch path's own wording
-  // ({@link copilotRouteUnavailableReason}), so the picker shows exactly the
-  // sentence a run would fail with. The `??` arm is unreachable: these kinds
-  // are only chosen inside the `prefersCopilotRoute` branch, which is the one
-  // case that helper never answers `undefined` for.
+  // Both Copilot arms ship the dispatch path's own wording
+  // ({@link copilotRouteUnavailableReason}), captured when the model was
+  // routed, so the picker shows exactly the sentence a run would fail with.
+  // The `??` arm is unreachable: these kinds are only chosen inside the
+  // `prefersCopilotRoute` branch, which is the one case that helper never
+  // answers `undefined` for.
   'copilot-consent-required': copilotUnavailableReason,
   'copilot-unavailable': copilotUnavailableReason,
-  // Unreachable from `getModelUnavailableReason` today (it returns its own
+  // Unreachable from `modelUnavailableReasonFrom` today (it returns its own
   // "not recognized" message before a config resolves far enough to compute
   // availability at all), but the table must still cover it: `unknown-model`
   // is `available: false`, so leaving it out would defeat the whole point of
@@ -219,8 +231,6 @@ interface ModelRouteContext {
    * `modelRoutes` uses instead of a hand-renamed copy.
    */
   kimiRouting: KimiCodeRoutingFacts;
-  /** The process global state the picker's persisted choices come from. */
-  globalState: StateStore;
 }
 
 /** The route facts plus the key statuses the batch read resolved for them. */
@@ -257,16 +267,22 @@ interface RoutedModel {
 type RoutedModels = ReadonlyMap<string, RoutedModel>;
 
 /**
- * Stage 1 — the route ladder, pure and free of any key status. Every branch
- * that can decide availability from the stage-0 facts answers with its kind;
- * a model that comes down to a direct provider key answers with that provider
- * instead, so the batch read that follows consults exactly the providers the
- * ladder reached and no others.
+ * Stage 1 — the route ladder, free of any key status. Every branch that can
+ * decide availability from the stage-0 facts answers with its kind; a model
+ * that comes down to a direct provider key answers with that provider instead,
+ * so the batch read that follows consults exactly the providers the ladder
+ * reached and no others.
+ *
+ * This is the one step that reads the Copilot preference and route catalogue,
+ * and it takes everything it finds there with it — the route's config, or the
+ * sentence an unavailable route is explained with — so no later step has to go
+ * back to either.
  */
 function resolveModelRoute(
   model: string,
   config: ModelConfig,
   ctx: ModelRouteContext,
+  globalState: Pick<StateStore, 'get'>,
 ): ModelRoute {
   if (config.retired) {
     return availabilityStatus('retired');
@@ -275,19 +291,32 @@ function resolveModelRoute(
   // An explicit Copilot route preference reports the discovered route's own
   // state — consent and temporary unavailability are route states on the one
   // canonical model row, never a reason to fall back to another transport.
-  if (prefersCopilotRoute(model, ctx.globalState)) {
-    const access = copilotRouteForModel(model)?.access;
+  if (prefersCopilotRoute(model, globalState)) {
+    const route = copilotRouteForModel(model);
+    const access = route?.access;
+    // The dispatch path's own wording for this model, resolved here from the
+    // same preference and catalogue this decision was made on.
+    const copilotReason =
+      access === 'allowed'
+        ? undefined
+        : copilotRouteUnavailableReason(model, globalState);
     switch (access) {
       case 'allowed':
-        return availabilityStatus('copilot-access');
+        return {
+          ...availabilityStatus('copilot-access'),
+          copilotConfig: route?.effectiveConfig,
+        };
       case 'consent-required':
-        return availabilityStatus('copilot-consent-required');
+        return {
+          ...availabilityStatus('copilot-consent-required'),
+          copilotReason,
+        };
       case 'unavailable':
       case undefined:
-        return availabilityStatus('copilot-unavailable');
+        return { ...availabilityStatus('copilot-unavailable'), copilotReason };
       default:
         access satisfies never;
-        return availabilityStatus('copilot-unavailable');
+        return { ...availabilityStatus('copilot-unavailable'), copilotReason };
     }
   }
 
@@ -413,7 +442,6 @@ async function buildAvailabilityContext(
     isPreferXaiSubscription() ? isXaiSignedIn() : Promise.resolve(false),
   ]);
   return {
-    globalState,
     reasoningLevels: reasoningEffortOverrides(globalState),
     keyStatuses: routingKeys,
     hasOpenRouter: routingKeys.openRouter === true,
@@ -438,6 +466,7 @@ async function buildAvailabilityContext(
 function routeModels(
   models: readonly string[],
   ctx: ModelRouteContext,
+  globalState: Pick<StateStore, 'get'>,
 ): RoutedModels {
   const routed = new Map<string, RoutedModel>();
   for (const model of models) {
@@ -450,7 +479,7 @@ function routeModels(
     routed.set(model, {
       rawConfig,
       config,
-      route: resolveModelRoute(model, config, ctx),
+      route: resolveModelRoute(model, config, ctx, globalState),
     });
   }
   return routed;
@@ -612,35 +641,6 @@ export async function setModelEnabled(input: {
   return nextEnabled;
 }
 
-/** Returns a human-readable reason why a model is unavailable, or `null` if available. */
-export async function getModelUnavailableReason(
-  model: string,
-  stores: ModelOptionStores,
-): Promise<string | null> {
-  await discoveredCopilotRoutes();
-  const routeCtx = await buildAvailabilityContext(stores);
-  const routed = routeModels([model], routeCtx);
-  const decision = routed.get(model);
-  if (!decision) return `Model "${model}" is not recognized.`;
-
-  const ctx = await withConsultedKeyStatuses(stores.secrets, routed, routeCtx);
-  const { config, route } = decision;
-  const availability = resolveModelAvailability(model, route, ctx.keyStatuses);
-  if (MODEL_AVAILABILITY_STATUS[availability.kind].available) return null;
-
-  // `availability.kind` is guaranteed `available: false` here, so it's a
-  // valid `UnavailableAvailabilityKind` and every case is covered by
-  // `UNAVAILABLE_REASON_BUILDERS` — the compiler, not this call site, is what
-  // enforces that a newly added unavailable kind gets a reason.
-  const kind = availability.kind as UnavailableAvailabilityKind;
-  return UNAVAILABLE_REASON_BUILDERS[kind]({
-    model,
-    config,
-    reason: availability.reason,
-    globalState: ctx.globalState,
-  });
-}
-
 /**
  * Build typed model option data for a single model from stage 1's decision for
  * it. No decision means the registry does not describe the model.
@@ -663,10 +663,6 @@ function buildModelOptionData(
     decision.route,
     ctx.keyStatuses,
   );
-  const copilotConfig =
-    availability.kind === 'copilot-access'
-      ? copilotRouteForModel(model)?.effectiveConfig
-      : undefined;
   const optionConfig = availability.providerCapabilities
     ? {
         ...config,
@@ -674,7 +670,7 @@ function buildModelOptionData(
         inputPrice: availability.providerCapabilities.inputPrice,
         outputPrice: availability.providerCapabilities.outputPrice,
       }
-    : (copilotConfig ?? config);
+    : (availability.copilotConfig ?? config);
   let reasoning: string | undefined;
   if (optionConfig.capabilities.supportsReasoning) {
     if (availability.kind === 'copilot-access') {
@@ -719,40 +715,103 @@ function buildModelOptionData(
 }
 
 /**
- * Compute typed model options data for Lit-native rendering.
+ * One computation's resolved inputs: the host facts and key statuses, read
+ * once, and the route each visible model was decided to take over them.
  *
- * When `models` is provided, the caller's view of the visible-models list is
- * honored verbatim. The host reads happen in two awaits — the facts every
- * model shares, then one key-status read per provider the visible models
- * actually consult — with each model routed once, before that second await,
- * and the rows finished purely from those decisions. Every call
- * recomputes from the live inputs: the secret reads behind `hasUsableApiKey`
- * are cached and invalidated in `apiProviders` (`invalidateApiKeyCache`), the
- * Copilot route catalogue in `runtimeModelRegistry`
- * (`invalidateRuntimeModelRegistry`), and the rest are synchronous config and
- * state reads plus the probe-backed sign-in status (`isCodexSignedIn`,
- * `isXaiSignedIn`, live by design), so there is no second cache to keep fresh
- * here.
+ * This is the whole of the boundary between reading a host and computing
+ * availability. {@link readModelAvailabilityInputs} is the only thing in this
+ * module that touches a host; {@link modelOptionsFrom} and
+ * {@link modelUnavailableReasonFrom} are pure functions of this value, so a
+ * caller awaits once and then finishes synchronously. It carries no store
+ * reference, which is what makes that structural rather than a promise: the
+ * finishers have nothing to read a host through.
  */
-export async function computeModelOptionsData(
+export interface ModelAvailabilityInputs {
+  /** The host facts plus the key status of every provider the routes consult. */
+  readonly context: ModelAvailabilityContext;
+  /** Stage 1's decision per model, keyed by model. */
+  readonly routed: RoutedModels;
+  /** The models the rows are built for, in the order they are shown. */
+  readonly visible: readonly string[];
+}
+
+/**
+ * Read everything one availability computation runs over, in two awaits: the
+ * facts every model shares, then one key-status read per provider the visible
+ * models actually consult, with each model routed once in between so that
+ * batch consults exactly the providers the ladder reached.
+ *
+ * When `models` is provided the caller's view of the visible-models list is
+ * honored verbatim. Nothing here is cached beyond the caches its reads already
+ * own: the secret reads behind `hasUsableApiKey` in `apiProviders`
+ * (`invalidateApiKeyCache`), the Copilot route catalogue in
+ * `runtimeModelRegistry` (`invalidateRuntimeModelRegistry`), and the rest are
+ * synchronous config and state reads plus the probe-backed sign-in status
+ * (`isCodexSignedIn`, `isXaiSignedIn`, live by design), so there is no second
+ * cache to keep fresh here.
+ */
+export async function readModelAvailabilityInputs(
   stores: ModelOptionStores,
   models?: readonly string[],
-): Promise<ModelOptionData[]> {
+): Promise<ModelAvailabilityInputs> {
   await discoveredCopilotRoutes();
   const routeCtx = await buildAvailabilityContext(stores);
   const visible =
     models ??
     visibleModelsForAccess(getEnabledModels(stores.globalState), routeCtx);
-  const routed = routeModels(visible, routeCtx);
-  const availabilityCtx = await withConsultedKeyStatuses(
+  const routed = routeModels(visible, routeCtx, stores.globalState);
+  const context = await withConsultedKeyStatuses(
     stores.secrets,
     routed,
     routeCtx,
   );
+  return { context, routed, visible };
+}
 
-  return visible.map((model) =>
-    buildModelOptionData(model, routed.get(model), availabilityCtx),
+/**
+ * Typed model option data for Lit-native rendering — pure, and the whole of
+ * the per-model work, so the ~157-model settings pass costs no awaits.
+ */
+export function modelOptionsFrom(
+  inputs: ModelAvailabilityInputs,
+): ModelOptionData[] {
+  return inputs.visible.map((model) =>
+    buildModelOptionData(model, inputs.routed.get(model), inputs.context),
   );
+}
+
+/**
+ * A human-readable reason why a model is unavailable, or `null` if available.
+ * Pure — including the two Copilot kinds, whose sentence was worded when the
+ * model was routed. `inputs` must have been read for a list containing `model`
+ * (a single `[model]` list is the usual one).
+ */
+export function modelUnavailableReasonFrom(
+  inputs: ModelAvailabilityInputs,
+  model: string,
+): string | null {
+  const decision = inputs.routed.get(model);
+  if (!decision) return `Model "${model}" is not recognized.`;
+
+  const { config, route } = decision;
+  const availability = resolveModelAvailability(
+    model,
+    route,
+    inputs.context.keyStatuses,
+  );
+  if (MODEL_AVAILABILITY_STATUS[availability.kind].available) return null;
+
+  // `availability.kind` is guaranteed `available: false` here, so it's a
+  // valid `UnavailableAvailabilityKind` and every case is covered by
+  // `UNAVAILABLE_REASON_BUILDERS` — the compiler, not this call site, is what
+  // enforces that a newly added unavailable kind gets a reason.
+  const kind = availability.kind as UnavailableAvailabilityKind;
+  return UNAVAILABLE_REASON_BUILDERS[kind]({
+    model,
+    config,
+    reason: availability.reason,
+    copilotReason: availability.copilotReason,
+  });
 }
 
 function visibleModelsForAccess(

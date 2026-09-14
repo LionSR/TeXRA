@@ -28,7 +28,8 @@ import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolSe
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { createLog } from '@logger/logUtils';
 import {
-  computeModelOptionsData,
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
@@ -89,7 +90,7 @@ async function availableDelegationModelNamesForTools(
   }
 
   try {
-    const models = await computeModelOptionsData(stores);
+    const models = modelOptionsFrom(await readModelAvailabilityInputs(stores));
     return availableModelNamesFromOptions(models);
   } catch (err) {
     // Couldn't load model options — skip the delegation annotation rather than

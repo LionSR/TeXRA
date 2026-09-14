@@ -6,8 +6,9 @@ import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import * as logger from '@logger/logUtils';
 import {
-  computeModelOptionsData,
-  getModelUnavailableReason,
+  modelOptionsFrom,
+  modelUnavailableReasonFrom,
+  readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import {
   resolveDirectModelApiKeyProvider,
@@ -31,6 +32,26 @@ import {
 } from '@test/support/setupPlatform';
 
 const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
+
+/**
+ * What every caller now does: read the inputs at the boundary, then finish
+ * synchronously. The two steps are exercised separately by the seam test
+ * below; everywhere else the suite is about the rows, not the split.
+ */
+async function modelOptions(
+  models?: readonly string[],
+): Promise<ModelOptionData[]> {
+  return modelOptionsFrom(
+    await readModelAvailabilityInputs(hostStores(), models),
+  );
+}
+
+async function unavailableReason(model: string): Promise<string | null> {
+  return modelUnavailableReasonFrom(
+    await readModelAvailabilityInputs(hostStores(), [model]),
+    model,
+  );
+}
 
 /**
  * Global state that counts the Copilot-preference reads, the one live state
@@ -115,7 +136,7 @@ describe('model catalogue direct-route key ownership', () => {
   });
 });
 
-describe('computeModelOptionsData availability', () => {
+describe('model availability', () => {
   setupPlatform({
     globalState: { [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']) },
     secrets: OPENAI_KEY_SECRETS,
@@ -146,7 +167,7 @@ describe('computeModelOptionsData availability', () => {
         secrets: OPENAI_KEY_SECRETS,
       });
 
-      const [option] = await computeModelOptionsData(hostStores(), [model]);
+      const [option] = await modelOptions([model]);
 
       expect(option.reasoning).toBe(expected);
     },
@@ -157,7 +178,7 @@ describe('computeModelOptionsData availability', () => {
       secrets: { [apiKeySecretName('kimiCode')]: 'sk-kimi-code' },
     });
 
-    const [model] = await computeModelOptionsData(hostStores(), ['kimiCoding']);
+    const [model] = await modelOptions(['kimiCoding']);
 
     expect(model).toMatchObject({
       provider: 'kimiCode',
@@ -170,8 +191,8 @@ describe('computeModelOptionsData availability', () => {
       secrets: { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
     });
 
-    const [model] = await computeModelOptionsData(hostStores(), ['kimiCoding']);
-    const reason = await getModelUnavailableReason('kimiCoding', hostStores());
+    const [model] = await modelOptions(['kimiCoding']);
+    const reason = await unavailableReason('kimiCoding');
 
     expect(model).toMatchObject({
       provider: 'kimiCode',
@@ -185,7 +206,7 @@ describe('computeModelOptionsData availability', () => {
   it('reports a model with no stored key as missing a key', async () => {
     await installAccessPlatform({ secrets: {} });
 
-    const [model] = await computeModelOptionsData(hostStores(), ['gpt55']);
+    const [model] = await modelOptions(['gpt55']);
 
     expect(model.availability).toBe('missing-key');
   });
@@ -205,10 +226,7 @@ describe('computeModelOptionsData availability', () => {
     invalidateApiKeyCache();
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
-    const [gpt55, gpt56] = await computeModelOptionsData(hostStores(), [
-      'gpt55',
-      'gpt56',
-    ]);
+    const [gpt55, gpt56] = await modelOptions(['gpt55', 'gpt56']);
 
     expect(gpt55.availability).toBe('missing-key');
     expect(gpt56.availability).toBe('missing-key');
@@ -247,32 +265,67 @@ describe('computeModelOptionsData availability', () => {
     invalidateApiKeyCache();
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
-    const rows = await computeModelOptionsData(hostStores(), [
-      'haiku3',
-      'haiku35',
-    ]);
+    const rows = await modelOptions(['haiku3', 'haiku35']);
 
     expect(rows.map((row) => row.availability)).toEqual(['retired', 'retired']);
     // Only the two routing keys every call resolves up front.
     expect(warn).toHaveBeenCalledTimes(2);
 
     // Two models that do reach the Copilot branch: one preference read each.
-    const keyed = await computeModelOptionsData(hostStores(), [
-      'gpt55',
-      'gpt56',
-    ]);
+    const keyed = await modelOptions(['gpt55', 'gpt56']);
 
     expect(keyed).toHaveLength(2);
     expect(globalState.copilotPreferenceReads).toBe(2);
     warn.mockRestore();
   });
 
+  it('finishes the rows without a further host read once the inputs are in', async () => {
+    // The seam callers now own: everything that touches a host happens in
+    // `readModelAvailabilityInputs`, and both finishers are synchronous
+    // functions of that value — no store is consulted a second time while the
+    // rows are built, so a credential change mid-render cannot split one
+    // computation across two views of the host.
+    //
+    // `gpt56` is preferred through Copilot with no route discovered, which is
+    // the case whose sentence used to be worded at finish time out of the live
+    // preference and catalogue: it is the arm that can leak a host read past
+    // this boundary, so it is the one the counting store watches.
+    const secrets = new FakeSecrets(OPENAI_KEY_SECRETS);
+    const secretReads = vi.spyOn(secrets, 'get');
+    const globalState = new CountingStateStore({
+      [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),
+      [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gpt56'],
+    });
+    await installPlatform({}, { secrets, globalState });
+    invalidateApiKeyCache();
+
+    const inputs = await readModelAvailabilityInputs(hostStores(), [
+      'gpt55',
+      'gpt56',
+    ]);
+    const readsAfterInputs = secretReads.mock.calls.length;
+    const preferenceReadsAfterInputs = globalState.copilotPreferenceReads;
+
+    const rows = modelOptionsFrom(inputs);
+    const available = modelUnavailableReasonFrom(inputs, 'gpt55');
+    const copilot = modelUnavailableReasonFrom(inputs, 'gpt56');
+
+    expect(rows.map((row) => row.availability)).toEqual([
+      'provider-key',
+      'copilot-unavailable',
+    ]);
+    expect(available).toBeNull();
+    expect(copilot).toBe(
+      'VS Code does not currently offer "gpt56" through Copilot.',
+    );
+    expect(secretReads.mock.calls).toHaveLength(readsAfterInputs);
+    expect(globalState.copilotPreferenceReads).toBe(preferenceReadsAfterInputs);
+  });
+
   it('labels models the registry no longer describes instead of shipping a bare row', async () => {
     await installAccessPlatform();
 
-    const [model] = await computeModelOptionsData(hostStores(), [
-      'no-such-model',
-    ]);
+    const [model] = await modelOptions(['no-such-model']);
 
     expect(model).toMatchObject({
       value: 'no-such-model',
@@ -284,7 +337,7 @@ describe('computeModelOptionsData availability', () => {
   it('reports a stored personal key as provider-key access', async () => {
     await installAccessPlatform();
 
-    const [model] = await computeModelOptionsData(hostStores());
+    const [model] = await modelOptions();
 
     expect(model.availability).toBe('provider-key');
     expect(isModelOptionAvailable(model)).toBe(true);
@@ -293,8 +346,8 @@ describe('computeModelOptionsData availability', () => {
   it('marks retired models unavailable', async () => {
     await installAccessPlatform();
 
-    const [model] = await computeModelOptionsData(hostStores(), ['haiku3']);
-    const reason = await getModelUnavailableReason('haiku3', hostStores());
+    const [model] = await modelOptions(['haiku3']);
+    const reason = await unavailableReason('haiku3');
 
     expect(model.availability).toBe('retired');
     expect(isModelOptionAvailable(model)).toBe(false);
@@ -306,7 +359,7 @@ describe('computeModelOptionsData availability', () => {
   it('does not disable API-key access when ChatGPT subscription is preferred but signed out', async () => {
     await installAccessPlatform({ config: PREFER_CODEX_CONFIG });
 
-    const [model] = await computeModelOptionsData(hostStores(), ['gpt55']);
+    const [model] = await modelOptions(['gpt55']);
 
     expect(model.availability).toBe('provider-key');
     expect(isModelOptionAvailable(model)).toBe(true);
@@ -318,7 +371,7 @@ describe('computeModelOptionsData availability', () => {
       secrets: codexSessionSecrets(),
     });
 
-    const [model] = await computeModelOptionsData(hostStores(), ['gpt56pro']);
+    const [model] = await modelOptions(['gpt56pro']);
 
     expect(MODEL_CONFIGS.gpt56pro.codexSubscription).not.toBe(true);
     expect(model).toMatchObject({
@@ -329,8 +382,8 @@ describe('computeModelOptionsData availability', () => {
   it('marks GPT-5.6 Pro unavailable through OpenRouter', async () => {
     await installAccessPlatform({ useOpenRouter: true });
 
-    const [model] = await computeModelOptionsData(hostStores(), ['gpt56pro']);
-    const reason = await getModelUnavailableReason('gpt56pro', hostStores());
+    const [model] = await modelOptions(['gpt56pro']);
+    const reason = await unavailableReason('gpt56pro');
 
     expect(model).toMatchObject({
       availability: 'provider-unavailable',
@@ -343,8 +396,8 @@ describe('computeModelOptionsData availability', () => {
   it('asks for an OpenRouter key, not the provider key, on the OpenRouter route', async () => {
     await installAccessPlatform({ secrets: {}, useOpenRouter: true });
 
-    const [model] = await computeModelOptionsData(hostStores(), ['gpt55']);
-    const reason = await getModelUnavailableReason('gpt55', hostStores());
+    const [model] = await modelOptions(['gpt55']);
+    const reason = await unavailableReason('gpt55');
 
     expect(model).toMatchObject({
       availability: 'missing-key',
@@ -360,7 +413,7 @@ describe('computeModelOptionsData availability', () => {
       useOpenRouter: false,
     });
 
-    const [model] = await computeModelOptionsData(hostStores(), ['gemini31p']);
+    const [model] = await modelOptions(['gemini31p']);
 
     expect(model.availability).toBe('missing-key');
   });
@@ -371,7 +424,7 @@ describe('computeModelOptionsData availability', () => {
       secrets: codexSessionSecrets(),
     });
 
-    const [model] = await computeModelOptionsData(hostStores(), ['gpt55']);
+    const [model] = await modelOptions(['gpt55']);
 
     expect(model.availability).toBe('subscription-access');
     expect(model.context).toBe(
@@ -393,7 +446,7 @@ describe('computeModelOptionsData availability', () => {
       enabledModels: ['gemini31p'],
     });
 
-    const models = await computeModelOptionsData(hostStores());
+    const models = await modelOptions();
     const expected = Object.entries(MODEL_CONFIGS)
       .filter(
         ([, config]) =>
@@ -421,13 +474,13 @@ describe('computeModelOptionsData availability', () => {
       secrets: { ...codexSessionSecrets(), ...OPENAI_KEY_SECRETS },
     });
 
-    const [model] = await computeModelOptionsData(hostStores(), ['gpt55']);
+    const [model] = await modelOptions(['gpt55']);
 
     expect(model.availability).toBe('subscription-access');
   });
 });
 
-describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () => {
+describe('model availability Kimi Code routing (dual-backend kimi3)', () => {
   beforeEach(() => {
     invalidateApiKeyCache();
   });
@@ -443,7 +496,7 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
       },
       secrets,
     });
-    const [model] = await computeModelOptionsData(hostStores(), ['kimi3']);
+    const [model] = await modelOptions(['kimi3']);
     return model;
   }
 

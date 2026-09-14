@@ -33,7 +33,10 @@ import {
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
+} from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -236,13 +239,14 @@ export const selectAvailableDelegationModel = Effect.fn(
     secrets: yield* Secrets,
     globalState: yield* AppState,
   };
-  const models = yield* Effect.tryPromise({
+  const inputs = yield* Effect.tryPromise({
     try: () =>
       withScope
-        ? withScope(() => computeModelOptionsData(stores))
-        : computeModelOptionsData(stores),
+        ? withScope(() => readModelAvailabilityInputs(stores))
+        : readModelAvailabilityInputs(stores),
     catch: ensureError,
   });
+  const models = modelOptionsFrom(inputs);
   const availableModels = unique(
     availableModelNamesFromOptions(models)
       .map((model) => model.trim())

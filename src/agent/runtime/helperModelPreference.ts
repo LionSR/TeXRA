@@ -11,7 +11,8 @@
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createLog } from '@logger/logUtils';
 import {
-  getModelUnavailableReason,
+  modelUnavailableReasonFrom,
+  readModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -52,7 +53,10 @@ export async function applyHelperModelPreference(
     return config;
   }
 
-  const unavailable = await getModelUnavailableReason(helperModel, stores);
+  const unavailable = modelUnavailableReasonFrom(
+    await readModelAvailabilityInputs(stores, [helperModel]),
+    helperModel,
+  );
   if (unavailable) {
     log.warn(
       `Keeping ${config.model} for ${config.agent}: helper model ${helperModel} is unavailable. ${unavailable}`,

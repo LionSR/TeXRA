@@ -1,6 +1,7 @@
 // Local imports
 import {
-  computeModelOptionsData,
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { resolveGlmRoute } from '@model/glmRouting';
@@ -197,7 +198,9 @@ function toCliModelAccess(model: ModelOptionData): CliModelAccess {
 export async function getCliModelAccessList(
   options: CliModelAccessListOptions,
 ): Promise<CliModelAccess[]> {
-  const models = await computeModelOptionsData(options.stores, options.models);
+  const models = modelOptionsFrom(
+    await readModelAvailabilityInputs(options.stores, options.models),
+  );
   return models.map(toCliModelAccess);
 }
 
@@ -330,8 +333,8 @@ export async function loadCliModelAccessEntry(
   const hiddenModelId = resolveKnownCliModelId(trimmed);
   if (hiddenModelId == null) return undefined;
 
-  const hiddenModelOption = (
-    await computeModelOptionsData(options.stores, [hiddenModelId])
+  const hiddenModelOption = modelOptionsFrom(
+    await readModelAvailabilityInputs(options.stores, [hiddenModelId]),
   )[0];
   if (!hiddenModelOption) {
     throw new Error(

@@ -13,14 +13,18 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
-import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore, fakeStores } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 
+const readModelAvailabilityInputsMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@model/computeModelOptions', () => ({
-  computeModelOptionsData: vi.fn(),
+  readModelAvailabilityInputs: readModelAvailabilityInputsMock,
+  // Availability is read once and finished purely, so a case seeds the option
+  // rows on the read and the pure finisher hands them straight back.
+  modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
 }));
 
 vi.mock('llm-zoo', async (importOriginal) => {
@@ -41,8 +45,6 @@ vi.mock('llm-zoo', async (importOriginal) => {
     },
   };
 });
-
-const computeModelOptionsDataMock = vi.mocked(computeModelOptionsData);
 
 /**
  * The GLM routing settings the status formatter reads, as the installed fake
@@ -148,12 +150,12 @@ const GLM52_MISSING_KEY_ENTRY = model('glm52', {
 });
 
 function expectModelOptionsRequested(models: string[]): void {
-  expect(computeModelOptionsDataMock).toHaveBeenCalledWith(stores, models);
+  expect(readModelAvailabilityInputsMock).toHaveBeenCalledWith(stores, models);
 }
 
 describe('CLI model access resolution', () => {
   beforeEach(async () => {
-    computeModelOptionsDataMock.mockReset();
+    readModelAvailabilityInputsMock.mockReset();
     await seedGlmRouting({});
   });
 
@@ -480,7 +482,9 @@ describe('CLI model access resolution', () => {
   });
 
   it('rejects explicit retired hidden models before fallback', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([RETIRED_HAIKU3_OPTION]);
+    readModelAvailabilityInputsMock.mockResolvedValueOnce([
+      RETIRED_HAIKU3_OPTION,
+    ]);
 
     await expect(
       selectCliRunnableModel('haiku3', {
@@ -526,7 +530,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('keeps ChatGPT models available without TeXRA sign-in or API keys', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
+    readModelAvailabilityInputsMock.mockResolvedValueOnce([
       modelOption('gpt56', {
         availability: 'subscription-access',
       }),
@@ -544,7 +548,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('loads explicit model ids for diagnostic lists', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
+    readModelAvailabilityInputsMock.mockResolvedValueOnce([
       modelOption('hiddenFixtureModel', {
         availability: 'missing-key',
       }),
@@ -566,7 +570,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('uses the loaded access list as the availability source of truth', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
+    readModelAvailabilityInputsMock.mockResolvedValueOnce([
       modelOption('sonnet46T', {
         availability: 'provider-key',
       }),
@@ -587,7 +591,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('checks access for explicit models hidden from the visible model list', async () => {
-    computeModelOptionsDataMock
+    readModelAvailabilityInputsMock
       .mockResolvedValueOnce([
         modelOption('sonnet46T', { availability: 'provider-key' }),
       ])
@@ -601,13 +605,13 @@ describe('CLI model access resolution', () => {
         stores,
       }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
-    expect(computeModelOptionsDataMock).toHaveBeenNthCalledWith(2, stores, [
+    expect(readModelAvailabilityInputsMock).toHaveBeenNthCalledWith(2, stores, [
       'hiddenFixtureModel',
     ]);
   });
 
   it('checks hidden model access against a supplied visible model list', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
+    readModelAvailabilityInputsMock.mockResolvedValueOnce([
       modelOption('hiddenFixtureModel', {
         availability: 'provider-key',
       }),
@@ -624,7 +628,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('ignores stale lower-priority hidden candidates after a runnable winner', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([]);
+    readModelAvailabilityInputsMock.mockResolvedValueOnce([]);
 
     await expect(
       selectCliRunnableModel(
@@ -641,7 +645,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('resolves hidden model entries for diagnostic commands', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
+    readModelAvailabilityInputsMock.mockResolvedValueOnce([
       modelOption('hiddenFixtureModel', {
         availability: 'missing-key',
       }),
@@ -672,7 +676,7 @@ describe('CLI model access resolution', () => {
       ),
     ).resolves.toEqual({ model: 'userFacingFixture' });
 
-    computeModelOptionsDataMock.mockResolvedValueOnce([
+    readModelAvailabilityInputsMock.mockResolvedValueOnce([
       modelOption('userFacingFixture', {
         availability: 'missing-key',
       }),
@@ -694,7 +698,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('reports stale hidden model configuration directly', async () => {
-    computeModelOptionsDataMock
+    readModelAvailabilityInputsMock
       .mockResolvedValueOnce([
         modelOption('sonnet46T', { availability: 'provider-key' }),
       ])
