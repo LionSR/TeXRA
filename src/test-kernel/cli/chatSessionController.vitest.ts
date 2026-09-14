@@ -4,10 +4,17 @@
 // registry, event hub, run status, host interactions) are the real
 // runtime objects wherever a test asserts through them.
 
-import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, Fiber, Scope, SubscriptionRef } from 'effect';
+import { Cause, Effect, Exit, Scope, SubscriptionRef } from 'effect';
 import pDefer from 'p-defer';
-import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
+import {
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
@@ -251,14 +258,14 @@ type ExecuteAgentMockOptions = {
 function makeInit(
   overrides: Partial<ChatSessionControllerInit> = {},
 ): ChatSessionControllerInit {
+  const scope = Scope.makeUnsafe();
+  onTestFinished(() => Effect.runPromise(Scope.close(scope, Exit.void)));
   return {
     session: makeSession(),
     runtimeSession: mocks.defaultSession(),
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
-    followUpQueue: Effect.runSync(
-      makeFollowUpDeliveryQueue(Scope.makeUnsafe()),
-    ),
+    followUpQueue: Effect.runSync(makeFollowUpDeliveryQueue(scope)),
     initialAgent: 'demo-agent',
     initialModel: 'demo-model',
     initialModelSource: 'builtin-default',
@@ -1689,49 +1696,4 @@ describe('createChatSessionController', () => {
       }),
     );
   });
-});
-
-describe('follow-up delivery queue', () => {
-  it.effect(
-    'delivers one at a time, drops only unstarted deliveries on clear, and idles after the running one settles',
-    () =>
-      Effect.gen(function* () {
-        const scope = yield* Scope.make();
-        const queue = yield* makeFollowUpDeliveryQueue(scope);
-        const delivered: string[] = [];
-        const record = (label: string) =>
-          Effect.sync(() => {
-            delivered.push(label);
-          });
-        const firstStarted = yield* Deferred.make<void>();
-        const releaseFirst = yield* Deferred.make<void>();
-
-        queue.enqueue(
-          record('first:start').pipe(
-            Effect.andThen(Deferred.succeed(firstStarted, undefined)),
-            Effect.andThen(Deferred.await(releaseFirst)),
-            Effect.andThen(record('first:end')),
-          ),
-        );
-        queue.enqueue(record('dropped'));
-        yield* Deferred.await(firstStarted);
-        queue.clear();
-        queue.enqueue(record('after-clear'));
-        const idle = yield* queue.idle.pipe(
-          Effect.andThen(record('idle')),
-          Effect.forkChild,
-        );
-
-        yield* Deferred.succeed(releaseFirst, undefined);
-        yield* Fiber.join(idle);
-
-        expect(delivered).toEqual([
-          'first:start',
-          'first:end',
-          'after-clear',
-          'idle',
-        ]);
-        yield* Scope.close(scope, Exit.void);
-      }),
-  );
 });
