@@ -76,7 +76,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
 ) {
   const call = yield* ToolCall;
   const state = { getAgents: getAgentsByCategory };
-  const roster = call.inScope(() => createWorkspaceAgentRosterController());
+  const roster = createWorkspaceAgentRosterController(call.roots);
   const { signIn } = yield* SetupPlatform;
   const authStatus = yield* getSetupAuthStatus();
 
