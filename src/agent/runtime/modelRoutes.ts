@@ -196,7 +196,17 @@ export const resolveSubscriptionCredential = Effect.fn(
   if (provider === undefined) return null;
   if (config.provider === ModelProvider.OPENAI) {
     if (declinedRoutes.includes('chatgpt-subscription')) return null;
-    const profile = resolveCodexSubscriptionCapabilities(config, useOpenRouter);
+    // The capability read consults the project's subscription preference
+    // and context-window setting through the workspace roots, so it runs in
+    // the run's frame like every other host read here; a host read that
+    // throws stays in the typed channel.
+    const profile = yield* Effect.try({
+      try: () =>
+        inScope(() =>
+          resolveCodexSubscriptionCapabilities(config, useOpenRouter),
+        ),
+      catch: ensureError,
+    });
     if (profile === null) return null;
     const routable = yield* Effect.tryPromise({
       try: () => inScope(() => isCodexSessionRoutable(secrets)),
@@ -240,7 +250,13 @@ export const resolveSubscriptionCredential = Effect.fn(
   }
   if (config.provider === ModelProvider.XAI) {
     if (declinedRoutes.includes('xai-subscription')) return null;
-    const profile = resolveXaiSubscriptionCapabilities(config, useOpenRouter);
+    const profile = yield* Effect.try({
+      try: () =>
+        inScope(() =>
+          resolveXaiSubscriptionCapabilities(config, useOpenRouter),
+        ),
+      catch: ensureError,
+    });
     if (profile === null) return null;
     const signedIn = yield* Effect.tryPromise({
       try: () => inScope(isXaiSignedIn),
