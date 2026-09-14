@@ -30,9 +30,10 @@ async function setupTool(): Promise<{
     {
       setup: createFakeSetupPlatform({
         commands: {
-          async invoke(command, ...args) {
-            invocations.push({ command, args });
-          },
+          invoke: (command, ...args) =>
+            Effect.sync(() => {
+              invocations.push({ command, args });
+            }),
         },
       }),
     },

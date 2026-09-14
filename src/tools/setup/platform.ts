@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { Context, Effect, Layer } from 'effect';
+import { Context, Data, Effect, Layer } from 'effect';
 
 // Local imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
@@ -21,15 +21,57 @@ import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { Secrets } from '@platform/secrets';
 
-/** Per-command surface. */
+/**
+ * Why a host command invocation never ran to completion, read off what the
+ * implementations raise: the agent package has no command surface at all,
+ * and the VS Code host's own `executeCommand` rejects once a command is
+ * dispatched. Callers match the tag and read `reason`, so "this host cannot
+ * invoke commands" and "the command ran and faulted" stay distinguishable.
+ */
+export class SetupCommandFailed extends Data.TaggedError('SetupCommandFailed')<{
+  readonly reason: 'command-unavailable' | 'command-failed';
+  readonly message: string;
+  readonly commandId: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
+ * The one failure of {@link SetupExtensionAdapter.install}: the host refused
+ * the install. There is no second reason, because a host without an
+ * extension surface leaves `extensions` undefined rather than raising —
+ * the caller already reports that absence itself.
+ */
+export class SetupExtensionInstallFailed extends Data.TaggedError(
+  'SetupExtensionInstallFailed',
+)<{
+  readonly message: string;
+  readonly extensionId: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
+ * Per-command surface. The member is an `Effect`: a host fault reaches the
+ * setup tool as {@link SetupCommandFailed} rather than as `unknown`, and
+ * interrupting the fiber abandons the wait instead of holding an
+ * uninterruptible region open.
+ */
 interface SetupCommandAdapter {
-  invoke(commandId: string, ...args: unknown[]): Promise<unknown>;
+  invoke(
+    commandId: string,
+    ...args: unknown[]
+  ): Effect.Effect<unknown, SetupCommandFailed>;
 }
 
-/** Extension host surface. */
+/**
+ * Extension host surface. `isInstalled` stays synchronous — it is a registry
+ * read, not a host call — while `install` is an `Effect` carrying
+ * {@link SetupExtensionInstallFailed}.
+ */
 interface SetupExtensionAdapter {
   isInstalled(extensionId: string): boolean;
-  install(extensionId: string): Promise<void>;
+  install(
+    extensionId: string,
+  ): Effect.Effect<void, SetupExtensionInstallFailed>;
 }
 
 /** Host-varying setup capabilities. */

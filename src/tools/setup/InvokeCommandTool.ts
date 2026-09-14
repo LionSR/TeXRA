@@ -4,7 +4,6 @@ import { z } from 'zod';
 
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';
-import { hostPort } from '@common/hostPort';
 import { ToolError } from '@shared/schemas';
 import type { CommandId } from '@shared/commands/catalog';
 
@@ -77,7 +76,19 @@ const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
       new ToolError('VS Code command invocation is unavailable in this host.'),
     );
   }
-  yield* hostPort(() => commands.invoke(commandId));
+  yield* commands
+    .invoke(commandId)
+    .pipe(
+      Effect.catchTag('SetupCommandFailed', (failure) =>
+        Effect.fail(
+          new ToolError(
+            failure.reason === 'command-unavailable'
+              ? `This host cannot invoke VS Code commands: ${failure.message}`
+              : `VS Code command "${commandId}" failed: ${failure.message}`,
+          ),
+        ),
+      ),
+    );
 
   return executed(
     `Invoked VS Code command "${commandId}". If this opens a UI prompt, wait for the user's response before continuing.`,

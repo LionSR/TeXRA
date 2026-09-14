@@ -31,10 +31,10 @@ import type {
  * host or LSP primitives into these programs, and the one run of each program
  * is composed directly by the native tool dispatcher. Run ownership is passed
  * explicitly at invocation; adapters never recover it from ambient state. The adapters' failure
- * channels are disjoint (VS Code bridge rejects with plain host errors, the
- * direct pool fails with its tagged errors) and every consumer folds a failure
- * into a `ToolError`, so the port declares `unknown` rather than a union no
- * caller switches on.
+ * channels are disjoint (the VS Code bridge fails with its editor, command
+ * and extension tags, the direct pool with its own) and every consumer folds
+ * a failure into a `ToolError`, so the port declares `unknown` rather than a
+ * union no caller switches on.
  */
 export interface LeanLanguageServicesShape {
   executeFileCommand(
