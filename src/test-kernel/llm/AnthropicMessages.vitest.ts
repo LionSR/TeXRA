@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Logger, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { anthropicMessagesModel } from '@llm/anthropicMessages';
@@ -325,6 +325,50 @@ describe('canonical Anthropic Messages protocol', () => {
           },
         ]);
       }),
+  );
+
+  it.effect(
+    'warns when an upload that finishes after release cannot be deleted',
+    () => {
+      const warnings: unknown[] = [];
+      const capture = Logger.make((options) => {
+        warnings.push(options.message);
+      });
+      return Effect.gen(function* () {
+        // The provider answers the upload only once the release has run,
+        // then refuses the late delete.
+        const uploadIssued = yield* Deferred.make<void>();
+        const answerUpload = yield* Deferred.make<void>();
+        fetchModel.mockImplementation(async (url, init) => {
+          if (init?.method === 'DELETE')
+            return Response.json({}, { status: 500 });
+          if (String(url).endsWith('/v1/files')) {
+            Deferred.doneUnsafe(uploadIssued, Effect.void);
+            await Effect.runPromise(Deferred.await(answerUpload));
+            return Response.json({ id: 'file_late', expires_at: null });
+          }
+          return response(signedEvents());
+        });
+        const bound = model();
+        assert(bound.uploadFile && bound.releaseUploads);
+        const late = yield* Effect.forkChild(
+          bound.uploadFile({
+            mimeType: 'application/pdf',
+            filename: 'paper.pdf',
+            base64: 'AA==',
+          }),
+        );
+        yield* Deferred.await(uploadIssued);
+        // Nothing is owned yet, so the release finishes empty; the late
+        // upload's id is deleted instead of cached.
+        expect(yield* bound.releaseUploads()).toStrictEqual([]);
+        yield* Deferred.done(answerUpload, Exit.void);
+        yield* Fiber.join(late);
+        expect(warnings.flat()).toStrictEqual([
+          expect.stringContaining('file_late'),
+        ]);
+      }).pipe(Effect.withLogger(capture));
+    },
   );
 
   it.effect.each([

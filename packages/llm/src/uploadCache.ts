@@ -90,9 +90,15 @@ export function uploadCache(provider: {
     // writes are one synchronous stretch, so a release either already ran
     // (delete this id, do not cache it) or still sees it in `owned`.
     if (released) {
-      yield* provider
-        .remove(uploaded.fileId)
-        .pipe(Effect.catchTag('ModelError', () => Effect.void));
+      yield* provider.remove(uploaded.fileId).pipe(
+        // The release that would have reported this id already finished, so
+        // a refused delete is warned here rather than silently dropped.
+        Effect.catchTag('ModelError', (error) =>
+          Effect.logWarning(
+            `Uploaded file ${uploaded.fileId} could not be deleted after its binding was released; the provider expires it on its own (${error.message}).`,
+          ),
+        ),
+      );
       return;
     }
     owned.add(uploaded.fileId);
