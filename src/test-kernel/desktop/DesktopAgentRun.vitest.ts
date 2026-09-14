@@ -57,7 +57,12 @@ describe('desktop agent run completion hook', () => {
     });
     const run = createDesktopAgentRun({
       host,
-      toolEditPreview: host,
+      toolEditPreview: {
+        openPath: host.openPath,
+        openBuildDisplay: host.openBuildDisplay,
+        openDiff: host.openDiff,
+        closeDiff: async () => undefined,
+      },
       session,
       runtime: effectRuntime(),
       showAgentConfigBanner: () => undefined,
