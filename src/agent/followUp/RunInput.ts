@@ -61,13 +61,29 @@ export class RunInput {
    * holds, consumed ones included: a held or later offer of a consumed id
    * is a replayed delivery, and is dropped. A pending id already in `held`
    * (a producer replay before this seed) stays at its ledger position.
+   *
+   * `held === null` means this generation is already seeded. A later seed
+   * (the inner tool-use flow sharing a native child's queue) only enqueues
+   * pending ids not already in `seen`, so a live offer is not duplicated.
    */
   seed(
     pending: readonly QueuedFollowUp[],
     known: ReadonlySet<string> = new Set(),
   ): void {
     const pendingIds = new Set(pending.map((f) => f.followUpId));
-    const extraHeld = (this.held ?? []).filter(
+    if (this.held === null) {
+      const unseen = pending.filter((f) => !this.seen.has(f.followUpId));
+      for (const id of [...pendingIds, ...known]) this.seen.add(id);
+      Queue.offerAllUnsafe(
+        this.queue,
+        unseen.map((followUp) => ({
+          kind: 'followUp' as const,
+          followUp,
+        })),
+      );
+      return;
+    }
+    const extraHeld = this.held.filter(
       (f) => !pendingIds.has(f.followUpId) && !known.has(f.followUpId),
     );
     for (const id of [...pendingIds, ...known]) this.seen.add(id);
