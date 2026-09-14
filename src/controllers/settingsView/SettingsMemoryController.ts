@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 
-import { hostPort } from '@common/hostPort';
 import type { PromptHost } from '@hosts/uiHosts';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -77,13 +76,15 @@ export class SettingsMemoryController {
       this: SettingsMemoryController,
       input: { storagePath: string; displayPath: string },
     ) {
+      // A declined delete is `false`, a value. `PromptFailed` is not matched
+      // here for the same reason `raiseCause` above re-raises: the memory tab
+      // has no recovery for a window that cannot show a dialog, so it reaches
+      // the host edge as the host's own fault rather than as a silent no-op.
       const confirmed = yield* Effect.orDie(
-        hostPort(() =>
-          this.deps.prompt.confirm(`Delete "${input.displayPath}"?`, {
-            modal: true,
-            confirmLabel: 'Delete',
-          }),
-        ),
+        this.deps.prompt.confirm(`Delete "${input.displayPath}"?`, {
+          modal: true,
+          confirmLabel: 'Delete',
+        }),
       );
       if (!confirmed) return null;
 
@@ -104,10 +105,8 @@ export class SettingsMemoryController {
     const result = yield* raiseCause(setMemoryPinned(resolvedPath, pinned));
     if (result.status === 'cap-reached') {
       yield* Effect.orDie(
-        hostPort(() =>
-          this.deps.prompt.warning(
-            `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
-          ),
+        this.deps.prompt.warning(
+          `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
         ),
       );
       return null;

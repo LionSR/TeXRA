@@ -48,7 +48,10 @@ import { unique } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { ProgressApiKeyRetryController } from '../progressView/ProgressApiKeyRetryController';
+import {
+  ApiKeyPromptFailed,
+  ProgressApiKeyRetryController,
+} from '../progressView/ProgressApiKeyRetryController';
 import {
   ProgressFollowUpController,
   type ProgressFollowUpModelOption,
@@ -258,7 +261,21 @@ export const createHostRunActions = (
       providers: API_PROVIDERS,
       readKey: (provider) => lookupApiKeyUncached(secrets, provider),
       hasUsableKey: (provider) => hasUsableApiKey(secrets, provider),
-      promptForApiKey: (provider) => ports.promptForApiKey(provider),
+      // The host's key prompt is still Promise-shaped — on the extension it
+      // is a VS Code command invocation, which moves with the editor and
+      // commands plane — so this is its one typed boundary call: a host that
+      // could not ask reaches the controller as `ApiKeyPromptFailed` rather
+      // than as an unknown rejection.
+      promptForApiKey: (provider) =>
+        Effect.tryPromise({
+          try: () => ports.promptForApiKey(provider),
+          catch: (cause) =>
+            new ApiKeyPromptFailed({
+              provider,
+              message: 'The host could not ask for a provider API key.',
+              cause,
+            }),
+        }),
       isRetryPending,
       triggerRetry: (runId, requestId) =>
         settleRetry(runId, requestId, {

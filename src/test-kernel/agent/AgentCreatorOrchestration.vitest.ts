@@ -63,17 +63,23 @@ function createUi(
   overrides: Partial<AgentCreatorUI> = {},
 ): AgentCreatorUI {
   return {
-    promptAgentName: vi.fn(async () => 'editor'),
-    promptDescription: vi.fn(async () => 'Edit documents'),
-    pickTools: vi.fn(async () => ({ tools: ['edit_file'], groups: [] })),
-    getCustomAgentDir: vi.fn(async () => resolve('/agents')),
+    promptAgentName: vi.fn(() => Effect.succeed('editor')),
+    promptDescription: vi.fn(() => Effect.succeed('Edit documents')),
+    pickTools: vi.fn(() =>
+      Effect.succeed({ tools: ['edit_file'], groups: [] }),
+    ),
+    getCustomAgentDir: vi.fn(() => Effect.succeed(resolve('/agents'))),
     showCreatedInfo: vi.fn(() => events.push('show')),
-    promptAddToConfig: vi.fn(async () => {
-      events.push('register');
-    }),
-    openCreatedFile: vi.fn(async () => {
-      events.push('open');
-    }),
+    promptAddToConfig: vi.fn(() =>
+      Effect.sync(() => {
+        events.push('register');
+      }),
+    ),
+    openCreatedFile: vi.fn(() =>
+      Effect.sync(() => {
+        events.push('open');
+      }),
+    ),
     renderTemplate: vi.fn(() => 'fallback yaml'),
     ...overrides,
   };

@@ -1,3 +1,5 @@
+import { Data } from 'effect';
+
 import type {
   RequestEnsureProgressViewPayload,
   RequestOpenFilePayload,
@@ -49,3 +51,32 @@ export type PresentationEventHandlers<
 > = {
   [K in keyof Payloads]: (payload: Payloads[K]) => unknown;
 };
+
+/**
+ * Why the host could not read a file's diagnostics for the diagnostics tool.
+ *
+ * Read off the one implementation
+ * (`packages/extension/src/frontend/latex/linter.ts`): the file's workspace
+ * root is not resolvable (`workspace-unavailable`), the LaTeX build the read
+ * triggers to refresh them faults (`build-failed`), or the host's own
+ * diagnostics collection throws (`read-failed`).
+ */
+export class DiagnosticsReadFailed extends Data.TaggedError(
+  'DiagnosticsReadFailed',
+)<{
+  readonly reason: 'workspace-unavailable' | 'build-failed' | 'read-failed';
+  readonly path: string;
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
+ * The host viewer refused to open a PDF the tool had already located on disk.
+ * One reason only, by measurement: the implementation hands the file to the
+ * host's own viewer, which either opens it or rejects.
+ */
+export class PdfOpenFailed extends Data.TaggedError('PdfOpenFailed')<{
+  readonly path: string;
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}

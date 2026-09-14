@@ -66,9 +66,11 @@ describe('OpenPdfTool', () => {
   });
 
   /** Attach a PDF viewer the way a host does: as a session capability. */
-  function installOpener(): Mock<(request: OpenPdfRequest) => Promise<void>> {
-    const openPdf = vi.fn<(request: OpenPdfRequest) => Promise<void>>();
-    openPdf.mockResolvedValue(undefined);
+  function installOpener(): Mock<
+    (request: OpenPdfRequest) => Effect.Effect<void>
+  > {
+    const openPdf = vi.fn<(request: OpenPdfRequest) => Effect.Effect<void>>();
+    openPdf.mockReturnValue(Effect.void);
     detachHostInteractions();
     detachHostInteractions = defaultSession().interactions.use({
       openPdf,

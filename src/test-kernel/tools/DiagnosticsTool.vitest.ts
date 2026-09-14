@@ -81,9 +81,9 @@ describe('DiagnosticsTool', () => {
     Effect.gen(function* () {
       yield* withSession((session) =>
         Effect.gen(function* () {
-          const readDiagnostics = vi.fn(async (_path: string) => {
-            return [] as GenericDiagnostic[];
-          });
+          const readDiagnostics = vi.fn((_path: string) =>
+            Effect.succeed([] as GenericDiagnostic[]),
+          );
           session.interactions.use({ readDiagnostics });
 
           const result = yield* new DiagnosticsTool()

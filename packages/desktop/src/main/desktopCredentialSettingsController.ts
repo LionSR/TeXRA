@@ -54,7 +54,12 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   readonly renderer: {
     postToRenderer(message: unknown): void;
   };
-  readonly prompt: Pick<PromptHost, 'input' | 'confirm'>;
+  /**
+   * The window's dialog surface. `info` is the key-change notice the profile
+   * key controller posts; it is bound where the other two are, so the window's
+   * dialogs are built in one place.
+   */
+  readonly prompt: Pick<PromptHost, 'input' | 'confirm' | 'info'>;
   readonly externalOpener: Pick<ExternalOpener, 'openExternal'> & {
     openSubscriptionSignInUrl(url: string): Promise<void>;
     presentSubscriptionSignInUrl(
@@ -206,14 +211,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     });
     this.profileKeyController = new SettingsProfileKeyController({
       secrets: options.secrets,
-      prompt: {
-        input: options.prompt.input,
-        confirm: options.prompt.confirm,
-        info: async (message) => {
-          await options.notifications.showInfoMessage(message);
-          return undefined;
-        },
-      },
+      prompt: options.prompt,
       externalOpener: options.externalOpener,
       getProviderDisplayName: (provider) =>
         this.profileController.getProviderDisplayName(provider),
