@@ -535,7 +535,10 @@ export function executeAgent(
     // shaping its result as a root's. `runAgent` put the persisted edge on
     // that handle before this launch began preparing, which is what lets the
     // parent's stop reach the child meanwhile: a stop that detaches severs
-    // this very handle, and the run then legitimately continues as a root.
+    // this very handle. The edge is deliberately not copied out here: it is
+    // mutable for exactly as long as this preparation runs, so the run reads
+    // it off its own lifecycle handle below, after the registry has carried
+    // it across the replacement.
     const resumedHandle = options.resumed
       ? options.session.runs.getHandle(runId)
       : undefined;
@@ -546,10 +549,6 @@ export function executeAgent(
         ),
       );
     }
-    const parentRunId = options.resumed
-      ? resumedHandle?.deliveryTarget
-      : options.parentRunId;
-    const hasParent = parentRunId !== undefined;
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId,
@@ -598,6 +597,12 @@ export function executeAgent(
                 ctx,
                 (handle) =>
                   Effect.gen(function* () {
+                    // This run's lineage, derived once, from the live handle
+                    // the registry admitted: for a resume that is the edge
+                    // carried over from the provisional registration, minus a
+                    // detach committed while the launch prepared, and for a
+                    // fresh launch it is the caller's own parent.
+                    const parentRunId = handle.deliveryTarget;
                     // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
                     yield* Effect.tryPromise({
                       try: () => runInScope(() => ensureRunDir(runId)),
@@ -619,7 +624,7 @@ export function executeAgent(
                     );
                     // Subagents don't need to force-open the progress board or show notifications;
                     // the orchestrator's run is already visible.
-                    if (!hasParent) {
+                    if (parentRunId === undefined) {
                       runSession.interactions.emit(
                         'requestEnsureProgressView',
                         {
@@ -648,7 +653,16 @@ export function executeAgent(
                       runInScope,
                     );
                   }),
-                buildLifecycleOptions(options, parentRunId),
+                // The edge the lifecycle's handle is born with, read as late
+                // as that handle is built. A detach landing even after this
+                // read still stands: `RunRegistry.track` carries the
+                // registration's sever onto the replacement.
+                buildLifecycleOptions(
+                  options,
+                  resumedHandle
+                    ? resumedHandle.deliveryTarget
+                    : options.parentRunId,
+                ),
               );
               // The overload the caller chose is what admits WAITING, so this
               // assertion reads the caller's own parent, not the lineage: no

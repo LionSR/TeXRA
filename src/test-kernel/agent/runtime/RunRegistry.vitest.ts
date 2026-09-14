@@ -1511,6 +1511,29 @@ describe('runRegistry', () => {
     }
   });
 
+  it('keeps a handle replacing a detached registration a root run', () => {
+    const { registry } = createRegistry();
+    const parentRunId = generateRunId();
+    const runId = generateRunId();
+
+    try {
+      // The provisional registration a launch makes before it prepares, and
+      // the parent's detaching stop landing while that preparation runs.
+      const provisional = createHandle(runId, parentRunId);
+      registry.track(provisional);
+      Effect.runSync(registry.detachActiveChildren(parentRunId));
+
+      // The lifecycle's handle, built from the edge the launch started with.
+      const lifecycle = createHandle(runId, parentRunId);
+      registry.track(lifecycle);
+
+      expect(lifecycle.deliveryTarget).toBeUndefined();
+      expect(registry.getActiveChildren(parentRunId)).toEqual([]);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('preserves child approvals when detaching it from its parent', () => {
     const approvals = createSessionApprovals({ setApprovalBypassState() {} });
     const { registry } = createRegistry({ approvals });
