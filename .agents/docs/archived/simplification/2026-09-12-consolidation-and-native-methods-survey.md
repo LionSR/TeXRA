@@ -236,9 +236,16 @@ now with a comment recording why it isn't deduped against the shared one.
   `src/controllers/session/hostDraftRequests.ts`,
   `src/agent/runtime/SessionHandle.ts`,
   `src/agent/followUp/ToolUseFollowUpQueueManager.ts`,
-  `packages/desktop/src/main/desktopProjects.ts`) instead of the existing,
-  browser-safe `createListenerSet` (`src/utils/core/listenerSet.ts`, today
-  only adopted by `TraceEmitter`). Not fixed in this pass: three of the five
+  `packages/desktop/src/main/desktopProjects.ts`) instead of the existing
+  `createListenerSet` (`src/utils/core/listenerSet.ts`, today only adopted by
+  `TraceEmitter`). Backend-only, not browser-safe as an earlier draft of
+  this entry claimed: `@utils/core/listenerSet` is not one of the five
+  modules `BROWSER_SAFE_UTILS` (`eslint.config.mjs`) allows a
+  browser-reachable file to import at runtime, and `@utils/core`'s barrel
+  does not re-export it — so `progressView/frontend/sessionSurfaces.ts`
+  specifically (a browser-reachable webview file) cannot adopt it as-is; a
+  follow-up would need to extend the allowlist and barrel first, or keep
+  that one site local. Not fixed in this pass: three of the five
   sites (`SessionHandle.ts`, `ToolUseFollowUpQueueManager.ts`,
   `hostDraftRequests.ts`) sit inside or adjacent to the run-ledger/session
   surface this window's dominant "1.0 clean slate" work is actively
@@ -257,11 +264,26 @@ now with a comment recording why it isn't deduped against the shared one.
   findings.
 - **Scripts, resources, prompts, Supabase, utils**: a real duplicated LaTeX
   `\criticize` color-coding macro across seven
-  `prompts/agents/remote/workflow/*.yaml` files has drifted into a genuine
-  severity-mapping bug (`criticize.yaml` and `enhance.yaml` gate the lowest
-  severity on `\ifnum#2=0`, which never fires given the documented 1–5
-  severity scale, while `elevate.yaml` has the correct `\ifnum#2=1`), and a
-  15-line style-guide `itemize` block is duplicated verbatim across
+  `prompts/agents/remote/workflow/*.yaml` files has drifted, but the drift is
+  narrower than two earlier drafts of this entry claimed (corrected twice
+  after PR review — see history in this file's own commits): the only
+  actual dead code is `enhance.yaml`'s `\ifnum#2=0` branch, which never
+  fires because that file's scale is "impact: 1-5" with no impact-0
+  documented (`enhance.yaml:34`). `criticize.yaml` and `firstread.yaml` use
+  the identical macro, but for them every branch is reachable and
+  intentional: both run a full, documented 0-5 scale where severity 0 is a
+  distinct "Verified Correct" tier (green) and severity 1 is deliberately
+  the plain `gray` fallback — `firstread.yaml:136`'s abstract spells this
+  out explicitly ("Severity: 5=red, 4=orange, 3=yellow-red, 2=yellow,
+  1=gray, 0=green"), and `criticize.yaml:269` names severity 1 as its own
+  "Cosmetic Issues" tier, consistent with gray as its intentional color, not
+  an accident. `elevate.yaml` runs a plain 1-5 scale with no severity-0 tier
+  and colors severity 1 green instead of gray — a different, equally valid
+  design choice for a different scale, not evidence that criticize.yaml or
+  firstread.yaml are "wrong". So the one genuine, fixable finding across all
+  four files is `enhance.yaml`'s single unreachable branch; nothing else in
+  this macro family is drift. A 15-line style-guide `itemize` block is also
+  duplicated verbatim across
   `correct.yaml`, `polish.yaml`, and `generic.yaml`. Both are real findings
   but are prompt-content fixes with no include/anchor mechanism available
   (`agentLoad.ts` parses each YAML as a standalone document) and land in
