@@ -429,17 +429,28 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   }
 
   let cancelledAtFlowAttachment = false;
+  let refusedElsewhere = false;
   let runResult: AgentRuntimeFlowResult | undefined;
   let undelivered = false;
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
+      // Each follow-up is durable before the next is offered. The run's
+      // claim is taken on the first write and held by this attempt's lease,
+      // so only the first can be refused as held elsewhere, before anything
+      // is queued: the batch then stays the caller's.
+      for (const followUp of options.extraFollowUps ?? []) {
+        const submitted = yield* followUps.submit(
+          runId,
+          followUp,
+          'live_owner',
+        );
+        if (submitted.kind === 'refused' && submitted.reason) {
+          refusedElsewhere = true;
+          return undefined;
+        }
+      }
       yield* Effect.try({
-        try: () => {
-          for (const followUp of options.extraFollowUps ?? []) {
-            followUps.submit(runId, followUp, 'live_owner');
-          }
-          options.onFollowUpQueueReady?.(queueLease);
-        },
+        try: () => options.onFollowUpQueueReady?.(queueLease),
         catch: ensureError,
       });
       return yield* resumeToolUseFromResumeData(resume, {
@@ -476,6 +487,8 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     if (refusal) return refusal;
     return yield* Effect.fail(resumed.failure);
   }
+  // Another live process holds the run: nothing was queued or launched.
+  if (refusedElsewhere) return { failed: 'owned_elsewhere' };
   // Cancellation at flow attachment means the run was never reached; input
   // left queued means it ran and returned before taking it.
   if (cancelledAtFlowAttachment) return REFUSED;

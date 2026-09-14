@@ -283,6 +283,10 @@ interface SessionIndexes {
   readonly byOwner: Map<string, Set<RunId>>;
   /** Current sequence-row claims for the checked resident scope. */
   readonly claims: Map<AggregateId, string | null>;
+  /** Every follow-up id a run's rows named, consumed ones included: the
+   *  queued set's unique key, so a delivery replayed after its consumption
+   *  is not listed again (the run-state fold's `followUpIds`). */
+  readonly followUpIds: Map<RunId, Set<string>>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
    *  listing fact folded for it, so a replayed older one is ignored. The
    *  lifecycle entry outlives its run: it is what keeps a tombstone
@@ -311,6 +315,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       ended: new Set(),
       byOwner: new Map(),
       claims: new Map(),
+      followUpIds: new Map(),
       latest: new Map(),
       inflight: new Map(),
       local: { self: [], dead: [], unreadable: [] },
@@ -1622,12 +1627,14 @@ function applySessionSlices(
       return;
     }
     case 'followup.queued': {
-      // A set keyed by follow-up id, like the requests above; a replayed row
-      // is below the pair's `latest` entry and never reaches here.
+      // A set keyed by follow-up id, like the requests above. A re-read row is
+      // below the pair's `latest` entry and never reaches here; a delivery its
+      // producer replayed under an id this run already named, queued or
+      // consumed, is the same follow-up and is not listed again.
       if (runId === null) return;
+      if (knownFollowUpIds(view, runId).has(event.followUpId)) return;
+      knownFollowUpIds(view, runId).add(event.followUpId);
       const queued = view.queuedFollowUps.get(runId) ?? [];
-      // A replayed delivery id names a follow-up the set already holds.
-      if (queued.some((f) => f.followUpId === event.followUpId)) return;
       writableMap(view, 'queuedFollowUps').set(runId, [
         ...queued,
         {
@@ -1638,8 +1645,10 @@ function applySessionSlices(
       return;
     }
     case 'followup.consumed': {
-      const queued = runId === null ? [] : view.queuedFollowUps.get(runId);
-      if (runId === null || queued === undefined) return;
+      if (runId === null) return;
+      knownFollowUpIds(view, runId).add(event.followUpId);
+      const queued = view.queuedFollowUps.get(runId);
+      if (queued === undefined) return;
       const remaining = queued.filter(
         (followUp) => followUp.followUpId !== event.followUpId,
       );
@@ -1654,6 +1663,17 @@ function applySessionSlices(
     default:
       return;
   }
+}
+
+/** The follow-up ids a run's rows named, created on first use. */
+function knownFollowUpIds(view: SessionView, runId: RunId): Set<string> {
+  const { followUpIds } = sessionIndexesOf(view);
+  let ids = followUpIds.get(runId);
+  if (!ids) {
+    ids = new Set();
+    followUpIds.set(runId, ids);
+  }
+  return ids;
 }
 
 /**
@@ -1865,6 +1885,7 @@ function foldRunRemoved(
   if (view.queuedFollowUps.has(run.id)) {
     writableMap(view, 'queuedFollowUps').delete(run.id);
   }
+  sessionIndexesOf(view).followUpIds.delete(run.id);
   writableMap(view, 'folded').delete(qualifyAggregateId('run', run.id));
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);

@@ -481,14 +481,16 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
 );
 
 /** Put input on the run's queue before the loop claims it. */
-function enqueue(
+const enqueue = Effect.fn('test.enqueue')(function* (
   session: SessionHandle,
   runId: RunId,
   items: readonly FollowUpQueueInput[],
-): void {
-  for (const item of items)
-    session.followUps.submit(runId, item, 'recoverable');
-}
+) {
+  yield* Effect.promise(() => session.settlePublications());
+  for (const item of items) {
+    yield* session.followUps.submit(runId, item, 'recoverable');
+  }
+});
 
 /** The plain text of every user message the run recorded. */
 function userTexts(state: RunState | null): string[] {
@@ -511,7 +513,7 @@ describe('a parked child run', () => {
         const session = quietSession();
         const runId = startedRun(session);
         if (queued) {
-          enqueue(session, runId, [{ text: 'later', origin: 'user' }]);
+          yield* enqueue(session, runId, [{ text: 'later', origin: 'user' }]);
         }
 
         const { result, requests } = yield* runLoop({
@@ -607,7 +609,9 @@ describe('a parked root run', () => {
         const session = quietSession();
         const runId = startedRun(session);
         const onIdle = vi.fn();
-        enqueue(session, runId, [{ text: 'keep going', origin: 'user' }]);
+        yield* enqueue(session, runId, [
+          { text: 'keep going', origin: 'user' },
+        ]);
 
         const { fiber, park } = yield* forkLoop({
           runId,
@@ -701,7 +705,7 @@ describe('a parked root run', () => {
         script: [textTurn('first'), textTurn('second')],
       });
       yield* park(0);
-      enqueue(session, runId, [{ text: 'carry on', origin: 'user' }]);
+      yield* enqueue(session, runId, [{ text: 'carry on', origin: 'user' }]);
       yield* park(1);
       yield* Fiber.interrupt(fiber);
 
@@ -760,7 +764,7 @@ describe('the batch a parked run consumes', () => {
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
-        enqueue(session, runId, [
+        yield* enqueue(session, runId, [
           {
             text: '<subagent-result>done</subagent-result>',
             origin: 'subagent_result',
@@ -824,7 +828,7 @@ describe('the batch a parked run consumes', () => {
       const runId = startedRun(session);
       const logger = new TraceEmitter();
       const info = vi.spyOn(logger, 'info');
-      enqueue(session, runId, [
+      yield* enqueue(session, runId, [
         {
           text: [
             '<workflow-script-result id="abc">',
@@ -861,7 +865,7 @@ describe('the batch a parked run consumes', () => {
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
         const warn = vi.spyOn(logger, 'warn');
-        enqueue(session, runId, [
+        yield* enqueue(session, runId, [
           {
             text: 'please inspect this figure',
             mediaFiles: ['/tmp/texra-figure.png'],
@@ -902,7 +906,7 @@ describe('the batch a parked run consumes', () => {
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
-        enqueue(session, runId, [
+        yield* enqueue(session, runId, [
           {
             text: 'use this diagram',
             mediaFiles: ['/tmp/texra-unreadable-figure.png'],
@@ -973,7 +977,9 @@ describe('an active goal at the wait', () => {
       const session = yield* goalSession();
       const runId = startedRun(session);
       yield* startGoal(session, runId, 'Keep going autonomously.');
-      enqueue(session, runId, [{ text: 'user correction', origin: 'user' }]);
+      yield* enqueue(session, runId, [
+        { text: 'user correction', origin: 'user' },
+      ]);
 
       try {
         const { state } = yield* runUntilSpent({
@@ -1054,7 +1060,7 @@ describe('an active goal at the wait', () => {
             ],
           });
           setApprovalBypassState.mockClear();
-          enqueue(session, runId, [
+          yield* enqueue(session, runId, [
             { text: 'try the other lemma', origin: 'user' },
           ]);
 

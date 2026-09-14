@@ -113,15 +113,19 @@ export function notifyFollowUpSent(
   (session ?? currentSession()).followUps.notifySent(runId);
 }
 
-/** Queue transient progress using the current run and live queue owners. */
+/**
+ * Queue transient progress using the current run and live queue owners. The
+ * target and the admission are decided when this is called; the returned
+ * effect writes the row (nothing when no session holds the run).
+ */
 export function enqueueLiveFollowUp(
   runId: RunId,
   followUp: FollowUpQueueInput,
   session: SessionHandle,
-): void {
+): Effect.Effect<void, Error> {
   const target = session.runs.getToolUseFollowUpTarget(runId);
-  if (target.kind === 'no_session') return;
-  session.followUps.submit(runId, followUp, 'live_owner');
+  if (target.kind === 'no_session') return Effect.void;
+  return Effect.asVoid(session.followUps.submit(runId, followUp, 'live_owner'));
 }
 
 type Admission =
@@ -131,9 +135,10 @@ type Admission =
 
 /**
  * Route and admit one submission. Synchronous from the registry snapshot to
- * the enqueue: two submissions to one run cannot interleave between the
- * target lookup and the admission, which is what keeps the recovery claim
- * single-owner without a per-run lock. A resumed model turn completes
+ * the admission decision: two submissions to one run cannot interleave
+ * between the target lookup and the admission, which is what keeps the
+ * recovery claim single-owner without a per-run lock. The row is durable
+ * before anything is acknowledged or woken. A resumed model turn completes
  * after this returns, so it cannot block later input from joining its queue.
  */
 function admitFollowUp(
@@ -141,55 +146,75 @@ function admitFollowUp(
   item: FollowUpQueueInput,
   options: SubmitFollowUpOptions,
   ownerSession: SessionHandle,
-): Admission {
-  const target = ownerSession.runs.getToolUseFollowUpTarget(runId);
+): Effect.Effect<Admission, Error> {
+  return Effect.suspend(() => {
+    const target = ownerSession.runs.getToolUseFollowUpTarget(runId);
 
-  if (target.kind === 'active') {
-    // A child loop remains the owner during active inner turns, so input joins
-    // its ordered queue rather than creating a second turn driver.
-    const submission = ownerSession.followUps.submit(runId, item, 'live_owner');
-    if (submission.kind === 'duplicate') return { status: 'sent' };
-    if (submission.kind === 'delivered_live') {
-      if (options.mode === 'live_notification') return { status: 'queued' };
-      notifyFollowUpSent(runId, ownerSession);
-      return { status: 'sent' };
+    if (target.kind === 'no_session') {
+      logger.warn(
+        `No active session for follow-up on run ${runId}. Status: ${target.runStatus}`,
+      );
+      return Effect.succeed<Admission>({ status: 'no_session' });
     }
-    if (submission.kind === 'queued') return { status: 'queued' };
-    // The queue is the only way in. A refusal here means the session has no
-    // entry for this run (terminalized by a run deletion, or terminally
-    // released) or is disposed: the flow context may still be attached during
-    // teardown, but the continuation boundary that owns it is gone.
-    return { status: 'failed', reason: 'not_resumable' };
-  }
 
-  if (target.kind === 'no_session') {
-    logger.warn(
-      `No active session for follow-up on run ${runId}. Status: ${target.runStatus}`,
+    if (target.kind === 'active') {
+      // A child loop remains the owner during active inner turns, so input
+      // joins its ordered queue rather than creating a second turn driver.
+      return Effect.map(
+        ownerSession.followUps.submit(runId, item, 'live_owner'),
+        (submission): Admission => {
+          if (submission.kind === 'duplicate') return { status: 'sent' };
+          if (submission.kind === 'delivered_live') {
+            if (options.mode === 'live_notification') {
+              return { status: 'queued' };
+            }
+            notifyFollowUpSent(runId, ownerSession);
+            return { status: 'sent' };
+          }
+          if (submission.kind === 'queued') return { status: 'queued' };
+          // The queue is the only way in. A refusal here means another process
+          // holds the run, or the session has no entry for it (terminalized by
+          // a run deletion, or terminally released) or is disposed: the flow
+          // context may still be attached during teardown, but the
+          // continuation boundary that owns it is gone.
+          return {
+            status: 'failed',
+            reason: submission.reason ?? 'not_resumable',
+          };
+        },
+      );
+    }
+
+    const admission =
+      options.mode === 'live_notification' ? 'live_owner' : 'recoverable';
+    return Effect.map(
+      ownerSession.followUps.submit(runId, item, admission),
+      (submission): Admission => {
+        if (submission.kind === 'duplicate') return { status: 'sent' };
+        if (submission.kind === 'refused') {
+          return {
+            status: 'failed',
+            reason: submission.reason ?? 'not_resumable',
+          };
+        }
+        if (submission.kind !== 'queued' || !submission.lease) {
+          return { status: 'queued' };
+        }
+        const recovery = submission.lease;
+        // The Promise resume port owns its settlement even if the submitting
+        // fiber stops waiting. A declined wake must release its claim for the
+        // next attempt.
+        const resume = (options.resumePort ?? platform().agentResume)
+          .tryResumeRun(runId, recovery)
+          .then((resumed) => {
+            if (!resumed)
+              ownerSession.followUps.release(recovery, 'recoverable');
+            return resumed;
+          });
+        return { resume };
+      },
     );
-    return { status: 'no_session' };
-  }
-
-  const admission =
-    options.mode === 'live_notification' ? 'live_owner' : 'recoverable';
-  const submission = ownerSession.followUps.submit(runId, item, admission);
-  if (submission.kind === 'duplicate') return { status: 'sent' };
-  if (submission.kind === 'refused') {
-    return { status: 'failed', reason: 'not_resumable' };
-  }
-  if (submission.kind !== 'queued' || !submission.lease) {
-    return { status: 'queued' };
-  }
-
-  const recovery = submission.lease;
-  // The Promise resume port owns its settlement even if the submitting fiber
-  // stops waiting. A declined wake must release its claim for the next attempt.
-  const resume = (options.resumePort ?? platform().agentResume)
-    .tryResumeRun(runId, recovery)
-    .then((resumed) => {
-      if (!resumed) ownerSession.followUps.release(recovery, 'recoverable');
-      return resumed;
-    });
-  return { resume };
+  });
 }
 
 /**
@@ -283,7 +308,12 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
         }),
       ),
     );
-  const dispatch = admitFollowUp(runId, item, options, ownerSession);
+  const dispatch = yield* admitFollowUp(
+    runId,
+    item,
+    options,
+    ownerSession,
+  ).pipe(Effect.tapError(() => notifyAdmitted(false)));
   if ('resume' in dispatch) {
     yield* notifyAdmitted(true);
     const resumed = yield* Effect.tryPromise({

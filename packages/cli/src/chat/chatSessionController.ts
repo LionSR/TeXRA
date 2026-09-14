@@ -859,7 +859,17 @@ export function createChatSessionController(
         if (!options.onFollowUpQueueReady) {
           const previous = supersedeInterruptedRecovery();
           for (const followUp of previous?.followUps ?? []) {
-            runtimeSession.followUps.submit(runId, followUp, 'live_owner');
+            const submitted = yield* runtimeSession.followUps.submit(
+              runId,
+              followUp,
+              'live_owner',
+            );
+            // Refused before anything was queued (the run is held by another
+            // process): the interrupted batch stays this controller's.
+            if (submitted.kind === 'refused') {
+              restoreInterruptedRecovery(previous);
+              return false;
+            }
           }
           if (previous?.followUps.length)
             runtimeSession.followUps.notifySent(recovery.runId);

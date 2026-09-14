@@ -19,6 +19,7 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {
   createTestSession,
+  publishTestRunStart,
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { listenForFollowUp } from '@tools/executions/waitCoordination';
@@ -92,6 +93,8 @@ describe('tool-use follow-up progress events', () => {
   it('publishes sent follow-up events through the owning session fact hub', async () => {
     const run = createRecordingHost();
     const session = trackSession();
+    publishTestRunStart(session, runId);
+    await session.settlePublications();
     const sent = recordFollowUpsSent(session);
     const lease = session.followUps.claimLive(runId, 'flow')!;
 

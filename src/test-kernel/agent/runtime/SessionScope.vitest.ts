@@ -98,9 +98,11 @@ describe('session-owned transcripts and follow-up queues', () => {
       a.followUps.terminalize(runId);
 
       expect(a.followUps.hasLiveOwner(runId)).toBe(false);
-      expect(a.followUps.submit(runId, { text: 'late' }, 'live_owner')).toEqual(
-        { kind: 'refused' },
-      );
+      expect(
+        await Effect.runPromise(
+          a.followUps.submit(runId, { text: 'late' }, 'live_owner'),
+        ),
+      ).toEqual({ kind: 'refused' });
       expect(b.followUps.hasLiveOwner(runId)).toBe(true);
     } finally {
       await Effect.runPromise(a.dispose());
@@ -112,7 +114,8 @@ describe('session-owned transcripts and follow-up queues', () => {
 describe('sendFollowUp host-path session routing', () => {
   it('resolves the follow-up target against the passed session, not the process default', async () => {
     const processSession = createTestSession();
-    const parentRun = generateRunId();
+    const parentRun = publishTestRunStart(processSession);
+    await processSession.settlePublications();
 
     try {
       // A child run is tracked in the explicit process session, as desktop

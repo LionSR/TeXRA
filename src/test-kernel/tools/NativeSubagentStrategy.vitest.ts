@@ -796,7 +796,7 @@ describe('NativeSubagentStrategy', () => {
           expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
 
           expect(
-            session.followUps.submit(
+            yield* session.followUps.submit(
               childRunId,
               {
                 text: 'Also state exactly where finiteness is used.',
@@ -811,7 +811,7 @@ describe('NativeSubagentStrategy', () => {
           expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2);
 
           expect(
-            session.followUps.submit(
+            yield* session.followUps.submit(
               childRunId,
               {
                 text: 'Now give the shortest equivalent statement.',

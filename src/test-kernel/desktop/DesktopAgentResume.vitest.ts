@@ -285,10 +285,12 @@ describe('desktop process resume owner', () => {
     );
     const harness = await createResumeHarness();
     const flow = harness.session.followUps.claimLive(runId, 'flow')!;
-    harness.session.followUps.submit(
-      runId,
-      { text: 'keep this queued' },
-      'live_owner',
+    await Effect.runPromise(
+      harness.session.followUps.submit(
+        runId,
+        { text: 'keep this queued' },
+        'live_owner',
+      ),
     );
     harness.session.followUps.release(flow, 'recoverable');
     resumeToolUseFromResumeData.mockImplementation((_resume, options) =>

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Effect, Exit, type Fiber } from 'effect';
+import { Cause, Effect, Exit, Fiber, Queue, Result } from 'effect';
 
 // One driver for every child-run type (agent-CLI codex/claude sessions, native
 // subagents of either category, workflow-script runs, background shells). Each
@@ -48,6 +48,7 @@ import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
+import { foldRunState } from '@shared/session/runStateFold';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { aggregateError, formatDuration, onAbort } from '@utils/core';
@@ -498,15 +499,27 @@ function emitTurnDiagnostic(
  * failure. `not-owner` means this process no longer holds the run and the
  * loop stops rather than deliver under a claim it lost (R7); a write failure
  * is a fact the slots cannot be labeled without.
+ *
+ * An agent-CLI turn's settlement also consumes the follow-ups that were its
+ * prompt (C3): no ledger message carries that prompt, and its provider's
+ * thread holds it only once the turn has run, so the rows stay queued until
+ * then. A crash before the settled row re-delivers them to the next loop,
+ * which seeds from the rows; after it, nothing re-delivers them.
  */
 function commitChildTurn(
   session: SessionHandle,
   runId: RunId,
   turn: ChildTurnKey,
   phase: 'accepted' | 'settled',
+  consumed: readonly QueuedFollowUp[] = [],
 ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
   return session
     .commit([
+      ...consumed.map((followUp) => ({
+        type: 'followup.consumed' as const,
+        aggregateId: aggregateId('run', runId),
+        followUpId: followUp.followUpId,
+      })),
       {
         type: 'child.turn',
         aggregateId: aggregateId('run', runId),
@@ -521,9 +534,7 @@ function commitChildTurn(
 /**
  * Move an agent-CLI child's phase across its park (one run model, 3.3):
  * `waiting` before the loop blocks on its queue, `turn.begin` when the taken
- * batch starts the next turn, committed with that batch's
- * `followup.consumed` rows (C3): the batch is this turn's prompt, and no
- * ledger message carries it. Written with the loops' own step-row
+ * batch starts the next turn. Written with the loops' own step-row
  * constructor, so the child protocol carries no second phase vocabulary. A run
  * this loop is the only driver of has no `flow.snapshot` and no rounds: its
  * family is the interactive one its turns are, and the turn index is its one
@@ -537,15 +548,9 @@ function commitFlowStep(
   runId: RunId,
   turn: number,
   step: 'waiting' | 'turn.begin',
-  consumed: readonly QueuedFollowUp[] = [],
 ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
   return session
     .commit([
-      ...consumed.map((followUp) => ({
-        type: 'followup.consumed' as const,
-        aggregateId: aggregateId('run', runId),
-        followUpId: followUp.followUpId,
-      })),
       stepRow(
         runId,
         { family: 'toolUse', round: 0, turn, continuationIndex: 0 },
@@ -615,6 +620,8 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   logger: AgentTrace;
   turn: TTurn | null;
   turnKey: ChildTurnKey;
+  /** The queued follow-ups this turn ran as its prompt. */
+  consumed: readonly QueuedFollowUp[];
   err: unknown;
   wallTimeMs: number;
   isError: boolean;
@@ -665,7 +672,13 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   // manifest or not, since the manifest is written for a failed delivery
   // too and so cannot say whether the turn succeeded), so the row lands
   // before that failure is raised.
-  yield* commitChildTurn(params.session, runId, turnKey, 'settled');
+  yield* commitChildTurn(
+    params.session,
+    runId,
+    turnKey,
+    'settled',
+    params.consumed,
+  );
 
   params.onTurnSettled?.({
     message: msg,
@@ -879,6 +892,16 @@ export function startChildRunLoop<TTurn, R = never>(
       });
 
     const created = yield* RunInput.make;
+    // An agent-CLI child has no flow to fold: its loop seeds the queue from
+    // the run's rows itself, so follow-ups a crash left queued (or a turn it
+    // never settled) reach the relaunched loop. A native child's resumed flow
+    // seeds the same queue from its own load.
+    const folded = childRun
+      ? foldRunState(
+          null,
+          yield* runSession.readAggregate(aggregateId('run', runId)),
+        )
+      : null;
     const setup = yield* Effect.exit(
       Effect.sync(() => {
         strategy.onLoopStart?.(runSession);
@@ -889,10 +912,18 @@ export function startChildRunLoop<TTurn, R = never>(
           );
         }
         input = runSession.followUps.attachInput(runId, created, queueLease)!;
-        // A native child's resumed flow seeds this queue from the run's rows
-        // when it loads them; an agent-CLI child has no flow to fold, so its
-        // queue starts from what is admitted from here on.
-        if (childRun) input.seed([]);
+        if (folded !== null) {
+          if (Result.isFailure(folded)) {
+            throw new Error(
+              `Child run ${runId} has rows its follow-up queue cannot be seeded from: ${folded.failure.detail}`,
+              { cause: folded.failure },
+            );
+          }
+          input.seed(
+            folded.success?.followUps ?? [],
+            folded.success?.followUpIds,
+          );
+        }
         attachLoopInterrupt();
         sessionStage = childRun
           ? logger.openStage(strategy.stageLabel)
@@ -910,6 +941,14 @@ export function startChildRunLoop<TTurn, R = never>(
     const childRunHandle = childRun ? runs.getHandle(runId) : undefined;
 
     let bestCostUsd: number | undefined;
+    // Progress reaches the parent as queued follow-ups. The port is
+    // synchronous, so it admits each one where it is reported (the target and
+    // the admission decided then) and one drainer the loop's body owns writes
+    // the rows in that order.
+    const notices = yield* Queue.unbounded<
+      Effect.Effect<void, Error>,
+      Cause.Done
+    >();
     const ports: ChildRunPorts = {
       notify: (update) => {
         if (params.notify) {
@@ -922,11 +961,16 @@ export function startChildRunLoop<TTurn, R = never>(
           childRun ? childRunHandle?.deliveryTarget : parentRunId,
         );
         if (!targetRunId) return;
-        const msg = formatSubagentProgress(runId, agentName, update);
-        enqueueLiveFollowUp(
-          targetRunId,
-          { text: msg, origin: 'subagent_result' },
-          runSession,
+        Queue.offerUnsafe(
+          notices,
+          enqueueLiveFollowUp(
+            targetRunId,
+            {
+              text: formatSubagentProgress(runId, agentName, update),
+              origin: 'subagent_result',
+            },
+            runSession,
+          ),
         );
       },
       recordCost: (totalCost) => {
@@ -980,6 +1024,34 @@ export function startChildRunLoop<TTurn, R = never>(
       const body = yield* Effect.exit(
         Effect.scoped(
           Effect.gen(function* () {
+            const drainer = yield* Effect.forkScoped(
+              Effect.gen(function* () {
+                for (;;) {
+                  const notice = yield* Queue.take(notices).pipe(
+                    Effect.catchTag('Done', () => Effect.succeed(null)),
+                  );
+                  if (notice === null) return;
+                  yield* notice.pipe(
+                    Effect.catch((error) =>
+                      Effect.sync(() => {
+                        logger.warn('Child progress was not queued', {
+                          data: { runId, error },
+                        });
+                      }),
+                    ),
+                  );
+                }
+              }),
+            );
+            // Progress reported before the body ends is written before it
+            // ends: close the queue, then let the drainer finish.
+            yield* Effect.addFinalizer(() =>
+              Queue.end(notices).pipe(
+                Effect.andThen(Fiber.await(drainer)),
+                Effect.asVoid,
+              ),
+            );
+            let consumed: readonly QueuedFollowUp[] = [];
             while (!loop.isInterrupted()) {
               turnIndex += 1;
               const turnKey: ChildTurnKey = { attemptId, turnIndex };
@@ -1022,6 +1094,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 logger,
                 turn,
                 turnKey,
+                consumed,
                 err,
                 wallTimeMs,
                 isError: turnFailed,
@@ -1102,8 +1175,8 @@ export function startChildRunLoop<TTurn, R = never>(
                 runId,
                 turnIndex + 1,
                 'turn.begin',
-                taken,
               );
+              consumed = taken;
               const prompts: readonly FollowUpContent[] = batch.synthetic
                 ? [{ text: batch.text, origin: 'user' }]
                 : taken.map((followUp) => followUp.content);

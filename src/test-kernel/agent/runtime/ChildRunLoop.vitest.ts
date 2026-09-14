@@ -594,8 +594,16 @@ describe('childRunLoop E2E fixtures', () => {
 
           yield* foldParentPhase(true);
           notifyProgress({ kind: 'started' });
-          const progressQueue = yield* queuedTexts(PARENT_RUN_ID);
-          expect(progressQueue).toHaveLength(terminalQueue.length + 1);
+          // The loop writes progress after the port returns.
+          const progressQueue = yield* Effect.promise(() =>
+            vi.waitFor(async () => {
+              const queued = await Effect.runPromise(
+                queuedTexts(PARENT_RUN_ID),
+              );
+              expect(queued).toHaveLength(terminalQueue.length + 1);
+              return queued;
+            }),
+          );
 
           yield* Deferred.succeed<FakeTurn, Error>(turn, {
             kind: 'terminal',
@@ -651,8 +659,8 @@ describe('childRunLoop E2E fixtures', () => {
         const admissions: string[] = [];
         mocks.submitFollowUp.mockImplementation(
           (targetRunId, followUp, options) =>
-            Effect.sync(() => {
-              const admission = options.session.followUps.submit(
+            Effect.gen(function* () {
+              const admission = yield* options.session.followUps.submit(
                 targetRunId,
                 followUp,
                 'live_owner',
@@ -799,7 +807,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         // Enqueue a follow-up on the same queue the loop is now blocked on.
         expect(
-          session.followUps.submit(
+          yield* session.followUps.submit(
             runId,
             { text: 'keep going', origin: 'user' },
             'live_owner',
@@ -859,7 +867,7 @@ describe('childRunLoop E2E fixtures', () => {
           kind: 'queue',
         });
 
-        session.followUps.submit(
+        yield* session.followUps.submit(
           runId,
           { text: 'keep going', origin: 'user' },
           'live_owner',
@@ -1101,7 +1109,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
 
         expect(
-          session.followUps.submit(
+          yield* session.followUps.submit(
             runId,
             { text: 'resume please', origin: 'user' },
             'live_owner',
@@ -1337,7 +1345,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
 
         expect(
-          session.followUps.submit(
+          yield* session.followUps.submit(
             runId,
             { text: 'go on', origin: 'user' },
             'live_owner',

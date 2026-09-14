@@ -11,14 +11,15 @@ import {
 import {
   ToolUseFollowUpQueue,
   type FollowUpConsumerLease,
+  type FollowUpRowPort,
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { aggregateId, type RunId } from '@shared/schemas';
 import {
-  aggregateId,
-  type RunId,
-  type SessionEventDraft,
-} from '@shared/schemas';
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { generateRunId } from '@utils/core';
 
@@ -32,14 +33,46 @@ function mockTryResume(): Mock<() => Promise<boolean>> {
 }
 
 /**
- * The admission boundary over a recorded publisher: `queued(runId)` is the
- * text of every `followup.queued` row it published for the run, in order,
- * which is what the run's next consumer seeds from.
+ * The admission boundary over a recorded row port: `queued(runId)` is the
+ * text of every `followup.queued` row it wrote for the run, in order, which
+ * is what the run's next consumer seeds from; `claims` is every run it
+ * claimed before writing. `claimRefused` answers each claim the way a live
+ * foreign owner does.
  */
-function recordedFollowUps() {
-  const rows: SessionEventDraft[] = [];
-  const followUps = new ToolUseFollowUpQueue((events) => {
-    rows.push(...events);
+function recordedFollowUps(options: { claimRefused?: boolean } = {}) {
+  const rows: Parameters<FollowUpRowPort['write']>[0][] = [];
+  const claims: RunId[] = [];
+  const followUps = new ToolUseFollowUpQueue({
+    acquireClaim: (runId) =>
+      Effect.suspend(() => {
+        claims.push(runId);
+        return options.claimRefused
+          ? Effect.fail(
+              new DatabaseWriteFailed({
+                path: ':memory:',
+                cause: new DatabaseClaimRefused({
+                  ownerId: JSON.stringify(['other-host', 4321, null]),
+                  verdict: 'alive',
+                }),
+              }),
+            )
+          : Effect.succeed(Effect.void);
+      }),
+    write: (row, replayable) =>
+      Effect.sync(() => {
+        if (
+          replayable &&
+          rows.some(
+            (known) =>
+              known.aggregateId === row.aggregateId &&
+              known.followUpId === row.followUpId,
+          )
+        ) {
+          return 'pending' as const;
+        }
+        rows.push(row);
+        return 'written' as const;
+      }),
   });
   const queuedRows = (runId: RunId) =>
     rows.flatMap((row) =>
@@ -50,6 +83,7 @@ function recordedFollowUps() {
     );
   return {
     followUps,
+    claims,
     queuedRows,
     queued: (runId: RunId) => queuedRows(runId).map((row) => row.content.text),
   };
@@ -397,22 +431,24 @@ describe('submitFollowUp', () => {
 });
 
 describe('ToolUseFollowUpQueue claim exclusivity', () => {
-  it('makes recovery-vs-child claims exclusive in either order', () => {
-    const runId = generateRunId();
-    const recoveryFirst = recordedFollowUps().followUps;
-    const submission = recoveryFirst.submit(
-      runId,
-      { text: 'recover' },
-      'recoverable',
-    );
-    expect(submission).toMatchObject({ kind: 'queued' });
-    expect(submission.kind === 'queued' && submission.lease).toBeTruthy();
-    expect(recoveryFirst.claimLive(runId, 'child')).toBeUndefined();
+  it.effect('makes recovery-vs-child claims exclusive in either order', () =>
+    Effect.gen(function* () {
+      const runId = generateRunId();
+      const recoveryFirst = recordedFollowUps().followUps;
+      const submission = yield* recoveryFirst.submit(
+        runId,
+        { text: 'recover' },
+        'recoverable',
+      );
+      expect(submission).toMatchObject({ kind: 'queued' });
+      expect(submission.kind === 'queued' && submission.lease).toBeTruthy();
+      expect(recoveryFirst.claimLive(runId, 'child')).toBeUndefined();
 
-    const childFirst = recordedFollowUps().followUps;
-    expect(childFirst.claimLive(runId, 'child')).toBeDefined();
-    expect(childFirst.claimRecovery(runId)).toBeUndefined();
-  });
+      const childFirst = recordedFollowUps().followUps;
+      expect(childFirst.claimLive(runId, 'child')).toBeDefined();
+      expect(childFirst.claimRecovery(runId)).toBeUndefined();
+    }),
+  );
 });
 
 describe('ToolUseFollowUpQueue ownership', () => {
@@ -437,11 +473,15 @@ describe('ToolUseFollowUpQueue ownership', () => {
         const { followUps, queued, queuedRows } = recordedFollowUps();
         const id = generateRunId();
         const child = followUps.claimLive(id, 'child')!;
-        followUps.submit(id, { text: 'before handoff' }, 'live_owner');
+        yield* followUps.submit(id, { text: 'before handoff' }, 'live_owner');
         followUps.release(child, 'recoverable');
         const recovery = followUps.claimRecovery(id)!;
         expect(
-          followUps.submit(id, { text: 'during recovery' }, 'recoverable'),
+          yield* followUps.submit(
+            id,
+            { text: 'during recovery' },
+            'recoverable',
+          ),
         ).toEqual({ kind: 'queued' });
 
         expect(followUps.release(child, 'terminal')).toBe(false);
@@ -455,77 +495,128 @@ describe('ToolUseFollowUpQueue ownership', () => {
       }),
   );
 
-  it('queues live_owner notifications on a recoverable entry without claiming', () => {
-    const { followUps, queued } = recordedFollowUps();
-    const id = generateRunId();
-    const child = followUps.claimLive(id, 'child')!;
-    followUps.release(child, 'recoverable');
+  it.effect(
+    'queues live_owner notifications on a recoverable entry without claiming',
+    () =>
+      Effect.gen(function* () {
+        const { followUps, queued } = recordedFollowUps();
+        const id = generateRunId();
+        const child = followUps.claimLive(id, 'child')!;
+        followUps.release(child, 'recoverable');
 
-    expect(followUps.submit(id, { text: 'progress' }, 'live_owner')).toEqual({
-      kind: 'queued',
-    });
-    expect(queued(id)).toEqual(['progress']);
-    // The entry stays recoverable: a later recovery claim acquires it.
-    expect(followUps.claimRecovery(id)).toBeDefined();
-  });
+        expect(
+          yield* followUps.submit(id, { text: 'progress' }, 'live_owner'),
+        ).toEqual({ kind: 'queued' });
+        expect(queued(id)).toEqual(['progress']);
+        // The entry stays recoverable: a later recovery claim acquires it.
+        expect(followUps.claimRecovery(id)).toBeDefined();
+      }),
+  );
 
-  it('forgets a terminal run so a late live-owner submission is refused', () => {
-    const { followUps, queued } = recordedFollowUps();
-    const id = generateRunId();
-    const lease = followUps.claimLive(id, 'flow')!;
-    followUps.release(lease, 'terminal');
+  it.effect(
+    'refuses a run another process holds, writing nothing and keeping the input offerable',
+    () =>
+      Effect.gen(function* () {
+        // A cold run (no consumer here) is claimed before its row is written,
+        // as a resume claims it; a live foreign owner refuses that claim.
+        const { followUps, queued, claims } = recordedFollowUps({
+          claimRefused: true,
+        });
+        const id = generateRunId();
+        const delivery = {
+          text: 'child result',
+          origin: 'subagent_result' as const,
+          deliveryId: 'd-held',
+        };
 
-    expect(followUps.hasLiveOwner(id)).toBe(false);
-    expect(followUps.submit(id, { text: 'late' }, 'live_owner')).toEqual({
-      kind: 'refused',
-    });
-    expect(queued(id)).toEqual([]);
-  });
+        expect(yield* followUps.submit(id, delivery, 'recoverable')).toEqual({
+          kind: 'refused',
+          reason: 'owned_elsewhere',
+        });
+        expect(claims).toEqual([id]);
+        expect(queued(id)).toEqual([]);
+        // The admission rolled back: the delivery id is not remembered as
+        // admitted (a retry is tried again, not reported as a duplicate), and
+        // no recovery lease is stranded.
+        expect(yield* followUps.submit(id, delivery, 'recoverable')).toEqual({
+          kind: 'refused',
+          reason: 'owned_elsewhere',
+        });
+        expect(followUps.claimRecovery(id)).toBeDefined();
+      }),
+  );
 
-  it('starts a new child generation for an authorized retry', () => {
-    const { followUps } = recordedFollowUps();
-    const id = generateRunId();
-    const first = followUps.claimChildRun(id)!;
-    followUps.release(first, 'terminal');
+  it.effect(
+    'forgets a terminal run so a late live-owner submission is refused',
+    () =>
+      Effect.gen(function* () {
+        const { followUps, queued } = recordedFollowUps();
+        const id = generateRunId();
+        const lease = followUps.claimLive(id, 'flow')!;
+        followUps.release(lease, 'terminal');
 
-    expect(followUps.submit(id, { text: 'late' }, 'live_owner')).toEqual({
-      kind: 'refused',
-    });
+        expect(followUps.hasLiveOwner(id)).toBe(false);
+        expect(
+          yield* followUps.submit(id, { text: 'late' }, 'live_owner'),
+        ).toEqual({ kind: 'refused' });
+        expect(queued(id)).toEqual([]);
+      }),
+  );
 
-    const retry = followUps.claimChildRun(id);
-    expect(retry?.kind).toBe('child');
-    expect(
-      followUps.submit(id, { text: 'current generation' }, 'live_owner'),
-    ).toEqual({ kind: 'queued' });
-    expect(followUps.hasLiveOwner(id)).toBe(true);
-  });
+  it.effect('starts a new child generation for an authorized retry', () =>
+    Effect.gen(function* () {
+      const { followUps } = recordedFollowUps();
+      const id = generateRunId();
+      const first = followUps.claimChildRun(id)!;
+      followUps.release(first, 'terminal');
 
-  it('deletion invalidates a live generation', () => {
-    const { followUps } = recordedFollowUps();
-    const id = generateRunId();
-    const lease = followUps.claimLive(id, 'child')!;
+      expect(
+        yield* followUps.submit(id, { text: 'late' }, 'live_owner'),
+      ).toEqual({ kind: 'refused' });
 
-    expect(followUps.terminalize(id)).toBe(true);
-    expect(followUps.release(lease, 'recoverable')).toBe(false);
-    expect(followUps.submit(id, { text: 'late' }, 'live_owner')).toEqual({
-      kind: 'refused',
-    });
-  });
+      const retry = followUps.claimChildRun(id);
+      expect(retry?.kind).toBe('child');
+      expect(
+        yield* followUps.submit(
+          id,
+          { text: 'current generation' },
+          'live_owner',
+        ),
+      ).toEqual({ kind: 'queued' });
+      expect(followUps.hasLiveOwner(id)).toBe(true);
+    }),
+  );
 
-  it('refuses to rebuild entries after dispose', () => {
-    const { followUps } = recordedFollowUps();
-    const liveId = generateRunId();
-    followUps.claimLive(liveId, 'flow');
-    followUps.dispose();
+  it.effect('deletion invalidates a live generation', () =>
+    Effect.gen(function* () {
+      const { followUps } = recordedFollowUps();
+      const id = generateRunId();
+      const lease = followUps.claimLive(id, 'child')!;
 
-    expect(followUps.claimLive(liveId, 'flow')).toBeUndefined();
-    expect(followUps.claimChildRun(generateRunId())).toBeUndefined();
-    expect(followUps.claimRecovery(liveId, true)).toBeUndefined();
-    expect(followUps.submit(liveId, { text: 'late' }, 'recoverable')).toEqual({
-      kind: 'refused',
-    });
-    expect(followUps.terminalize(liveId)).toBe(false);
-  });
+      expect(followUps.terminalize(id)).toBe(true);
+      expect(followUps.release(lease, 'recoverable')).toBe(false);
+      expect(
+        yield* followUps.submit(id, { text: 'late' }, 'live_owner'),
+      ).toEqual({ kind: 'refused' });
+    }),
+  );
+
+  it.effect('refuses to rebuild entries after dispose', () =>
+    Effect.gen(function* () {
+      const { followUps } = recordedFollowUps();
+      const liveId = generateRunId();
+      followUps.claimLive(liveId, 'flow');
+      followUps.dispose();
+
+      expect(followUps.claimLive(liveId, 'flow')).toBeUndefined();
+      expect(followUps.claimChildRun(generateRunId())).toBeUndefined();
+      expect(followUps.claimRecovery(liveId, true)).toBeUndefined();
+      expect(
+        yield* followUps.submit(liveId, { text: 'late' }, 'recoverable'),
+      ).toEqual({ kind: 'refused' });
+      expect(followUps.terminalize(liveId)).toBe(false);
+    }),
+  );
 
   it.effect('never lets a maintenance wake share a batch with follow-ups', () =>
     Effect.gen(function* () {
@@ -557,91 +648,114 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
     deliveryId,
   });
 
-  it('suppresses a replayed delivery id instead of queueing it again', () => {
-    const { followUps, queued } = recordedFollowUps();
-    const id = generateRunId();
-    followUps.claimLive(id, 'flow');
-    const delivery = childResult('exec-1:turn:1:delivery');
+  it.effect(
+    'suppresses a replayed delivery id instead of queueing it again',
+    () =>
+      Effect.gen(function* () {
+        const { followUps, queued } = recordedFollowUps();
+        const id = generateRunId();
+        followUps.claimLive(id, 'flow');
+        const delivery = childResult('exec-1:turn:1:delivery');
 
-    expect(followUps.submit(id, delivery, 'live_owner')).toEqual({
-      kind: 'delivered_live',
-    });
-    for (let replay = 0; replay < 100; replay++) {
-      expect(followUps.submit(id, delivery, 'live_owner')).toEqual({
-        kind: 'duplicate',
-      });
-    }
-    expect(queued(id)).toEqual(['child result']);
-  });
+        expect(yield* followUps.submit(id, delivery, 'live_owner')).toEqual({
+          kind: 'delivered_live',
+        });
+        for (let replay = 0; replay < 100; replay++) {
+          expect(yield* followUps.submit(id, delivery, 'live_owner')).toEqual({
+            kind: 'duplicate',
+          });
+        }
+        expect(queued(id)).toEqual(['child result']);
+      }),
+  );
 
-  it('keeps distinct delivery ids distinct even with identical text', () => {
-    const { followUps, queuedRows } = recordedFollowUps();
-    const id = generateRunId();
-    followUps.claimLive(id, 'flow');
+  it.effect(
+    'keeps distinct delivery ids distinct even with identical text',
+    () =>
+      Effect.gen(function* () {
+        const { followUps, queuedRows } = recordedFollowUps();
+        const id = generateRunId();
+        followUps.claimLive(id, 'flow');
 
-    for (const deliveryId of ['d1', 'd2']) {
-      expect(
-        followUps.submit(
-          id,
-          { text: 'same text', origin: 'subagent_result', deliveryId },
-          'live_owner',
-        ),
-      ).toEqual({ kind: 'delivered_live' });
-    }
-    expect(queuedRows(id).map((row) => row.followUpId)).toEqual(['d1', 'd2']);
-  });
+        for (const deliveryId of ['d1', 'd2']) {
+          expect(
+            yield* followUps.submit(
+              id,
+              { text: 'same text', origin: 'subagent_result', deliveryId },
+              'live_owner',
+            ),
+          ).toEqual({ kind: 'delivered_live' });
+        }
+        expect(queuedRows(id).map((row) => row.followUpId)).toEqual([
+          'd1',
+          'd2',
+        ]);
+      }),
+  );
 
-  it('keeps suppressing a replayed id across a recoverable release', () => {
-    const { followUps, queued } = recordedFollowUps();
-    const id = generateRunId();
-    const child = followUps.claimLive(id, 'child')!;
-    const delivery = childResult('d1');
-    followUps.submit(id, delivery, 'live_owner');
-    followUps.release(child, 'recoverable');
+  it.effect(
+    'keeps suppressing a replayed id across a recoverable release',
+    () =>
+      Effect.gen(function* () {
+        const { followUps, queued } = recordedFollowUps();
+        const id = generateRunId();
+        const child = followUps.claimLive(id, 'child')!;
+        const delivery = childResult('d1');
+        yield* followUps.submit(id, delivery, 'live_owner');
+        followUps.release(child, 'recoverable');
 
-    expect(followUps.submit(id, delivery, 'recoverable')).toEqual({
-      kind: 'duplicate',
-    });
-    expect(queued(id)).toEqual(['child result']);
-  });
+        expect(yield* followUps.submit(id, delivery, 'recoverable')).toEqual({
+          kind: 'duplicate',
+        });
+        expect(queued(id)).toEqual(['child result']);
+      }),
+  );
 
-  it('never suppresses input that carries no delivery id', () => {
-    const { followUps, queuedRows } = recordedFollowUps();
-    const id = generateRunId();
-    followUps.claimLive(id, 'flow');
+  it.effect('never suppresses input that carries no delivery id', () =>
+    Effect.gen(function* () {
+      const { followUps, queuedRows } = recordedFollowUps();
+      const id = generateRunId();
+      followUps.claimLive(id, 'flow');
 
-    followUps.submit(id, { text: 'repeat me' }, 'live_owner');
-    followUps.submit(id, { text: 'repeat me' }, 'live_owner');
+      yield* followUps.submit(id, { text: 'repeat me' }, 'live_owner');
+      yield* followUps.submit(id, { text: 'repeat me' }, 'live_owner');
 
-    const rows = queuedRows(id);
-    expect(rows.map((row) => row.content.text)).toEqual([
-      'repeat me',
-      'repeat me',
-    ]);
-    expect(rows[0]!.followUpId).not.toBe(rows[1]!.followUpId);
-  });
+      const rows = queuedRows(id);
+      expect(rows.map((row) => row.content.text)).toEqual([
+        'repeat me',
+        'repeat me',
+      ]);
+      expect(rows[0]!.followUpId).not.toBe(rows[1]!.followUpId);
+    }),
+  );
 });
 
 describe('ToolUseFollowUpQueue terminal tombstones', () => {
-  it('evicts the oldest tombstone at the historical cap', () => {
-    const { followUps } = recordedFollowUps();
-    const runIds = Array.from(
-      { length: ToolUseFollowUpQueue.TERMINALIZED_CAP + 1 },
-      () => generateRunId(),
-    );
-    for (const runId of runIds) followUps.terminalize(runId);
+  it.effect('evicts the oldest tombstone at the historical cap', () =>
+    Effect.gen(function* () {
+      const { followUps } = recordedFollowUps();
+      const runIds = Array.from(
+        { length: ToolUseFollowUpQueue.TERMINALIZED_CAP + 1 },
+        () => generateRunId(),
+      );
+      for (const runId of runIds) followUps.terminalize(runId);
 
-    expect(
-      followUps.submit(runIds[0]!, { text: 'after eviction' }, 'recoverable'),
-    ).toMatchObject({ kind: 'queued' });
-    expect(
-      followUps.submit(
-        runIds[1]!,
-        { text: 'still terminalized' },
-        'recoverable',
-      ),
-    ).toEqual({ kind: 'refused' });
-  });
+      expect(
+        yield* followUps.submit(
+          runIds[0]!,
+          { text: 'after eviction' },
+          'recoverable',
+        ),
+      ).toMatchObject({ kind: 'queued' });
+      expect(
+        yield* followUps.submit(
+          runIds[1]!,
+          { text: 'still terminalized' },
+          'recoverable',
+        ),
+      ).toEqual({ kind: 'refused' });
+    }),
+  );
 });
 
 describe('presentFollowUpResult', () => {

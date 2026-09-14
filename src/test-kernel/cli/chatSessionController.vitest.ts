@@ -314,7 +314,9 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       })),
       useRecovery: vi.fn((recovery: FollowUpRecoveryLease) => recovery),
       release: vi.fn(),
-      submit: mocks.followUpSubmit,
+      submit: mocks.followUpSubmit.mockReturnValue(
+        Effect.succeed({ kind: 'queued' }),
+      ),
     },
     approvals: { registerRunParent: vi.fn() },
     runs,

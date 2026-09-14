@@ -92,8 +92,11 @@ export const followUpsLayer: Layer.Layer<
     const ledger = yield* RunLedger;
     const { runId, session, logger } = run;
     const manager = session.followUps;
+    // The queue exists before the lease is claimed: nothing yields between
+    // the claim and the service that releases it.
+    const created = yield* RunInput.make;
     const lease = manager.claimLive(runId, 'flow');
-    const input = manager.attachInput(runId, yield* RunInput.make, lease);
+    const input = manager.attachInput(runId, created, lease);
     if (!input) {
       return yield* Effect.fail(
         new Error(
