@@ -128,7 +128,11 @@ function — no cursor, no graph, no intermediate writer service.
 Single writer holds for the rows that actually fold run state: the durable rows
 `foldRunState` mutates state from (`flow.snapshot`, `model.message`,
 `model.compaction`, `tool.intent`, `tool.result`, `flow.step`, loop-owned
-`request.opened`) have one writer, `RunLedger.appendBatch`. **`stream.end` is
+`request.opened`) have one writer, `RunLedger.appendBatch`
+(`src/agent/runtime/RunLedger.ts:361` — the 455-LoC runtime implementation,
+distinct from the 139-LoC session contract `src/shared/session/runLedger.ts`
+cited in §0/§2; the doc uses both, so the capitalization disambiguates them).
+**`stream.end` is
 not one of them** — it is a trace/display-plane event emitted through
 `TraceEmitter` (`src/agent/trace/TraceEmitter.ts:379`) and explicitly folds to
 no state mutation (`runStateFold.ts:961` returns `null`, "the ledger row beside
@@ -136,9 +140,9 @@ it is the fact"); an earlier draft mislisted it here. Likewise the two
 `session.publish` sites in `loop/` (`toolUse.ts` `run.workspaceFiles`,
 `run.record`) are display-plane events, not run-state rows. Two documented,
 intentional second-plane exceptions exist for the run-state rows and are
-not migration accidents: `RunLedger.acquire` publishing `request.decided`
-cancellation rows for a dead owner's unbound requests (in-service,
-file-header-documented), and the host request plane writing
+not migration accidents: `RunLedger.acquire` (`RunLedger.ts:272`) publishing
+`request.decided` cancellation rows (`:300`) for a dead owner's unbound requests
+(in-service, file-header-documented), and the host request plane writing
 `request.opened`/`request.decided` through `SessionHandle.openRequest`/`commit`
 ("the one door for a request outside the loop's own batches"). No silent
 degradation found in any of the four areas (no empty `catch {}`; every `??` is a
