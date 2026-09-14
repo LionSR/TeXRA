@@ -32,7 +32,6 @@ import {
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -157,18 +156,11 @@ function visibleDelegationAgentsBlock(
   return `Available agents:\n${formatAgentList(agents)}`;
 }
 
-function activeDelegationScope(): AgentDelegationScope | undefined {
-  const context = tryUseRunContext();
-  return context?.kind === 'launch'
-    ? (context.runScope.delegationAgentScope ?? undefined)
-    : undefined;
-}
-
 /**
  * The two annotation facts that depend on where the reader is standing: the
- * run's pinned delegation scope (ambient, from the run context) and the
- * worktree opt-in (read from the calling session's workspace state). Resolved
- * as data so the annotation itself is pure over them.
+ * run's pinned delegation scope and the worktree opt-in (read from the calling
+ * session's workspace state). Resolved as data so the annotation itself is
+ * pure over them.
  */
 export interface DelegationAnnotationState {
   /** The run's pinned delegation scope, or undefined for the durable roster. */
@@ -178,32 +170,29 @@ export interface DelegationAnnotationState {
 }
 
 /**
- * Read those two facts here and now. The caller resolves them inside the run's
- * session frame and hands the result to {@link annotateDelegationAvailability}:
- * annotation is reached from an Effect program, and a fiber runs outside the
- * frame its caller entered, so reading them from the annotation itself would
- * lose the pinned scope and resolve the worktree switch against the process's
- * roots rather than the session's.
+ * Read the annotation's run scope and workspace setting here and now. The
+ * caller supplies the run scope explicitly and resolves the workspace setting
+ * inside its session frame before handing both facts to
+ * {@link annotateDelegationAvailability}.
  */
-export function readDelegationAnnotationState(): DelegationAnnotationState {
+export function readDelegationAnnotationState(
+  delegationScope?: AgentDelegationScope,
+): DelegationAnnotationState {
   return {
-    delegationScope: activeDelegationScope(),
+    delegationScope,
     worktreeEnabled: isWorktreeSupportEnabled(),
   };
 }
 
 /**
- * Resolve delegation targets from an explicitly captured scope, or — when none
- * is supplied — the active run scope, falling back to the durable roster.
+ * Resolve delegation targets from an explicitly captured scope, falling back to
+ * the durable roster when no run scope applies.
  */
 export function getDelegationAgents(
   category: AgentCategory,
   scope?: AgentDelegationScope,
 ): AgentEntry[] {
-  return resolveDelegationScopeAgents(
-    scope ?? activeDelegationScope(),
-    category,
-  );
+  return resolveDelegationScopeAgents(scope, category);
 }
 
 /** Resolve one delegation target out of that same candidate set. */

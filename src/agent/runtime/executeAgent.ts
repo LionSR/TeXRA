@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { Cause, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
 
@@ -39,8 +38,8 @@ import {
   buildAgentLaunchContext,
   prepareAgentDefinition,
   type PreparedAgentDefinition,
-  withLaunchRunContext,
   type AgentLaunchContext,
+  withLaunchRunContext,
 } from './AgentLaunchContext';
 import {
   runFlowWithLifecycle,
@@ -566,123 +565,111 @@ export function executeAgent(
         stopAfterCycle: options.stopAfterCycle,
       },
     });
-    return yield* Effect.suspend(() =>
+    const runInScope = <A>(operation: () => A): A =>
       withLaunchRunContext(
         ctx,
         { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
-        () => {
-          const runInScope = AsyncLocalStorage.bind(<A>(operation: () => A) =>
-            operation(),
-          );
-          return Effect.gen(function* () {
-            const { setting, config } = ctx;
-            const { runId, session: runSession } = ctx.runScope;
+        operation,
+      );
+    return yield* Effect.gen(function* () {
+      const { setting, config } = ctx;
+      const { runId, session: runSession } = ctx.runScope;
 
-            // Start description generation concurrently with the run, but join it
-            // before the owner can release its run lease. This prevents the
-            // metadata write from recreating a run deleted by another host.
-            // The run's stop interrupts it, as it interrupts the run.
-            const sessionDescription = yield* Effect.forkChild(
-              Effect.raceFirst(
-                generateSessionDescription(
+      // Start description generation concurrently with the run, but join it
+      // before the owner can release its run lease. This prevents the
+      // metadata write from recreating a run deleted by another host.
+      // The run's stop interrupts it, as it interrupts the run.
+      const sessionDescription = yield* Effect.forkChild(
+        Effect.raceFirst(
+          generateSessionDescription(
+            runId,
+            config,
+            ctx.resolvedAgentDescription,
+            runSession,
+            ctx.stores,
+          ),
+          Deferred.await(ctx.stopped),
+        ),
+      );
+      try {
+        const result = yield* runFlowWithLifecycle(
+          ctx,
+          (handle) =>
+            Effect.gen(function* () {
+              // This run's lineage, derived once, from the live handle
+              // the registry admitted: for a resume that is the edge
+              // carried over from the provisional registration, minus a
+              // detach committed while the launch prepared, and for a
+              // fresh launch it is the caller's own parent.
+              const parentRunId = handle.deliveryTarget;
+              // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
+              yield* Effect.tryPromise({
+                try: () => runInScope(() => ensureRunDir(runId)),
+                catch: ensureError,
+              });
+              logger.info(`Starting task run (runId: ${runId})`);
+              logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
+              logger.debug('Task run details', {
+                data: {
                   runId,
-                  config,
-                  ctx.resolvedAgentDescription,
-                  runSession,
-                  ctx.stores,
-                ),
-                Deferred.await(ctx.stopped),
-              ),
-            );
-            try {
-              const result = yield* runFlowWithLifecycle(
-                ctx,
-                (handle) =>
-                  Effect.gen(function* () {
-                    // This run's lineage, derived once, from the live handle
-                    // the registry admitted: for a resume that is the edge
-                    // carried over from the provisional registration, minus a
-                    // detach committed while the launch prepared, and for a
-                    // fresh launch it is the caller's own parent.
-                    const parentRunId = handle.deliveryTarget;
-                    // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
-                    yield* Effect.tryPromise({
-                      try: () => runInScope(() => ensureRunDir(runId)),
-                      catch: ensureError,
-                    });
-                    logger.info(`Starting task run (runId: ${runId})`);
-                    logger.info(
-                      `Input file: ${config.inputFiles[0] ?? '(none)'}`,
-                    );
-                    logger.debug('Task run details', {
-                      data: {
-                        runId,
-                        agent: config.agent,
-                        model: config.model,
-                      },
-                    });
-                    logger.debug(
-                      `Output files: ${config.outputFiles?.length ?? 0}`,
-                    );
-                    // Subagents don't need to force-open the progress board or show notifications;
-                    // the orchestrator's run is already visible.
-                    if (parentRunId === undefined) {
-                      runSession.interactions.emit(
-                        'requestEnsureProgressView',
-                        {
-                          fallbackNotification:
-                            buildFallbackNotification(config),
-                        },
-                        { replayWhenAttached: true },
-                      );
-                    }
-                    logger.info('Executing agent', {
-                      data: { agent: config.agent, model: config.model },
-                    });
-
-                    if (setting.agentCategory === AgentCategory.ToolUse) {
-                      return yield* launchToolUseRun(
-                        ctx,
-                        handle,
-                        { ...options, parentRunId, setting, toolInjections },
-                        { kind: 'fresh', onIdle: options.onIdle },
-                        runInScope,
-                      );
-                    }
-                    return yield* launchReflectionRun(
-                      ctx,
-                      { ...options, parentRunId, setting },
-                      runInScope,
-                    );
-                  }),
-                // The edge the lifecycle's handle is born with, read as late
-                // as that handle is built. A detach landing even after this
-                // read still stands: `RunRegistry.track` carries the
-                // registration's sever onto the replacement.
-                buildLifecycleOptions(
-                  options,
-                  resumedHandle
-                    ? resumedHandle.deliveryTarget
-                    : options.parentRunId,
-                ),
-              );
-              // The overload the caller chose is what admits WAITING, so this
-              // assertion reads the caller's own parent, not the lineage: no
-              // resume caller names one, and reading a parent off the ledger
-              // must not retype a result the caller was promised is terminal.
-              if (isWaitingFlowResult(result) && !options.parentRunId) {
-                throw new Error(
-                  'executeAgent received a non-terminal WAITING result for a non-subagent run.',
+                  agent: config.agent,
+                  model: config.model,
+                },
+              });
+              logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
+              // Subagents don't need to force-open the progress board or show notifications;
+              // the orchestrator's run is already visible.
+              if (parentRunId === undefined) {
+                runSession.interactions.emit(
+                  'requestEnsureProgressView',
+                  {
+                    fallbackNotification: buildFallbackNotification(config),
+                  },
+                  { replayWhenAttached: true },
                 );
               }
-              return result;
-            } finally {
-              yield* Fiber.join(sessionDescription);
-            }
-          });
-        },
-      ),
-    );
+              logger.info('Executing agent', {
+                data: { agent: config.agent, model: config.model },
+              });
+
+              if (setting.agentCategory === AgentCategory.ToolUse) {
+                return yield* launchToolUseRun(
+                  ctx,
+                  handle,
+                  { ...options, parentRunId, setting, toolInjections },
+                  { kind: 'fresh', onIdle: options.onIdle },
+                  runInScope,
+                );
+              }
+              return yield* launchReflectionRun(
+                ctx,
+                { ...options, parentRunId, setting },
+                runInScope,
+              );
+            }),
+          // The edge the lifecycle's handle is born with, read as late
+          // as that handle is built. A detach landing even after this
+          // read still stands: `RunRegistry.track` carries the
+          // registration's sever onto the replacement.
+          buildLifecycleOptions(
+            options,
+            resumedHandle ? resumedHandle.deliveryTarget : options.parentRunId,
+          ),
+        );
+        // The overload the caller chose is what admits WAITING, so this
+        // assertion reads the caller's own parent, not the lineage: no
+        // resume caller names one, and reading a parent off the ledger
+        // must not retype a result the caller was promised is terminal.
+        if (isWaitingFlowResult(result) && !options.parentRunId) {
+          throw new Error(
+            'executeAgent received a non-terminal WAITING result for a non-subagent run.',
+          );
+        }
+        return result;
+      } finally {
+        yield* Fiber.join(sessionDescription);
+      }
+    });
   }).pipe(
     Effect.uninterruptible,
     Effect.provideService(Runs, options.session.runs),
@@ -755,47 +742,41 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     }
     const { ctx, parentRunId } = setup.value;
     const { setting } = ctx;
+    const runInScope = <A>(operation: () => A): A =>
+      withLaunchRunContext(
+        ctx,
+        { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
+        operation,
+      );
     const result = yield* Effect.exit(
-      Effect.suspend(() =>
-        withLaunchRunContext(
-          ctx,
-          { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
-          () => {
-            const runInScope = AsyncLocalStorage.bind(<A>(operation: () => A) =>
-              operation(),
-            );
-            return runFlowWithLifecycle(
-              ctx,
-              (handle) =>
-                // Inside the lifecycle so the rejection ends the started stream
-                // with its FAILED result like any other run failure.
-                setting.agentCategory !== AgentCategory.ToolUse
-                  ? // Keep this historical diagnostic byte-for-byte for external monitors.
-                    Effect.fail(
-                      new AgentError(
-                        'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-                      ),
-                    )
-                  : launchToolUseRun(
-                      ctx,
-                      handle,
-                      { ...options, setting, parentRunId, toolInjections },
-                      {
-                        kind: 'resume',
-                        resume,
-                        drainedFollowUps: options.drainedFollowUps,
-                        takePendingFollowUps: options.takePendingFollowUps,
-                        isCancellationRequested:
-                          options.isCancellationRequested,
-                        onCancellationAtFlowAttachment:
-                          options.onCancellationAtFlowAttachment,
-                      },
-                      runInScope,
-                    ),
-              buildLifecycleOptions(options, parentRunId),
-            );
-          },
-        ),
+      runFlowWithLifecycle(
+        ctx,
+        (handle) =>
+          // Inside the lifecycle so the rejection ends the started stream
+          // with its FAILED result like any other run failure.
+          setting.agentCategory !== AgentCategory.ToolUse
+            ? // Keep this historical diagnostic byte-for-byte for external monitors.
+              Effect.fail(
+                new AgentError(
+                  'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+                ),
+              )
+            : launchToolUseRun(
+                ctx,
+                handle,
+                { ...options, setting, parentRunId, toolInjections },
+                {
+                  kind: 'resume',
+                  resume,
+                  drainedFollowUps: options.drainedFollowUps,
+                  takePendingFollowUps: options.takePendingFollowUps,
+                  isCancellationRequested: options.isCancellationRequested,
+                  onCancellationAtFlowAttachment:
+                    options.onCancellationAtFlowAttachment,
+                },
+                runInScope,
+              ),
+        buildLifecycleOptions(options, parentRunId),
       ),
     );
     if (Exit.isFailure(result)) {
