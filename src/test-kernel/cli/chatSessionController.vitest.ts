@@ -4,10 +4,17 @@
 // registry, event hub, run status, host interactions) are the real
 // runtime objects wherever a test asserts through them.
 
-import { Cause, Effect, SubscriptionRef } from 'effect';
-import PQueue from 'p-queue';
+import { Cause, Effect, Exit, Scope, SubscriptionRef } from 'effect';
 import pDefer from 'p-defer';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
@@ -131,6 +138,7 @@ import { readCliRunOutcomeState } from '@cli/runtime/terminalStatus';
 import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
+import { makeFollowUpDeliveryQueue } from '@cli/chat/followUpDeliveryQueue';
 import {
   patchSessionMeta,
   rootRunPending,
@@ -250,12 +258,14 @@ type ExecuteAgentMockOptions = {
 function makeInit(
   overrides: Partial<ChatSessionControllerInit> = {},
 ): ChatSessionControllerInit {
+  const scope = Scope.makeUnsafe();
+  onTestFinished(() => Effect.runPromise(Scope.close(scope, Exit.void)));
   return {
     session: makeSession(),
     runtimeSession: mocks.defaultSession(),
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
-    followUpQueue: new PQueue({ concurrency: 1 }),
+    followUpQueue: Effect.runSync(makeFollowUpDeliveryQueue(scope)),
     initialAgent: 'demo-agent',
     initialModel: 'demo-model',
     initialModelSource: 'builtin-default',

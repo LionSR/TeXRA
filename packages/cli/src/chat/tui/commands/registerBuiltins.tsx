@@ -769,7 +769,7 @@ export function registerBuiltinSlashCommands(options: {
       // agrees with Ctrl-C by construction instead of pre-empting it.
       //
       // `stopRequested` stays and is the sole writer on this path. The
-      // teardown awaits `followUpQueue.onIdle()` BEFORE setting the flag
+      // teardown awaits the follow-up queue's `idle` BEFORE setting the flag
       // itself, and the queued task polls this flag — dropping it would hang
       // `/exit` forever with a follow-up queued and no stream id yet.
       context.session.stopRequested = true;

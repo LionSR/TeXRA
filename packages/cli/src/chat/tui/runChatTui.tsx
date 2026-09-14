@@ -7,7 +7,6 @@
 
 import { Cause, Effect, Exit } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
-import PQueue from 'p-queue';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { detachSubagentsOnStop, type AgentConfig } from '@agent/runtime';
@@ -57,6 +56,7 @@ import {
   createChatSessionController,
   type ChatSessionController,
 } from '../chatSessionController';
+import { makeFollowUpDeliveryQueue } from '../followUpDeliveryQueue';
 import { App } from './App';
 import {
   applyCliModelSelection,
@@ -368,7 +368,11 @@ export async function runChat(
   );
   syncTranscriptSubscriptions();
 
-  const followUpQueue = new PQueue({ concurrency: 1 });
+  // The drain lives as long as the process runtime; the graceful exit waits
+  // on `idle` before that runtime is disposed.
+  const followUpQueue = await runtime.runPromise(
+    makeFollowUpDeliveryQueue(runtime.scope),
+  );
   const rootRunStatus = (): RunPhase | undefined =>
     runPhaseOf(runViewOf(currentView(), session.runId));
   const hasActiveToolUseFlow = (): boolean =>
@@ -585,7 +589,7 @@ export async function runChat(
     cwd: context.cwd,
     disposables,
     disposeTerminalRestoreOnExit,
-    followUpQueue,
+    awaitFollowUpsIdle: () => runtime.runPromise(followUpQueue.idle),
     getApprovalPolicy,
     flushArtifacts: () =>
       runtime.runPromise(runtimeSession.settlePublications()),

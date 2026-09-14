@@ -3,7 +3,6 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import PQueue from 'p-queue';
 
 // Local imports
 import { loadAgents } from '@agent/index';
@@ -25,6 +24,7 @@ import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { isFileNotFoundError } from '@common/errors';
+import { hostPort } from '@common/hostPort';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import {
   disposeProcessRuntime,
@@ -117,6 +117,7 @@ import {
   initProcessSettingHost,
   readPlatformSetting,
 } from '@utils/config/platformSettings';
+import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { StorageFS } from '@utils/files/storageFS';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -768,15 +769,17 @@ async function activateExtension(context: vscode.ExtensionContext) {
   );
   apiKeyStatusBarItem.name = 'TeXRA Setup';
   context.subscriptions.push(apiKeyStatusBarItem);
-  const apiKeyStatusRefreshQueue = new PQueue({ concurrency: 1 });
-  // Serial run ensures the last refresh sees the newest credential
-  // state and is the last one to update the UI. `add` widens to
-  // `T | void` to cover abort via signal/timeout; we pass neither, so the
-  // task always runs and resolves with `void`.
+  // One refresh at a time, in request order, so the last refresh sees the
+  // newest credential state and is the last one to update the UI. The
+  // refresh starts inside the lane, so no started refresh waits there.
+  const apiKeyStatusRefreshLanes = new Map<'refresh', PerKeyLane>();
   const queueApiKeyStatusRefresh = (): Promise<void> =>
-    apiKeyStatusRefreshQueue.add(() =>
-      refreshApiKeyStatus(secrets, runtime),
-    ) as Promise<void>;
+    runtime.runPromise(
+      withPerKeyLane(
+        apiKeyStatusRefreshLanes,
+        'refresh',
+      )(hostPort(() => refreshApiKeyStatus(secrets, runtime))),
+    );
   const safeRefreshApiKeyStatus = () =>
     queueApiKeyStatusRefresh().catch((err) =>
       log.error(`API key status refresh failed: ${toErrorMessage(err)}`),

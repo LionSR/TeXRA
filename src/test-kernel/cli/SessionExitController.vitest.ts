@@ -1,4 +1,3 @@
-import PQueue from 'p-queue';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
@@ -85,7 +84,7 @@ describe('chat TUI session exit controller', () => {
       cwd: '/tmp/project',
       disposables: new DisposableStore(),
       disposeTerminalRestoreOnExit: vi.fn(),
-      followUpQueue: new PQueue(),
+      awaitFollowUpsIdle: async () => undefined,
       getApprovalPolicy: () => 'ask',
       flushArtifacts: vi.fn().mockRejectedValue(new Error('disk full')),
       repaintAfterTerminalResume: vi.fn(),
