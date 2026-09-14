@@ -151,6 +151,26 @@ describe('CLI tool display lines', () => {
     expect(editLines).not.toContain('Full output:');
     expect(editLines).not.toContain('The diff applied cleanly.');
 
+    // A failed edit painted no diff, so its output is not rendered by
+    // sections: the card shows it, once, in the output block.
+    const failedEdit = toolUse(
+      'Edit',
+      {
+        path: 'paper.tex',
+        old_string: 'We use a CNN.\n',
+        new_string: 'We use a transformer.\n',
+      },
+      { outputText: 'old_string not found in paper.tex', status: 'failed' },
+    );
+    const failedLines = toolUseDisplayLines(failedEdit, {
+      showFullOutput: true,
+    });
+    expect(
+      failedLines.filter((line) =>
+        line.includes('old_string not found in paper.tex'),
+      ),
+    ).toHaveLength(1);
+
     // `file-link`: the card shows only a link, so the full transcript is
     // where the content appears.
     const read = toolUse(
