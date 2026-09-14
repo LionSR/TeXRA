@@ -51,6 +51,8 @@ type SectionContext = {
   readonly filePath: string;
   readonly parsedOutput: unknown;
   readonly outputText: string;
+  /** The call's terminal status is `failed`. */
+  readonly failed: boolean;
 };
 
 function asString(value: unknown): string | undefined {
@@ -676,10 +678,13 @@ export function dispatchSections(ctx: SectionContext): {
       sections,
       // `delegate_multi_agents` is deliberately absent: its sections describe
       // the call (agent, script, args, files) and carry no output, so calling
-      // them 'rendered-by-sections' hid the script's real result.
+      // them 'rendered-by-sections' hid the script's real result. A diff
+      // shows what an edit changed, so it stands for the output only when the
+      // edit applied: a failed edit's output is its failure, which no diff
+      // shows, and a host may paint no diff for it at all.
       carriesOutput:
         isMcpToolName(ctx.toolName) ||
-        sections.some((section) => section.kind === 'diff'),
+        (!ctx.failed && sections.some((section) => section.kind === 'diff')),
       ...(fileLinkKind ? { fileLinkKind } : {}),
     };
   }

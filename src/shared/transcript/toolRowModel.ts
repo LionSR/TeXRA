@@ -295,6 +295,7 @@ export function toolRowModel(
     filePath: inputFilePath(normalized.input),
     parsedOutput: ctx.parsedOutput,
     outputText: normalized.outputText,
+    failed: normalized.status === TOOL_CALL_STATUS.FAILED,
   });
 
   const suppression = outputSuppression(

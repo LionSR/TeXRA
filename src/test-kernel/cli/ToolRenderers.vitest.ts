@@ -135,6 +135,84 @@ describe('CLI tool display lines', () => {
     `);
   });
 
+  it('full transcript prints the output only when the card withholds it', () => {
+    // An MCP result section paints the whole output: printing it again under
+    // "Full output:" would repeat it (#11968).
+    const mcp = toolUse(
+      'mcp:fs/read',
+      { path: '/x' },
+      { outputText: 'line1\nline2\nline3' },
+    );
+    expect(mcp.model.outputSuppression).toBe('rendered-by-sections');
+    const mcpLines = toolUseDisplayLines(mcp, { showFullOutput: true });
+    expect(mcpLines).not.toContain('Full output:');
+
+    // An edit's diff is the proposed change; its output is the confirmation
+    // plus the user's adjustments, which only the full output shows.
+    const edit = toolUse(
+      'Edit',
+      {
+        path: 'paper.tex',
+        old_string: 'We use a CNN.\n',
+        new_string: 'We use a transformer.\n',
+      },
+      {
+        outputText:
+          'Edited paper.tex\n\nUser adjustments to paper.tex:\n+We use a ViT.',
+      },
+    );
+    expect(edit.model.outputSuppression).toBe('rendered-by-sections');
+    const editLines = toolUseDisplayLines(edit, { showFullOutput: true });
+    expect(editLines).toContain('Full output:');
+    expect(editLines).toContain('+We use a ViT.');
+
+    // A header painted cut to its width is not the whole output.
+    const summary = `Reported issue #1: ${'long title '.repeat(20)}`;
+    const report = toolUse(
+      'report_review_issue',
+      {},
+      { headerSummary: summary, outputText: summary },
+    );
+    expect(report.model.outputSuppression).toBe('duplicate-of-header');
+    expect(
+      toolUseDisplayLines(report, { showFullOutput: true, width: 80 }),
+    ).toContain('Full output:');
+
+    // A failed edit painted no diff, so its output is not rendered by
+    // sections: the card shows it, once, in the output block.
+    const failedEdit = toolUse(
+      'Edit',
+      {
+        path: 'paper.tex',
+        old_string: 'We use a CNN.\n',
+        new_string: 'We use a transformer.\n',
+      },
+      { outputText: 'old_string not found in paper.tex', status: 'failed' },
+    );
+    const failedLines = toolUseDisplayLines(failedEdit, {
+      showFullOutput: true,
+    });
+    expect(
+      failedLines.filter((line) =>
+        line.includes('old_string not found in paper.tex'),
+      ),
+    ).toHaveLength(1);
+
+    // `file-link`: the card shows only a link, so the full transcript is
+    // where the content appears.
+    const read = toolUse(
+      'read_file',
+      { path: 'paper.tex' },
+      { outputText: 'Large file contents\nwith many lines' },
+    );
+    expect(toolUseDisplayLines(read, { showFullOutput: true })).toEqual([
+      '● read_file (paper.tex)',
+      'Full output:',
+      'Large file contents',
+      'with many lines',
+    ]);
+  });
+
   it('sizes live header previews to the terminal width', () => {
     const command = 'x'.repeat(300);
     const header = (width: number | undefined, toolName = 'bash'): string =>
