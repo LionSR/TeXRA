@@ -4,7 +4,6 @@ import * as path from 'node:path';
 // Third-party imports
 import { Data, Effect, FileSystem } from 'effect';
 import { imageSize } from 'image-size';
-import { fromPath } from 'pdf2pic';
 
 // Local imports - log
 import { createLog } from '@logger/logUtils';
@@ -214,32 +213,41 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
   absolutePath: string,
   pageNum: number,
   tempDir: string,
+  tool: 'magick' | 'gm',
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const convert = fromPath(absolutePath, {
-    density: PDF_RASTER_DENSITY,
-    width: PDF_RASTER_MAX_SIZE[0],
-    height: PDF_RASTER_MAX_SIZE[1],
-    preserveAspectRatio: true,
-    format: 'png',
-    saveFilename: `page-${pageNum}`,
-    savePath: tempDir,
+  const outputPath = path.join(tempDir, `page-${pageNum}.png`);
+  // Density is an input option; `^` fills 1024×1024 while keeping aspect.
+  const convertArgs = [
+    tool,
+    ...(tool === 'gm' ? ['convert'] : []),
+    '-density',
+    `${PDF_RASTER_DENSITY}x${PDF_RASTER_DENSITY}`,
+    `${absolutePath}[${pageNum - 1}]`,
+    '-units',
+    'PixelsPerInch',
+    '-resize',
+    `${PDF_RASTER_MAX_SIZE[0]}x${PDF_RASTER_MAX_SIZE[1]}^`,
+    outputPath,
+  ];
+  const result = yield* Effect.tryPromise({
+    try: (signal) => executeCommand(convertArgs, { channel: CHANNEL, signal }),
+    catch: conversionFailure,
   });
-  const result = yield* conversionStep(() => convert(pageNum));
-
-  if (!result?.path) {
+  if (!result.success) {
     return yield* new MediaConversionFailed({
-      message: 'PDF conversion failed: No output path returned',
+      message:
+        result.stderr || 'PDF conversion failed: No output path returned',
     });
   }
 
-  if (!(yield* fs.exists(result.path))) {
+  if (!(yield* fs.exists(outputPath))) {
     return yield* new MediaConversionFailed({
       message: 'Failed to convert PDF page to PNG: Output file not found',
     });
   }
 
-  const imageBytes = yield* fs.readFile(result.path);
+  const imageBytes = yield* fs.readFile(outputPath);
   log.debug(`Successfully converted page ${pageNum} of ${absolutePath} to PNG`);
   return toBase64(imageBytes);
 });
@@ -265,7 +273,8 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(
       return null;
     }
 
-    if (!(yield* conversionStep(detectImageTool))) {
+    const tool = yield* conversionStep(detectImageTool);
+    if (!tool) {
       return yield* new MediaConversionFailed({
         message: 'GraphicsMagick/ImageMagick is not installed.',
       });
@@ -288,7 +297,7 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(
           const base64Images: string[] = [];
           for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
             base64Images.push(
-              yield* singlePagePdf2Png(pdfPath, pageNum, tempDir),
+              yield* singlePagePdf2Png(pdfPath, pageNum, tempDir, tool),
             );
           }
           log.debug(
