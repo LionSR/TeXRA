@@ -236,6 +236,7 @@ describe('runResumeCommand', () => {
       }),
     );
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
+      expect.anything(),
       'correct',
       'workflowResume',
     );

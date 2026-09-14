@@ -7,6 +7,7 @@ import {
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   RUN_PHASE,
@@ -181,6 +182,7 @@ function projectionOver(session: SessionHandle) {
   const writeRecord = recordWriter();
   let roster: RosterListener | undefined;
   const detach = attachCliSessionProgressProjection(
+    effectRuntime(),
     {
       events: session.events,
       now: () => session.now(),

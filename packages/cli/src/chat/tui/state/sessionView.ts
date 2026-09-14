@@ -10,7 +10,7 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 import { Cause, Stream, SubscriptionRef } from 'effect';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   isPlainAgentIdentity,
@@ -40,7 +40,9 @@ const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
 /**
  * Bridge a session's view level into the TUI's signal; returns the unbind.
  * The only meeting point between Effect and the components (PRD 7.5): the
- * view's change run bridged onto the process runtime by `toSignal`.
+ * view's change run bridged onto `runtime` by `toSignal` — the process
+ * runtime the chat entry point holds, since the bridge lives as long as the
+ * session it binds.
  *
  * A session binds `changes` to `SessionHandle.viewChanges`, the level stream
  * that fails when the fold dies: the ref's own changes never fail, so a TUI
@@ -50,6 +52,7 @@ const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
  * ref needs neither.
  */
 export function bindSessionView(
+  runtime: ProcessRuntime,
   view: SubscriptionRef.SubscriptionRef<SessionView>,
   options: {
     readonly changes?: Stream.Stream<SessionView>;
@@ -66,7 +69,7 @@ export function bindSessionView(
     }),
   );
   const bridgedBound = toSignal(
-    effectRuntime(),
+    runtime,
     changes,
     SubscriptionRef.getUnsafe(view),
   );
@@ -83,7 +86,7 @@ export function sessionView(): Signal.State<SessionView> {
   const current = bound.get();
   if (!current) {
     throw new Error(
-      'The session view is not bound: call bindSessionView(session.view) before rendering the TUI.',
+      'The session view is not bound: call bindSessionView(runtime, session.view) before rendering the TUI.',
     );
   }
   return current;

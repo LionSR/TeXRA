@@ -4,6 +4,8 @@
 // `useSignal(currentApproval)` subscription — avoids a second store read
 // every render.
 
+import type { ProcessRuntime } from '@platform/processRuntime';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { assertNever } from '@utils/core';
 import { AgentProposal } from './AgentProposal';
 import { BashApproval } from './BashApproval';
@@ -17,6 +19,9 @@ export interface ApprovalModalProps {
   readonly availableRows?: number;
   readonly goalAutoApproveAll: boolean;
   readonly pending: PendingApproval | undefined;
+  /** The process runtime the answered decision is issued on, from the App
+   *  that already holds it. */
+  readonly runtime: ProcessRuntime;
 }
 
 export function ApprovalModal(
@@ -25,13 +30,15 @@ export function ApprovalModal(
   if (!props.pending) return null;
   const { payload, decide } = props.pending;
   const availableRows = props.availableRows;
+  const onDecide = (decision: SurfaceDecision): void =>
+    decide(props.runtime, decision);
   switch (payload.kind) {
     case 'bash':
       return (
         <BashApproval
           availableRows={availableRows}
           payload={payload.data}
-          onDecide={decide}
+          onDecide={onDecide}
         />
       );
     case 'toolEdit':
@@ -39,7 +46,7 @@ export function ApprovalModal(
         <EditApproval
           availableRows={availableRows}
           payload={payload}
-          onDecide={decide}
+          onDecide={onDecide}
         />
       );
     case 'planApproval':
@@ -48,7 +55,7 @@ export function ApprovalModal(
           autoApproveAll={props.goalAutoApproveAll}
           availableRows={availableRows}
           payload={payload.data}
-          onDecide={decide}
+          onDecide={onDecide}
         />
       );
     case 'proposal':
@@ -56,7 +63,7 @@ export function ApprovalModal(
         <AgentProposal
           availableRows={availableRows}
           payload={payload.data}
-          onDecide={decide}
+          onDecide={onDecide}
         />
       );
     case 'retry':
@@ -64,7 +71,7 @@ export function ApprovalModal(
         <RetryRequest
           availableRows={availableRows}
           payload={payload}
-          onDecide={decide}
+          onDecide={onDecide}
         />
       );
     case 'userQuestion':
@@ -72,7 +79,7 @@ export function ApprovalModal(
         <UserQuestion
           availableRows={availableRows}
           payload={payload.data}
-          onDecide={decide}
+          onDecide={onDecide}
         />
       );
   }

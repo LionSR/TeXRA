@@ -18,6 +18,7 @@ import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   RUN_PHASE,
@@ -366,14 +367,18 @@ function plainRenderer(
   init: Partial<RunProgressRendererInit> = {},
 ): TestRunProgressRenderer {
   return attached(
-    createRunProgressRenderer(context({ stderrColorEnabled: false }), {
-      colorEnabled: false,
-      write: output.write,
-      nowMs: () => 0,
-      // Every view change paints: the cases pin the line, not the throttle.
-      minIntervalMs: 0,
-      ...init,
-    })!,
+    createRunProgressRenderer(
+      effectRuntime(),
+      context({ stderrColorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: output.write,
+        nowMs: () => 0,
+        // Every view change paints: the cases pin the line, not the throttle.
+        minIntervalMs: 0,
+        ...init,
+      },
+    )!,
   );
 }
 
@@ -382,7 +387,7 @@ function ansiRenderer(
   init: Partial<RunProgressRendererInit> = {},
 ): TestRunProgressRenderer {
   return attached(
-    createRunProgressRenderer(context(), {
+    createRunProgressRenderer(effectRuntime(), context(), {
       colorEnabled: true,
       write: output.write,
       nowMs: () => 0,
@@ -941,6 +946,7 @@ describe('CLI run progress renderer', () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const session = createTestSession();
       const host = createCliRuntimeHost(
+        effectRuntime(),
         context({
           quietLogs: true,
           renderRunProgress: true,
@@ -965,6 +971,7 @@ describe('CLI run progress renderer', () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const session = createTestSession();
       const host = createCliRuntimeHost(
+        effectRuntime(),
         context({
           stderrColorEnabled: false,
           quietLogs: true,
@@ -999,6 +1006,7 @@ describe('CLI run progress renderer', () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const session = createTestSession();
       const host = createCliRuntimeHost(
+        effectRuntime(),
         context({
           approvalPolicy: 'ask',
           approvalPrompt: async () => 'n no review needed',
@@ -1022,6 +1030,7 @@ describe('CLI run progress renderer', () => {
       stderr = await captureStreamWrites(process.stderr, async () => {
         const session = createTestSession();
         const host = createCliRuntimeHost(
+          effectRuntime(),
           context({
             outputFormat: 'json',
             stderrColorEnabled: false,
@@ -1041,7 +1050,10 @@ describe('CLI run progress renderer', () => {
 
   it('prints requestShowInstruction text and a human-readable action hint to stderr in text mode', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
-      const host = createCliRuntimeHost(context({ outputFormat: 'text' }));
+      const host = createCliRuntimeHost(
+        effectRuntime(),
+        context({ outputFormat: 'text' }),
+      );
 
       host.emit('requestShowInstruction', {
         key: 'missingApiKey',
@@ -1066,7 +1078,10 @@ describe('CLI run progress renderer', () => {
 
   it('falls back to the raw token for an unrecognized action in the instruction hint', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
-      const host = createCliRuntimeHost(context({ outputFormat: 'text' }));
+      const host = createCliRuntimeHost(
+        effectRuntime(),
+        context({ outputFormat: 'text' }),
+      );
 
       host.emit('requestShowInstruction', {
         key: 'futureInstruction',
@@ -1083,7 +1098,10 @@ describe('CLI run progress renderer', () => {
 
   it('prints a visible agent-not-found error for showAgentConfigBanner in text mode', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
-      const host = createCliRuntimeHost(context({ outputFormat: 'text' }));
+      const host = createCliRuntimeHost(
+        effectRuntime(),
+        context({ outputFormat: 'text' }),
+      );
 
       expect(
         host.emit('showAgentConfigBanner', {
@@ -1102,6 +1120,7 @@ describe('CLI run progress renderer', () => {
   it('does not gate requestShowInstruction behind quietLogs in text mode', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const host = createCliRuntimeHost(
+        effectRuntime(),
         context({ outputFormat: 'text', quietLogs: true }),
       );
 
@@ -1124,7 +1143,7 @@ describe('CLI run progress renderer', () => {
       // it through `onChildActivity`, so the case plays the listener.
       let roster:
         ((parentRunId: RunId, items: ActiveChildInfo[]) => void) | undefined;
-      const detach = attachCliSessionProgressProjection({
+      const detach = attachCliSessionProgressProjection(effectRuntime(), {
         events: session.events,
         now: () => session.now(),
         runs: {
@@ -1175,6 +1194,7 @@ describe('CLI run progress renderer', () => {
   it('preserves approval bypass records in ndjson mode', async () => {
     const output = await captureStreamWrites(process.stdout, async () => {
       const host = createCliRuntimeHost(
+        effectRuntime(),
         context({ mode: 'headless', outputFormat: 'ndjson' }),
       );
 
@@ -1221,6 +1241,7 @@ describe('CLI run progress renderer', () => {
   it('applies an explicit ndjson policy to every runtime presentation request', async () => {
     const output = await captureStreamWrites(process.stdout, async () => {
       const host = createCliRuntimeHost(
+        effectRuntime(),
         context({ mode: 'headless', outputFormat: 'ndjson' }),
       );
 

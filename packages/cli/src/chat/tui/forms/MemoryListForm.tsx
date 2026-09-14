@@ -8,12 +8,16 @@ import {
   cliMemoryItemDescription,
   runCliMemory,
 } from '@cli/runtime/memory';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { MemoryViewItem } from '@shared/schemas';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { AsyncListForm } from './_shared/ListForm';
 
 interface MemoryListFormProps {
+  /** The process runtime the listing runs on, from the surface that
+   *  registered this form. */
+  readonly runtime: ProcessRuntime;
   readonly availableRows?: number;
   readonly onSelect: (storagePath: string) => void;
   readonly onClose: () => void;
@@ -25,7 +29,10 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
       title="/memory"
       loadingLabel="Loading memories..."
       load={async () =>
-        (await runCliMemory(loadMemoryItems())).slice(0, CLI_MEMORY_LIST_LIMIT)
+        (await runCliMemory(props.runtime, loadMemoryItems())).slice(
+          0,
+          CLI_MEMORY_LIST_LIMIT,
+        )
       }
       items={(entries) =>
         entries.map((item) => ({

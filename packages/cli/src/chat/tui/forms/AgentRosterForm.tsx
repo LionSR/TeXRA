@@ -17,7 +17,7 @@ import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AGENT_MODE_PRESETS,
@@ -48,6 +48,9 @@ interface AgentRosterData {
 }
 
 interface AgentRosterFormProps {
+  /** The process runtime the roster read and the default-agent write run on,
+   *  from the config form that owns this one. */
+  readonly runtime: ProcessRuntime;
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
@@ -95,9 +98,11 @@ function selectionSizeLabel(selection: AgentRosterCategorySelection): string {
 // Border, title, footer spacer, and key hints are the chrome.
 const AGENT_ROSTER_SELECT_CHROME_ROWS = 5;
 
-async function loadRosterData(): Promise<AgentRosterData> {
+async function loadRosterData(
+  runtime: ProcessRuntime,
+): Promise<AgentRosterData> {
   // The roster read loads the local agent catalog the lists below read.
-  const record = await effectRuntime().runPromise(readCliAgentRoster);
+  const record = await runtime.runPromise(readCliAgentRoster);
   return {
     record,
     presets: createWorkspaceAgentRosterController().allPresets(),
@@ -111,7 +116,7 @@ export function AgentRosterForm(
   const [mode, setMode] = useState<AgentRosterFormMode>('overview');
   const { data, error, reload, reportError } =
     useAsyncListForm<AgentRosterData>({
-      load: loadRosterData,
+      load: () => loadRosterData(props.runtime),
       onClose: props.onClose,
       onError: props.onError,
     });
@@ -274,7 +279,7 @@ export function AgentRosterForm(
               'Default chat-agent selection requires a workspace.',
             );
           }
-          await effectRuntime().runPromise(
+          await props.runtime.runPromise(
             setWorkspaceCliChatAgent(cwd, value || undefined),
           );
         }, 'overview');

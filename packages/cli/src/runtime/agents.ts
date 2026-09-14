@@ -7,7 +7,7 @@ import {
   type AgentEntry,
 } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AGENT_CATEGORIES,
   AgentSourceSchema,
@@ -150,12 +150,16 @@ export function assertCliAgentLaunch(
  * A launch category resolves through the launch resolver, so validation lands
  * on the exact entry the launch will load; without one this is a display
  * lookup and stays category-blind.
+ *
+ * The catalog loads are Effect programs, run on the runtime the calling
+ * surface holds (`CliPlatformServices.runtime`).
  */
 export async function resolveCliAgent(
+  runtime: ProcessRuntime,
   name: string,
   lookupCategory?: AgentCategory,
 ): Promise<AgentEntry | undefined> {
-  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
+  await runtime.runPromise(loadAgents({ includeRemote: false }));
   const agent = lookupCliAgent(name, lookupCategory);
 
   // Keep the local hit only when a remote-inclusive reload could not change
@@ -169,7 +173,7 @@ export async function resolveCliAgent(
     return agent;
   }
 
-  await effectRuntime().runPromise(loadAgents());
+  await runtime.runPromise(loadAgents());
   return lookupCliAgent(name, lookupCategory);
 }
 
@@ -194,8 +198,11 @@ function lookupCliAgent(
  * and a source-qualified identifier hits exactly one cache key — a same-source
  * collision is unrepresentable, not merely unhandled.
  */
-export async function resolveCliRunAgent(name: string): Promise<AgentEntry> {
-  const workflow = await resolveCliAgent(name, AgentCategory.Workflow);
+export async function resolveCliRunAgent(
+  runtime: ProcessRuntime,
+  name: string,
+): Promise<AgentEntry> {
+  const workflow = await resolveCliAgent(runtime, name, AgentCategory.Workflow);
   // The pass above already loaded the catalog this lookup reads: it returns
   // before the remote-inclusive reload only for a source-qualified name (which
   // pins one cache key, so it cannot also hit here) or a signed-out session
@@ -223,22 +230,24 @@ function ambiguousRunAgentMessage(
  * Resolve and validate an agent for a category-pinned CLI launch.
  */
 export async function resolveCliLaunchAgent(
+  runtime: ProcessRuntime,
   name: string,
   mode: CliAgentLaunchMode,
 ): Promise<AgentEntry> {
   const target = CLI_AGENT_LAUNCH_TARGETS[mode];
   return assertCliAgentLaunch(
     name,
-    await resolveCliAgent(name, target.requiredCategory),
+    await resolveCliAgent(runtime, name, target.requiredCategory),
     mode,
   );
 }
 
 export async function loadCliAgentList(
+  runtime: ProcessRuntime,
   options: CliAgentListOptions = {},
 ): Promise<CliAgentListResult> {
   const includeHidden = options.includeHidden === true;
-  await effectRuntime().runPromise(
+  await runtime.runPromise(
     loadAgents(includeHidden ? undefined : { includeRemote: false }),
   );
 

@@ -6,6 +6,7 @@ import { maskDisplayValue } from '@cli/chat/tui/input/textInputEditing';
 import { formatPersonalApiKeysLine } from '@cli/runtime/apiStatus';
 import { maybeRunCliOnboarding } from '@cli/onboarding/runOnboarding';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
@@ -59,6 +60,7 @@ describe('maybeRunCliOnboarding headless parity', () => {
                 ...createFakePlatform(),
                 globalState: createFakeWorkspaceRoots().globalState,
                 secrets: new FakeSecrets(),
+                runtime: effectRuntime(),
               },
               {
                 mode: 'interactive',

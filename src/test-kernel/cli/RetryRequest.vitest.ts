@@ -7,6 +7,7 @@ import type {
   PendingApproval,
   RetryApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
+import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
@@ -21,9 +22,9 @@ function pendingFor(payload: ApprovalPayload): {
   readonly pending: PendingApproval;
   readonly decision: Promise<SurfaceDecision>;
 } {
-  let decide!: (decision: SurfaceDecision) => void;
+  let decide!: PendingApproval['decide'];
   const decision = new Promise<SurfaceDecision>((resolve) => {
-    decide = resolve;
+    decide = (_runtime, next) => resolve(next);
   });
   return { pending: { payload, decide }, decision };
 }
@@ -63,7 +64,7 @@ describe('CLI retry request', () => {
     });
     const { instance, stdin } = renderInteractive(
       ink,
-      React.createElement(ApprovalModal, { pending }),
+      React.createElement(ApprovalModal, { pending, runtime: effectRuntime() }),
       { columns: 100 },
     );
 
@@ -112,7 +113,7 @@ describe('CLI retry request', () => {
     const { pending, decision } = pendingFor(subscriptionLimitPayload(true));
     const { instance, stdin } = renderInteractive(
       ink,
-      React.createElement(ApprovalModal, { pending }),
+      React.createElement(ApprovalModal, { pending, runtime: effectRuntime() }),
       { columns: 100 },
     );
 

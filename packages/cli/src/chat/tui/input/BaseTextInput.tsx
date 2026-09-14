@@ -17,7 +17,7 @@ import {
   metaChordInput,
 } from '@cli/tui/inputKeys';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   applyTerminalInputChunk,
   clampCursor,
@@ -58,12 +58,17 @@ interface BaseTextInputProps {
    *  large paste into a `[Pasted text #N +M lines]` chip and stash the content
    *  elsewhere. Defaults to inserting the paste verbatim. */
   readonly transformPaste?: (text: string) => string;
-  /** Ctrl-V handler: probe the OS clipboard for an image. Resolves to the chip
-   *  text to insert (e.g. `[Image #1]`) or null when there is no image. */
-  readonly onImagePaste?: (
-    attempt: ImagePasteAttempt,
-  ) => Promise<string | null>;
-  readonly onImagePasteError?: (error: unknown) => void;
+  /** Ctrl-V image paste: the OS-clipboard probe, the runtime its Effect
+   *  timeout runs on, and where a failure is reported. They arrive as one
+   *  prop because the probe cannot run without the runtime, so a bar that
+   *  offers paste always supplies both. */
+  readonly onImagePaste?: {
+    /** Resolves to the chip text to insert (e.g. `[Image #1]`), or null when
+     *  there is no image on the clipboard. */
+    readonly probe: (attempt: ImagePasteAttempt) => Promise<string | null>;
+    readonly runtime: ProcessRuntime;
+    readonly onError?: (error: unknown) => void;
+  };
   readonly imagePasteQueue?: ImagePasteQueue;
   /** Optional parent-owned value ref for same-tick programmatic draft changes. */
   readonly readLatestValue?: () => string;
@@ -296,7 +301,8 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         else moveCursorTo(binding.move);
         return;
       }
-      if (isCtrlInput(input, key, 'v') && props.onImagePaste) {
+      const imagePaste = props.onImagePaste;
+      if (isCtrlInput(input, key, 'v') && imagePaste) {
         // Insert the chip at whatever the caret is when the async probe
         // resolves (read from a ref, not a keypress-time snapshot) so typing
         // during the probe isn't clobbered. The probe runs on the process
@@ -304,12 +310,9 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         // so the tracked promise never rejects. Runtime disposal interrupts
         // the fiber — not a paste failure to report.
         const attempt = imagePasteQueue.beginAttempt();
-        const paste = effectRuntime().runPromise(
+        const paste = imagePaste.runtime.runPromise(
           Effect.tryPromise({
-            try: () =>
-              Promise.resolve().then(
-                () => props.onImagePaste?.(attempt) ?? null,
-              ),
+            try: () => Promise.resolve().then(() => imagePaste.probe(attempt)),
             catch: (error: unknown) => error,
           }).pipe(
             Effect.timeout(IMAGE_PASTE_TIMEOUT_MS),
@@ -317,7 +320,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
               onFailure: (cause) => {
                 if (Cause.hasInterrupts(cause) || !attempt.isCurrent()) return;
                 const error = Cause.squash(cause);
-                props.onImagePasteError?.(
+                imagePaste.onError?.(
                   Cause.isTimeoutError(error)
                     ? new Error('Image paste timed out.')
                     : error,

@@ -16,6 +16,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { effectRuntime } from '@platform/processRuntime';
 import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -108,7 +109,7 @@ describe('CLI run command, tool-use agents', () => {
     vi.clearAllMocks();
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
-    const { platform } = installedHost();
+    const platform = { ...installedHost().platform, runtime: effectRuntime() };
     cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
     cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mocks.withExpandedRunInputs.mockResolvedValue({
@@ -161,7 +162,10 @@ describe('CLI run command, tool-use agents', () => {
         expect(
           cliInitPlatformMock.initLocalCliPlatform.mock.invocationCallOrder[0],
         ).toBeLessThan(mocks.resolveCliRunAgent.mock.invocationCallOrder[0]);
-        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('chat');
+        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith(
+          expect.anything(),
+          'chat',
+        );
         expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
           ['problem.md'],
           ['notes.md'],

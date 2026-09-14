@@ -36,6 +36,7 @@ import {
   buildToolEditApprovalContent,
   formatRetryRequestMessage,
 } from '@cli/runtime/approval/approvalSummaries';
+import { effectRuntime } from '@platform/processRuntime';
 import { decideRetryApproval } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -75,7 +76,7 @@ function useCliHostInteractions(
   detachHostInteractions();
   defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
   detachHostInteractions = defaultSession().interactions.use(
-    createHeadlessCliHostInteractions(cliContext, hooks),
+    createHeadlessCliHostInteractions(effectRuntime(), cliContext, hooks),
   );
 }
 

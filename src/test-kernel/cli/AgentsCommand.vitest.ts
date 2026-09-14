@@ -11,6 +11,7 @@ import { cliOutputMock } from '@test/support/cliOutputMock';
 
 import { AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+import { effectRuntime } from '@platform/processRuntime';
 
 const mocks = vi.hoisted(() => ({
   resolveCliAgent: vi.fn(),
@@ -94,6 +95,11 @@ function expectEmittedAgents(payload: EmittedAgentsPayload): void {
 describe('CLI agents command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The CLI init hands its caller the composition root's services; these
+    // commands read the process runtime off what it returns.
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue({
+      runtime: effectRuntime(),
+    });
     agentCatalogMock.getAgentsByCategory.mockReturnValue([]);
     agentCatalogMock.getVisibleAgents.mockReturnValue([]);
   });
@@ -274,7 +280,7 @@ describe('CLI agents command', () => {
     expect(exitCode).toBe(0);
     expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledTimes(1);
     expect(agentCatalogMock.getAgent).not.toHaveBeenCalled();
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(args);
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(expect.anything(), args);
     expect(cliOutputMock.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
       {

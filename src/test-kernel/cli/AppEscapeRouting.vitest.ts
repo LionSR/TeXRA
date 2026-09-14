@@ -39,6 +39,7 @@ import {
   updateWorkflowPopupView,
   workflowPopupView,
 } from '@cli/chat/tui/state/cliState';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   RUN_PHASE,
@@ -266,6 +267,7 @@ function appProps(onInterruptRun: (runId: RunId) => void): AppProps {
     // The status bar's subscription probe never runs in these key-routing
     // suites; the App only requires the store to be present.
     secrets: new FakeSecrets(),
+    runtime: effectRuntime(),
     onSubmit: vi.fn(),
     onKillRun: vi.fn(),
     onWorkflowControl: vi.fn(),

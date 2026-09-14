@@ -358,13 +358,13 @@ describe('handleTuiSlashCommand', () => {
       }),
     );
 
-    await showCliMemoryList();
+    await showCliMemoryList(effectRuntime());
     expect(infoPane.get()).toEqual({
       title: '/memory list',
       lines: ['No memory files found.'],
     });
 
-    await showCliMemoryPreview('note.md');
+    await showCliMemoryPreview(effectRuntime(), 'note.md');
     expect(infoPane.get()?.title).toBe('/memory list');
     closeInfoPane();
     expect(infoPane.get()).toMatchObject({ title: '/memory preview' });
@@ -617,6 +617,7 @@ describe('handleTuiSlashCommand', () => {
       update.program,
     );
     const completion = applyCliModelAccessSelection(
+      effectRuntime(),
       {
         kind: 'subscription-preference',
         provider: 'chatgpt',

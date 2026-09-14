@@ -244,6 +244,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       formRenderers={{
         agents: (onBack) => (
           <AgentRosterForm
+            runtime={props.runtime}
             availableRows={props.availableRows}
             onClose={onBack}
             onError={props.onError}

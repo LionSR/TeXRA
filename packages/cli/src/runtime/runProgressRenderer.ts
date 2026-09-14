@@ -12,7 +12,7 @@ import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import { getAgent } from '@agent/index';
 import type { SessionHandle } from '@agent/runtime';
 import { redactSecrets } from '@logger/redaction';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   RUN_PHASE,
@@ -82,11 +82,12 @@ export function shouldRenderRunProgress(
 }
 
 export function createRunProgressRenderer(
+  runtime: ProcessRuntime,
   context: CliContext,
   init?: RunProgressRendererInit,
 ): RunProgressRenderer | undefined {
   if (context.renderRunProgress !== true) return undefined;
-  return new DefaultRunProgressRenderer({
+  return new DefaultRunProgressRenderer(runtime, {
     colorEnabled: context.stderrColorEnabled,
     ...init,
     getColumns:
@@ -120,18 +121,20 @@ function claimRootRun(
   return candidates.at(0)?.id;
 }
 
-/** Follow a view level with a callback; returns the detach. */
+/** Follow a view level with a callback; returns the detach. The fiber runs on
+ *  the runtime the renderer was built with. */
 function followView(
+  runtime: ProcessRuntime,
   session: RunProgressSession,
   onView: (view: SessionView) => void,
 ): () => void {
-  const fiber = effectRuntime().runFork(
+  const fiber = runtime.runFork(
     Stream.runForEach(SubscriptionRef.changes(session.view), (view) =>
       Effect.sync(() => onView(view)),
     ),
   );
   return () => {
-    effectRuntime().runFork(Fiber.interrupt(fiber));
+    runtime.runFork(Fiber.interrupt(fiber));
   };
 }
 
@@ -157,6 +160,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
+    private readonly runtime: ProcessRuntime,
     init: RunProgressRendererInit & {
       readonly getColumns: () => number | undefined;
     },
@@ -178,7 +182,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): () => void {
     this.wantedRunId = options.runId;
     this.attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
-    const detach = followView(session, (view) => this.applyView(view));
+    const detach = followView(this.runtime, session, (view) =>
+      this.applyView(view),
+    );
     return () => {
       detach();
       this.view = undefined;
@@ -457,6 +463,7 @@ function workflowPlainLines(run: RunView): ReadonlyMap<string, string> {
  * or relabels.
  */
 export function attachWorkflowPlainOutput(
+  runtime: ProcessRuntime,
   session: WorkflowPlainSession,
   options: WorkflowPlainOutputOptions,
 ): () => void {
@@ -476,7 +483,7 @@ export function attachWorkflowPlainOutput(
       if (before?.get(id) !== line) write(line);
     }
   };
-  const detach = followView(session, (view) => {
+  const detach = followView(runtime, session, (view) => {
     for (const runId of [...previous.keys()]) {
       if (!view.runs.has(runId)) previous.delete(runId);
     }
@@ -499,7 +506,7 @@ export function attachWorkflowPlainOutput(
     const key = workflows.map((run) => run.id).join('\0');
     if (key !== subscribed) {
       subscribed = key;
-      effectRuntime().runFork(
+      runtime.runFork(
         session.setTranscriptSubscriptions(
           'workflow-plain-output',
           workflows.map((run) => ({ id: run.id, fromSeq: 0 })),
@@ -511,7 +518,7 @@ export function attachWorkflowPlainOutput(
   return () => {
     detach();
     previous.clear();
-    effectRuntime().runFork(
+    runtime.runFork(
       session.setTranscriptSubscriptions('workflow-plain-output', []),
     );
   };

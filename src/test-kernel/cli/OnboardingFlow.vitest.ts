@@ -4,6 +4,7 @@ import { it } from '@effect/vitest';
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
+import { effectRuntime } from '@platform/processRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { FakeStdin, FakeStdout } from '@test/support/inkTestHarness.ts';
 
@@ -101,6 +102,7 @@ describe('provider-key onboarding flow', () => {
           globalStorage: createFakeWorkspaceRoots().globalStorage,
           globalState: createFakeWorkspaceRoots().globalState,
           secrets: new FakeSecrets(),
+          runtime: effectRuntime(),
         };
         const result = yield* Effect.forkChild(
           runCliOnboarding(platform, false),

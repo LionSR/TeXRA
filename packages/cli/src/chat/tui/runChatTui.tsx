@@ -334,7 +334,7 @@ export async function runChat(
   // A dead fold (`viewChanges` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
-  const unbindSessionView = bindSessionView(runtimeSession.view, {
+  const unbindSessionView = bindSessionView(runtime, runtimeSession.view, {
     changes: runtimeSession.viewChanges,
     onFailure: (error) => {
       sessionViewFailureSignal.set(
@@ -422,6 +422,7 @@ export async function runChat(
     getSlashCommandContext: slashCommandContext,
     secrets: services.secrets,
     state: services.globalState,
+    runtime,
   });
   disposables.add(setCliAgentResumeHandler(chatController.tryResumeRun));
 
@@ -486,13 +487,18 @@ export async function runChat(
     onModelSelect: (nextModel) =>
       applyCliModelSelection(nextModel, slashCommandContext()),
     onModelAccessSelect: (route, output) =>
-      applyCliModelAccessSelection(route, slashCommandContext(), output),
+      applyCliModelAccessSelection(
+        runtime,
+        route,
+        slashCommandContext(),
+        output,
+      ),
     // `onApiKeySave` and `onLogoutSelect` are deliberately absent: the
     // registry's own defaults are exactly these handlers. Only `/login` needs
     // an override, to carry this session's CliContext.
     onLoginSelect: (value, output) =>
       loginFromChat(value, runtime, context, output),
-    onMemorySelect: showCliMemoryPreview,
+    onMemorySelect: (storagePath) => showCliMemoryPreview(runtime, storagePath),
     onSkillSelect: chatController.activateSkill,
     onResumeSelect: chatController.resume,
     getConfigStores: platformSettingsStores,
@@ -507,6 +513,7 @@ export async function runChat(
   const ink = render(
     <App
       secrets={services.secrets}
+      runtime={runtime}
       onSubmit={(line, mediaFiles, images) =>
         void chatController.submit(line, mediaFiles, images)
       }

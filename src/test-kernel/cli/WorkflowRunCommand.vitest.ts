@@ -23,6 +23,7 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { effectRuntime } from '@platform/processRuntime';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   RUN_OUTCOME,
@@ -387,6 +388,7 @@ describe('CLI run command, workflow agents', () => {
     const platform = {
       ...installedHost().platform,
       session: Effect.succeed(session),
+      runtime: effectRuntime(),
     };
     cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
     cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
@@ -473,7 +475,10 @@ describe('CLI run command, workflow agents', () => {
         );
 
         expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalled();
-        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('polish');
+        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith(
+          expect.anything(),
+          'polish',
+        );
         expectNoModelOrInputWork();
       }),
   );
@@ -1290,7 +1295,7 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      { session: Effect.succeed(session) },
+      { session: Effect.succeed(session), runtime: effectRuntime() },
     ).finally(() => Effect.runPromise(session.dispose()));
 
     expect(exitCode).toBe(CliExitCode.Interrupted);
@@ -1332,7 +1337,7 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      { session: Effect.succeed(session) },
+      { session: Effect.succeed(session), runtime: effectRuntime() },
     ).finally(() => Effect.runPromise(session.dispose()));
     await expect(result).resolves.toBe(CliExitCode.Interrupted);
     expect(cwdSpy).toHaveBeenCalledOnce();

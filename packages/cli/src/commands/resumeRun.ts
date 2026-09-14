@@ -145,7 +145,12 @@ export async function runResumeCommand(
 
       const agent = yield* Effect.result(
         Effect.tryPromise({
-          try: () => resolveCliLaunchAgent(config.agent, 'workflowResume'),
+          try: () =>
+            resolveCliLaunchAgent(
+              stores.runtime,
+              config.agent,
+              'workflowResume',
+            ),
           catch: ensureError,
         }),
       );
@@ -184,6 +189,7 @@ export async function runResumeCommand(
                 buildHeadlessRunContext(context),
                 {
                   session: stores.session,
+                  runtime: stores.runtime,
                   runId,
                   modelCompatibilityKey,
                   recoveryInputIsDurable:

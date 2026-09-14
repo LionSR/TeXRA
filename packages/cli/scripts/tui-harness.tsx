@@ -599,7 +599,7 @@ function publish(...drafts: SessionEventDraft[]): void {
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
 // run's transcript tier the way `runChat` does.
-HARNESS_DISPOSERS.push(bindSessionView(session().view));
+HARNESS_DISPOSERS.push(bindSessionView(effectRuntime(), session().view));
 {
   let subscribed = '';
   const syncTranscriptSubscriptions = (): void => {
@@ -621,12 +621,15 @@ HARNESS_DISPOSERS.push(bindSessionView(session().view));
 }
 // Approvals go through the session's interaction port with the TUI host
 // attached, exactly as `chatSessionController` wires a live chat.
-const harnessRuntimeHost: CliRuntimeHost =
-  createCliRuntimeHost(HARNESS_CLI_CONTEXT);
+const harnessRuntimeHost: CliRuntimeHost = createCliRuntimeHost(
+  effectRuntime(),
+  HARNESS_CLI_CONTEXT,
+);
 HARNESS_DISPOSERS.push(
   session().interactions.use(
     createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
       secrets: HARNESS_PLATFORM_SERVICES.secrets,
+      runtime: effectRuntime(),
     }),
   ),
 );
@@ -1920,6 +1923,7 @@ function renderHarnessApp(): React.JSX.Element {
   return (
     <App
       secrets={HARNESS_PLATFORM_SERVICES.secrets}
+      runtime={effectRuntime()}
       onSubmit={handleHarnessSubmit}
       onKillRun={markHarnessRunStopped}
       onWorkflowControl={() => undefined}
@@ -1995,7 +1999,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     local({ self: [OWNER] }),
   ]);
   const ref = await effectRuntime().runPromise(SubscriptionRef.make(view));
-  HARNESS_DISPOSERS.push(bindSessionView(ref));
+  HARNESS_DISPOSERS.push(bindSessionView(effectRuntime(), ref));
   rootRunId.set(PROCESS);
   activeRunIdSignal.set(PROCESS);
 }
