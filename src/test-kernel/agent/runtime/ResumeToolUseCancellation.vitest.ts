@@ -75,13 +75,15 @@ vi.mock('@agent/runtime/run/AgentRun', async (importOriginal) => {
   };
 });
 
-vi.mock('@agent/runtime/ModelInvoker', async () => ({
-  modelInvokerLayer: (await import('effect')).Layer.empty,
-}));
+vi.mock('@agent/runtime/ModelInvoker', async () => {
+  const { Layer } = await import('effect');
+  return { modelInvokerLayer: () => Layer.empty };
+});
 
-vi.mock('@agent/runtime/FollowUps', async () => ({
-  followUpsLayer: (await import('effect')).Layer.empty,
-}));
+vi.mock('@agent/runtime/FollowUps', async () => {
+  const { Layer } = await import('effect');
+  return { followUpsLayer: () => Layer.empty };
+});
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: (...args: unknown[]) =>

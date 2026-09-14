@@ -12,6 +12,7 @@ import {
   infoPane,
   openInfoPane,
   rootRunPending,
+  rootRunId,
   claimedRunId,
   resetCliState,
   setTransientNotice,
@@ -103,6 +104,7 @@ describe('focus over the session view', () => {
   it('keeps keyboard order identical to the grouped, expanded tree', () => {
     resetCliState();
     seedView(familyView({ [child2]: { forceExpanded: true } }));
+    rootRunId.set(root);
     expect(sessionListRunIds.get()).toEqual([root]);
     expandedRuns.set(new Map([[root, true]]));
     expect(sessionListRunIds.get()).toEqual([root, child2, grandchild, child1]);
@@ -120,7 +122,7 @@ describe('focus over the session view', () => {
         .map((row) => row.label),
     ).toEqual(['Running']);
     resetCliState();
-    expect(sessionListRunIds.get()).toEqual([root]);
+    expect(sessionListRunIds.get()).toEqual([]);
   });
 
   it('resolves the child list to the nearest ancestor with children', () => {

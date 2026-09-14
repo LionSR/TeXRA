@@ -78,180 +78,182 @@ export class FollowUps extends Context.Service<
   }
 >()('@texra/agent/FollowUps') {}
 
-export const followUpsLayer: Layer.Layer<
+/** Build a follow-up consumer for one run, with its own queue and lease. */
+export const followUpsLayer = (): Layer.Layer<
   FollowUps,
   Error,
   AgentRun | RunLedger
-> = Layer.effect(
-  FollowUps,
-  Effect.gen(function* () {
-    const run = yield* AgentRun;
-    const ledger = yield* RunLedger;
-    const { runId, session, logger } = run;
-    const manager = session.followUps;
-    let lease: FollowUpConsumerLease | undefined;
-    let queue: FollowUpQueue;
-    const claimed = manager.claimLive(runId, 'flow');
-    if (claimed) {
-      lease = claimed;
-      queue = manager.queue(claimed);
-    } else {
-      const borrowed = manager.externallyOwnedQueue(runId);
-      if (!borrowed) {
-        return yield* Effect.fail(
-          new Error(
-            `Follow-up continuation already has an owner for run ${runId}.`,
-          ),
-        );
+> =>
+  Layer.effect(
+    FollowUps,
+    Effect.gen(function* () {
+      const run = yield* AgentRun;
+      const ledger = yield* RunLedger;
+      const { runId, session, logger } = run;
+      const manager = session.followUps;
+      let lease: FollowUpConsumerLease | undefined;
+      let queue: FollowUpQueue;
+      const claimed = manager.claimLive(runId, 'flow');
+      if (claimed) {
+        lease = claimed;
+        queue = manager.queue(claimed);
+      } else {
+        const borrowed = manager.externallyOwnedQueue(runId);
+        if (!borrowed) {
+          return yield* Effect.fail(
+            new Error(
+              `Follow-up continuation already has an owner for run ${runId}.`,
+            ),
+          );
+        }
+        queue = borrowed;
       }
-      queue = borrowed;
-    }
-    let syntheticPending = false;
-    let waitCancelled = false;
+      let syntheticPending = false;
+      let waitCancelled = false;
 
-    const wait = Effect.scoped(
-      Effect.gen(function* () {
-        const signal = yield* Effect.abortSignal;
-        const batch = yield* Effect.promise(() =>
-          queue.waitAndDrainAll(signal),
-        );
-        if (batch === null && !signal.aborted) waitCancelled = true;
-        if (batch?.synthetic) syntheticPending = false;
-        return batch;
-      }),
-    );
-    const drain = Effect.suspend(() =>
-      queue.isEmpty() ? Effect.succeed(null) : wait,
-    );
-
-    /** The canonical user message of one batch: every item's text as its
-     *  own part, media parts after the item they arrived with. */
-    const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
-      items: readonly FollowUpQueueBatchItem[],
-    ): Effect.fn.Return<
-      { message: Message; kinds: readonly MediaAttachmentKind[] },
-      Error
-    > {
-      const bound = yield* SynchronizedRef.get(run.model);
-      const parts: InputPart[] = [];
-      const kinds: MediaAttachmentKind[] = [];
-      for (const item of items) {
-        parts.push({ kind: 'text', text: item.text });
-        const files = item.mediaFiles;
-        if (!files?.length) continue;
-        const warning = mediaNeedsVisionWarning(
-          files,
-          bound.config.capabilities,
-          'pasted',
-        );
-        if (warning) logger.warn(warning);
-        const media = yield* mediaInputParts(
-          run.inScope(() =>
-            files.map((path) => run.fileService.createLocation(path)),
-          ),
-          bound,
-          logger,
-          run.inScope,
-        );
-        parts.push(...media.parts);
-        kinds.push(...media.kinds);
-      }
-      return { message: { role: 'user', content: parts }, kinds };
-    });
-
-    /** Return an unconsumed batch to the queue, synthetic or visible. */
-    const restore = (batch: FollowUpQueueBatch): void => {
-      if (batch.synthetic) {
-        for (const item of batch.items) queue.enqueueSynthetic(item.text);
-        syntheticPending = true;
-        return;
-      }
-      queue.restore(
-        batch.items.filter(
-          (
-            item,
-          ): item is FollowUpQueueBatchItem & {
-            origin: 'user' | 'subagent_result';
-          } => item.origin !== 'synthetic',
-        ),
+      const wait = Effect.scoped(
+        Effect.gen(function* () {
+          const signal = yield* Effect.abortSignal;
+          const batch = yield* Effect.promise(() =>
+            queue.waitAndDrainAll(signal),
+          );
+          if (batch === null && !signal.aborted) waitCancelled = true;
+          if (batch?.synthetic) syntheticPending = false;
+          return batch;
+        }),
       );
-    };
+      const drain = Effect.suspend(() =>
+        queue.isEmpty() ? Effect.succeed(null) : wait,
+      );
 
-    const consume = Effect.fn('FollowUps.consume')(function* (
-      state: RunState,
-      batch: FollowUpQueueBatch,
-    ): Effect.fn.Return<ConsumedFollowUps, Error> {
-      const built = yield* Effect.exit(batchMessage(batch.items));
-      if (built._tag === 'Failure') {
-        restore(batch);
+      /** The canonical user message of one batch: every item's text as its
+       *  own part, media parts after the item they arrived with. */
+      const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
+        items: readonly FollowUpQueueBatchItem[],
+      ): Effect.fn.Return<
+        { message: Message; kinds: readonly MediaAttachmentKind[] },
+        Error
+      > {
+        const bound = yield* SynchronizedRef.get(run.model);
+        const parts: InputPart[] = [];
+        const kinds: MediaAttachmentKind[] = [];
+        for (const item of items) {
+          parts.push({ kind: 'text', text: item.text });
+          const files = item.mediaFiles;
+          if (!files?.length) continue;
+          const warning = mediaNeedsVisionWarning(
+            files,
+            bound.config.capabilities,
+            'pasted',
+          );
+          if (warning) logger.warn(warning);
+          const media = yield* mediaInputParts(
+            run.inScope(() =>
+              files.map((path) => run.fileService.createLocation(path)),
+            ),
+            bound,
+            logger,
+            run.inScope,
+          );
+          parts.push(...media.parts);
+          kinds.push(...media.kinds);
+        }
+        return { message: { role: 'user', content: parts }, kinds };
+      });
+
+      /** Return an unconsumed batch to the queue, synthetic or visible. */
+      const restore = (batch: FollowUpQueueBatch): void => {
+        if (batch.synthetic) {
+          for (const item of batch.items) queue.enqueueSynthetic(item.text);
+          syntheticPending = true;
+          return;
+        }
+        queue.restore(
+          batch.items.filter(
+            (
+              item,
+            ): item is FollowUpQueueBatchItem & {
+              origin: 'user' | 'subagent_result';
+            } => item.origin !== 'synthetic',
+          ),
+        );
+      };
+
+      const consume = Effect.fn('FollowUps.consume')(function* (
+        state: RunState,
+        batch: FollowUpQueueBatch,
+      ): Effect.fn.Return<ConsumedFollowUps, Error> {
+        const built = yield* Effect.exit(batchMessage(batch.items));
+        if (built._tag === 'Failure') {
+          restore(batch);
+          if (!batch.synthetic) {
+            for (const item of batch.items) {
+              const display = followUpDisplay(item);
+              logUserMessage(logger, display.text, [], display.workflowSummary);
+            }
+          }
+          return yield* Effect.failCause(built.cause);
+        }
+        const committed = yield* Effect.exit(
+          Effect.uninterruptible(
+            ledger.appendBatch(runId, state, [
+              appendRow(runId, [built.value.message]),
+              // The input that recovers a failed run clears the error fact in
+              // the same transaction, so a resume taken between this batch and
+              // the next turn's snapshot does not read the run as still failed.
+              runtimeSnapshotRow(runId, state, { lastError: null }),
+              stepRow(runId, state, 'turn.ready'),
+            ]),
+          ),
+        );
+        if (committed._tag === 'Failure') {
+          restore(batch);
+          return yield* Effect.fail(ensureError(Cause.squash(committed.cause)));
+        }
+        // The user's rows are durable; the transcript shows what was asked.
         if (!batch.synthetic) {
           for (const item of batch.items) {
             const display = followUpDisplay(item);
-            logUserMessage(logger, display.text, [], display.workflowSummary);
+            logUserMessage(
+              logger,
+              display.text,
+              built.value.kinds,
+              display.workflowSummary,
+            );
           }
+          run.callbacks.onFollowUpConsumed?.();
         }
-        return yield* Effect.failCause(built.cause);
-      }
-      const committed = yield* Effect.exit(
-        Effect.uninterruptible(
-          ledger.appendBatch(runId, state, [
-            appendRow(runId, [built.value.message]),
-            // The input that recovers a failed run clears the error fact in
-            // the same transaction, so a resume taken between this batch and
-            // the next turn's snapshot does not read the run as still failed.
-            runtimeSnapshotRow(runId, state, { lastError: null }),
-            stepRow(runId, state, 'turn.ready'),
-          ]),
-        ),
-      );
-      if (committed._tag === 'Failure') {
-        restore(batch);
-        return yield* Effect.fail(ensureError(Cause.squash(committed.cause)));
-      }
-      // The user's rows are durable; the transcript shows what was asked.
-      if (!batch.synthetic) {
-        for (const item of batch.items) {
-          const display = followUpDisplay(item);
-          logUserMessage(
-            logger,
-            display.text,
-            built.value.kinds,
-            display.workflowSummary,
-          );
-        }
-        run.callbacks.onFollowUpConsumed?.();
-      }
-      return {
-        state: committed.value,
-        instruction: batch.synthetic
-          ? undefined
-          : userFollowUpInstruction(batch.items),
-        synthetic: batch.synthetic,
-      };
-    });
+        return {
+          state: committed.value,
+          instruction: batch.synthetic
+            ? undefined
+            : userFollowUpInstruction(batch.items),
+          synthetic: batch.synthetic,
+        };
+      });
 
-    return {
-      hasQueued: () => !queue.isEmpty(),
-      appendSynthetic: (text) => {
-        if (syntheticPending) return;
-        syntheticPending = true;
-        queue.enqueueSynthetic(text);
-      },
-      wait,
-      drain,
-      parkedWaitCancelled: () => waitCancelled,
-      interrupt: (mode) => {
-        syntheticPending = false;
-        if (mode === 'clear' && lease) {
-          queue.dispose();
-          return;
-        }
-        queue.cancelWait();
-      },
-      release: (next) => {
-        if (lease) manager.release(lease, next);
-      },
-      consume,
-    };
-  }),
-);
+      return {
+        hasQueued: () => !queue.isEmpty(),
+        appendSynthetic: (text) => {
+          if (syntheticPending) return;
+          syntheticPending = true;
+          queue.enqueueSynthetic(text);
+        },
+        wait,
+        drain,
+        parkedWaitCancelled: () => waitCancelled,
+        interrupt: (mode) => {
+          syntheticPending = false;
+          if (mode === 'clear' && lease) {
+            queue.dispose();
+            return;
+          }
+          queue.cancelWait();
+        },
+        release: (next) => {
+          if (lease) manager.release(lease, next);
+        },
+        consume,
+      };
+    }),
+  );

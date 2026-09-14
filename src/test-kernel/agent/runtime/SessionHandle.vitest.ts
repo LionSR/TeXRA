@@ -1,14 +1,17 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { type RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 
 function trackAgent(session: SessionHandle, runId: RunId): RunHandle {
@@ -21,28 +24,63 @@ function trackAgent(session: SessionHandle, runId: RunId): RunHandle {
 }
 
 describe('SessionHandle', () => {
-  it.effect('keeps run tracking isolated between sessions', () =>
-    Effect.gen(function* () {
-      const a = yield* Effect.acquireRelease(
-        Effect.sync(() => createTestSession()),
-        (session) => session.dispose(),
-      );
-      const b = yield* Effect.acquireRelease(
-        Effect.sync(() => createTestSession()),
-        (session) => session.dispose(),
-      );
-      const isolated = generateRunId();
-      const runB = generateRunId();
-      const handle = trackAgent(a, isolated);
-      expect(a.runs.getHandle(isolated)).toBe(handle);
-      expect(b.runs.getHandle(isolated)).toBeUndefined();
+  it.effect(
+    'keeps run tracking and approval policy isolated between sessions',
+    () =>
+      Effect.gen(function* () {
+        const a = yield* Effect.acquireRelease(
+          Effect.sync(() => createTestSession()),
+          (session) => session.dispose(),
+        );
+        const b = yield* Effect.acquireRelease(
+          Effect.sync(() => createTestSession()),
+          (session) => session.dispose(),
+        );
+        const isolated = generateRunId();
+        const runB = generateRunId();
+        const provisional = generateRunId();
+        trackAgent(a, provisional);
+        const handle = trackAgent(a, isolated);
+        expect(a.runs.getHandle(isolated)).toBe(handle);
+        expect(b.runs.getHandle(isolated)).toBeUndefined();
 
-      // Disposing A leaves B's separate registry untouched.
-      const handleB = trackAgent(b, runB);
-      yield* a.dispose();
-      expect(a.runs.getHandle(isolated)).toBeUndefined();
-      expect(b.runs.getHandle(runB)).toBe(handleB);
-    }),
+        // Disposing A leaves B's separate registry untouched.
+        const handleB = trackAgent(b, runB);
+        // The project view can contain runs owned by another terminal.
+        publishTestRunStart(a, isolated);
+        publishTestRunStart(a, runB);
+        yield* Effect.promise(() => a.settlePublications());
+        const foreignPolicy = SubscriptionRef.getUnsafe(a.view).policy.get(
+          runB,
+        );
+        a.setApprovalPolicy('yolo');
+        yield* Effect.promise(() => a.settlePublications());
+        expect(
+          SubscriptionRef.getUnsafe(a.view).policy.get(isolated)?.policy,
+        ).toBe('yolo');
+        expect(SubscriptionRef.getUnsafe(a.view).policy.get(runB)).toEqual(
+          foreignPolicy,
+        );
+        expect(b.approvalPolicy).toBe('ask');
+        expect(SubscriptionRef.getUnsafe(a.view).runs.has(provisional)).toBe(
+          false,
+        );
+        yield* Effect.promise(() => a.settlePublications(provisional));
+        // A birth queued before the next policy change must receive that
+        // change even though the display has not folded the birth yet.
+        publishTestRunStart(a, provisional);
+        a.setApprovalPolicy('never');
+        yield* Effect.promise(() => a.settlePublications());
+        expect(
+          SubscriptionRef.getUnsafe(a.view).policy.get(provisional)?.policy,
+        ).toBe('never');
+        expect(SubscriptionRef.getUnsafe(a.view).policy.get(runB)).toEqual(
+          foreignPolicy,
+        );
+        yield* a.dispose();
+        expect(a.runs.getHandle(isolated)).toBeUndefined();
+        expect(b.runs.getHandle(runB)).toBe(handleB);
+      }),
   );
 
   it.effect('finishes owner teardown before surfacing a disposal failure', () =>

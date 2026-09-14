@@ -96,7 +96,7 @@ export function createTuiHostInteractions(
   const automaticSwitches = new Set<string>();
 
   const pendingRetry = (requestId: string): RetryPermission | undefined => {
-    const pending = currentView().requests.find(
+    const pending = attentionRequests(currentView()).find(
       (request) => request.requestId === requestId,
     );
     return pending?.payload.kind === 'retry' ? pending.payload.data : undefined;
@@ -268,7 +268,6 @@ export function createTuiHostInteractions(
     }
     for (const request of pending) {
       if (acted.has(request.requestId)) continue;
-      acted.add(request.requestId);
       const payload = request.payload;
       switch (payload.kind) {
         case 'bash':
@@ -278,6 +277,7 @@ export function createTuiHostInteractions(
         case 'proposal': {
           const settled = settleExecutable(context, request.runId);
           if (settled) {
+            acted.add(request.requestId);
             decidePendingRequest(
               stores.runtime,
               request.requestId,
@@ -290,6 +290,7 @@ export function createTuiHostInteractions(
         case 'userQuestion': {
           const denial = settleHumanInputDenial(context, request.runId);
           if (denial) {
+            acted.add(request.requestId);
             decidePendingRequest(
               stores.runtime,
               request.requestId,
@@ -300,6 +301,7 @@ export function createTuiHostInteractions(
           continue;
         }
         case 'retry': {
+          acted.add(request.requestId);
           const settled = settleRetry(payload.data, context);
           if (settled) {
             decidePendingRequest(

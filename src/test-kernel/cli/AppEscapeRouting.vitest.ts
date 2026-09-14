@@ -26,6 +26,7 @@ import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   activeRunId,
+  selectedRunId,
   closeForegroundReader,
   focusRun,
   expandedRuns,
@@ -248,6 +249,8 @@ function seedRootRun(): void {
 function seedChildHierarchy(): void {
   seedRootRun();
   setRunning(CHILD, GRANDCHILD);
+  seedRun(CHILD, { ownedHere: true });
+  seedRun(GRANDCHILD, { ownedHere: true });
   markToolUseAgent(CHILD, GRANDCHILD);
   seedChildRoster(ROOT, [runningChild(CHILD, 'child')]);
   seedChildRoster(CHILD, [runningChild(GRANDCHILD, 'grandchild')]);
@@ -410,24 +413,6 @@ describe('App foreground Escape ownership', () => {
     seedChildRoster(WORKFLOW, [runningChild(CHILD, 'inspect')]);
     seedParentEdge(CHILD, WORKFLOW);
     markToolUseAgent(CHILD);
-    seedRequest({
-      kind: 'planApproval',
-      data: {
-        requestId: 'plan-unrelated',
-        runId: GRANDCHILD,
-        plan: { objective: 'Keep this unrelated request queued.' },
-        goalEnabled: false,
-      },
-    });
-    seedRequest({
-      kind: 'planApproval',
-      data: {
-        requestId: 'plan-queued-workflow-child',
-        runId: CHILD,
-        plan: { objective: 'Promote the queued workflow child.' },
-        goalEnabled: false,
-      },
-    });
     const { instance, stdin, stdout, onInterruptRun } =
       await renderWithInterrupt();
     const emit = vi.spyOn(defaultSession(), 'publish');
@@ -441,6 +426,25 @@ describe('App foreground Escape ownership', () => {
       // The workflow row opens the popup over main, promotes direct-child
       // approvals, and keeps main as the underlying viewport.
       await waitFor(() => foregroundReader.get()?.kind === 'workflow');
+      seedRequest({
+        kind: 'planApproval',
+        data: {
+          requestId: 'plan-unrelated',
+          runId: GRANDCHILD,
+          plan: { objective: 'Keep this unrelated request queued.' },
+          goalEnabled: false,
+        },
+      });
+      seedRequest({
+        kind: 'planApproval',
+        data: {
+          requestId: 'plan-queued-workflow-child',
+          runId: CHILD,
+          plan: { objective: 'Promote the queued workflow child.' },
+          goalEnabled: false,
+        },
+      });
+
       await waitFor(() =>
         stdout.output.includes('Promote the queued workflow child.'),
       );
@@ -616,6 +620,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => onInterruptRun.mock.calls.length === 1);
 
       expect(activeRunId.get()).toBe(CHILD);
+      expect(selectedRunId.get()).toBe(CHILD);
       expect(onInterruptRun).toHaveBeenCalledWith(CHILD);
     } finally {
       instance.unmount();
@@ -979,7 +984,7 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
-  it('interrupts a promoted top-level stream because it has no back relation', async () => {
+  it('keeps a locally owned detached run reachable as a control target', async () => {
     seedChildHierarchy();
     seedParentEdge(CHILD, null);
     focusRun(CHILD);
@@ -990,6 +995,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => onInterruptRun.mock.calls.length === 1);
 
       expect(onInterruptRun).toHaveBeenCalledWith(CHILD);
+      expect(selectedRunId.get()).toBe(CHILD);
       expect(activeRunId.get()).toBe(CHILD);
     } finally {
       instance.unmount();

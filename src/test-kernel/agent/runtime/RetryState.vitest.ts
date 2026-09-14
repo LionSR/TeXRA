@@ -361,7 +361,7 @@ const openRun = Effect.fn('openRun')(function* (
     }),
   ]);
   const bound = yield* SynchronizedRef.make(boundModel(model, overrides));
-  const layer = modelInvokerLayer.pipe(
+  const layer = modelInvokerLayer().pipe(
     Layer.provide([
       Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
       Layer.succeed(RunLedger, session.ledger),
@@ -654,6 +654,31 @@ describe('ModelInvoker retry', () => {
   afterEach(async () => {
     await installPlatform();
   });
+
+  it.effect('keeps a delegated call on its own model and run ledger', () =>
+    Effect.gen(function* () {
+      const session = sessionWithInteractions(undefined);
+      const parentModel = stubModel([{ ok: completedTurn('parent') }]);
+      const childModel = stubModel([{ ok: completedTurn('child') }]);
+      const parent = yield* openRun(session, parentModel.model);
+      const child = yield* openRun(session, childModel.model);
+
+      const outcome = yield* Effect.gen(function* () {
+        // A child starts while its parent's request service is still alive.
+        yield* ModelInvoker;
+        return yield* invokeOn(child);
+      }).pipe(Effect.provide(parent.layer));
+
+      expect(outcome.kind).toBe('response');
+      expect(childModel.attempts()).toBe(1);
+      expect(parentModel.attempts()).toBe(0);
+      expect((yield* session.ledger.load(parent.runId))?.lastTurn).toBeNull();
+      expect((yield* session.ledger.load(child.runId))?.lastTurn).toEqual(
+        completedTurn('child'),
+      );
+      yield* session.dispose();
+    }),
+  );
 
   // The invoker's backoff and the session gate's probe both sleep on the
   // Effect clock, so a forked pump walks the test clock past each park and

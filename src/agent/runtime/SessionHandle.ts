@@ -377,12 +377,10 @@ export class SessionHandle {
   setApprovalPolicy(policy: TexraApprovalPolicy): void {
     if (policy === this.texraApprovalPolicy) return;
     this.texraApprovalPolicy = policy;
-    // The policy is session-wide; the snapshot is per run, so every stream
-    // the view holds (the ones whose `run.start` has folded: the existence
-    // rule, PRD 5.2) gets its own `approval.policy`. A reservation still
-    // short of its `run.start` is not in the view: its launcher stamps the
-    // initial snapshot, read from this new value, on that event instead.
-    for (const runId of SubscriptionRef.getUnsafe(this.view).runs.keys()) {
+    // The view includes other processes' runs from the project database.
+    // Publish only for runs this session owns; a future launch stamps its
+    // initial snapshot from the current policy on `run.start`.
+    for (const runId of this.runs.getActiveIds()) {
       this.publishApprovalPolicy(runId);
     }
   }
@@ -405,13 +403,22 @@ export class SessionHandle {
    * section 6, item 2), for a change after the run's `run.start`.
    */
   private publishApprovalPolicy(runId: RunId): void {
-    this.publish([
-      {
-        type: 'approval.policy',
-        aggregateId: qualifyAggregateId('run', runId),
-        snapshot: this.approvalPolicySnapshotFor(runId),
-      },
-    ]);
+    if (this.disposed) return;
+    const snapshot = this.approvalPolicySnapshotFor(runId);
+    this.detachPublication(runId, (append) =>
+      Effect.gen({ self: this }, function* () {
+        // Check the claim in publication order: a provisional handle does
+        // not yet own a run, while a registration queued before this does.
+        if (!(yield* this.graph.ownsRun(runId))) return;
+        yield* append([
+          {
+            type: 'approval.policy',
+            aggregateId: qualifyAggregateId('run', runId),
+            snapshot,
+          },
+        ]);
+      }),
+    );
   }
 
   /**

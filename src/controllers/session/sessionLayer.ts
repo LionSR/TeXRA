@@ -275,6 +275,7 @@ const sessionHandleLayer = (
       const { publish, exclusive, detach, settle, ...reads } =
         yield* SessionEvents;
       const eventLog = yield* Database;
+      const identity = yield* ProcessIdentity;
       const ledger = yield* RunLedger;
       const inquiryRecords = yield* InquiryRecords;
       const view = yield* SessionViewService;
@@ -365,6 +366,18 @@ const sessionHandleLayer = (
           eventLog
             .readRunRecords(qualifyAggregateId('run', id))
             .pipe(Effect.orDie),
+        ownsRun: (id) =>
+          eventLog.aggregateState([qualifyAggregateId('run', id)]).pipe(
+            Effect.map((states) =>
+              states.some(
+                (state) =>
+                  state.startCommit !== null &&
+                  !state.closed &&
+                  state.ownerId === identity.ownerId,
+              ),
+            ),
+            Effect.orDie,
+          ),
         runChildren: (id) =>
           eventLog
             .readRunChildren(qualifyAggregateId('run', id))

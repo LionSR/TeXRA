@@ -2,7 +2,7 @@
  * The TUI's approval Surface over the fold: which request the modal shows,
  * in what order, and how the status bar's attention list reads.
  */
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   approvalPayloadRunId,
@@ -11,7 +11,11 @@ import {
   promoteApprovalsForRun,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
-import { resetCliState } from '@cli/chat/tui/state/cliState';
+import {
+  resetCliState,
+  rootRunId,
+  sessionListRunIds,
+} from '@cli/chat/tui/state/cliState';
 import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 
@@ -22,6 +26,7 @@ import {
   viewWith,
 } from './fixtures/sessionViewFixture';
 
+const ROOT = 'chat-root' as RunId;
 const RUN_A = 'run-a' as RunId;
 const RUN_B = 'run-b' as RunId;
 const WORKFLOW = 'workflow' as RunId;
@@ -50,8 +55,8 @@ function questionPayload(runId: RunId) {
 function viewOfRequests(...payloads: readonly ApprovalPayload[]): SessionView {
   const runs = [...new Set(payloads.map((p) => p.data.runId))]
     .filter((id): id is RunId => id !== '')
-    .map((id) => makeRunView({ id }));
-  return viewWith(runs, {
+    .map((id) => makeRunView({ id, parentId: ROOT }));
+  return viewWith([makeRunView({ id: ROOT }), ...runs], {
     requests: payloads.map((payload) => ({
       runId: payload.data.runId as RunId,
       requestId: payload.data.requestId,
@@ -62,9 +67,61 @@ function viewOfRequests(...payloads: readonly ApprovalPayload[]): SessionView {
 }
 
 beforeAll(bindTestSessionView);
+beforeEach(() => rootRunId.set(ROOT));
 afterEach(() => resetCliState());
 
 describe('CLI approval surface', () => {
+  it('isolates approval prompts, counts, and run lists to the current chat', () => {
+    const local = bashPayload(RUN_A);
+    const foreign = bashPayload(RUN_B);
+    const view = viewWith(
+      [
+        makeRunView({ id: ROOT }),
+        makeRunView({ id: RUN_A, parentId: ROOT }),
+        makeRunView({ id: RUN_B }),
+      ],
+      {
+        requests: [foreign, local].map((payload) => ({
+          runId: payload.data.runId as RunId,
+          requestId: payload.data.requestId,
+          payload,
+          thread: null,
+        })),
+      },
+    );
+    seedView(view);
+    expect(currentApproval.get()?.payload).toEqual(local);
+    expect(attentionRequests(view).map((request) => request.runId)).toEqual([
+      RUN_A,
+    ]);
+    expect(sessionListRunIds.get()).toEqual([ROOT]);
+
+    rootRunId.set(RUN_B);
+    expect(currentApproval.get()?.payload).toEqual(foreign);
+    expect(attentionRequests(view).map((request) => request.runId)).toEqual([
+      RUN_B,
+    ]);
+    expect(sessionListRunIds.get()).toEqual([RUN_B]);
+
+    rootRunId.set(undefined);
+    expect(currentApproval.get()).toBeUndefined();
+    expect(attentionRequests(view)).toEqual([]);
+    expect(sessionListRunIds.get()).toEqual([]);
+
+    // A detached child still owned by this terminal keeps its approval
+    // path even after the root conversation has been cleared.
+    const detachedView = viewWith(
+      [makeRunView({ id: RUN_A, ownedHere: true }), makeRunView({ id: RUN_B })],
+      { requests: view.requests },
+    );
+    seedView(detachedView);
+    expect(currentApproval.get()?.payload).toEqual(local);
+    expect(
+      attentionRequests(detachedView).map((request) => request.runId),
+    ).toEqual([RUN_A]);
+    expect(sessionListRunIds.get()).toEqual([RUN_A]);
+  });
+
   it("shows the fold's first outstanding approval and reads the rest as attention", () => {
     const first = bashPayload(RUN_A);
     const second = questionPayload(RUN_B);

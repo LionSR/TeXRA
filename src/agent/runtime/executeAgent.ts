@@ -123,7 +123,7 @@ function runLayerFor(
   inScope: <A>(operation: () => A) => A,
 ) {
   const { runId, session: runSession } = ctx.runScope;
-  return modelInvokerLayer.pipe(
+  return modelInvokerLayer().pipe(
     Layer.provideMerge(
       agentRunLayer(ctx, {
         setting: shared.setting,
@@ -247,7 +247,7 @@ function launchToolUseRun(
     Effect.provide(
       // The follow-up lease is the tool-use loop's alone; its finalizer is
       // what releases it.
-      followUpsLayer.pipe(
+      followUpsLayer().pipe(
         Layer.provideMerge(
           runLayerFor(
             ctx,

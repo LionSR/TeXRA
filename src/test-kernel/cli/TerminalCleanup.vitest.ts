@@ -94,6 +94,7 @@ afterEach(() => {
  *  projection, so the test has to drive it through the queue. */
 function queueTitleApproval(label: string): void {
   const runId = label as RunId;
+  if (!phases.has(runId)) phases.set(runId, RUN_PHASE.WAITING);
   requests = [
     ...requests,
     {

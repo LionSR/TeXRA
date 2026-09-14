@@ -74,7 +74,7 @@ vi.mock('@platform/platform', async () => {
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
-import { resetCliState } from '@cli/chat/tui/state/cliState';
+import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -84,6 +84,7 @@ import type { ApiProvider } from '@model/apiProviders';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
+  aggregateId,
   RUN_OUTCOME,
   type AgentProposalPermission,
   type PermissionPayload,
@@ -101,6 +102,7 @@ import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import { setGoalSessionAutoApproval } from '@tools/goal';
 import { proposalApprovals } from '@tools/approval';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
@@ -161,10 +163,12 @@ const started = new Set<RunId>();
 
 function ensureRun(runId: RunId): Effect.Effect<void> {
   return Effect.gen(function* () {
+    const root = rootRunId.get();
+    if (root === undefined) rootRunId.set(runId);
     if (started.has(runId)) return;
     started.add(runId);
     const session = defaultSession();
-    publishTestRunStart(session, runId);
+    publishTestRunStart(session, runId, { parent: root ?? null });
     yield* Effect.promise(() => session.settlePublications());
   });
 }
@@ -426,6 +430,38 @@ afterEach(async () => {
 });
 
 describe('TUI request decisions', () => {
+  it.effect(
+    'reconsiders a detached child delegation when live policy changes to yolo',
+    () =>
+      Effect.gen(function* () {
+        tui();
+        yield* ensureRun(runIdFor('waiting-proposal-parent'));
+        const runId = runIdFor('waiting-proposal-policy-change');
+        yield* ensureRun(runId);
+        const session = defaultSession();
+        session.runs.track(testRunHandle({ runId, agent: 'orchestrator' }));
+        const pending = yield* Effect.forkChild(
+          openRequest(runId, {
+            kind: 'proposal',
+            data: proposalPayload('waiting-proposal-policy-change', runId),
+          }),
+        );
+        yield* waitForApproval('proposal', { runId });
+        session.publish([
+          { type: 'run.detach', aggregateId: aggregateId('run', runId) },
+        ]);
+        yield* Effect.promise(() => session.settlePublications());
+        expect(
+          SubscriptionRef.getUnsafe(session.view).runs.get(runId)?.ownedHere,
+        ).toBe(true);
+        yield* waitForApproval('proposal', { runId });
+        session.setApprovalPolicy('yolo');
+        expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
+        yield* waitForNoApproval();
+        session.runs.untrack(runId);
+      }),
+  );
+
   it.effect(
     'reports an automatic yolo retry rejection as a policy denial',
     () =>
