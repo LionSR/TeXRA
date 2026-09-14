@@ -92,13 +92,18 @@ describe('session-owned transcripts and follow-up queues', () => {
     const runId = generateRunId();
 
     try {
-      a.followUps.submit(runId, { text: 'from a' }, 'recoverable');
-      b.followUps.submit(runId, { text: 'from b' }, 'recoverable');
+      expect(a.followUps.claimLive(runId, 'flow')).toBeDefined();
+      expect(b.followUps.claimLive(runId, 'flow')).toBeDefined();
 
       a.followUps.terminalize(runId);
 
-      expect(a.followUps.getAll(runId)).toEqual([]);
-      expect(b.followUps.getAll(runId)).toEqual(['from b']);
+      expect(a.followUps.hasLiveOwner(runId)).toBe(false);
+      expect(
+        await Effect.runPromise(
+          a.followUps.submit(runId, { text: 'late' }, 'live_owner'),
+        ),
+      ).toEqual({ kind: 'refused' });
+      expect(b.followUps.hasLiveOwner(runId)).toBe(true);
     } finally {
       await Effect.runPromise(a.dispose());
       await Effect.runPromise(b.dispose());
@@ -109,7 +114,8 @@ describe('session-owned transcripts and follow-up queues', () => {
 describe('sendFollowUp host-path session routing', () => {
   it('resolves the follow-up target against the passed session, not the process default', async () => {
     const processSession = createTestSession();
-    const parentRun = generateRunId();
+    const parentRun = publishTestRunStart(processSession);
+    await processSession.settlePublications();
 
     try {
       // A child run is tracked in the explicit process session, as desktop

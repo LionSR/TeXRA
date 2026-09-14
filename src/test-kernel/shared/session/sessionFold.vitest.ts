@@ -22,6 +22,7 @@ import {
   runIdentityDisplayName,
   SessionEventSchema,
   type CompileFailure,
+  type DisplaySessionEvent,
   type FoldInput,
   type OutputFileInfo,
   type SessionEvent,
@@ -978,6 +979,41 @@ describe('sessionFold', () => {
     expect(pruned.order).toStrictEqual([PROCESS]);
     expect(pruned.requests).toStrictEqual([]);
     expect(pruned.policy.size).toBe(0);
+  });
+
+  it('lists a queued follow-up once, and not again when its delivery is replayed after consumption', () => {
+    const settled = foldAll(scenario.events);
+    const aggregateId = qualifyAggregateId('run', CHILD);
+    let seq = settled.folded.get(aggregateId)!;
+    const row = (commit: number, draft: Record<string, unknown>) =>
+      tail({
+        ...draft,
+        aggregateId,
+        seq: ++seq,
+        commit,
+        ownerId: OWNER,
+        at: 5000,
+      } as DisplaySessionEvent);
+    const queued = (commit: number, followUpId: string, text: string) =>
+      row(commit, {
+        type: 'followup.queued',
+        followUpId,
+        content: { text, origin: 'subagent_result' },
+      });
+    const view = foldAll(
+      [
+        queued(300, 'delivery-1', 'child result'),
+        row(301, { type: 'followup.consumed', followUpId: 'delivery-1' }),
+        // The producer replays the same delivery after a restart: a later
+        // commit than the consumption, under an id this run already named.
+        queued(302, 'delivery-1', 'child result'),
+        queued(303, 'delivery-2', 'next result'),
+      ],
+      settled,
+    );
+    expect(view.queuedFollowUps.get(CHILD)).toStrictEqual([
+      { followUpId: 'delivery-2', text: 'next result' },
+    ]);
   });
 
   it('mints a run from run.start alone', () => {

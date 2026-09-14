@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Queue } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { RunInput } from '@agent/followUp/RunInput';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
@@ -361,6 +362,10 @@ describe('NativeSubagentStrategy', () => {
         // The loop commits the child's `child.turn` rows, which its aggregate
         // refuses until the run has begun.
         publishTestRunStart(params.session, params.runId);
+        // The parent delivery is admitted under a database claim, which a
+        // run without rows cannot grant.
+        publishTestRunStart(params.session, params.parentRunId);
+        yield* params.session.settlePublications();
         const recordCost = vi.fn();
         mocks.executeAgent.mockResolvedValueOnce(
           toolUseTurnResult('failed', params.runId, {
@@ -398,6 +403,8 @@ describe('NativeSubagentStrategy', () => {
       Effect.gen(function* () {
         const params = { ...baseParams(), resultOnly: true };
         publishTestRunStart(params.session, params.runId);
+        publishTestRunStart(params.session, params.parentRunId);
+        yield* params.session.settlePublications();
         const failure = new Error('provider failed');
         mocks.throwErrorFormatting = true;
         mocks.executeAgent.mockImplementationOnce(
@@ -711,6 +718,7 @@ describe('NativeSubagentStrategy', () => {
         const parentRunId = RunIdSchema.parse('fa110002');
         const childRunId = RunIdSchema.parse('fa110001');
         publishTestRunStart(session, childRunId);
+        publishTestRunStart(session, parentRunId);
         yield* session.settlePublications();
         const deliveries = yield* Queue.unbounded<string>();
         mocks.submitFollowUp.mockImplementation((_runId, followUp) =>
@@ -757,8 +765,23 @@ describe('NativeSubagentStrategy', () => {
         });
         mocks.readConfig.mockReturnValue(Effect.succeed(config));
         mocks.retrieveSessionResumeData.mockReturnValue(Effect.succeed(resume));
+        // The resumed flow takes its batch from the queue the child loop
+        // owns, as the tool-use loop's drain does.
+        const taken: unknown[] = [];
         mocks.resumeToolUseTurn.mockImplementation(
           async (_snapshot, options) => {
+            const batch = await Effect.runPromise(
+              Effect.flatMap(
+                RunInput.make,
+                (input) =>
+                  session.followUps.attachInput(childRunId, input)!.poll,
+              ),
+            );
+            taken.push(
+              batch === null || batch.synthetic
+                ? []
+                : batch.followUps.map((followUp) => followUp.content),
+            );
             options.onRun?.(handle);
             publishFlowStep(session, childRunId, 'waiting');
             return waitingTurn(
@@ -780,7 +803,7 @@ describe('NativeSubagentStrategy', () => {
           expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
 
           expect(
-            session.followUps.submit(
+            yield* session.followUps.submit(
               childRunId,
               {
                 text: 'Also state exactly where finiteness is used.',
@@ -795,7 +818,7 @@ describe('NativeSubagentStrategy', () => {
           expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2);
 
           expect(
-            session.followUps.submit(
+            yield* session.followUps.submit(
               childRunId,
               {
                 text: 'Now give the shortest equivalent statement.',
@@ -813,29 +836,20 @@ describe('NativeSubagentStrategy', () => {
           expect(
             mocks.resumeToolUseTurn.mock.calls.map((call) => call[0]),
           ).toEqual([resume, resume]);
-          expect(
-            mocks.resumeToolUseTurn.mock.calls.map(
-              (call) => call[1].drainedFollowUps,
-            ),
-          ).toEqual([
+          expect(taken).toEqual([
             [
               {
                 text: 'Also state exactly where finiteness is used.',
-                displayText: undefined,
-                mediaFiles: undefined,
                 origin: 'user',
               },
             ],
             [
               {
                 text: 'Now give the shortest equivalent statement.',
-                displayText: undefined,
-                mediaFiles: undefined,
                 origin: 'user',
               },
             ],
           ]);
-          expect(session.followUps.getAll(childRunId)).toEqual([]);
           yield* session.settlePublications();
           expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.WAITING);
           const resumedDeliveries = mocks.submitFollowUp.mock.calls.filter(
@@ -899,6 +913,8 @@ describe('NativeSubagentStrategy', () => {
           interactions,
         };
         publishTestRunStart(session, childRunId);
+        publishTestRunStart(session, parentRunId);
+        yield* session.settlePublications();
 
         mocks.executeAgent.mockResolvedValueOnce({
           outcome: 'completed',

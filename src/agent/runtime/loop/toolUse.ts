@@ -21,7 +21,7 @@
 import { Cause, Effect, Exit, Ref, Scope, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
+import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
@@ -93,10 +93,6 @@ export interface ToolUseFlowContext {
 export interface ToolUseStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
   readonly resume: boolean;
-  /** One batch already drained by an external child-turn owner. */
-  readonly drainedFollowUps?: readonly FollowUpQueueBatchItem[];
-  /** Take messages queued at a resume ownership boundary. */
-  readonly takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
     attach(context: ToolUseFlowContext): void;
@@ -198,7 +194,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ownerSession: session,
     interrupt(): void {
       run.interrupt();
-      followUps.interrupt('clear');
     },
     requestImmediateCompaction(): void {
       compactionRequested = true;
@@ -688,15 +683,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // ------------------------------------------------------------- the loop
   const program = Effect.gen(function* () {
     attach();
-    const pendingBatches: FollowUpQueueBatchItem[] = [
-      ...(start.drainedFollowUps ?? []),
-      ...(start.takePendingFollowUps?.() ?? []),
-    ];
     if (start.resume) yield* ledger.acquire(runId);
     const loaded = yield* ledger.load(runId);
+    // The follow-ups the rows still queue: input admitted while no consumer
+    // held this run, or a batch a crash left unconsumed (C3). An unopened
+    // aggregate (`phase` null) still carries those rows; seed them before
+    // the opening batch so a restart delivers the SQLite copy.
+    followUps.seed(loaded);
     let state: RunState;
-    if (loaded === null) {
-      if (start.resume) {
+    if (loaded === null || loaded.phase === null) {
+      if (start.resume && loaded === null) {
         return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
       }
       state = yield* openFresh();
@@ -725,22 +721,20 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const afterError = lastError !== undefined;
       if (parked || state.phase === 'initial') {
         if (state.phase !== 'initial') {
-          // Input for the next turn: a batch in hand, else what the queue
-          // holds, else (root only) a blocking wait.
-          let batch =
-            pendingBatches.length > 0
-              ? { items: pendingBatches.splice(0), synthetic: false }
-              : null;
-          if (batch === null && isChild) {
-            if (afterError) return finish(state, RUN_OUTCOME.FAILED);
-            // A one-cycle launch stops here rather than suspending: the
-            // headless in-band child has no orchestrator to resume it, so a
-            // WAITING park would leave the run hanging.
-            if (run.toolPolicy.stopAfterCycle) {
-              return finish(state, RUN_OUTCOME.COMPLETED);
-            }
-            batch = yield* followUps.drain;
+          // Input for the next turn: what the queue holds (a child's loop
+          // resumes this run once its queue has input), else (root only) a
+          // blocking wait.
+          let batch: FollowUpBatch | null = null;
+          if (isChild) {
+            if (!run.toolPolicy.stopAfterCycle) batch = yield* followUps.drain;
             if (batch === null) {
+              if (afterError) return finish(state, RUN_OUTCOME.FAILED);
+              // A one-cycle launch stops here rather than suspending: the
+              // headless in-band child has no orchestrator to resume it, so
+              // a WAITING park would leave the run hanging.
+              if (run.toolPolicy.stopAfterCycle) {
+                return finish(state, RUN_OUTCOME.COMPLETED);
+              }
               return { state, waiting: true } as const satisfies LoopExit;
             }
           }
@@ -762,10 +756,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 catch: ensureError,
               });
               if (continuation && !followUps.hasQueued()) {
-                batch = {
-                  items: [{ text: continuation, origin: 'synthetic' as const }],
-                  synthetic: true,
-                };
+                batch = { synthetic: true, text: continuation };
               }
             }
           }
@@ -837,11 +828,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           cost: cost > 0 ? cost : undefined,
         });
       }
-      if (
-        isChild &&
-        turn.outcome === 'completed' &&
-        pendingBatches.length === 0
-      ) {
+      if (isChild && turn.outcome === 'completed') {
         // A one-cycle launch ends here rather than parking: its caller
         // treats a WAITING result as an invariant failure, because the
         // headless in-band child has no orchestrator to resume it. Checked

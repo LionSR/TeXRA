@@ -75,17 +75,18 @@ export class RunLedger extends Context.Service<
       RunLedgerRefused | DatabaseReadFailed | DatabaseWriteFailed
     >;
     /**
-     * Fold a run's rows into its state. `null` only when the run aggregate
-     * carries no ledger row: the loop's fresh-run branch and, for a run
-     * recorded before the run ledger, the honest answer, distinct from
-     * "checkpoint corrupt". Ledger rows without an opening `flow.snapshot`
-     * are not that case: they are a malformed aggregate and fail
-     * `inconsistent`, because folding an `attempt` or a `response` into a
-     * fresh run is how a paid invocation gets issued twice. Reads the run
-     * aggregate in full: a `flow.snapshot` carries no reference to the
-     * message history below it (D5 dropped `messageBaseCommit`), so a fold
-     * anchored at the latest snapshot would restore a run with no
-     * conversation and no error to say so.
+     * Fold a run's rows into its state. `null` only when no ledger row has
+     * folded: the loop's fresh-run branch and, for a run recorded before the
+     * run ledger, the honest answer, distinct from "checkpoint corrupt".
+     * Queued follow-ups alone still return that unopened state (`phase` is
+     * null) so the caller can seed them; they do not open the run. Ledger
+     * rows without an opening `flow.snapshot` are not that case: they are a
+     * malformed aggregate and fail `inconsistent`, because folding an
+     * `attempt` or a `response` into a fresh run is how a paid invocation
+     * gets issued twice. Reads the run aggregate in full: a `flow.snapshot`
+     * carries no reference to the message history below it (D5 dropped
+     * `messageBaseCommit`), so a fold anchored at the latest snapshot would
+     * restore a run with no conversation and no error to say so.
      */
     readonly load: (
       run: RunId,

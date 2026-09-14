@@ -334,7 +334,13 @@ export class SessionHandle {
     this.inputs = graph.inputs;
     this.subscriptions = graph.subscriptions;
     this.runs = graph.runs;
-    this.followUps = new ToolUseFollowUpQueue();
+    this.followUps = new ToolUseFollowUpQueue({
+      exclusive: (job) => graph.exclusive(job),
+      detach: (job) => graph.detach(() => job),
+      rows: (runId) => graph.aggregateRows(qualifyAggregateId('run', runId)),
+      acquireClaim: (runId) =>
+        this.acquireClaims(qualifyAggregateId('run', runId)),
+    });
     this.modelRetries = init.modelRetries;
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();

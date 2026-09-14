@@ -856,11 +856,22 @@ export function createChatSessionController(
         // must see the new queue owner before it can attempt a second resume.
         if (!options.onFollowUpQueueReady) {
           const previous = supersedeInterruptedRecovery();
-          runtimeSession.followUps
-            .queue(recovery)
-            .restore(previous?.followUps ?? []);
-          if (previous?.followUps.length)
+          if (previous?.followUps.length) {
+            // One admission, one transaction: the batch is queued whole, or
+            // nothing was written and it stays this controller's.
+            const submitted = yield* runtimeSession.followUps
+              .submitBatch(runId, previous.followUps, 'live_owner')
+              .pipe(
+                Effect.tapError(() =>
+                  Effect.sync(() => restoreInterruptedRecovery(previous)),
+                ),
+              );
+            if (submitted.kind === 'refused') {
+              restoreInterruptedRecovery(previous);
+              return false;
+            }
             runtimeSession.followUps.notifySent(recovery.runId);
+          }
         }
 
         const config = yield* getRunRecords(runtimeSession, runId).readConfig();

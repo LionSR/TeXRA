@@ -837,7 +837,9 @@ export class SessionComposer extends LitElement {
     if (run && run.followUpSupport === 'unsupported') return nothing;
     const compact = this.compact;
     const readOnly = run?.readOnly === true;
-    const queued = run ? (this.view?.queuedFollowUps.get(run.id) ?? []) : [];
+    const queued = (
+      run ? (this.view?.queuedFollowUps.get(run.id) ?? []) : []
+    ).map((followUp) => followUp.text);
     const text = this.text;
     // A follow-up's Send and the Cmd+Alt+E accelerator read one rule
     // (`canSendFollowUp`); the launcher has no run and no draft images,

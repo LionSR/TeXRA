@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { Cause, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
-import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -14,7 +13,6 @@ import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
-  aggregateId as qualifyAggregateId,
   type ModelCompatibilityKey,
   type RunId,
   type RequestEnsureProgressViewPayload,
@@ -95,8 +93,6 @@ type ToolUseLaunchVariant =
   | {
       readonly kind: 'resume';
       readonly resume: ToolUseResumeData;
-      readonly drainedFollowUps?: readonly FollowUpQueueBatchItem[];
-      readonly takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
       /** Queried once the resumed flow is attached and interruptible. */
       readonly isCancellationRequested?: () => boolean;
       readonly onCancellationAtFlowAttachment?: () => void;
@@ -115,15 +111,12 @@ type ToolUseLaunchVariant =
  */
 function runLayerFor(
   ctx: AgentLaunchContext,
-  shared: SubagentRunOptions & {
-    readonly setting: AgentSetting;
-    readonly onFollowUpConsumed?: () => void;
-  },
+  shared: SubagentRunOptions & { readonly setting: AgentSetting },
   toolInjections: ToolInjections['Service'],
   onIdle: (() => void) | undefined,
   inScope: <A>(operation: () => A) => A,
 ) {
-  const { runId, session: runSession } = ctx.runScope;
+  const runSession = ctx.runScope.session;
   return modelInvokerLayer().pipe(
     Layer.provideMerge(
       agentRunLayer(ctx, {
@@ -141,16 +134,6 @@ function runLayerFor(
               });
             }
             shared.onProgress?.(update);
-          },
-          onFollowUpConsumed: () => {
-            runSession.publish([
-              {
-                type: 'updateQueuedFollowUps',
-                aggregateId: qualifyAggregateId('run', runId),
-                messages: runSession.followUps.getAll(runId),
-              },
-            ]);
-            shared.onFollowUpConsumed?.();
           },
           onModelChanged: (model) => {
             // The cell is the live model; usage accounting and the prompt
@@ -216,7 +199,6 @@ function launchToolUseRun(
   handle: RunHandle,
   shared: SubagentRunOptions & {
     readonly setting: AgentSetting;
-    readonly onFollowUpConsumed?: () => void;
     /** The process injections the Effect-typed caller read for this run. */
     readonly toolInjections: ToolInjections['Service'];
   },
@@ -226,12 +208,6 @@ function launchToolUseRun(
   const { runId } = ctx.runScope;
   const program = runToolUse({
     resume: variant.kind === 'resume',
-    ...(variant.kind === 'resume'
-      ? {
-          drainedFollowUps: variant.drainedFollowUps,
-          takePendingFollowUps: variant.takePendingFollowUps,
-        }
-      : {}),
     attachment: {
       attach: (flowContext) => {
         handle.attachToolUseFlow(flowContext);
@@ -246,7 +222,7 @@ function launchToolUseRun(
     Effect.provide(
       // The follow-up lease is the tool-use loop's alone; its finalizer is
       // what releases it.
-      followUpsLayer().pipe(
+      followUpsLayer.pipe(
         Layer.provideMerge(
           runLayerFor(
             ctx,
@@ -677,23 +653,10 @@ export function executeAgent(
 }
 
 export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
-  /** Fires when the resumed tool-use session consumes queued follow-ups. */
-  readonly onFollowUpConsumed?: () => void;
-  /**
-   * Take messages queued after the initial drain. The flow invokes this once
-   * after attaching its live context and before resuming the persisted cursor.
-   */
-  readonly takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
   /** Query caller-owned cancellation once the resumed flow is interruptible. */
   readonly isCancellationRequested?: () => boolean;
   /** Observe cancellation accepted at the live-flow attachment boundary. */
   readonly onCancellationAtFlowAttachment?: () => void;
-  /**
-   * Follow-ups already drained by an external turn owner. The resumed flow
-   * consumes this batch once at its persisted WAITING cursor; it must never
-   * pass through the stream queue again.
-   */
-  readonly drainedFollowUps?: readonly FollowUpQueueBatchItem[];
 }
 
 /**
@@ -768,8 +731,6 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
                 {
                   kind: 'resume',
                   resume,
-                  drainedFollowUps: options.drainedFollowUps,
-                  takePendingFollowUps: options.takePendingFollowUps,
                   isCancellationRequested: options.isCancellationRequested,
                   onCancellationAtFlowAttachment:
                     options.onCancellationAtFlowAttachment,

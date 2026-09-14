@@ -24,5 +24,7 @@ export {
   presentFollowUpResult,
   submitFollowUp,
 } from './ToolUseFollowUp';
-export type { FollowUpQueueInput } from './FollowUpQueue';
-export type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
+export type {
+  FollowUpQueueInput,
+  FollowUpRecoveryLease,
+} from './ToolUseFollowUpQueueManager';

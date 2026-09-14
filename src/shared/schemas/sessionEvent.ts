@@ -64,6 +64,22 @@ import {
 import { TodoItemSchema } from './todo';
 import { TranscriptEventSchemas } from './traceEvent';
 
+/**
+ * One follow-up as it is queued, taken, and shown. `origin` keeps the
+ * provenance a consumer reads: a user's text becomes the run's instruction,
+ * a child's delivery envelope is summarized for the transcript. A loop's own
+ * maintenance wake is never a follow-up row.
+ */
+const FollowUpContentSchema = z.object({
+  text: z.string(),
+  /** What the transcript and the queued list show instead of `text`. */
+  displayText: z.string().nullish(),
+  /** Media file paths (e.g. pasted images) attached to a user follow-up. */
+  mediaFiles: z.array(z.string()).nullish(),
+  origin: z.enum(['user', 'subagent_result']),
+});
+export type FollowUpContent = z.infer<typeof FollowUpContentSchema>;
+
 /** C5's complete process identity, encoded canonically without losing null. */
 const OwnerIdentitySchema = z.tuple([
   z.string().min(1),
@@ -361,7 +377,24 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     InquiryThreadUpdatedEventSchema.shape,
     'inquiry',
   ),
-  durable('updateQueuedFollowUps', { messages: z.array(z.string()) }),
+  /**
+   * Input a run has not taken yet (one run model, section 3.7): the whole
+   * follow-up, so a resume seeds the run's queue from its rows and a crash
+   * loses nothing. `followUpId` is the unique key: the producer's logical
+   * delivery id when it has one (a child's accepted turn, an inquiry
+   * continuation), otherwise minted once at admission. Pending is the fold,
+   * queued without consumed, and it is the view's `queuedFollowUps`.
+   */
+  durable('followup.queued', {
+    followUpId: z.string().min(1),
+    content: FollowUpContentSchema,
+  }),
+  /**
+   * The follow-up became the message a turn carries (C3): committed in the
+   * same batch as that message, so a crash between the two re-delivers the
+   * follow-up and never delivers it twice.
+   */
+  durable('followup.consumed', { followUpId: z.string().min(1) }),
   /**
    * A run asking a person (one run model, section 3.7): what the UI shows
    * (diff, command, question), never host handles. `thread` names an earlier
@@ -572,7 +605,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * to the stored shape of `SessionEventSchema`; `sessionEventFormat.vitest.ts`
  * pins that shape and fails a change that leaves the version alone.
  */
-export const SESSION_EVENT_FORMAT = 2;
+export const SESSION_EVENT_FORMAT = 3;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -613,7 +646,7 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
 /**
  * The listing types the fold keys `latest` by (PRD 5.1): every durable arm
  * but the transcript tier. The request pair shares one entry because it
- * folds to one set, and the lifecycle pair (`run.start`, `run.removed`)
+ * folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
  * shares one because it folds to one existence: a tombstone's commit then
  * outranks a replayed `run.start` below it, which is what makes the
  * tombstone final under every read (5.2, "Existence"). `flow.step` is a
@@ -659,6 +692,9 @@ export function listingTypeOf(
     case 'request.opened':
     case 'request.decided':
       return 'request';
+    case 'followup.queued':
+    case 'followup.consumed':
+      return 'followup';
     case 'run.start':
     case 'run.removed':
       return 'lifecycle';

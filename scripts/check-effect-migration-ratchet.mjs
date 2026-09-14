@@ -58,7 +58,11 @@ const SCRIPT_REL = 'scripts/check-effect-migration-ratchet.mjs';
 const SUPERSEDED_PACKAGES = ['p-queue', 'p-defer', 'async-mutex'];
 /** Surveyed row IDs omitted from the baseline at zero. `--update` must not
  *  treat these as newly introduced rows and reseed them from the tree. */
-const RETIRED_ROW_IDS = new Set(['import:p-queue', 'effectRuntime()']);
+const RETIRED_ROW_IDS = new Set([
+  'import:p-queue',
+  'import:p-defer',
+  'effectRuntime()',
+]);
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
 const PROCESS_RUNTIME_MODULE = '@platform/processRuntime';
@@ -880,10 +884,9 @@ function selfTestSurvey() {
       // ImportKeyword branch of moduleSpecifier, so it must always name a
       // live row: without it, a dynamic `import('p-queue')` would dodge its
       // row undetected, in a ratchet whose whole subject is import rows.
-      text: "import PQueue from 'p-queue';\nimport type { Options } from 'p-defer';\nimport pd from 'p-queue-plus';\nimport local from './p-queue';\nconst defer = require('p-defer');\nexport { default as deferred } from 'p-defer';\nawait import('async-mutex');\n",
+      text: "import PQueue from 'p-queue';\nimport type { Options } from 'p-queue';\nimport pd from 'p-queue-plus';\nimport local from './p-queue';\nconst defer = require('p-queue');\nexport { default as deferred } from 'p-queue';\nawait import('async-mutex');\n",
       expected: {
-        [importRow('p-queue')]: 1,
-        [importRow('p-defer')]: 3,
+        [importRow('p-queue')]: 4,
         [importRow('async-mutex')]: 1,
       },
     },

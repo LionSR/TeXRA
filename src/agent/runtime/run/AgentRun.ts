@@ -83,8 +83,6 @@ interface RunCallbacks {
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Root-run-only: fires at every turn boundary before the follow-up wait. */
   readonly onIdle?: () => void;
-  /** Fires after a queued user batch reached the conversation. */
-  readonly onFollowUpConsumed?: () => void;
   /** Fires once the run's model changed and the cell holds the new binding. */
   readonly onModelChanged: (model: string) => void;
 }

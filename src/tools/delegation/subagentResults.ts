@@ -2,10 +2,10 @@
  * Formatting utilities for subagent results and progress updates.
  *
  * Format helpers convert a run's terminal facts and progress updates into
- * structured XML strings for FollowUpQueue delivery to the orchestrator.
+ * structured XML strings for follow-up delivery to the orchestrator.
  *
  * Design: Typed objects internally, XML formatting only at the boundary
- * (just before injection into model context via FollowUpQueue).
+ * (just before injection into model context as a queued follow-up).
  */
 
 import path from 'node:path';
@@ -138,7 +138,7 @@ function formatDeliveryPreamble(options: {
 
 /**
  * Format a run's terminal result as a delivery message.
- * Injected into the orchestrator's FollowUpQueue as a user-role message.
+ * Queued as a follow-up for the orchestrator, which it reads as a user-role message.
  *
  * Diff files are accessible via /executions/{id}/files/{diffRelPath}; the
  * delivery includes only the path reference, not the diff content itself.

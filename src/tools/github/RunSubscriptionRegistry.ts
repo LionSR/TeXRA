@@ -24,7 +24,7 @@ import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import type { PollEventListener } from './PollingSourceBase';
 
@@ -121,8 +121,8 @@ export class RunSubscriptionRegistry<K extends string, Input> {
       const onEvent = (text: string): Effect.Effect<void> => {
         // Invoked synchronously on the emit turn (see PollEventListener):
         // capture the binding and its owner now — bind() reassigns the owner
-        // on rebind, and the queued-follow-up refresh belongs to the session
-        // that delivered. Only the delivery itself runs detached.
+        // on rebind, and the delivery belongs to the session the event came
+        // through. Only the delivery itself runs detached.
         const subscription = bound.get(key);
         if (!subscription) return Effect.void;
         const owner = subscription.owner;
@@ -136,20 +136,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
           session: owner,
           mode: 'live_notification',
         }).pipe(
-          Effect.flatMap((result) => {
-            if (result.status !== 'sent' && result.status !== 'queued') {
-              return Effect.void;
-            }
-            return Effect.sync(() => {
-              owner.publish([
-                {
-                  type: 'updateQueuedFollowUps',
-                  aggregateId: qualifyAggregateId('run', runId),
-                  messages: owner.followUps.getAll(runId),
-                },
-              ]);
-            });
-          }),
+          Effect.asVoid,
           Effect.catch(reportDeliveryFailure),
           // A defect (e.g. publish throwing) got the same warn through the old
           // promise chain's .catch; keep one message for both channels.
