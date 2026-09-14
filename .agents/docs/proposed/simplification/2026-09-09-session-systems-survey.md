@@ -129,7 +129,7 @@ substrate. Not #11867, whose SQLite cutover has landed, and not #11869.
 `selectedRunId` now calls it instead of reimplementing the rule — the CLI's
 pre-run local id (`CLI_LOCAL_RUN_ID`) is guarded by the caller rather than by
 a `resolveSelectedId` option, per #12395's refinement. The rest of this
-section — `Surface.expanded` vs. `expandedStreams`, `Surface.launch` vs.
+section — `Surface.expanded` vs. `expandedRuns`, `Surface.launch` vs.
 `sessionMeta`, `Surface.phase` vs. `WORKFLOW_POPUP_VIEW`, and the full
 `Surface` adoption in #11866 — is unchanged and still open.
 
@@ -142,11 +142,12 @@ longer reads zero (`cliState.ts` now imports `resolveSelectedId`), but the
 twin otherwise stands as surveyed.
 
 The result is a concept-by-concept twin. `Surface.selected` against
-`activeStreamId` (`packages/cli/src/chat/tui/state/cliState.ts:90`);
-`Surface.expanded` against `expandedStreams` (`cliState.ts:126`);
-`Surface.launch` against `sessionMeta` (`cliState.ts:60`); `Surface.phase`
-against `WORKFLOW_POPUP_VIEW` (`cliState.ts:329`). The selection rule itself
-was written twice at the time of this survey, at
+`activeRunId` (`packages/cli/src/chat/tui/state/cliState.ts:100`, named
+`activeStreamId` at the time of this survey); `Surface.expanded` against
+`expandedRuns` (`cliState.ts:141`, then `expandedStreams`); `Surface.launch`
+against `sessionMeta` (`cliState.ts:63`); `Surface.phase` against
+`WORKFLOW_POPUP_VIEW` (`cliState.ts:324`). The selection rule itself was
+written twice at the time of this survey, at
 `src/shared/session/surface.ts:293-301` (seven extension and desktop call
 sites) and `cliState.ts:101-108` (read in five CLI files) — it no longer is,
 per the landed note above.
