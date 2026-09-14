@@ -161,30 +161,21 @@ function fetchLocalhost(
   url: string,
   timeoutMs = ZOTERO_PROBE_TIMEOUT_MS,
 ): Effect.Effect<Pick<Response, 'ok' | 'status'>, ToolProbeFailed> {
-  return Effect.acquireUseRelease(
-    // The fiber's signal is the request's: the probe's own deadline below
-    // interrupts this effect, and so does the caller interrupting the probe,
-    // and either way the socket is torn down rather than abandoned.
-    Effect.tryPromise({
-      try: (signal) => fetch(url, { signal }),
-      catch: (cause) =>
-        new ToolProbeFailed({
-          reason: 'probe-request-failed',
-          message: `Probe request to ${url} failed: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    }),
-    (response) => Effect.succeed({ ok: response.ok, status: response.status }),
-    // The probe never reads the body; releasing it frees the socket, and a
-    // cancel that itself fails says nothing about availability.
-    (response) =>
-      Effect.ignore(
-        Effect.tryPromise({
-          try: () => response.body?.cancel() ?? Promise.resolve(),
-          catch: (cause) => cause,
-        }),
-      ),
-  ).pipe(
+  // The deadline sits on the request itself, which stays interruptible. A
+  // bracket would not do: its acquire phase is uninterruptible, so a timeout
+  // around one cannot cut a connection that never returns headers — exactly
+  // the case this deadline exists for. The fiber's signal is the request's,
+  // so both the deadline and a caller interrupting the probe abort the socket
+  // rather than abandon it.
+  return Effect.tryPromise({
+    try: (signal) => fetch(url, { signal }),
+    catch: (cause) =>
+      new ToolProbeFailed({
+        reason: 'probe-request-failed',
+        message: `Probe request to ${url} failed: ${toErrorMessage(cause)}`,
+        cause,
+      }),
+  }).pipe(
     Effect.timeout(timeoutMs),
     Effect.catchTag('TimeoutError', () =>
       Effect.fail(
@@ -193,6 +184,19 @@ function fetchLocalhost(
           message: `Probe request to ${url} did not answer within ${timeoutMs}ms.`,
         }),
       ),
+    ),
+    // Status is read off the response before anything can suspend; cancelling
+    // the body then frees the socket, since the probe never reads it, and a
+    // cancel that itself fails says nothing about availability. An interrupt
+    // arriving instead of this step aborts the request's signal, which tears
+    // the same socket down.
+    Effect.flatMap((response) =>
+      Effect.ignore(
+        Effect.tryPromise({
+          try: () => response.body?.cancel() ?? Promise.resolve(),
+          catch: (cause) => cause,
+        }),
+      ).pipe(Effect.as({ ok: response.ok, status: response.status })),
     ),
   );
 }
@@ -458,7 +462,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     installUrl: 'https://app.uio.no/ifi/texcount/',
     configNotes: 'Part of most TeX Live distributions.',
     hideFromDashboard: true, // Shown in LaTeX settings tab instead
-    check: () => Effect.promise(() => checkToolInstalled('texcount', false)),
+    // The fiber's signal reaches the spawned `texcount --version`, so an
+    // interrupted dashboard refresh kills the probe instead of abandoning it.
+    check: () =>
+      Effect.promise((signal) => checkToolInstalled('texcount', false, signal)),
   },
   {
     id: 'wolfram',
@@ -479,7 +486,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     installUrl: 'https://www.wolfram.com/engine/',
     configNotes: 'Requires the free Wolfram Engine (provides wolframscript).',
     check: () =>
-      Effect.promise(() => checkToolInstalled('wolframscript', false)),
+      Effect.promise((signal) =>
+        checkToolInstalled('wolframscript', false, signal),
+      ),
   },
   {
     id: 'zotero',

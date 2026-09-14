@@ -163,11 +163,15 @@ function parseCommand(cmd: string): { cmdName: string; args: string[] } | null {
 /**
  * Probe one command, falling back to a BinaryResolver-resolved path when the
  * direct spawn neither exits 0 nor prints version-like output.
+ *
+ * `signal` is execa's `cancelSignal`, so an aborted probe kills the spawned
+ * process instead of leaving it to run out its five-second timeout.
  */
 async function executeWithFallback(
   cmd: string,
   args: string[],
   execEnv: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   log.debug(`Checking tool '${cmd}' with args [${args.join(', ')}]`);
 
@@ -175,6 +179,7 @@ async function executeWithFallback(
     env: execEnv,
     reject: false,
     timeout: 5000,
+    cancelSignal: signal,
   });
   log.debug(
     `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
@@ -202,6 +207,7 @@ async function executeWithFallback(
       env: execEnv,
       reject: false,
       timeout: 5000,
+      cancelSignal: signal,
     });
     log.debug(
       `Fallback result: exitCode=${result.exitCode}, ` +
@@ -227,11 +233,17 @@ async function executeWithFallback(
  * Generic function to check if a tool is installed
  * @param toolName Tool name (looked up in TOOL_CONFIGS)
  * @param showError Whether to show an error message if the tool is not installed
+ * @param signal Abort signal for the spawned `<tool> --version` probes.
+ *   Callers inside an Effect pass the fiber's signal so an interrupted probe
+ *   kills the processes instead of leaving several of them running out their
+ *   five-second timeout; Promise-shaped callers pass nothing and behave as
+ *   before.
  * @returns Promise<boolean> True if the tool is installed
  */
 export async function checkToolInstalled(
   toolName: string,
   showError: boolean = true,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   const config = TOOL_CONFIGS[toolName];
 
@@ -262,7 +274,14 @@ export async function checkToolInstalled(
       for (const cmd of command) {
         const parsed = parseCommand(cmd);
         if (!parsed) continue;
-        if (await executeWithFallback(parsed.cmdName, parsed.args, execEnv)) {
+        if (
+          await executeWithFallback(
+            parsed.cmdName,
+            parsed.args,
+            execEnv,
+            signal,
+          )
+        ) {
           isInstalled = true;
           break;
         }
@@ -277,6 +296,7 @@ export async function checkToolInstalled(
         parsed.cmdName,
         parsed.args,
         execEnv,
+        signal,
       );
     }
 

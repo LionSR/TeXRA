@@ -141,7 +141,21 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   // Open the stream on this frame so no chunk is missed, then drain it on a
   // child fiber: a late stream error (terminal closed after we stopped
   // reading) is a value this program discards, not an unhandled rejection.
-  const stream = execution.read();
+  // Opening it is a host call of its own: a terminal disposed between
+  // `executeCommand` and here throws synchronously, and that is this run
+  // failing, not a defect. The abandoned exit-code wait resolves on its own
+  // timer and disposes its listener, so failing here leaks nothing.
+  const stream = yield* Effect.try({
+    try: () => execution.read(),
+    catch: (cause) =>
+      new TerminalRunFailed({
+        reason: 'execution-failed',
+        message:
+          'The integrated terminal closed before its output could be read.',
+        command: args.command,
+        cause,
+      }),
+  });
   const reader = yield* Effect.forkChild(
     Effect.tryPromise({
       try: () => drainStreamTail(stream, TERMINAL_OUTPUT_MAX_CHARS),
