@@ -194,7 +194,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     const presetLaunchBlockReason =
       context.approvalPolicy === 'never' ? 'delegation-denied' : undefined;
     const [modelAccess, authProfile] = await Promise.all([
-      readCliModelAccessStatus(services.secrets),
+      runtime.runPromise(readCliModelAccessStatus(services.secrets)),
       getCliAuthProfile(),
     ]);
     const toolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
@@ -224,7 +224,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
           Effect.catch(() => Effect.succeed([] as readonly CliModelAccess[])),
         ),
       ),
-      loadCliApiStatus(services.secrets, authProfile),
+      runtime.runPromise(loadCliApiStatus(services.secrets, authProfile)),
     ]);
     const allowDefaultModelLaunch = await runtime.runPromise(
       canLaunchWithDefaultModel(context, models, services),

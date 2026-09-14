@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, vi } from 'vitest';
 import { apiKeyEnvName, invalidateApiKeyCache } from '@model/apiProviders';
 import * as apiProviders from '@model/apiProviders';
 import * as setupCredentialAccess from '@model/setupCredentialAccess';
+import { SecretsFailed } from '@platform/secrets';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';
@@ -129,8 +130,14 @@ describe('setup credential reporting', () => {
 
   it.effect('keeps probing when one provider key origin is unavailable', () =>
     Effect.gen(function* () {
-      vi.spyOn(apiProviders, 'lookupApiKeyOrigin').mockRejectedValue(
-        new Error('Keychain unavailable'),
+      vi.spyOn(apiProviders, 'lookupApiKeyOrigin').mockReturnValue(
+        Effect.fail(
+          new SecretsFailed({
+            reason: 'io',
+            operation: 'get',
+            message: 'Keychain unavailable',
+          }),
+        ),
       );
 
       const result = yield* new ProbeEnvironmentTool()

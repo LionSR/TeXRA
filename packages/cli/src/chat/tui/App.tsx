@@ -650,6 +650,7 @@ export function App(props: AppProps): React.JSX.Element {
             />
             <StatusBar
               secrets={props.secrets}
+              runtime={props.runtime}
               chatInputAvailable={
                 !childInputHidden && unavailableDetail === undefined
               }

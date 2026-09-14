@@ -12,9 +12,10 @@ import {
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { providerDisplayName } from '@shared/constants/providers';
 
+/** Every provider's key status, as a program the calling surface settles. */
 export function loadProviderApiKeyStatuses(
   secrets: PlatformSecrets,
-): Promise<Record<ApiProvider, ApiKeyStatus>> {
+): Effect.Effect<Record<ApiProvider, ApiKeyStatus>, SecretsFailed> {
   return loadApiKeyStatusMap(secrets, API_PROVIDERS);
 }
 

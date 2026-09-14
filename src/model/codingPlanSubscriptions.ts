@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 
 import { hasUsableApiKey } from '@model/apiProviders';
@@ -24,6 +25,7 @@ import {
   setGLMCodingPlan,
 } from '@utils/config/providerConfig';
 import { writePlatformSetting } from '@utils/config/platformSettings';
+import { ensureError } from '@utils/errors/errorMessage';
 
 export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
@@ -31,23 +33,27 @@ export interface CodingPlanSubscriptionRuntime {
   readonly setEnabled: (enabled: boolean) => Promise<void>;
 }
 
-async function isGlmCodingPlanActive(
+function isGlmCodingPlanActive(
   modelId: string,
   secrets: PlatformSecrets,
-): Promise<boolean> {
-  const config = await resolveRuntimeModelConfig(modelId);
-  if (config?.provider !== ModelProvider.GLM) return false;
+): Effect.Effect<boolean, Error> {
+  return Effect.gen(function* () {
+    const config = yield* Effect.tryPromise({
+      try: () => resolveRuntimeModelConfig(modelId),
+      catch: ensureError,
+    });
+    if (config?.provider !== ModelProvider.GLM) return false;
 
-  const route = resolveGlmRoute({
-    baseUrl: config.baseUrl,
-    useOpenRouter: shouldRouteModelThroughOpenRouter(
-      config,
-      getUseOpenRouter(),
-    ),
+    const route = resolveGlmRoute({
+      baseUrl: config.baseUrl,
+      useOpenRouter: shouldRouteModelThroughOpenRouter(
+        config,
+        getUseOpenRouter(),
+      ),
+    });
+    if (route.route !== 'official-coding-plan') return false;
+    return yield* hasUsableApiKey(secrets, 'glm');
   });
-  return (
-    route.route === 'official-coding-plan' && hasUsableApiKey(secrets, 'glm')
-  );
 }
 
 /**
@@ -56,16 +62,21 @@ async function isGlmCodingPlanActive(
  * Mirrors the `modelRoutes` route facts: registry eligibility, the OpenRouter
  * toggle, a stored key, and the "Prefer Kimi Code" switch.
  */
-async function isKimiCodeSubscriptionActive(
+function isKimiCodeSubscriptionActive(
   modelId: string,
   secrets: PlatformSecrets,
-): Promise<boolean> {
-  const config = await resolveRuntimeModelConfig(modelId);
-  if (!config || !isKimiSubscriptionEligible(config)) return false;
-  return isKimiCodeRoute(
-    config,
-    await resolveKimiCodeRoutingFacts(secrets, getUseOpenRouter()),
-  );
+): Effect.Effect<boolean, Error> {
+  return Effect.gen(function* () {
+    const config = yield* Effect.tryPromise({
+      try: () => resolveRuntimeModelConfig(modelId),
+      catch: ensureError,
+    });
+    if (!config || !isKimiSubscriptionEligible(config)) return false;
+    return isKimiCodeRoute(
+      config,
+      yield* resolveKimiCodeRoutingFacts(secrets, getUseOpenRouter()),
+    );
+  });
 }
 
 const RUNTIME_BY_ID = {
@@ -94,7 +105,7 @@ const RUNTIME_BY_ID = {
     readonly isActiveForModel: (
       modelId: string,
       secrets: PlatformSecrets,
-    ) => Promise<boolean>;
+    ) => Effect.Effect<boolean, Error>;
   }
 >;
 
@@ -113,17 +124,23 @@ export const codingPlanSubscriptionRuntimes: readonly CodingPlanSubscriptionRunt
   RUNTIMES;
 
 /** Resolve the coding plan currently serving a model, if any. */
-async function activeCodingPlanForModel(
+function activeCodingPlanForModel(
   modelId: string,
   secrets: PlatformSecrets,
-): Promise<CodingPlanSubscriptionRuntime | undefined> {
-  const active = await Promise.all(
-    RUNTIMES.map(async (runtime) => ({
-      runtime,
-      active: await runtime.isActiveForModel(modelId, secrets),
-    })),
+): Effect.Effect<CodingPlanSubscriptionRuntime | undefined, Error> {
+  return Effect.forEach(
+    RUNTIMES,
+    (runtime) =>
+      Effect.map(runtime.isActiveForModel(modelId, secrets), (active) => ({
+        runtime,
+        active,
+      })),
+    { concurrency: 'unbounded' },
+  ).pipe(
+    Effect.map(
+      (candidates) => candidates.find((candidate) => candidate.active)?.runtime,
+    ),
   );
-  return active.find((candidate) => candidate.active)?.runtime;
 }
 
 /**
@@ -140,12 +157,17 @@ async function activeCodingPlanForModel(
  * Lives here rather than in `@model/providerCapabilities` so the OAuth-only
  * module stays free of the coding-plan runtime, which reads stored keys.
  */
-export async function activeSubscriptionUsageRoute(
+export function activeSubscriptionUsageRoute(
   modelId: string,
   secrets: PlatformSecrets,
-): Promise<UsageRoute | undefined> {
-  return (
-    (await oauthSubscriptionUsageRoute(modelId)) ??
-    (await activeCodingPlanForModel(modelId, secrets))?.descriptor.usageRoute
-  );
+): Effect.Effect<UsageRoute | undefined, Error> {
+  return Effect.gen(function* () {
+    const oauthRoute = yield* Effect.tryPromise({
+      try: () => oauthSubscriptionUsageRoute(modelId),
+      catch: ensureError,
+    });
+    if (oauthRoute !== undefined) return oauthRoute;
+    const plan = yield* activeCodingPlanForModel(modelId, secrets);
+    return plan?.descriptor.usageRoute;
+  });
 }

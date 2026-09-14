@@ -149,8 +149,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.profileController = new SettingsProfileController({
       host: 'vscode',
       globalState,
+      // The key-status read is an Effect; this is the boundary that holds a
+      // runtime to settle it on.
       loadProviderKeyStatuses: () =>
-        loadApiKeyStatusMap(secrets, API_PROVIDERS),
+        this.runtime.runPromise(loadApiKeyStatusMap(secrets, API_PROVIDERS)),
       getConfig,
     });
     this.subscriptionUsage = new SubscriptionUsageService({ secrets });

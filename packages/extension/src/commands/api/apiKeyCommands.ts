@@ -9,7 +9,7 @@ import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   API_PROVIDERS,
-  hasUsableApiKey,
+  loadApiKeyStatusMap,
   type ApiProvider,
 } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -86,18 +86,20 @@ async function promptForApiKey(
 
 async function pickApiProvider(
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
   placeHolder: string,
   prompt: string,
 ): Promise<ApiProvider | undefined> {
-  const providerItems = await Promise.all(
-    API_PROVIDERS.map(async (provider) => ({
-      label: provider,
-      description: (await hasUsableApiKey(secrets, provider))
-        ? 'key set'
-        : 'not set',
-      provider,
-    })),
+  // One batched read of the key statuses, settled on the runtime this command
+  // already holds: the pick shows each provider's stored/environment state.
+  const statuses = await runtime.runPromise(
+    loadApiKeyStatusMap(secrets, API_PROVIDERS),
   );
+  const providerItems = API_PROVIDERS.map((provider) => ({
+    label: provider,
+    description: statuses[provider] === 'not-set' ? 'not set' : 'key set',
+    provider,
+  }));
   const providerPick =
     await vscode.window.showQuickPick<ApiProviderQuickPickItem>(providerItems, {
       placeHolder,
@@ -121,6 +123,7 @@ export async function setApiKey(
     provider ??
     (await pickApiProvider(
       secrets,
+      runtime,
       'Select API provider',
       "Keys are stored in VS Code's encrypted secret store, never on disk.",
     ));
@@ -149,6 +152,7 @@ export async function removeApiKey(
 ): Promise<void> {
   const provider = await pickApiProvider(
     secrets,
+    runtime,
     'Select API provider to remove key',
     'Only removes the key from TeXRA — does not delete it from the provider.',
   );

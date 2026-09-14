@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Redacted } from 'effect';
+import { Effect, Fiber, Redacted } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
@@ -88,62 +88,74 @@ describe('API provider key caches', () => {
     vi.restoreAllMocks();
   });
 
-  it('derives provider status from the canonical API-key origin cache', async () => {
-    const { secrets } = createSecrets({
-      [apiKeySecretName('openai')]: 'sk-test',
-    });
+  it.effect(
+    'derives provider status from the canonical API-key origin cache',
+    () =>
+      Effect.gen(function* () {
+        const { secrets } = createSecrets({
+          [apiKeySecretName('openai')]: 'sk-test',
+        });
 
-    await expect(loadApiKeyStatusMap(secrets, ['openai'])).resolves.toEqual({
-      openai: 'set',
-    });
+        expect(yield* loadApiKeyStatusMap(secrets, ['openai'])).toEqual({
+          openai: 'set',
+        });
 
-    invalidateApiKeyCache();
-    const empty = createSecrets({}, { OPENAI_API_KEY: 'from-env' });
+        invalidateApiKeyCache();
+        const empty = createSecrets({}, { OPENAI_API_KEY: 'from-env' });
 
-    await expect(
-      loadApiKeyStatusMap(empty.secrets, ['openai']),
-    ).resolves.toEqual({
-      openai: 'env',
-    });
-  });
+        expect(yield* loadApiKeyStatusMap(empty.secrets, ['openai'])).toEqual({
+          openai: 'env',
+        });
+      }),
+  );
 
-  it('lists only providers with a configured key (secret or env)', async () => {
-    const { secrets } = createSecrets(
-      { [apiKeySecretName('openai')]: 'sk-test' },
-      { MOONSHOT_API_KEY: 'from-env' },
-    );
+  it.effect('lists only providers with a configured key (secret or env)', () =>
+    Effect.gen(function* () {
+      const { secrets } = createSecrets(
+        { [apiKeySecretName('openai')]: 'sk-test' },
+        { MOONSHOT_API_KEY: 'from-env' },
+      );
 
-    await expect(configuredApiKeyProviders(secrets)).resolves.toEqual([
-      'openai',
-      'moonshot',
-    ]);
-  });
+      expect(yield* configuredApiKeyProviders(secrets)).toEqual([
+        'openai',
+        'moonshot',
+      ]);
+    }),
+  );
 
-  it('treats empty env keys as missing in uncached lookups', async () => {
-    const { secrets } = createSecrets({}, { OPENAI_API_KEY: '' });
+  it.effect('treats empty env keys as missing in uncached lookups', () =>
+    Effect.gen(function* () {
+      const { secrets } = createSecrets({}, { OPENAI_API_KEY: '' });
 
-    await expect(apiKeyExistsUncached(secrets, 'openai')).resolves.toBe(false);
-  });
+      expect(yield* apiKeyExistsUncached(secrets, 'openai')).toBe(false);
+    }),
+  );
 
-  it('falls through blank stored values to a usable environment key', async () => {
-    const { secrets } = createSecrets(
-      { [apiKeySecretName('openai')]: '   ' },
-      { OPENAI_API_KEY: '  from-env  ' },
-    );
+  it.effect(
+    'falls through blank stored values to a usable environment key',
+    () =>
+      Effect.gen(function* () {
+        const { secrets } = createSecrets(
+          { [apiKeySecretName('openai')]: '   ' },
+          { OPENAI_API_KEY: '  from-env  ' },
+        );
 
-    await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('env');
-    await expect(hasUsableApiKey(secrets, 'openai')).resolves.toBe(true);
-  });
+        expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('env');
+        expect(yield* hasUsableApiKey(secrets, 'openai')).toBe(true);
+      }),
+  );
 
-  it('reports blank stored and environment values as absent', async () => {
-    const { secrets } = createSecrets(
-      { [apiKeySecretName('openai')]: '   ' },
-      { OPENAI_API_KEY: '\t' },
-    );
+  it.effect('reports blank stored and environment values as absent', () =>
+    Effect.gen(function* () {
+      const { secrets } = createSecrets(
+        { [apiKeySecretName('openai')]: '   ' },
+        { OPENAI_API_KEY: '\t' },
+      );
 
-    await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('none');
-    await expect(hasUsableApiKey(secrets, 'openai')).resolves.toBe(false);
-  });
+      expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('none');
+      expect(yield* hasUsableApiKey(secrets, 'openai')).toBe(false);
+    }),
+  );
 
   it('propagates credential-store read failures to execution callers', async () => {
     const readError = new Error('credential store unavailable');
@@ -190,29 +202,39 @@ describe('API provider key caches', () => {
     expect(secondRead).toHaveBeenCalledTimes(1);
   });
 
-  it('does not let in-flight stale lookups repopulate the cache after invalidation', async () => {
-    const firstLookup = createDeferred<string | undefined>();
-    const { secrets: backing, store } = createSecrets();
-    let reads = 0;
-    const secrets: PlatformSecrets = {
-      ...backing,
-      async get(key) {
-        reads += 1;
-        if (reads === 1) return firstLookup.promise;
-        return store.get(key);
-      },
-    };
+  it.effect(
+    'does not let in-flight stale lookups repopulate the cache after invalidation',
+    () =>
+      Effect.gen(function* () {
+        const firstLookup = createDeferred<string | undefined>();
+        const firstLookupStarted = createDeferred();
+        const { secrets: backing, store } = createSecrets();
+        let reads = 0;
+        const secrets: PlatformSecrets = {
+          ...backing,
+          async get(key) {
+            reads += 1;
+            if (reads === 1) {
+              firstLookupStarted.resolve();
+              return firstLookup.promise;
+            }
+            return store.get(key);
+          },
+        };
 
-    const staleLookup = lookupApiKeyOrigin(secrets, 'openai');
-    await Effect.runPromise(
-      secrets.set(apiKeySecretName('openai'), 'sk-after-invalidate'),
-    );
-    invalidateApiKeyCache();
-    firstLookup.resolve(undefined);
+        const staleLookup = yield* Effect.forkChild(
+          lookupApiKeyOrigin(secrets, 'openai'),
+        );
+        // The invalidation below must race a read that has actually started.
+        yield* Effect.promise(() => firstLookupStarted.promise);
+        yield* secrets.set(apiKeySecretName('openai'), 'sk-after-invalidate');
+        invalidateApiKeyCache();
+        firstLookup.resolve(undefined);
 
-    await expect(staleLookup).resolves.toBe('none');
-    await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('secret');
-  });
+        expect(yield* Fiber.join(staleLookup)).toBe('none');
+        expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('secret');
+      }),
+  );
 
   it.effect('unset_api_key invalidates stale stored-key lookups', () =>
     Effect.gen(function* () {
@@ -221,16 +243,12 @@ describe('API provider key caches', () => {
       });
       yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
 
-      expect(
-        yield* Effect.promise(() => lookupApiKeyOrigin(secrets, 'openai')),
-      ).toBe('secret');
+      expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('secret');
       yield* new UnsetApiKeyTool()
         .call({ provider: 'openai' })
         .pipe(Effect.provide(nativeToolTestLayer()));
 
-      expect(
-        yield* Effect.promise(() => lookupApiKeyOrigin(secrets, 'openai')),
-      ).toBe('none');
+      expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('none');
     }),
   );
 

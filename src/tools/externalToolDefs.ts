@@ -677,10 +677,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
 
       const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
       const secrets = yield* Secrets;
-      const keyOrigin = yield* hostPort(() =>
-        lookupApiKeyOrigin(secrets, 'anthropic'),
-      ).pipe(
-        Effect.catch(() =>
+      const keyOrigin = yield* lookupApiKeyOrigin(secrets, 'anthropic').pipe(
+        Effect.catchTag('SecretsFailed', () =>
           Effect.succeed(process.env[anthropicApiKeyEnv] ? 'env' : 'none'),
         ),
       );

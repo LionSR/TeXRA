@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
@@ -62,8 +61,10 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
       ),
       Effect.all(
         API_PROVIDERS.map((provider) =>
-          hostPort(() => lookupApiKeyOrigin(secrets, provider)).pipe(
-            Effect.catch(() => Effect.succeed('unknown' as const)),
+          lookupApiKeyOrigin(secrets, provider).pipe(
+            Effect.catchTag('SecretsFailed', () =>
+              Effect.succeed('unknown' as const),
+            ),
             Effect.map((origin) => ({ provider, origin })),
           ),
         ),

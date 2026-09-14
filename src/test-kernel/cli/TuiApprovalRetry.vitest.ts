@@ -375,8 +375,8 @@ beforeAll(() => {
 beforeEach(() => {
   mocks.preferSubscription = true;
   mocks.openRouter = false;
-  mocks.apiKeyExistsUncached.mockResolvedValue(true);
-  mocks.hasUsableApiKey.mockResolvedValue(false);
+  mocks.apiKeyExistsUncached.mockReturnValue(Effect.succeed(true));
+  mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
   mocks.updateGlobalState.mockImplementation(
     async (key: string, value: unknown) => {
       if (key === GlobalStateKey.USE_OPENROUTER) {
@@ -674,7 +674,7 @@ describe('TUI request decisions', () => {
     'fails closed when a switchable retry does not identify its provider',
     () =>
       Effect.gen(function* () {
-        mocks.hasUsableApiKey.mockResolvedValue(true);
+        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
         tui();
         const pending = yield* Effect.forkChild(
           openRetry({
@@ -709,8 +709,8 @@ describe('TUI request decisions', () => {
 
   it.effect('falls back to the retry modal when API key lookup fails', () =>
     Effect.gen(function* () {
-      mocks.hasUsableApiKey.mockRejectedValue(
-        new Error('keychain unavailable'),
+      mocks.hasUsableApiKey.mockReturnValue(
+        Effect.fail(new Error('keychain unavailable')),
       );
       tui();
       yield* Effect.forkChild(openRetry(chatGptSubscriptionRetry('s2')));
@@ -731,7 +731,7 @@ describe('TUI request decisions', () => {
     'does not auto-switch when a retry provider is not an API provider',
     () =>
       Effect.gen(function* () {
-        mocks.hasUsableApiKey.mockResolvedValue(true);
+        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
         tui();
         yield* Effect.forkChild(
           openRetry({
@@ -759,7 +759,8 @@ describe('TUI request decisions', () => {
     () =>
       Effect.gen(function* () {
         mocks.hasUsableApiKey.mockImplementation(
-          async (_secrets, provider: ApiProvider) => provider === 'openai',
+          (_secrets, provider: ApiProvider) =>
+            Effect.succeed(provider === 'openai'),
         );
         tui();
         const pending = yield* Effect.forkChild(
@@ -801,19 +802,24 @@ describe('TUI request decisions', () => {
       Effect.gen(function* () {
         let finishLookup: (() => void) | undefined;
         if (stage === 'decision') {
-          mocks.hasUsableApiKey.mockResolvedValue(true);
-          mocks.apiKeyExistsUncached.mockImplementation(
-            () =>
-              new Promise<boolean>((_resolve, reject) => {
-                finishLookup = () => reject(new Error('Keychain unavailable'));
-              }),
+          mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
+          mocks.apiKeyExistsUncached.mockImplementation(() =>
+            Effect.tryPromise(
+              () =>
+                new Promise<boolean>((_resolve, reject) => {
+                  finishLookup = () =>
+                    reject(new Error('Keychain unavailable'));
+                }),
+            ),
           );
         } else {
-          mocks.hasUsableApiKey.mockImplementationOnce(
-            () =>
-              new Promise<boolean>((resolve) => {
-                finishLookup = () => resolve(true);
-              }),
+          mocks.hasUsableApiKey.mockImplementationOnce(() =>
+            Effect.promise(
+              () =>
+                new Promise<boolean>((resolve) => {
+                  finishLookup = () => resolve(true);
+                }),
+            ),
           );
         }
         const attached = tui();
@@ -833,7 +839,7 @@ describe('TUI request decisions', () => {
         attached.dispose();
         if (stage === 'presentation') {
           // A replacement attachment has already prepared its own card.
-          mocks.hasUsableApiKey.mockResolvedValue(false);
+          mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
           tui();
           yield* waitForApproval(
             'retry',
@@ -867,7 +873,8 @@ describe('TUI request decisions', () => {
       Effect.gen(function* () {
         mocks.preferKimiCode = true;
         mocks.hasUsableApiKey.mockImplementation(
-          async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+          (_secrets, provider: ApiProvider) =>
+            Effect.succeed(provider === 'moonshot'),
         );
         tui();
 
@@ -893,7 +900,8 @@ describe('TUI request decisions', () => {
       Effect.gen(function* () {
         mocks.preferKimiCode = true;
         mocks.hasUsableApiKey.mockImplementation(
-          async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+          (_secrets, provider: ApiProvider) =>
+            Effect.succeed(provider === 'moonshot'),
         );
         tui();
         const pending = yield* Effect.forkChild(
@@ -933,7 +941,7 @@ describe('TUI request decisions', () => {
       Effect.gen(function* () {
         mocks.preferKimiCode = true;
         mocks.glmCodingPlan = true;
-        mocks.hasUsableApiKey.mockResolvedValue(false);
+        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
         tui();
         const pending = yield* Effect.forkChild(openRetry(retry()));
 
@@ -953,7 +961,7 @@ describe('TUI request decisions', () => {
     Effect.gen(function* () {
       mocks.glmCodingPlan = true;
       mocks.hasUsableApiKey.mockImplementation(
-        async (_secrets, provider: ApiProvider) => provider === 'glm',
+        (_secrets, provider: ApiProvider) => Effect.succeed(provider === 'glm'),
       );
       tui();
 
@@ -970,7 +978,7 @@ describe('TUI request decisions', () => {
     'does not offer or apply the subscription switch without an OpenAI API key',
     () =>
       Effect.gen(function* () {
-        mocks.hasUsableApiKey.mockResolvedValue(false);
+        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
         tui();
         const pending = yield* Effect.forkChild(
           openRetry(chatGptSubscriptionRetry('missing-openai-key')),
@@ -1014,11 +1022,13 @@ describe('TUI request decisions', () => {
     () =>
       Effect.gen(function* () {
         let resolveLookup: ((value: boolean) => void) | undefined;
-        mocks.hasUsableApiKey.mockImplementation(
-          () =>
-            new Promise<boolean>((resolve) => {
-              resolveLookup = resolve;
-            }),
+        mocks.hasUsableApiKey.mockImplementation(() =>
+          Effect.promise(
+            () =>
+              new Promise<boolean>((resolve) => {
+                resolveLookup = resolve;
+              }),
+          ),
         );
         tui();
         const retry = yield* Effect.forkChild(
@@ -1052,7 +1062,7 @@ describe('TUI request decisions', () => {
 
   it.effect('cancels the retry modal when the run interrupts its request', () =>
     Effect.gen(function* () {
-      mocks.hasUsableApiKey.mockResolvedValue(false);
+      mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
       tui();
       const pending = yield* Effect.forkChild(
         openRetry(chatGptSubscriptionRetry('modal-interrupt')),

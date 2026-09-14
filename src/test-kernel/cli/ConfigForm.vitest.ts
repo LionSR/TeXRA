@@ -106,7 +106,7 @@ function apiKeyStatuses(
 
 beforeEach(() => {
   providerApiKeyRuntime.load.mockReset();
-  providerApiKeyRuntime.load.mockResolvedValue(apiKeyStatuses());
+  providerApiKeyRuntime.load.mockReturnValue(Effect.succeed(apiKeyStatuses()));
   providerApiKeyRuntime.save.mockReset();
   providerApiKeyRuntime.save.mockReturnValue(Effect.void);
 });
@@ -285,7 +285,9 @@ describe('ConfigForm helpers', () => {
 describe('CliConfigForm API-key status lifecycle', () => {
   it('renders initial loading and then configured status from the resolved request', async () => {
     const initial = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
-    providerApiKeyRuntime.load.mockReturnValueOnce(initial.promise);
+    providerApiKeyRuntime.load.mockReturnValueOnce(
+      Effect.tryPromise(() => initial.promise),
+    );
     const rendered = await renderCliConfigForm();
 
     try {
@@ -305,7 +307,9 @@ describe('CliConfigForm API-key status lifecycle', () => {
   it('settles a failed initial load to a stable unavailable state', async () => {
     const initial = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
     const onError = vi.fn();
-    providerApiKeyRuntime.load.mockReturnValueOnce(initial.promise);
+    providerApiKeyRuntime.load.mockReturnValueOnce(
+      Effect.tryPromise(() => initial.promise),
+    );
     const rendered = await renderCliConfigForm(onError);
 
     try {
@@ -327,8 +331,8 @@ describe('CliConfigForm API-key status lifecycle', () => {
   it('refreshes provider status after saving without rendering the secret', async () => {
     const refreshed = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
     providerApiKeyRuntime.load
-      .mockResolvedValueOnce(apiKeyStatuses())
-      .mockReturnValueOnce(refreshed.promise);
+      .mockReturnValueOnce(Effect.succeed(apiKeyStatuses()))
+      .mockReturnValueOnce(Effect.tryPromise(() => refreshed.promise));
     const rendered = await renderCliConfigForm();
 
     try {
@@ -357,8 +361,10 @@ describe('CliConfigForm API-key status lifecycle', () => {
     const refreshed = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
     const onError = vi.fn();
     providerApiKeyRuntime.load
-      .mockResolvedValueOnce(apiKeyStatuses({ openai: 'not-set' }))
-      .mockReturnValueOnce(refreshed.promise);
+      .mockReturnValueOnce(
+        Effect.succeed(apiKeyStatuses({ openai: 'not-set' })),
+      )
+      .mockReturnValueOnce(Effect.tryPromise(() => refreshed.promise));
     const rendered = await renderCliConfigForm(onError);
 
     try {
@@ -392,8 +398,8 @@ describe('CliConfigForm API-key status lifecycle', () => {
     const initial = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
     const refreshed = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
     providerApiKeyRuntime.load
-      .mockReturnValueOnce(initial.promise)
-      .mockReturnValueOnce(refreshed.promise);
+      .mockReturnValueOnce(Effect.tryPromise(() => initial.promise))
+      .mockReturnValueOnce(Effect.tryPromise(() => refreshed.promise));
     const rendered = await renderCliConfigForm();
 
     try {
@@ -418,7 +424,9 @@ describe('CliConfigForm API-key status lifecycle', () => {
   it('ignores a pending status response after unmount', async () => {
     const initial = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
     const onError = vi.fn();
-    providerApiKeyRuntime.load.mockReturnValueOnce(initial.promise);
+    providerApiKeyRuntime.load.mockReturnValueOnce(
+      Effect.tryPromise(() => initial.promise),
+    );
     const rendered = await renderCliConfigForm(onError);
 
     await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 1);
@@ -448,10 +456,12 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 
   it('uses the same status-aware form in standalone config and /config', async () => {
-    providerApiKeyRuntime.load.mockResolvedValue(
-      apiKeyStatuses({
-        openai: 'set',
-      }),
+    providerApiKeyRuntime.load.mockReturnValue(
+      Effect.succeed(
+        apiKeyStatuses({
+          openai: 'set',
+        }),
+      ),
     );
     const { React } = await loadInk();
     const standalone = await renderInkElement(
