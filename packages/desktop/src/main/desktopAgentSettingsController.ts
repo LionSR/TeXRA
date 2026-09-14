@@ -219,11 +219,15 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         this.runtime.runPromise(
           hostPort(action).pipe(
             Effect.catchCause((cause) =>
-              hostPort(() =>
-                notifications.showErrorMessage(
-                  `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
-                ),
-              ),
+              // An interrupt (the runtime disposing at shutdown) is not an
+              // action failure: re-fail it instead of showing a notification.
+              Cause.hasInterruptsOnly(cause)
+                ? Effect.failCause(cause)
+                : hostPort(() =>
+                    notifications.showErrorMessage(
+                      `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
+                    ),
+                  ),
             ),
           ),
         ),
@@ -422,11 +426,13 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         yield* hostPort(() => this.refreshAfterAgentMutation());
       }).pipe(
         Effect.catchCause((cause) =>
-          hostPort(() =>
-            this.notifications.showErrorMessage(
-              `Failed to create custom agent: ${toErrorMessage(Cause.squash(cause))}`,
-            ),
-          ),
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause)
+            : hostPort(() =>
+                this.notifications.showErrorMessage(
+                  `Failed to create custom agent: ${toErrorMessage(Cause.squash(cause))}`,
+                ),
+              ),
         ),
       ),
     );
@@ -461,11 +467,13 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         yield* hostPort(() => this.directory.openPath(target));
       }).pipe(
         Effect.catchCause((cause) =>
-          hostPort(() =>
-            this.notifications.showErrorMessage(
-              `Failed to view remote agent prompt: ${toErrorMessage(Cause.squash(cause))}`,
-            ),
-          ),
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause)
+            : hostPort(() =>
+                this.notifications.showErrorMessage(
+                  `Failed to view remote agent prompt: ${toErrorMessage(Cause.squash(cause))}`,
+                ),
+              ),
         ),
       ),
     );
