@@ -960,6 +960,24 @@ export const bindModel = Effect.fn('bindModel')(function* (
           try: () => constructModel(configuration, credential),
           catch: ensureError,
         });
+  // What the binding uploaded lives only in the model's memory, so it is
+  // deleted when the binding's scope closes: after the run settles, on every
+  // exit. A delete the provider refuses or leaves unanswered is logged and
+  // left to the upload's own expiry; it never fails the close.
+  const releaseUploads = model.releaseUploads;
+  if (releaseUploads !== undefined) {
+    yield* Effect.addFinalizer(() =>
+      releaseUploads().pipe(
+        Effect.flatMap((unreleased) =>
+          unreleased.length === 0
+            ? Effect.void
+            : Effect.logWarning(
+                `Could not delete ${unreleased.length} uploaded file(s) when the ${config.name} binding closed; the provider expires them on its own.`,
+              ).pipe(Effect.annotateLogs({ unreleased })),
+        ),
+      ),
+    );
+  }
   const origin: ModelOrigin = {
     protocol: configuration.protocol,
     codecVersion: 1,

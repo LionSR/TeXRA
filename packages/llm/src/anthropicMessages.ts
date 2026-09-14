@@ -24,13 +24,10 @@ import {
   pullStream,
   ResolvedTurnSchema,
   retryAfterMsOf,
-  usableReceipt,
   sameModelOrigin,
   TurnRequestSchema,
   TurnResultSchema,
-  FileUploadSchema,
   type AnthropicMessagesConfiguration,
-  type FileReceipt,
   type Model,
   type ModelOrigin,
   type ResolvedTurn,
@@ -38,7 +35,7 @@ import {
   type TurnResult,
   completedTurn,
 } from './turn.js';
-import { issuerFingerprint } from './prefixFingerprint.js';
+import { uploadCache, type UploadCache } from './uploadCache.js';
 import type {
   ContentBlockParam,
   MessageCreateParamsStreaming,
@@ -189,19 +186,13 @@ function sdkFailure(cause: unknown): ModelError {
   });
 }
 
-/** What lowering needs to decide whether a receipt may stand in for bytes. */
-interface ReceiptLowering {
-  /** This binding's issuer, or `null` when it has none to honour. */
-  readonly issuer: string | null;
-  readonly nowMs: number;
-}
-
 const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
   part: Extract<
     ResolvedTurn['messages'][number],
     { role: 'user' }
   >['content'][number],
-  lowering: ReceiptLowering,
+  /** The live file id this binding holds for some bytes, or `null`. */
+  fileIdFor: (base64: string) => string | null,
 ) {
   if (part.kind === 'text') return { type: 'text', text: part.text } as const;
   if (part.kind === 'image' && part.detail === undefined) {
@@ -215,15 +206,8 @@ const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
       } as const;
   }
   if (part.kind === 'document' && part.mimeType === 'application/pdf') {
-    // The id stands in for the bytes only where this binding issued it and
-    // it is still live; a receipt from another protocol, account, endpoint
-    // or credential, or an expired one, is never sent.
-    const fileId = usableReceipt(
-      part.receipt,
-      'anthropic-messages',
-      lowering.issuer,
-      lowering.nowMs,
-    );
+    // Only this binding's own live upload stands in for the bytes.
+    const fileId = fileIdFor(part.base64);
     return fileId !== null
       ? ({
           type: 'document',
@@ -249,7 +233,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   turn: ResolvedTurn,
   origin: ModelOrigin,
   config: AnthropicMessagesConfiguration,
-  issuer: string | null,
+  uploads: UploadCache,
 ) {
   if (
     turn.protocol !== 'anthropic-messages' ||
@@ -295,12 +279,9 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       });
     }
   }
-  const lowering: ReceiptLowering = {
-    issuer,
-    nowMs: yield* Clock.currentTimeMillis,
-  };
+  const nowMs = yield* Clock.currentTimeMillis;
   const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
-    inputPart(part, lowering);
+    inputPart(part, (base64) => uploads.fileIdFor(base64, nowMs));
   const messages: MessageParam[] = [];
   let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
     [];
@@ -475,12 +456,6 @@ export function anthropicMessagesModel(
     requestedModel: config.requestedModel,
     deployment: config.deployment,
   };
-  // The account a file id lives in: this endpoint and this key, by digest.
-  const issuer = issuerFingerprint(
-    'anthropic-messages',
-    config.deployment.endpoint,
-    transport.apiKey,
-  );
   const client = new Anthropic({
     apiKey: transport.apiKey,
     authToken: null,
@@ -489,6 +464,52 @@ export function anthropicMessagesModel(
     maxRetries: 0,
     logLevel: 'off',
     timeout: 600_000,
+  });
+  const uploads = uploadCache({
+    send: (upload) =>
+      Effect.gen(function* () {
+        const uploaded = yield* Effect.tryPromise({
+          try: async (signal) =>
+            client.files.upload(
+              {
+                file: await toFile(
+                  Buffer.from(upload.base64, 'base64'),
+                  upload.filename,
+                  { type: upload.mimeType },
+                ),
+                expires_in_seconds: FILE_UPLOAD_LIFETIME_SECONDS,
+              },
+              { signal },
+            ),
+          catch: (cause) =>
+            enrichModelError(sdkFailure(cause), {
+              model: origin.requestedModel,
+            }),
+        });
+        // RFC 3339, or null when the file does not expire. An expiry that
+        // cannot be read is refused rather than read as "never".
+        const expiresAtMs =
+          uploaded.expires_at == null ? null : Date.parse(uploaded.expires_at);
+        if (expiresAtMs !== null && !Number.isFinite(expiresAtMs))
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message: 'Anthropic returned a file expiry that is not a date.',
+            model: origin.requestedModel,
+          });
+        return { fileId: uploaded.id, expiresAtMs };
+      }),
+    // A 404 means the provider already expired the file: the outcome asked for.
+    remove: (fileId) =>
+      Effect.tryPromise({
+        try: (signal) => client.files.delete(fileId, null, { signal }),
+        catch: (cause) =>
+          enrichModelError(sdkFailure(cause), { model: origin.requestedModel }),
+      }).pipe(
+        Effect.asVoid,
+        Effect.catchTag('ModelError', (error) =>
+          error.status === 404 ? Effect.void : Effect.fail(error),
+        ),
+      ),
   });
   const prepareTurn: Model['prepareTurn'] = Effect.fn(
     'llm.anthropic.prepareTurn',
@@ -559,7 +580,7 @@ export function anthropicMessagesModel(
         message: 'Anthropic requires complete supported invocation controls.',
         cause: prepared.error,
       });
-    yield* invocationBody(prepared.data, origin, config, issuer);
+    yield* invocationBody(prepared.data, origin, config, uploads);
     return prepared.data;
   });
 
@@ -585,7 +606,7 @@ export function anthropicMessagesModel(
             prepared.data,
             origin,
             config,
-            issuer,
+            uploads,
           );
           const signal = yield* Effect.abortSignal;
           const source = yield* Effect.tryPromise({
@@ -993,7 +1014,7 @@ export function anthropicMessagesModel(
           message: 'The prepared Anthropic count invocation is unsupported.',
         });
       const turn = parsed.data;
-      const body = yield* invocationBody(turn, origin, config, issuer);
+      const body = yield* invocationBody(turn, origin, config, uploads);
       const message = turn.messages[0];
       if (
         turn.tools.length !== 0 ||
@@ -1090,84 +1111,12 @@ export function anthropicMessagesModel(
         coverage: 'anthropic-message-input' as const,
       });
     });
-  /**
-   * One file into Anthropic's Files API, in exchange for the id a `document`
-   * source names. The receipt records this binding's issuer and the stated
-   * expiry, so lowering sends the id only while both still hold.
-   */
-  const uploadFile: NonNullable<Model['uploadFile']> = Effect.fn(
-    'llm.anthropic.uploadFile',
-  )(function* (file): Effect.fn.Return<FileReceipt, ModelError> {
-    const parsed = FileUploadSchema.safeParse(file);
-    if (!parsed.success)
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'The file to upload is invalid.',
-        cause: parsed.error,
-      });
-    const upload = parsed.data;
-    const uploaded = yield* Effect.tryPromise({
-      try: async (signal) =>
-        client.files.upload(
-          {
-            file: await toFile(
-              Buffer.from(upload.base64, 'base64'),
-              upload.filename,
-              { type: upload.mimeType },
-            ),
-            expires_in_seconds: FILE_UPLOAD_LIFETIME_SECONDS,
-          },
-          { signal },
-        ),
-      catch: (cause) =>
-        enrichModelError(sdkFailure(cause), { model: origin.requestedModel }),
-    });
-    // `expires_at` is RFC 3339, or null when the file does not expire. An
-    // expiry that cannot be read is refused rather than read as "never".
-    const expiresAtMs =
-      uploaded.expires_at == null ? null : Date.parse(uploaded.expires_at);
-    if (expiresAtMs !== null && !Number.isFinite(expiresAtMs))
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message: 'Anthropic returned a file expiry that is not a date.',
-        model: origin.requestedModel,
-      });
-    return {
-      protocol: 'anthropic-messages',
-      issuer,
-      fileId: uploaded.id,
-      expiresAtMs,
-    };
-  });
-  /**
-   * Remove a file this binding uploaded. A receipt from another protocol or
-   * issuer names a file this key cannot own, so it is refused, never sent; a
-   * 404 means the provider already expired it, which is the outcome asked for.
-   */
-  const deleteFile: NonNullable<Model['deleteFile']> = Effect.fn(
-    'llm.anthropic.deleteFile',
-  )(function* (receipt) {
-    if (receipt.protocol !== 'anthropic-messages' || receipt.issuer !== issuer)
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message: 'This binding did not upload the file it was asked to delete.',
-      });
-    yield* Effect.tryPromise({
-      try: (signal) => client.files.delete(receipt.fileId, null, { signal }),
-      catch: (cause) =>
-        enrichModelError(sdkFailure(cause), { model: origin.requestedModel }),
-    }).pipe(
-      Effect.catchTag('ModelError', (error) =>
-        error.status === 404 ? Effect.void : Effect.fail(error),
-      ),
-    );
-  });
   return Object.freeze({
     prepareTurn,
     streamTurn,
     generateTurn,
-    uploadFile,
-    deleteFile,
+    uploadFile: uploads.uploadFile,
+    releaseUploads: uploads.releaseUploads,
     ...(config.supportsInputTokenEstimation ? { estimateInputTokens } : {}),
   });
 }

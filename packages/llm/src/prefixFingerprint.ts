@@ -26,20 +26,3 @@ export function prefixFingerprint(
   );
   return createHash('sha256').update(encoded, 'utf8').digest('hex');
 }
-
-/**
- * A non-secret name for the account a credential acts as on one endpoint of
- * one protocol: a SHA-256 digest of the three, never the credential itself
- * (the run binding names its wire route the same way). A provider file id is
- * valid only inside the account that uploaded it, so a receipt carries this
- * and only a binding that computes the same value sends the id.
- */
-export function issuerFingerprint(
-  protocol: string,
-  endpoint: string,
-  credential: string,
-): string {
-  return createHash('sha256')
-    .update(`texra-file-issuer-v1\0${protocol}\0${endpoint}\0${credential}`)
-    .digest('hex');
-}

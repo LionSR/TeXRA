@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 // Local imports - canonical model contract
 import { openaiFailure } from './openaiError.js';
-import { issuerFingerprint, prefixFingerprint } from './prefixFingerprint.js';
+import { prefixFingerprint } from './prefixFingerprint.js';
 import {
   BackgroundSubmissionSchema,
   CancellationEvidenceSchema,
@@ -28,11 +28,9 @@ import {
   parseJsonOrModelError,
   RemoteOperationSchema,
   ResolvedTurnSchema,
-  FileUploadSchema,
   TurnRequestSchema,
   TurnResultSchema,
   sameModelOrigin,
-  usableReceipt,
   type Model,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
@@ -42,10 +40,10 @@ import {
   type BackgroundEvent,
   type BackgroundSubmission,
   type Continuation,
-  type FileReceipt,
   type RemoteOperation,
   completedTurn,
 } from './turn.js';
+import { uploadCache, type UploadCache } from './uploadCache.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 type ResponseOrigin = RemoteOperation['origin'];
@@ -352,49 +350,90 @@ const RESPONSES_IMAGE_DETAIL = {
   OpenAI.Responses.ResponseInputImage['detail']
 >;
 
-/** What lowering needs to decide whether a receipt may stand in for bytes. */
-interface ReceiptLowering {
-  /** This binding's issuer, or `null` when it has none to honour. */
-  readonly issuer: string | null;
-  readonly nowMs: number;
-}
+/**
+ * The image formats sent to Responses. The pinned `openai` typings name no
+ * input-image formats (only image generation's output formats), so this is
+ * the conservative raster set; a GIF must also be a single frame. An exact
+ * match on the lowercased MIME type also keeps a value carrying data-URL
+ * delimiters out of the URL built from it.
+ */
+const RESPONSES_IMAGE_MIME_TYPES: ReadonlySet<string> = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+]);
 
 /**
- * The issuer a Responses binding honours receipts from. An API key names the
- * account its files live in; a subscription token rotates on refresh and its
- * backend serves no files endpoint, so that binding has none and always sends
- * bytes.
+ * How many image frames a GIF holds, by walking its blocks, or `null` when
+ * the bytes are not a well-formed GIF. Only the structure is read: the
+ * header, the optional colour tables, then extension and image blocks and
+ * their data sub-blocks up to the trailer.
  */
-function responsesIssuer(
-  config: OpenAIResponsesConfiguration,
-  authentication: z.infer<typeof ResponseAuthenticationSchema>,
-): string | null {
-  return authentication.kind === 'api-key'
-    ? issuerFingerprint(
-        'openai-responses',
-        config.deployment.endpoint,
-        authentication.apiKey,
-      )
-    : null;
+function gifFrameCount(bytes: Uint8Array): number | null {
+  const header = String.fromCharCode(...bytes.subarray(0, 6));
+  if (bytes.length < 13 || (header !== 'GIF87a' && header !== 'GIF89a'))
+    return null;
+  const tableSize = (flags: number): number =>
+    flags & 0x80 ? 3 * 2 ** ((flags & 0x07) + 1) : 0;
+  let offset = 13 + tableSize(bytes[10]!);
+  const skipSubBlocks = (): boolean => {
+    while (offset < bytes.length) {
+      const size = bytes[offset]!;
+      offset += 1;
+      if (size === 0) return true;
+      offset += size;
+    }
+    return false;
+  };
+  let frames = 0;
+  while (offset < bytes.length) {
+    const block = bytes[offset]!;
+    if (block === 0x3b) return frames;
+    if (block === 0x21) {
+      offset += 2;
+      if (!skipSubBlocks()) return null;
+    } else if (block === 0x2c) {
+      if (offset + 10 > bytes.length) return null;
+      frames += 1;
+      offset += 10 + tableSize(bytes[offset + 9]!) + 1;
+      if (!skipSubBlocks()) return null;
+    } else {
+      return null;
+    }
+  }
+  return null;
 }
 
 /**
  * One canonical input part as Responses content. Inline bytes travel as a
- * data URL. A document's receipt travels as its id only where this binding
- * issued it and it is still live; any other receipt is never sent, and the
- * document lowers from the bytes it always keeps.
+ * data URL; a document this binding already uploaded travels as its live
+ * file id. An image outside the formats Responses takes is refused here,
+ * before any request, rather than by the provider.
  */
 const responsesContent = Effect.fn('llm.responses.content')(function* (
   part: Extract<
     ResolvedTurn['messages'][number],
     { role: 'user' }
   >['content'][number],
-  lowering: ReceiptLowering,
+  /** The live file id this binding holds for some bytes, or `null`. */
+  fileIdFor: (base64: string) => string | null,
 ): Effect.fn.Return<OpenAI.Responses.ResponseInputContent, ModelError> {
   switch (part.kind) {
     case 'text':
       return { type: 'input_text', text: part.text };
-    case 'image':
+    case 'image': {
+      const mimeType = part.mimeType.toLowerCase();
+      if (
+        !RESPONSES_IMAGE_MIME_TYPES.has(mimeType) ||
+        (mimeType === 'image/gif' &&
+          gifFrameCount(Buffer.from(part.base64, 'base64')) !== 1)
+      )
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Responses takes PNG, JPEG, WEBP and single-frame GIF images; this image attachment is none of those.',
+        });
       return {
         type: 'input_image',
         // No stated detail keeps the provider's own choice rather than
@@ -403,15 +442,11 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
           part.detail === undefined
             ? 'auto'
             : RESPONSES_IMAGE_DETAIL[part.detail],
-        image_url: `data:${part.mimeType};base64,${part.base64}`,
+        image_url: `data:${mimeType};base64,${part.base64}`,
       };
+    }
     case 'document': {
-      const fileId = usableReceipt(
-        part.receipt,
-        'openai-responses',
-        lowering.issuer,
-        lowering.nowMs,
-      );
+      const fileId = fileIdFor(part.base64);
       if (fileId !== null) return { type: 'input_file', file_id: fileId };
       return {
         type: 'input_file',
@@ -433,14 +468,13 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
 
 const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
-  issuer: string | null,
+  uploads: UploadCache | null,
 ) {
-  const lowering: ReceiptLowering = {
-    issuer,
-    nowMs: yield* Clock.currentTimeMillis,
-  };
+  const nowMs = yield* Clock.currentTimeMillis;
   const content = (part: Parameters<typeof responsesContent>[0]) =>
-    responsesContent(part, lowering);
+    responsesContent(part, (base64) =>
+      uploads === null ? null : uploads.fileIdFor(base64, nowMs),
+    );
   const input: OpenAI.Responses.ResponseInput = [];
   let callIds: string[] = [];
   for (const message of turn.messages) {
@@ -697,13 +731,13 @@ export const openaiResponsesContinuation = Effect.fn(
 
 const responseInput = Effect.fn('llm.responses.input')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
-  issuer: string | null,
+  uploads: UploadCache | null,
 ) {
-  const input = yield* lowerInput(turn, issuer);
+  const input = yield* lowerInput(turn, uploads);
   const continuation = turn.continuation;
   if (!continuation) return { input };
   const prefix = turn.messages.slice(0, continuation.coveredMessages);
-  // Counted only: a receipt and its bytes lower to the same one item.
+  // Counted only: a file id and the bytes it stands for are one item.
   const encodedPrefix = yield* lowerInput({ ...turn, messages: prefix }, null);
   if (
     !sameModelOrigin(turn, continuation.origin) ||
@@ -1079,7 +1113,7 @@ const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
   origin: ResponseOrigin,
   transport: ResponsesTransport,
   request: TurnRequest,
-  issuer: string | null,
+  uploads: UploadCache | null,
 ) {
   const parsed = TurnRequestSchema.safeParse(request);
   if (!parsed.success)
@@ -1145,7 +1179,14 @@ const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
       kind: 'unsupported',
       message: 'The prepared protocol changed.',
     });
-  yield* responseParameters(config, origin, transport, turn, turn.mode, issuer);
+  yield* responseParameters(
+    config,
+    origin,
+    transport,
+    turn,
+    turn.mode,
+    uploads,
+  );
   return turn;
 });
 
@@ -1156,7 +1197,7 @@ const responseParameters = Effect.fn('llm.responses.parameters')(function* (
   transport: ResponsesTransport,
   input: ResolvedTurn,
   mode: 'foreground' | 'background',
-  issuer: string | null,
+  uploads: UploadCache | null,
 ) {
   const parsed = ResolvedTurnSchema.safeParse(input);
   if (
@@ -1190,7 +1231,7 @@ const responseParameters = Effect.fn('llm.responses.parameters')(function* (
       kind: 'unsupported',
       message: 'The prepared controls are unsupported by the selected route.',
     });
-  const wireInput = yield* responseInput(turn, issuer);
+  const wireInput = yield* responseInput(turn, uploads);
   const reasoning = turn.controls.reasoning;
   const parameters: ResponseCreateParamsBase = {
     model: turn.requestedModel,
@@ -1294,7 +1335,7 @@ const estimateResponseInput = Effect.fn('llm.responses.estimateInputTokens')(
     client: OpenAI,
     input: Extract<ResolvedTurn, { mode: 'foreground' }>,
   ) {
-    // Estimation admits a single text message, so no receipt can apply.
+    // Estimation admits a single text message, so no file id can apply.
     const { turn, parameters } = yield* responseParameters(
       config,
       origin,
@@ -1456,7 +1497,6 @@ export function openaiResponsesModel(
     codecVersion: 1,
   } satisfies ResponseOrigin);
   const authentication = responseAuthentication(transport.authentication);
-  const issuer = responsesIssuer(config, transport.authentication);
   const client = new OpenAI({
     apiKey: authentication.token,
     defaultHeaders: authentication.headers,
@@ -1467,8 +1507,72 @@ export function openaiResponsesModel(
     project: null,
     logLevel: 'off',
   });
+  // Uploads need a files endpoint and a stable account: an API-key binding.
+  // A subscription token rotates and its backend serves no files endpoint.
+  const uploads =
+    transport.authentication.kind === 'api-key'
+      ? uploadCache({
+          send: (upload) =>
+            Effect.gen(function* () {
+              const uploaded = yield* Effect.tryPromise({
+                try: async (signal) =>
+                  client.files.create(
+                    {
+                      file: await OpenAI.toFile(
+                        Buffer.from(upload.base64, 'base64'),
+                        upload.filename,
+                        { type: upload.mimeType },
+                      ),
+                      purpose: 'user_data',
+                      expires_after: {
+                        anchor: 'created_at',
+                        seconds: FILE_UPLOAD_LIFETIME_SECONDS,
+                      },
+                    },
+                    { signal },
+                  ),
+                catch: (cause) =>
+                  enrichModelError(openaiFailure(cause), {
+                    model: origin.requestedModel,
+                  }),
+              });
+              // Unix seconds, absent when the file does not expire. An
+              // expiry that is not a whole, non-negative second is refused
+              // rather than read as "never".
+              const expiresAt = uploaded.expires_at;
+              if (
+                expiresAt !== undefined &&
+                !(Number.isSafeInteger(expiresAt) && expiresAt >= 0)
+              )
+                return yield* new ModelError({
+                  kind: 'malformed-output',
+                  message:
+                    'OpenAI returned a file expiry that is not a timestamp.',
+                  model: origin.requestedModel,
+                });
+              return {
+                fileId: uploaded.id,
+                expiresAtMs: expiresAt === undefined ? null : expiresAt * 1000,
+              };
+            }),
+          // A 404 means the provider already expired the file.
+          remove: (fileId) =>
+            Effect.tryPromise({
+              try: (signal) => client.files.delete(fileId, { signal }),
+              catch: (cause) =>
+                enrichModelError(openaiFailure(cause), {
+                  model: origin.requestedModel,
+                }),
+            }).pipe(
+              Effect.asVoid,
+              Effect.catchTag('ModelError', (error) =>
+                error.status === 404 ? Effect.void : Effect.fail(error),
+              ),
+            ),
+        })
+      : null;
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, { kind: 'http' }, request, issuer);
+    prepareResponsesTurn(config, origin, { kind: 'http' }, request, uploads);
 
   const createResponse = Effect.fn('llm.responses.create')(function* (
     input: ResolvedTurn,
@@ -1480,7 +1584,7 @@ export function openaiResponsesModel(
       { kind: 'http' },
       input,
       mode,
-      issuer,
+      uploads,
     );
     const signal = yield* Effect.abortSignal;
     const opened = yield* Effect.tryPromise({
@@ -2118,107 +2222,16 @@ export function openaiResponsesModel(
     );
   });
 
-  /**
-   * One file into OpenAI's Files API, in exchange for the id an `input_file`
-   * part names. The receipt records this binding's issuer and the stated
-   * expiry, so lowering sends the id only while both still hold. Offered only
-   * to an API-key binding: a subscription binding has no issuer to honour.
-   * The WebSocket transport uploads nothing itself but honours a receipt
-   * issued to the same key and endpoint.
-   */
-  const uploadFile: Model['uploadFile'] =
-    issuer === null
-      ? undefined
-      : Effect.fn('llm.responses.uploadFile')(
-          function* (file): Effect.fn.Return<FileReceipt, ModelError> {
-            const parsed = FileUploadSchema.safeParse(file);
-            if (!parsed.success)
-              return yield* new ModelError({
-                kind: 'invalid-request',
-                message: 'The file to upload is invalid.',
-                cause: parsed.error,
-              });
-            const upload = parsed.data;
-            const uploaded = yield* Effect.tryPromise({
-              try: async (signal) =>
-                client.files.create(
-                  {
-                    file: await OpenAI.toFile(
-                      Buffer.from(upload.base64, 'base64'),
-                      upload.filename,
-                      { type: upload.mimeType },
-                    ),
-                    purpose: 'user_data',
-                    expires_after: {
-                      anchor: 'created_at',
-                      seconds: FILE_UPLOAD_LIFETIME_SECONDS,
-                    },
-                  },
-                  { signal },
-                ),
-              catch: (cause) =>
-                enrichModelError(openaiFailure(cause), {
-                  model: origin.requestedModel,
-                }),
-            });
-            // `expires_at` is Unix seconds and absent when the file does not expire.
-            // An expiry that is not a whole, non-negative second is refused rather
-            // than read as "never".
-            const expiresAt = uploaded.expires_at;
-            if (
-              expiresAt !== undefined &&
-              !(Number.isSafeInteger(expiresAt) && expiresAt >= 0)
-            )
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message:
-                  'OpenAI returned a file expiry that is not a timestamp.',
-                model: origin.requestedModel,
-              });
-            return {
-              protocol: 'openai-responses',
-              issuer,
-              fileId: uploaded.id,
-              expiresAtMs: expiresAt === undefined ? null : expiresAt * 1000,
-            };
-          },
-        );
-
-  /**
-   * Remove a file this binding uploaded. A receipt from another protocol or
-   * issuer names a file this key cannot own, so it is refused, never sent; a
-   * 404 means the provider already expired it, which is the outcome asked for.
-   */
-  const deleteFile: NonNullable<Model['deleteFile']> = Effect.fn(
-    'llm.responses.deleteFile',
-  )(function* (receipt) {
-    if (
-      issuer === null ||
-      receipt.protocol !== 'openai-responses' ||
-      receipt.issuer !== issuer
-    )
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message: 'This binding did not upload the file it was asked to delete.',
-      });
-    yield* Effect.tryPromise({
-      try: (signal) => client.files.delete(receipt.fileId, { signal }),
-      catch: (cause) =>
-        enrichModelError(openaiFailure(cause), {
-          model: origin.requestedModel,
-        }),
-    }).pipe(
-      Effect.catchTag('ModelError', (error) =>
-        error.status === 404 ? Effect.void : Effect.fail(error),
-      ),
-    );
-  });
-
   return Object.freeze({
     prepareTurn,
     streamTurn,
     generateTurn,
-    ...(uploadFile !== undefined ? { uploadFile, deleteFile } : {}),
+    ...(uploads !== null
+      ? {
+          uploadFile: uploads.uploadFile,
+          releaseUploads: uploads.releaseUploads,
+        }
+      : {}),
     ...(config.supportsInputTokenEstimation
       ? {
           estimateInputTokens: (
@@ -2285,7 +2298,6 @@ export const openaiResponsesWebSocketModel = Effect.fn(
     deployment: config.deployment,
     codecVersion: 1,
   } satisfies ResponseOrigin);
-  const issuer = responsesIssuer(config, authentication);
   const selected = yield* Effect.try({
     try: () => responseAuthentication(authentication),
     catch: (cause) => cause,
@@ -2469,7 +2481,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   }).pipe(Effect.forkScoped);
 
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, transport, request, issuer);
+    prepareResponsesTurn(config, origin, transport, request, null);
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.suspend(() => {
       let responseId: string | undefined;
@@ -2488,7 +2500,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
             transport,
             input,
             'foreground',
-            issuer,
+            null,
           );
           const now = yield* Clock.currentTimeMillis;
           yield* Effect.acquireRelease(

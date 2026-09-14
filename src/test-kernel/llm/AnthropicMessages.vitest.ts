@@ -201,44 +201,30 @@ describe('canonical Anthropic Messages protocol', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it.effect(
-    'sends a document by receipt only while its issuer and expiry hold, and by bytes otherwise',
+    'sends an uploaded document by file id only from this binding while live, and deletes it on release',
     () =>
       Effect.gen(function* () {
-        fetchModel.mockImplementation(async (url) =>
-          String(url).endsWith('/v1/files')
-            ? Response.json({
-                id: 'file_uploaded',
-                expires_at: '1970-01-01T01:00:00Z',
-              })
-            : response(signedEvents()),
-        );
-        const configured = model();
-        assert(configured.uploadFile);
-        const receipt = yield* configured.uploadFile({
-          mimeType: 'application/pdf',
-          filename: 'paper.pdf',
-          base64: 'AA==',
+        const requests: { method: string; url: string }[] = [];
+        fetchModel.mockImplementation(async (url, init) => {
+          requests.push({ method: init?.method ?? 'GET', url: String(url) });
+          if (String(url).endsWith('/v1/files'))
+            return Response.json({
+              id: 'file_uploaded',
+              expires_at: '1970-01-01T01:00:00Z',
+            });
+          if (init?.method === 'DELETE')
+            return Response.json({ id: 'file_uploaded', type: 'file_deleted' });
+          return response(signedEvents());
         });
-        expect(receipt).toStrictEqual({
-          protocol: 'anthropic-messages',
-          issuer: expect.stringMatching(/^[0-9a-f]{64}$/),
-          fileId: 'file_uploaded',
-          expiresAtMs: 3_600_000,
-        });
-        expect(receipt.issuer).not.toContain('selected-key');
         const document = {
           kind: 'document' as const,
           mimeType: 'application/pdf',
           base64: 'AA==',
-          receipt,
         };
-        const sentSource = (
-          bound: ReturnType<typeof model>,
-          part: typeof document,
-        ) =>
+        const sentSource = (bound: ReturnType<typeof model>) =>
           Effect.gen(function* () {
             const turn = yield* bound.prepareTurn({
-              messages: [{ role: 'user', content: [part] }],
+              messages: [{ role: 'user', content: [document] }],
             });
             assert(turn.mode === 'foreground');
             yield* bound.generateTurn(turn);
@@ -250,30 +236,43 @@ describe('canonical Anthropic Messages protocol', () => {
           media_type: 'application/pdf',
           data: 'AA==',
         };
-        expect(yield* sentSource(configured, document)).toStrictEqual({
+        const configured = model();
+        assert(configured.uploadFile && configured.releaseUploads);
+        expect(yield* sentSource(configured)).toStrictEqual(bytes);
+        yield* configured.uploadFile({
+          mimeType: 'application/pdf',
+          filename: 'paper.pdf',
+          base64: 'AA==',
+        });
+        expect(yield* sentSource(configured)).toStrictEqual({
           type: 'file',
           file_id: 'file_uploaded',
         });
-        // Another API, another key on the same endpoint, and an expired
-        // receipt all name a file this binding cannot resolve: the document
-        // goes by the bytes it kept.
+        // A resumed run binds a new model: its cache is empty, so the id the
+        // earlier binding held is never sent.
+        expect(yield* sentSource(model())).toStrictEqual(bytes);
+
+        expect(yield* configured.releaseUploads()).toStrictEqual([]);
         expect(
-          yield* sentSource(configured, {
-            ...document,
-            receipt: { ...receipt, protocol: 'openai-responses' },
-          }),
-        ).toStrictEqual(bytes);
-        expect(
-          yield* sentSource(
-            anthropicMessagesModel(CONFIG, {
-              apiKey: 'another-key',
-              fetch: fetchModel,
-            }),
-            document,
-          ),
-        ).toStrictEqual(bytes);
+          requests.filter((request) => request.method === 'DELETE'),
+        ).toStrictEqual([
+          {
+            method: 'DELETE',
+            url: 'https://synthetic.invalid/v1/files/file_uploaded',
+          },
+        ]);
+        expect(yield* sentSource(configured)).toStrictEqual(bytes);
+
+        // An upload the provider will expire lowers from bytes near expiry.
+        const expiring = model();
+        assert(expiring.uploadFile);
+        yield* expiring.uploadFile({
+          mimeType: 'application/pdf',
+          filename: 'paper.pdf',
+          base64: 'AA==',
+        });
         yield* TestClock.adjust('1 hour');
-        expect(yield* sentSource(configured, document)).toStrictEqual(bytes);
+        expect(yield* sentSource(expiring)).toStrictEqual(bytes);
       }),
   );
 

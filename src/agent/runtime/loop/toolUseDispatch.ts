@@ -20,7 +20,7 @@
  * skip; a barrier with an intent and no result is outcome-unknown and asks;
  * a parallel-safe call without a result re-runs.
  */
-import { Cause, Effect, Exit, Result, Scope, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
 
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
@@ -67,7 +67,6 @@ import {
   type Message,
 } from './rows';
 import type { Runs } from '../runRegistry';
-import type { BoundModel } from '../run/modelBinding';
 
 /** Max concurrently executing tool calls within one parallel-safe partition. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
@@ -178,44 +177,27 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
 });
 
 /**
- * How long a run's end waits on one provider to delete a file it uploaded.
- * Deletes run as the run's scope closes, so an interrupted run waits for them
- * too; a stalled provider must not hold that close open.
+ * How long delivery waits on the provider to take one upload. Uploading is
+ * an optimisation for later rounds, so a stalled files endpoint must cost
+ * delivery no more than this; the bytes are delivered either way.
  */
-const UPLOAD_DELETE_TIMEOUT = '10 seconds';
+const UPLOAD_DEADLINE = '5 seconds';
 
 /**
- * The model-visible content of one settlement: text, then its attachments.
+ * The model-visible content of one settlement: text, then inline media. The
+ * ledger keeps the bytes; whether a later request sends them or a file id is
+ * the bound model's in-memory upload cache's decision, made when it lowers.
  *
- * A document is uploaded where the bound model serves a files endpoint
- * (`Model.uploadFile`), here, before the delivering append. The ledger row
- * keeps the document's bytes and carries the receipt beside them, so a later
- * round sends the file id while that binding's receipt still holds and the
- * bytes otherwise: a credential, account or endpoint change, a model switch,
- * or a provider-side expiry costs request size, never the document. A failed
- * upload attaches no receipt and says so. Bindings with no upload (a
- * subscription route, every Chat protocol, Google Interactions) send the
- * bytes as before.
- *
- * What a run uploads it removes when it ends. Each successful upload adds a
- * finalizer to the run's scope, which closes after the run settles whether it
- * completed, failed or was interrupted, and that finalizer deletes the file
- * through the binding that uploaded it. The delete is best effort: a failure
- * or a slow provider is a `warn` naming the file id, never a failed run, and
- * the upload's bounded lifetime still clears a file that no delete reached. A
- * resumed run whose receipts were deleted lowers those documents from bytes.
- *
- * An attachment the binding cannot carry at all — a PDF on a route without
- * native PDF support, an image on a text-only route, any other type — still
- * reaches the model as the text mention only, and says so in the transcript
- * rather than degrading silently.
+ * An attachment the binding cannot carry inline (a PDF on a route without
+ * native PDF support, an image on a text-only route, any other type) reaches
+ * the model as the text mention only, and says so in the transcript rather
+ * than degrading silently.
  */
-const settlementContent = Effect.fn('toolUse.settlementContent')(function* (
+function settlementContent(
   settlement: Settlement,
-  bound: BoundModel,
+  capabilities: Parameters<typeof inlineMediaPart>[2],
   logger: AgentTrace,
-  runScope: Scope.Scope,
-): Effect.fn.Return<readonly InputPart[]> {
+): readonly InputPart[] {
   const attachments: ToolFileAttachment[] = settlement.attachments.map(
     (attachment) => ({
       path: attachment.path,
@@ -230,78 +212,28 @@ const settlementContent = Effect.fn('toolUse.settlementContent')(function* (
     attachments,
     true,
   );
-  const media: InputPart[] = [];
-  for (const attachment of settlement.attachments) {
+  const media = settlement.attachments.flatMap((attachment) => {
     if (attachment.content.kind !== 'base64') {
       logger.warn(
         `The model receives "${attachment.path}" as a mention only: its bytes were not captured (${attachment.content.reason}).`,
       );
-      continue;
+      return [];
     }
-    const inline = inlineMediaPart(
+    const part = inlineMediaPart(
       attachment.mimeType,
       attachment.content.data,
-      bound,
+      capabilities,
     );
-    if (inline === null) {
+    if (part === null) {
       logger.warn(
         `The model receives "${attachment.path}" as a mention only: the bound model carries no ${attachment.mimeType} attachment inline.`,
       );
-      continue;
+      return [];
     }
-    // Documents only, as the two retired upload paths did: an image is small
-    // enough to inline and every route that takes one takes it that way.
-    const upload = bound.model.uploadFile;
-    if (upload === undefined || inline.kind !== 'document') {
-      media.push(inline);
-      continue;
-    }
-    const receipt = yield* upload({
-      mimeType: inline.mimeType,
-      filename: getBasename(attachment.path) || 'attachment',
-      base64: inline.base64,
-    }).pipe(
-      Effect.catchTag('ModelError', (error) =>
-        Effect.sync(() => {
-          logger.warn(
-            `Sending "${attachment.path}" inline every round: the provider did not accept it as an upload (${error.message}).`,
-          );
-          return undefined;
-        }),
-      ),
-    );
-    if (receipt === undefined) {
-      media.push(inline);
-      continue;
-    }
-    const deleteFile = bound.model.deleteFile;
-    if (deleteFile !== undefined) {
-      yield* Scope.addFinalizer(
-        runScope,
-        deleteFile(receipt).pipe(
-          Effect.catchTag('ModelError', (error) =>
-            Effect.sync(() =>
-              logger.warn(
-                `Could not delete uploaded file ${receipt.fileId} when the run ended (${error.message}); the provider expires it on its own.`,
-              ),
-            ),
-          ),
-          Effect.timeoutOrElse({
-            duration: UPLOAD_DELETE_TIMEOUT,
-            orElse: () =>
-              Effect.sync(() =>
-                logger.warn(
-                  `Could not delete uploaded file ${receipt.fileId} when the run ended (no answer within ${UPLOAD_DELETE_TIMEOUT}); the provider expires it on its own.`,
-                ),
-              ),
-          }),
-        ),
-      );
-    }
-    media.push({ ...inline, receipt });
-  }
+    return [part];
+  });
   return [{ kind: 'text', text }, ...media];
-});
+}
 
 /** Dispatch every unsettled call of the pending response, then deliver. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
@@ -915,29 +847,77 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   }
   const bound = yield* SynchronizedRef.get(run.model);
-  const results = yield* Effect.forEach(settledPending.calls, (fact, ordinal) =>
-    Effect.gen(function* () {
-      const settlement = settledPending.settled[fact.callId];
-      if (settlement === undefined) {
-        return yield* Effect.die(
-          new Error(`Call ${fact.callId} is unsettled at delivery.`),
-        );
-      }
-      return {
-        callOrdinal: ordinal,
-        status:
-          settlement.result.status === 'executed'
-            ? ('success' as const)
-            : ('error' as const),
-        content: yield* settlementContent(
-          { ...settlement, stateMutation: [] },
+  const results = settledPending.calls.map((fact, ordinal) => {
+    const settlement = settledPending.settled[fact.callId];
+    if (settlement === undefined) {
+      throw new Error(`Call ${fact.callId} is unsettled at delivery.`);
+    }
+    return {
+      callOrdinal: ordinal,
+      status:
+        settlement.result.status === 'executed'
+          ? ('success' as const)
+          : ('error' as const),
+      content: settlementContent(
+        { ...settlement, stateMutation: [] },
+        bound,
+        logger,
+      ),
+    };
+  });
+  // Offer each delivered document to the binding's upload cache, so the
+  // requests that replay this history can send a file id instead of the
+  // bytes. Concurrent, each under a short deadline: a slow or failing files
+  // endpoint delays delivery by at most one deadline and changes nothing the
+  // model reads now. The binding deletes what it uploaded when it closes.
+  // The optional upload is looked for only when there is a document to give
+  // it, so a delivery without one never touches it.
+  const documents = settledPending.calls.flatMap((fact) =>
+    (settledPending.settled[fact.callId]?.attachments ?? []).flatMap(
+      (attachment) => {
+        if (attachment.content.kind !== 'base64') return [];
+        const part = inlineMediaPart(
+          attachment.mimeType,
+          attachment.content.data,
           bound,
-          logger,
-          run.scope,
-        ),
-      };
-    }),
+        );
+        return part?.kind === 'document'
+          ? [{ path: attachment.path, part }]
+          : [];
+      },
+    ),
   );
+  const uploadFile =
+    documents.length === 0 ? undefined : bound.model.uploadFile;
+  if (uploadFile !== undefined) {
+    yield* Effect.forEach(
+      documents,
+      ({ path, part }) =>
+        uploadFile({
+          mimeType: part.mimeType,
+          filename: getBasename(path) || 'attachment',
+          base64: part.base64,
+        }).pipe(
+          Effect.catchTag('ModelError', (error) =>
+            Effect.sync(() =>
+              logger.warn(
+                `Sending "${path}" as bytes: the provider did not accept it as an upload (${error.message}).`,
+              ),
+            ),
+          ),
+          Effect.timeoutOrElse({
+            duration: UPLOAD_DEADLINE,
+            orElse: () =>
+              Effect.sync(() =>
+                logger.warn(
+                  `Sending "${path}" as bytes: its upload did not finish within ${UPLOAD_DEADLINE}.`,
+                ),
+              ),
+          }),
+        ),
+      { concurrency: 'unbounded', discard: true },
+    );
+  }
   const group: Message = { role: 'tool', results };
   const flow = toolUseFlowState(settledState);
   if (flow === null) {

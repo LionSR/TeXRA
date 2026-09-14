@@ -57,9 +57,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import {
-  ModelError,
   TurnResultSchema,
-  type FileReceipt,
   type Model,
   type ModelOrigin,
   type TurnResult,
@@ -235,7 +233,6 @@ function agentRun(
   tools: RuntimeToolRegistry,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
   rootUserInstruction: string | undefined,
-  scope: Scope.Scope,
 ): AgentRunShape {
   const config = AgentConfigSchema.parse({
     agent: 'assistant',
@@ -265,7 +262,7 @@ function agentRun(
     finalToolName: null,
     structured: { value: undefined },
     model,
-    scope,
+    scope: Scope.makeUnsafe(),
     declinedRoutes: [],
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
@@ -299,8 +296,6 @@ interface HarnessOptions {
   readonly stateSlices?: ToolUseFlowState['stateSlices'];
   /** The run's binding, for the cases that read more than capabilities. */
   readonly bound?: BoundModel;
-  /** The run's scope, for the cases that close it as the run ends. */
-  readonly scope?: Scope.Scope;
 }
 
 /** The slices of a run that has yet to touch a file. */
@@ -375,7 +370,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         tools,
         model,
         options.rootUserInstruction,
-        options.scope ?? Scope.makeUnsafe(),
       ),
     ),
     Layer.succeed(RunLedger, session.ledger),
@@ -850,41 +844,23 @@ describe('tool-use dispatch', () => {
   );
 
   it.effect(
-    'deletes what a run uploaded when its scope closes, and a failed or stalled delete only warns',
+    'keeps delivered documents as bytes and bounds a stalled upload by its deadline',
     () =>
       Effect.gen(function* () {
         const pdf = Buffer.from('%PDF-1.7').toString('base64');
-        const uploads: string[] = [];
-        const deletes: string[] = [];
         const warnings: string[] = [];
-        const receiptFor = (fileId: string): FileReceipt => ({
-          protocol: 'openai-responses',
-          issuer: 'issuer-a',
-          fileId,
-          expiresAtMs: null,
-        });
+        // `a.pdf` finishes only once `b.pdf` has started, and `b.pdf` never
+        // answers: uploads taken one at a time would never reach `b.pdf`.
+        const bStarted = yield* Deferred.make<void>();
         const uploading: Model = {
           ...boundModel().model,
           uploadFile: (file) =>
-            Effect.sync(() => {
-              uploads.push(file.filename);
-              return receiptFor(`file_${uploads.length}`);
-            }),
-          // The first file's delete is refused; the second never answers.
-          deleteFile: (receipt) =>
-            Effect.suspend(() => {
-              deletes.push(receipt.fileId);
-              return receipt.fileId === 'file_1'
-                ? Effect.fail(
-                    new ModelError({
-                      kind: 'provider-rejection',
-                      message: 'quota service unavailable',
-                    }),
-                  )
-                : Effect.never;
-            }),
+            file.filename === 'a.pdf'
+              ? Deferred.await(bStarted)
+              : Effect.sync(() =>
+                  Deferred.doneUnsafe(bStarted, Effect.void),
+                ).pipe(Effect.andThen(Effect.never)),
         };
-        const scope = Scope.makeUnsafe();
         const kit = yield* openDispatch({
           tools: {
             fetch_papers: {
@@ -914,37 +890,20 @@ describe('tool-use dispatch', () => {
             supportsVision: true,
             supportsNativePdf: true,
           },
-          scope,
         });
-        const outcome = yield* dispatch(kit);
+        const delivering = yield* Effect.forkChild(dispatch(kit));
+        yield* Deferred.await(bStarted);
+        yield* TestClock.adjust('5 seconds');
+        const outcome = yield* Fiber.join(delivering);
+        expect(warnings).toStrictEqual([expect.stringContaining('"b.pdf"')]);
         const group = outcome.state.messages.at(-1);
         if (group?.role !== 'tool') {
           throw new Error('The dispatch delivered no tool group.');
         }
-        // The row keeps each document's bytes and its receipt beside them.
+        // The ledger holds the bytes; a file id only ever lives in memory.
         expect(group.results[0]?.content.slice(1)).toStrictEqual([
-          {
-            kind: 'document',
-            mimeType: 'application/pdf',
-            base64: pdf,
-            receipt: receiptFor('file_1'),
-          },
-          {
-            kind: 'document',
-            mimeType: 'application/pdf',
-            base64: pdf,
-            receipt: receiptFor('file_2'),
-          },
-        ]);
-        expect(deletes).toStrictEqual([]);
-
-        const closing = yield* Effect.forkChild(Scope.close(scope, Exit.void));
-        yield* TestClock.adjust('10 seconds');
-        yield* Fiber.join(closing);
-        expect([...deletes].sort()).toStrictEqual(['file_1', 'file_2']);
-        expect(warnings).toStrictEqual([
-          expect.stringContaining('file_2'),
-          expect.stringContaining('file_1'),
+          { kind: 'document', mimeType: 'application/pdf', base64: pdf },
+          { kind: 'document', mimeType: 'application/pdf', base64: pdf },
         ]);
         yield* kit.session.dispose();
       }),

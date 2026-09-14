@@ -364,6 +364,22 @@ describe('native OpenAI Responses protocol', () => {
                   },
                 ],
               },
+              // An image format Responses does not take is refused locally.
+              {
+                ...turn,
+                messages: [
+                  {
+                    role: 'user' as const,
+                    content: [
+                      {
+                        kind: 'image' as const,
+                        mimeType: 'image/svg+xml',
+                        base64: '',
+                      },
+                    ],
+                  },
+                ],
+              },
             ])
               expect(
                 yield* Effect.flip(model.estimateInputTokens(rejected)),
@@ -1164,35 +1180,38 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.effect(
-    'sends a settlement document by its receipt beside the result text, and by bytes once it expires',
+    'sends a settlement document by its cached file id beside the result text, and by bytes once released',
     () =>
       Effect.gen(function* () {
         const fetch = vi
           .fn<typeof globalThis.fetch>()
-          .mockImplementation(async (url) => {
+          .mockImplementation(async (url, init) => {
             const target = String(url);
             if (target.startsWith('data:')) return new Response('%PDF-1.7');
             if (target.endsWith('/files'))
               return new Response(
-                JSON.stringify({ id: 'file_uploaded', expires_at: 3600 }),
+                JSON.stringify({ id: 'file_uploaded', expires_at: 86_400 }),
+                { headers: { 'content-type': 'application/json' } },
+              );
+            if (init?.method === 'DELETE')
+              return new Response(
+                JSON.stringify({
+                  id: 'file_uploaded',
+                  object: 'file',
+                  deleted: true,
+                }),
                 { headers: { 'content-type': 'application/json' } },
               );
             return response(events([MESSAGE]));
           });
         const model = modelWith(fetch);
-        assert(model.uploadFile);
-        const receipt = yield* model.uploadFile({
+        assert(model.uploadFile && model.releaseUploads);
+        const pdf = Buffer.from('%PDF-1.7').toString('base64');
+        yield* model.uploadFile({
           mimeType: 'application/pdf',
           filename: 'paper.pdf',
-          base64: Buffer.from('%PDF-1.7').toString('base64'),
+          base64: pdf,
         });
-        expect(receipt).toStrictEqual({
-          protocol: 'openai-responses',
-          issuer: expect.stringMatching(/^[0-9a-f]{64}$/),
-          fileId: 'file_uploaded',
-          expiresAtMs: 3_600_000,
-        });
-        const pdf = Buffer.from('%PDF-1.7').toString('base64');
         const turn = yield* model.prepareTurn({
           ...REQUEST,
           messages: [
@@ -1221,7 +1240,6 @@ describe('native OpenAI Responses protocol', () => {
                       kind: 'document',
                       mimeType: 'application/pdf',
                       base64: pdf,
-                      receipt,
                     },
                   ],
                 },
@@ -1242,7 +1260,7 @@ describe('native OpenAI Responses protocol', () => {
           { type: 'input_text', text: 'Downloaded paper.pdf' },
           { type: 'input_file', file_id: 'file_uploaded' },
         ]);
-        yield* TestClock.adjust('1 hour');
+        expect(yield* model.releaseUploads()).toStrictEqual([]);
         expect(yield* sentOutput).toStrictEqual([
           { type: 'input_text', text: 'Downloaded paper.pdf' },
           {

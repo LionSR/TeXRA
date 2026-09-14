@@ -11,97 +11,6 @@ const MediaFieldsSchema = z.strictObject({
   // Encoding validity is distinct from a provider accepting the captured bytes.
   base64: z.base64(),
 });
-/**
- * Every wire surface the package speaks. Usage is billed per surface, so a
- * usage record's provider is the protocol of the turn that produced it.
- */
-export const TurnProtocolSchema = z.enum([
-  'openai-chat',
-  'google-interactions',
-  'openai-responses',
-  'anthropic-messages',
-  'deepseek-chat',
-  'kimi-chat',
-  'glm-chat',
-  'xai-chat',
-  'dashscope-chat',
-  'minimax-chat',
-  'openrouter-chat',
-  'vscode-lm',
-]);
-type TurnProtocol = z.infer<typeof TurnProtocolSchema>;
-
-/**
- * Where a provider already holds a document's bytes: the id its own upload
- * returned, and the facts that bound where that id still resolves. A file id
- * lives only inside the account that uploaded it, and only until the
- * provider expires it, so the receipt names the issuing protocol, a
- * non-secret fingerprint of the issuing endpoint and credential, and the
- * expiry the provider stated. It rides beside the bytes, never instead of
- * them: a binding that cannot honour it sends the bytes.
- */
-const FileReceiptSchema = z
-  .strictObject({
-    protocol: TurnProtocolSchema,
-    issuer: z.string().min(1),
-    fileId: z.string().min(1),
-    /** Epoch milliseconds; `null` when the provider stated no expiry. */
-    expiresAtMs: z.int().nonnegative().nullable(),
-  })
-  .readonly();
-export type FileReceipt = z.infer<typeof FileReceiptSchema>;
-
-/** The bytes an upload takes, before the provider issues a receipt. */
-export const FileUploadSchema = z
-  .strictObject({
-    mimeType: z.string().min(1),
-    filename: z.string().min(1),
-    base64: z.base64(),
-  })
-  .readonly();
-export type FileUpload = z.infer<typeof FileUploadSchema>;
-
-/**
- * The lifetime every upload asks its provider for, in seconds: one day, long
- * enough for a typical run and inside both files endpoints' accepted range
- * (OpenAI `expires_after.seconds` 3600-2592000, Anthropic
- * `expires_in_seconds` 3600-7776000, per the pinned SDK typings). Without it
- * OpenAI keeps a non-batch file until it is deleted. The run deletes what it
- * uploaded when it ends; this bound is what still clears a file a crashed
- * process never got to delete.
- */
-export const FILE_UPLOAD_LIFETIME_SECONDS = 86_400;
-
-/**
- * Time allowed between lowering a turn and the provider resolving its file
- * ids, so a receipt that would expire while the request is in flight lowers
- * from bytes instead. A TeXRA margin, not a provider figure.
- */
-const RECEIPT_EXPIRY_MARGIN_MS = 60_000;
-
-/**
- * The file id a document may be sent as on this binding, or `null` to send
- * its bytes: only a receipt issued by this protocol, to this binding's
- * issuer, and still unexpired at `nowMs`. Every other case is the ordinary
- * byte path, so a credential, account or endpoint change, a model switch, or
- * a provider-side expiry costs request size and never the document.
- */
-export function usableReceipt(
-  receipt: FileReceipt | undefined,
-  protocol: TurnProtocol,
-  issuer: string | null,
-  nowMs: number,
-): string | null {
-  if (receipt === undefined || issuer === null) return null;
-  if (receipt.protocol !== protocol || receipt.issuer !== issuer) return null;
-  if (
-    receipt.expiresAtMs !== null &&
-    receipt.expiresAtMs - RECEIPT_EXPIRY_MARGIN_MS <= nowMs
-  )
-    return null;
-  return receipt.fileId;
-}
-
 const InputPartSchema = z.discriminatedUnion('kind', [
   TextPartSchema,
   MediaFieldsSchema.extend({
@@ -109,11 +18,7 @@ const InputPartSchema = z.discriminatedUnion('kind', [
     detail: z.enum(['low', 'medium', 'high', 'ultra-high']).optional(),
   }).readonly(),
   MediaFieldsSchema.extend({
-    kind: z.enum(['audio', 'video']),
-  }).readonly(),
-  MediaFieldsSchema.extend({
-    kind: z.literal('document'),
-    receipt: FileReceiptSchema.optional(),
+    kind: z.enum(['audio', 'video', 'document']),
   }).readonly(),
 ]);
 /**
@@ -137,6 +42,24 @@ const BindingSchema = z.strictObject({
     })
     .readonly(),
 });
+/**
+ * Every wire surface the package speaks. Usage is billed per surface, so a
+ * usage record's provider is the protocol of the turn that produced it.
+ */
+export const TurnProtocolSchema = z.enum([
+  'openai-chat',
+  'google-interactions',
+  'openai-responses',
+  'anthropic-messages',
+  'deepseek-chat',
+  'kimi-chat',
+  'glm-chat',
+  'xai-chat',
+  'dashscope-chat',
+  'minimax-chat',
+  'openrouter-chat',
+  'vscode-lm',
+]);
 
 const OriginSchema = BindingSchema.extend({
   protocol: TurnProtocolSchema.exclude(['vscode-lm']),
@@ -1924,6 +1847,33 @@ export const InputTokenEstimateSchema = z
 export type InputTokenEstimate = z.infer<typeof InputTokenEstimateSchema>;
 
 /** A configured executable value; it owns neither conversation nor retry policy. */
+/** The bytes an upload takes. */
+export const FileUploadSchema = z
+  .strictObject({
+    mimeType: z.string().min(1),
+    filename: z.string().min(1),
+    base64: z.base64(),
+  })
+  .readonly();
+export type FileUpload = z.infer<typeof FileUploadSchema>;
+
+/**
+ * The lifetime every upload asks its provider for, in seconds: one day, long
+ * enough for a typical run and inside both files endpoints' accepted range
+ * (OpenAI `expires_after.seconds` 3600-2592000, Anthropic
+ * `expires_in_seconds` 3600-7776000, per the pinned SDK typings). Without it
+ * OpenAI keeps a non-batch file until it is deleted. A binding deletes what
+ * it uploaded when its scope closes; this bound is what still clears a file
+ * a crashed process never got to delete.
+ */
+export const FILE_UPLOAD_LIFETIME_SECONDS = 86_400;
+
+/** A file a binding uploaded and could not confirm it deleted. */
+export interface UnreleasedUpload {
+  readonly fileId: string;
+  readonly reason: string;
+}
+
 export interface Model {
   prepareTurn(request: TurnRequest): Effect.Effect<ResolvedTurn, ModelError>;
   streamTurn(
@@ -1933,19 +1883,19 @@ export interface Model {
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
   ): Effect.Effect<TurnResult, ModelError>;
   /**
-   * Hand the provider one file and take back the receipt that names it. The
-   * caller keeps the bytes and attaches the receipt beside them, so while the
-   * receipt is valid a round sends the id instead of the base64. Present
-   * only where the binding serves a files endpoint to a credential it can
-   * fingerprint.
+   * Upload a document's bytes so later turns on this same model can send the
+   * provider's file id in their place. The id lives only in this model's
+   * memory, keyed by a digest of the bytes; nothing durable ever holds it,
+   * so a new binding (a resumed run, a rebind, another model) starts empty
+   * and sends bytes. Present only where the binding serves a files endpoint.
    */
-  uploadFile?(file: FileUpload): Effect.Effect<FileReceipt, ModelError>;
+  uploadFile?(file: FileUpload): Effect.Effect<void, ModelError>;
   /**
-   * Remove a file this binding uploaded. The counterpart of `uploadFile`,
-   * present wherever it is: a receipt another issuer holds is refused rather
-   * than sent, and a file the provider already expired counts as removed.
+   * Delete every file `uploadFile` created, concurrently under one deadline,
+   * and forget them, so no later turn can send an id that no longer resolves.
+   * Never fails: what could not be confirmed deleted is returned.
    */
-  deleteFile?(receipt: FileReceipt): Effect.Effect<void, ModelError>;
+  releaseUploads?(): Effect.Effect<readonly UnreleasedUpload[]>;
   /** Estimate supported prepared input and report the counted scope. */
   estimateInputTokens?(
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
