@@ -19,7 +19,10 @@ import {
   getProposalFileGroups,
   type ProposalFileGroup,
 } from '@shared/schemas';
-import { executionsWaitTimeoutSeconds } from '@shared/toolUse';
+import {
+  executionsWaitTimeoutSeconds,
+  TOOL_RESULT_METADATA_FIELDS,
+} from '@shared/toolUse';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOLS,
@@ -418,11 +421,19 @@ function isMcpTextBlock(block: unknown): block is { text: string } {
   );
 }
 
+/** The output fields the structured MCP sections render. */
+const MCP_STRUCTURED_FIELDS: ReadonlySet<string> = new Set(
+  Object.keys(CodexMcpToolOutputSchema.shape),
+);
+
 /**
  * MCP output is shown, structured when it can be and raw when it cannot.
  * Ad-hoc MCP servers are not obliged to emit Codex-shaped output, so a schema
  * mismatch here is the intended "not structured output" path, not a producer
- * bug: it falls through to the raw `Result:` section below.
+ * bug: it falls through to the raw `Result:` section below. A structured
+ * output's fields outside the schema, which the parse strips, are shown as
+ * they came in that same section, except the result metadata the row shows
+ * on its own (`TOOL_RESULT_METADATA_FIELDS`).
  */
 function buildMcpSections(ctx: SectionContext): ToolSection[] {
   const sections: ToolSection[] = [];
@@ -478,8 +489,27 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
       structured = true;
     }
   }
-  if (!structured && ctx.outputText) {
-    sections.push(textSection('Result:', ctx.outputText));
+  if (!structured) {
+    if (ctx.outputText) sections.push(textSection('Result:', ctx.outputText));
+    return sections;
+  }
+  const unrendered = isObject(ctx.parsedOutput)
+    ? Object.fromEntries(
+        Object.entries(ctx.parsedOutput).filter(
+          ([field]) =>
+            !MCP_STRUCTURED_FIELDS.has(field) &&
+            !TOOL_RESULT_METADATA_FIELDS.has(field),
+        ),
+      )
+    : {};
+  if (Object.keys(unrendered).length > 0) {
+    const payload = stringifyPayload(unrendered);
+    sections.push({
+      kind: 'code',
+      label: 'Result:',
+      text: payload.text,
+      language: payload.language,
+    });
   }
   return sections;
 }

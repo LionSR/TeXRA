@@ -117,6 +117,74 @@ describe('projectTranscriptRow', () => {
     expect(row.model.headerLabel).toBe('MCP fs/read');
     expect(row.model.sections.at(-1)).toMatchObject({ label: 'Result:' });
     expect(row.model.outputSuppression).toBe('rendered-by-sections');
+
+    // A structured output with a field the schema does not know keeps its
+    // raw form beside the structured sections, so claiming the sections
+    // carry the output stays true and the provider's `result` is shown.
+    const partial = projectTranscriptRow({
+      ...base,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      text: '',
+      data: {
+        toolName: 'mcp:calc/eval',
+        status: 'completed',
+        input: { expr: '6*7' },
+        output: { status: 'completed', result: '42' },
+      },
+    });
+    if (partial?.kind !== 'tool') throw new Error('bad');
+    expect(partial.model.sections.map((section) => section.label)).toEqual([
+      'Arguments:',
+      'Status:',
+      'Result:',
+    ]);
+    expect(partial.model.sections.at(-1)).toMatchObject({
+      text: expect.objectContaining({ full: expect.stringContaining('42') }),
+    });
+    expect(partial.model.outputSuppression).toBe('rendered-by-sections');
+
+    // The normalized output text is the `output` field alone when one exists,
+    // so the section must render the dropped fields, not that text.
+    const withOutput = projectTranscriptRow({
+      ...base,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      text: '',
+      data: {
+        toolName: 'mcp:calc/eval',
+        status: 'completed',
+        input: { expr: '6*7' },
+        output: { status: 'completed', output: 'stdout', result: '42' },
+      },
+    });
+    if (withOutput?.kind !== 'tool') throw new Error('bad');
+    const result = withOutput.model.sections.at(-1);
+    expect(result).toMatchObject({ label: 'Result:' });
+    expect(result).toMatchObject({
+      text: expect.objectContaining({ full: expect.stringContaining('42') }),
+    });
+    expect(result).toMatchObject({
+      text: expect.objectContaining({
+        full: expect.stringContaining('stdout'),
+      }),
+    });
+
+    // Result metadata is the row's to show on its own, never a raw field.
+    const failed = projectTranscriptRow({
+      ...base,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      text: '',
+      data: {
+        toolName: 'mcp:calc/eval',
+        status: 'failed',
+        input: { expr: '6*7' },
+        output: { status: 'error', error: 'boom', diagnostics: { code: 7 } },
+      },
+    });
+    if (failed?.kind !== 'tool') throw new Error('bad');
+    expect(failed.model.sections.map((section) => section.label)).toEqual([
+      'Arguments:',
+      'Status:',
+    ]);
   });
 
   it('drops the state-only and marker message types', () => {
