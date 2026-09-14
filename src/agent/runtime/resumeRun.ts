@@ -270,7 +270,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   if (!resume) {
     releaseQueue();
     const classification = yield* classifyRun(runId, session);
-    return { failed: recordRunRefusal(runId, session, classification) };
+    return { failed: yield* recordRunRefusal(runId, session, classification) };
   }
   const willLaunch = (resume.type === 'toolUse') === (queueLease !== undefined);
   const claim =
@@ -279,7 +279,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
           .claimOwner(runId)
           .pipe(Effect.onError(() => Effect.sync(releaseQueue)))
       : undefined;
-  session.clearUnreadable(runId);
+  yield* session.clearUnreadable(runId);
   // A claim whose owner is this process, or provably dead, is one the resume
   // takes over; anything else is another live TeXRA process's run.
   if (
@@ -289,7 +289,10 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     claim.liveness !== 'dead'
   ) {
     releaseQueue();
-    session.markUnreadable(runId, runHeldMessage(ownerPid(claim.ownerId)));
+    yield* session.markUnreadable(
+      runId,
+      runHeldMessage(ownerPid(claim.ownerId)),
+    );
     return { failed: 'owned_elsewhere' };
   }
   if (willLaunch && options.onResumeResolved) {
@@ -319,7 +322,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
       }),
     );
     if (Result.isFailure(launched)) {
-      const refused = refusalFor(launched.failure, session, runId);
+      const refused = yield* refusalFor(launched.failure, session, runId);
       if (refused) return refused;
       return yield* Effect.fail(launched.failure);
     }
@@ -357,28 +360,28 @@ function refusalFor(
   error: unknown,
   session: SessionHandle,
   runId: RunId,
-): ResumeRunResult | undefined {
+): Effect.Effect<ResumeRunResult | undefined> {
   if (
     error instanceof DatabaseWriteFailed &&
     error.cause instanceof DatabaseClaimRefused
   ) {
-    session.markUnreadable(
-      runId,
-      runHeldMessage(ownerPid(error.cause.ownerId)),
-    );
-    return { failed: 'owned_elsewhere' };
+    return session
+      .markUnreadable(runId, runHeldMessage(ownerPid(error.cause.ownerId)))
+      .pipe(Effect.as({ failed: 'owned_elsewhere' } as const));
   }
   if (error instanceof ResumeSessionUnavailableError) {
-    return { failed: 'finished' };
+    return Effect.succeed({ failed: 'finished' });
   }
   if (namesUnusableCheckpoint(error)) {
-    log.warn(
-      `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,
-      { data: error },
-    );
-    return { failed: 'unusable_checkpoint' };
+    return Effect.sync(() => {
+      log.warn(
+        `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+      return { failed: 'unusable_checkpoint' } as const;
+    });
   }
-  return undefined;
+  return Effect.succeed(undefined);
 }
 
 /**
@@ -488,7 +491,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     ),
   );
   if (Result.isFailure(resumed)) {
-    const refusal = refusalFor(resumed.failure, session, runId);
+    const refusal = yield* refusalFor(resumed.failure, session, runId);
     if (refusal) return refusal;
     return yield* Effect.fail(resumed.failure);
   }

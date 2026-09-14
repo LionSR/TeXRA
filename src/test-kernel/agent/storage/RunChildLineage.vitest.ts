@@ -23,13 +23,13 @@ const readParentRunId = (runId: RunId) =>
 describe('persisted parent edge', () => {
   it('is absent for roots and for runs that were never started', async () => {
     publishTestRunStart(session, 'aaa001' as RunId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     expect(await readParentRunId('aaa001' as RunId)).toBeUndefined();
     expect(await readParentRunId('aaa002' as RunId)).toBeUndefined();
   });
   it('retains parent identity in the child creation even when reads exclude parent history', async () => {
     publishTestRunStart(session, 'aaa0ff' as RunId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const rows = await Effect.runPromise(
       session.commit([
         {

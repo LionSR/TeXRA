@@ -37,7 +37,6 @@
       "src/controllers/mainView/teamCatalogPorts.ts": 1,
       "src/controllers/progressView/ChatExportController.ts": 1,
       "src/controllers/session/hostDraftRequests.ts": 2,
-      "src/controllers/session/sessionLayer.ts": 1,
       "src/model/subscriptionPreference.ts": 2,
       "src/tools/agentCliShared.ts": 1,
       "src/tools/claudeAgent.ts": 2,
@@ -76,7 +75,6 @@
     },
     "Effect.run*": {
       "packages/extension/src/progressView/frontend/sessionTransport.ts": 4,
-      "src/agent/runtime/SessionHandle.ts": 2,
       "src/platform/defaults/jsonStore.ts": 1,
       "src/shared/signals.ts": 2,
       "src/tools/approval/latexPreview.ts": 1
@@ -84,7 +82,6 @@
     "catch:effect-importer": {
       "packages/desktop/src/main/index.ts": 1,
       "src/agent/remote/RemoteAgentLoader.ts": 1,
-      "src/agent/runtime/SessionHandle.ts": 2,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/files/relativeFS.ts": 2
     }

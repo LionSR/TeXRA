@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { effectRuntime } from '@platform/processRuntime';
@@ -142,7 +143,7 @@ async function emitOutputFiles(
       },
     },
   ]);
-  await session.settlePublications();
+  await Effect.runPromise(session.settlePublications());
 }
 
 /** Diagnostics currently recorded for `absolutePath` in the latest collection. */

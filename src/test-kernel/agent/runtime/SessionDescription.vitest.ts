@@ -95,7 +95,7 @@ describe('session description helpers', () => {
   it('uses the exact workflow-agent description carried by launch context', async () => {
     const session = createTestSession();
     publishTestRunStart(session, 'a0b0c1' as RunId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const recorded = recordSessionEvents(session);
     mockToolUseAnswer('Correcting derivation signs');
 
@@ -118,7 +118,7 @@ describe('session description helpers', () => {
         'a0b0c1' as RunId,
       )?.description,
     ).toBe('Correcting derivation signs');
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     expect(await recorded.read()).toMatchObject([
       {
         type: 'run.description',

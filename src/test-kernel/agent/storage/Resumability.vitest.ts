@@ -66,7 +66,7 @@ describe('deriveResumability', () => {
     { outcome }: { outcome?: RunOutcome },
   ): Promise<void> {
     publishTestRunStart(session, runId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     if (outcome) {
       await Effect.runPromise(
         session.commit([

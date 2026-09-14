@@ -222,7 +222,7 @@ describe('workflow-script completed journal cost', () => {
   beforeEach(async () => {
     session = await Effect.runPromise(createProcessSession());
     parentRunId = publishTestRunStart(session);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
   });
 
   it('sums canonical workflow and tool-use results independent of entry order', () => {

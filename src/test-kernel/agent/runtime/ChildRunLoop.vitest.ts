@@ -134,7 +134,7 @@ const foldParentPhase = (active: boolean) =>
             output: emptyRunEndOutput(AgentCategory.ToolUse),
           },
     ]);
-    yield* Effect.promise(() => session.settlePublications());
+    yield* session.settlePublications();
   });
 
 /** Lets a forked loop reach its budget permit wait or its queue block. */
@@ -275,7 +275,7 @@ const startLoop = (
 beforeEach(async () => {
   session = await Effect.runPromise(createProcessSession());
   publishTestRunStart(session, PARENT_RUN_ID);
-  await session.settlePublications();
+  await Effect.runPromise(session.settlePublications());
   vi.clearAllMocks();
   // The loop's terminal drain is the session's one exit choreography; the
   // suite observes it through the same (session, runId) spy as before.
@@ -866,7 +866,7 @@ describe('childRunLoop E2E fixtures', () => {
           'live_owner',
         );
         yield* turnStarted(2);
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
         expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
         yield* Fiber.join(loop);

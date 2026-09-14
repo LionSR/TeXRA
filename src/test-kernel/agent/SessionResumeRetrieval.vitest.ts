@@ -104,7 +104,7 @@ describe('retrieveSessionResumeData', () => {
     payload: FlowSnapshotPayload,
   ) {
     publishTestRunStart(session, runId);
-    yield* Effect.promise(() => session.settlePublications());
+    yield* session.settlePublications();
     yield* session.ledger.acquire(runId);
     yield* session.ledger.appendBatch(runId, null, [
       {
@@ -148,7 +148,7 @@ describe('retrieveSessionResumeData', () => {
     Effect.gen(function* () {
       const runId = 'ab0002' as RunId;
       publishTestRunStart(session, runId);
-      yield* Effect.promise(() => session.settlePublications());
+      yield* session.settlePublications();
 
       expect(
         yield* retrieveSessionResumeData(runId, CONFIG, session),
@@ -187,7 +187,7 @@ describe('retrieveSessionResumeData', () => {
     Effect.gen(function* () {
       const runId = 'ab0005' as RunId;
       publishTestRunStart(session, runId);
-      yield* Effect.promise(() => session.settlePublications());
+      yield* session.settlePublications();
       vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({

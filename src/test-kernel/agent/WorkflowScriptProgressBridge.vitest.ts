@@ -49,7 +49,7 @@ beforeEach(async () => {
     }),
   );
   parentRunId = publishTestRunStart(session);
-  await session.settlePublications();
+  await Effect.runPromise(session.settlePublications());
 });
 
 afterEach(async () => {

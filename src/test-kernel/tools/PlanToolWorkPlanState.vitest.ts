@@ -411,7 +411,7 @@ describe('PlanTool — update (plan approval)', () => {
             expect(outcome.output).toContain(
               'feature flag is currently disabled',
             );
-            yield* Effect.promise(() => session.settlePublications());
+            yield* session.settlePublications();
             expect(goalOf(session, runId)).toBeNull();
           } finally {
             releaseRunResources(runId, session);
@@ -430,7 +430,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     await installPlatform(true);
     RUN_ID = generateRunId();
     publishTestRunStart(defaultSession(), RUN_ID);
-    await defaultSession().settlePublications();
+    await Effect.runPromise(defaultSession().settlePublications());
   });
 
   function callTool(input: unknown) {
@@ -457,7 +457,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
         reason: 'Need API credentials from the user.',
       });
       expect(result.status).toBe('executed');
-      yield* Effect.promise(() => defaultSession().settlePublications());
+      yield* defaultSession().settlePublications();
       expect(goalOf(defaultSession(), RUN_ID)?.status).toBe('paused');
     }),
   );
@@ -473,7 +473,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
       expect(result.output).toContain('all 142 tests pass');
       // A finished goal is not archived: the run's next row states that none
       // is in flight, so the wait-node loop has nothing to continue.
-      yield* Effect.promise(() => defaultSession().settlePublications());
+      yield* defaultSession().settlePublications();
       expect(goalOf(defaultSession(), RUN_ID)).toBeNull();
     }),
   );

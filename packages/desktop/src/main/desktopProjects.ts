@@ -370,11 +370,7 @@ export function openDesktopProjectRegistry(
         const failures: string[] = [];
         for (const project of [fallback, ...projects.values()]) {
           await options.runtime.runPromise(
-            hostPort(() =>
-              runInSession(project.session, () =>
-                project.session.flushArtifacts(),
-              ),
-            ).pipe(
+            project.session.settlePublications().pipe(
               Effect.catch((error) =>
                 Effect.sync(() => {
                   failures.push(

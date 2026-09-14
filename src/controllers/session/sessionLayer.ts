@@ -40,7 +40,6 @@ import { FetchHttpClient } from 'effect/unstable/http';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import { runInSession } from '@agent/runtime/RunContext';
 import {
   AGENT_TOOL_INJECTIONS,
   ToolInjections,
@@ -63,7 +62,6 @@ import {
   initProcessRuntime,
   tryProcessRuntime,
   type ProcessRuntime,
-  type ProcessServices,
 } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
@@ -268,7 +266,6 @@ const sessionHandleLayer = (
   key: SessionKey,
   held: HeldSessions,
   release: (key: SessionKey) => Effect.Effect<void>,
-  runtime: ProcessRuntime,
 ) =>
   Layer.effectContext(
     Effect.gen(function* () {
@@ -499,7 +496,6 @@ const sessionHandleLayer = (
               transcripts,
               graph,
               modelRetries,
-              runtime,
             }),
         ),
         (session) =>
@@ -509,10 +505,7 @@ const sessionHandleLayer = (
             // logged here rather than escaping `Scope.close` and failing the
             // `invalidate` or `close` that asked for the release.
             Effect.ensuring(
-              Effect.tryPromise({
-                try: () => session.settlePublications(),
-                catch: (error) => error,
-              }).pipe(
+              session.settlePublications().pipe(
                 Effect.catch((error) =>
                   Effect.sync(() => {
                     log.warn(
@@ -596,7 +589,7 @@ const sessionHandleLayer = (
       // synchronously, so a row must reach them only once the view holds the
       // state that row produced.
       yield* Stream.runForEach(session.folded(anchor), (event) =>
-        Effect.sync(() => session.receiveFoldedEvent(event)),
+        session.receiveFoldedEvent(event),
       ).pipe(Effect.forkIn(consumerScope));
       yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.provideService(Runs, runs),
@@ -669,10 +662,9 @@ const sessionLayer = (
   held: HeldSessions,
   release: (key: SessionKey) => Effect.Effect<void>,
   identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
-  runtime: ProcessRuntime,
 ) =>
   Layer.fresh(
-    sessionHandleLayer(key, held, release, runtime).pipe(
+    sessionHandleLayer(key, held, release).pipe(
       Layer.provide(sessionGraphLayer(key)),
       Layer.provide(identity),
     ),
@@ -692,20 +684,16 @@ class Sessions extends Context.Service<
   LayerMap.LayerMap<SessionKey, Session | Runs>
 >()('@texra/session/Sessions') {
   /** The map, releasing an entry the handle asked to be released through
-   *  the runtime that holds the map. `runtime` is that same runtime: each
-   *  entry's `SessionHandle` is handed it, so a session never looks one up
-   *  when it needs a fiber. */
+   *  the runtime that holds the map. */
   static layer(
     held: HeldSessions,
     release: (key: SessionKey) => Effect.Effect<void>,
     identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
-    runtime: ProcessRuntime,
   ) {
     return Layer.effect(
       Sessions,
       LayerMap.make(
-        (key: SessionKey) =>
-          sessionLayer(key, held, release, identity, runtime),
+        (key: SessionKey) => sessionLayer(key, held, release, identity),
         { idleTimeToLive: Duration.infinity },
       ),
     );
@@ -830,10 +818,8 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     const held = yield* heldSession(root);
     if (held === undefined) return NOTHING_TO_CLOSE;
     const { key, session, runs } = held;
-    const flushArtifacts = Effect.promise(
-      () =>
-        runInSession(session, () => session.flushArtifacts()) as Promise<void>,
-    );
+    // A failed settle travels the defect channel: see the race below.
+    const flushArtifacts = session.settlePublications().pipe(Effect.orDie);
     runs.closeAdmissions();
     // Every touch of the session's storage runs in its scope: the stop
     // writes each run's outcome under the session's roots, and the flush
@@ -908,8 +894,8 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // is armed on the settlement, whatever the flush's exit, and a flush
     // that fails still fails this close.
     //
-    // `flushArtifacts` does reject when a session publication failed, and
-    // `Effect.promise` is deliberate rather than an oversight:
+    // `flushArtifacts` does fail when a session publication failed, and
+    // `Effect.orDie` is deliberate rather than an oversight:
     // `close` answers a `SessionCloseReport` and names no error, so the
     // defect is the channel a failed flush travels on, and `ProcessHold.release`
     // (packages/agent/src/effect/runtime.ts) documents the embedder seeing
@@ -1051,16 +1037,8 @@ export function installProcessRuntime({
   // fiber: the release settles when the entry has unwound.
   const release = (key: SessionKey): Effect.Effect<void> =>
     onThisRuntime(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
-  // Each session is handed the runtime it runs on (`SessionHandle`'s two
-  // Promise faces), so the family below names the runtime this very call is
-  // building. `Layer.suspend` is what makes that legal: an entry is built on
-  // its first open, long after `make` has returned. The type is stated
-  // because a value named inside its own initializer has none to infer.
-  const runtime: ManagedRuntime.ManagedRuntime<
-    Sessions | ProcessServices,
-    never
-  > = ManagedRuntime.make(
-    Layer.suspend(() => Sessions.layer(held, release, services, runtime)).pipe(
+  const runtime = ManagedRuntime.make(
+    Sessions.layer(held, release, services).pipe(
       Layer.provideMerge(services),
       // The Lean port beside `services`, not among them: `services` is also
       // each session entry's identity layer, rebuilt fresh per root, and the
@@ -1101,8 +1079,7 @@ export function installProcessRuntime({
  * finalizers are what release the open sessions, and they still publish while
  * they unwind -- a session's release unwinds the handle and then awaits the
  * publications that teardown left in flight
- * (`SessionHandle.settlePublications`), which run on the very runtime the
- * session was handed. The installed reference is cleared afterwards, and only
+ * (`SessionHandle.settlePublications`), on the releasing fiber. The installed reference is cleared afterwards, and only
  * if this runtime is still the installed one, so a replacement installed while
  * this one unwound survives.
  *

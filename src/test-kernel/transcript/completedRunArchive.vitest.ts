@@ -94,7 +94,7 @@ async function stampRun(runId: RunId): Promise<void> {
   const view = await Effect.runPromise(taskSession.readView([runId]));
   if (!view.runs.has(runId)) {
     publishTestRunStart(taskSession, runId);
-    await taskSession.settlePublications();
+    await Effect.runPromise(taskSession.settlePublications());
   }
 }
 
@@ -167,7 +167,7 @@ async function appendRows(
       data: row.data,
     })),
   );
-  await taskSession.settlePublications();
+  await Effect.runPromise(taskSession.settlePublications());
 }
 
 /** Write transcript rows and committed task events for a completed run. */
@@ -359,7 +359,7 @@ describe('completedRunArchive facade', () => {
           ({ session, label }) =>
             Effect.gen(function* () {
               publishTestRunStart(session, runId);
-              yield* Effect.promise(() => session.settlePublications());
+              yield* session.settlePublications();
               yield* getRunRecords(session, runId).writeRunRecord({
                 ...runConfig(label),
                 instruction: label,
@@ -378,7 +378,7 @@ describe('completedRunArchive facade', () => {
                   text: `Proof for ${label}.`,
                 },
               ]);
-              yield* Effect.promise(() => session.settlePublications());
+              yield* session.settlePublications();
             }),
           { concurrency: 'unbounded', discard: true },
         );
@@ -476,7 +476,7 @@ describe('completedRunArchive facade', () => {
         const session = yield* initializeDefaultSession({});
         taskSession = session;
         publishTestRunStart(session, runId);
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
         yield* getRunRecords(session, runId).writeRunRecord(config);
         session.publish([
           {
@@ -492,7 +492,7 @@ describe('completedRunArchive facade', () => {
             text: 'First proof.',
           },
         ]);
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
         const logs = session.transcripts;
         logs.requestEviction(runId);
         expect(logs.get(runId)).toBeUndefined();
@@ -554,7 +554,7 @@ describe('completedRunArchive facade', () => {
                   text: 'Second proof.',
                 },
               ]);
-              yield* Effect.promise(() => session.settlePublications());
+              yield* session.settlePublications().pipe(Effect.orDie);
               return writer;
             }),
           );

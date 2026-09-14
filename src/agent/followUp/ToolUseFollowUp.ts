@@ -222,31 +222,28 @@ export function recordRunRefusal(
   runId: RunId,
   session: SessionHandle,
   classification: RunClassification,
-): FollowUpFailureReason {
+): Effect.Effect<FollowUpFailureReason> {
   switch (classification.kind) {
     case 'held_elsewhere':
-      session.markUnreadable(
-        runId,
-        runHeldMessage(ownerPid(classification.owner)),
-      );
-      return 'owned_elsewhere';
+      return session
+        .markUnreadable(runId, runHeldMessage(ownerPid(classification.owner)))
+        .pipe(Effect.as('owned_elsewhere'));
     case 'owned_here':
       // A claim this process holds for a run with no live flow context is
       // a registry/claim disagreement, not a free run: it stays read-only
       // with a diagnostic naming that disagreement.
-      session.markUnreadable(
-        runId,
-        runUnreadableMessage('run claimed by this process with no live run'),
-      );
-      return 'not_resumable';
+      return session
+        .markUnreadable(
+          runId,
+          runUnreadableMessage('run claimed by this process with no live run'),
+        )
+        .pipe(Effect.as('not_resumable'));
     case 'finished':
-      session.clearUnreadable(runId);
-      return 'finished';
+      return session.clearUnreadable(runId).pipe(Effect.as('finished'));
     case 'resumable':
-      session.clearUnreadable(runId);
-      return 'not_resumable';
+      return session.clearUnreadable(runId).pipe(Effect.as('not_resumable'));
     case 'unclassified':
-      return 'not_resumable';
+      return Effect.succeed('not_resumable');
   }
 }
 
@@ -261,7 +258,7 @@ const classifyRefusal = Effect.fn('classifyRefusal')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<FollowUpFailureReason, Error> {
   const classification = yield* classifyRun(runId, session);
-  return recordRunRefusal(runId, session, classification);
+  return yield* recordRunRefusal(runId, session, classification);
 });
 
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (

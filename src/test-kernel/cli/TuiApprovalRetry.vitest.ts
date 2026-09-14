@@ -169,7 +169,7 @@ function ensureRun(runId: RunId): Effect.Effect<void> {
     started.add(runId);
     const session = defaultSession();
     publishTestRunStart(session, runId, { parent: root ?? null });
-    yield* Effect.promise(() => session.settlePublications());
+    yield* session.settlePublications().pipe(Effect.orDie);
   });
 }
 
@@ -416,7 +416,7 @@ afterEach(async () => {
         .pipe(Effect.ignore),
     );
   }
-  await session.settlePublications();
+  await Effect.runPromise(session.settlePublications());
   session.approvals.clearAll();
   resetCliState();
   mocks.apiKeyExistsUncached.mockReset();

@@ -143,7 +143,7 @@ describe('maybeBuildGoalContinuation', () => {
   it('is a pure read — leaves the goal untouched', async () => {
     const before = await goalOnTheRun('objective');
     await maybeBuildGoalContinuation(session, RUN_ID);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     // No counter, no audit log: the helper only reads. The loop runs until
     // the model completes or the user stops it.
     expect(goalOf(session, RUN_ID)).toEqual(before);

@@ -64,7 +64,7 @@ function foldRunPhase(
         payload: { family: 'toolUse', step },
       },
     ]);
-    yield* Effect.promise(() => session.settlePublications());
+    yield* session.settlePublications().pipe(Effect.orDie);
     expect(session.runView(runId)?.status).toBe(expected);
   });
 }
@@ -333,7 +333,7 @@ describe('ExecutionsTool', () => {
 
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
-          yield* Effect.promise(() => session.settlePublications());
+          yield* session.settlePublications();
           session.runs.track(handle);
           yield* foldRunPhase(
             session,
@@ -354,7 +354,7 @@ describe('ExecutionsTool', () => {
               ],
             },
           ]);
-          yield* Effect.promise(() => session.settlePublications());
+          yield* session.settlePublications();
           const [summary, todos] = yield* Effect.all([
             new ExecutionsTool().call({
               path: `/executions/${childRunId}`,
@@ -400,7 +400,7 @@ describe('ExecutionsTool', () => {
             const callerRunId = RunIdSchema.parse('ca11e0000001');
 
             publishTestRunStart(session, runId);
-            yield* Effect.promise(() => session.settlePublications());
+            yield* session.settlePublications();
             mocks.readConfig.mockResolvedValue(config);
             mocks.readReport.mockResolvedValue(
               '<subagent-result>full report</subagent-result>',
@@ -565,7 +565,7 @@ describe('ExecutionsTool', () => {
                   ],
                 },
               ]);
-              yield* Effect.promise(() => session.settlePublications());
+              yield* session.settlePublications();
               mocks.readConfig.mockResolvedValue(config);
               const result = yield* new ExecutionsTool()
                 .call({ path: toolPath })

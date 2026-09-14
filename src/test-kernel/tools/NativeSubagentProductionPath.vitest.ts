@@ -538,7 +538,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await Effect.runPromise(teardownDefaultSession());
     session = await Effect.runPromise(initializeDefaultSession({}));
     publishTestRunStart(session, OUTER_RUN_ID);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     childId = undefined;
     resumedRuns = [];
     completedResumes = [];
@@ -586,7 +586,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       'Result A.',
     );
 
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const archivedChild = await Effect.runPromise(
       readCompletedRunConversation(runId, session),
     );
@@ -659,7 +659,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     );
     await waitForCompletedResumes(2);
 
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const archivedChild = await Effect.runPromise(
       readCompletedRunConversation(runId, session),
     );
@@ -726,7 +726,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
     // The child transcript has turn 1 (Result A) and the batch turn (Result B),
     // with BOTH follow-up instructions recorded as user messages in the batch.
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const archivedChild = await Effect.runPromise(
       readCompletedRunConversation(runId, session),
     );
@@ -788,7 +788,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         ),
       );
     }
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const afterReplay = JSON.stringify(
       (
         await Effect.runPromise(
@@ -813,7 +813,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       ),
     );
     await waitForCompletedResumes(2);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const afterDistinct = JSON.stringify(
       (
         await Effect.runPromise(

@@ -76,7 +76,7 @@ async function setupTool(
     },
   );
   const runId = publishTestRunStart(defaultSession());
-  await defaultSession().settlePublications();
+  await Effect.runPromise(defaultSession().settlePublications());
   return { tool: new SendToTerminalTool(), runs, runId };
 }
 

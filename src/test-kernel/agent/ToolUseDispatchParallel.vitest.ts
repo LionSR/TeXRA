@@ -316,7 +316,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const logger = options.logger ?? noopTrace;
   const tools = new MapToolRegistry(options.tools);
   publishTestRunStart(session, runId);
-  yield* Effect.promise(() => session.settlePublications());
+  yield* session.settlePublications();
   yield* session.ledger.acquire(runId);
   const opened = yield* session.ledger.appendBatch(runId, null, [
     appendRow(runId, [

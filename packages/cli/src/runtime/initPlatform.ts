@@ -451,7 +451,10 @@ export async function initCliPlatform(
         runSettlement: (settlement) => runtime.runPromise(settlement),
         // The session is opened lazily (`sessionOpen`); a process that never
         // asked for one has nothing to flush.
-        flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
+        flushArtifacts: async () => {
+          const session = tryDefaultSession();
+          if (session) await runtime.runPromise(session.settlePublications());
+        },
         afterFlushArtifacts: [
           () => runtime.runPromise(UsageLogService.dispose()),
         ],

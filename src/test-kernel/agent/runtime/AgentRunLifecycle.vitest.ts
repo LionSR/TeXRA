@@ -472,7 +472,7 @@ describe('runFlowWithLifecycle', () => {
         yield* stop.settlement;
 
         expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        yield* Effect.promise(() => ctx.runScope.session.settlePublications());
+        yield* ctx.runScope.session.settlePublications();
         // A run that never ran a turn writes no step of its own: `run.end` is
         // the whole of what it says.
         expect(
@@ -612,9 +612,7 @@ describe('runFlowWithLifecycle', () => {
           );
           // The detached trace cannot publish this close. The suspended owner
           // must append it to the same session event stream before releasing.
-          yield* Effect.promise(() =>
-            ctx.runScope.session.settlePublications(),
-          );
+          yield* ctx.runScope.session.settlePublications();
           expect(
             eventsOfType(
               yield* Effect.promise(() => recorded.read()),
@@ -637,7 +635,7 @@ describe('runFlowWithLifecycle', () => {
       const { runId, ctx } = lifecycleFixture();
       const stopSessionsForRun = vi.fn((_runId: RunId) => Effect.void);
       seedOpenRunGroup(ctx, runId);
-      yield* Effect.promise(() => ctx.runScope.session.settlePublications());
+      yield* ctx.runScope.session.settlePublications();
       vi.spyOn(ctx.runScope.session, 'commitRunEvent').mockReturnValueOnce(
         Effect.fail(
           new DatabaseWriteFailed({
@@ -902,20 +900,22 @@ function finalizeFixture(): {
   session: SessionHandle;
   handle: ReturnType<typeof testRunHandle>;
   untrack: Mock<(runId: RunId) => void>;
-  flushArtifacts: Mock<(runId?: RunId) => Promise<void>>;
+  settlePublications: Mock<(runId?: RunId) => Effect.Effect<void, Error>>;
 } {
   const runId =
     `f${(finalizeFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
   const untrack = vi.fn<(runId: RunId) => void>();
-  const flushArtifacts = vi.fn(async (_runId?: RunId) => {});
+  const settlePublications = vi.fn(
+    (_runId?: RunId): Effect.Effect<void, Error> => Effect.void,
+  );
   return {
     runId,
     session: {
       runs: { untrack },
-      flushArtifacts,
+      settlePublications,
     } as unknown as SessionHandle,
     untrack,
-    flushArtifacts,
+    settlePublications,
     handle: testRunHandle({
       runId,
       parent: PARENT_RUN_ID,
@@ -987,19 +987,15 @@ describe('finalizeRunTerminal', () => {
 
   it.effect('flushes display artifacts before publishing and untracking', () =>
     Effect.gen(function* () {
-      const { runId, session, handle, untrack, flushArtifacts } =
+      const { runId, session, handle, untrack, settlePublications } =
         finalizeFixture();
       const flushStarted = yield* Deferred.make<void>();
-      let releaseFlush: (() => void) | undefined;
-      // `flushArtifacts` is a Promise API, so the gate the test waits on is
-      // opened from inside the mock and the release stays a raw resolve.
-      flushArtifacts.mockImplementation(() => {
-        const flushing = new Promise<void>((resolve) => {
-          releaseFlush = resolve;
-        });
-        Deferred.doneUnsafe(flushStarted, Effect.void);
-        return flushing;
-      });
+      const releaseFlush = yield* Deferred.make<void>();
+      settlePublications.mockImplementation(() =>
+        Deferred.succeed(flushStarted, undefined).pipe(
+          Effect.andThen(Deferred.await(releaseFlush)),
+        ),
+      );
       const finalization = yield* Effect.forkChild(
         finalize({
           session,
@@ -1009,11 +1005,11 @@ describe('finalizeRunTerminal', () => {
       );
 
       yield* Deferred.await(flushStarted);
-      expect(flushArtifacts).toHaveBeenCalledOnce();
+      expect(settlePublications).toHaveBeenCalledOnce();
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(untrack).not.toHaveBeenCalled();
 
-      releaseFlush?.();
+      yield* Deferred.succeed(releaseFlush, undefined);
       yield* Fiber.join(finalization);
 
       expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
@@ -1022,7 +1018,7 @@ describe('finalizeRunTerminal', () => {
   );
 
   it('ends the transcript stage inside the drain that attests it', async () => {
-    const { session, handle, flushArtifacts } = finalizeFixture();
+    const { session, handle, settlePublications } = finalizeFixture();
     const stage = { end: vi.fn() };
 
     await Effect.runPromise(
@@ -1038,12 +1034,12 @@ describe('finalizeRunTerminal', () => {
     // post-drain fact has to be written after a drain that already has it.
     expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.COMPLETED);
     expect(stage.end.mock.invocationCallOrder[0]).toBeLessThan(
-      flushArtifacts.mock.invocationCallOrder[0] ?? 0,
+      settlePublications.mock.invocationCallOrder[0] ?? 0,
     );
   });
 
   it("attests the facts this run queued and no other run's", async () => {
-    const { runId, session, handle, flushArtifacts } = finalizeFixture();
+    const { runId, session, handle, settlePublications } = finalizeFixture();
 
     await Effect.runPromise(
       finalize({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
@@ -1051,13 +1047,15 @@ describe('finalizeRunTerminal', () => {
 
     // Another run's rolled-back fact is that run's terminal outcome, so the
     // drain this row is the post-drain fact of answers for this run alone.
-    expect(flushArtifacts).toHaveBeenCalledExactlyOnceWith(runId);
+    expect(settlePublications).toHaveBeenCalledExactlyOnceWith(runId);
   });
 
   it('records a failed drain as the terminal outcome', async () => {
-    const { runId, session, handle, untrack, flushArtifacts } =
+    const { runId, session, handle, untrack, settlePublications } =
       finalizeFixture();
-    flushArtifacts.mockRejectedValueOnce(new Error('artifact flush failed'));
+    settlePublications.mockReturnValueOnce(
+      Effect.fail(new Error('artifact flush failed')),
+    );
 
     const finalization = await Effect.runPromise(
       finalize({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
@@ -1163,8 +1161,10 @@ describe('finalizeRunTerminal', () => {
   });
 
   it('keeps the drain marker on the row a stop resolved as cancelled', async () => {
-    const { runId, session, handle, flushArtifacts } = finalizeFixture();
-    flushArtifacts.mockRejectedValueOnce(new Error('artifact flush failed'));
+    const { runId, session, handle, settlePublications } = finalizeFixture();
+    settlePublications.mockReturnValueOnce(
+      Effect.fail(new Error('artifact flush failed')),
+    );
 
     handle.interrupt();
 

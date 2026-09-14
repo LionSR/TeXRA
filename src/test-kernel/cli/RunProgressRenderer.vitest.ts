@@ -980,7 +980,7 @@ describe('CLI run progress renderer', () => {
       );
       const detach = host.attachRunProgressRenderer(session);
       await publishRun(session, { runId: 'b2b2b2' });
-      await session.settlePublications();
+      await Effect.runPromise(session.settlePublications());
       // The terminal phase is the `run.end` row's fact and nothing else, so
       // exactly one line renders for the transition.
       session.publish([
@@ -991,7 +991,7 @@ describe('CLI run progress renderer', () => {
           output: emptyRunEndOutput(AgentCategory.Workflow),
         },
       ]);
-      await session.settlePublications();
+      await Effect.runPromise(session.settlePublications());
 
       detach();
       await host.close();

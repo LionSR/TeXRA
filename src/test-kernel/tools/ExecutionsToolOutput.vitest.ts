@@ -74,7 +74,7 @@ function publishWorkflowBoard(
         ...(board.phase !== undefined && { stageId: 'phase-1' }),
       });
     }
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
   });
 }
 
@@ -150,7 +150,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
 
     assert.equal(launched.status, 'executed');
     yield* Effect.promise(() => outputEmitted);
-    yield* Effect.promise(() => defaultSession().settlePublications());
+    yield* defaultSession().settlePublications();
     const reported = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
     assert.ok(reported, 'Background launch should report its run ID');
     const runId = RunIdSchema.parse(reported);
@@ -178,7 +178,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
 
 function readOutput(runId: RunId, viewRange?: [number, number]) {
   return Effect.gen(function* () {
-    yield* Effect.promise(() => defaultSession().settlePublications());
+    yield* defaultSession().settlePublications();
     return yield* new ExecutionsTool().call({
       path: `/executions/${runId}/output`,
       ...(viewRange ? { view_range: viewRange } : {}),

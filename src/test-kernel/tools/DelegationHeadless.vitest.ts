@@ -251,7 +251,7 @@ function delegateWithProposalDecision(
       );
       // A request is a row on its run, so the parent run must exist first.
       publishTestRunStart(session, PARENT_RUN_ID);
-      yield* Effect.promise(() => session.settlePublications());
+      yield* session.settlePublications();
       const result = yield* callDelegateReview(parentRunContext({ session }));
       // A detached child commits its `child.turn` row before its first turn
       // runs, so the launch is not observable the moment the tool returns and
@@ -460,7 +460,7 @@ describe('headless delegation', () => {
     // with its own `run.start`.
     inBandSession = createTestSession();
     publishTestRunStart(inBandSession, IN_BAND_PARENT_RUN_ID);
-    await inBandSession.settlePublications();
+    await Effect.runPromise(inBandSession.settlePublications());
     mocks.prepareAgentDefinition.mockImplementation(
       ({ config }: { config: unknown }) =>
         Effect.succeed({ config, setting: { defaultOutputFiles: [] } }),
@@ -472,7 +472,7 @@ describe('headless delegation', () => {
       (session: SessionHandle, runId: RunId) =>
         Effect.promise(async () => {
           publishTestRunStart(session, runId);
-          await session.settlePublications();
+          await Effect.runPromise(session.settlePublications());
         }),
     );
     restoreAgentEngine = provideAgentEngine({
@@ -496,12 +496,12 @@ describe('headless delegation', () => {
             // (`finalizeRunTerminal`); the drain runs here too, so a
             // publication that fails only once is marked on the row and gone
             // by the time the lease-release drain runs.
-            const drainFailure = await options.session
-              .flushArtifacts(runId)
-              .then(
-                () => undefined,
-                (cause: unknown) => ensureError(cause),
-              );
+            const drainFailure = await Effect.runPromise(
+              options.session.settlePublications(runId).pipe(
+                Effect.as(undefined),
+                Effect.catch((cause) => Effect.succeed(cause)),
+              ),
+            );
             recordTerminalFact(runId, turn, reportedError, drainFailure);
             return turn;
           },
@@ -727,9 +727,16 @@ describe('headless delegation', () => {
     () =>
       Effect.gen(function* () {
         const drainFailure = new Error('artifact flush failed');
+        const settle = inBandSession.settlePublications.bind(inBandSession);
+        // Every drain of the child's own facts fails; a session-wide settle
+        // (the registration barrier) still runs.
         const drain = vi
-          .spyOn(inBandSession, 'flushArtifacts')
-          .mockRejectedValue(drainFailure);
+          .spyOn(inBandSession, 'settlePublications')
+          .mockImplementation((runId, options) =>
+            runId === IN_BAND_RUN_ID
+              ? Effect.fail(drainFailure)
+              : settle(runId, options),
+          );
 
         try {
           expect(
@@ -751,9 +758,16 @@ describe('headless delegation', () => {
     'does not return a typed result when only the pre-terminal drain fails',
     () =>
       Effect.gen(function* () {
+        const settle = inBandSession.settlePublications.bind(inBandSession);
+        let childDrains = 0;
+        // Only the child's first drain (the pre-terminal one) fails.
         const drain = vi
-          .spyOn(inBandSession, 'flushArtifacts')
-          .mockRejectedValueOnce(new Error('queued publication failed'));
+          .spyOn(inBandSession, 'settlePublications')
+          .mockImplementation((runId, options) =>
+            runId === IN_BAND_RUN_ID && childDrains++ === 0
+              ? Effect.fail(new Error('queued publication failed'))
+              : settle(runId, options),
+          );
 
         try {
           expect(
@@ -764,7 +778,7 @@ describe('headless delegation', () => {
               'failed to commit its final artifacts',
             ),
           });
-          expect(drain).toHaveBeenCalledTimes(2);
+          expect(childDrains).toBe(3);
         } finally {
           drain.mockRestore();
         }

@@ -92,8 +92,8 @@ const persistTranscriptEntry = (runId: RunId) =>
     },
   ]);
 
-/** The session publishes on the process runtime, so its settle is a Promise. */
-const settlePublications = Effect.promise(() => session.settlePublications());
+/** The session's settle, run by each test that waits on its publications. */
+const settlePublications = Effect.suspend(() => session.settlePublications());
 
 describe('ChatExportController.exportAsHtml', () => {
   let controller: ChatExportController;

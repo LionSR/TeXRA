@@ -614,12 +614,10 @@ export function executeCliRequest(
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
         yield* Effect.tryPromise({
-          try: async () => {
-            await finalizeShutdownStatus();
-            await session.flushArtifacts();
-          },
+          try: () => finalizeShutdownStatus(),
           catch: (error: unknown) => error,
         });
+        yield* session.settlePublications();
         if (runResult.ok) {
           return yield* readCliRunOutcomeState(
             session,

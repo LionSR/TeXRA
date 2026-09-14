@@ -66,7 +66,7 @@ async function writeRun(
   runConfigRecord: AgentConfig = config(),
 ): Promise<void> {
   publishTestRunStart(session, runId);
-  await session.settlePublications();
+  await Effect.runPromise(session.settlePublications());
   await Effect.runPromise(
     getRunRecords(session, runId).writeRunRecord(runConfigRecord),
   );

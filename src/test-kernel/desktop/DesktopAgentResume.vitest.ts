@@ -149,7 +149,7 @@ async function createResumeHarness(): Promise<{
       config,
     },
   ]);
-  await session.settlePublications();
+  await Effect.runPromise(session.settlePublications());
   const owner = new DesktopProcessResumeOwner({
     sessions: () => [session],
     runtime: effectRuntime,
@@ -207,7 +207,7 @@ describe('desktop process resume owner', () => {
   beforeEach(async () => {
     testSession = await Effect.runPromise(createProcessSession());
     publishTestRunStart(testSession, runId);
-    await testSession.settlePublications();
+    await Effect.runPromise(testSession.settlePublications());
     retrieveSessionResumeData.mockReset();
     resumeToolUseFromResumeData.mockReset();
     runAgent.mockReset().mockReturnValue(Effect.succeed(completedRunResult()));
@@ -381,7 +381,7 @@ describe('desktop process resume owner', () => {
     harness.session.publish([
       { type: 'run.removed', aggregateId: aggregateId('run', runId) },
     ]);
-    await harness.session.settlePublications();
+    await Effect.runPromise(harness.session.settlePublications());
     retrieval.release();
 
     await expect(resume).resolves.toBe(false);
