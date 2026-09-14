@@ -58,7 +58,7 @@ const SCRIPT_REL = 'scripts/check-effect-migration-ratchet.mjs';
 const SUPERSEDED_PACKAGES = ['p-queue', 'p-defer', 'async-mutex'];
 /** Surveyed row IDs omitted from the baseline at zero. `--update` must not
  *  treat these as newly introduced rows and reseed them from the tree. */
-const RETIRED_ROW_IDS = new Set(['import:p-queue']);
+const RETIRED_ROW_IDS = new Set(['import:p-queue', 'effectRuntime()']);
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
 const PROCESS_RUNTIME_MODULE = '@platform/processRuntime';

@@ -19,6 +19,7 @@ import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { createTexraTempDir } from '@utils/files/tempDir';
+import type { Effect } from 'effect';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
@@ -90,6 +91,10 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
    * to open ahead of it.
    */
   async revealApprovalSurface(): Promise<void> {}
+
+  runPreview(program: Effect.Effect<void>): Promise<void> {
+    return this.options.runtime.runPromise(program);
+  }
 
   reportError(message: string): void {
     void this.options.ui.showErrorMessage(message);

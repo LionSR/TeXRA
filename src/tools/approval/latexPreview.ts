@@ -1,18 +1,23 @@
 /**
  * LaTeX preview and diff operations for tool edit approval.
  * Handles creating temp files, running latexdiff, and building PDFs.
+ *
+ * Both previews are Effect programs the approval controller runs through its
+ * host's runner, so the process runtime is the host's and nothing here runs a
+ * fiber.
  */
 
 import path from 'node:path';
 
+import { Cause, Effect } from 'effect';
 import { sync as globSync } from 'glob';
 import { z } from 'zod';
 
 import { isFileNotFoundError } from '@common/errors';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
+import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { debug, warn } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   type FileLocation,
@@ -45,7 +50,13 @@ export interface LatexPreviewEntry {
   originalContent: string;
   proposedContent: string;
   isSettled: () => boolean;
-  workspaceTempCleanup: Array<() => Promise<void>>;
+  /**
+   * Resolves when the request settles. A preview still running then is
+   * interrupted, which stops its latexdiff subprocess.
+   */
+  settled: Promise<void>;
+  /** Removals of the temp files the previews wrote, run when the request settles. */
+  workspaceTempCleanup: Array<Effect.Effect<void>>;
   latexOperationInProgress: boolean;
   /** Platform-specific error reporter, injected by the caller. */
   onError: (message: string) => void;
@@ -54,72 +65,88 @@ export interface LatexPreviewEntry {
 const TEXRA_TEMP_DIR = '.texra-temp';
 /** Length of the random suffix for temp file names (8 nanoid chars ≈ 2^47 combinations, sufficient for uniqueness) */
 const TEMP_ID_LENGTH = 8;
+/** The suffix latexdiff's output file carries after the proposed file's stem. */
+const DIFF_SUFFIX = '_diff';
 
 const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 
 /** Silently attempt to delete a file or directory, ignoring errors */
-async function silentDelete(
+const silentDelete = (
   targetPath: string,
   kind: 'file' | 'dir',
-): Promise<void> {
-  await AbsoluteFS.delete(targetPath).catch((error) => {
+): Effect.Effect<void> =>
+  Effect.tryPromise({
+    try: () => AbsoluteFS.delete(targetPath),
+    catch: (error) => error,
+  }).pipe(
     // Best-effort temp cleanup; the target may already be gone.
-    debug('latexPreview', `Failed to delete temp ${kind} ${targetPath}`, {
-      data: error,
-    });
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        debug('latexPreview', `Failed to delete temp ${kind} ${targetPath}`, {
+          data: error,
+        });
+      }),
+    ),
+  );
+
+/** Delete a file and the LaTeX auxiliary files built beside it */
+const deleteWithAuxFiles = (filePath: string): Effect.Effect<void> =>
+  Effect.suspend(() => {
+    const ext = path.extname(filePath);
+    const basePathNoExt = filePath.slice(0, -ext.length);
+    const unlinkTargets = TEMP_EXTENSIONS.flatMap((tempExt) =>
+      tempExt.includes('*')
+        ? globSync(`${basePathNoExt}${tempExt}`, { nodir: true })
+        : [basePathNoExt + tempExt],
+    );
+    return Effect.forEach(
+      [filePath, ...unlinkTargets],
+      (target) => silentDelete(target, 'file'),
+      { concurrency: 'unbounded', discard: true },
+    );
   });
-}
 
-/** Clean up LaTeX auxiliary files for a given base path */
-async function cleanupLatexAuxFiles(filePath: string): Promise<void> {
-  const ext = path.extname(filePath);
-  const basePathNoExt = filePath.slice(0, -ext.length);
-  const unlinkTargets = TEMP_EXTENSIONS.flatMap((tempExt) =>
-    tempExt.includes('*')
-      ? globSync(`${basePathNoExt}${tempExt}`, { nodir: true })
-      : [basePathNoExt + tempExt],
-  );
-  await Promise.all(
-    unlinkTargets.map((target) => silentDelete(target, 'file')),
-  );
-}
-
-/** Register cleanup function with entry, or run immediately if already settled */
-function registerCleanup(
+/** Register cleanup with the entry, or run it now if the entry already settled */
+const registerCleanup = (
   entry: LatexPreviewEntry,
-  cleanup: () => Promise<void>,
-): void {
-  if (entry.isSettled()) {
-    // Best-effort cleanup for an already-settled entry; failures are benign.
-    void cleanup().catch((error) => {
-      debug('latexPreview', 'Immediate cleanup failed for settled entry', {
-        data: error,
-      });
-    });
-    return;
-  }
-  entry.workspaceTempCleanup.push(cleanup);
-}
+  cleanup: Effect.Effect<void>,
+): Effect.Effect<void> =>
+  Effect.suspend(() => {
+    if (entry.isSettled()) return cleanup;
+    entry.workspaceTempCleanup.push(cleanup);
+    return Effect.void;
+  });
 
-/** Execute a LaTeX operation with standard error handling and progress tracking */
-async function withLatexOperation(
+/**
+ * Run a LaTeX operation with standard error handling and progress tracking.
+ * The operation ends early, interrupted, when the request settles under it.
+ */
+const withLatexOperation = (
   entry: LatexPreviewEntry,
   operationName: string,
-  operation: () => Promise<void>,
-): Promise<void> {
-  if (entry.latexOperationInProgress) {
-    return;
-  }
-  entry.latexOperationInProgress = true;
-
-  try {
-    await operation();
-  } catch (err) {
-    entry.onError(`${operationName} failed: ${toErrorMessage(err)}`);
-  } finally {
-    entry.latexOperationInProgress = false;
-  }
-}
+  operation: Effect.Effect<void, unknown>,
+): Effect.Effect<void> =>
+  Effect.suspend(() => {
+    if (entry.latexOperationInProgress) return Effect.void;
+    entry.latexOperationInProgress = true;
+    return operation.pipe(
+      Effect.raceFirst(Effect.promise(() => entry.settled)),
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.interrupt
+          : Effect.sync(() => {
+              entry.onError(
+                `${operationName} failed: ${toErrorMessage(Cause.squash(cause))}`,
+              );
+            }),
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          entry.latexOperationInProgress = false;
+        }),
+      ),
+    );
+  });
 
 /** Read file content with fallback to provided default. The disk read exists
  *  to pick up the user's saved hand edits to the approval temp file; a
@@ -127,74 +154,96 @@ async function withLatexOperation(
  *  benign, so only that case falls back silently. Any other failure still
  *  falls back — the held in-memory content keeps the preview usable — but
  *  warns, because the preview would silently drop the user's saved edits. */
-async function readFileWithFallback(
+const readFileWithFallback = (
   uri: { fsPath: string },
   fallback: string,
-): Promise<string> {
-  return AbsoluteFS.readBytes(uri.fsPath)
-    .then((bytes) => bytes.toString('utf8'))
-    .catch((error) => {
-      if (!isFileNotFoundError(error)) {
-        warn(
-          'latexPreview',
-          `Failed to read ${uri.fsPath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,
-          { data: error },
-        );
-      }
-      return fallback;
-    });
-}
+): Effect.Effect<string> =>
+  Effect.tryPromise({
+    try: () => AbsoluteFS.readBytes(uri.fsPath),
+    catch: (error) => error,
+  }).pipe(
+    Effect.map((bytes) => bytes.toString('utf8')),
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        if (!isFileNotFoundError(error)) {
+          warn(
+            'latexPreview',
+            `Failed to read ${uri.fsPath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,
+            { data: error },
+          );
+        }
+        return fallback;
+      }),
+    ),
+  );
 
 /**
  * Create a temporary file and register its cleanup with the entry.
  * Returns the temp file path for further operations.
  */
-async function createTempFileWithCleanup(
-  entry: LatexPreviewEntry,
-  content: string,
-  suffix: string,
-): Promise<string> {
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) {
-    throw new Error('No workspace folder open');
-  }
-
-  const location = getValidatedConfig(
-    'texra.latexdiff.tempFileLocation',
-    z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS),
-    'sameDirectory',
-  );
-
-  const originalPath = entry.request.path;
-  const ext = path.extname(originalPath);
-  const basename = path.basename(originalPath, ext);
-  const tempFileName = `${basename}${suffix}-${generateShortId(TEMP_ID_LENGTH)}${ext}`;
-
-  let tempDir: string;
-  if (location === 'workspaceTemp') {
-    tempDir = path.join(workspacePath, TEXRA_TEMP_DIR);
-    await AbsoluteFS.createDir(tempDir);
-  } else {
-    const resolvedPath = path.isAbsolute(originalPath)
-      ? originalPath
-      : path.join(workspacePath, originalPath);
-    tempDir = path.dirname(resolvedPath);
-  }
-
-  const tempPath = path.join(tempDir, tempFileName);
-  await AbsoluteFS.write(tempPath, content);
-
-  registerCleanup(entry, async () => {
-    await silentDelete(tempPath, 'file');
-    await cleanupLatexAuxFiles(tempPath);
-    if (location === 'workspaceTemp') {
-      await silentDelete(tempDir, 'dir');
+const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
+  function* (
+    entry: LatexPreviewEntry,
+    content: string,
+    suffix: string,
+  ): Effect.fn.Return<string, unknown> {
+    const workspacePath = WorkspaceFS.getPath();
+    if (!workspacePath) {
+      return yield* Effect.fail(new Error('No workspace folder open'));
     }
-  });
 
-  return tempPath;
-}
+    const location = getValidatedConfig(
+      'texra.latexdiff.tempFileLocation',
+      z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS),
+      'sameDirectory',
+    );
 
+    const originalPath = entry.request.path;
+    const ext = path.extname(originalPath);
+    const basename = path.basename(originalPath, ext);
+    const tempFileName = `${basename}${suffix}-${generateShortId(TEMP_ID_LENGTH)}${ext}`;
+
+    const tempDir =
+      location === 'workspaceTemp'
+        ? path.join(workspacePath, TEXRA_TEMP_DIR)
+        : path.dirname(
+            path.isAbsolute(originalPath)
+              ? originalPath
+              : path.join(workspacePath, originalPath),
+          );
+    const tempPath = path.join(tempDir, tempFileName);
+
+    // Writing the file and registering its removal are one step: a settled
+    // request interrupting between them would leave a file nothing deletes.
+    // The removal is registered however the write ends, since a failed write
+    // can still leave a partial file behind.
+    yield* Effect.uninterruptible(
+      Effect.tryPromise({
+        try: async () => {
+          if (location === 'workspaceTemp') {
+            await AbsoluteFS.createDir(tempDir);
+          }
+          await AbsoluteFS.write(tempPath, content);
+        },
+        catch: (error) => error,
+      }).pipe(
+        Effect.onExit(() =>
+          registerCleanup(
+            entry,
+            Effect.gen(function* () {
+              yield* deleteWithAuxFiles(tempPath);
+              if (location === 'workspaceTemp') {
+                yield* silentDelete(tempDir, 'dir');
+              }
+            }),
+          ),
+        ),
+      ),
+    );
+
+    return tempPath;
+  },
+);
 function tempPathToLocation(tempPath: string): FileLocation {
   const workspacePath = WorkspaceFS.getPath();
   if (workspacePath == null) return createExternalLocation(tempPath);
@@ -214,28 +263,35 @@ function tempPathToLocation(tempPath: string): FileLocation {
 }
 
 /** Preview the proposed LaTeX document by creating a temp file and building it */
-export async function previewProposedLatex(
+export const previewProposedLatex = (
   entry: LatexPreviewEntry,
   options: LatexPreviewDisplayOptions,
-): Promise<void> {
-  await withLatexOperation(entry, 'Preview', async () => {
-    const content = await readFileWithFallback(
-      entry.proposedUri,
-      entry.proposedContent,
-    );
-    const tempPath = await createTempFileWithCleanup(
-      entry,
-      content,
-      '_preview',
-    );
+): Effect.Effect<void> =>
+  withLatexOperation(
+    entry,
+    'Preview',
+    Effect.gen(function* () {
+      const content = yield* readFileWithFallback(
+        entry.proposedUri,
+        entry.proposedContent,
+      );
+      const tempPath = yield* createTempFileWithCleanup(
+        entry,
+        content,
+        '_preview',
+      );
 
-    if (entry.isSettled()) return;
+      if (entry.isSettled()) return;
 
-    await options.openBuildDisplay(tempPathToLocation(tempPath), {
-      preserveFocus: true,
-    });
-  });
-}
+      yield* Effect.tryPromise({
+        try: () =>
+          options.openBuildDisplay(tempPathToLocation(tempPath), {
+            preserveFocus: true,
+          }),
+        catch: (error) => error,
+      });
+    }),
+  );
 
 interface LatexdiffOptions extends LatexPreviewDisplayOptions {
   subtype?: string;
@@ -245,57 +301,72 @@ interface LatexdiffOptions extends LatexPreviewDisplayOptions {
  * Run latexdiff on the original and proposed content.
  * @param options.subtype - e.g., 'ONLYCHANGEDPAGE' to show only pages with changes
  */
-export async function runLatexdiff(
+export const runLatexdiff = (
   entry: LatexPreviewEntry,
   options: LatexdiffOptions,
-): Promise<void> {
-  await withLatexOperation(entry, 'LaTeXdiff', async () => {
-    const [originalContent, proposedContent] = await Promise.all([
-      readFileWithFallback(entry.originalUri, entry.originalContent),
-      readFileWithFallback(entry.proposedUri, entry.proposedContent),
-    ]);
+): Effect.Effect<void> =>
+  withLatexOperation(
+    entry,
+    'LaTeXdiff',
+    Effect.gen(function* () {
+      const [originalContent, proposedContent] = yield* Effect.all(
+        [
+          readFileWithFallback(entry.originalUri, entry.originalContent),
+          readFileWithFallback(entry.proposedUri, entry.proposedContent),
+        ],
+        { concurrency: 2 },
+      );
 
-    const originalPath = await createTempFileWithCleanup(
-      entry,
-      originalContent,
-      '_original',
-    );
-    const proposedPath = await createTempFileWithCleanup(
-      entry,
-      proposedContent,
-      '_proposed',
-    );
+      const originalPath = yield* createTempFileWithCleanup(
+        entry,
+        originalContent,
+        '_original',
+      );
+      const proposedPath = yield* createTempFileWithCleanup(
+        entry,
+        proposedContent,
+        '_proposed',
+      );
 
-    // The one Promise seam left here: the diff service is Effect below this
-    // line and the approval preview's callback plumbing above it is not.
-    const result = await effectRuntime().runPromise(
-      latexdiffService.runDiff(
+      // The diff lands beside the original copy under the proposed copy's
+      // stem. Its removal is registered before latexdiff starts, so a
+      // request settling mid-diff, which interrupts the diff after its
+      // output may already be written, still has it deleted.
+      const outputDirectory = path.dirname(originalPath);
+      yield* registerCleanup(
+        entry,
+        deleteWithAuxFiles(
+          path.join(
+            outputDirectory,
+            generateDiffFileName(proposedPath, DIFF_SUFFIX),
+          ),
+        ),
+      );
+
+      const result = yield* latexdiffService.runDiff(
         tempPathToLocation(originalPath),
         tempPathToLocation(proposedPath),
-        '_diff',
+        DIFF_SUFFIX,
         'coarse',
         {
-          cwd: WorkspaceFS.getPath() ?? path.dirname(originalPath),
+          cwd: WorkspaceFS.getPath() ?? outputDirectory,
           subtype: options.subtype,
+          outputDirectory,
         },
-      ),
-    );
+      );
 
-    if (!result.success || !result.diffPath) {
-      entry.onError(result.message ?? 'Failed to generate LaTeXdiff');
-      return;
-    }
+      if (!result.success || !result.diffPath) {
+        entry.onError(result.message ?? 'Failed to generate LaTeXdiff');
+        return;
+      }
 
-    const diffFilePath = result.diffPath;
-    registerCleanup(entry, async () => {
-      await silentDelete(diffFilePath, 'file');
-      await cleanupLatexAuxFiles(diffFilePath);
-    });
+      if (entry.isSettled()) return;
 
-    if (entry.isSettled()) return;
-
-    await options.openBuildDisplay(tempPathToLocation(diffFilePath), {
-      preserveFocus: true,
-    });
-  });
-}
+      const diffLocation = tempPathToLocation(result.diffPath);
+      yield* Effect.tryPromise({
+        try: () =>
+          options.openBuildDisplay(diffLocation, { preserveFocus: true }),
+        catch: (error) => error,
+      });
+    }),
+  );

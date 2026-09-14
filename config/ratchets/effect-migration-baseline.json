@@ -13,9 +13,6 @@
       "src/utils/files/baseFS.ts": 13,
       "src/utils/system/toolUtils.ts": 1
     },
-    "effectRuntime()": {
-      "src/tools/approval/latexPreview.ts": 1
-    },
     "ambient:asyncLocalStorage": {
       "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx": 1,
       "packages/cli/src/runtime/agentRoster.ts": 1,
@@ -67,8 +64,7 @@
     "Effect.run*": {
       "packages/extension/src/progressView/frontend/sessionTransport.ts": 4,
       "src/platform/defaults/jsonStore.ts": 1,
-      "src/shared/signals.ts": 2,
-      "src/tools/approval/latexPreview.ts": 1
+      "src/shared/signals.ts": 2
     },
     "catch:effect-importer": {
       "packages/desktop/src/main/index.ts": 1,
