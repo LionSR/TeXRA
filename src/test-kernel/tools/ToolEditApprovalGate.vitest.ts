@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Node imports
 import * as assert from 'node:assert';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -26,6 +26,7 @@ import {
   installPlatform as installFakePlatform,
 } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { EditFileTool } from '@tools/EditTool';
 import { WriteFileTool } from '@tools/WriteTool';
 import {
   requestToolEditApproval,
@@ -136,6 +137,29 @@ describe('Tool edit approval gating', () => {
     detachHostInteractions = () => {};
     defaultSession().approvals.clearAll();
   });
+
+  it.effect('gates an edit to a dangling symlink as an existing file', () =>
+    Effect.gen(function* () {
+      const tool = new EditFileTool();
+      mkdirSync(WORKSPACE_PATH, { recursive: true });
+      // A dangling symlink names a workspace entry even though stat through
+      // the link fails; the read-before-edit gate must not treat it as new.
+      symlinkSync(
+        path.join(WORKSPACE_PATH, 'gone.txt'),
+        path.join(WORKSPACE_PATH, 'dangling.txt'),
+      );
+      const write = vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
+
+      const result = yield* inRun(
+        tool.call({ path: 'dangling.txt', old_str: 'a', new_str: 'b' }),
+      );
+
+      assert.strictEqual(result.status, 'error');
+      assert.match(result.error ?? '', /require a prior read/);
+      assert.strictEqual(write.mock.calls.length, 0);
+      assert.strictEqual(approvalRequests.length, 0);
+    }),
+  );
 
   it.effect('write_file applies changes after approval', () =>
     Effect.gen(function* () {
