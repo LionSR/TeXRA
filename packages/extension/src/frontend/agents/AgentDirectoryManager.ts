@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -20,7 +20,6 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { AGENT_SOURCE } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentLoad';
@@ -119,7 +118,18 @@ class AgentDirectoryManager {
       return undefined;
     }
 
-    await AbsoluteFS.ensureDir(selectedPath);
+    // The picked folder is the user's, outside every session root. A
+    // directory already there is the post-condition.
+    await this.getHost().runtime.runPromise(
+      Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+        fs.makeDirectory(selectedPath, { recursive: true }),
+      ).pipe(
+        Effect.catchIf(
+          (error) => error.reason._tag === 'AlreadyExists',
+          () => Effect.void,
+        ),
+      ),
+    );
 
     await this.getHost().globalState.update(
       GlobalStateKey.CUSTOM_AGENT_DIR,

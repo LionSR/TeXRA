@@ -34,7 +34,7 @@ export function registerCommands(
     secrets,
     runtime,
   );
-  registerOpenFileCommands(context);
+  registerOpenFileCommands(context, runtime);
   registerMainViewCommands(context, progressViewProvider);
 
   // The shared registry owns every command whose handler map lives in

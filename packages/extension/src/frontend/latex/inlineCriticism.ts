@@ -16,6 +16,7 @@
  */
 
 // Third-party imports
+import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -31,9 +32,9 @@ import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const log = createLog('InlineCriticism');
 const COLLECTION_NAME = 'texra-criticism';
@@ -92,19 +93,26 @@ function buildDiagnostic(
   return diag;
 }
 
-async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
+const refreshFileDiagnostics = Effect.fnUntraced(function* (
+  file: OutputFileInfo,
+) {
   const activeCollection = collection;
   if (!activeCollection) return;
   const absolutePath = file.location.absolutePath;
   if (!hasExtension(absolutePath, '.tex')) return;
 
-  let text: string;
-  try {
-    text = await AbsoluteFS.read(absolutePath);
-  } catch (error) {
-    log.error(`Failed to read ${absolutePath}: ${toErrorMessage(error)}`);
-    return;
-  }
+  const fs = yield* FileSystem.FileSystem;
+  // An unreadable output file loses its squiggles, not the whole refresh.
+  const text = yield* fs.readFileString(absolutePath).pipe(
+    Effect.map(normalizeLineEndings),
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        log.error(`Failed to read ${absolutePath}: ${error.message}`);
+        return undefined;
+      }),
+    ),
+  );
+  if (text === undefined) return;
 
   if (collection !== activeCollection) return;
 
@@ -135,17 +143,27 @@ async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
       ),
     ),
   ]);
-}
+});
 
-function handleAddOutputFiles(payload: AddOutputFilesPayload): void {
+function handleAddOutputFiles(
+  payload: AddOutputFilesPayload,
+  runtime: ProcessRuntime,
+): void {
   if (!collection) return;
   const allFiles = Object.values(payload.filesByRound).flat();
-  void Promise.all(allFiles.map((f) => refreshFileDiagnostics(f))).catch(
-    (error: unknown) => {
-      log.error(
-        `Failed to refresh criticism diagnostics: ${toErrorMessage(error)}`,
-      );
-    },
+  runtime.runFork(
+    Effect.forEach(allFiles, refreshFileDiagnostics, {
+      concurrency: 'unbounded',
+      discard: true,
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          log.error(
+            `Failed to refresh criticism diagnostics: ${toErrorMessage(Cause.squash(cause))}`,
+          );
+        }),
+      ),
+    ),
   );
 }
 
@@ -155,7 +173,7 @@ function enable({ context, session, runtime }: CriticismRegistration): void {
   context.subscriptions.push(collection);
   runFactUnsubscribe = subscribeAddOutputFilesRunFact(
     session,
-    handleAddOutputFiles,
+    (payload) => handleAddOutputFiles(payload, runtime),
     runtime,
   );
   log.info('Inline criticism diagnostics enabled');

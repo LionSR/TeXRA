@@ -7,7 +7,6 @@
 import * as vscode from 'vscode';
 
 import { createLog } from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('vscodeEditor');
@@ -73,7 +72,7 @@ async function showDocument(
  * already-visible editor without re-showing it.
  */
 export async function openFileInEditor(
-  filePath: string,
+  absolutePath: string,
   options: {
     line?: number;
     preserveFocus?: boolean;
@@ -84,7 +83,7 @@ export async function openFileInEditor(
 ): Promise<{ editor: vscode.TextEditor; absolutePath: string } | undefined> {
   try {
     const { line, save, reuseVisible } = options;
-    const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
+    const uri = vscode.Uri.file(absolutePath);
     const existingEditor = findVisibleEditor(uri);
     const preserveFocus = options.preserveFocus ?? false;
 
@@ -108,7 +107,9 @@ export async function openFileInEditor(
 
     return { editor, absolutePath: uri.fsPath };
   } catch (err) {
-    log.warn(`Failed to open ${filePath} in an editor: ${toErrorMessage(err)}`);
+    log.warn(
+      `Failed to open ${absolutePath} in an editor: ${toErrorMessage(err)}`,
+    );
     return undefined;
   }
 }

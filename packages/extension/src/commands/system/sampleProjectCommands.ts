@@ -7,12 +7,14 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports - fs
+import { defaultSession } from '@agent/runtime';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 
 const CHANNEL = 'SampleProjectCommands';
 
@@ -20,7 +22,7 @@ const CHANNEL = 'SampleProjectCommands';
  * No-workspace variant for the welcome view: ask where to put the sample,
  * copy it there, and open the folder (which reloads the window into full
  * activation, so the regular onboarding takes over). Must not touch
- * `platform()`/`WorkspaceFS` — the no-workspace activation path returns
+ * `platform()` or a session — the no-workspace activation path returns
  * before `initPlatform()` runs.
  */
 export async function createSampleProjectWithoutWorkspace(
@@ -59,11 +61,22 @@ export async function createSampleProjectWithoutWorkspace(
   }
 }
 
+/**
+ * Copy the bundled sample into the default session's workspace and open its
+ * README. Every workspace path is named and checked by the session's
+ * workspace view; the bundled source lives in the extension, outside every
+ * session root, so the tree copy runs at the two absolute paths, with the
+ * options the replaced facade used.
+ */
 export async function createSampleProject(
   extensionPath: string,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   try {
-    if (!WorkspaceFS.getPath()) {
+    const workspaceFs = await runtime.runPromise(
+      withSessionFs(defaultSession().roots, WorkspaceFs),
+    );
+    if (!workspaceFs.root) {
       void showLoggedMessage(
         CHANNEL,
         'Open a workspace to create the sample project.',
@@ -72,7 +85,7 @@ export async function createSampleProject(
     }
 
     const destFolder = 'texra-sample';
-    if (await WorkspaceFS.exists(destFolder)) {
+    if (await runtime.runPromise(workspaceFs.exists(destFolder))) {
       void vscode.window.showInformationMessage(
         'Sample project already exists in workspace.',
       );
@@ -80,16 +93,23 @@ export async function createSampleProject(
     }
 
     const sourcePath = path.join(extensionPath, 'resources', 'examples');
+    const destPath = await runtime.runPromise(workspaceFs.resolve(destFolder));
 
-    await WorkspaceFS.ensureDir(destFolder);
-    await WorkspaceFS.copy(sourcePath, destFolder, { overwrite: true });
+    await runtime.runPromise(
+      workspaceFs.makeDirectory(destFolder, { recursive: true }),
+    );
+    await cp(sourcePath, destPath, {
+      recursive: true,
+      force: true,
+      errorOnExist: false,
+    });
 
     void vscode.window.showInformationMessage('Created TeXRA sample project.');
 
     const readmeRelativePath = path.join(destFolder, 'README.md');
-    if (await WorkspaceFS.exists(readmeRelativePath)) {
+    if (await runtime.runPromise(workspaceFs.exists(readmeRelativePath))) {
       const document = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(WorkspaceFS.fullPath(readmeRelativePath)),
+        vscode.Uri.file(path.join(destPath, 'README.md')),
       );
       await vscode.window.showTextDocument(document, { preview: false });
     }

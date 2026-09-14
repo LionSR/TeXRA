@@ -2,12 +2,13 @@
 import * as vscode from 'vscode';
 
 // Local imports - utils
+import { defaultSession } from '@agent/runtime';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { createLog } from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'ActiveFileGuards';
 
@@ -79,7 +80,10 @@ async function getActiveLatexEditor(
     }
   }
 
-  const relativePath = WorkspaceFS.relativePath(editor.document.fileName);
+  const relativePath = workspaceRelativePath(
+    defaultSession().roots.workspace,
+    editor.document.fileName,
+  );
 
   return {
     status: 'ok',

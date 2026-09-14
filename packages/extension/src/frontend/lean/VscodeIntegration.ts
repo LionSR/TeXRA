@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { Effect, Result } from 'effect';
+import { currentSession } from '@agent/runtime';
 import { hostPort } from '@common/hostPort';
 
 import { promptExtensionInstall } from '@frontend/ui/instruction';
@@ -35,7 +36,7 @@ import {
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
 import type { LeanLanguageServicesShape } from '@tools/lean/leanLanguageServices';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -179,7 +180,9 @@ function toLeanDiagnostic(d: vscode.Diagnostic): LeanDiagnostic {
  * This returns diagnostics from the Lean 4 extension's LSP.
  */
 function getDiagnostics(filePath: string): LeanDiagnostic[] {
-  const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
+  const uri = vscode.Uri.file(
+    workspaceAbsolutePath(currentSession().roots.workspace, filePath),
+  );
   const directLookup = vscode.languages.getDiagnostics(uri);
   if (directLookup.length > 0) {
     return directLookup.map(toLeanDiagnostic);
@@ -203,7 +206,9 @@ function executeFileCommand(
   return Effect.gen(function* () {
     yield* hostPort(async () => {
       const document = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(WorkspaceFS.toAbsolute(filePath)),
+        vscode.Uri.file(
+          workspaceAbsolutePath(currentSession().roots.workspace, filePath),
+        ),
       );
       await vscode.window.showTextDocument(document, { preserveFocus: true });
     });
@@ -257,7 +262,10 @@ function sendPositionRequest<T>(
   method: string,
 ): Effect.Effect<LspResult<T>> {
   return Effect.gen(function* () {
-    const absolutePath = WorkspaceFS.toAbsolute(filePath);
+    const absolutePath = workspaceAbsolutePath(
+      currentSession().roots.workspace,
+      filePath,
+    );
     const uri = vscode.Uri.file(absolutePath);
     const leanUri = createLeanFileUri(absolutePath);
 
@@ -395,13 +403,18 @@ function fetchDiagnosticsForFile(
   file: string,
 ): Effect.Effect<FetchDiagnosticsResult, unknown> {
   return hostPort(async (): Promise<FetchDiagnosticsResult> => {
-    const absolutePath = WorkspaceFS.toAbsolute(file);
+    const absolutePath = workspaceAbsolutePath(
+      currentSession().roots.workspace,
+      file,
+    );
     const diagnosticsWait = waitForDiagnosticsChange(
       vscode.Uri.file(absolutePath),
       10000,
     );
 
-    const opened = await openFileInEditor(file, { preserveFocus: true });
+    const opened = await openFileInEditor(absolutePath, {
+      preserveFocus: true,
+    });
     if (!opened) {
       // Could not be opened in the editor — the file itself is the problem.
       return {
@@ -428,9 +441,10 @@ function navigateToFirstError(
   );
   if (!firstError) return Effect.void;
   return hostPort(async () => {
-    await openFileInEditor(filePath, {
-      line: firstError.range.start.line + 1,
-    });
+    await openFileInEditor(
+      workspaceAbsolutePath(currentSession().roots.workspace, filePath),
+      { line: firstError.range.start.line + 1 },
+    );
   });
 }
 

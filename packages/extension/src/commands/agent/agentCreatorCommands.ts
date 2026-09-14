@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import { renderAgentTemplateString } from '@agent/templates';
@@ -12,38 +12,43 @@ import {
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
-import { hostPort } from '@common/hostPort';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { AgentCategory } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'AgentCreator';
 
 /** Cached after first load. Templates are bundled resources — stable for the session. */
 let creatorConfig: CreatorConfig | null = null;
 
-async function loadCreatorConfig(
+const loadCreatorConfig = Effect.fnUntraced(function* (
   context: vscode.ExtensionContext,
-): Promise<CreatorConfig> {
+) {
   if (creatorConfig) return creatorConfig;
+  const fs = yield* FileSystem.FileSystem;
   const templatesDir = path.join(
     context.extensionPath,
     'resources',
     'templates',
   );
+  const readTemplate = (name: string) =>
+    fs
+      .readFileString(path.join(templatesDir, name))
+      .pipe(Effect.map(normalizeLineEndings));
   const [workflowYaml, toolUseYaml, workflowSingle, toolUseTpl] =
-    await Promise.all([
-      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorWorkflow.yaml')),
-      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorToolUse.yaml')),
-      AbsoluteFS.read(
-        path.join(templatesDir, 'agentTemplate-workflowSingle.yaml'),
-      ),
-      AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
-    ]);
+    yield* Effect.all(
+      [
+        readTemplate('agentCreatorWorkflow.yaml'),
+        readTemplate('agentCreatorToolUse.yaml'),
+        readTemplate('agentTemplate-workflowSingle.yaml'),
+        readTemplate('agentTemplate-toolUse.yaml'),
+      ],
+      { concurrency: 'unbounded' },
+    );
   creatorConfig = buildCreatorConfig({
     workflowYaml,
     toolUseYaml,
@@ -51,7 +56,7 @@ async function loadCreatorConfig(
     toolUseTpl,
   });
   return creatorConfig;
-}
+});
 
 /**
  * Multi-select tool-group picker with a persistent prompt hint and a native
@@ -184,7 +189,7 @@ export function handleCreateAgentWithAI(
   runtime: ProcessRuntime,
 ) {
   return Effect.gen(function* () {
-    const config = yield* hostPort(() => loadCreatorConfig(context));
+    const config = yield* loadCreatorConfig(context);
     yield* runAgentCreator(config, category, buildVSCodeUI(runtime), {
       secrets,
       globalState: context.globalState,

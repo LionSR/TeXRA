@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
 
+import { defaultSession } from '@agent/runtime';
 import {
   getFileListConfig,
   type FileFilterConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { createLog } from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 import { getFilesRecursively } from './listing';
 
@@ -21,10 +21,10 @@ export class FileLister {
     );
   }
 
-  private workspacePath = WorkspaceFS.getPath();
+  private workspacePath = defaultSession().roots.workspace;
 
   public refresh(): void {
-    this.workspacePath = WorkspaceFS.getPath();
+    this.workspacePath = defaultSession().roots.workspace;
   }
 
   public list(fileType: ListableFileType): Promise<string[]> {

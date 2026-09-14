@@ -4,6 +4,7 @@ import { execa } from 'execa';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
+import { defaultSession } from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
@@ -18,8 +19,9 @@ import {
 } from '@latex/overleafProject';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
@@ -48,7 +50,7 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
 }
 
 async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
-  const workspacePath = rootPath ?? WorkspaceFS.getPath();
+  const workspacePath = rootPath ?? defaultSession().roots.workspace;
   if (!workspacePath || !(await isGitRepository(workspacePath))) {
     return null;
   }
@@ -76,7 +78,7 @@ function findCommitInHistory(
     return null;
   }
 
-  const workspacePath = rootPath ?? WorkspaceFS.getPath();
+  const workspacePath = rootPath ?? defaultSession().roots.workspace;
   if (!workspacePath) {
     return null;
   }
@@ -179,6 +181,7 @@ async function promptGitMissing(): Promise<void> {
 function buildOverleafClonePorts(
   secrets: PlatformSecrets,
   remote: OverleafRemote,
+  workspaceFs: RootedFileSystem,
 ): OverleafCloneWorkflowPorts {
   return {
     // `getStored` (not `get`): the clone token is a persisted credential the
@@ -215,11 +218,7 @@ function buildOverleafClonePorts(
       Effect.sync(() => executeCommandSync(['git', '--version']).success),
     showGitMissing: () => Effect.promise(() => promptGitMissing()),
     listWorkspaceEntries: (workspacePath) =>
-      Effect.tryPromise({
-        try: async () =>
-          (await WorkspaceFS.readDir(workspacePath)).map(([name]) => name),
-        catch: ensureError,
-      }),
+      workspaceFs.readDirectory(workspacePath),
     showWorkspaceUnreadable: (e) =>
       Effect.sync(() => {
         log.error(`readDir failed: ${toErrorMessage(e)}`);
@@ -311,17 +310,27 @@ export async function cloneOverleafProject(
     return;
   }
 
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) {
-    void showLoggedMessage(CHANNEL, 'Open a workspace folder first.');
-    return;
-  }
-
+  // The session's workspace view both names the clone target and lists it,
+  // so the emptiness check and the clone agree on one folder.
   await runtime.runPromise(
-    runOverleafClone(
-      remote,
-      workspacePath,
-      buildOverleafClonePorts(secrets, remote),
+    withSessionFs(
+      defaultSession().roots,
+      Effect.gen(function* () {
+        const workspaceFs = yield* WorkspaceFs;
+        const workspacePath = workspaceFs.root;
+        if (!workspacePath) {
+          yield* Effect.sync(
+            () =>
+              void showLoggedMessage(CHANNEL, 'Open a workspace folder first.'),
+          );
+          return;
+        }
+        yield* runOverleafClone(
+          remote,
+          workspacePath,
+          buildOverleafClonePorts(secrets, remote, workspaceFs),
+        );
+      }),
     ),
   );
 }

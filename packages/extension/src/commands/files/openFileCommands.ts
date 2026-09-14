@@ -1,13 +1,17 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { getFileLister } from '@frontend/files/fileLister';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { createLog } from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
+import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const log = createLog('openFileCommands');
 
@@ -18,7 +22,9 @@ function revealPosition(editor: vscode.TextEditor, pos: vscode.Position): void {
 }
 
 async function openFile(file: string, line?: number): Promise<void> {
-  const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));
+  const uri = vscode.Uri.file(
+    workspaceAbsolutePath(defaultSession().roots.workspace, file),
+  );
 
   if (line !== undefined && line > 0) {
     const doc = await vscode.workspace.openTextDocument(uri);
@@ -35,26 +41,38 @@ async function openFile(file: string, line?: number): Promise<void> {
  * caller (`ProgressWorkflowFileActionsController.openLabel`), which owns it
  * for every host.
  */
-async function openLabel(label: string): Promise<boolean> {
+async function openLabel(
+  label: string,
+  runtime: ProcessRuntime,
+): Promise<boolean> {
   const candidates = new Set([
     ...(await getFileLister().list('input')),
     ...(await getFileLister().list('context')),
   ]);
+  const { roots } = defaultSession();
+  // The candidates are workspace-relative listings, read through the
+  // session's workspace view.
+  const workspaceFs = await runtime.runPromise(
+    withSessionFs(roots, Effect.service(WorkspaceFs)),
+  );
 
   return openFirstLabelMatch(
     label,
     candidates,
-    async (file) => {
-      try {
-        return await WorkspaceFS.read(file);
-      } catch (error) {
-        log.debug(`Could not read file ${file}: ${toErrorMessage(error)}`);
-        throw error;
-      }
-    },
+    (file) =>
+      runtime.runPromise(
+        workspaceFs.readFileString(file).pipe(
+          Effect.map(normalizeLineEndings),
+          Effect.tapError((error) =>
+            Effect.sync(() => {
+              log.debug(`Could not read file ${file}: ${error.message}`);
+            }),
+          ),
+        ),
+      ),
     async (file, index) => {
       const doc = await vscode.workspace.openTextDocument(
-        WorkspaceFS.toAbsolute(file),
+        workspaceAbsolutePath(roots.workspace, file),
       );
       const editor = await vscode.window.showTextDocument(doc, {
         preview: true,
@@ -66,9 +84,13 @@ async function openLabel(label: string): Promise<boolean> {
 
 export function registerOpenFileCommands(
   context: vscode.ExtensionContext,
+  runtime: ProcessRuntime,
 ): void {
   registerCommandEntries(context, [
     { id: 'texra.openFile', handler: openFile },
-    { id: 'texra.openLabel', handler: openLabel },
+    {
+      id: 'texra.openLabel',
+      handler: (label: string) => openLabel(label, runtime),
+    },
   ]);
 }

@@ -2,13 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
+import { currentSession } from '@agent/runtime';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import { invokeLatexWorkshopBuild } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
-
-// Local imports
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'LinterUtils';
 const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
@@ -20,7 +19,9 @@ const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
 export async function getLinterMessages(
   filePath: string,
 ): Promise<vscode.Diagnostic[]> {
-  const fileUri = vscode.Uri.file(WorkspaceFS.fullPath(filePath));
+  const fileUri = vscode.Uri.file(
+    workspaceAbsolutePath(currentSession().roots.workspace, filePath),
+  );
 
   if (isTexFile(filePath)) {
     await triggerLaTeXBuild(filePath, fileUri);
@@ -36,7 +37,7 @@ async function triggerLaTeXBuild(
   filePath: string,
   fileUri: vscode.Uri,
 ): Promise<void> {
-  await openFileInEditor(filePath, {
+  await openFileInEditor(fileUri.fsPath, {
     preserveFocus: true,
     save: true,
     reuseVisible: true,

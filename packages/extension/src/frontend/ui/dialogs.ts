@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 type TeamAvailabilityChoice =
   TeamAvailabilityPrompt['actions'][number]['choice'];
@@ -23,15 +23,19 @@ interface FileDialogOptions {
   filters: { [name: string]: string[] };
   /** Current file path relative to workspace (used to compute defaultUri) */
   currentFile?: string;
+  /** The workspace root the dialog opens in and relativizes picks against. */
+  workspacePath: string | undefined;
 }
 
-function computeDefaultUri(options: FileDialogOptions): vscode.Uri | null {
-  const workspacePath = WorkspaceFS.getPath();
+function computeDefaultUri({
+  workspacePath,
+  currentFile,
+}: FileDialogOptions): vscode.Uri | null {
   if (!workspacePath) {
     return null;
   }
-  const basePath = options.currentFile
-    ? path.dirname(path.join(workspacePath, options.currentFile))
+  const basePath = currentFile
+    ? path.dirname(path.join(workspacePath, currentFile))
     : workspacePath;
   return vscode.Uri.file(basePath);
 }
@@ -80,7 +84,9 @@ export async function selectFiles(
   if (!fileUris?.length) {
     return null;
   }
-  return fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath));
+  return fileUris.map((uri) =>
+    workspaceRelativePath(options.workspacePath, uri.fsPath),
+  );
 }
 
 /**
@@ -122,9 +128,9 @@ interface FolderDialogOptions {
 
 /**
  * Generic helper to show a folder-picker dialog and return the selected
- * absolute path. Unlike {@link selectFiles}, this never
- * touches `WorkspaceFS`, so it's safe to call before a workspace (or
- * `platform()`) is available.
+ * absolute path. Unlike {@link selectFiles}, this needs
+ * no workspace, so it's safe to call before a workspace (or `platform()`) is
+ * available.
  */
 export async function selectFolder(
   options: FolderDialogOptions,

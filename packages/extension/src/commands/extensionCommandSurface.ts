@@ -86,8 +86,17 @@ export function createExtensionCommandActions(
     cleanBuild: () => onSessionFiles(runCleanBuild),
     pack: (config) => onSessionFiles(fileHandlePack(config)),
     clean: (config) => onSessionFiles(fileHandleClean(config)),
-    compare: latexHandleCompare,
-    acceptEdited: latexHandleAcceptEdited,
+    compare: (baseLocation, editedLocation) =>
+      runtime.runPromise(latexHandleCompare(baseLocation, editedLocation)),
+    acceptEdited: (baseLocation, editedLocation, copyMeta) =>
+      runtime.runPromise(
+        latexHandleAcceptEdited(
+          baseLocation,
+          editedLocation,
+          runtime,
+          copyMeta,
+        ),
+      ),
     indentTeX: handleIndentTeX,
     signIn: authSignIn,
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
@@ -97,7 +106,8 @@ export function createExtensionCommandActions(
       await launchSetupAssistant(secrets, context.globalState, runtime);
     },
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
-    createSampleProject: () => sysCreateSampleProject(context.extensionPath),
+    createSampleProject: () =>
+      sysCreateSampleProject(context.extensionPath, runtime),
     downloadArXivSource: () => latexDownloadArXivSource(runtime),
     openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     async openDoc(page) {
