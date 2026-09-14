@@ -705,7 +705,7 @@ describe('headless delegation', () => {
     'returns the committed result when the final claim release fails',
     () =>
       Effect.gen(function* () {
-        const drain = vi.spyOn(inBandSession, 'flushArtifacts');
+        const drain = vi.spyOn(inBandSession, 'settlePublications');
         releaseClaims.mockReturnValueOnce(
           Effect.fail(new Error('claim release failed')),
         );

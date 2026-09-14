@@ -450,7 +450,7 @@ describe('TUI request decisions', () => {
         session.publish([
           { type: 'run.detach', aggregateId: aggregateId('run', runId) },
         ]);
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
         expect(
           SubscriptionRef.getUnsafe(session.view).runs.get(runId)?.ownedHere,
         ).toBe(true);
@@ -845,7 +845,7 @@ describe('TUI request decisions', () => {
         }
         finishLookup?.();
         yield* settle();
-        yield* Effect.promise(() => defaultSession().settlePublications());
+        yield* defaultSession().settlePublications();
         expect(
           SubscriptionRef.getUnsafe(defaultSession().view).requests.some(
             (request) => request.requestId === permission.requestId,

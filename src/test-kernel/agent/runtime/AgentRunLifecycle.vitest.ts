@@ -1081,24 +1081,28 @@ describe('finalizeRunTerminal', () => {
 
   // A plane whose consumer stopped cannot settle at all: that is a lost drain
   // like any other, so the run still ends on an `artifact-drain` row.
-  it('records a dead plane as a failed drain', async () => {
-    const { session, handle } = finalizeFixture();
-    Object.assign(session, {
-      graph: {
-        settle: Effect.die(
-          new Error('Session committed-event consumer stopped'),
-        ),
-      },
-      publications: new Set(),
-      settlePublications: SessionHandle.prototype.settlePublications,
-    });
+  it.effect('records a dead plane as a failed drain', () =>
+    Effect.gen(function* () {
+      const { session, handle } = finalizeFixture();
+      Object.assign(session, {
+        graph: {
+          settle: Effect.die(
+            new Error('Session committed-event consumer stopped'),
+          ),
+        },
+        publications: new Set(),
+        settlePublications: SessionHandle.prototype.settlePublications,
+      });
 
-    const finalization = await Effect.runPromise(
-      finalize({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
-    );
+      const finalization = yield* finalize({
+        session,
+        handle,
+        outcome: RUN_OUTCOME.COMPLETED,
+      });
 
-    expect(finalization?.event.error?.kind).toBe('artifact-drain');
-  });
+      expect(finalization?.event.error?.kind).toBe('artifact-drain');
+    }),
+  );
 
   it('settles and untracks once while reporting terminal metadata failure', async () => {
     const { runId, session, handle, untrack } = finalizeFixture();
