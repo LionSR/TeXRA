@@ -110,8 +110,18 @@ const HARNESS = process.env.TEXRA_TUI_HARNESS
 const STATIC_TRANSCRIPT_CWD = mkdtempSync(
   path.join(tmpdir(), 'texra-tui-static-transcript-'),
 );
+// The agent-proposal card prints the working directory, and how many rows that
+// costs decides how many rows are left for the scrollable prompt. Left to the
+// default, the cwd is the harness's own short temp dir in a plain run and the
+// long per-scenario workspace under `--snapshot-dir`, so the two runs render
+// different prompt budgets. Pin it to the harness's own naming so the card
+// costs the same either way.
+const AGENT_PROPOSAL_CWD = mkdtempSync(
+  path.join(tmpdir(), 'texra-tui-harness-'),
+);
 process.on('exit', () => {
   rmSync(STATIC_TRANSCRIPT_CWD, { recursive: true, force: true });
+  rmSync(AGENT_PROPOSAL_CWD, { recursive: true, force: true });
 });
 
 // --- scenarios (verified against the committed harness) ------------------
@@ -134,6 +144,7 @@ const SCENARIOS = [
     frame: 'scrollback',
     rows: 24,
     cols: 80,
+    freshStorage: true,
     env: {
       HARNESS_ENTRIES: '12',
       HARNESS_CWD: STATIC_TRANSCRIPT_CWD,
@@ -146,6 +157,7 @@ const SCENARIOS = [
     frame: 'scrollback',
     rows: 24,
     cols: 40,
+    freshStorage: true,
     env: {
       HARNESS_ENTRIES: '12',
       HARNESS_CWD: STATIC_TRANSCRIPT_CWD,
@@ -159,6 +171,7 @@ const SCENARIOS = [
     frame: 'scrollback',
     rows: 24,
     cols: 80,
+    freshStorage: true,
     env: {
       HARNESS_ENTRIES: '12',
       HARNESS_CWD: STATIC_TRANSCRIPT_CWD,
@@ -675,7 +688,7 @@ const SCENARIOS = [
       'api: your own API keys',
       'auth: signed out',
       'New chat',
-      'No models are available with your own API keys',
+      'No models are available',
       'Help',
       'Esc exit',
     ],
@@ -699,7 +712,11 @@ const SCENARIOS = [
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/help', '\r'],
-    frame: 'viewport',
+    // `/help` is finalized transcript text: it prints through <Static> into
+    // native scrollback, and it is already taller than 45 rows, so the
+    // leading "Session" heading has scrolled out of the viewport. Assert the
+    // scrollback the user can actually scroll back to.
+    frame: 'scrollback',
     expect: [
       'Session',
       '/clear',
@@ -710,30 +727,38 @@ const SCENARIOS = [
     ],
   },
   {
+    // `/goal` opens the goal-mode form (its approval-scope toggle) instead of
+    // printing the goal reference text it used to; the reference now lives in
+    // `/help`.
     name: 'slash-goal-help',
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/goal', '\r'],
     frame: 'viewport',
     expect: [
-      'Goal mode starts from an approved plan',
-      'choose `r run as goal`',
-      'Goal mode auto-approves bash only',
+      '/goal',
+      'Run an approved plan until it finishes, pauses, or you stop it.',
+      'Auto-approve all goal w',
+      '1/Enter toggle',
+      'Esc close',
     ],
     unexpect: ['Unknown command: /goal', 'Running 1s'],
   },
   {
-    name: 'backslash-goal-help',
+    // The `\goal` and `\clear` backslash aliases were deleted as expired
+    // compatibility, so a leading backslash is ordinary text and `\goal`
+    // submits as a message. This scenario keeps the alias from creeping back.
+    name: 'backslash-goal-is-not-a-command',
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['\\goal', '\r'],
     frame: 'viewport',
-    expect: [
-      'Goal mode starts from an approved plan',
-      'choose `r run as goal`',
-      'Goal mode auto-approves bash only',
+    expect: ['Harness received: \\goal'],
+    unexpect: [
+      'Run an approved plan until it finishes, pauses, or you stop it.',
+      'Auto-approve all goal w',
+      'Unknown command',
     ],
-    unexpect: ['Unknown command: /goal', 'Running 1s'],
   },
   {
     name: 'slash-resume-empty',
@@ -836,7 +861,7 @@ const SCENARIOS = [
     },
     keys: ['/', `${NAK}/model\r`],
     frame: 'viewport',
-    expect: ['/model · Your own API keys', 'Available models'],
+    expect: ['Available models'],
     unexpect: ['/\u0015/model', '/model - error'],
   },
   {
@@ -855,7 +880,7 @@ const SCENARIOS = [
       'Workflows',
       'correct',
       'polish',
-      'texra chat --agent <name>',
+      'Choose the root agent for this chat.',
     ],
     unexpect: [
       '//agent',
@@ -902,6 +927,10 @@ const SCENARIOS = [
   {
     name: 'agent-form',
     frame: 'scrollback',
+    // The harness mirrors `texra chat`: agent selection is open exactly while
+    // no root run is pending, so a fixture with no interruptible run gets the
+    // selectable picker and its "Choose the root agent" description, not the
+    // read-only `texra chat --agent <name>` hint.
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
@@ -919,7 +948,7 @@ const SCENARIOS = [
       'correct',
       'polish',
       'Current: chat (hidden from picker)',
-      'texra chat --agent <name>',
+      'Choose the root agent for this chat.',
       'Esc close',
     ],
     unexpect: [
@@ -957,7 +986,7 @@ const SCENARIOS = [
       'correct',
       'polish',
       'Current: chat (hidden from picker)',
-      'texra chat --agent <name>',
+      'Choose the root agent for this chat.',
       'Esc close',
     ],
     unexpect: [
@@ -983,8 +1012,11 @@ const SCENARIOS = [
     },
     keys: ['/model', '\r'],
     frame: 'viewport',
+    // `/model`'s frame title carried the API-access route until the relay
+    // plane was removed and every call became BYOK or a provider
+    // subscription; the title is plain `/model` now, so these scenarios pin
+    // the form's own description instead of an access breadcrumb.
     expect: [
-      '/model · Your own API keys',
       'Available models. Finish the active response before switching models.',
       'Enter close',
     ],
@@ -1005,7 +1037,6 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · Your own API keys',
       'Available models. Finish the active response before switching models.',
       'Enter close',
     ],
@@ -1022,12 +1053,7 @@ const SCENARIOS = [
     },
     keys: ['/model', '\r'],
     frame: 'viewport',
-    expect: [
-      '/model · Your own API keys',
-      'Choose the model for future turns.',
-      '1-9/a-z',
-      'select',
-    ],
+    expect: ['Choose the model for future turns.', '1-9/a-z', 'select'],
     unexpect: [
       'Finish the active response before switching models.',
       'Enter close',
@@ -1049,7 +1075,6 @@ const SCENARIOS = [
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
-      '/model · Your own API keys',
       'Choose the model for future turns.',
       'Sonnet 4.6',
       'different conversation format',
@@ -1140,7 +1165,22 @@ const SCENARIOS = [
     name: 'config-category-back-responsive',
     env: { HARNESS_ENTRIES: '4' },
     // Reuses the shared Select instance across category -> list -> category.
-    keys: ['/config', '\r', '\r', ESC, DOWN, DOWN, '\r'],
+    // `/config` leads with the two action rows ("API keys", "GitHub token")
+    // before the setting categories, so "Git and worktrees" is the seventh
+    // row; the picker offers no hotkeys, only ↑/↓.
+    keys: [
+      '/config',
+      '\r',
+      '\r',
+      ESC,
+      DOWN,
+      DOWN,
+      DOWN,
+      DOWN,
+      DOWN,
+      DOWN,
+      '\r',
+    ],
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
@@ -1308,7 +1348,7 @@ const SCENARIOS = [
       'Tool-use agents',
       '+4 more',
       '↑/↓ navigate',
-      'Enter close',
+      '1-9/a-z/Enter select',
       'Esc close',
     ],
     unexpect: ['Platform not initialized', '/agent - error'],
@@ -1325,7 +1365,6 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · Your own API keys',
       'Available models',
       '+1 more',
       '↑/↓ navigate',
@@ -1668,7 +1707,12 @@ const SCENARIOS = [
     bootExpect: '· Ctrl-C ',
     keys: ['y'],
     frame: 'viewport',
-    expect: ['/status details', '/model models'],
+    // What these approval-dismissal scenarios pin is that the modal's
+    // foreground hints gave the row back to the chat bindings. The chat row
+    // is width-budgeted (`statusBarBindingsText`) and at these widths the
+    // session/transcript hints win over `/model models`, so `/status details`
+    // is the stable marker.
+    expect: ['/status details'],
     unexpect: ['Apply edit to draft.tex?', '1 approval'],
   },
   {
@@ -1840,7 +1884,7 @@ const SCENARIOS = [
     bootExpect: '· Ctrl-C ',
     keys: ['a'],
     frame: 'viewport',
-    expect: ['AUTO-BASH', '/status details', '/model models'],
+    expect: ['AUTO-BASH', '/status details'],
     unexpect: ['AUTO-APPROVE', 'Run command?', '1 approval'],
   },
   {
@@ -1854,7 +1898,7 @@ const SCENARIOS = [
     keys: ['y', { input: 'y', delayMs: 1000 }],
     settleMs: 6000,
     frame: 'viewport',
-    expect: ['SECOND-BASH-APPROVED', '/status details', '/model models'],
+    expect: ['SECOND-BASH-APPROVED', '/status details'],
     unexpect: ['Run command?', '1 approval'],
   },
   {
@@ -1951,7 +1995,11 @@ const SCENARIOS = [
     name: 'compact-agent-proposal-scroll',
     rows: 17,
     cols: 80,
-    env: { HARNESS_ENTRIES: '4', HARNESS_AGENT_PROPOSAL: '1' },
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_AGENT_PROPOSAL: '1',
+      HARNESS_CWD: AGENT_PROPOSAL_CWD,
+    },
     bootExpect: '· Ctrl-C ',
     keys: [
       PAGE_DOWN,
@@ -1969,7 +2017,9 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Spawn review?',
-      'Model: deepseekT',
+      // The proposal card names the model by its catalogue label, not its
+      // persisted id; the label itself belongs to llm-zoo, so pin the prefix.
+      'Model: DeepSeek',
       'Category: tool-use agent',
       'Include a short independent enumeration',
       'previous, 1 more rows',
@@ -2195,7 +2245,6 @@ const SCENARIOS = [
       'goal: active',
       'goal objective: Coordinate a short math proof through CLI chat.',
       '/status details',
-      '/model models',
     ],
     unexpect: ['Approve plan?', '1 approval'],
   },
@@ -2216,18 +2265,23 @@ const SCENARIOS = [
     name: 'retry-approval',
     frame: 'scrollback',
     cols: 120,
+    // A plain credit/quota failure is not a catalogued quota-fallback route,
+    // so there is nothing to switch away from and the modal offers no `k`.
+    // `retry-approval-chatgpt` covers the switchable arm.
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
     bootExpect: '· Ctrl-C ',
     expect: [
       'Retry the failed call?',
       'HTTP 429 Too Many Requests',
-      'Press k to use your own API key for this retry.',
       'retry',
       'dismiss',
-      'use your own API key',
       '1 approval',
     ],
-    unexpect: ['Feedback to send with rejection', 'send note', '/model models'],
+    unexpect: [
+      'Feedback to send with rejection',
+      'send note',
+      'use your own API key',
+    ],
   },
   {
     name: 'retry-approval-chatgpt',
@@ -2257,7 +2311,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
     bootExpect: 'dismiss',
     keys: ['n'],
-    expect: ['RETRY-REJECTED', '/status details', '/model models'],
+    expect: ['RETRY-REJECTED', '/status details'],
     unexpect: [
       'Retry the failed call?',
       'Feedback to send with rejection',
@@ -2268,11 +2322,17 @@ const SCENARIOS = [
   {
     name: 'retry-approval-switch-api',
     cols: 120,
-    env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
+    // `k` only exists on a catalogued quota-fallback route, so this scenario
+    // uses the ChatGPT-subscription fixture rather than the plain credit one.
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_RETRY_APPROVAL: '1',
+      HARNESS_RETRY_APPROVAL_CHATGPT: '1',
+    },
     bootExpect: '· Ctrl-C ',
     keys: ['k'],
     frame: 'viewport',
-    expect: ['RETRY-PERSONAL-CREDENTIALS', '/status details', '/model models'],
+    expect: ['RETRY-PERSONAL-CREDENTIALS', '/status details'],
     unexpect: ['Retry the failed call?', '1 approval'],
   },
   {
@@ -2281,7 +2341,7 @@ const SCENARIOS = [
     bootExpect: '· Ctrl-C ',
     keys: ['n', '\r'],
     frame: 'viewport',
-    expect: ['/status details', '/model models'],
+    expect: ['/status details'],
     unexpect: ['Apply edit to draft.tex?', '1 approval'],
   },
   {
@@ -2641,7 +2701,11 @@ const SCENARIOS = [
     bootExpect: 'TeXRA',
     frame: 'viewport',
     expect: ['API keys'],
-    expectPatterns: [/◆ [-|\/\\] Running 1m/],
+    // The run window opens at the activation row's publish clock, which the
+    // publisher stamps, so a fixture cannot backdate the elapsed time. What
+    // this scenario is about is the separators at 30 columns, not a
+    // particular duration.
+    expectPatterns: [/◆ [-|\/\\] Running \d+[smhd]/],
     unexpect: ['◆Running', 'API keys3'],
   },
   {
@@ -2787,6 +2851,8 @@ const SCENARIOS = [
     ],
   },
   {
+    // Todo status labels come from the one shared display table, which spells
+    // them `Pending` / `In progress` / `Completed` in every host.
     name: 'work-plan-reader',
     rows: 18,
     cols: 72,
@@ -2796,9 +2862,9 @@ const SCENARIOS = [
     expect: [
       'Work plan:',
       'Todos',
-      '[completed] Split theorem into algebraic and analytic checks',
-      '[in progress] Ask leanSolver to verify the finite case',
-      '[pending] Merge subagent conclusions into final answer',
+      '[Completed] Split theorem into algebraic and analytic checks',
+      '[In progress] Ask leanSolver to verify the finite case',
+      '[Pending] Merge subagent conclusions into final answer',
       'PgUp/PgDn page',
       'Esc close',
     ],
@@ -2821,7 +2887,7 @@ const SCENARIOS = [
       PAGE_DOWN,
     ],
     frame: 'viewport',
-    expect: ['Work plan', '[completed]', 'PgUp/PgDn page', 'Esc', 'close'],
+    expect: ['Work plan', '[Completed]', 'PgUp/PgDn page', 'Esc', 'close'],
     unexpect: ['Unknown command: /plan'],
     maxLineColumns: 24,
   },
@@ -2835,9 +2901,12 @@ const SCENARIOS = [
       '/status details',
       'Ctrl-C exit',
     ],
-    unexpect: ['Work plan:', 'Objective', '[in progress]'],
+    unexpect: ['Work plan:', 'Objective', '[In progress]'],
   },
   {
+    // The harness names runs, not streams: its focused-interrupt notice
+    // carries the run id (`aaaa0001f10e`, as `stopped-subagent-list` already
+    // asserts for a child) and the session rows carry the run's agent name.
     name: 'escape-root-restores-prompt-history',
     env: {
       HARNESS_ENTRIES: '4',
@@ -2848,7 +2917,7 @@ const SCENARIOS = [
     keys: [{ input: ESC, delayMs: 50 }, UP, UP, DOWN],
     frame: 'viewport',
     expect: [
-      'Harness focused interrupt requested for harness-stream-1.',
+      'Harness focused interrupt requested for aaaa0001f10e.',
       '◆ Stopped API keys',
       'latest stopped prompt',
     ],
@@ -2865,8 +2934,8 @@ const SCENARIOS = [
     keys: [{ input: ESC, delayMs: 700 }, '\t', RIGHT, DOWN],
     frame: 'viewport',
     expect: [
-      'Harness focused interrupt requested for harness-stream-1.',
-      '● harness-stream-1 Stopped',
+      'Harness focused interrupt requested for aaaa0001f10e.',
+      '● harness-agent Stopped',
       'strategy Running',
       'leanSolver Idle',
       'reviewer Running',
@@ -2895,7 +2964,7 @@ const SCENARIOS = [
     ],
     frame: 'viewport',
     expect: [
-      '● harness-stream-1 Running',
+      '● harness-agent Running',
       'strategy Running',
       'leanSolver Idle',
       'reviewer Running',
@@ -3765,6 +3834,18 @@ async function runScenario(scenario, index) {
   if (workspaceDir && childEnv.HARNESS_CWD == null) {
     mkdirSync(workspaceDir, { recursive: true });
     childEnv.HARNESS_CWD = workspaceDir;
+  }
+  if (scenario.freshStorage === true && childEnv.HARNESS_CWD) {
+    // Scenarios that share one cwd (to keep the header line byte-identical)
+    // also share the persisted session store under it, and the validator
+    // kills each harness rather than letting it end its run — so the next
+    // scenario in that directory would open on an interrupted run and paint
+    // `Interrupted` where a first run paints `Ready`. Start each from the
+    // same empty store instead.
+    rmSync(path.join(childEnv.HARNESS_CWD, '.texra-storage'), {
+      recursive: true,
+      force: true,
+    });
   }
   if (scenario.colorEnabled === false) {
     delete childEnv.FORCE_COLOR;
