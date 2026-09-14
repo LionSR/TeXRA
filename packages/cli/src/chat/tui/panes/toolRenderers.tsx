@@ -356,14 +356,23 @@ function buildStyledLines(
     (isBashKind || isMcpToolName(toolUse.toolName));
 
   const compactOutput: ToolDisplayLine[] = [];
-  // The full-transcript fallback exists for suppression modes whose sections
-  // genuinely omit the output: `file-link` renders a link, not the content.
-  // Every other mode already shows the output elsewhere on the card (header,
-  // error, or the sections themselves), so repeating it under "Full output:"
-  // would print it twice.
+  // The full transcript prints what the card withheld, unless the card
+  // already painted that exact text in full (the full transcript does not
+  // elide): the error block, or an MCP call's result section. Everything
+  // else still hides it: a `file-link` card shows a link, a
+  // `duplicate-of-header` card paints the header cut to its width, and an
+  // edit's diff is the proposed change from the input, while its output is
+  // the confirmation plus any user adjustments. A `trivial-write` output is
+  // the word the card's file link already implies.
+  const cardPaintsOutput =
+    model.outputSuppression === 'duplicate-of-error' ||
+    model.outputSuppression === 'trivial-write' ||
+    (model.outputSuppression === 'rendered-by-sections' &&
+      isMcpToolName(toolUse.toolName));
   if (
     options.showFullOutput &&
-    model.outputSuppression === 'file-link' &&
+    !model.showOutput &&
+    !cardPaintsOutput &&
     toolUse.outputText
   ) {
     compactOutput.push(row([{ text: 'Full output:' }]));

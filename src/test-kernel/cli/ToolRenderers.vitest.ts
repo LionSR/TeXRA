@@ -136,8 +136,19 @@ describe('CLI tool display lines', () => {
   });
 
   it('full transcript prints the output only when the card withholds it', () => {
-    // `rendered-by-sections`: the diff already carries the output, so a
-    // "Full output:" block would print the same text a second time.
+    // An MCP result section paints the whole output: printing it again under
+    // "Full output:" would repeat it (#11968).
+    const mcp = toolUse(
+      'mcp:fs/read',
+      { path: '/x' },
+      { outputText: 'line1\nline2\nline3' },
+    );
+    expect(mcp.model.outputSuppression).toBe('rendered-by-sections');
+    const mcpLines = toolUseDisplayLines(mcp, { showFullOutput: true });
+    expect(mcpLines).not.toContain('Full output:');
+
+    // An edit's diff is the proposed change; its output is the confirmation
+    // plus the user's adjustments, which only the full output shows.
     const edit = toolUse(
       'Edit',
       {
@@ -145,11 +156,27 @@ describe('CLI tool display lines', () => {
         old_string: 'We use a CNN.\n',
         new_string: 'We use a transformer.\n',
       },
-      { outputText: 'The diff applied cleanly.' },
+      {
+        outputText:
+          'Edited paper.tex\n\nUser adjustments to paper.tex:\n+We use a ViT.',
+      },
     );
+    expect(edit.model.outputSuppression).toBe('rendered-by-sections');
     const editLines = toolUseDisplayLines(edit, { showFullOutput: true });
-    expect(editLines).not.toContain('Full output:');
-    expect(editLines).not.toContain('The diff applied cleanly.');
+    expect(editLines).toContain('Full output:');
+    expect(editLines).toContain('+We use a ViT.');
+
+    // A header painted cut to its width is not the whole output.
+    const summary = `Reported issue #1: ${'long title '.repeat(20)}`;
+    const report = toolUse(
+      'report_review_issue',
+      {},
+      { headerSummary: summary, outputText: summary },
+    );
+    expect(report.model.outputSuppression).toBe('duplicate-of-header');
+    expect(
+      toolUseDisplayLines(report, { showFullOutput: true, width: 80 }),
+    ).toContain('Full output:');
 
     // A failed edit painted no diff, so its output is not rendered by
     // sections: the card shows it, once, in the output block.
