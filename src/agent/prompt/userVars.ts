@@ -96,6 +96,8 @@ interface ModelProviderFlags {
 export interface BuildUserVarsOptions {
   workspacePath?: string;
   delegationAgentScope?: AgentDelegationScope | null;
+  /** Explicit trace stage for diagnostics emitted while loading variables. */
+  stageId?: string;
 }
 
 /**
@@ -155,11 +157,17 @@ export async function buildUserVars(
 
   for (const issue of runtimeSkills.issues) {
     const location = issue.path ? ` (${issue.path})` : '';
-    logger.warn(`Skill import ${issue.severity}: ${issue.message}${location}`);
+    logger.warn(`Skill import ${issue.severity}: ${issue.message}${location}`, {
+      stageId: options.stageId,
+    });
   }
 
   if (agentSetting.agentCategory === AgentCategory.ToolUse) {
-    logger.emit({ type: 'skills.snapshot', skills: runtimeSkills.skills });
+    logger.emit({
+      type: 'skills.snapshot',
+      skills: runtimeSkills.skills,
+      stageId: options.stageId,
+    });
   }
 
   // The resolved output list is also the run's normalized `config.outputFiles`:
@@ -177,7 +185,7 @@ export async function buildUserVars(
   // (BuiltUserVars) and reach templates through the channel boundary.
   const userVars: BuiltUserVars = {
     ...getBasicVars(agentConfig, providerFlags, options),
-    ...(await getFileVars(agentConfig, agentSetting, logger)),
+    ...(await getFileVars(agentConfig, agentSetting, logger, options.stageId)),
     ...requiredVars,
     ...outputFileVars,
     ...getToolFlags(agentSetting, agentPrompt),
@@ -188,7 +196,7 @@ export async function buildUserVars(
 
   // Emit aggregated file list if any files were loaded
   if (requiredFiles.length > 0) {
-    logFilesLoaded(logger, 'all', requiredFiles);
+    logFilesLoaded(logger, 'all', requiredFiles, options.stageId);
   }
 
   return userVars;
@@ -348,6 +356,7 @@ async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   logger: AgentTrace,
+  stageId: string | undefined,
 ): Promise<FileVars> {
   // Compiler-checked completeness: every FileVars key starts at its
   // empty-file default here, so a future FileVars key without a matching
@@ -385,6 +394,7 @@ async function getFileVars(
     if (primaryFile != null && !primaryFileOk) {
       logger.warn(
         `Failed to load primary file into prompt variables: ${primaryFile}`,
+        { stageId },
       );
     }
     if (primaryFileResult != null) {
@@ -397,6 +407,7 @@ async function getFileVars(
     for (const { file, reason } of skipped) {
       logger.warn(
         `Skipping unreadable file in prompt context: ${file} (${reason})`,
+        { stageId },
       );
     }
 
@@ -413,14 +424,11 @@ async function getFileVars(
       agentSetting.agentCategory !== AgentCategory.ToolUse
     ) {
       const readable = new Set(readableFiles);
-      logFileCategory(
-        logger,
-        cardLabel,
-        allFiles.map((file) => ({
-          path: file,
-          ok: file === primaryFile ? primaryFileOk : readable.has(file),
-        })),
-      );
+      const entries = allFiles.map((file) => ({
+        path: file,
+        ok: file === primaryFile ? primaryFileOk : readable.has(file),
+      }));
+      logFileCategory(logger, cardLabel, entries, stageId);
     }
 
     userVars[`ALL_${prefix}S`] = xml;

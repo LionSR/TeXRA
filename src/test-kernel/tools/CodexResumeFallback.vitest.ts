@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { codexThreadsFor } from '@tools/agentCliSessionStores';
 
@@ -137,7 +138,7 @@ describe('codex tool - atomic resume fallback', () => {
   });
 
   it.effect(
-    'logs a detached run-loop rejection from a fresh Codex thread launch',
+    'roots a fresh Codex launch in the session and logs detached rejection',
     () =>
       Effect.gen(function* () {
         const childRun = createFakeAgentCliChildRun(childRunId);
@@ -152,13 +153,14 @@ describe('codex tool - atomic resume fallback', () => {
         mocks.startChildRunLoop.mockReturnValue(
           Effect.forkDetach(Effect.fail(lateFailure)),
         );
+        const startThread = vi.fn((_options: unknown) => ({
+          id: undefined,
+          runStreamed: vi.fn(),
+        }));
         mocks.importCodexClass.mockResolvedValue(
           class MockCodex {
-            startThread(): {
-              id: undefined;
-              runStreamed: ReturnType<typeof vi.fn>;
-            } {
-              return { id: undefined, runStreamed: vi.fn() };
+            startThread(options: unknown) {
+              return startThread(options);
             }
           },
         );
@@ -178,9 +180,15 @@ describe('codex tool - atomic resume fallback', () => {
             data: lateFailure,
           },
         );
+        expect(startThread).toHaveBeenCalledWith(
+          expect.objectContaining({ workingDirectory: '/desktop/project' }),
+        );
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({
+            roots: createFakeWorkspaceRoots({
+              workspacePath: '/desktop/project',
+            }),
             run: { session: testSession, runId: parentRunId, toolPolicy: {} },
           }),
         ),

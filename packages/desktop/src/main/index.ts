@@ -855,6 +855,7 @@ function createWindow(options: {
     const snapshot = createHostSnapshotSource({
       project: projectDisplayOf(project.key, project.root),
       globalState: options.globalState,
+      workspaceState: project.session.roots.workspaceState,
       secrets: options.secrets,
       inScope: (read) => runInSession(project.session, read),
       fileOptions: () => files.fileOptions(),

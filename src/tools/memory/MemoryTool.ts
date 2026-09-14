@@ -11,7 +11,6 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import type { FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
@@ -200,15 +199,13 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     return Effect.gen({ self: this }, function* () {
       const call = yield* ToolCall;
       const runs = yield* Runs;
-      const invocation = call.inScope(() => {
-        const runId = call.run?.runId;
-        return {
-          storageRoot: workspaceRoots().storage,
-          runId,
-          agentName:
-            runId === undefined ? undefined : runs.getHandle(runId)?.agentName,
-        } satisfies MemoryInvocation;
-      });
+      const runId = call.run?.runId;
+      const invocation = {
+        storageRoot: call.roots.storage,
+        runId,
+        agentName:
+          runId === undefined ? undefined : runs.getHandle(runId)?.agentName,
+      } satisfies MemoryInvocation;
       return yield* this.run(input, invocation);
     }).pipe(
       Effect.catchTags({

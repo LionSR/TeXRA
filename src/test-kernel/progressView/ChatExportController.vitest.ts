@@ -25,6 +25,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
+import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const TEMPLATE =
@@ -117,7 +118,7 @@ describe('ChatExportController.exportAsHtml', () => {
       );
 
       expect(outcome).toEqual({ status: 'config_missing' });
-    }),
+    }).pipe(Effect.provide(rootedFsLayer(session.roots))),
   );
 
   it.effect(
@@ -149,7 +150,7 @@ describe('ChatExportController.exportAsHtml', () => {
         expect(html).toContain(
           '<script type="module" crossorigin src="./index.js">',
         );
-      }),
+      }).pipe(Effect.provide(rootedFsLayer(session.roots))),
   );
 
   it.effect('throws when the standalone template bundle is missing', () =>
@@ -164,7 +165,7 @@ describe('ChatExportController.exportAsHtml', () => {
         controller.exportAsHtml(runId, '/nonexistent/index.html'),
       );
       expect(error.message).toMatch(/Trace-viewer standalone bundle missing/);
-    }),
+    }).pipe(Effect.provide(rootedFsLayer(session.roots))),
   );
 });
 

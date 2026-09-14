@@ -150,6 +150,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
     expect(vars.AVAILABLE_SKILLS).toBe('');
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       `Skill import error: Skill source does not exist (${missingSource})`,
+      { stageId: undefined },
     );
     expect(emit).toHaveBeenCalledExactlyOnceWith({
       type: 'skills.snapshot',

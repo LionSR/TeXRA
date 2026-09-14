@@ -35,7 +35,7 @@ export function createSubscriptionPreference(
     const target: ConfigTarget =
       inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
     await config.update(configKey, enabled, target);
-    return { effective: isPrefer(), target };
+    return { effective: config.get<boolean>(configKey, false), target };
   }
 
   return { isPrefer, setPrefer };

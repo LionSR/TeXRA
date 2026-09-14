@@ -64,7 +64,6 @@ import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKeyOf,
   AgentCategory,
@@ -177,10 +176,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         onPortClosed: (port) => hostRequests.closePort(port),
       }).pipe(Scope.provide(this.bridgeScope)),
     );
-    const roots = workspaceRoots();
+    const roots = session.roots;
     this.snapshot = createHostSnapshotSource({
       project: projectDisplayOf(session.roots.storage, roots.workspace),
       globalState: context.globalState,
+      workspaceState: roots.workspaceState,
       secrets,
       // One session per extension host: the calling frame is this session's.
       inScope: (read) => read(),

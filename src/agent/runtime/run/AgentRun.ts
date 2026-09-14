@@ -201,6 +201,7 @@ export const agentRunLayer = (
         toolInjections: input.toolInjections,
         config: session.roots.config,
         stores: ctx.stores,
+        delegationScope: ctx.runScope.delegationAgentScope ?? undefined,
         inScope: input.inScope,
       });
       const overlayTools: ITool[] = [];

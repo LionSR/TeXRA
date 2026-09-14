@@ -559,7 +559,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       delegationAgentScope: config.delegationAgentScope,
       session,
     });
-    const buildVars = () =>
+    const buildVars = (stageId?: string) =>
       buildUserVars(
         config,
         setting,
@@ -571,16 +571,28 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           isGoogle: modelConfig.provider === ModelProvider.GOOGLE,
         },
         agentLogger,
-        { delegationAgentScope: runScope.delegationAgentScope },
+        { delegationAgentScope: runScope.delegationAgentScope, stageId },
       );
 
     const baseVars = yield* Effect.tryPromise({
       try: async () =>
-        runInSession(session, () =>
-          setting.agentCategory === AgentCategory.ToolUse
-            ? buildVars()
-            : parentStage.child('Init').run(buildVars),
-        ),
+        runInSession(session, async () => {
+          if (setting.agentCategory === AgentCategory.ToolUse) {
+            return buildVars();
+          }
+
+          const initStage = parentStage.child('Init');
+          return buildVars(initStage.id).then(
+            (vars) => {
+              initStage.end(RUN_OUTCOME.COMPLETED);
+              return vars;
+            },
+            (error) => {
+              initStage.end(RUN_OUTCOME.FAILED);
+              throw error;
+            },
+          );
+        }),
       catch: ensureError,
     });
     yield* failIfLaunchStopped(input.stopped);

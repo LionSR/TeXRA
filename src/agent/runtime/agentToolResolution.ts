@@ -36,7 +36,7 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
-import type { ToolDefinition } from '@shared/schemas';
+import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
@@ -75,13 +75,13 @@ interface ResolveAgentToolsInput {
    * roster's model availability.
    */
   stores: ModelOptionStores;
+  /** The run's pinned delegation roster scope, when this is a delegated run. */
+  delegationScope?: AgentDelegationScope;
   /**
-   * The run's session frame, applied around every frame-sensitive read this
-   * resolver makes: the model availability read, and the delegation
-   * annotation's scope and worktree reads. It is handed in rather than
-   * wrapped around the call because this resolver is an Effect, so a wrapper
-   * would enter the frame around building the program instead of around
-   * running it.
+   * The run's session frame, applied around the model-availability and worktree
+   * reads this resolver makes. It is handed in rather than wrapped around the
+   * call because this resolver is an Effect, so a wrapper would enter the frame
+   * around building the program instead of around running it.
    */
   inScope?: ModelAvailabilityScope;
 }
@@ -144,6 +144,7 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   config,
   stores,
   inScope,
+  delegationScope,
 }: ResolveAgentToolsInput) {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames(stores.globalState);
@@ -201,14 +202,12 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     stores,
     inScope,
   );
-  // The annotation's two frame-sensitive reads — the run's pinned delegation
-  // scope and this session's worktree opt-in — resolve inside the caller's
-  // frame and travel into the mapping as data. This fiber is outside the run's
-  // session frame, so reading them from the mapping would lose the pinned
-  // scope and read the process's roots instead of the session's.
+  // The worktree read resolves inside the caller's frame. The run's pinned
+  // delegation scope is already explicit data from AgentRun, so both facts
+  // travel into the pure annotation mapping without reading run context here.
   const annotationState = inScope
-    ? inScope(readDelegationAnnotationState)
-    : readDelegationAnnotationState();
+    ? inScope(() => readDelegationAnnotationState(delegationScope))
+    : readDelegationAnnotationState(delegationScope);
   return resolved.map((tool) =>
     annotateDelegationAvailability(tool, availableModelNames, annotationState),
   );
