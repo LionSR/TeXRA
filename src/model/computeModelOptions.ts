@@ -188,9 +188,24 @@ function withAvailabilityFields(
   return { ...option, availability: availability.kind };
 }
 
-interface ModelAvailabilityContext {
+/**
+ * Which providers have a usable API key, as plain data — the only provider-key
+ * fact the per-model pass reads. Stage 0 fills the two routing providers
+ * (`openRouter`, `kimiCode`); stage 2 fills the providers the route ladder
+ * said it would consult. A provider absent from the map was never consulted,
+ * and is never read on a model's behalf afterwards.
+ */
+type ProviderKeyStatuses = Partial<Record<ApiProvider, boolean>>;
+
+/**
+ * The host facts the route ladder reads, all resolved once before any model is
+ * routed. It deliberately excludes {@link ProviderKeyStatuses}: the ladder runs
+ * *before* the per-provider key statuses are read — that pass is how the batch
+ * read learns which providers to consult — so the compiler, not a comment,
+ * keeps the ladder key-independent.
+ */
+interface ModelRouteContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
-  hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
   hasOpenRouter: boolean;
   useOpenRouter: boolean;
   /** Whether the user is signed in with ChatGPT (only resolved when the
@@ -208,12 +223,28 @@ interface ModelAvailabilityContext {
   globalState: StateStore;
 }
 
-/** Determine how a model can be used in the current access mode. */
-async function resolveModelAvailability(
+/** The route facts plus the key statuses the batch read resolved for them. */
+interface ModelAvailabilityContext extends ModelRouteContext {
+  keyStatuses: ProviderKeyStatuses;
+}
+
+/** The one provider whose key decides a model the ladder did not settle. */
+interface ProviderKeyGate {
+  needsProviderKey: ApiProvider;
+}
+
+/**
+ * Stage 1 — the route ladder, pure and free of any key status. Every branch
+ * that can decide availability from the stage-0 facts answers with its kind;
+ * a model that comes down to a direct provider key answers with that provider
+ * instead, so the batch read that follows consults exactly the providers the
+ * ladder reached and no others.
+ */
+function resolveModelRoute(
   model: string,
   config: ModelConfig,
-  ctx: ModelAvailabilityContext,
-): Promise<ModelAvailabilityStatus> {
+  ctx: ModelRouteContext,
+): ModelAvailabilityStatus | ProviderKeyGate {
   if (config.retired) {
     return availabilityStatus('retired');
   }
@@ -286,56 +317,118 @@ async function resolveModelAvailability(
   // key makes the model ready. The live-route branch above is the only source
   // of 'openrouter-key'.
   const provider = resolveDirectModelApiKeyProvider(config);
-  if (provider && (await ctx.hasUsableApiKey(provider))) {
-    return availabilityStatus('provider-key');
-  }
-
-  return availabilityStatus('missing-key');
+  if (!provider) return availabilityStatus('missing-key');
+  return { needsProviderKey: provider };
 }
 
+/**
+ * Stage 3 — the per-model verdict, pure: the ladder's own answer, or the one
+ * the consulted provider's key status decides.
+ */
+function resolveModelAvailability(
+  model: string,
+  config: ModelConfig,
+  ctx: ModelAvailabilityContext,
+): ModelAvailabilityStatus {
+  const route = resolveModelRoute(model, config, ctx);
+  if (!('needsProviderKey' in route)) return route;
+  return availabilityStatus(
+    ctx.keyStatuses[route.needsProviderKey] ? 'provider-key' : 'missing-key',
+  );
+}
+
+/**
+ * One key status per provider, read once. A failed read degrades that provider
+ * to unavailable and warns once for the provider, never once per model that
+ * consults it (#11508), so one unreadable store cannot flood the log.
+ */
+async function readProviderKeyStatuses(
+  secrets: PlatformSecrets,
+  providers: readonly ApiProvider[],
+): Promise<ProviderKeyStatuses> {
+  const entries = await Promise.all(
+    providers.map(async (provider) => {
+      const usable = await hasUsableApiKey(secrets, provider).catch(
+        (error: unknown) => {
+          warnModelAvailability(
+            `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
+            error,
+          );
+          return false;
+        },
+      );
+      return [provider, usable] as const;
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
+/**
+ * Stage 0 — every host fact the ladder reads, resolved once per call. The two
+ * routing key statuses belong here rather than in the stage-2 batch because
+ * routing itself depends on them: `kimiCodeEffectiveConfig` reads `keySet`,
+ * and the OpenRouter branch is decided by the OpenRouter key alone.
+ */
 async function buildAvailabilityContext(
   stores: ModelOptionStores,
 ): Promise<ModelAvailabilityContext> {
   const { secrets, globalState } = stores;
   const useOpenRouter = getUseOpenRouter();
-  // One key check per provider per context: `apiProviders` coalesces the
-  // secret read, but a rejection reaches every awaiting model, and the picker
-  // warns once per provider, not once per model (#11508).
-  const keyChecks = new Map<ApiProvider, Promise<boolean>>();
-  const hasApiKey = (provider: ApiProvider): Promise<boolean> => {
-    let check = keyChecks.get(provider);
-    if (!check) {
-      check = hasUsableApiKey(secrets, provider).catch((error: unknown) => {
-        warnModelAvailability(
-          `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
-          error,
-        );
-        return false;
-      });
-      keyChecks.set(provider, check);
-    }
-    return check;
-  };
-  const [hasOpenRouter, codexSignedIn, xaiSignedIn, kimiCodeKeySet] =
-    await Promise.all([
-      hasApiKey('openRouter'),
-      // Only worth a secrets read when the "prefer subscription" switch is on.
-      isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
-      isPreferXaiSubscription() ? isXaiSignedIn() : Promise.resolve(false),
-      hasApiKey('kimiCode'),
-    ]);
+  const [routingKeys, codexSignedIn, xaiSignedIn] = await Promise.all([
+    readProviderKeyStatuses(secrets, ['openRouter', 'kimiCode']),
+    // Only worth a secrets read when the "prefer subscription" switch is on.
+    isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
+    isPreferXaiSubscription() ? isXaiSignedIn() : Promise.resolve(false),
+  ]);
   return {
     globalState,
     reasoningLevels: reasoningEffortOverrides(globalState),
-    hasUsableApiKey: hasApiKey,
-    hasOpenRouter,
+    keyStatuses: routingKeys,
+    hasOpenRouter: routingKeys.openRouter === true,
     useOpenRouter,
     codexSignedIn,
     xaiSignedIn,
     kimiRouting: {
       useOpenRouter,
-      keySet: kimiCodeKeySet,
+      keySet: routingKeys.kimiCode === true,
       preferKimiCode: getPreferKimiCode(),
+    },
+  };
+}
+
+/**
+ * Stages 1 and 2 — run the pure ladder over `models` to learn which providers
+ * they would consult, then read those key statuses in one batch. A provider
+ * stage 0 already resolved is not read again, so no model is charged a second
+ * read (or a second warning) for it.
+ */
+async function withConsultedKeyStatuses(
+  secrets: PlatformSecrets,
+  models: readonly string[],
+  ctx: ModelAvailabilityContext,
+): Promise<ModelAvailabilityContext> {
+  const consulted = new Set<ApiProvider>();
+  for (const model of models) {
+    const rawConfig = getRuntimeModelConfig(model);
+    if (!rawConfig) continue;
+    const route = resolveModelRoute(
+      model,
+      kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting),
+      ctx,
+    );
+    if (
+      'needsProviderKey' in route &&
+      ctx.keyStatuses[route.needsProviderKey] === undefined
+    ) {
+      consulted.add(route.needsProviderKey);
+    }
+  }
+  if (consulted.size === 0) return ctx;
+  return {
+    ...ctx,
+    keyStatuses: {
+      ...ctx.keyStatuses,
+      ...(await readProviderKeyStatuses(secrets, [...consulted])),
     },
   };
 }
@@ -476,9 +569,10 @@ export async function getModelUnavailableReason(
   const rawConfig = getRuntimeModelConfig(model);
   if (!rawConfig) return `Model "${model}" is not recognized.`;
 
-  const ctx = await buildAvailabilityContext(stores);
+  const routeCtx = await buildAvailabilityContext(stores);
+  const ctx = await withConsultedKeyStatuses(stores.secrets, [model], routeCtx);
   const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
-  const availability = await resolveModelAvailability(model, config, ctx);
+  const availability = resolveModelAvailability(model, config, ctx);
   if (MODEL_AVAILABILITY_STATUS[availability.kind].available) return null;
 
   // `availability.kind` is guaranteed `available: false` here, so it's a
@@ -495,10 +589,10 @@ export async function getModelUnavailableReason(
 }
 
 /** Build typed model option data for a single model. */
-async function buildModelOptionData(
+function buildModelOptionData(
   model: string,
   ctx: ModelAvailabilityContext,
-): Promise<ModelOptionData> {
+): ModelOptionData {
   const rawConfig = getRuntimeModelConfig(model);
   if (!rawConfig) {
     return withAvailabilityFields(
@@ -510,7 +604,7 @@ async function buildModelOptionData(
   // endpoint runs with the synthesized runtime config, so the row reflects it.
   const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
 
-  const availability = await resolveModelAvailability(model, config, ctx);
+  const availability = resolveModelAvailability(model, config, ctx);
   const copilotConfig =
     availability.kind === 'copilot-access'
       ? copilotRouteForModel(model)?.effectiveConfig
@@ -570,35 +664,38 @@ async function buildModelOptionData(
  * Compute typed model options data for Lit-native rendering.
  *
  * When `models` is provided, the caller's view of the visible-models list is
- * honored verbatim. Every call recomputes from the live inputs: the secret
- * reads behind `hasUsableApiKey` are cached and invalidated in `apiProviders`
- * (`invalidateApiKeyCache`), the Copilot route catalogue in
- * `runtimeModelRegistry` (`invalidateRuntimeModelRegistry`), and the rest are
- * synchronous config and state reads plus the probe-backed sign-in status
- * (`isCodexSignedIn`, `isXaiSignedIn`, live by design), so there is no second
- * cache to keep fresh here.
+ * honored verbatim. The host reads happen in two awaits — the facts every
+ * model shares, then one key-status read per provider the visible models
+ * actually consult — and the per-model pass over them is pure. Every call
+ * recomputes from the live inputs: the secret reads behind `hasUsableApiKey`
+ * are cached and invalidated in `apiProviders` (`invalidateApiKeyCache`), the
+ * Copilot route catalogue in `runtimeModelRegistry`
+ * (`invalidateRuntimeModelRegistry`), and the rest are synchronous config and
+ * state reads plus the probe-backed sign-in status (`isCodexSignedIn`,
+ * `isXaiSignedIn`, live by design), so there is no second cache to keep fresh
+ * here.
  */
 export async function computeModelOptionsData(
   stores: ModelOptionStores,
   models?: readonly string[],
 ): Promise<ModelOptionData[]> {
   await discoveredCopilotRoutes();
-  const availabilityCtx = await buildAvailabilityContext(stores);
+  const routeCtx = await buildAvailabilityContext(stores);
   const visible =
     models ??
-    visibleModelsForAccess(
-      getEnabledModels(stores.globalState),
-      availabilityCtx,
-    );
-
-  return Promise.all(
-    visible.map((model) => buildModelOptionData(model, availabilityCtx)),
+    visibleModelsForAccess(getEnabledModels(stores.globalState), routeCtx);
+  const availabilityCtx = await withConsultedKeyStatuses(
+    stores.secrets,
+    visible,
+    routeCtx,
   );
+
+  return visible.map((model) => buildModelOptionData(model, availabilityCtx));
 }
 
 function visibleModelsForAccess(
   configuredModels: readonly string[],
-  context: ModelAvailabilityContext,
+  context: ModelRouteContext,
 ): readonly string[] {
   const models = new Set(configuredModels);
   if (!context.codexSignedIn) return [...models];

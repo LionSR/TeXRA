@@ -216,6 +216,31 @@ describe('computeModelOptionsData availability', () => {
     warn.mockRestore();
   });
 
+  it('reads no provider key for a model the route ladder settles without one', async () => {
+    // The key statuses are read once per provider the ladder actually
+    // consults, so a row settled before the key step (retired, here) never
+    // turns into an Anthropic read — and never into its warning.
+    const secrets = new FakeSecrets();
+    vi.spyOn(secrets, 'get').mockRejectedValue(new Error('unreadable store'));
+    await installPlatform(
+      {
+        globalState: {
+          [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),
+        },
+      },
+      { secrets },
+    );
+    invalidateApiKeyCache();
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    const [model] = await computeModelOptionsData(hostStores(), ['haiku3']);
+
+    expect(model.availability).toBe('retired');
+    // Only the two routing keys every call resolves up front.
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
   it('labels models the registry no longer describes instead of shipping a bare row', async () => {
     await installAccessPlatform();
 
