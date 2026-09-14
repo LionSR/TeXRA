@@ -48,6 +48,8 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
+import { chooseTeamAvailabilityViaDialog } from '../../common/teamAvailabilityDialog';
+
 import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,
@@ -380,17 +382,7 @@ export class AgentHandlers {
   // ── Private helpers ──
 
   private async chooseTeamAvailability(prompt: TeamAvailabilityPrompt) {
-    const items = prompt.actions.map((action) => ({
-      title: action.label,
-      isCloseAffordance: action.choice === 'cancel',
-    }));
-    const choice = await vscode.window.showWarningMessage(
-      prompt.message,
-      { modal: true },
-      ...items,
-    );
-    return prompt.actions.find((action) => action.label === choice?.title)
-      ?.choice;
+    return chooseTeamAvailabilityViaDialog(prompt, { modal: true });
   }
 
   private async createAgentFromTemplate(

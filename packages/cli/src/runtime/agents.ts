@@ -273,10 +273,12 @@ export function formatCliAgentList(
   // that resolves to that row. A bare name shared by two listed agents does
   // not — `texra run` refuses it as ambiguous — so those rows print the
   // source-qualified key instead, which hits exactly one registry entry.
+  const nameCounts = new Map<string, number>();
+  for (const agent of agents) {
+    nameCounts.set(agent.name, (nameCounts.get(agent.name) ?? 0) + 1);
+  }
   const collidingNames = new Set(
-    agents
-      .map((agent) => agent.name)
-      .filter((name, index, names) => names.indexOf(name) !== index),
+    [...nameCounts].filter(([, count]) => count > 1).map(([name]) => name),
   );
   return agents
     .map(

@@ -65,7 +65,7 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
-import { redactSecrets } from '@logger/redaction';
+import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
@@ -276,7 +276,7 @@ function installUnhandledRejectionSurface(
     log.error('Unhandled extension-host rejection', { data: error });
     void vscode.window
       .showErrorMessage(
-        `The extension host encountered an unrecoverable error: ${redactSecrets(toErrorMessage(error))}`,
+        `The extension host encountered an unrecoverable error: ${formatFatalErrorDetail(error)}`,
       )
       .then(undefined, (notificationError: unknown) => {
         log.error('Failed to display unhandled rejection error', {

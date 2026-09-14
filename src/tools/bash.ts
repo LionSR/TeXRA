@@ -12,7 +12,6 @@ import {
 } from '@agent/runtime/run/toolResultText';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   currentSession,
   type SessionHandle,
@@ -40,6 +39,7 @@ import {
   requestBashApproval,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
+import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { formatDuration, generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
@@ -514,10 +514,9 @@ export class BashTool extends defineTool({
           const runId = generateRunId();
           const preview = previewLabel(command);
 
-          const syntheticConfig = AgentConfigSchema.parse({
+          const syntheticConfig = buildSyntheticToolUseConfig({
             agent: 'bash',
             instruction: command,
-            agentCategory: AgentCategory.ToolUse,
           });
 
           // The durable record states only what a shell command has: no run

@@ -15,7 +15,7 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -28,7 +28,7 @@ import type {
   ToolDashboardItem,
   ToolInstallAction,
 } from '@shared/schemas';
-import { isOwnDetailsToggle } from '@shared/litControllers/detailsToggle';
+import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -194,25 +194,15 @@ export class ToolCard extends LitElement {
 
   @property({ attribute: false }) item!: ToolDashboardItem;
 
-  @state() private guideExpanded = false;
+  private readonly guideDetails = new DetailsOpenController(this);
 
   /** Reveal the install buttons immediately when a tool first reports missing. */
   override willUpdate(changed: PropertyValues<this>): void {
     if (!changed.has('item')) return;
     const prev = changed.get('item');
     if (prev?.status !== 'not-found' && this.item.status === 'not-found') {
-      this.guideExpanded = true;
+      this.guideDetails.open = true;
     }
-  }
-
-  private handleGuideShow(event: Event): void {
-    if (!isOwnDetailsToggle(event)) return;
-    this.guideExpanded = true;
-  }
-
-  private handleGuideHide(event: Event): void {
-    if (!isOwnDetailsToggle(event)) return;
-    this.guideExpanded = false;
   }
 
   private runCommand(kind: ToolCommandKind): void {
@@ -361,9 +351,9 @@ export class ToolCard extends LitElement {
       <wa-details
         class="collapsible-quiet tool-guide-details"
         summary=${`Set up ${this.item.name}`}
-        ?open=${this.guideExpanded}
-        @wa-show=${this.handleGuideShow}
-        @wa-hide=${this.handleGuideHide}
+        ?open=${this.guideDetails.open}
+        @wa-show=${this.guideDetails.handleShow}
+        @wa-hide=${this.guideDetails.handleHide}
       >
         ${this.item.installActions.map((action) =>
           action.kind === 'guide'
