@@ -45,6 +45,37 @@ export function parseWorkingDirectory(
   return trimmed;
 }
 
+/**
+ * The scoped path-resolution capability a native tool reads from its call: the
+ * working-directory root and the host frame its filesystem access runs inside.
+ * Tools that need more from their call (a host viewer, a read tracker) extend
+ * this interface with those fields.
+ */
+export interface WorkspacePathPorts {
+  /**
+   * The active working directory, bound to the calling turn. It stays a thunk
+   * because {@link parseWorkingDirectory} rejects a relative directory, so each
+   * tool forces it exactly at the use site where reporting that failure is
+   * theirs to own — never eagerly at assembly time.
+   */
+  readonly toolRoot: () => string | undefined;
+  /** Enter the host's workspace frame only while touching its filesystem. */
+  readonly inScope: <A>(operation: () => A) => A;
+}
+
+/**
+ * Assemble the {@link WorkspacePathPorts} that every path-taking tool binds
+ * identically from its `ToolCall`, so the working-directory convention lives in
+ * one place. `call` is structural — a tool's `ToolCall` value satisfies it.
+ */
+export const workspacePathPorts = (call: {
+  readonly workingDirectory?: string;
+  readonly inScope: <A>(operation: () => A) => A;
+}): WorkspacePathPorts => ({
+  toolRoot: () => parseWorkingDirectory(call.workingDirectory),
+  inScope: call.inScope,
+});
+
 /** Throw when a raw tool path contains a parent-directory segment. */
 export function assertNoParentTraversal(targetPath: string): void {
   if (getPathSegments(targetPath).includes('..')) {

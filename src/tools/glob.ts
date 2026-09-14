@@ -16,7 +16,8 @@ import { formatToolOutput } from '@tools/formatting';
 import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
-  parseWorkingDirectory,
+  workspacePathPorts,
+  type WorkspacePathPorts,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { filterNotNull } from '@utils/core';
@@ -50,10 +51,8 @@ interface GlobMatchInfo {
  * The per-call context this tool reads from the caller's turn: the batch's
  * abort signal and the working directory.
  */
-interface GlobPorts {
+interface GlobPorts extends WorkspacePathPorts {
   readonly signal: AbortSignal | undefined;
-  readonly toolRoot: () => string | undefined;
-  readonly inScope: <A>(operation: () => A) => A;
 }
 
 const runGlob = Effect.fn('GlobTool.execute')(function* (
@@ -165,9 +164,8 @@ export const GlobTool = defineTool({
   execute: Effect.fn('GlobTool.call')(function* (input: GlobInput) {
     const call = yield* ToolCall;
     const ports: GlobPorts = {
+      ...workspacePathPorts(call),
       signal: yield* Effect.abortSignal,
-      toolRoot: () => parseWorkingDirectory(call.workingDirectory),
-      inScope: call.inScope,
     };
     return yield* runGlob(ports, input);
   }),

@@ -9,7 +9,10 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 // Local imports - tools
 import { hostPort } from '@common/hostPort';
 import { ToolError, type ToolResult } from '@shared/schemas';
-import { parseWorkingDirectory } from '@tools/pathResolution';
+import {
+  workspacePathPorts,
+  type WorkspacePathPorts,
+} from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -114,10 +117,8 @@ function buildArguments(input: GrepInput, outputMode: OutputMode): string[] {
  * The per-call context this tool reads from the caller's turn: the batch's
  * abort signal and the working directory.
  */
-interface GrepPorts {
+interface GrepPorts extends WorkspacePathPorts {
   readonly signal: AbortSignal | undefined;
-  readonly toolRoot: () => string | undefined;
-  readonly inScope: <A>(operation: () => A) => A;
 }
 
 const runGrep = Effect.fn('GrepTool.execute')(function* (
@@ -229,9 +230,8 @@ export const GrepTool = defineTool({
   execute: Effect.fn('GrepTool.call')(function* (input: GrepInput) {
     const call = yield* ToolCall;
     const ports: GrepPorts = {
+      ...workspacePathPorts(call),
       signal: yield* Effect.abortSignal,
-      toolRoot: () => parseWorkingDirectory(call.workingDirectory),
-      inScope: call.inScope,
     };
     return yield* runGrep(ports, input);
   }),
