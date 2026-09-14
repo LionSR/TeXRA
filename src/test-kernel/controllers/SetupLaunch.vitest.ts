@@ -20,7 +20,9 @@ const mocks = vi.hoisted(() => ({
   isCodexSubscriptionActive: vi.fn<() => Promise<boolean>>(),
   isXaiSubscriptionActive: vi.fn<() => Promise<boolean>>(),
   hasUsableApiKey:
-    vi.fn<(secrets: unknown, provider: string) => Promise<boolean>>(),
+    vi.fn<
+      (secrets: unknown, provider: string) => Effect.Effect<boolean, Error>
+    >(),
   getUseOpenRouter: vi.fn<() => boolean>(),
   getProviderEndpoint: vi.fn<() => string>(),
   useChinaRegion: vi.fn<() => boolean>(),
@@ -58,7 +60,7 @@ const {
 beforeEach(() => {
   mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
   mocks.isXaiSubscriptionActive.mockReset().mockResolvedValue(false);
-  mocks.hasUsableApiKey.mockReset().mockResolvedValue(false);
+  mocks.hasUsableApiKey.mockReset().mockReturnValue(Effect.succeed(false));
   mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
   mocks.getProviderEndpoint.mockReset().mockReturnValue('');
   mocks.useChinaRegion.mockReset().mockReturnValue(true);
@@ -92,22 +94,22 @@ function launchModel(
 }
 
 function mockDirectApiKey(provider: string): void {
-  mocks.hasUsableApiKey.mockImplementation(
-    async (_secrets, p) => p === provider,
+  mocks.hasUsableApiKey.mockImplementation((_secrets, p) =>
+    Effect.succeed(p === provider),
   );
 }
 
 describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   it('prefers an active ChatGPT subscription over every other credential', async () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
-    mocks.hasUsableApiKey.mockResolvedValue(true);
+    mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
 
     await expect(selectCredentialModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 
   it('uses an active Grok subscription before provider keys', async () => {
     mocks.isXaiSubscriptionActive.mockResolvedValue(true);
-    mocks.hasUsableApiKey.mockResolvedValue(true);
+    mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
 
     await expect(selectCredentialModel()).resolves.toBe(XAI_SETUP_MODEL);
     expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
@@ -126,10 +128,11 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   });
 
   it('continues to a later provider when an earlier API key read fails', async () => {
-    mocks.hasUsableApiKey.mockImplementation(async (_secrets, provider) => {
-      if (provider === 'openai') throw new Error('openai key read failed');
-      return provider === 'anthropic';
-    });
+    mocks.hasUsableApiKey.mockImplementation((_secrets, provider) =>
+      provider === 'openai'
+        ? Effect.fail(new Error('openai key read failed'))
+        : Effect.succeed(provider === 'anthropic'),
+    );
 
     await expect(selectCredentialModel()).resolves.toBe(
       SETUP_MODEL_BY_PROVIDER.anthropic,
@@ -242,7 +245,9 @@ describe('resolveSetupLaunchModel', () => {
   ])(
     'continues to an active $subscription subscription when the OpenRouter key read fails',
     async ({ model, activate }) => {
-      mocks.hasUsableApiKey.mockRejectedValueOnce(new Error('keychain locked'));
+      mocks.hasUsableApiKey.mockReturnValueOnce(
+        Effect.fail(new Error('keychain locked')),
+      );
       activate();
 
       await expect(launchModel(false)).resolves.toEqual({

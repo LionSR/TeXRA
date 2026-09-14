@@ -51,7 +51,7 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
     // If no persisted entry exists but a *usable* (non-blank) key
     // is still reported, it's coming from the `<PROVIDER>_API_KEY`
     // env var — `deleteApiKey` can't touch that, so be explicit.
-    const envExists = yield* hostPort(() => hasUsableApiKey(secrets, provider));
+    const envExists = yield* hasUsableApiKey(secrets, provider);
     if (envExists) {
       return executed(
         `No stored API key for "${provider}" to remove, but one is still active via the ${envVar} environment variable. The credential store has nothing to clear: unset ${envVar} in your shell (or the source that sets it) to remove this credential.`,
@@ -89,9 +89,7 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
 
   // A shell env var can shadow the deletion — flag that so the agent can
   // tell the user why the key still appears to exist after removal.
-  const stillPresent = yield* hostPort(() =>
-    hasUsableApiKey(secrets, provider),
-  );
+  const stillPresent = yield* hasUsableApiKey(secrets, provider);
   if (stillPresent) {
     return executed(
       `Removed stored API key for provider "${provider}", but the ${envVar} environment variable is still set and will continue to provide a credential. Unset ${envVar} in your shell to fully remove it.`,

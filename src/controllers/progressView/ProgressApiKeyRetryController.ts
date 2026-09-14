@@ -25,8 +25,8 @@ export interface ProgressApiKeyRetryControllerDeps {
   providers: readonly ApiProvider[];
   readKey(
     provider: ApiProvider,
-  ): Promise<Redacted.Redacted<string> | undefined>;
-  hasUsableKey(provider: ApiProvider): Promise<boolean>;
+  ): Effect.Effect<Redacted.Redacted<string> | undefined, unknown>;
+  hasUsableKey(provider: ApiProvider): Effect.Effect<boolean, unknown>;
   promptForApiKey(provider?: ApiProvider): Promise<void>;
   isRetryPending(stream: RunId, requestId: string): boolean;
   triggerRetry(
@@ -144,7 +144,7 @@ export class ProgressApiKeyRetryController {
     return Effect.map(
       Effect.forEach(
         providers,
-        (provider) => hostPort(() => this.deps.hasUsableKey(provider)),
+        (provider) => this.deps.hasUsableKey(provider),
         { concurrency: 'unbounded' },
       ),
       (checks) => checks.some(Boolean),
@@ -178,7 +178,7 @@ export class ProgressApiKeyRetryController {
         providers,
         (provider) =>
           Effect.map(
-            hostPort(() => this.deps.readKey(provider)),
+            this.deps.readKey(provider),
             (key) => [provider, key] as const,
           ),
         { concurrency: 'unbounded' },

@@ -416,18 +416,6 @@ export type ModelAvailabilityScope = <T>(read: () => T) => T;
 const CALLING_SCOPE: ModelAvailabilityScope = (read) => read();
 
 /**
- * One provider's key status could not be read at all: the store rejected.
- * Recovered where it is raised (the provider degrades to unavailable and
- * warns once), so it never reaches a caller — but it is raised as a tagged
- * failure rather than swallowed so the recovery is a matched branch instead
- * of a `.catch` that would also swallow a defect.
- */
-class ProviderKeyUnreadable extends Data.TaggedError('ProviderKeyUnreadable')<{
-  readonly provider: ApiProvider;
-  readonly cause: unknown;
-}> {}
-
-/**
  * A host fact this module reads synchronously — a workspace preference, a
  * config switch, a stored state entry — could not be read at all, because the
  * host's config or state store threw. That is environmental, not a bug in this
@@ -469,20 +457,21 @@ const hostFact = <A>(
  * One key status per provider, read once. A failed read degrades that provider
  * to unavailable and warns once for the provider, never once per model that
  * consults it (#11508), so one unreadable store cannot flood the log.
+ *
+ * No `inScope` here: `hasUsableApiKey` is a program over the credential store
+ * the caller passed in, and none of the four store implementations reads a
+ * workspace-scoped setting, so there is no host frame for this read to be in.
+ * The facts that do read one are wrapped where they are read, above.
  */
 function readProviderKeyStatuses(
   secrets: PlatformSecrets,
   providers: readonly ApiProvider[],
-  inScope: ModelAvailabilityScope,
 ): Effect.Effect<ProviderKeyStatuses> {
   return Effect.forEach(
     providers,
     (provider) =>
-      Effect.tryPromise({
-        try: () => inScope(() => hasUsableApiKey(secrets, provider)),
-        catch: (cause) => new ProviderKeyUnreadable({ provider, cause }),
-      }).pipe(
-        Effect.catchTag('ProviderKeyUnreadable', (failure) =>
+      hasUsableApiKey(secrets, provider).pipe(
+        Effect.catchTag('SecretsFailed', (failure) =>
           Effect.sync(() => {
             warnModelAvailability(
               `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
@@ -534,7 +523,7 @@ function buildAvailabilityContext(
     ] as const);
     const [routingKeys, codexSignedIn, xaiSignedIn] = yield* Effect.all(
       [
-        readProviderKeyStatuses(secrets, ['openRouter', 'kimiCode'], inScope),
+        readProviderKeyStatuses(secrets, ['openRouter', 'kimiCode']),
         // Only worth a probe when the "prefer subscription" switch is on.
         preferCodexSubscription
           ? Effect.tryPromise({
@@ -605,7 +594,6 @@ function withConsultedKeyStatuses(
   secrets: PlatformSecrets,
   routed: RoutedModels,
   ctx: ModelAvailabilityContext,
-  inScope: ModelAvailabilityScope,
 ): Effect.Effect<ModelAvailabilityContext> {
   const consulted = new Set<ApiProvider>();
   for (const { route } of routed.values()) {
@@ -617,7 +605,7 @@ function withConsultedKeyStatuses(
     }
   }
   if (consulted.size === 0) return Effect.succeed(ctx);
-  return readProviderKeyStatuses(secrets, [...consulted], inScope).pipe(
+  return readProviderKeyStatuses(secrets, [...consulted]).pipe(
     Effect.map((consultedStatuses) => ({
       ...ctx,
       keyStatuses: { ...ctx.keyStatuses, ...consultedStatuses },
@@ -899,7 +887,6 @@ export const readModelAvailabilityInputs = Effect.fn(
     stores.secrets,
     routed,
     routeCtx,
-    inScope,
   );
   return { context, routed, visible } satisfies ModelAvailabilityInputs;
 });

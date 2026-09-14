@@ -351,6 +351,7 @@ export function registerBuiltinSlashCommands(options: {
     return (
       <AccountAccessForm
         secrets={secrets}
+        runtime={runtime}
         availableRows={props.availableRows}
         onSelect={formSelectionHandler<AccountAccessFormValue>({
           action: (value, output) => {
@@ -611,7 +612,7 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Show signed-in accounts and active model access',
     category: 'account',
     echo: 'ifPersists',
-    handler: () => showCliAuthStatus(secrets),
+    handler: () => showCliAuthStatus(runtime, secrets),
   });
   registerSlashCommand({
     name: 'login',

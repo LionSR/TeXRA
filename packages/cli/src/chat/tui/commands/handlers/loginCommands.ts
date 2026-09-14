@@ -267,10 +267,7 @@ const logoutLines = (
       yield* signOutSubscription('grok', GROK_AUTH.label);
     }
 
-    const overviewLines = yield* Effect.tryPromise({
-      try: () => loadCliModelAccessOverview(secrets),
-      catch: (cause) => ensureError(cause),
-    }).pipe(
+    const overviewLines = yield* loadCliModelAccessOverview(secrets).pipe(
       Effect.match({
         onFailure: (error) => [toErrorMessage(error)],
         onSuccess: (overview) => overview.lines,

@@ -162,22 +162,25 @@ function createSession(): TuiSession {
 }
 
 function mockModelAccessOverview(): void {
-  vi.spyOn(apiStatus, 'loadCliModelAccessOverview').mockResolvedValue({
-    access: {
-      preferences: {
-        chatGpt: 'off',
-        grok: 'off',
+  vi.spyOn(apiStatus, 'loadCliModelAccessOverview').mockReturnValue(
+    Effect.succeed({
+      access: {
+        preferences: {
+          chatGpt: 'off',
+          grok: 'off',
+        },
+        codingPlans: {
+          kimiCode: { preferred: false, keySet: false },
+          glmCodingPlan: { preferred: false, keySet: false },
+        },
+        chatGptSignedIn: false,
+        grokSignedIn: false,
+        texraSignedIn: false,
       },
-      codingPlans: {
-        kimiCode: { preferred: false, keySet: false },
-        glmCodingPlan: { preferred: false, keySet: false },
-      },
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-      texraSignedIn: false,
-    },
-    lines: ['model access: Your own API keys'],
-  });
+      lines: ['model access: Your own API keys'],
+      note: undefined,
+    }),
+  );
 }
 
 function createCliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -576,12 +579,14 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands({ ...stores });
     const overview = vi
       .spyOn(apiStatus, 'loadCliDetailedAccountStatusLines')
-      .mockResolvedValue([
-        'ChatGPT: preferred · signed in as chatgpt@example.com',
-        'Kimi Code: not preferred · key not configured',
-        'Otherwise: Your own API keys',
-        'Other API keys: DeepSeek',
-      ]);
+      .mockReturnValue(
+        Effect.succeed([
+          'ChatGPT: preferred · signed in as chatgpt@example.com',
+          'Kimi Code: not preferred · key not configured',
+          'Otherwise: Your own API keys',
+          'Other API keys: DeepSeek',
+        ]),
+      );
     const context = createContext();
 
     await handleTuiSlashCommand('/auth', context);

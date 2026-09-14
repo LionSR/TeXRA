@@ -90,7 +90,9 @@ export function applyCliModelAccessInput(
     const normalized = routeInput.trim().toLowerCase();
 
     if (!normalized || normalized === 'status') {
-      const lines = await loadCliDetailedAccountStatusLines(context.secrets);
+      const lines = await runtime.runPromise(
+        loadCliDetailedAccountStatusLines(context.secrets),
+      );
       output.appendOutcome(lines.join('\n'));
       return;
     }
@@ -112,8 +114,11 @@ export function applyCliModelAccessInput(
 }
 
 export async function showCliAuthStatus(
+  runtime: ProcessRuntime,
   secrets: PlatformSecrets,
 ): Promise<void> {
-  const lines = await loadCliDetailedAccountStatusLines(secrets);
+  const lines = await runtime.runPromise(
+    loadCliDetailedAccountStatusLines(secrets),
+  );
   transcriptSlashCommandOutput.appendOutcome(lines.join('\n'));
 }
