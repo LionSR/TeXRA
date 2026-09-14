@@ -308,7 +308,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
     Effect.provide(
       Layer.mergeAll(
         invokerLayer(init.script, requests),
-        followUpsLayer(),
+        followUpsLayer,
         nativeToolTestLayer(),
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),

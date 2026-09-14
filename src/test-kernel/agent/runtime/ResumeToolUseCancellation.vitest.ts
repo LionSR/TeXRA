@@ -65,7 +65,7 @@ vi.mock('@agent/runtime/ModelInvoker', async () => {
 
 vi.mock('@agent/runtime/FollowUps', async () => {
   const { Layer } = await import('effect');
-  return { followUpsLayer: () => Layer.empty };
+  return { followUpsLayer: Layer.empty };
 });
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({

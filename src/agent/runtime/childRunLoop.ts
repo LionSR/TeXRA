@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Effect, Exit, Fiber, Queue, Result } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Queue, Result } from 'effect';
 
 // One driver for every child-run type (agent-CLI codex/claude sessions, native
 // subagents of either category, workflow-script runs, background shells). Each
@@ -1024,27 +1024,39 @@ export function startChildRunLoop<TTurn, R = never>(
       const body = yield* Effect.exit(
         Effect.scoped(
           Effect.gen(function* () {
-            // Notices await SQLite admission, so they must drain before any
-            // parent delivery: an interim result that races ahead of them
-            // becomes a separate stale model turn. Serial, not a forked
-            // drainer, so the result cannot commit first.
+            const runNotice = (notice: Effect.Effect<void, Error>) =>
+              notice.pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => {
+                    logger.warn('Child progress was not queued', {
+                      data: { runId, error },
+                    });
+                  }),
+                ),
+              );
+            const drainer = yield* Effect.forkScoped(
+              Effect.gen(function* () {
+                for (;;) {
+                  const notice = yield* Queue.take(notices).pipe(
+                    Effect.catchTag('Done', () => Effect.succeed(null)),
+                  );
+                  if (notice === null) return;
+                  yield* runNotice(notice);
+                }
+              }),
+            );
+            // Notices await SQLite admission. Offer a sentinel so the
+            // drainer finishes every progress job already queued before a
+            // parent result can commit (otherwise the result is a separate
+            // stale model turn).
             const drainNotices = Effect.gen(function* () {
-              while (Queue.sizeUnsafe(notices) > 0) {
-                const notice = yield* Queue.take(notices);
-                yield* notice.pipe(
-                  Effect.catch((error) =>
-                    Effect.sync(() => {
-                      logger.warn('Child progress was not queued', {
-                        data: { runId, error },
-                      });
-                    }),
-                  ),
-                );
-              }
+              const done = yield* Deferred.make<void>();
+              yield* Queue.offer(notices, Deferred.succeed(done, undefined));
+              yield* Deferred.await(done);
             });
             yield* Effect.addFinalizer(() =>
-              drainNotices.pipe(
-                Effect.andThen(Queue.end(notices)),
+              Queue.end(notices).pipe(
+                Effect.andThen(Fiber.await(drainer)),
                 Effect.asVoid,
               ),
             );
