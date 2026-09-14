@@ -60,6 +60,11 @@ export interface DesktopAgentRunOptions {
   /** The process runtime this window was handed; the run and its approval
    *  wiring settle on it. */
   runtime: ProcessRuntime;
+  /** Fired when a launch this window started settles. That is after
+   *  `AgentRunLifecycle` writes `firstRunDone` on a successful run, so the
+   *  host can recompute the onboarding funnel from the updated flag. The
+   *  refresh is idempotent and runs on every settle. */
+  onRunCompleted?: () => void;
   logger?: AgentTrace;
 }
 
@@ -114,9 +119,9 @@ export function createDesktopAgentRun(
       // The desktop task shell keeps the conversation canvas permanently on
       // screen, so there is no separate progress surface to reveal.
       requestEnsureProgressView: () => undefined,
-      requestShowError: ({ message }) =>
+      requestShowError: ({ message, docsCommand }) =>
         settleHostDialog(
-          host.showErrorMessage(message),
+          host.showErrorDialog(message, docsCommand),
           'Failed to present the error dialog',
         ),
       requestShowInstruction: (instruction) =>
@@ -194,18 +199,25 @@ export function createDesktopAgentRun(
     releaseToolEdit: (requestId) => toolEditApprovals.release(requestId),
   });
 
-  function runValidated(
+  async function runValidated(
     request: ValidatedRunRequest,
     runOptions: DesktopRunOptions = {},
   ): Promise<void> {
-    return launchDesktopAgent(
-      { kind: 'fresh', ...request },
-      { session, runtime },
-      {
-        onRunResolved: options.onLaunched,
-        ...runOptions,
-      },
-    );
+    try {
+      await launchDesktopAgent(
+        { kind: 'fresh', ...request },
+        { session, runtime },
+        {
+          onRunResolved: options.onLaunched,
+          ...runOptions,
+        },
+      );
+    } finally {
+      // After the awaited runPromise, including setFirstRunDone. Do not
+      // hook session.onResult: that fires from run.end inside
+      // finalizeTerminal, before the flag write.
+      options.onRunCompleted?.();
+    }
   }
 
   return {
