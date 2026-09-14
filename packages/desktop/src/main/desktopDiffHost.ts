@@ -1,9 +1,9 @@
-import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, FileSystem } from 'effect';
 import { nanoid } from 'nanoid';
 
+import { hostPort } from '@common/hostPort';
 import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
@@ -37,8 +37,8 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
    * removes the recorded directories once during quit.
    */
   recordPatchDir(tempDir: string): void;
-  /** The process runtime the window was handed; the external-editor fallback
-   *  settles its file work on it. */
+  /** The process runtime the window was handed; every file read and write
+   *  below settles on it. */
   runtime: ProcessRuntime;
 }
 
@@ -80,10 +80,21 @@ export function createDesktopDiffHost(
     title: string,
     previewId: string = nanoid(),
   ): Promise<void> {
-    const [originalContent, proposedContent] = await Promise.all([
-      readFile(original.filePath, 'utf8'),
-      readFile(proposed.filePath, 'utf8'),
-    ]);
+    // Both sides of a diff are absolute paths their caller chose — a run's
+    // output, an accepted file, a temp copy — so they are read through the
+    // process filesystem rather than through either rooted view.
+    const [originalContent, proposedContent] = await options.runtime.runPromise(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        return yield* Effect.all(
+          [
+            fs.readFileString(original.filePath),
+            fs.readFileString(proposed.filePath),
+          ],
+          { concurrency: 2 },
+        );
+      }),
+    );
     const lineChanges = computeLineChangeSummary(
       originalContent,
       proposedContent,
@@ -119,12 +130,10 @@ export function createDesktopDiffHost(
     const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
     const opened = await options.runtime.runPromiseExit(
-      Effect.tryPromise({
-        try: async () => {
-          await writeFile(diffPath, patch, 'utf8');
-          await options.openPath(diffPath);
-        },
-        catch: (error) => error,
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.writeFileString(diffPath, patch);
+        yield* hostPort(() => options.openPath(diffPath));
       }),
     );
     if (Exit.isFailure(opened)) {
@@ -133,10 +142,9 @@ export function createDesktopDiffHost(
       // directory stays recorded, so a failed removal is retried by the
       // process-level removal, and the failure is logged instead of swallowed.
       const removed = await options.runtime.runPromiseExit(
-        Effect.tryPromise({
-          try: () => rm(tempDir, { recursive: true, force: true }),
-          catch: (error) => error,
-        }),
+        FileSystem.FileSystem.use((fs) =>
+          fs.remove(tempDir, { recursive: true, force: true }),
+        ),
       );
       if (Exit.isFailure(removed)) {
         console.warn(
