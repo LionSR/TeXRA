@@ -339,6 +339,21 @@ function launchReflectionRun(
 }
 
 /**
+ * The one rule both resume families share: a resumed run's parent edge is
+ * the fold's (`run.start.parent`, severed by a later `run.detach`), read
+ * cold so a resume racing the live fold's first replay still sees it. A
+ * resume never takes the caller's word, so a resumed child stays a child
+ * whether it is resumed through the tool-use arm or a host's workflow
+ * launcher.
+ */
+const persistedParentRunId = Effect.fn('persistedParentRunId')(function* (
+  session: SessionHandle,
+  runId: RunId,
+) {
+  return (yield* session.readView([])).runs.get(runId)?.parentId ?? undefined;
+});
+
+/**
  * The lifecycle options every entry point that drives one run passes. The
  * parent edge is an argument because resume reads it from the persisted
  * `run.start` rather than from the caller's options.
@@ -455,7 +470,11 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   ) => Promise<RunOutcome | void>;
   /** Cancel launch preparation before the per-run handle is available. */
   launchSignal?: AbortSignal;
-  /** The run's `run.start` was committed by an earlier activation (a resume). */
+  /**
+   * The run's `run.start` was committed by an earlier activation (a resume).
+   * That row is also where this run's parent edge comes from: a resumed run
+   * takes its lineage from the ledger, never from `parentRunId`.
+   */
   resumed?: boolean;
   /**
    * Fires with the run id once its `run.start` is published, before the run
@@ -523,7 +542,15 @@ export function executeAgent(
     // Read here, on the Effect side of the lifecycle's Promise seam: the
     // flow drivers below resolve the run's tools from it.
     const toolInjections = yield* ToolInjections;
-    const hasParent = options.parentRunId !== undefined;
+    // A resumed run's parentage is the persisted `run.start`, never the
+    // caller's word: no resume caller can name one (`RunAgentOptions` has no
+    // parent field), so reading the caller's option here would relaunch a
+    // resumed child as a root run, forcing the progress view open, toasting
+    // its failure, and shaping its result as a root's.
+    const parentRunId = options.resumed
+      ? yield* persistedParentRunId(options.session, runId)
+      : options.parentRunId;
+    const hasParent = parentRunId !== undefined;
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId,
@@ -611,7 +638,7 @@ export function executeAgent(
                       return yield* launchToolUseRun(
                         ctx,
                         handle,
-                        { ...options, setting, toolInjections },
+                        { ...options, parentRunId, setting, toolInjections },
                         { kind: 'fresh', onIdle: options.onIdle },
                         runInScope,
                       );
@@ -622,9 +649,13 @@ export function executeAgent(
                       runInScope,
                     );
                   }),
-                buildLifecycleOptions(options, options.parentRunId),
+                buildLifecycleOptions(options, parentRunId),
               );
-              if (isWaitingFlowResult(result) && !hasParent) {
+              // The overload the caller chose is what admits WAITING, so this
+              // assertion reads the caller's own parent, not the lineage: no
+              // resume caller names one, and reading a parent off the ledger
+              // must not retype a result the caller was promised is terminal.
+              if (isWaitingFlowResult(result) && !options.parentRunId) {
                 throw new Error(
                   'executeAgent received a non-terminal WAITING result for a non-subagent run.',
                 );
@@ -675,12 +706,10 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     const toolInjections = yield* ToolInjections;
     const setup = yield* Effect.exit(
       Effect.gen(function* () {
-        // The parent edge as the fold holds it (`run.start.parent`, severed
-        // by a later `run.detach`), read cold so a resume racing the live
-        // fold's first replay still sees it.
-        const parentRunId =
-          (yield* runSession.readView([])).runs.get(resume.runId)?.parentId ??
-          undefined;
+        const parentRunId = yield* persistedParentRunId(
+          runSession,
+          resume.runId,
+        );
         const definition = yield* prepareAgentDefinition({
           config: resume.agentConfig,
           enforceCategory: true,
