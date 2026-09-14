@@ -164,9 +164,12 @@ const BOUNDARY_HOST_EXCLUSIONS = [
  *    import from anywhere else), and the runtime is disposed in the same
  *    file, because the entry's premise is that this module owns the
  *    runtime's whole lifecycle;
- *  - for a parameter entry: the parameter carries no default and is typed
- *    exactly as the `parameterType` export of 'effect', because the premise
- *    is that the entry runs only on the runtime its caller passes.
+ *  - for a parameter entry: the parameter belongs to the `parameterOwner`
+ *    function the ruling names, carries no default, and is typed exactly as
+ *    the `parameterType` export of 'effect', because the premise is that the
+ *    entry runs only on the runtime its caller passes. Deleting or renaming
+ *    the owner does not transfer the exemption to another helper's lookalike
+ *    parameter; re-admitting a new owner is a new ruling.
  * `Effect.runFork(...)`, a run on an imported value, or a run on any other
  * local stays on the row. An entry whose file no longer exists fails the
  * check (see main), so a dormant exemption cannot apply to unrelated code
@@ -195,8 +198,14 @@ const BOUNDARY_RUNTIME_ENTRIES = new Map([
     {
       reason:
         'toSignal, the one meeting point between Effect and the components (PRD one-fold-three-renderers 7.5): it runs on the runtime its caller passes and reads no global',
-      // The one approved binding: toSignal's `runtime: ManagedRuntime` parameter.
-      runtime: { name: 'runtime', parameterType: 'ManagedRuntime' },
+      // The one approved binding: toSignal's `runtime: ManagedRuntime`
+      // parameter -- pinned to that function by name, so the exemption
+      // cannot transfer to another helper's lookalike parameter.
+      runtime: {
+        name: 'runtime',
+        parameterType: 'ManagedRuntime',
+        parameterOwner: 'toSignal',
+      },
     },
   ],
 ]);
@@ -308,6 +317,32 @@ function isApprovedRuntimeType(sourceFile, type, parameterType) {
 }
 
 /**
+ * The name of the function a parameter belongs to: the declared name of a
+ * function or method, or the variable an arrow/function expression is
+ * assigned to. Null when the owner has no stable name, which fails closed.
+ */
+function parameterOwnerName(parameter) {
+  const fn = parameter.parent;
+  if (
+    (ts.isFunctionDeclaration(fn) ||
+      ts.isFunctionExpression(fn) ||
+      ts.isMethodDeclaration(fn)) &&
+    fn.name != null &&
+    ts.isIdentifier(fn.name)
+  ) {
+    return fn.name.text;
+  }
+  if (
+    (ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) &&
+    ts.isVariableDeclaration(fn.parent) &&
+    ts.isIdentifier(fn.parent.name)
+  ) {
+    return fn.parent.name.text;
+  }
+  return null;
+}
+
+/**
  * Whether a named runtime entry binds its approved runtime name in exactly
  * the approved shape -- see the BOUNDARY_RUNTIME_ENTRIES docblock. Any
  * deviation fails closed: no run in the file is approved.
@@ -343,6 +378,7 @@ function bindsApprovedRuntime(sourceFile, fileName, spec) {
           const byType =
             ts.isParameter(node) &&
             spec.parameterType != null &&
+            parameterOwnerName(node) === spec.parameterOwner &&
             node.initializer == null &&
             node.type != null &&
             isApprovedRuntimeType(sourceFile, node.type, spec.parameterType);
@@ -676,7 +712,9 @@ function surveySource(text, fileName) {
     fileName,
     text,
     ts.ScriptTarget.Latest,
-    false,
+    // Parent pointers: bindsApprovedRuntime resolves the function a
+    // parameter belongs to through node.parent.
+    true,
   );
   const counts = new Map();
   const bump = (row) => counts.set(row, (counts.get(row) ?? 0) + 1);
@@ -975,7 +1013,11 @@ function selfTestBoundary() {
     'packages/extension/src/progressView/frontend/sessionTransport.ts',
   );
   const twoApprovedProbe = surveySource(
-    "import { type ManagedRuntime } from 'effect';\nexport function toSignal(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\nfunction extra(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runSync(b); }\n",
+    "import { type ManagedRuntime } from 'effect';\nexport function toSignal(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\nfunction toSignal(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runSync(b); }\n",
+    'src/shared/signals.ts',
+  );
+  const wrongOwnerProbe = surveySource(
+    "import { type ManagedRuntime } from 'effect';\nfunction helper(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\n",
     'src/shared/signals.ts',
   );
   const wrongTypeProbe = surveySource(
@@ -1027,6 +1069,10 @@ function selfTestBoundary() {
     [
       twoApprovedProbe.localRuntimeRuns === 0,
       'a second approved declaration fails closed',
+    ],
+    [
+      wrongOwnerProbe.localRuntimeRuns === 0,
+      'the approved parameter belongs to the named owner function',
     ],
     [
       wrongTypeProbe.localRuntimeRuns === 0,
