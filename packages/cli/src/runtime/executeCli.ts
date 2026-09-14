@@ -253,7 +253,10 @@ export function executeCliToolUseConfig(
  */
 export function executeCliRequest(
   // The run id is decided before launch: a shutdown stops the launch through
-  // the session's registry under it (`runs.kill`), from launch preparation on.
+  // the session's registry under it (`runs.kill`). `runAgent` tracks the
+  // launch handle (or attaches the stop latch to a parked predecessor)
+  // before the first resume lineage read, so this kill has a target from
+  // that first await on.
   request: RunAgentRequest & { readonly runId: RunId },
   runContext: CliContext,
   options: CliExecuteOptions,

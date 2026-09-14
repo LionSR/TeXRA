@@ -171,9 +171,10 @@ function runLayerFor(
 /**
  * The one boundary that races the run's stop. `ctx.stopped` is completed by
  * every stop entry (a host kill through the run handle, the live tool-use
- * flow context, an aborted launch signal); winning it interrupts the
- * program's fiber, whose masked exit protocol records the halt before this
- * returns, and reports the cancelled shell result of the run's category.
+ * flow context, the launch handle's interrupt before the run has a handle of
+ * its own); winning it interrupts the program's fiber, whose masked exit
+ * protocol records the halt before this returns, and reports the cancelled
+ * shell result of the run's category.
  * The loop reads the fiber's own interruption (`Effect.abortSignal`) for the
  * provider request and the tool bodies that still need a signal, so no run
  * signal exists beside the stop.

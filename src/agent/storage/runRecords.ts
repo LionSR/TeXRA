@@ -124,7 +124,8 @@ export function runEndFromEvents(
  * The one rule every resume family shares, and the one site that derives it:
  * a resumed run takes its lineage from the log, never from its caller, who
  * has no parent to name for a run that already started once. `runAgent`
- * reads it before the run's handle enters the registry, so a stop of the
+ * tracks a launch handle before this read (so a stop during it has a
+ * target) and then installs the edge on that handle, so a stop of the
  * parent sees the child from that moment on; the tool-use resume arm reads
  * it for the handle its own lifecycle registers.
  */

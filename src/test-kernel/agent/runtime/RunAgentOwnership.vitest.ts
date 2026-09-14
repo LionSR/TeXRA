@@ -27,7 +27,11 @@ vi.mock('@agent/storage', () => ({
       catch: ensureError,
     }),
   getRunRecords: () => ({
-    readRunEnd: () => Effect.sync(() => mocks.readRunEnd()),
+    readRunEnd: () =>
+      Effect.tryPromise({
+        try: async () => mocks.readRunEnd(),
+        catch: ensureError,
+      }),
     exists: () => Effect.sync(() => mocks.runExists()),
   }),
 }));
@@ -81,8 +85,8 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const RUN_ID = 'a9e70a9e7001' as RunId;
 const PARENT_RUN_ID = 'a9e70a9e7002' as RunId;
-// The persisted lineage a resume reads before its handle registers. Empty
-// unless a case seeds this run's `run.start` parent.
+// The persisted lineage a resume reads after tracking its launch handle.
+// Empty unless a case seeds this run's `run.start` parent.
 const persistedRuns = new Map<RunId, { readonly parentId: RunId }>();
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
@@ -222,21 +226,25 @@ describe('runAgent run ownership', () => {
       }),
   );
 
-  it.effect('refuses a resume of a missing run before tracking a handle', () =>
-    Effect.gen(function* () {
-      mocks.runExists.mockReturnValueOnce(false);
-      expect(
-        yield* Effect.flip(
-          launchRun(
-            { kind: 'resume', config: CONFIG, runId: RUN_ID },
-            { session: SESSION },
+  it.effect(
+    'refuses a resume of a missing run and untracks its launch handle',
+    () =>
+      Effect.gen(function* () {
+        mocks.runExists.mockReturnValueOnce(false);
+        expect(
+          yield* Effect.flip(
+            launchRun(
+              { kind: 'resume', config: CONFIG, runId: RUN_ID },
+              { session: SESSION },
+            ),
           ),
-        ),
-      ).toMatchObject({
-        message: `Run not found: ${RUN_ID}`,
-      });
-      expect(trackRun).not.toHaveBeenCalled();
-    }),
+        ).toMatchObject({
+          message: `Run not found: ${RUN_ID}`,
+        });
+        expect(trackRun).toHaveBeenCalledOnce();
+        expect(untrackRun).toHaveBeenCalledWith(RUN_ID);
+        expect(trackedHandle).toBeUndefined();
+      }),
   );
 
   it.effect(
@@ -251,9 +259,12 @@ describe('runAgent run ownership', () => {
           `Cannot launch child run ${RUN_ID} under run ${PARENT_RUN_ID} while that run is stopping.`,
         );
         let admittedParent: RunId | null | undefined;
-        trackRun.mockImplementationOnce((handle) => {
-          admittedParent = handle.parent;
-          throw refusal;
+        trackRun.mockImplementation((handle) => {
+          if (handle.parent === PARENT_RUN_ID) {
+            admittedParent = handle.parent;
+            throw refusal;
+          }
+          trackedHandle = handle;
         });
 
         const exit = yield* Effect.exit(launch());
@@ -280,7 +291,7 @@ describe('runAgent run ownership', () => {
           }),
         );
         let launched: RunHandle | undefined;
-        trackRun.mockImplementationOnce((handle) => {
+        trackRun.mockImplementation((handle) => {
           trackedHandle = handle;
           launched = handle;
         });
@@ -289,6 +300,28 @@ describe('runAgent run ownership', () => {
 
         expect(launched?.parent).toBeNull();
       }),
+  );
+
+  it.effect('stops a resumed launch killed during its lineage read', () =>
+    Effect.gen(function* () {
+      let finishRead!: (value: null) => void;
+      mocks.readRunEnd.mockImplementationOnce(
+        () =>
+          new Promise<null>((resolve) => {
+            finishRead = resolve;
+          }),
+      );
+
+      const fiber = yield* Effect.forkChild(launch(), {
+        startImmediately: true,
+      });
+      expect(trackedHandle?.interrupt()).toBe(true);
+      finishRead(null);
+      expect(yield* Effect.flip(Fiber.join(fiber))).toMatchObject({
+        name: 'AbortError',
+      });
+      expect(mocks.executeAgent).not.toHaveBeenCalled();
+    }),
   );
 
   it.effect(

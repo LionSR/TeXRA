@@ -1048,22 +1048,22 @@ export class RunRegistry {
         activationInterrupted = true;
       }
     }
-    if (handle.interrupt()) return true;
+    const interrupted = handle.interrupt();
+    // A launch-stop latch attached to a parked predecessor makes
+    // `interrupt()` return true; WAITING teardown must still run, or a
+    // resume that then fails would leave the parked run live.
+    const settlement = this.waitingTermination.terminateWaitingHandle(handle);
+    if (settlement) {
+      settlements.push(settlement);
+      return true;
+    }
     // The loop's own interrupt already carried the stop into the turn: the
     // native-subagent strategy links the loop signal to this handle, so
     // aborting the loop spends the handle's interrupt target before we reach
     // it. The delivered stop is the admission, exactly as the handle-less
     // branch of `kill` reports an activation-only stop.
-    if (activationInterrupted) return true;
-    // No live interrupt context: a native subagent suspended at WAITING has
-    // already had its tool-use session disposed and interrupt handler detached
-    // (the tool-use loop's scope), while the handle stays tracked for resume
-    // (runFlowWithLifecycle). Run the teardown it parked with instead of
-    // silently no-oping the kill.
-    const settlement = this.waitingTermination.terminateWaitingHandle(handle);
-    if (!settlement) return false;
-    settlements.push(settlement);
-    return true;
+    if (interrupted || activationInterrupted) return true;
+    return false;
   }
 
   /**

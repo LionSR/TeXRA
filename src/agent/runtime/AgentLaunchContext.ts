@@ -336,10 +336,13 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       config: AgentConfig;
       enforceCategory?: boolean;
       signal?: AbortSignal;
+      /** The launch handle's stop latch; checked between async steps. */
+      stopped?: Deferred.Deferred<void>;
       suppressErrorNotification?: boolean;
     } & { session: SessionHandle },
   ) {
     yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
     const fullConfig = input.config;
     const interactions = input.session.interactions;
     // Resolve by the source the delegation captured at validation time, so launch
@@ -359,6 +362,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       catch: ensureError,
     });
     yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
     // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
     // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
     // (to Workflow when absent), so `setting.agentCategory` is always populated
@@ -371,6 +375,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       catch: ensureError,
     });
     yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
 
     // Block category mismatch: prevent launching a tool-use agent as a workflow
     // (or vice versa). Source-pinned resolution already guarantees launch lands on
@@ -402,6 +407,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       catch: ensureError,
     });
     yield* failIfAborted(input.signal);
+    yield* failIfLaunchStopped(input.stopped);
 
     const config: AgentConfig = {
       ...fullConfig,
