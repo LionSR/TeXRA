@@ -10,7 +10,6 @@ import { fakePath } from '@test/support/FakePlatform';
 import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { getRunRecords } from '@agent/storage';
-import { RunLeaseActiveError } from '@agent/storage/runLease';
 import {
   currentSession,
   initializeDefaultSession,
@@ -25,6 +24,10 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { RunId, WorkflowScriptFiles } from '@shared/schemas';
+import {
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import {
   DELEGATION_TOOL_CATEGORY,
   DELEGATION_TOOLS,
@@ -54,8 +57,7 @@ const mocks = vi.hoisted(() => ({
 
 // Spread the real storage module so every reader stays authentic; only
 // registration is spied so the launch can be observed without touching the
-// async run loop. The runLease mock below spreads the real
-// `RunLeaseActiveError` and lease helpers the same way.
+// async run loop.
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
   const { createFakeRunRecords } = await import('@test/support/FakeRunRecords');
@@ -108,11 +110,6 @@ vi.mock('@tools/delegation/workflowScriptStrategy', async (importOriginal) => {
     },
   };
 });
-
-vi.mock('@agent/storage/runLease', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
-  assertOwnedRunLease: vi.fn(),
-}));
 
 vi.mock('@agent/runtime/childRunLoop', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/runtime/childRunLoop')>()),
@@ -1149,16 +1146,18 @@ return null`;
   );
 
   it.effect(
-    'reports already-running when the deterministic id is still leased',
+    'reports already-running when another process holds the deterministic id',
     () =>
       Effect.gen(function* () {
         const runId = runIdFor('tool-test');
         mocks.registerRun.mockReturnValueOnce(
           Effect.fail(
-            new RunLeaseActiveError(runId, {
-              pid: 1,
-              processStart: '1',
-              hostname: 'test-host',
+            new DatabaseWriteFailed({
+              path: 'session.db',
+              cause: new DatabaseClaimRefused({
+                ownerId: JSON.stringify(['test-host', 1, '1']),
+                verdict: 'alive',
+              }),
             }),
           ),
         );
@@ -1173,6 +1172,42 @@ return null`;
         // A relaunch over a live run never starts a second competing loop.
         expect(mocks.createChildRun).not.toHaveBeenCalled();
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'reports already-running when this process still runs the deterministic id',
+    () =>
+      Effect.gen(function* () {
+        const runId = runIdFor('tool-test');
+        // The claim never refuses its own holder, so the run's lane is what
+        // separates two dispatches of one deterministic id: the first holds
+        // it from admission through registration, and the second is refused
+        // where a read of the same fact would have let it register too.
+        const registering = yield* Deferred.make<void>();
+        const finishRegistration = yield* Deferred.make<void>();
+        mocks.registerRun.mockImplementation(() =>
+          Deferred.succeed(registering, undefined).pipe(
+            Effect.andThen(Deferred.await(finishRegistration)),
+          ),
+        );
+
+        const first = yield* Effect.forkChild(callTool());
+        yield* Deferred.await(registering);
+        const second = yield* Fiber.join(yield* Effect.forkChild(callTool()));
+
+        expect(second).toMatchObject({
+          status: 'executed',
+          summary: "Workflow script 'tool-test' is already running",
+        });
+        expect(second.output).toContain(`Run ID: ${runId}`);
+
+        yield* Deferred.succeed(finishRegistration, undefined);
+        expect((yield* Fiber.join(first)).status).toBe('executed');
+        // One admission, so one registration and one child loop.
+        expect(mocks.registerRun).toHaveBeenCalledOnce();
+        expect(mocks.createChildRun).toHaveBeenCalledOnce();
+        expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
       }),
   );
 });

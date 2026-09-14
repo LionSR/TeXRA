@@ -10,7 +10,6 @@ import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
 import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
-import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -59,7 +58,6 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
-import { runInSession } from './RunContext';
 import { followUpsLayer } from './FollowUps';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer } from './run/AgentRun';
@@ -528,11 +526,6 @@ export function executeAgent(
   options: ExecuteAgentOptions & { session: SessionHandle },
 ): Effect.Effect<AgentRuntimeFlowResult, Error, ProcessServices> {
   return Effect.gen(function* () {
-    yield* Effect.tryPromise({
-      try: async () =>
-        runInSession(options.session, () => assertOwnedRunLease(runId)),
-      catch: ensureError,
-    });
     // Read here, on the Effect side of the lifecycle's Promise seam: the
     // flow drivers below resolve the run's tools from it.
     const toolInjections = yield* ToolInjections;

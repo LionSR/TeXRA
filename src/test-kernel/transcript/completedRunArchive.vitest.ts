@@ -4,7 +4,6 @@ import { Effect, Stream, SubscriptionRef } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => ({
-  acquireResumedRunLease: vi.fn(),
   buildVars: vi.fn(),
   loadAgent: vi.fn(),
   resolveAgent: vi.fn(),
@@ -23,11 +22,6 @@ vi.mock('@agent/prompt/userVars', async (importActual) => ({
   ...(await importActual<typeof import('@agent/prompt/userVars')>()),
   buildUserVars: launchMocks.buildVars,
 }));
-vi.mock('@agent/storage/runLease', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/runLease')>()),
-  acquireResumedRunLease: launchMocks.acquireResumedRunLease,
-  assertOwnedRunLease: vi.fn(),
-}));
 
 import { getRunRecords } from '@agent/storage';
 import {
@@ -39,7 +33,6 @@ import {
   initializeDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { runInSession } from '@agent/runtime/RunContext';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import {
@@ -507,14 +500,6 @@ describe('completedRunArchive facade', () => {
         const launchFailure = new Error(
           'stop after resumed writer acquisition',
         );
-        const leaseModule = yield* Effect.promise(() =>
-          vi.importActual<typeof import('@agent/storage/runLease')>(
-            '@agent/storage/runLease',
-          ),
-        );
-        launchMocks.acquireResumedRunLease.mockImplementation(
-          leaseModule.acquireResumedRunLease,
-        );
         launchMocks.resolveAgent.mockReturnValue({
           path: '/agents/orchestrator.yaml',
         });
@@ -600,11 +585,7 @@ describe('completedRunArchive facade', () => {
             ]),
           ))._tag,
         ).toBe('Failure');
-        expect(
-          yield* Effect.promise(() =>
-            runInSession(session, () => leaseModule.inspectRunLease(runId)),
-          ),
-        ).toEqual({ status: 'free' });
+        expect(yield* session.ownsRun(runId)).toBe(false);
         resumedWriter.mockRestore();
 
         const archived = yield* readCompletedRunConversationEffect(

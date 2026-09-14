@@ -12,7 +12,6 @@ import {
 } from '@agent/runtime';
 import {
   deriveResumability,
-  RunLeaseLostError,
   type ResumabilityDecision,
   finalizeRun,
 } from '@agent/storage';
@@ -28,6 +27,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { DatabaseNotOwner } from '@shared/session/database';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { aggregateError, generateRunId, onAbort } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -402,13 +402,13 @@ export function executeCliRequest(
           // Record the original drain failure for the one-shot runtime adapter
           // below, which rethrows it into runAgent's artifact aggregate. This
           // memoized operation itself resolves false so the outer shutdown await
-          // cannot rethrow the same error over the primary run failure. A lease
-          // loss is the expected shutdown contention, not a drain failure.
+          // cannot rethrow the same error over the primary run failure. A lost
+          // claim is the expected shutdown contention, not a drain failure.
           return yield* drain.pipe(
             Effect.catch((error: unknown) =>
               Effect.sync(() => {
                 if (
-                  !(error instanceof RunLeaseLostError) &&
+                  !(error instanceof DatabaseNotOwner) &&
                   launchVerdict.kind === 'interrupted'
                 ) {
                   launchVerdict.artifactFailure = error;

@@ -378,6 +378,7 @@ const sessionHandleLayer = (
             ),
             Effect.orDie,
           ),
+        claimOwner: (id) => eventLog.claimOwner(qualifyAggregateId('run', id)),
         runChildren: (id) =>
           eventLog
             .readRunChildren(qualifyAggregateId('run', id))

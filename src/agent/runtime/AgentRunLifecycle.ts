@@ -418,8 +418,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     const detachRunInterrupt =
       handle.attachInterruptHandler(runInterruptHandler);
     runs.track(handle);
-    // A lease record removed out from under this run is not watched: the next
-    // fenced write throws `RunLeaseLostError` and the run aborts dirty.
+    // A claim moved out from under this run is not watched: the next append
+    // refuses with `DatabaseNotOwner` and the run aborts dirty.
     let suspended = false;
     // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
     // throw nor an async rejection from a consumer callback may abort the run.

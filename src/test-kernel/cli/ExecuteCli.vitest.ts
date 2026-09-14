@@ -12,7 +12,7 @@ import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { effectRuntime } from '@platform/processRuntime';
 import { RUN_OUTCOME } from '@shared/schemas';
-import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
+import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
 import {
   fakeProcessServices,
   installFakeHost,
@@ -1185,7 +1185,7 @@ describe('executeCliRequest', () => {
   );
 
   it.live(
-    'does not report a shutdown drain that fails because the lease is already lost',
+    'does not report a shutdown drain that fails because the claim is already lost',
     () =>
       Effect.gen(function* () {
         const { platform, executeCliRequest } = yield* Effect.promise(
@@ -1194,11 +1194,17 @@ describe('executeCliRequest', () => {
         // Imported dynamically (matching the module above) so the `instanceof`
         // check in executeCli.ts sees the same module instance even after an
         // earlier test's `vi.resetModules()` in this file.
-        const { RunLeaseLostError } = yield* Effect.promise(
-          () => import('@agent/storage'),
+        const { DatabaseNotOwner } = yield* Effect.promise(
+          () => import('@shared/session/database'),
         );
         mocks.releaseRunLeaseAfterArtifacts.mockRejectedValueOnce(
-          new RunLeaseLostError('exec-1' as RunId),
+          new DatabaseNotOwner({
+            // The fixture's run id is not a canonical one, so the key is
+            // written directly: only its type matters to the drain.
+            aggregateId: JSON.stringify(['run', 'exec-1']) as AggregateId,
+            ownerId: null,
+            closed: false,
+          }),
         );
         const published = yield* Deferred.make<LeaseOptions>();
         const hangingRun = stubHangingRun(published);

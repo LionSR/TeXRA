@@ -30,14 +30,17 @@ import { Effect } from 'effect';
  */
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runInSession } from '@agent/runtime/RunContext';
 import type { RunStatusInfo } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { getRunRecords } from '@agent/storage/runRecords';
-import { inspectRunLease } from '@agent/storage/runLease';
-import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { createLog } from '@logger/logUtils';
-import type { RunId, RunOutcome, RunPhase } from '@shared/schemas';
+import {
+  ownerIdentity,
+  type OwnerId,
+  type RunId,
+  type RunOutcome,
+  type RunPhase,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunLiveness');
@@ -72,9 +75,10 @@ type LiveRunStatusInfo = RunStatusInfo & { status: RunPhase };
  */
 export type KnownRunOutcome = RunOutcome | null;
 
-/** `runLeaseHeldMessage`'s copy, as a clause a sentence can continue with. */
-function heldElsewhereReason(owner: LeaseOwnerRecord): string {
-  return `held by another TeXRA process (pid ${owner.pid} on ${owner.hostname})`;
+/** `runHeldByProcessMessage`'s copy, as a clause a sentence can continue with. */
+function heldElsewhereReason(ownerId: OwnerId): string {
+  const { pid, hostname } = ownerIdentity(ownerId);
+  return `held by another TeXRA process (pid ${pid} on ${hostname})`;
 }
 
 /**
@@ -82,7 +86,7 @@ function heldElsewhereReason(owner: LeaseOwnerRecord): string {
  * written: the registry and the claim disagree with nothing durable to fall
  * back on, which is a leak to report, never a run to call settled.
  */
-const OWNED_HERE_REASON = "held by this process's lease with no live run";
+const OWNED_HERE_REASON = "held by this process's claim with no live run";
 
 export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
   runId: RunId,
@@ -108,18 +112,15 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
     if (outcome !== null) {
       return { kind: 'settled', outcome };
     }
-    const lease = yield* Effect.tryPromise({
-      try: () => runInSession(session, () => inspectRunLease(runId)),
-      catch: (error) => error,
-    });
-    if (lease.status === 'held') {
-      return { kind: 'unsettled', reason: heldElsewhereReason(lease.owner) };
-    }
-    if (lease.status === 'owned') {
+    const claim = yield* session.claimOwner(runId);
+    if (claim.liveness === 'self') {
       log.warn(
-        `Run ${runId} holds this process's lease with no tracked run and no recorded outcome; reporting it as unsettled rather than finished`,
+        `Run ${runId} holds this process's claim with no tracked run and no recorded outcome; reporting it as unsettled rather than finished`,
       );
       return { kind: 'unsettled', reason: OWNED_HERE_REASON };
+    }
+    if (claim.ownerId !== null && claim.liveness !== 'dead') {
+      return { kind: 'unsettled', reason: heldElsewhereReason(claim.ownerId) };
     }
     // Nobody owns the run and nothing recorded how it ended: it stopped
     // without finishing.

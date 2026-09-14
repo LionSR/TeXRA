@@ -43,11 +43,6 @@ import {
   runEndFromEvents,
   type ChildRecord,
 } from './runRecords';
-import {
-  acquireFreshRunLease,
-  acquireResumedRunLease,
-  releaseOwnedRunLease,
-} from './runLease';
 
 function pinRunWorkingDirectory(record: RunRecord): RunRecord {
   // First non-blank candidate wins, stored verbatim (untrimmed) — trimming
@@ -88,10 +83,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
   agentName: string,
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
-  const lease = yield* Effect.tryPromise({
-    try: () => runInSession(session, () => acquireFreshRunLease(runId)),
-    catch: ensureError,
-  });
   let releaseClaims: Effect.Effect<void, Error> = Effect.void;
   const registration = yield* Effect.exit(
     Effect.gen(function* () {
@@ -175,25 +166,17 @@ export const registerRun = Effect.fn('registerRun')(function* (
   if (Exit.isFailure(registration)) {
     const cause = Cause.squash(registration.cause);
     const claimRelease = yield* Effect.exit(releaseClaims);
-    const release = yield* Effect.exit(
-      lease === 'existing'
-        ? Effect.void
-        : Effect.tryPromise({
-            try: () => runInSession(session, () => releaseOwnedRunLease(runId)),
-            catch: ensureError,
-          }),
-    );
     const failures = [
       cause,
-      ...[claimRelease, release].flatMap((exit) =>
-        Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
-      ),
+      ...(Exit.isFailure(claimRelease)
+        ? [Cause.squash(claimRelease.cause)]
+        : []),
     ];
     return yield* Effect.fail(
       failures.length > 1
         ? new AggregateError(
             failures,
-            `Run registration and lease rollback failed for ${runId}`,
+            `Run registration and claim rollback failed for ${runId}`,
           )
         : ensureError(cause),
     );
@@ -207,45 +190,19 @@ export const acquireResumedRunOwnership = Effect.fn(
   session: SessionHandle,
   runId: RunId,
 ): Effect.fn.Return<Effect.Effect<void, Error>, Error> {
-  const lease = yield* Effect.tryPromise({
-    try: () => runInSession(session, () => acquireResumedRunLease(runId)),
-    catch: ensureError,
-  });
-  const releaseLease =
-    lease === 'existing'
-      ? Effect.void
-      : Effect.tryPromise({
-          try: () => runInSession(session, () => releaseOwnedRunLease(runId)),
-          catch: ensureError,
-        });
   const claims = yield* Effect.exit(
     session.acquireClaims(aggregateId('run', runId)),
   );
-  if (Exit.isFailure(claims)) {
-    const release = yield* Effect.exit(releaseLease);
-    return yield* Effect.fail(
-      Exit.isFailure(release)
-        ? new AggregateError(
-            [Cause.squash(claims.cause), Cause.squash(release.cause)],
-            `Run admission and lease rollback failed for ${runId}`,
-          )
-        : ensureError(Cause.squash(claims.cause)),
-    );
-  }
-  return Effect.gen(function* () {
-    const releasedClaims = yield* Effect.exit(claims.value);
-    const releasedLease = yield* Effect.exit(releaseLease);
-    const failures = [releasedClaims, releasedLease].flatMap((exit) =>
-      Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
-    );
-    if (failures.length > 0)
-      return yield* Effect.fail(
-        new AggregateError(
-          failures,
-          `Run admission rollback failed for ${runId}`,
-        ),
-      );
-  });
+  if (Exit.isFailure(claims))
+    return yield* Effect.fail(ensureError(Cause.squash(claims.cause)));
+  return claims.value.pipe(
+    Effect.mapError(
+      (error) =>
+        new Error(`Run admission rollback failed for ${runId}`, {
+          cause: error,
+        }),
+    ),
+  );
 });
 
 export interface FinalizeRunInput {

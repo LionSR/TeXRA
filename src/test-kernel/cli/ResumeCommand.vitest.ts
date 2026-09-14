@@ -9,11 +9,8 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
-import {
-  acquireFreshRunLease,
-  releaseOwnedRunLease,
-} from '@agent/storage/runLease';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { effectRuntime } from '@platform/processRuntime';
@@ -109,12 +106,16 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
   state: { shouldSkipCycle: false, stateSlices: null },
 };
 
+/** The session the seeded run lives in, as the command resolves it. */
+let seededSession: SessionHandle;
+
 /** Seed the real (fake-platform-backed) run records and run aggregate. */
 async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
   readonly checkpoint?: boolean;
 }): Promise<void> {
   const session = await Effect.runPromise(createProcessSession());
+  seededSession = session;
   // `runResumeCommand` reads the session off the services the init returns.
   mocks.initInteractiveCliPlatform.mockResolvedValue({
     runtime: effectRuntime(),
@@ -149,6 +150,9 @@ async function seedRunRecord(seed: {
       ]),
     );
   }
+  // Seeding wrote the run's rows, which claimed its aggregate. A run waiting
+  // to be resumed is one nobody holds, so the seed gives the claim back.
+  await Effect.runPromise(session.releaseClaims(aggregateId('run', RUN_ID)));
 }
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -359,7 +363,9 @@ describe('runResumeCommand', () => {
   });
 
   it('reports a live run instead of failing silently', async () => {
-    await acquireFreshRunLease(RUN_ID);
+    await Effect.runPromise(
+      seededSession.acquireClaims(aggregateId('run', RUN_ID)),
+    );
     try {
       await expect(run(cliContext())).resolves.toBe(2);
 
@@ -368,22 +374,39 @@ describe('runResumeCommand', () => {
       );
       expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
-      await releaseOwnedRunLease(RUN_ID);
+      await Effect.runPromise(
+        seededSession.releaseClaims(aggregateId('run', RUN_ID)),
+      );
     }
   });
 
-  it('identifies lease inspection failures separately from session loading', async () => {
-    const lease = await import('@agent/storage/runLease');
-    vi.spyOn(lease, 'inspectRunLease').mockRejectedValueOnce(
-      new Error('lease disk offline'),
+  it('refuses a run another live TeXRA process holds, naming its pid', async () => {
+    vi.spyOn(seededSession, 'claimOwner').mockReturnValue(
+      Effect.succeed({
+        ownerId: JSON.stringify(['other-host', 4321, 'start-1']),
+        liveness: 'alive',
+      }),
+    );
+
+    await expect(run(cliContext())).resolves.toBe(CliExitCode.Usage);
+
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      `Run ${RUN_ID} is held by another TeXRA process (pid 4321 on other-host).`,
+    );
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+  });
+
+  it('identifies claim read failures separately from session loading', async () => {
+    vi.spyOn(seededSession, 'claimOwner').mockReturnValue(
+      Effect.fail(new Error('claim disk offline')),
     );
 
     await expect(run(cliContext())).resolves.toBe(1);
 
-    // An unreadable lease says nothing about the checkpoint, so it keeps the
+    // An unreadable claim says nothing about the checkpoint, so it keeps the
     // operational wording rather than telling the user to delete the run.
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Could not read the state of run ${RUN_ID}: lease unreadable (lease disk offline)`,
+      `Could not read the state of run ${RUN_ID}: claim unreadable (claim disk offline)`,
     );
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });

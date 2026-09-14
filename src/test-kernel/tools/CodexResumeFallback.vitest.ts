@@ -50,10 +50,6 @@ vi.mock('@agent/storage', () => ({
   registerRun: mocks.registerRun,
 }));
 
-vi.mock('@agent/storage/runLease', () => ({
-  assertOwnedRunLease: vi.fn(),
-}));
-
 vi.mock('@tools/delegation/childRun', () => ({
   createChildRun: mocks.createChildRun,
   childRunDescription: (raw: string) => raw,

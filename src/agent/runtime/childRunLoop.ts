@@ -16,10 +16,6 @@ import { finalizeRun } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import type { ChildTurnKey } from '@agent/storage/runRecords';
-import {
-  assertOwnedRunLease,
-  RunLeaseLostError,
-} from '@agent/storage/runLease';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
@@ -735,8 +731,8 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
 
 /**
  * Own admitted run cleanup until the child loop takes over. Failure or
- * interruption records the terminal outcome and releases canonical and file
- * claims before propagating the original cause. Post-handoff work stays outside
+ * interruption records the terminal outcome and releases the run's claim
+ * before propagating the original cause. Post-handoff work stays outside
  * this owner because the live child then owns its own settlement.
  */
 export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
@@ -796,9 +792,6 @@ export function startChildRunLoop<TTurn, R = never>(
     // own run trace inside `runFlowWithLifecycle`), so this is a channel-only
     // fallback for the loop's own turn-summary/warning lines.
     const logger = childRun?.logger ?? createChannelTrace('childRunLoop');
-    // The code below is synchronous until the loop task is spawned, so a run
-    // that does not own its lease fails before any queue, stage, or loop exists.
-    runInSession(runSession, () => assertOwnedRunLease(runId));
     const loop = new ChildRunInterruptible(
       strategy.ownsBackgroundProcess === true,
     );
@@ -870,9 +863,6 @@ export function startChildRunLoop<TTurn, R = never>(
     const setup = yield* Effect.exit(
       Effect.sync(() => {
         strategy.onLoopStart?.(runSession);
-        // Revalidate at the state transition itself: setup hooks above may run
-        // arbitrary synchronous code after the early fail-fast lease check.
-        runInSession(runSession, () => assertOwnedRunLease(runId));
         queueLease = runSession.followUps.claimChildRun(runId);
         if (!queueLease) {
           throw new Error(
@@ -1093,13 +1083,9 @@ export function startChildRunLoop<TTurn, R = never>(
         const error = Cause.squash(body.cause);
         sawTurnFailure = true;
         lastTurnErr ??= error;
-        // A lost file lease or a lost aggregate claim: this process no longer
-        // owns the run, so the loop stops rather than continue under it.
-        if (
-          error instanceof RunLeaseLostError ||
-          error instanceof DatabaseNotOwner
-        )
-          loop.interrupt();
+        // A lost aggregate claim: this process no longer owns the run, so
+        // the loop stops rather than continue under it.
+        if (error instanceof DatabaseNotOwner) loop.interrupt();
       }
 
       const terminal = yield* Effect.exit(

@@ -6,11 +6,6 @@ import { beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { noopTrace, TraceEmitter } from '@agent/trace';
 import type { FinalizeRunResult } from '@agent/storage/runLifecycle';
-import {
-  acquireResumedRunLease,
-  inspectRunLease,
-  releaseOwnedRunLease,
-} from '@agent/storage/runLease';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
@@ -322,7 +317,6 @@ describe('runFlowWithLifecycle', () => {
   it('keeps native subagent WAITING results registered and nonterminal', async () => {
     const { runId, ctx } = lifecycleFixture();
     const onError = vi.fn();
-    await acquireResumedRunLease(runId);
 
     try {
       const result = await Effect.runPromise(
@@ -336,11 +330,7 @@ describe('runFlowWithLifecycle', () => {
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(onError).not.toHaveBeenCalled();
       expect(defaultSession().runs.getHandle(runId)).toBeDefined();
-      await expect(inspectRunLease(runId)).resolves.toMatchObject({
-        status: 'owned',
-      });
     } finally {
-      await releaseOwnedRunLease(runId);
       defaultSession().runs.untrack(runId);
     }
   });

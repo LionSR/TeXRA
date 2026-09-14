@@ -9,7 +9,11 @@ import {
   notifyFollowUpSent,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+} from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -152,6 +156,11 @@ describe('tool-use follow-up progress events', () => {
 
   it('does not append through stale active contexts after final status', async () => {
     await seedTerminalRun(defaultSession(), runId, RUN_OUTCOME.COMPLETED);
+    // A finished run's driver gave its claim back with its last drain; these
+    // rows stand in for that driver, so the claim goes back here too.
+    await Effect.runPromise(
+      defaultSession().releaseClaims(qualifyAggregateId('run', runId)),
+    );
     trackToolUseFlow();
 
     const result = await Effect.runPromise(

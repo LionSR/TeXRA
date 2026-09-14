@@ -12,7 +12,7 @@ import {
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
-import type { RunId } from '@shared/schemas';
+import { ownerPid, type RunId } from '@shared/schemas';
 import {
   runHeldMessage,
   runUnreadableMessage,
@@ -225,15 +225,18 @@ export function recordRunRefusal(
 ): FollowUpFailureReason {
   switch (classification.kind) {
     case 'held_elsewhere':
-      session.markUnreadable(runId, runHeldMessage(classification.owner.pid));
+      session.markUnreadable(
+        runId,
+        runHeldMessage(ownerPid(classification.owner)),
+      );
       return 'owned_elsewhere';
     case 'owned_here':
-      // A lease this process holds for a run with no live flow context is
-      // a registry/lease disagreement, not a free run: it stays read-only
+      // A claim this process holds for a run with no live flow context is
+      // a registry/claim disagreement, not a free run: it stays read-only
       // with a diagnostic naming that disagreement.
       session.markUnreadable(
         runId,
-        runUnreadableMessage('lease owned by this process with no live run'),
+        runUnreadableMessage('run claimed by this process with no live run'),
       );
       return 'not_resumable';
     case 'finished':

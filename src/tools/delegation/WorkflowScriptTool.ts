@@ -10,8 +10,8 @@ import {
 } from '@agent/workflowScript/checkpoint';
 import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
 import { ToolCall } from '@agent/runtime/ToolCall';
+import { RunBusy } from '@agent/runtime/runLanes';
 import { registerRun } from '@agent/storage/runLifecycle';
-import { RunLeaseActiveError } from '@agent/storage/runLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -27,6 +27,10 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   WorkflowScriptFilesSchema,
 } from '@shared/schemas';
+import {
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
@@ -438,160 +442,189 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       if (declined) return withScriptReference(declined, scriptPath);
 
       const runStore = getRunRecords(session, runId);
+      // A relaunch whose prior run is still in flight shares this
+      // deterministic id, and must point the model at the live run instead of
+      // starting a second run over the same journal.
+      const alreadyRunning = (): ToolResult =>
+        withScriptReference(
+          executed(
+            [
+              `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run: wait for it, then resume with the same meta.name and agent if it did not complete.`,
+              `Run ID: ${runId}`,
+              `To check progress or collect the result: executions tool with path=/executions/${runId} and action=wait (returns immediately if it already finished).`,
+            ].join('\n'),
+            `Workflow script '${meta.name}' is already running`,
+          ),
+          scriptPath,
+        );
       const runResult = Effect.gen(function* () {
         const launched = yield* Effect.uninterruptibleMask((restore) =>
-          Effect.gen(function* () {
-            const registration = yield* Effect.exit(
-              registerRun(
-                session,
-                runId,
-                {
-                  name: meta.name,
-                  instruction: `Workflow script '${meta.name}'`,
-                  model: runModel,
-                  ...(workingDirectory !== undefined && {
-                    workingDirectory,
-                  }),
-                },
-                meta.name,
-                {
-                  category: runConfig.agentCategory,
-                  checkpointId,
-                  identity: {
-                    kind: 'multiAgentWorkflow',
-                    workflowName: meta.name,
-                  },
-                  userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                  parentRunId,
-                  description: childRunDescription(meta.description),
-                },
-              ),
-            );
-            if (Exit.isFailure(registration)) {
-              const error = Cause.squash(registration.cause);
-              // A relaunch whose prior run is still in flight shares this deterministic
-              // id: the fresh-lease acquisition fails closed rather than starting a
-              // second competing run over the same journal. Point the model at the
-              // live run instead of erroring.
-              if (error instanceof RunLeaseActiveError) {
-                return withScriptReference(
-                  executed(
-                    [
-                      `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run: wait for it, then resume with the same meta.name and agent if it did not complete.`,
-                      `Run ID: ${runId}`,
-                      `To check progress or collect the result: executions tool with path=/executions/${runId} and action=wait (returns immediately if it already finished).`,
-                    ].join('\n'),
-                    `Workflow script '${meta.name}' is already running`,
-                  ),
-                  scriptPath,
-                );
-              }
-              throw workflowScriptToolError(
-                new ToolError(
-                  `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
-                ),
-                scriptPath,
-              );
-            }
-
-            // Attempt-scoped setup runs inside the lease launch guard: it runs after
-            // the deterministic run lease is held, so a throw here must release the
-            // lease - otherwise the record survives for this process's lifetime and
-            // a prompt relaunch is refused.
-            return yield* startDetachedChildRunLoop({
-              session,
+          // The database claim refuses a foreign owner but never this
+          // process's own, so this process answers for itself on the run's
+          // lane. Admission and registration are one step there, which a
+          // read is not: two dispatches of the same deterministic id can
+          // both find the run idle, but only one of them takes its lane.
+          session.runs
+            .withInactiveRunStep(
               runId,
-              parentRunId,
-              agentName: meta.name,
-              recordCost,
-              createChildRun: () =>
-                Effect.gen(function* () {
-                  yield* restore(Effect.void);
-                  // A deterministic run id may retain the prior attempt's report.
-                  // Clear it before starting this attempt so an interruption before
-                  // delivery cannot be mistaken for a newly persisted result.
-                  yield* runStore.clearReport();
-
-                  // meta.name deliberately reuses one deterministic stream across
-                  // launches. Reserve its writer while rehydrating so transcript
-                  // eviction cannot race a resumed run.
-                  return yield* createChildRun(session, runId, parentRunId, {
-                    run: {
-                      kind: 'multiAgentWorkflow',
-                      workflowName: meta.name,
-                    },
-                    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                    description: meta.description,
-                    config: runConfig,
-                    checkpointId,
-                  });
-                }),
-              buildLaunch: (childRun) =>
-                Effect.sync(() => {
-                  // A proposal-bypass approval carries the same explicit child edit
-                  // grant as delegate_agent/delegate_workflow. A human one-off approval
-                  // inherits only the parent's ordinary per-kind bypass state.
-                  configureDelegatedChildApprovals(
-                    childRun.childRunId,
-                    parentRunId,
-                    proposalDecision.autoApproved ? 'auto-approved' : 'inherit',
+              Effect.gen(function* () {
+                const registration = yield* Effect.exit(
+                  registerRun(
                     session,
+                    runId,
+                    {
+                      name: meta.name,
+                      instruction: `Workflow script '${meta.name}'`,
+                      model: runModel,
+                      ...(workingDirectory !== undefined && {
+                        workingDirectory,
+                      }),
+                    },
+                    meta.name,
+                    {
+                      category: runConfig.agentCategory,
+                      checkpointId,
+                      identity: {
+                        kind: 'multiAgentWorkflow',
+                        workflowName: meta.name,
+                      },
+                      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+                      parentRunId,
+                      description: childRunDescription(meta.description),
+                    },
+                  ),
+                );
+                if (Exit.isFailure(registration)) {
+                  const error = Cause.squash(registration.cause);
+                  // Another live TeXRA process holds the run this id names: the
+                  // claim acquisition refuses rather than moving the aggregate.
+                  if (
+                    error instanceof DatabaseWriteFailed &&
+                    error.cause instanceof DatabaseClaimRefused
+                  ) {
+                    return alreadyRunning();
+                  }
+                  throw workflowScriptToolError(
+                    new ToolError(
+                      `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
+                    ),
+                    scriptPath,
                   );
+                }
 
-                  return {
-                    strategy: createWorkflowScriptStrategy({
-                      fingerprintAgentDependencies: (options) =>
-                        fingerprintWorkflowAgentDependencies(
+                // Attempt-scoped setup runs inside the launch guard: it runs after
+                // the deterministic run's claim is held, so a throw here must
+                // release the claim - otherwise the run stays claimed for this
+                // process's lifetime and a prompt relaunch is refused.
+                return yield* startDetachedChildRunLoop({
+                  session,
+                  runId,
+                  parentRunId,
+                  agentName: meta.name,
+                  recordCost,
+                  createChildRun: () =>
+                    Effect.gen(function* () {
+                      yield* restore(Effect.void);
+                      // A deterministic run id may retain the prior attempt's report.
+                      // Clear it before starting this attempt so an interruption before
+                      // delivery cannot be mistaken for a newly persisted result.
+                      yield* runStore.clearReport();
+
+                      // meta.name deliberately reuses one deterministic stream across
+                      // launches. Reserve its writer while rehydrating so transcript
+                      // eviction cannot race a resumed run.
+                      return yield* createChildRun(
+                        session,
+                        runId,
+                        parentRunId,
+                        {
+                          run: {
+                            kind: 'multiAgentWorkflow',
+                            workflowName: meta.name,
+                          },
+                          userFollowUpSupport:
+                            USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+                          description: meta.description,
+                          config: runConfig,
+                          checkpointId,
+                        },
+                      );
+                    }),
+                  buildLaunch: (childRun) =>
+                    Effect.sync(() => {
+                      // A proposal-bypass approval carries the same explicit child edit
+                      // grant as delegate_agent/delegate_workflow. A human one-off approval
+                      // inherits only the parent's ordinary per-kind bypass state.
+                      configureDelegatedChildApprovals(
+                        childRun.childRunId,
+                        parentRunId,
+                        proposalDecision.autoApproved
+                          ? 'auto-approved'
+                          : 'inherit',
+                        session,
+                      );
+
+                      return {
+                        strategy: createWorkflowScriptStrategy({
+                          fingerprintAgentDependencies: (options) =>
+                            fingerprintWorkflowAgentDependencies(
+                              session,
+                              runId,
+                              options,
+                            ),
                           session,
                           runId,
-                          options,
-                        ),
-                      session,
-                      runId,
-                      logger: childRun.logger,
-                      parentRunId,
-                      checkpointId,
-                      script,
-                      scriptPath,
-                      args: input.args,
-                      files,
-                      name: meta.name,
-                      workflowControls: session.workflowControls,
-                      ...((parent.stopAfterCycle ??
-                        parent.run.toolPolicy.stopAfterCycle) && {
-                        deliveryMode: 'persistOnly' as const,
-                      }),
-                      createRunAgent: (hooks) => {
-                        const runAgent = createWorkflowScriptAgentRunner(
-                          parent,
-                          defaultAgent,
+                          logger: childRun.logger,
+                          parentRunId,
                           checkpointId,
-                          {
-                            runId,
+                          script,
+                          scriptPath,
+                          args: input.args,
+                          files,
+                          name: meta.name,
+                          workflowControls: session.workflowControls,
+                          ...((parent.stopAfterCycle ??
+                            parent.run.toolPolicy.stopAfterCycle) && {
+                            deliveryMode: 'persistOnly' as const,
+                          }),
+                          createRunAgent: (hooks) => {
+                            const runAgent = createWorkflowScriptAgentRunner(
+                              parent,
+                              defaultAgent,
+                              checkpointId,
+                              {
+                                runId,
+                              },
+                              hooks,
+                            );
+                            return runAgent;
                           },
-                          hooks,
-                        );
-                        return runAgent;
-                      },
+                        }),
+                        // Detached callers do not await completion. Own late finalization
+                        // failures here as trace diagnostics; the child loop already owns
+                        // its one user-facing result/error delivery.
+                        ...(!(
+                          parent.stopAfterCycle ??
+                          parent.run.toolPolicy.stopAfterCycle
+                        ) && {
+                          onLoopFailed: (error: unknown): void => {
+                            childRun.logger.error(
+                              `Workflow script '${meta.name}' run loop failed after launch`,
+                              { data: error },
+                            );
+                          },
+                        }),
+                      };
                     }),
-                    // Detached callers do not await completion. Own late finalization
-                    // failures here as trace diagnostics; the child loop already owns
-                    // its one user-facing result/error delivery.
-                    ...(!(
-                      parent.stopAfterCycle ??
-                      parent.run.toolPolicy.stopAfterCycle
-                    ) && {
-                      onLoopFailed: (error: unknown): void => {
-                        childRun.logger.error(
-                          `Workflow script '${meta.name}' run loop failed after launch`,
-                          { data: error },
-                        );
-                      },
-                    }),
-                  };
-                }),
-            });
-          }),
+                });
+              }),
+            )
+            .pipe(
+              Effect.catchIf(
+                (error) => error instanceof RunBusy,
+                () => Effect.succeed(alreadyRunning()),
+              ),
+            ),
         );
         if ('status' in launched) return launched;
         const { completion: runCompletion } = launched;

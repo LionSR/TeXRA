@@ -32,7 +32,12 @@ import type {
   SessionEvent,
   TranscriptSubscription,
 } from '@shared/schemas';
-import type { DeletionMode } from '@shared/session/database';
+import type {
+  AggregateClaim,
+  DatabaseReadFailed,
+  DeletionMode,
+  SessionStoreCleared,
+} from '@shared/session/database';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
@@ -41,7 +46,6 @@ import type {
   SessionEventReads,
   SessionEventsShape,
 } from '@shared/session/sessionEvents';
-import type { SessionStoreCleared } from '@shared/session/database';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { Runs } from './runRegistry';
 import type { SessionHandle, SessionHandleInit } from './SessionHandle';
@@ -79,6 +83,12 @@ export interface SessionGraph {
   readonly runRecords: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
   /** Whether this process holds an existing, open run in the database. */
   readonly ownsRun: (id: RunId) => Effect.Effect<boolean>;
+  /** Who holds one run right now, with its owner's liveness proved in the
+   *  call: the ownership read a resume gate and the run listing ask, so a
+   *  run outside the live view is never reported held by a dead owner. */
+  readonly claimOwner: (
+    id: RunId,
+  ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
   /** Every committed row of one aggregate, ledger-private rows included:
    *  the read behind the keyed private records and the checkpoint journal,
    *  which fold over the whole aggregate rather than the latest of a type. */

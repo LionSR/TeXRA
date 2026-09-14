@@ -13,7 +13,7 @@ import {
 } from 'effect';
 import PQueue from 'p-queue';
 
-import { RunLeaseActiveError, getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
@@ -61,6 +61,10 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
+import {
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
@@ -479,7 +483,10 @@ export function createChatSessionController(
     if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
-    if (error instanceof RunLeaseActiveError) {
+    if (
+      error instanceof DatabaseWriteFailed &&
+      error.cause instanceof DatabaseClaimRefused
+    ) {
       session.runExitCode = CliExitCode.Usage;
     } else {
       session.runExitCode = CliExitCode.AgentError;

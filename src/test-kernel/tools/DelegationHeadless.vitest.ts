@@ -4,7 +4,14 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Stream } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  vi,
+  type MockInstance,
+} from 'vitest';
 
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
@@ -38,11 +45,9 @@ const mocks = vi.hoisted(() => ({
   resumeToolUseTurn: vi.fn(),
   childRecords: vi.fn(),
   getVisibleAgents: vi.fn(),
-  inspectRunLease: vi.fn(),
   isApprovalBypassedForRun: vi.fn(),
   isProposalBypassed: vi.fn(),
   registerRun: vi.fn(),
-  releaseOwnedRunLease: vi.fn(),
   writeReport: vi.fn(),
   writeResultMeta: vi.fn(),
   readModelAvailabilityInputs: vi.fn(),
@@ -95,17 +100,6 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
     registerRun: mocks.registerRun,
   };
 });
-
-vi.mock('@agent/storage/runLease', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
-  assertOwnedRunLease: vi.fn(),
-  inspectRunLease: mocks.inspectRunLease,
-  ownsRunLease: vi.fn(() => true),
-  // The session's one exit choreography runs for real over these inert lease
-  // verbs.
-  validateOwnedRunLease: vi.fn(async () => {}),
-  releaseOwnedRunLease: mocks.releaseOwnedRunLease,
-}));
 
 vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
   persistChildRunDelivery: (
@@ -452,9 +446,16 @@ function recordTerminalFact(
 
 describe('headless delegation', () => {
   let restoreAgentEngine = (): void => {};
+  /**
+   * The claim release the session's exit choreography ends with. The failure
+   * paths fail it rather than `releaseRunLease` itself, so the drain, the
+   * terminal write and the settle above it still run for real.
+   */
+  let releaseClaims: MockInstance<SessionHandle['releaseClaims']>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    releaseClaims = vi.spyOn(SessionHandle.prototype, 'releaseClaims');
     // A child registers under its parent, and a run's aggregate must begin
     // with its own `run.start`.
     inBandSession = createTestSession();
@@ -474,7 +475,6 @@ describe('headless delegation', () => {
           await session.settlePublications();
         }),
     );
-    mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
     restoreAgentEngine = provideAgentEngine({
       executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
@@ -530,7 +530,6 @@ describe('headless delegation', () => {
     ]);
     mocks.isProposalBypassed.mockReturnValue(true);
     mocks.isApprovalBypassedForRun.mockReturnValue(false);
-    mocks.inspectRunLease.mockResolvedValue({ status: 'free' });
     const records = new Map<RunId, ReturnType<typeof memoryChildRecords>>();
     mocks.childRecords.mockImplementation((runId: RunId) => {
       let child = records.get(runId);
@@ -697,23 +696,29 @@ describe('headless delegation', () => {
           }),
         );
         expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
-          mocks.releaseOwnedRunLease.mock.invocationCallOrder[0],
+          releaseClaims.mock.invocationCallOrder[0] ?? 0,
         );
       }),
   );
 
   it.effect(
-    'returns the committed result when the final lease release fails',
+    'returns the committed result when the final claim release fails',
     () =>
       Effect.gen(function* () {
-        mocks.releaseOwnedRunLease.mockRejectedValueOnce(
-          new Error('lease deletion failed'),
+        const drain = vi.spyOn(inBandSession, 'flushArtifacts');
+        releaseClaims.mockReturnValueOnce(
+          Effect.fail(new Error('claim release failed')),
         );
 
         const result = yield* runInBand(delegationOptions());
 
         expect(result.result.outcome).toBe('completed');
         expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+        // The release that failed is the last step: everything the exit
+        // choreography owes the run happened before it.
+        expect(drain).toHaveBeenCalled();
+        // The failure injected is the run's own release, not a neighbour's.
+        expect(releaseClaims).toHaveBeenCalledOnce();
       }),
   );
 
@@ -851,17 +856,19 @@ describe('headless delegation', () => {
   );
 
   it.effect(
-    'preserves the child failure when final lease cleanup also fails',
+    'preserves the child failure when final claim cleanup also fails',
     () =>
       Effect.gen(function* () {
         const childFailure = new Error('review model failed');
         mocks.executeAgent.mockRejectedValueOnce(childFailure);
-        mocks.releaseOwnedRunLease.mockRejectedValueOnce(
-          new Error('artifact flush failed'),
+        releaseClaims.mockReturnValueOnce(
+          Effect.fail(new Error('claim release failed')),
         );
         expect(yield* Effect.flip(runInBand(delegationOptions()))).toBe(
           childFailure,
         );
+        // The failure manifest is written above the release that failed.
+        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
       }),
   );
 

@@ -6,16 +6,16 @@
  * process's registry". Every other run in the shared bucket is one of these,
  * decided once here and never inferred:
  *
- * - `held_elsewhere`: its run lease is held by an owner that is alive
+ * - `held_elsewhere`: its aggregate claim is held by an owner that is alive
  *   or cannot be proven dead (another TeXRA process). Shown read-only.
- * - `owned_here`: its lease is held by this very process, yet no live flow
- *   context exists for it: a registry/lease disagreement. Shown read-only.
+ * - `owned_here`: the claim is held by this very process, yet no live flow
+ *   context exists for it: a registry/claim disagreement. Shown read-only.
  * - `resumable`: a `flow.snapshot` exists on the run aggregate and nobody
- *   alive holds the lease. Continued only through the explicit Resume
+ *   alive holds the claim. Continued only through the explicit Resume
  *   affordance.
  * - `finished`: no checkpoint. Its persisted outcome, when present, is the
  *   display fact.
- * - `unclassified`: the lease or metadata could not be read or is malformed.
+ * - `unclassified`: the claim or metadata could not be read or is malformed.
  *   Nothing is known, so nothing is mutated.
  *
  * The first, second, and last kinds are all shown as one unavailable state
@@ -23,22 +23,19 @@
  */
 import { Effect } from 'effect';
 
-import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { inspectRunLease } from '@agent/storage/runLease';
-import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import {
   deriveResumability,
   type ResumabilityFault,
 } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
-import type { RunId, RunOutcome } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { OwnerId, RunId, RunOutcome } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunClassification');
 
 export type RunClassification =
-  | { readonly kind: 'held_elsewhere'; readonly owner: LeaseOwnerRecord }
+  | { readonly kind: 'held_elsewhere'; readonly owner: OwnerId }
   | { readonly kind: 'owned_here' }
   | { readonly kind: 'resumable'; readonly outcome?: RunOutcome }
   | { readonly kind: 'finished'; readonly outcome?: RunOutcome }
@@ -49,9 +46,9 @@ export type RunClassification =
        * Which durable fact was unreadable, when a fact-level probe named one.
        * A caller words a run's refusal from this, never from `cause`, which is
        * display text. Absent when the classification failed above the facts
-       * (an unreadable run index, a lease lock that could not be taken).
+       * (an unreadable run index, a claim that could not be read).
        */
-      readonly fault?: ResumabilityFault | 'lease-unreadable';
+      readonly fault?: ResumabilityFault | 'claim-unreadable';
     };
 
 /** What the durable facts alone decide, ownership already settled. */
@@ -81,19 +78,16 @@ export const classifyRun = Effect.fn('classifyRun')(function* (
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<RunClassification> {
-  const leaseResult = yield* Effect.tryPromise({
-    try: () => runInSession(session, () => inspectRunLease(runId)),
-    catch: ensureError,
-  }).pipe(Effect.result);
-  if (leaseResult._tag === 'Failure') {
-    const error = leaseResult.failure;
-    const cause = `lease unreadable (${toErrorMessage(error)})`;
+  const claimResult = yield* Effect.result(session.claimOwner(runId));
+  if (claimResult._tag === 'Failure') {
+    const error = claimResult.failure;
+    const cause = `claim unreadable (${toErrorMessage(error)})`;
     log.warn(`Cannot classify ${runId}: ${cause}`, { data: error });
-    return { kind: 'unclassified', cause, fault: 'lease-unreadable' };
+    return { kind: 'unclassified', cause, fault: 'claim-unreadable' };
   }
-  const lease = leaseResult.success;
-  if (lease.status === 'owned') return { kind: 'owned_here' };
-  if (lease.status === 'held')
-    return { kind: 'held_elsewhere', owner: lease.owner };
+  const claim = claimResult.success;
+  if (claim.liveness === 'self') return { kind: 'owned_here' };
+  if (claim.ownerId !== null && claim.liveness !== 'dead')
+    return { kind: 'held_elsewhere', owner: claim.ownerId };
   return yield* classifyRunFacts(runId, session);
 });

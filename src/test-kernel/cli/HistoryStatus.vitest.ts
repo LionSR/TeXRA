@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
 
 import { registerRun } from '@agent/storage';
-import { releaseOwnedRunLease } from '@agent/storage/runLease';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -117,7 +116,7 @@ async function seedSnapshot(
       },
     ]),
   );
-  await releaseOwnedRunLease(id);
+  await Effect.runPromise(currentSession().releaseRunLease(id));
 }
 
 describe('CLI history status formatting', () => {

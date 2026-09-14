@@ -99,11 +99,6 @@ const AMBIENT_CARRIERS = [
     path: 'src/agent/followUp/ToolFileInteractionContext',
     readers: ['getCurrentToolCallContext', 'getCurrentToolContexts'],
   },
-  {
-    alias: '@agent/storage/runLease',
-    path: 'src/agent/storage/runLease',
-    readers: ['ownsRunLease', 'assertOwnedRunLease'],
-  },
 ];
 const AMBIENT_READERS_TEXT = AMBIENT_CARRIERS.map(
   (carrier) => `${carrier.alias} {${carrier.readers.join(', ')}}`,
@@ -181,7 +176,7 @@ const ROWS = [
   },
   {
     id: ROW_AMBIENT,
-    rule: `${INJECTION_PLAN} §3.2 and §6 steps 6, 7, 10, 11: the AsyncLocalStorage carriers (workspace roots, run context, tool call context, run lease ownership) become Context services and Context.Reference values on the fiber; a new call of one of their readers is a new dependency on the carrier being deleted`,
+    rule: `${INJECTION_PLAN} §3.2 and §6 steps 6, 7, 10, 11: the AsyncLocalStorage carriers (workspace roots, run context, tool call context) become Context services and Context.Reference values on the fiber; a new call of one of their readers is a new dependency on the carrier being deleted`,
   },
   {
     id: ROW_ABORT_CONTROLLER,
@@ -207,7 +202,7 @@ const SEMANTICS =
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
   "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; " +
   "'effectRuntime()' counts, the same binding-scoped way, calls of the effectRuntime export of @platform/processRuntime (src/platform/processRuntime): tryProcessRuntime, initProcessRuntime and any other module's effectRuntime excluded; " +
-  `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the four AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
+  `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the three AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
   "'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
   "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, or packages/agent/src/**; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
@@ -579,13 +574,12 @@ function selfTestSurvey() {
       expected: { [ROW_EFFECT_RUNTIME]: 1 },
     },
     {
-      // Readers of three carriers under their own names, an alias, a
-      // namespace member, and a relative import of a fourth; the bare
-      // reference passed as a value and the namespace's non-reader member
-      // do not count.
-      text: "import { workspaceRoots, tryWorkspaceRoots as tryRoots } from '@platform/workspaceRoots';\nimport * as RC from '@agent/runtime/RunContext';\nimport { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';\nimport { ownsRunLease } from './runLease';\nworkspaceRoots().config;\ntryRoots();\nRC.runInSession(s, f);\nRC.isRunContext(x);\ngetCurrentToolCallContext();\nownsRunLease(id);\nuse(workspaceRoots);\n",
+      // Readers of all three carriers under their own names, an alias, and a
+      // namespace member; the bare reference passed as a value and the
+      // namespace's non-reader member do not count.
+      text: "import { workspaceRoots, tryWorkspaceRoots as tryRoots } from '@platform/workspaceRoots';\nimport * as RC from '@agent/runtime/RunContext';\nimport { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';\nworkspaceRoots().config;\ntryRoots();\nRC.runInSession(s, f);\nRC.isRunContext(x);\ngetCurrentToolCallContext();\nuse(workspaceRoots);\n",
       fileName: 'src/agent/storage/probe.ts',
-      expected: { [ROW_AMBIENT]: 5 },
+      expected: { [ROW_AMBIENT]: 4 },
     },
     {
       // A carrier's own module calling its own reader is the declaration

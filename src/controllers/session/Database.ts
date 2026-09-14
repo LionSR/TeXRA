@@ -984,6 +984,25 @@ export const databaseLayer = (
         readAggregate: (id, fromSeq) =>
           query(decodedRows(aggregate, [id, fromSeq])),
         aggregateState: (ids) => query(readState(ids)),
+        claimOwner: (id) =>
+          Effect.gen(function* () {
+            const state = (yield* query(readState([id])))[0];
+            // A tombstoned row keeps the owner that closed it, and the
+            // aggregate it named is gone: nothing holds what no longer
+            // exists, so it reads unclaimed rather than held.
+            const owner =
+              state?.closed === true ? null : (state?.ownerId ?? null);
+            if (owner === null) return { ownerId: null, liveness: null };
+            if (owner === identity.ownerId)
+              return { ownerId: owner, liveness: 'self' as const };
+            return {
+              ownerId: owner,
+              liveness: yield* Effect.tryPromise({
+                try: () => proveOwnerLiveness(ownerIdentity(owner)),
+                catch: readFailed,
+              }),
+            };
+          }),
         readInputBatch: (ids, fromCommit, checkedIds = ids) =>
           transaction(
             'read',

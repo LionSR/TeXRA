@@ -29,11 +29,6 @@ import { refresh } from '@agent/index';
 import { getRunRecords, registerRun } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import {
-  assertOwnedRunLease,
-  ownsRunLease,
-  releaseOwnedRunLease,
-} from '@agent/storage/runLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { RunHandle } from '@agent/runtime/RunHandle';
@@ -363,15 +358,15 @@ async function waitForCompletedResumes(count: number): Promise<void> {
   });
 }
 
-type ParentOwnerRunner = <T>(operation: () => T) => T;
-
 /**
- * Wait for the child's lease release. The loop's lane stays held past that
- * point while its final delivery wakes the parent, so the lease, not the
+ * Wait for the child's claim release. The loop's lane stays held past that
+ * point while its final delivery wakes the parent, so the claim, not the
  * lane, is the durable boundary these assertions read against.
  */
-function waitForLeaseRelease(runId: RunId): Promise<void> {
-  return vi.waitFor(() => expect(ownsRunLease(runId)).toBe(false));
+function waitForClaimRelease(runId: RunId): Promise<void> {
+  return vi.waitFor(async () => {
+    expect(await Effect.runPromise(session.ownsRun(runId))).toBe(false);
+  });
 }
 
 /**
@@ -380,7 +375,6 @@ function waitForLeaseRelease(runId: RunId): Promise<void> {
  */
 async function queueSecondAssertionFollowUp(
   parentContext: ReturnType<typeof createRunContext>,
-  runAsParentOwner: ParentOwnerRunner,
   runId: RunId,
   instruction = 'Now prove the second assertion.',
 ) {
@@ -398,39 +392,36 @@ async function queueSecondAssertionFollowUp(
   }
   const parentRunId = parentRun.runId;
   const parentSession = parentRun.session;
-  const resumed = await runAsParentOwner(() =>
-    effectRuntime().runPromise(
-      new DelegateAgentTool()
-        .call({
-          agent: null,
-          model: null,
-          instruction,
-          memories: [],
-          working_directory: null,
-          execution_id: runId,
-        })
-        .pipe(
-          Effect.provide(
-            nativeToolTestLayer({
-              model: parentContext.model,
-              tracker: new FileInteractionState(),
-              workingDirectory: parentRun.workingDirectory,
-              delegationAgentScope: parentRun.delegationAgentScope,
-              run: {
-                runId: parentRunId,
-                session: parentSession,
-                toolPolicy: {
-                  approvalPromptsUnavailable:
-                    parentContext.approvalPromptsUnavailable,
-                  runtimeUnavailableTools:
-                    parentContext.runtimeUnavailableTools,
-                  stopAfterCycle: parentContext.stopAfterCycle,
-                },
+  const resumed = await effectRuntime().runPromise(
+    new DelegateAgentTool()
+      .call({
+        agent: null,
+        model: null,
+        instruction,
+        memories: [],
+        working_directory: null,
+        execution_id: runId,
+      })
+      .pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            model: parentContext.model,
+            tracker: new FileInteractionState(),
+            workingDirectory: parentRun.workingDirectory,
+            delegationAgentScope: parentRun.delegationAgentScope,
+            run: {
+              runId: parentRunId,
+              session: parentSession,
+              toolPolicy: {
+                approvalPromptsUnavailable:
+                  parentContext.approvalPromptsUnavailable,
+                runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
+                stopAfterCycle: parentContext.stopAfterCycle,
               },
-            }),
-          ),
+            },
+          }),
         ),
-    ),
+      ),
   );
   expect(resumed.status).toBe('executed');
   return resumed;
@@ -448,7 +439,6 @@ async function launchWaitingChild(options: {
 }): Promise<{
   readonly runId: RunId;
   readonly parentContext: ReturnType<typeof createRunContext>;
-  readonly runAsParentOwner: ParentOwnerRunner;
   readonly observedRequests: ObservedRequest[];
 }> {
   const observedRequests: ObservedRequest[] = [];
@@ -516,32 +506,26 @@ async function launchWaitingChild(options: {
     },
     inScope: <A>(operation: () => A): A => operation(),
   };
-  const runAsParentOwner: ParentOwnerRunner = (operation) => {
-    assertOwnedRunLease(PARENT_RUN_ID);
-    return operation();
-  };
-  const launch = await runAsParentOwner(() =>
-    effectRuntime().runPromise(
-      executeSubagent(
-        parentCall,
-        {
-          agent: CHILD_AGENT,
-          agentSource: 'custom',
-          agentCategory: AgentCategory.ToolUse,
-          model: CHILD_MODEL,
-          instruction: 'Prove the first assertion.',
-          memories: [],
-          workingDirectory: process.cwd(),
-        },
-        CHILD_AGENT,
-        PARENT_RUN_ID,
-      ).pipe(Effect.provideService(Runs, session.runs)),
-    ),
+  const launch = await effectRuntime().runPromise(
+    executeSubagent(
+      parentCall,
+      {
+        agent: CHILD_AGENT,
+        agentSource: 'custom',
+        agentCategory: AgentCategory.ToolUse,
+        model: CHILD_MODEL,
+        instruction: 'Prove the first assertion.',
+        memories: [],
+        workingDirectory: process.cwd(),
+      },
+      CHILD_AGENT,
+      PARENT_RUN_ID,
+    ).pipe(Effect.provideService(Runs, session.runs)),
   );
   expect(launch.status).toBe('executed');
   const runId = childRunId(launch.output);
   childId = runId;
-  return { runId, parentContext, runAsParentOwner, observedRequests };
+  return { runId, parentContext, observedRequests };
 }
 
 describe('native subagent production delivery path', { retry: 2 }, () => {
@@ -562,8 +546,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
   afterEach(async () => {
     interruptActiveRuns(session);
-    if (childId) await waitForLeaseRelease(childId);
-    await releaseOwnedRunLease(PARENT_RUN_ID);
+    if (childId) await waitForClaimRelease(childId);
+    await Effect.runPromise(session.releaseRunLease(PARENT_RUN_ID));
     await Effect.runPromise(teardownDefaultSession());
     vi.restoreAllMocks();
   });
@@ -575,17 +559,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       { text: 'Parent received result B.' },
     ];
     const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
-    const { runId, parentContext, runAsParentOwner, observedRequests } =
-      await launchWaitingChild({ parentTurns, childTurns });
+    const { runId, parentContext, observedRequests } = await launchWaitingChild(
+      { parentTurns, childTurns },
+    );
 
     await waitForPersistedResult(runId, 'Result A.');
     await waitForCompletedResumes(1);
 
-    const resumed = await queueSecondAssertionFollowUp(
-      parentContext,
-      runAsParentOwner,
-      runId,
-    );
+    const resumed = await queueSecondAssertionFollowUp(parentContext, runId);
     expect(resumed.summary).toContain('Follow-up queued');
 
     await waitForPersistedResult(runId, 'Result B.');
@@ -647,18 +628,15 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // Turn 2 is answerless: the scripted transport ends the turn with no text,
     // so the resumed cycle completes without adding an assistant message.
     const childTurns = [{ text: 'Result A.' }, { text: '' }];
-    const { runId, parentContext, runAsParentOwner } = await launchWaitingChild(
-      { parentTurns, childTurns },
-    );
+    const { runId, parentContext } = await launchWaitingChild({
+      parentTurns,
+      childTurns,
+    });
 
     await waitForPersistedResult(runId, 'Result A.');
     await waitForCompletedResumes(1);
 
-    const resumed = await queueSecondAssertionFollowUp(
-      parentContext,
-      runAsParentOwner,
-      runId,
-    );
+    const resumed = await queueSecondAssertionFollowUp(parentContext, runId);
     expect(resumed.summary).toContain('Follow-up queued');
 
     // The answerless turn still delivers: its report/result overwrite turn 1's
@@ -716,9 +694,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       { text: 'Parent received result B.' },
     ];
     const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
-    const { runId, parentContext, runAsParentOwner } = await launchWaitingChild(
-      { parentTurns, childTurns },
-    );
+    const { runId, parentContext } = await launchWaitingChild({
+      parentTurns,
+      childTurns,
+    });
 
     await waitForPersistedResult(runId, 'Result A.');
     await waitForCompletedResumes(1);
@@ -730,13 +709,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     const [first, second] = await Promise.all([
       queueSecondAssertionFollowUp(
         parentContext,
-        runAsParentOwner,
         runId,
         'Now prove the second assertion.',
       ),
       queueSecondAssertionFollowUp(
         parentContext,
-        runAsParentOwner,
         runId,
         'Now prove the third assertion.',
       ),
@@ -854,16 +831,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       releaseTurn2 = reject;
     });
     void turn2Gate.catch(() => {});
-    const { runId, parentContext, runAsParentOwner } = await launchWaitingChild(
-      {
-        parentTurns: [
-          { text: 'Parent ready.' },
-          { text: 'Parent received result A.' },
-        ],
-        childTurns: [{ text: 'Result A.' }, 'hang'],
-        childGate: turn2Gate,
-      },
-    );
+    const { runId, parentContext } = await launchWaitingChild({
+      parentTurns: [
+        { text: 'Parent ready.' },
+        { text: 'Parent received result A.' },
+      ],
+      childTurns: [{ text: 'Result A.' }, 'hang'],
+      childGate: turn2Gate,
+    });
     await waitForPersistedResult(runId, 'Result A.');
     await waitForCompletedResumes(1);
 
@@ -873,7 +848,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     expect(completed1).not.toBeNull();
 
     // Accept a follow-up: the loop runs turn 2, which hangs mid-model-call.
-    await queueSecondAssertionFollowUp(parentContext, runAsParentOwner, runId);
+    await queueSecondAssertionFollowUp(parentContext, runId);
 
     // Turn 2 was accepted: a pending-turn record marks it active, while the
     // persisted result still belongs to the latest completed turn (turn 1).
@@ -902,7 +877,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     const stopSettlement = Effect.runPromise(stopped.settlement);
     releaseTurn2(new Error('interrupted before result persistence'));
     await stopSettlement;
-    await waitForLeaseRelease(runId);
+    await waitForClaimRelease(runId);
 
     // Turn 1 stays the latest completed turn; turn 2 remains on record as
     // the interrupted active turn instead of turn 1 posing as current.

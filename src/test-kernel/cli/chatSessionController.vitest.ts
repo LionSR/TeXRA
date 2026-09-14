@@ -58,7 +58,6 @@ vi.mock('@agent/storage', () => ({
         }),
     };
   },
-  RunLeaseActiveError: class RunLeaseActiveError extends Error {},
 }));
 
 vi.mock('@agent/runtime/resumeRun', () => ({

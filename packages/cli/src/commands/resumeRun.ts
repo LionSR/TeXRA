@@ -8,8 +8,9 @@ import {
   describeFollowUpFailure,
   resumeRun,
 } from '@agent/runtime';
-import { runLeaseHeldMessage, getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { AgentCategory, type RunId } from '@shared/schemas';
+import { runHeldByProcessMessage } from '@shared/runs/runStatusDisplay';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { executeCliWorkflowConfig } from './workflow';
@@ -86,14 +87,14 @@ export async function runResumeCommand(
       const classification = yield* classifyRun(id, session);
       switch (classification.kind) {
         case 'held_elsewhere':
-          writeTextStderr(runLeaseHeldMessage(id, classification.owner));
+          writeTextStderr(runHeldByProcessMessage(id, classification.owner));
           return CliExitCode.Usage;
         case 'owned_here':
           writeTextStderr(`Run ${id} is already running in this process.`);
           return CliExitCode.Usage;
         case 'unclassified':
           // `unclassified` names a durable fact that could not be read — the
-          // lease, the run metadata, the latest snapshot — and nothing else.
+          // claim, the run metadata, the latest snapshot — and nothing else.
           // Rows that do not fold are refused by the ledger's own load at the
           // open below, and come back from `resumeRun` worded
           // `unusable_checkpoint`; this arm never guesses at content it did

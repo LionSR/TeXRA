@@ -1492,8 +1492,8 @@ describe('createWorkflowScriptAgentRunner', () => {
     'refuses an interrupted child whose claim a concurrent resume holds',
     () =>
       Effect.gen(function* () {
-        // A free lease only says nobody owned the run when it was read. The
-        // claim is what the resume takes, so an acquire it refuses is the
+        // An unclaimed read only says nobody owned the run at that moment.
+        // The claim is what the resume takes, so an acquire it refuses is the
         // fact that a new owner is starting this child right now.
         probeAnswers({ exists: true }, { exists: false });
         mocks.acquireClaims.mockReturnValueOnce(

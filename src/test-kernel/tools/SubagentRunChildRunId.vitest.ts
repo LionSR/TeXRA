@@ -65,10 +65,6 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
   };
 });
 
-vi.mock('@agent/storage/runLease', () => ({
-  assertOwnedRunLease: vi.fn(),
-}));
-
 vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: vi.fn(),
 }));
