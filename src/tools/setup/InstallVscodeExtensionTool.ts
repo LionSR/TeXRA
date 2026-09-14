@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import { ToolError } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
@@ -64,7 +63,13 @@ const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
       );
     }
 
-    yield* hostPort(() => extensions.install(id));
+    yield* extensions
+      .install(id)
+      .pipe(
+        Effect.catchTag('SetupExtensionInstallFailed', (failure) =>
+          Effect.fail(new ToolError(failure.message)),
+        ),
+      );
 
     // Give VS Code a brief moment to register the new extension.
     yield* Effect.sleep(REGISTRATION_GRACE_MS);

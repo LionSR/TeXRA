@@ -11,13 +11,13 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { Effect, Result } from 'effect';
+import { Data, Effect, Result } from 'effect';
 import { currentSession } from '@agent/runtime';
-import { hostPort } from '@common/hostPort';
 
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
+import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import {
   LEAN4_EXTENSION_ID,
@@ -39,6 +39,48 @@ import type { LeanLanguageServicesShape } from '@tools/lean/leanLanguageServices
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const log = createLog('VscodeLeanIntegration');
+
+/**
+ * Why an editor call in this bridge produced no editor: VS Code would not
+ * read the document at all, or it read it and would not show it. The two
+ * are separate answers because only the first says anything about the file.
+ */
+class EditorOpenFailed extends Data.TaggedError('EditorOpenFailed')<{
+  readonly reason: 'document-open-failed' | 'editor-unavailable';
+  readonly message: string;
+  readonly absolutePath: string;
+  readonly cause: unknown;
+}> {}
+
+/**
+ * A Lean 4 command VS Code dispatched and rejected. There is no
+ * "not registered" reason: the ids are the extension's own, and VS Code
+ * reports an unregistered id the same way it reports a faulting one.
+ */
+class VscodeCommandFailed extends Data.TaggedError('VscodeCommandFailed')<{
+  readonly message: string;
+  readonly commandId: string;
+  readonly cause: unknown;
+}> {}
+
+/**
+ * Why the Lean 4 extension could not answer: it is not installed (the user
+ * was offered the install), or it is installed and its activation or feature
+ * promise rejected. The reasons carry different advice, which the old
+ * single "not ready" message gave to both.
+ */
+class LeanExtensionUnavailable extends Data.TaggedError(
+  'LeanExtensionUnavailable',
+)<{
+  readonly reason: 'not-installed' | 'activation-failed';
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+const LEAN4_NOT_INSTALLED =
+  'The Lean 4 extension is not installed. Install it, then try again.';
 
 const FILE_COMMAND_VSCODE_IDS: Record<LeanFileCommand, string> = {
   restart: 'lean4.restartFile',
@@ -198,52 +240,129 @@ function getDiagnostics(filePath: string): LeanDiagnostic[] {
   return [];
 }
 
+/**
+ * Open `uri` in an editor, keeping the current focus. Two steps, so a
+ * failure says which one VS Code refused.
+ */
+function openInEditor(uri: vscode.Uri): Effect.Effect<void, EditorOpenFailed> {
+  return Effect.gen(function* () {
+    const document = yield* Effect.tryPromise({
+      try: () => Promise.resolve(vscode.workspace.openTextDocument(uri)),
+      catch: (cause) =>
+        new EditorOpenFailed({
+          reason: 'document-open-failed',
+          message: `Could not open ${uri.fsPath}: ${toErrorMessage(cause)}`,
+          absolutePath: uri.fsPath,
+          cause,
+        }),
+    });
+    yield* Effect.tryPromise({
+      try: () =>
+        Promise.resolve(
+          vscode.window.showTextDocument(document, { preserveFocus: true }),
+        ),
+      catch: (cause) =>
+        new EditorOpenFailed({
+          reason: 'editor-unavailable',
+          message: `Could not show ${uri.fsPath} in an editor: ${toErrorMessage(cause)}`,
+          absolutePath: uri.fsPath,
+          cause,
+        }),
+    });
+  });
+}
+
+/** Run one of the Lean 4 extension's commands. */
+function executeLeanCommand(
+  commandId: string,
+): Effect.Effect<void, VscodeCommandFailed> {
+  return Effect.tryPromise({
+    try: async () => {
+      await vscode.commands.executeCommand(commandId);
+    },
+    catch: (cause) =>
+      new VscodeCommandFailed({
+        message: `VS Code command "${commandId}" failed: ${toErrorMessage(cause)}`,
+        commandId,
+        cause,
+      }),
+  });
+}
+
 function executeFileCommand(
   globalState: StateStore,
   command: LeanFileCommand,
   filePath: string,
 ): Effect.Effect<boolean> {
   return Effect.gen(function* () {
-    yield* hostPort(async () => {
-      const document = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(
-          workspaceAbsolutePath(currentSession().roots.workspace, filePath),
-        ),
-      );
-      await vscode.window.showTextDocument(document, { preserveFocus: true });
-    });
-    if (!(yield* getClientProvider(globalState))) return false;
-    yield* hostPort(() =>
-      vscode.commands.executeCommand(FILE_COMMAND_VSCODE_IDS[command]),
+    yield* openInEditor(
+      vscode.Uri.file(
+        workspaceAbsolutePath(currentSession().roots.workspace, filePath),
+      ),
     );
+    yield* getClientProvider(globalState);
+    yield* executeLeanCommand(FILE_COMMAND_VSCODE_IDS[command]);
     return true;
-  }).pipe(Effect.catch(() => Effect.succeed(false)));
+  }).pipe(
+    // The port answers this one with a boolean, so the reason is only worth
+    // saying once — in the log, rather than nowhere as it was before the
+    // failures were typed.
+    Effect.catch((failure) =>
+      Effect.sync(() => {
+        log.warn(
+          `Lean "${command}" on ${filePath} did not run: ${failure.message}`,
+        );
+        return false;
+      }),
+    ),
+  );
 }
 
 /**
- * Get the Lean 4 extension's client provider.
- * Yields null if the extension is not installed or not ready.
- * Prompts user to install the extension if not found.
+ * Get the Lean 4 extension's client provider, or say why there is none.
+ * Prompts the user to install the extension when it is missing; the prompt
+ * is an offer, so failing to show it does not change the answer.
  */
 function getClientProvider(
   globalState: StateStore,
-): Effect.Effect<LeanClientProvider | null, unknown> {
-  return hostPort(async () => {
+): Effect.Effect<LeanClientProvider, LeanExtensionUnavailable> {
+  return Effect.gen(function* () {
     const lean4Ext =
       vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
     if (!lean4Ext) {
-      await promptExtensionInstall(globalState, {
-        suppressKey: 'lean4-install-tool',
-        message:
-          'Lean 4 extension is required for this operation. Install now?',
-        extensionId: LEAN4_EXTENSION_ID,
-        channel: 'lean',
-      });
-      return null;
+      yield* Effect.tryPromise({
+        try: () =>
+          promptExtensionInstall(globalState, {
+            suppressKey: 'lean4-install-tool',
+            message:
+              'Lean 4 extension is required for this operation. Install now?',
+            extensionId: LEAN4_EXTENSION_ID,
+            channel: 'lean',
+          }),
+        catch: (cause) =>
+          `Could not offer the Lean 4 install prompt: ${toErrorMessage(cause)}`,
+      }).pipe(Effect.catch((message) => Effect.sync(() => log.warn(message))));
+      return yield* Effect.fail(
+        new LeanExtensionUnavailable({
+          reason: 'not-installed',
+          message: LEAN4_NOT_INSTALLED,
+        }),
+      );
     }
 
-    const api = await lean4Ext.activate();
-    const features = await api.lean4EnabledFeatures;
+    const features = yield* Effect.tryPromise({
+      try: async () => {
+        const api = await lean4Ext.activate();
+        return await api.lean4EnabledFeatures;
+      },
+      catch: (cause) =>
+        new LeanExtensionUnavailable({
+          reason: 'activation-failed',
+          message:
+            'The Lean 4 extension is not ready. Open a Lean file in the project, then try again.',
+          cause,
+        }),
+    });
     return features.clientProvider;
   });
 }
@@ -269,32 +388,19 @@ function sendPositionRequest<T>(
     const uri = vscode.Uri.file(absolutePath);
     const leanUri = createLeanFileUri(absolutePath);
 
-    const clientProvider = yield* getClientProvider(globalState).pipe(
-      Effect.catch(() => Effect.succeed(null)),
-    );
-    if (!clientProvider) {
-      return {
-        data: null,
-        error: 'Lean 4 extension not found or not activated',
-      };
+    const provider = yield* Effect.result(getClientProvider(globalState));
+    if (Result.isFailure(provider)) {
+      return { data: null, error: provider.failure.message };
     }
 
-    const opened = yield* Effect.result(
-      hostPort(async () => {
-        const document = await vscode.workspace.openTextDocument(uri);
-        await vscode.window.showTextDocument(document, { preserveFocus: true });
-      }),
-    );
+    const opened = yield* Effect.result(openInEditor(uri));
     if (Result.isFailure(opened)) {
-      return {
-        data: null,
-        error: `Failed to open file ${absolutePath}: ${toErrorMessage(opened.failure)}`,
-      };
+      return { data: null, error: opened.failure.message };
     }
 
     const found = yield* Effect.result(
       Effect.try({
-        try: () => clientProvider.findClient(leanUri),
+        try: () => provider.success.findClient(leanUri),
         catch: () => undefined,
       }),
     );
@@ -401,33 +507,38 @@ function getHoverInfo(
  */
 function fetchDiagnosticsForFile(
   file: string,
-): Effect.Effect<FetchDiagnosticsResult, unknown> {
-  return hostPort(async (): Promise<FetchDiagnosticsResult> => {
+): Effect.Effect<FetchDiagnosticsResult> {
+  return Effect.gen(function* () {
     const absolutePath = workspaceAbsolutePath(
       currentSession().roots.workspace,
       file,
     );
-    const diagnosticsWait = waitForDiagnosticsChange(
-      vscode.Uri.file(absolutePath),
-      10000,
+    // Subscribed before the file is opened, so an update the open itself
+    // triggers is not missed. `Effect.sync` starts that wait here; the
+    // program awaits the same promise below.
+    const diagnosticsWait = yield* Effect.sync(() =>
+      waitForDiagnosticsChange(vscode.Uri.file(absolutePath), 10000),
     );
 
-    const opened = await openFileInEditor(absolutePath, {
-      preserveFocus: true,
-    });
+    const opened = yield* Effect.promise(() =>
+      openFileInEditor(absolutePath, { preserveFocus: true }),
+    );
     if (!opened) {
       // Could not be opened in the editor — the file itself is the problem.
       return {
         ok: false,
         kind: 'file_missing',
         message: `Could not open ${absolutePath} in the editor.`,
-      };
+      } satisfies FetchDiagnosticsResult;
     }
 
     noteVscodeLeanServer(workspaceRootForFile(absolutePath));
 
-    await diagnosticsWait;
-    return { ok: true, diagnostics: getDiagnostics(opened.absolutePath) };
+    yield* Effect.promise(() => diagnosticsWait);
+    return {
+      ok: true,
+      diagnostics: getDiagnostics(opened.absolutePath),
+    } satisfies FetchDiagnosticsResult;
   });
 }
 
@@ -435,12 +546,14 @@ function fetchDiagnosticsForFile(
 function navigateToFirstError(
   filePath: string,
   diagnostics: LeanDiagnostic[],
-): Effect.Effect<void, unknown> {
+): Effect.Effect<void> {
   const firstError = diagnostics.find(
     (d) => d.severity === vscode.DiagnosticSeverity.Error,
   );
   if (!firstError) return Effect.void;
-  return hostPort(async () => {
+  // `openFileInEditor` reports a refusal by returning nothing, having
+  // already logged it, so this navigation has no failure of its own.
+  return Effect.promise(async () => {
     await openFileInEditor(
       workspaceAbsolutePath(currentSession().roots.workspace, filePath),
       { line: firstError.range.start.line + 1 },
@@ -451,23 +564,17 @@ function navigateToFirstError(
 function executeProjectCommand(
   globalState: StateStore,
   command: LeanProjectCommand,
-): Effect.Effect<void, unknown> {
+): Effect.Effect<void, LeanExtensionUnavailable | VscodeCommandFailed> {
   return Effect.gen(function* () {
     if (LEAN_FEATURE_PROJECT_COMMANDS.has(command)) {
       // vscode-lean4 registers these commands in activateLean4Features(), not
       // during its initial extension activation. Awaiting the exported feature
       // promise prevents a race with command registration after a Lean file opens.
-      if (!(yield* getClientProvider(globalState))) {
-        return yield* Effect.fail(
-          new Error(
-            'The Lean 4 extension is not ready. Open a Lean file in the project, then try again.',
-          ),
-        );
-      }
+      // Its failure is already the "extension cannot answer" report the tool
+      // shows, told apart by reason instead of by one message for both.
+      yield* getClientProvider(globalState);
     }
-    yield* hostPort(async () => {
-      await vscode.commands.executeCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
-    });
+    yield* executeLeanCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
   });
 }
 

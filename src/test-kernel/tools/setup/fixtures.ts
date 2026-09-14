@@ -17,14 +17,14 @@ export function createFakeSetupPlatform(
     host: overrides.host ?? 'cli',
     signIn: overrides.signIn ?? (async () => false),
     commands: {
-      async invoke() {},
+      invoke: () => Effect.void,
       ...overrides.commands,
     },
     extensions: {
       isInstalled() {
         return false;
       },
-      async install() {},
+      install: () => Effect.void,
       ...overrides.extensions,
     },
     terminal: {

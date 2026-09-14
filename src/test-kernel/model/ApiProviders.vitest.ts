@@ -71,7 +71,7 @@ async function setupApiKeyToolPlatform(
         host: 'cli',
         signIn: async () => false,
         commands: {
-          async invoke() {},
+          invoke: () => Effect.void,
         },
       },
     },

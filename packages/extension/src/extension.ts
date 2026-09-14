@@ -37,11 +37,11 @@ import {
   initializeLatexSupport,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
-import { runTerminalCommand } from '@frontend/setupTerminalRunner';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
+import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
@@ -105,7 +105,6 @@ import {
   refreshToolAvailability,
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
-import type { SetupPlatformShape } from '@tools/setup/platform';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   gitHubTokenRejectedMessage,
@@ -127,38 +126,6 @@ import { registerCommands } from './commands';
 
 const log = createLog('extension');
 
-// The setup platform's extensions port: also what the Lean 4 availability
-// probe reads to see whether the editor host has the extension installed.
-const isVscodeExtensionInstalled = (id: string) =>
-  vscode.extensions.getExtension(id) !== undefined;
-
-/**
- * The extension's setup capabilities, provided as the `SetupPlatform` service
- * by `initVscodePlatform`. Every member is a closure over VS Code's own APIs,
- * so the value exists before any activation state does.
- */
-const vscodeSetupPlatform: SetupPlatformShape = {
-  host: 'extension',
-  signIn: async () =>
-    (await vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN)) ===
-    true,
-  commands: {
-    invoke: (cmd, ...args) =>
-      Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
-  },
-  extensions: {
-    isInstalled: isVscodeExtensionInstalled,
-    install: async (id) => {
-      await vscode.commands.executeCommand(
-        'workbench.extensions.installExtension',
-        id,
-      );
-    },
-  },
-  terminal: {
-    runCommand: (args) => runTerminalCommand(args),
-  },
-};
 const authLog = createLog('SupabaseAuthProvider');
 
 let statusBarItem: vscode.StatusBarItem | undefined;

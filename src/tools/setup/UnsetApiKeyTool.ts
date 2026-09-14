@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import {
   API_PROVIDERS,
   apiKeyEnvName,
@@ -82,7 +81,7 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
     // `Effect.exit` per command keeps the settled-not-fail-fast semantics.
     yield* Effect.forEach(
       ['texra.refreshApiKeyStatus', 'texra.refreshAllOptions'],
-      (commandId) => Effect.exit(hostPort(() => commands.invoke(commandId))),
+      (commandId) => Effect.exit(commands.invoke(commandId)),
       { concurrency: 'unbounded', discard: true },
     );
   }
