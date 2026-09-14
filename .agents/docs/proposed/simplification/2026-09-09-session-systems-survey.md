@@ -152,6 +152,14 @@ written twice at the time of this survey, at
 sites) and `cliState.ts:101-108` (read in five CLI files) — it no longer is,
 per the landed note above.
 
+The next two paragraphs are the original 2026-09-09 proposal, unedited: it
+called for `resolveSelected` to gain an extra arm for the CLI's empty-view
+case. #12318 built exactly that (the `keepWhenViewEmpty` arm); #12395 then
+replaced it with the caller-side `CLI_LOCAL_RUN_ID` guard described in the
+landed note above, so `resolveSelectedId` today is unchanged two-argument and
+gained no arm. Read what follows as the reasoning that motivated the fix, not
+the shape it ended up taking.
+
 **Proposal, deliberately narrow.** Do not port `cliState.ts` onto `Surface`
 wholesale. That is a lane, and the cross-host convergence experience says a
 typed-port convergence adds lines when the duplicated surface is smaller than
