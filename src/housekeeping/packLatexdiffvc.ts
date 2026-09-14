@@ -23,7 +23,7 @@ import {
  */
 export type LatexdiffPackResult =
   | Extract<FileOpResult, { status: 'noFiles' }>
-  | Extract<FileOpResult, { status: 'success' }>
+  | (Extract<FileOpResult, { status: 'success' }> & { outputFolder: string })
   | { status: 'cleaned' }
   | { status: 'processed' };
 
@@ -38,9 +38,7 @@ export function latexdiffPackMessage(
     case 'cleaned':
       return 'LaTeXdiff files cleaned';
     case 'success':
-      return result.outputFolder
-        ? `Files packed into ${result.outputFolder}`
-        : undefined;
+      return `Files packed into ${result.outputFolder}`;
     case 'processed':
       return undefined;
   }
