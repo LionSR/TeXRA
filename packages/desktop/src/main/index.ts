@@ -42,6 +42,7 @@ import {
 import { createHostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
+import { PromptFailed } from '@hosts/uiHosts';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { DisposableStore } from '@platform/disposable';
@@ -1156,18 +1157,48 @@ function createWindow(options: {
         renderer: {
           postToRenderer: postForActiveProject,
         },
+        // The window's dialogs behind the host-neutral prompt port. The
+        // renderer overlay settles a prompt it could not deliver as "no
+        // answer", so `input` has no failure of its own; the native dialogs
+        // reject once the window they anchor to is gone.
         prompt: {
           input: (input) =>
-            promptController.request({
-              title: input.prompt ?? 'Set API key',
-              prompt: input.prompt ?? 'Enter API key',
-              password: input.password,
-            }),
+            Effect.promise(() =>
+              promptController.request({
+                title: input.prompt ?? 'Set API key',
+                prompt: input.prompt ?? 'Enter API key',
+                password: input.password,
+              }),
+            ),
           confirm: (message, promptOptions) =>
-            confirmDialog({
-              message,
-              detail: promptOptions?.detail,
-              confirmLabel: promptOptions?.confirmLabel,
+            Effect.tryPromise({
+              try: () =>
+                confirmDialog({
+                  message,
+                  detail: promptOptions?.detail,
+                  confirmLabel: promptOptions?.confirmLabel,
+                }),
+              catch: (cause) =>
+                new PromptFailed({
+                  reason: 'host-unavailable',
+                  member: 'confirm',
+                  message: 'The desktop window would not show the dialog.',
+                  cause,
+                }),
+            }),
+          info: (message) =>
+            Effect.tryPromise({
+              try: async () => {
+                await showInfoMessage(message);
+                return undefined;
+              },
+              catch: (cause) =>
+                new PromptFailed({
+                  reason: 'host-unavailable',
+                  member: 'info',
+                  message: 'The desktop window would not show the notice.',
+                  cause,
+                }),
             }),
         },
         externalOpener: {

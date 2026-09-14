@@ -5,13 +5,13 @@ import * as vscode from 'vscode';
 
 import { renderAgentTemplateString } from '@agent/templates';
 import {
+  AgentCreatorUiFailed,
   type AgentCreatorUI,
   type CreatorConfig,
   TOOL_GROUPS,
   buildCreatorConfig,
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
-import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -59,60 +59,128 @@ const loadCreatorConfig = Effect.fnUntraced(function* (
 });
 
 /**
- * Multi-select tool-group picker with a persistent prompt hint and a native
- * "Select all / Clear" toggle button on top of the stateful multi-select.
+ * Ask for one line of text in an input box the wizard owns.
+ *
+ * The box is opened with this program's own cancellation token: cancelling it
+ * is what closes a box the user never answered, and the token source is
+ * disposed on every path — the answer, a host fault, and interruption.
  */
-async function pickToolGroups(
-  agentName: string,
-  items: vscode.QuickPickItem[],
-): Promise<readonly vscode.QuickPickItem[] | undefined> {
-  const qp = vscode.window.createQuickPick();
-  qp.title = `Tool Use Agent: ${agentName}`;
-  qp.placeholder = 'Select tool groups';
-  qp.canSelectMany = true;
-  qp.items = items;
-  const initiallySelected = items.filter((item) => item.picked);
-  qp.selectedItems = initiallySelected;
-  qp.prompt =
-    'Space / click to toggle. Pre-selected groups match your description.';
-
-  let allSelected =
-    initiallySelected.length > 0 && initiallySelected.length === items.length;
-  let activeSelectAllButton: vscode.QuickInputButton | undefined;
-  const refreshSelectAllButton = () => {
-    activeSelectAllButton = {
-      iconPath: new vscode.ThemeIcon('check-all'),
-      tooltip: 'Select all / clear',
-      location: vscode.QuickInputButtonLocation?.Input,
-      toggle: { checked: allSelected },
+function askForInput(
+  options: vscode.InputBoxOptions,
+): Effect.Effect<string | undefined, AgentCreatorUiFailed> {
+  return Effect.callback<string | undefined, AgentCreatorUiFailed>((resume) => {
+    const tokens = new vscode.CancellationTokenSource();
+    let settled = false;
+    const dispose = () => {
+      settled = true;
+      tokens.dispose();
     };
-    qp.buttons = [activeSelectAllButton];
-  };
-  refreshSelectAllButton();
-  qp.onDidChangeSelection((selected) => {
-    allSelected = selected.length > 0 && selected.length === qp.items.length;
-    refreshSelectAllButton();
-  });
-  qp.onDidTriggerButton((button) => {
-    if (button !== activeSelectAllButton) {
-      return;
-    }
-    allSelected = qp.items.length > 0 && !allSelected;
-    qp.selectedItems = allSelected ? [...qp.items] : [];
-    refreshSelectAllButton();
-  });
-
-  return settleQuickInput<readonly vscode.QuickPickItem[]>(qp, (accept) => {
-    qp.onDidAccept(() => {
-      accept(qp.selectedItems);
+    void Promise.resolve(
+      vscode.window.showInputBox(options, tokens.token),
+    ).then(
+      (value) => {
+        dispose();
+        resume(Effect.succeed(value));
+      },
+      (cause: unknown) => {
+        dispose();
+        resume(
+          Effect.fail(
+            new AgentCreatorUiFailed({
+              reason: 'prompt-failed',
+              message: 'VS Code would not show the input box.',
+              cause,
+            }),
+          ),
+        );
+      },
+    );
+    return Effect.sync(() => {
+      if (settled) return;
+      tokens.cancel();
+      dispose();
     });
   });
 }
 
+/**
+ * Multi-select tool-group picker with a persistent prompt hint and a native
+ * "Select all / Clear" toggle button on top of the stateful multi-select.
+ *
+ * The picker is settled here rather than through `settleQuickInput` because
+ * this program owns its disposal: an interrupted wizard closes the picker
+ * instead of leaving it open over a run that has stopped.
+ */
+function pickToolGroups(
+  agentName: string,
+  items: vscode.QuickPickItem[],
+): Effect.Effect<readonly vscode.QuickPickItem[] | undefined> {
+  return Effect.callback<readonly vscode.QuickPickItem[] | undefined>(
+    (resume) => {
+      const qp = vscode.window.createQuickPick();
+      qp.title = `Tool Use Agent: ${agentName}`;
+      qp.placeholder = 'Select tool groups';
+      qp.canSelectMany = true;
+      qp.items = items;
+      const initiallySelected = items.filter((item) => item.picked);
+      qp.selectedItems = initiallySelected;
+      qp.prompt =
+        'Space / click to toggle. Pre-selected groups match your description.';
+
+      let allSelected =
+        initiallySelected.length > 0 &&
+        initiallySelected.length === items.length;
+      let activeSelectAllButton: vscode.QuickInputButton | undefined;
+      const refreshSelectAllButton = () => {
+        activeSelectAllButton = {
+          iconPath: new vscode.ThemeIcon('check-all'),
+          tooltip: 'Select all / clear',
+          location: vscode.QuickInputButtonLocation?.Input,
+          toggle: { checked: allSelected },
+        };
+        qp.buttons = [activeSelectAllButton];
+      };
+      refreshSelectAllButton();
+      qp.onDidChangeSelection((selected) => {
+        allSelected =
+          selected.length > 0 && selected.length === qp.items.length;
+        refreshSelectAllButton();
+      });
+      qp.onDidTriggerButton((button) => {
+        if (button !== activeSelectAllButton) {
+          return;
+        }
+        allSelected = qp.items.length > 0 && !allSelected;
+        qp.selectedItems = allSelected ? [...qp.items] : [];
+        refreshSelectAllButton();
+      });
+
+      let settled = false;
+      const accept = (
+        value: readonly vscode.QuickPickItem[] | undefined,
+      ): void => {
+        if (settled) return;
+        settled = true;
+        qp.dispose();
+        resume(Effect.succeed(value));
+      };
+      qp.onDidAccept(() => accept(qp.selectedItems));
+      qp.onDidHide(() => accept(undefined));
+      qp.show();
+
+      return Effect.sync(() => {
+        if (settled) return;
+        settled = true;
+        qp.dispose();
+      });
+    },
+  );
+}
+
 function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
   return {
-    async promptAgentName(categoryLabel) {
-      return vscode.window.showInputBox({
+    promptAgentName(categoryLabel) {
+      return askForInput({
         title: `New ${categoryLabel} Agent`,
         prompt: 'Enter a name for the new agent (without .yaml)',
         validateInput: (value) =>
@@ -122,11 +190,11 @@ function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
       });
     },
 
-    async promptDescription(title, prompt) {
-      return vscode.window.showInputBox({ title, prompt });
+    promptDescription(title, prompt) {
+      return askForInput({ title, prompt });
     },
 
-    async pickTools(agentName, suggestedGroups) {
+    pickTools(agentName, suggestedGroups) {
       const suggested = new Set(suggestedGroups);
       const items: vscode.QuickPickItem[] = Object.entries(TOOL_GROUPS).map(
         ([label, group]) => ({
@@ -137,22 +205,33 @@ function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
         }),
       );
 
-      const selected = await pickToolGroups(agentName, items);
-      if (!selected?.length) return undefined;
-      const tools: string[] = [];
-      const groups: string[] = [];
-      for (const item of selected) {
-        const group = TOOL_GROUPS[item.label];
-        if (group) {
-          tools.push(...group.tools);
-          groups.push(item.label);
-        }
-      }
-      return { tools, groups };
+      return pickToolGroups(agentName, items).pipe(
+        Effect.map((selected) => {
+          if (!selected?.length) return undefined;
+          const tools: string[] = [];
+          const groups: string[] = [];
+          for (const item of selected) {
+            const group = TOOL_GROUPS[item.label];
+            if (group) {
+              tools.push(...group.tools);
+              groups.push(item.label);
+            }
+          }
+          return { tools, groups };
+        }),
+      );
     },
 
     getCustomAgentDir() {
-      return agentDirectories.custom();
+      return Effect.tryPromise({
+        try: () => agentDirectories.custom(),
+        catch: (cause) =>
+          new AgentCreatorUiFailed({
+            reason: 'directory-unavailable',
+            message: 'The custom agents directory could not be resolved.',
+            cause,
+          }),
+      });
     },
 
     showCreatedInfo(filePath) {
@@ -160,14 +239,33 @@ function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
     },
 
     promptAddToConfig(agentName, category) {
-      return promptToAddAgentToConfig(agentName, 'custom', category, runtime);
+      return Effect.tryPromise({
+        try: () =>
+          promptToAddAgentToConfig(agentName, 'custom', category, runtime),
+        catch: (cause) =>
+          new AgentCreatorUiFailed({
+            reason: 'config-update-failed',
+            message: 'The new agent could not be added to the configuration.',
+            cause,
+          }),
+      });
     },
 
-    async openCreatedFile(filePath) {
-      const doc = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(filePath),
-      );
-      await vscode.window.showTextDocument(doc);
+    openCreatedFile(filePath) {
+      return Effect.tryPromise({
+        try: async () => {
+          const doc = await vscode.workspace.openTextDocument(
+            vscode.Uri.file(filePath),
+          );
+          await vscode.window.showTextDocument(doc);
+        },
+        catch: (cause) =>
+          new AgentCreatorUiFailed({
+            reason: 'open-failed',
+            message: 'VS Code would not open the created agent file.',
+            cause,
+          }),
+      });
     },
 
     renderTemplate: renderAgentTemplateString,

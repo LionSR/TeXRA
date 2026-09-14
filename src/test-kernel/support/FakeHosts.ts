@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - hosts
 import type {
   ExternalOpener,
@@ -54,38 +57,42 @@ class FakePromptHost implements PromptHost {
     this.inputResponses = [...(options.inputResponses ?? [])];
   }
 
-  async info<T extends string = string>(
+  info<T extends string = string>(
     message: string,
     options?: PromptMessageOptions<T>,
-  ): Promise<T | undefined> {
-    return this.recordMessage('info', message, options);
+  ): Effect.Effect<T | undefined> {
+    return Effect.sync(() => this.recordMessage('info', message, options));
   }
 
-  async warning<T extends string = string>(
+  warning<T extends string = string>(
     message: string,
     options?: PromptMessageOptions<T>,
-  ): Promise<T | undefined> {
-    return this.recordMessage('warning', message, options);
+  ): Effect.Effect<T | undefined> {
+    return Effect.sync(() => this.recordMessage('warning', message, options));
   }
 
-  async error<T extends string = string>(
+  error<T extends string = string>(
     message: string,
     options?: PromptMessageOptions<T>,
-  ): Promise<T | undefined> {
-    return this.recordMessage('error', message, options);
+  ): Effect.Effect<T | undefined> {
+    return Effect.sync(() => this.recordMessage('error', message, options));
   }
 
-  async confirm(
+  confirm(
     message: string,
     options?: PromptConfirmOptions,
-  ): Promise<boolean> {
-    this.confirms.push({ message, options });
-    return this.confirmResponses.shift() ?? false;
+  ): Effect.Effect<boolean> {
+    return Effect.sync(() => {
+      this.confirms.push({ message, options });
+      return this.confirmResponses.shift() ?? false;
+    });
   }
 
-  async input(options: PromptInputOptions): Promise<string | undefined> {
-    this.inputs.push({ options });
-    return this.inputResponses.shift();
+  input(options: PromptInputOptions): Effect.Effect<string | undefined> {
+    return Effect.sync(() => {
+      this.inputs.push({ options });
+      return this.inputResponses.shift();
+    });
   }
 
   private recordMessage<T extends string>(

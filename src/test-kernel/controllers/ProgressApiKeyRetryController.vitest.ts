@@ -70,10 +70,11 @@ function createHarness(options: HarnessOptions = {}): {
         }),
       hasUsableKey: (provider) =>
         Effect.sync(() => (keys.get(provider)?.trim().length ?? 0) > 0),
-      promptForApiKey: async (provider) => {
-        prompts.push(provider);
-        options.prompt?.(keys);
-      },
+      promptForApiKey: (provider) =>
+        Effect.sync(() => {
+          prompts.push(provider);
+          options.prompt?.(keys);
+        }),
       isRetryPending:
         options.isRetryPending ?? (() => options.retryPending ?? true),
       triggerRetry: (stream) =>

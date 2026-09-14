@@ -82,11 +82,17 @@ const openPdfProgram = Effect.fn('OpenPdfTool.execute')(function* (
     );
   }
 
-  yield* hostPort(() =>
-    openPdf({
-      location,
-      preserveFocus: input.preserve_focus ?? false,
-    }),
+  // The host viewer's own failure, matched by tag: the agent is told the
+  // viewer refused rather than seeing an unknown rejection escape the tool.
+  yield* openPdf({
+    location,
+    preserveFocus: input.preserve_focus ?? false,
+  }).pipe(
+    Effect.catchTag('PdfOpenFailed', (error) =>
+      Effect.fail(
+        new ToolError(`Failed to open PDF ${displayPath}: ${error.message}`),
+      ),
+    ),
   );
 
   const message = `Opened PDF: ${displayPath}`;

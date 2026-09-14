@@ -4,7 +4,7 @@ import { Cause, Effect, Exit } from 'effect';
 // Local imports - secrets
 import { storeCredential } from '@common/secrets/storeCredential';
 // Local imports - hosts
-import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
+import type { ExternalOpener, PromptFailed, PromptHost } from '@hosts/uiHosts';
 // Local imports - model
 import { apiKeySecretName, isApiProvider } from '@model/apiProviders';
 // Local imports - platform
@@ -38,10 +38,11 @@ interface SettingsProfileKeyControllerDeps {
  * The key actions are `Effect`s because the credential store is: the write
  * itself is the store's own program, with its commit region uninterruptible
  * (host-controller study Q2), and the host settles the action at its own
- * boundary. The prompt, refresh, and reporting ports are still
- * Promise-shaped, so each is one `Effect.tryPromise` whose rejection becomes
- * the `Error` this controller reports, exactly as the `try/catch` around them
- * did.
+ * boundary. The prompt port is an `Effect` too, so a host that could not ask
+ * for a key arrives as `PromptFailed` and is reported like any other failed
+ * action; the refresh and reporting ports are still Promise-shaped, so each is
+ * one `Effect.tryPromise` whose rejection becomes the `Error` this controller
+ * reports, exactly as the `try/catch` around them did.
  */
 export class SettingsProfileKeyController {
   constructor(private readonly deps: SettingsProfileKeyControllerDeps) {}
@@ -51,13 +52,11 @@ export class SettingsProfileKeyController {
       provider,
       'set',
       Effect.gen({ self: this }, function* () {
-        const apiKey = yield* this.fromPort(() =>
-          this.deps.prompt.input({
-            prompt: `Enter ${this.deps.getProviderDisplayName(provider)} API key`,
-            password: true,
-            placeHolder: '************************************',
-          }),
-        );
+        const apiKey = yield* this.deps.prompt.input({
+          prompt: `Enter ${this.deps.getProviderDisplayName(provider)} API key`,
+          password: true,
+          placeHolder: '************************************',
+        });
         if (apiKey == null) return false;
         return yield* this.storeProviderKey(provider, apiKey);
       }),
@@ -74,11 +73,9 @@ export class SettingsProfileKeyController {
       'remove',
       Effect.gen({ self: this }, function* () {
         const displayName = this.deps.getProviderDisplayName(provider);
-        const confirmed = yield* this.fromPort(() =>
-          this.deps.prompt.confirm(
-            `Remove the ${displayName} API key? This cannot be undone.`,
-            { confirmLabel: 'Remove', cancelLabel: 'Cancel', modal: false },
-          ),
+        const confirmed = yield* this.deps.prompt.confirm(
+          `Remove the ${displayName} API key? This cannot be undone.`,
+          { confirmLabel: 'Remove', cancelLabel: 'Cancel', modal: false },
         );
         if (!confirmed) return false;
 
@@ -139,7 +136,7 @@ export class SettingsProfileKeyController {
   private run(
     provider: string,
     verb: 'set' | 'remove',
-    action: Effect.Effect<boolean, Error>,
+    action: Effect.Effect<boolean, Error | PromptFailed>,
   ): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const changed = yield* Effect.exit(action);
@@ -175,14 +172,22 @@ export class SettingsProfileKeyController {
   }
 
   /**
-   * Tell the user a key changed. Best-effort by design and unawaited, as it
-   * was: the write already happened, and a toast that cannot be shown must
-   * not turn a successful key change into a reported failure.
+   * Tell the user a key changed. Best-effort by design and not awaited, as it
+   * was: the write already happened, a host notice can stay on screen long
+   * after the action that raised it, and a toast that cannot be shown must not
+   * turn a successful key change into a reported failure. The notice is a
+   * detached fiber rather than a discarded `Effect` — an `Effect` nobody runs
+   * shows nothing at all — started on this frame so it is posted before the
+   * action returns.
    */
   private notify(message: string): Effect.Effect<void> {
-    return Effect.sync(() => {
-      void this.deps.prompt.info(message);
-    });
+    return this.deps.prompt
+      .info(message)
+      .pipe(
+        Effect.ignore,
+        Effect.forkDetach({ startImmediately: true }),
+        Effect.asVoid,
+      );
   }
 
   /** Surface a failed action. A host that cannot report dies with it. */

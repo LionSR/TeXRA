@@ -4,8 +4,11 @@ import type { FileLocation, RunId } from '@shared/schemas';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import type { Effect } from 'effect';
 import type {
   AgentRuntimeEmitOptions,
+  DiagnosticsReadFailed,
+  PdfOpenFailed,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
@@ -21,7 +24,15 @@ const logger = createLog('SessionHostInteractions');
  */
 const MAX_PENDING_PRESENTATION_REPLAYS = 256;
 
-type DiagnosticsReader = (path: string) => Promise<GenericDiagnostic[]>;
+/**
+ * Read a file's diagnostics from the host's own language tooling. An `Effect`:
+ * a host that could not produce them reaches the diagnostics tool as
+ * {@link DiagnosticsReadFailed} instead of as `unknown`, and a tool call that
+ * is interrupted while the host rebuilds stops waiting on it.
+ */
+type DiagnosticsReader = (
+  path: string,
+) => Effect.Effect<GenericDiagnostic[], DiagnosticsReadFailed>;
 
 export interface ManualCriticismEntry {
   /** Absolute path resolved by the diagnostics tool. */
@@ -45,7 +56,15 @@ interface OpenPdfRequest {
   readonly preserveFocus: boolean;
 }
 
-type OpenPdfOpener = (request: OpenPdfRequest) => Promise<void> | void;
+/**
+ * Show a PDF in the host's viewer. An `Effect`, so a viewer that refused
+ * reaches the tool as {@link PdfOpenFailed} rather than as an `unknown`
+ * rejection — and the `Promise<void> | void` union the port carried while it
+ * was Promise-shaped is gone with it.
+ */
+type OpenPdfOpener = (
+  request: OpenPdfRequest,
+) => Effect.Effect<void, PdfOpenFailed>;
 
 /**
  * Collects one agent-review finding. Returns `accepted: false` with a reason

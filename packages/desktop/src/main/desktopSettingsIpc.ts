@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 
+import { Cause, Effect, Exit } from 'effect';
 import { runInSession, type SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
 import { storeCredential } from '@common/secrets/storeCredential';
@@ -10,7 +11,7 @@ import {
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
 import { appSignals } from '@eventBus/AppSignals';
-import type { MessageHost } from '@hosts/uiHosts';
+import { PromptFailed, type MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
@@ -49,7 +50,6 @@ import {
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
 import { subscribeDesktopGoalChanges } from './desktopGoalSubscription.js';
-import type { Effect } from 'effect';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -142,17 +142,52 @@ export function createDesktopSettingsIpc(
       options.ui.onError(error);
       return;
     }
-    void Promise.resolve(options.ui.showInfoMessage(error.reason)).catch(
-      options.ui.onError,
+    runtime.runFork(
+      Effect.tryPromise({
+        try: async () => {
+          await options.ui.showInfoMessage(error.reason);
+        },
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.catch((cause) =>
+          Effect.sync(() => {
+            options.ui.onError(cause);
+          }),
+        ),
+      ),
     );
   };
+  // The memory controller's prompts are the window's own dialogs; a window
+  // that has gone away rejects them, and that reaches the controller as
+  // `PromptFailed` rather than as an unknown rejection.
   const memoryController = new SettingsMemoryController({
     prompt: {
       confirm: (message, promptOptions) =>
-        options.ui.confirmAction(message, promptOptions?.confirmLabel),
-      warning: async (message) => {
-        await options.ui.showInfoMessage(message);
-      },
+        Effect.tryPromise({
+          try: async () =>
+            options.ui.confirmAction(message, promptOptions?.confirmLabel),
+          catch: (cause) =>
+            new PromptFailed({
+              reason: 'host-unavailable',
+              member: 'confirm',
+              message: 'The desktop window would not show the confirmation.',
+              cause,
+            }),
+        }),
+      warning: (message) =>
+        Effect.tryPromise({
+          try: async () => {
+            await options.ui.showInfoMessage(message);
+            return undefined;
+          },
+          catch: (cause) =>
+            new PromptFailed({
+              reason: 'host-unavailable',
+              member: 'warning',
+              message: 'The desktop window would not show the warning.',
+              cause,
+            }),
+        }),
     },
   });
   const modelSelectionController =
@@ -188,16 +223,17 @@ export function createDesktopSettingsIpc(
    * arrive.
    */
   async function postMemoryPreview(storagePath: string): Promise<void> {
-    try {
-      options.postToRenderer(
-        await runtime.runPromise(
-          memoryController.getMemoryPreviewMessage(storagePath),
-        ),
-      );
+    const previewed = await runtime.runPromise(
+      Effect.exit(memoryController.getMemoryPreviewMessage(storagePath)),
+    );
+    if (Exit.isSuccess(previewed)) {
+      options.postToRenderer(previewed.value);
       return;
-    } catch (error) {
-      onError(error);
     }
+    // A disposed runtime interrupts this read; the view it would repaint is
+    // going away with it, so there is no placeholder to post.
+    if (Cause.hasInterrupts(previewed.cause)) return;
+    onError(Cause.squash(previewed.cause));
     options.postToRenderer(
       memoryController.getMemoryPreviewErrorMessage(storagePath),
     );
@@ -246,17 +282,29 @@ export function createDesktopSettingsIpc(
   }
 
   async function postGoalList(): Promise<void> {
-    try {
+    // Settled synchronously, as the `try` it replaces was: the list is read
+    // from memory and the view is repainted on this turn, before any await.
+    const listed = runtime.runSync(
+      Effect.exit(
+        Effect.try({
+          try: () => goalList(options.session),
+          catch: (cause) => cause,
+        }),
+      ),
+    );
+    if (Exit.isSuccess(listed)) {
       options.postToRenderer({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-        items: goalList(options.session),
+        items: listed.value,
       });
-    } catch (error) {
-      options.ui.onError(error);
-      await options.ui.showErrorMessage(
-        formatError('Failed to load goals', error),
-      );
+      return;
     }
+    if (Cause.hasInterrupts(listed.cause)) return;
+    const error = Cause.squash(listed.cause);
+    options.ui.onError(error);
+    await options.ui.showErrorMessage(
+      formatError('Failed to load goals', error),
+    );
   }
 
   async function postInitialSettingsData(): Promise<void> {
@@ -356,7 +404,11 @@ export function createDesktopSettingsIpc(
   }
 
   function runAsync(work: Promise<void>): void {
-    void work.catch(onError);
+    runtime.runFork(
+      Effect.tryPromise({ try: () => work, catch: (cause) => cause }).pipe(
+        Effect.catch((cause) => Effect.sync(() => onError(cause))),
+      ),
+    );
   }
 
   /**

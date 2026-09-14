@@ -153,11 +153,17 @@ async function createFixture({
       },
     },
     prompt: {
-      input: async () => promptInput,
-      confirm: async (message) => {
-        confirms.push(message);
-        return confirmResult;
-      },
+      input: () => Effect.succeed(promptInput),
+      confirm: (message) =>
+        Effect.sync(() => {
+          confirms.push(message);
+          return confirmResult;
+        }),
+      info: (message) =>
+        Effect.sync(() => {
+          infos.push(message);
+          return undefined;
+        }),
     },
     externalOpener: {
       openExternal: async () => undefined,

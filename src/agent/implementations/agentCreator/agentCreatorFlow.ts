@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 import nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
@@ -242,20 +242,63 @@ function suggestToolGroups(description: string): string[] {
 }
 
 /**
+ * Why one of the creator's host steps could not be carried out.
+ *
+ * The reasons are the distinct things the host layer does on this flow's
+ * behalf, read off the one implementation
+ * (`packages/extension/src/commands/agent/agentCreatorCommands.ts`): show an
+ * input box or tool picker, resolve the custom-agents directory, register the
+ * new agent in the user's configuration, open the created file, and render the
+ * fallback template.
+ *
+ * A user who cancels is not a failure: the prompts answer `undefined` and the
+ * wizard returns without side effects, exactly as before.
+ */
+export class AgentCreatorUiFailed extends Data.TaggedError(
+  'AgentCreatorUiFailed',
+)<{
+  readonly reason:
+    | 'prompt-failed'
+    | 'directory-unavailable'
+    | 'config-update-failed'
+    | 'open-failed'
+    | 'render-failed';
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
  * All host-specific operations injected by the VS Code command layer.
  * Keeps the creation workflow independent of VS Code.
+ *
+ * Every member that waits on the host is an `Effect`: its failure reaches the
+ * wizard as {@link AgentCreatorUiFailed} rather than as `unknown`, and
+ * interrupting the wizard closes the input box or picker it left on screen.
+ * `showCreatedInfo` and `renderTemplate` stay synchronous — one is a
+ * fire-and-forget notice, the other a pure render.
  */
 export interface AgentCreatorUI {
-  promptAgentName(categoryLabel: string): Promise<string | undefined>;
-  promptDescription(title: string, prompt: string): Promise<string | undefined>;
+  promptAgentName(
+    categoryLabel: string,
+  ): Effect.Effect<string | undefined, AgentCreatorUiFailed>;
+  promptDescription(
+    title: string,
+    prompt: string,
+  ): Effect.Effect<string | undefined, AgentCreatorUiFailed>;
   pickTools(
     agentName: string,
     suggestedGroups: string[],
-  ): Promise<{ tools: string[]; groups: string[] } | undefined>;
-  getCustomAgentDir(): Promise<string>;
+  ): Effect.Effect<
+    { tools: string[]; groups: string[] } | undefined,
+    AgentCreatorUiFailed
+  >;
+  getCustomAgentDir(): Effect.Effect<string, AgentCreatorUiFailed>;
   showCreatedInfo(filePath: string): void;
-  promptAddToConfig(agentName: string, category: AgentCategory): Promise<void>;
-  openCreatedFile(filePath: string): Promise<void>;
+  promptAddToConfig(
+    agentName: string,
+    category: AgentCategory,
+  ): Effect.Effect<void, AgentCreatorUiFailed>;
+  openCreatedFile(filePath: string): Effect.Effect<void, AgentCreatorUiFailed>;
   renderTemplate(template: string, vars: Record<string, unknown>): string;
 }
 
@@ -309,22 +352,22 @@ function buildSchemaRef(settingsSchema: z.ZodObject<z.ZodRawShape>): string {
 
 // ── Creation stages ─────────────────────────────────────────
 
-async function buildAgentBlueprint(
+const buildAgentBlueprint = Effect.fn('agentCreator.buildBlueprint')(function* (
   config: CreatorConfig,
   category: AgentCategory,
   agentName: string,
   description: string,
   ui: AgentCreatorUI,
-): Promise<AgentBlueprint | undefined> {
+): Effect.fn.Return<AgentBlueprint | undefined, AgentCreatorUiFailed> {
   const base = { AGENT_NAME: agentName, DESCRIPTION: description };
 
   if (category === 'toolUse') {
-    const picked = await ui.pickTools(
+    const picked = yield* ui.pickTools(
       agentName,
       suggestToolGroups(description),
     );
     if (!picked) return undefined;
-    const targetDir = await ui.getCustomAgentDir();
+    const targetDir = yield* ui.getCustomAgentDir();
     return {
       category: 'toolUse',
       filePath: path.join(targetDir, `${agentName}.yaml`),
@@ -341,7 +384,7 @@ async function buildAgentBlueprint(
     };
   }
 
-  const targetDir = await ui.getCustomAgentDir();
+  const targetDir = yield* ui.getCustomAgentDir();
   return {
     category: 'workflow',
     filePath: path.join(targetDir, `${agentName}.yaml`),
@@ -349,7 +392,7 @@ async function buildAgentBlueprint(
     fallbackTemplate: config.templates.workflowSingle,
     fallbackVars: { ...base },
   };
-}
+});
 
 /**
  * Draft the agent YAML with the helper model: one initial attempt and one
@@ -418,9 +461,16 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
       // Route through the shared renderer so both the Settings "new from
       // template" flow and this fallback produce byte-identical output for
       // matching inputs.
-      return hostPort(() =>
-        ui.renderTemplate(blueprint.fallbackTemplate, blueprint.fallbackVars),
-      );
+      return Effect.try({
+        try: () =>
+          ui.renderTemplate(blueprint.fallbackTemplate, blueprint.fallbackVars),
+        catch: (cause) =>
+          new AgentCreatorUiFailed({
+            reason: 'render-failed',
+            message: 'The fallback agent template could not be rendered.',
+            cause,
+          }),
+      });
     }),
   );
 });
@@ -441,25 +491,27 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   stores: ModelOptionStores,
 ): Effect.fn.Return<void, unknown> {
   const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
-  const agentName = yield* hostPort(() => ui.promptAgentName(categoryLabel));
+  const agentName = yield* ui.promptAgentName(categoryLabel);
   if (!agentName) return;
 
-  const description = yield* hostPort(() =>
-    ui.promptDescription(
-      `New ${categoryLabel} Agent: ${agentName}`,
-      DESCRIPTION_PROMPTS[category],
-    ),
+  const description = yield* ui.promptDescription(
+    `New ${categoryLabel} Agent: ${agentName}`,
+    DESCRIPTION_PROMPTS[category],
   );
   if (!description) return;
 
-  const blueprint = yield* hostPort(() =>
-    buildAgentBlueprint(config, category, agentName, description, ui),
+  const blueprint = yield* buildAgentBlueprint(
+    config,
+    category,
+    agentName,
+    description,
+    ui,
   );
   if (!blueprint) return;
 
   const yamlContent = yield* generateAgentYaml(config, blueprint, ui, stores);
   yield* hostPort(() => AbsoluteFS.write(blueprint.filePath, yamlContent));
   ui.showCreatedInfo(blueprint.filePath);
-  yield* hostPort(() => ui.promptAddToConfig(agentName, category));
-  yield* hostPort(() => ui.openCreatedFile(blueprint.filePath));
+  yield* ui.promptAddToConfig(agentName, category);
+  yield* ui.openCreatedFile(blueprint.filePath);
 });

@@ -79,6 +79,10 @@ export { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 export { detachSubagentsOnStop } from './detachSubagentsOnStop';
 
 // runtimePresentationEvents
+export {
+  DiagnosticsReadFailed,
+  PdfOpenFailed,
+} from './runtimePresentationEvents';
 export type {
   PresentationEventHandlers,
   RuntimePresentationEvent,

@@ -7,7 +7,6 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import {
@@ -151,14 +150,18 @@ export class DiagnosticsTool extends defineTool({
       );
     }
 
-    const messages = yield* hostPort(() => linter(diagnosticsPath)).pipe(
-      Effect.catch((error) => {
-        const detail = toErrorMessage(error);
+    // The host's own failure, matched by tag: `reason` says whether the file
+    // had no workspace, the refresh build faulted, or the collection itself
+    // threw, and the agent is told which.
+    const messages = yield* linter(diagnosticsPath).pipe(
+      Effect.catchTag('DiagnosticsReadFailed', (error) => {
         log.error(
-          `Failed to collect diagnostics for ${diagnosticsPath}: ${detail}`,
+          `Failed to collect diagnostics for ${diagnosticsPath} (${error.reason}): ${error.message}`,
         );
         return Effect.fail(
-          new ToolError(`Failed to collect diagnostics: ${detail}`),
+          new ToolError(
+            `Failed to collect diagnostics (${error.reason}): ${error.message}`,
+          ),
         );
       }),
     );

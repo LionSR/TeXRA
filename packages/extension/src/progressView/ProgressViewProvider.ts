@@ -18,6 +18,7 @@ import { createChannelTrace } from '@agent/trace';
 import {
   attachTerminalResultToast,
   defaultSession,
+  PdfOpenFailed,
   type SessionHandle,
 } from '@agent/runtime';
 import { getAuthStatus } from '@commands/auth/authCommands';
@@ -299,16 +300,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         accepted: pushManualCriticism(payload),
         resolvedPath: payload.absolutePath,
       }),
-      openPdf: async ({ location, preserveFocus }) => {
-        await vscode.commands.executeCommand(
-          'vscode.open',
-          vscode.Uri.file(location.absolutePath),
-          {
-            viewColumn: vscode.ViewColumn.Beside,
-            preserveFocus,
-          } satisfies vscode.TextDocumentShowOptions,
-        );
-      },
+      openPdf: ({ location, preserveFocus }) =>
+        Effect.tryPromise({
+          try: async () => {
+            await vscode.commands.executeCommand(
+              'vscode.open',
+              vscode.Uri.file(location.absolutePath),
+              {
+                viewColumn: vscode.ViewColumn.Beside,
+                preserveFocus,
+              } satisfies vscode.TextDocumentShowOptions,
+            );
+          },
+          catch: (cause) =>
+            new PdfOpenFailed({
+              path: location.absolutePath,
+              message: 'VS Code would not open the PDF in its viewer.',
+              cause,
+            }),
+        }),
       // Findings from the changeReviewer tool-use session flow in through
       // the report_review_issue tool and land in the panel + diagnostics.
       reportReviewIssue: (report) => AgentReviewService.addIssueReport(report),

@@ -1,8 +1,7 @@
-import { Effect, Equal, Redacted } from 'effect';
+import { Data, Effect, Equal, Redacted } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveDirectModelApiKeyProvider } from '@model/openRouterRouting';
 import type { ExhaustionReason, RunId } from '@shared/schemas';
@@ -21,13 +20,31 @@ interface ProgressApiKeyRetryRequest {
   exhaustionReason?: ExhaustionReason;
 }
 
+/**
+ * The host could not ask the user for a provider key.
+ *
+ * One reason, by measurement: both implementations put the request in front of
+ * the user through the host's own surface (the extension runs its set-key
+ * command, the desktop opens the Models tab and posts a notice), and either
+ * that surface accepts the request or it faults. A user who closes the prompt
+ * without entering a key is not a failure — the controller re-reads the store
+ * and answers `false`.
+ */
+export class ApiKeyPromptFailed extends Data.TaggedError('ApiKeyPromptFailed')<{
+  readonly provider: ApiProvider | undefined;
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
 export interface ProgressApiKeyRetryControllerDeps {
   providers: readonly ApiProvider[];
   readKey(
     provider: ApiProvider,
   ): Effect.Effect<Redacted.Redacted<string> | undefined, unknown>;
   hasUsableKey(provider: ApiProvider): Effect.Effect<boolean, unknown>;
-  promptForApiKey(provider?: ApiProvider): Promise<void>;
+  promptForApiKey(
+    provider?: ApiProvider,
+  ): Effect.Effect<void, ApiKeyPromptFailed>;
   isRetryPending(stream: RunId, requestId: string): boolean;
   triggerRetry(
     stream: RunId,
@@ -115,7 +132,7 @@ export class ProgressApiKeyRetryController {
     //   usable direct key is enough consent to retry on it.
     if (requireChange) {
       const before = yield* this.readKeys(providersToCheck);
-      yield* hostPort(() => this.deps.promptForApiKey(provider));
+      yield* this.deps.promptForApiKey(provider);
       return yield* this.hasChangedUsableKey(providersToCheck, before);
     }
 
@@ -125,7 +142,7 @@ export class ProgressApiKeyRetryController {
     // none exists yet, and only re-check the keys after that prompt (so the
     // common already-set path reads the secret store once, not twice).
     if (yield* this.hasAnyUsableKey(providersToCheck)) return true;
-    yield* hostPort(() => this.deps.promptForApiKey(provider));
+    yield* this.deps.promptForApiKey(provider);
     return yield* this.hasAnyUsableKey(providersToCheck);
   });
 
