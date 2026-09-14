@@ -685,11 +685,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     if (start.resume) yield* ledger.acquire(runId);
     const loaded = yield* ledger.load(runId);
     // The follow-ups the rows still queue: input admitted while no consumer
-    // held this run, or a batch a crash left unconsumed (C3).
+    // held this run, or a batch a crash left unconsumed (C3). An unopened
+    // aggregate (`phase` null) still carries those rows; seed them before
+    // the opening batch so a restart delivers the SQLite copy.
     followUps.seed(loaded);
     let state: RunState;
-    if (loaded === null) {
-      if (start.resume) {
+    if (loaded === null || loaded.phase === null) {
+      if (start.resume && loaded === null) {
         return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
       }
       state = yield* openFresh();
