@@ -18,7 +18,7 @@ import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { workspaceRoots, type WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AGENT_MODE_PRESETS,
   agentKeyOf,
@@ -100,12 +100,13 @@ const AGENT_ROSTER_SELECT_CHROME_ROWS = 5;
 
 async function loadRosterData(
   runtime: ProcessRuntime,
+  roots: WorkspaceRoots,
 ): Promise<AgentRosterData> {
   // The roster read loads the local agent catalog the lists below read.
-  const record = await runtime.runPromise(readCliAgentRoster);
+  const record = await runtime.runPromise(readCliAgentRoster(roots));
   return {
     record,
-    presets: createWorkspaceAgentRosterController().allPresets(),
+    presets: createWorkspaceAgentRosterController(roots).allPresets(),
     agents: byCategory((category) => getAgentsByCategory(category)),
   };
 }
@@ -114,9 +115,12 @@ export function AgentRosterForm(
   props: AgentRosterFormProps,
 ): React.JSX.Element | null {
   const [mode, setMode] = useState<AgentRosterFormMode>('overview');
+  // Resolved once for the form's lifetime: the roster read, every roster
+  // write and the default chat-agent write below all target these roots.
+  const [roots] = useState(() => workspaceRoots());
   const { data, error, reload, reportError } =
     useAsyncListForm<AgentRosterData>({
-      load: () => loadRosterData(props.runtime),
+      load: () => loadRosterData(props.runtime, roots),
       onClose: props.onClose,
       onError: props.onError,
     });
@@ -229,7 +233,7 @@ export function AgentRosterForm(
     return frame(
       items,
       (value) => {
-        const roster = createWorkspaceAgentRosterController();
+        const roster = createWorkspaceAgentRosterController(roots);
         if (value === 'inherit') write(() => roster.setInherited(), 'overview');
         else if (value === 'all') write(() => roster.setAll(), 'overview');
         else
@@ -254,7 +258,7 @@ export function AgentRosterForm(
         })),
       ],
       (value) => {
-        const roster = createWorkspaceAgentRosterController();
+        const roster = createWorkspaceAgentRosterController(roots);
         write(
           () =>
             value ? roster.setDefaultTeam(value) : roster.clearDefaultTeam(),
@@ -272,7 +276,7 @@ export function AgentRosterForm(
         selectedAgentKeys(data.record.agentKeys.toolUse, data.agents.toolUse),
       ),
       (value) => {
-        const cwd = workspaceRoots().workspace;
+        const cwd = roots.workspace;
         write(async () => {
           if (!cwd) {
             throw new Error(
@@ -324,7 +328,7 @@ export function AgentRosterForm(
       const agent = agents.find((candidate) => agentKeyOf(candidate) === value);
       if (!agent) return;
       write(() =>
-        createWorkspaceAgentRosterController().setAgentEnabled({
+        createWorkspaceAgentRosterController(roots).setAgentEnabled({
           category: mode,
           source: agent.source,
           name: agent.name,

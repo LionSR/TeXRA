@@ -4,7 +4,7 @@ import { Data, Effect } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { workspaceRoots, type WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AgentCategory as AgentCategoryType,
   AgentDelegationScope,
@@ -366,12 +366,16 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
 // =============================================================================
 
 /**
- * Construct the roster controller over the active host stores. This is the one
- * place the durable roster's dependencies are wired, so every host reads and
- * writes the same selection through identical resolution rules.
+ * Construct the roster controller over the given workspace's stores. This is
+ * the one place the durable roster's dependencies are wired, so every host
+ * reads and writes the same selection through identical resolution rules. The
+ * caller passes the roots it holds (a tool call's `call.roots`, a host's
+ * session roots) rather than this reading the calling context's scope.
  */
-export function createWorkspaceAgentRosterController(): AgentRosterController<AgentEntry> {
-  const { workspaceState, globalState } = workspaceRoots();
+export function createWorkspaceAgentRosterController(
+  roots: Pick<WorkspaceRoots, 'workspaceState' | 'globalState'>,
+): AgentRosterController<AgentEntry> {
+  const { workspaceState, globalState } = roots;
   return new AgentRosterController({
     workspaceState,
     globalState,
@@ -390,7 +394,9 @@ export function createWorkspaceAgentRosterController(): AgentRosterController<Ag
  * No default → undefined means "never configured" (show all).
  */
 export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
-  return createWorkspaceAgentRosterController().getVisibleAgents(category);
+  return createWorkspaceAgentRosterController(
+    workspaceRoots(),
+  ).getVisibleAgents(category);
 }
 
 /**
