@@ -133,13 +133,13 @@ function delegationRegistry(tools: readonly ToolInput[]) {
   );
 }
 
-async function resolveToolList(
+function resolveToolList(
   tools: ToolInput[] = [DELEGATE_AGENT_TOOL],
   inScope?: <T>(read: () => T) => T,
 ) {
-  const { secrets, globalState } = hostStores();
-  return Effect.runPromise(
-    resolveAgentTools({
+  return Effect.suspend(() => {
+    const { secrets, globalState } = hostStores();
+    return resolveAgentTools({
       tools,
       registry: delegationRegistry(tools),
       logger: { warn: () => {} },
@@ -147,13 +147,14 @@ async function resolveToolList(
       config: new FakeConfigProvider(),
       stores: { secrets, globalState },
       inScope,
-    }),
-  );
+    });
+  });
 }
 
-async function resolveDelegateAgent(extraTools: ToolInput[] = []) {
-  const tools = await resolveToolList([DELEGATE_AGENT_TOOL, ...extraTools]);
-  return tools.find((t) => t.name === 'delegate_agent');
+function resolveDelegateAgent(extraTools: ToolInput[] = []) {
+  return resolveToolList([DELEGATE_AGENT_TOOL, ...extraTools]).pipe(
+    Effect.map((tools) => tools.find((t) => t.name === 'delegate_agent')),
+  );
 }
 
 function model(
@@ -338,78 +339,93 @@ describe('resolveAgentTools delegation annotation', () => {
     );
   });
 
-  it('reflects the current roster on each call, not a frozen snapshot', async () => {
-    // The #6655 regression: the roster was captured once and reused. Resolving
-    // twice with a roster change between calls must yield a refreshed list.
-    mocks.getVisibleAgents.mockReturnValue([
-      { name: 'research', description: 'Derive.' },
-      { name: 'numerics', description: 'Simulate.' },
-    ]);
-    const first = await resolveDelegateAgent();
-    expect(first?.description).toContain('- research:');
-    expect(first?.description).toContain('- numerics:');
+  it.effect(
+    'reflects the current roster on each call, not a frozen snapshot',
+    () =>
+      Effect.gen(function* () {
+        // The #6655 regression: the roster was captured once and reused.
+        // Resolving twice with a roster change between calls must yield a
+        // refreshed list.
+        mocks.getVisibleAgents.mockReturnValue([
+          { name: 'research', description: 'Derive.' },
+          { name: 'numerics', description: 'Simulate.' },
+        ]);
+        const first = yield* resolveDelegateAgent();
+        expect(first?.description).toContain('- research:');
+        expect(first?.description).toContain('- numerics:');
 
-    mocks.getVisibleAgents.mockReturnValue([
-      { name: 'coder', description: 'Write code.' },
-    ]);
-    const second = await resolveDelegateAgent();
-    expect(second?.description).toContain('- coder:');
-    expect(second?.description).not.toContain('- research:');
-    expect(second?.description).not.toContain('- numerics:');
-  });
+        mocks.getVisibleAgents.mockReturnValue([
+          { name: 'coder', description: 'Write code.' },
+        ]);
+        const second = yield* resolveDelegateAgent();
+        expect(second?.description).toContain('- coder:');
+        expect(second?.description).not.toContain('- research:');
+        expect(second?.description).not.toContain('- numerics:');
+      }),
+  );
 
-  it('reads the annotation facts inside the caller frame, not on the fiber', async () => {
-    // The annotation's worktree read resolves against the calling session's
-    // workspace, so it must happen inside the run's frame: outside it, a
-    // multi-session host reads the process's roots instead.
-    mocks.getVisibleAgents.mockReturnValue([]);
-    const worktreeTool: ToolInput = {
-      name: 'delegate_agent',
-      availabilityCategory: 'toolUse',
-      description: DELEGATE_AGENT_WORKTREE_DESCRIPTION,
-    };
-    let inFrame = false;
-    mocks.isWorktreeSupportEnabled.mockImplementation(() => inFrame);
+  it.effect(
+    'reads the annotation facts inside the caller frame, not on the fiber',
+    () =>
+      Effect.gen(function* () {
+        // The annotation's worktree read resolves against the calling session's
+        // workspace, so it must happen inside the run's frame: outside it, a
+        // multi-session host reads the process's roots instead.
+        mocks.getVisibleAgents.mockReturnValue([]);
+        const worktreeTool: ToolInput = {
+          name: 'delegate_agent',
+          availabilityCategory: 'toolUse',
+          description: DELEGATE_AGENT_WORKTREE_DESCRIPTION,
+        };
+        let inFrame = false;
+        mocks.isWorktreeSupportEnabled.mockImplementation(() => inFrame);
 
-    const scoped = await resolveToolList([worktreeTool], (read) => {
-      inFrame = true;
-      try {
-        return read();
-      } finally {
-        inFrame = false;
-      }
-    });
-    const unscoped = await resolveToolList([worktreeTool]);
+        const scoped = yield* resolveToolList([worktreeTool], (read) => {
+          inFrame = true;
+          try {
+            return read();
+          } finally {
+            inFrame = false;
+          }
+        });
+        const unscoped = yield* resolveToolList([worktreeTool]);
 
-    expect(scoped[0]?.description).toContain('Git worktree support: ENABLED.');
-    expect(unscoped[0]?.description).toContain(
-      'Git worktree support: DISABLED',
-    );
-  });
+        expect(scoped[0]?.description).toContain(
+          'Git worktree support: ENABLED.',
+        );
+        expect(unscoped[0]?.description).toContain(
+          'Git worktree support: DISABLED',
+        );
+      }),
+  );
 
-  it('annotates each delegation tool from its own agent category', async () => {
-    mocks.getVisibleAgents.mockImplementation((category: string) =>
-      category === 'toolUse'
-        ? [{ name: 'coder', description: 'Write code.' }]
-        : [{ name: 'apply', description: 'Apply review suggestions.' }],
-    );
+  it.effect('annotates each delegation tool from its own agent category', () =>
+    Effect.gen(function* () {
+      mocks.getVisibleAgents.mockImplementation((category: string) =>
+        category === 'toolUse'
+          ? [{ name: 'coder', description: 'Write code.' }]
+          : [{ name: 'apply', description: 'Apply review suggestions.' }],
+      );
 
-    const tools = await resolveToolList([
-      DELEGATE_AGENT_TOOL,
-      {
-        name: 'delegate_workflow',
-        availabilityCategory: 'workflow',
-        description: DELEGATE_WORKFLOW_DESCRIPTION,
-      },
-    ]);
+      const tools = yield* resolveToolList([
+        DELEGATE_AGENT_TOOL,
+        {
+          name: 'delegate_workflow',
+          availabilityCategory: 'workflow',
+          description: DELEGATE_WORKFLOW_DESCRIPTION,
+        },
+      ]);
 
-    const delegateAgent = tools.find((t) => t.name === 'delegate_agent');
-    const delegateWorkflow = tools.find((t) => t.name === 'delegate_workflow');
-    expect(delegateAgent?.description).toContain('- coder:');
-    expect(delegateAgent?.description).not.toContain('- apply:');
-    expect(delegateWorkflow?.description).toContain('- apply:');
-    expect(delegateWorkflow?.description).not.toContain('- coder:');
-    expect(mocks.getVisibleAgents).toHaveBeenCalledWith('toolUse');
-    expect(mocks.getVisibleAgents).toHaveBeenCalledWith('workflow');
-  });
+      const delegateAgent = tools.find((t) => t.name === 'delegate_agent');
+      const delegateWorkflow = tools.find(
+        (t) => t.name === 'delegate_workflow',
+      );
+      expect(delegateAgent?.description).toContain('- coder:');
+      expect(delegateAgent?.description).not.toContain('- apply:');
+      expect(delegateWorkflow?.description).toContain('- apply:');
+      expect(delegateWorkflow?.description).not.toContain('- coder:');
+      expect(mocks.getVisibleAgents).toHaveBeenCalledWith('toolUse');
+      expect(mocks.getVisibleAgents).toHaveBeenCalledWith('workflow');
+    }),
+  );
 });
