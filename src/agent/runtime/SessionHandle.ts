@@ -1098,7 +1098,20 @@ export class SessionHandle {
             ),
           ),
         );
-    });
+    }).pipe(
+      // A settle that cannot complete (the plane's consumer stopped) is a
+      // settle that failed: its caller decides the run's terminal row on it
+      // (the `artifact-drain` marker), so it is a typed failure here, never a
+      // defect that ends the caller before that row is written. Interruption
+      // still propagates.
+      Effect.catchDefect((defect) =>
+        Effect.sync(() => {
+          logger.warn('Session publications could not be settled', {
+            data: defect,
+          });
+        }).pipe(Effect.andThen(Effect.fail(ensureError(defect)))),
+      ),
+    );
   }
 
   /** Apply a durable fact delivered by the root's ordered table tail. */

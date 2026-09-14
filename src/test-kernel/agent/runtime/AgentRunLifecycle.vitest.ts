@@ -8,10 +8,7 @@ import { noopTrace, TraceEmitter } from '@agent/trace';
 import type { FinalizeRunResult } from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
-import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
   runFlowWithLifecycle,
@@ -1080,6 +1077,27 @@ describe('finalizeRunTerminal', () => {
       }),
     );
     expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
+  });
+
+  // A plane whose consumer stopped cannot settle at all: that is a lost drain
+  // like any other, so the run still ends on an `artifact-drain` row.
+  it('records a dead plane as a failed drain', async () => {
+    const { session, handle } = finalizeFixture();
+    Object.assign(session, {
+      graph: {
+        settle: Effect.die(
+          new Error('Session committed-event consumer stopped'),
+        ),
+      },
+      publications: new Set(),
+      settlePublications: SessionHandle.prototype.settlePublications,
+    });
+
+    const finalization = await Effect.runPromise(
+      finalize({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
+    );
+
+    expect(finalization?.event.error?.kind).toBe('artifact-drain');
   });
 
   it('settles and untracks once while reporting terminal metadata failure', async () => {
