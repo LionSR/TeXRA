@@ -357,30 +357,38 @@ export class ToolUseFollowUpQueue {
   /**
    * End a run's entry: any outstanding lease becomes stale immediately, and
    * no producer can recreate the entry until an explicit claim reopens it.
+   * While an admission for the run is running, the tombstone waits until
+   * that job settles: a row it commits keeps the run recoverable, and a
+   * refusal finishes the terminalize so nothing is left queued on a killed
+   * run.
    */
   terminalize(runId: RunId): boolean {
     if (this.disposed) return false;
     const entry = this.entries.get(runId);
-    if (entry) {
+    if (entry?.admitting) {
       this.endInput(entry);
-      this.releaseAdoptedClaim(runId, entry, () => {});
+      entry.pendingRelease = 'terminal';
+      return true;
     }
-    this.entries.delete(runId);
-    this.terminalized.add(runId);
-    this.notifyReleaseObservers(runId);
+    this.finishTerminalize(runId, entry);
     return true;
   }
 
   /**
-   * Dispose the session-owned boundary: end every attached queue, then drop
-   * the entry map and release observers. Entry-creating paths refuse to
-   * rebuild afterwards, so a late detached producer cannot leak an entry
-   * nobody will drain.
+   * Dispose the session-owned boundary: end every attached queue, release
+   * every adopted claim onto the session publisher, then drop the entry map
+   * and release observers. The session's unwind settles those releases
+   * before the graph closes. Entry-creating paths refuse to rebuild
+   * afterwards, so a late detached producer cannot leak an entry nobody
+   * will drain.
    */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const entry of this.entries.values()) this.endInput(entry);
+    for (const [runId, entry] of this.entries) {
+      this.endInput(entry);
+      this.releaseAdoptedClaim(runId, entry, () => {});
+    }
     this.entries.clear();
     this.terminalized.clear();
     this.releaseObservers.clear();
@@ -431,14 +439,15 @@ export class ToolUseFollowUpQueue {
       admitted.admitting = false;
       const pending = admitted.pendingRelease;
       if (pending !== undefined) {
-        // A run that now holds rows this admission queued stays recoverable.
-        this.applyRelease(
-          runId,
-          admitted,
-          Exit.isSuccess(written) && written.value.wrote
-            ? 'recoverable'
-            : pending,
-        );
+        // A run that now holds rows this admission queued stays recoverable,
+        // including a terminalize that arrived while the write was in flight.
+        if (Exit.isSuccess(written) && written.value.wrote) {
+          this.applyRelease(runId, admitted, 'recoverable');
+        } else if (pending === 'terminal') {
+          this.finishTerminalize(runId, admitted);
+        } else {
+          this.applyRelease(runId, admitted, pending);
+        }
       }
       if (Exit.isFailure(written)) {
         const error = Cause.squash(written.cause);
@@ -574,6 +583,20 @@ export class ToolUseFollowUpQueue {
       if (entry.input) entry.input.offer(followUp);
       else entry.held.push(followUp);
     }
+  }
+
+  /**
+   * Tombstone the run: any outstanding lease is stale, the entry is gone,
+   * and no producer can recreate it until an explicit claim reopens it.
+   */
+  private finishTerminalize(runId: RunId, entry: QueueEntry | undefined): void {
+    if (entry) {
+      this.endInput(entry);
+      this.releaseAdoptedClaim(runId, entry, () => {});
+    }
+    this.entries.delete(runId);
+    this.terminalized.add(runId);
+    this.notifyReleaseObservers(runId);
   }
 
   private applyRelease(

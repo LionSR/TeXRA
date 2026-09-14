@@ -1024,30 +1024,27 @@ export function startChildRunLoop<TTurn, R = never>(
       const body = yield* Effect.exit(
         Effect.scoped(
           Effect.gen(function* () {
-            const drainer = yield* Effect.forkScoped(
-              Effect.gen(function* () {
-                for (;;) {
-                  const notice = yield* Queue.take(notices).pipe(
-                    Effect.catchTag('Done', () => Effect.succeed(null)),
-                  );
-                  if (notice === null) return;
-                  yield* notice.pipe(
-                    Effect.catch((error) =>
-                      Effect.sync(() => {
-                        logger.warn('Child progress was not queued', {
-                          data: { runId, error },
-                        });
-                      }),
-                    ),
-                  );
-                }
-              }),
-            );
-            // Progress reported before the body ends is written before it
-            // ends: close the queue, then let the drainer finish.
+            // Notices await SQLite admission, so they must drain before any
+            // parent delivery: an interim result that races ahead of them
+            // becomes a separate stale model turn. Serial, not a forked
+            // drainer, so the result cannot commit first.
+            const drainNotices = Effect.gen(function* () {
+              while (Queue.sizeUnsafe(notices) > 0) {
+                const notice = yield* Queue.take(notices);
+                yield* notice.pipe(
+                  Effect.catch((error) =>
+                    Effect.sync(() => {
+                      logger.warn('Child progress was not queued', {
+                        data: { runId, error },
+                      });
+                    }),
+                  ),
+                );
+              }
+            });
             yield* Effect.addFinalizer(() =>
-              Queue.end(notices).pipe(
-                Effect.andThen(Fiber.await(drainer)),
+              drainNotices.pipe(
+                Effect.andThen(Queue.end(notices)),
                 Effect.asVoid,
               ),
             );
@@ -1118,6 +1115,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 turn: turnKey,
                 queueOwner: queueLease,
               });
+              yield* drainNotices;
 
               if (turnFailed) {
                 sawTurnFailure = true;
