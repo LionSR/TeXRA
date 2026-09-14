@@ -287,6 +287,15 @@ export class RunHandle<
     this.suspension = { state: 'parked', teardown };
   }
 
+  /**
+   * True while this handle is parked at WAITING, or a stop has claimed that
+   * parking. Presence of the suspension is the fact; a launch handle that
+   * is merely tracked is not suspended.
+   */
+  get isSuspended(): boolean {
+    return this.suspension !== undefined;
+  }
+
   /** True once a stop claimed this suspended run and owns its teardown. */
   get suspendedTerminationStarted(): boolean {
     return this.suspension?.state === 'terminating';

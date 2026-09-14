@@ -117,8 +117,16 @@ export const runAgent = Effect.fn('runAgent')(function* (
   // A resume of a run this session already runs is a duplicate, refused here
   // before any snapshot is taken: queued behind the live generation it would
   // wake without a handle of its own and restore a prior terminal fact over
-  // the one that generation is about to write.
-  if (!shouldRegister && runSession.runs.isActiveOrResuming(runId))
+  // the one that generation is about to write. A provisional launch handle
+  // is tracked before the lane is claimed, so `isActiveOrResuming` is not
+  // enough: treating that handle as a parked predecessor would overwrite
+  // its interrupt handler and leave the first launch unstoppable.
+  const existingHandle = runSession.runs.getHandle(runId);
+  if (
+    !shouldRegister &&
+    (runSession.runs.isActiveOrResuming(runId) ||
+      (existingHandle !== undefined && !existingHandle.isSuspended))
+  )
     return yield* Effect.fail(new Error(`Run is already running: ${runId}`));
   // The launch's one stop: the launch handle's interrupt completes it, the
   // launch fails at its next preparation step once it has, and the run
@@ -135,9 +143,12 @@ export const runAgent = Effect.fn('runAgent')(function* (
     category: request.config.agentCategory,
   };
   // A parked WAITING predecessor is already the kill target: attach the
-  // latch there instead of replacing it. A stop already claimed on that
-  // handle is inherited now, not after a later track().
-  const parkedHandle = runSession.runs.getHandle(runId);
+  // latch there instead of replacing it. Only a genuinely suspended handle
+  // qualifies; a live launch handle must keep its own interrupt handler.
+  // A stop already claimed on that parked handle is inherited now, not
+  // after a later track().
+  const parkedHandle =
+    existingHandle?.isSuspended === true ? existingHandle : undefined;
   if (
     parkedHandle?.stopRequested === true ||
     parkedHandle?.suspendedTerminationStarted === true

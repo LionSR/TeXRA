@@ -227,6 +227,33 @@ describe('runAgent run ownership', () => {
   );
 
   it.effect(
+    'refuses a second resume while the first has only tracked its launch handle',
+    () =>
+      Effect.gen(function* () {
+        let finishRead!: (value: null) => void;
+        mocks.readRunEnd.mockImplementationOnce(
+          () =>
+            new Promise<null>((resolve) => {
+              finishRead = resolve;
+            }),
+        );
+        const first = yield* Effect.forkChild(launch(), {
+          startImmediately: true,
+        });
+        expect(trackedHandle?.isSuspended).toBe(false);
+        expect(yield* Effect.flip(launch())).toMatchObject({
+          message: `Run is already running: ${RUN_ID}`,
+        });
+        const firstHandler = trackedHandle;
+        expect(firstHandler?.interrupt()).toBe(true);
+        finishRead(null);
+        expect(yield* Effect.flip(Fiber.join(first))).toMatchObject({
+          name: 'AbortError',
+        });
+      }),
+  );
+
+  it.effect(
     'refuses a resume of a missing run and untracks its launch handle',
     () =>
       Effect.gen(function* () {
