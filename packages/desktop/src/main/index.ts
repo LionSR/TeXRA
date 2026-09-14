@@ -817,6 +817,7 @@ function createWindow(options: {
       project: projectDisplayOf(project.key, project.root),
       globalState: options.globalState,
       secrets: options.secrets,
+      inScope: (read) => runInSession(project.session, read),
       fileOptions: () => files.fileOptions(),
       readRecentCommits: () => recentCommitsOf(project.root),
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
@@ -941,7 +942,9 @@ function createWindow(options: {
   // Catalog refresh leaves each Surface's selections intact. Applying an
   // agent mode separately sends the chosen root to that project's launcher.
   // Each project's catalogs are read inside its own session: the presets
-  // come from that project's workspace state, not the caller's.
+  // come from that project's workspace state, not the caller's. This frame
+  // covers the fiber's start only — it does not survive the first resume —
+  // so the model read holds the same session frame as its own `inScope`.
   const refreshCatalogs = async () => {
     await Promise.all(
       [...projectBindings.values()].map((binding) =>

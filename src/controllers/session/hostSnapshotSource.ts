@@ -18,6 +18,7 @@ import {
   getEnabledModels,
   modelOptionsFrom,
   readModelAvailabilityInputs,
+  type ModelAvailabilityScope,
 } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -37,6 +38,18 @@ interface HostSnapshotSourceOptions {
    *  answers. The host root that owns it threads it in beside
    *  {@link HostSnapshotSourceOptions.globalState}. */
   secrets: PlatformSecrets;
+  /**
+   * The owning project's session frame. The model catalog's availability read
+   * resolves the two "prefer my subscription" switches against the session's
+   * workspace roots, and it is an Effect: a fiber resumes outside whatever
+   * frame its caller entered, so the frame is threaded in and applied around
+   * each host call instead of wrapped around the refresh. A host that runs one
+   * session per process (the extension, the CLI) passes the calling frame,
+   * `(read) => read()`; a host with several open projects in one process (the
+   * desktop) passes that project's, or every project reads the process roots'
+   * preferences.
+   */
+  inScope: ModelAvailabilityScope;
   /** The launcher's single-slot catalogs: base and edited candidates. */
   fileOptions(): Promise<FileOptions>;
   readRecentCommits(): Promise<{ commits: string[]; isGitRepo: boolean }>;
@@ -154,6 +167,7 @@ export function createHostSnapshotSource(
     const inputs = yield* readModelAvailabilityInputs(
       { secrets: options.secrets, globalState: options.globalState },
       getEnabledModels(options.globalState),
+      options.inScope,
     );
     catalogs = { ...catalogs, modelOptions: modelOptionsFrom(inputs) };
   });

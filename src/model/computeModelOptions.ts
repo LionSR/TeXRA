@@ -428,6 +428,44 @@ class ProviderKeyUnreadable extends Data.TaggedError('ProviderKeyUnreadable')<{
 }> {}
 
 /**
+ * A host fact this module reads synchronously — a workspace preference, a
+ * config switch, a stored state entry — could not be read at all, because the
+ * host's config or state store threw. That is environmental, not a bug in this
+ * module, so it belongs in the typed failure channel rather than as a defect:
+ * a caller that already degrades on an unreadable host (the delegation
+ * annotation skips its "Available models:" line and logs) recovers from it
+ * exactly as it recovers from an unreadable secret store, and a caller that
+ * runs this program at its boundary gets the rejection the async wrapper used
+ * to give it.
+ *
+ * The module's own invariant — a verdict reached for a provider whose key
+ * status was never read ({@link resolveModelAvailability}) — stays a defect:
+ * it can only be a programming error here, and no caller should paper over it.
+ */
+class ModelHostFactUnreadable extends Data.TaggedError(
+  'ModelHostFactUnreadable',
+)<{
+  readonly fact: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/** The one wrap of this module's synchronous host reads. */
+const hostFact = <A>(
+  fact: string,
+  read: () => A,
+): Effect.Effect<A, ModelHostFactUnreadable> =>
+  Effect.try({
+    try: read,
+    catch: (cause) =>
+      new ModelHostFactUnreadable({
+        fact,
+        message: `Could not read ${fact} from the host.`,
+        cause,
+      }),
+  });
+
+/**
  * One key status per provider, read once. A failed read degrades that provider
  * to unavailable and warns once for the provider, never once per model that
  * consults it (#11508), so one unreadable store cannot flood the log.
@@ -468,21 +506,43 @@ function readProviderKeyStatuses(
 function buildAvailabilityContext(
   stores: ModelOptionStores,
   inScope: ModelAvailabilityScope,
-): Effect.Effect<ModelAvailabilityContext, Error> {
+): Effect.Effect<ModelAvailabilityContext, Error | ModelHostFactUnreadable> {
   return Effect.gen(function* () {
     const { secrets, globalState } = stores;
-    const useOpenRouter = inScope(getUseOpenRouter);
+    // The switches and stored levels, read before anything is probed: the two
+    // "prefer my subscription" answers decide whether their probe runs at all.
+    const [
+      useOpenRouter,
+      preferCodexSubscription,
+      preferXaiSubscription,
+      preferKimiCode,
+      reasoningLevels,
+    ] = yield* Effect.all([
+      hostFact('the OpenRouter switch', () => inScope(getUseOpenRouter)),
+      hostFact('the ChatGPT subscription preference', () =>
+        inScope(isPreferCodexSubscription),
+      ),
+      hostFact('the Grok subscription preference', () =>
+        inScope(isPreferXaiSubscription),
+      ),
+      hostFact('the Kimi Code routing preference', () =>
+        inScope(getPreferKimiCode),
+      ),
+      hostFact('the stored reasoning levels', () =>
+        reasoningEffortOverrides(globalState),
+      ),
+    ] as const);
     const [routingKeys, codexSignedIn, xaiSignedIn] = yield* Effect.all(
       [
         readProviderKeyStatuses(secrets, ['openRouter', 'kimiCode'], inScope),
         // Only worth a probe when the "prefer subscription" switch is on.
-        inScope(isPreferCodexSubscription)
+        preferCodexSubscription
           ? Effect.tryPromise({
               try: () => inScope(isCodexSignedIn),
               catch: ensureError,
             })
           : Effect.succeed(false),
-        inScope(isPreferXaiSubscription)
+        preferXaiSubscription
           ? Effect.tryPromise({
               try: () => inScope(isXaiSignedIn),
               catch: ensureError,
@@ -492,7 +552,7 @@ function buildAvailabilityContext(
       { concurrency: 'unbounded' },
     );
     return {
-      reasoningLevels: reasoningEffortOverrides(globalState),
+      reasoningLevels,
       keyStatuses: routingKeys,
       hasOpenRouter: routingKeys.openRouter === true,
       useOpenRouter,
@@ -501,7 +561,7 @@ function buildAvailabilityContext(
       kimiRouting: {
         useOpenRouter,
         keySet: routingKeys.kimiCode === true,
-        preferKimiCode: inScope(getPreferKimiCode),
+        preferKimiCode,
       },
     };
   });
@@ -794,7 +854,10 @@ export interface ModelAvailabilityInputs {
  *
  * This is the module's only host call, and it is an Effect so that a caller
  * inside a program yields it instead of bridging a promise: the store read
- * behind it is interruptible and its failure is typed. `inScope` is the
+ * behind it is interruptible and its failure is typed. Every host read it
+ * makes fails in that channel, the synchronous preference and state reads
+ * included ({@link ModelHostFactUnreadable}), so an unreadable host reaches a
+ * caller as a failure it can recover from rather than as a defect. `inScope` is the
  * caller's workspace-roots frame — see {@link ModelAvailabilityScope}; a
  * caller already inside the frame it wants omits it.
  *
@@ -820,8 +883,18 @@ export const readModelAvailabilityInputs = Effect.fn(
   const routeCtx = yield* buildAvailabilityContext(stores, inScope);
   const visible =
     models ??
-    visibleModelsForAccess(getEnabledModels(stores.globalState), routeCtx);
-  const routed = routeModels(visible, routeCtx, stores.globalState);
+    visibleModelsForAccess(
+      yield* hostFact('the enabled-model selection', () =>
+        getEnabledModels(stores.globalState),
+      ),
+      routeCtx,
+    );
+  // Stage 1 is computation over the stage-0 facts except for the one live
+  // state read in its ladder, the Copilot route preference, so an unreadable
+  // state store fails it the same way it fails the reads above.
+  const routed = yield* hostFact('the Copilot route preference', () =>
+    routeModels(visible, routeCtx, stores.globalState),
+  );
   const context = yield* withConsultedKeyStatuses(
     stores.secrets,
     routed,

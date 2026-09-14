@@ -45,7 +45,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   readonly config: ConfigProvider;
   readonly secrets: PlatformSecrets;
   /**
-   * The paper's session frame. The availability read resolves the workspace
+   * The project's session frame. The availability read resolves the workspace
    * subscription preferences inside it; a fiber started on the runtime
    * carries no AsyncLocalStorage frame of its own, so the read is handed the
    * frame explicitly rather than inheriting the caller's.
