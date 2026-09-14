@@ -34,7 +34,6 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // Local imports - host services this boundary wires
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { effectRuntime } from '@platform/processRuntime';
 import type { SessionCloseReport } from '@shared/schemas';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 
@@ -49,7 +48,11 @@ import type { Sessions, SessionView } from './effect/sessions.js';
  * below runs on Effect's own runtime rather than borrowing the process
  * runtime the composition installs. That is what lets `closeSession`
  * answer for a process no run has initialized, and for one whose shutdown
- * has already disposed that runtime, exactly as its contract says.
+ * has already disposed that runtime, exactly as its contract says. The one
+ * exception is the shutdown settlement, which is the session owner's own
+ * program: it runs on the runtime this entry's composition handed back
+ * (`ProcessHold.processRuntime`), which is the runtime those sessions were
+ * built on.
  */
 
 export type { AgentEvent } from '@agent/trace';
@@ -189,7 +192,7 @@ function agentServices(
   const sessions = hold.sessions;
   composition = { platform, sessions };
   registerRuntimeShutdownHandlers(platform.lifecycle, {
-    runSettlement: (settlement) => effectRuntime().runPromise(settlement),
+    runSettlement: (settlement) => hold.processRuntime.runPromise(settlement),
     flushArtifacts: async (signal) => {
       await Effect.runPromise(sessions.close(platform.roots, signal));
     },

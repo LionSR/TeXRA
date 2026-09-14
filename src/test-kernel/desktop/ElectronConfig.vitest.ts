@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Exit } from 'effect';
+import { Effect, Exit, ManagedRuntime } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - platform
@@ -41,9 +41,12 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
       );
       const globalPath = join(tempDir, 'global.json');
       const workspacePath = join(tempDir, 'workspace.json');
+      // The provider's `update` is a Promise, so each store is handed the
+      // runtime its write runs on, exactly as a host hands over its own.
+      const runtime = ManagedRuntime.make(nodePlatformLayer);
       const [globalStore, workspaceStore] = yield* Effect.all([
-        JsonStore.open(globalPath),
-        JsonStore.open(workspacePath),
+        JsonStore.open(globalPath, { runtime }),
+        JsonStore.open(workspacePath, { runtime }),
       ]);
       return {
         provider: new JsonConfigProvider({

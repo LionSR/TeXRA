@@ -62,6 +62,7 @@ import {
   initProcessRuntime,
   tryProcessRuntime,
   type ProcessRuntime,
+  type ProcessServices,
 } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
@@ -252,6 +253,7 @@ const sessionHandleLayer = (
   key: SessionKey,
   held: HeldSessions,
   release: (key: SessionKey) => Effect.Effect<void>,
+  runtime: ProcessRuntime,
 ) =>
   Layer.effect(
     Session,
@@ -451,6 +453,7 @@ const sessionHandleLayer = (
               transcripts,
               graph,
               modelRetries,
+              runtime,
             }),
         ),
         (session) =>
@@ -618,9 +621,10 @@ const sessionLayer = (
   held: HeldSessions,
   release: (key: SessionKey) => Effect.Effect<void>,
   identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
+  runtime: ProcessRuntime,
 ) =>
   Layer.fresh(
-    sessionHandleLayer(key, held, release).pipe(
+    sessionHandleLayer(key, held, release, runtime).pipe(
       Layer.provide(sessionGraphLayer(key)),
       Layer.provide(identity),
     ),
@@ -640,16 +644,20 @@ class Sessions extends Context.Service<
   LayerMap.LayerMap<SessionKey, Session>
 >()('@texra/session/Sessions') {
   /** The map, releasing an entry the handle asked to be released through
-   *  the runtime that holds the map. */
+   *  the runtime that holds the map. `runtime` is that same runtime: each
+   *  entry's `SessionHandle` is handed it, so a session never looks one up
+   *  when it needs a fiber. */
   static layer(
     held: HeldSessions,
     release: (key: SessionKey) => Effect.Effect<void>,
     identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
+    runtime: ProcessRuntime,
   ) {
     return Layer.effect(
       Sessions,
       LayerMap.make(
-        (key: SessionKey) => sessionLayer(key, held, release, identity),
+        (key: SessionKey) =>
+          sessionLayer(key, held, release, identity, runtime),
         { idleTimeToLive: Duration.infinity },
       ),
     );
@@ -992,8 +1000,16 @@ export function installProcessRuntime({
   // fiber: the release settles when the entry has unwound.
   const release = (key: SessionKey): Effect.Effect<void> =>
     onThisRuntime(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
-  const runtime = ManagedRuntime.make(
-    Sessions.layer(held, release, services).pipe(
+  // Each session is handed the runtime it runs on (`SessionHandle`'s two
+  // Promise faces), so the family below names the runtime this very call is
+  // building. `Layer.suspend` is what makes that legal: an entry is built on
+  // its first open, long after `make` has returned. The type is stated
+  // because a value named inside its own initializer has none to infer.
+  const runtime: ManagedRuntime.ManagedRuntime<
+    Sessions | ProcessServices,
+    never
+  > = ManagedRuntime.make(
+    Layer.suspend(() => Sessions.layer(held, release, services, runtime)).pipe(
       Layer.provideMerge(services),
       // The Lean port beside `services`, not among them: `services` is also
       // each session entry's identity layer, rebuilt fresh per root, and the
@@ -1031,14 +1047,13 @@ export function installProcessRuntime({
  * the disposed runtime.
  *
  * The runtime stays reachable for the whole of its own disposal. Its layer
- * finalizers are what release the open sessions, and they still publish
- * through `effectRuntime()` while they unwind -- a session's release unwinds
- * the handle and then awaits the publications that teardown left in flight
- * (`SessionHandle.settlePublications`), each of which forks on this very
- * runtime. Clearing
- * the reference first made those finalizers throw "not initialized" mid
- * shutdown. It is cleared afterwards, and only if this runtime is still the
- * installed one, so a replacement installed while this one unwound survives.
+ * finalizers are what release the open sessions, and they still publish while
+ * they unwind -- a session's release unwinds the handle and then awaits the
+ * publications that teardown left in flight
+ * (`SessionHandle.settlePublications`), which run on the very runtime the
+ * session was handed. The installed reference is cleared afterwards, and only
+ * if this runtime is still the installed one, so a replacement installed while
+ * this one unwound survives.
  *
  * Idempotent and safe to race: an absent runtime needs no disposal, and a
  * second call joins the disposal already in flight rather than reaching a

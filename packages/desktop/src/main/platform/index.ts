@@ -157,8 +157,11 @@ export async function initializeElectronPlatform(
                 runWrite,
               ),
               openAppStateStore(storage.getStoragePath(), runWrite),
-              openTexraConfigStores(storage, undefined, (message) =>
-                console.warn(`[desktop] ${message}`),
+              openTexraConfigStores(
+                storage,
+                undefined,
+                (message) => console.warn(`[desktop] ${message}`),
+                runtime,
               ),
               JsonStore.open(join(userDataPath, 'secrets.json')),
             ],

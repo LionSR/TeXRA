@@ -2,18 +2,34 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { Effect, FileSystem, Path, type PlatformError } from 'effect';
+import {
+  Effect,
+  FileSystem,
+  Path,
+  type ManagedRuntime,
+  type PlatformError,
+} from 'effect';
 import writeFileAtomic from 'write-file-atomic';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
-import { effectRuntime } from '@platform/processRuntime';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { StateStore } from '../interfaces';
 
 type JsonRecord = Record<string, unknown>;
+
+/**
+ * What {@link JsonStore.update} runs its write on: a runtime over the
+ * filesystem services the flush reads, which every host's process runtime
+ * provides. Narrower than `ProcessRuntime` on purpose -- this store needs a
+ * place to run a file write, not the process's whole service set.
+ */
+export type JsonStoreRuntime = ManagedRuntime.ManagedRuntime<
+  FileSystem.FileSystem | Path.Path,
+  never
+>;
 
 /** Preserve the Node error identity exposed by this store's existing callers. */
 function storageError(error: PlatformError.PlatformError): Error {
@@ -33,6 +49,15 @@ export interface JsonStoreOptions {
    * `JsonStore` behavior.
    */
   mode?: number;
+  /**
+   * The runtime {@link JsonStore.update} runs its write on: the one the host
+   * that opened this store built. Only a store that backs a `ConfigStore` or
+   * `StateStore` target has that `vscode.Memento`-shaped Promise face, so a
+   * store opened for Effect-side writes alone (`set`) leaves this unset and
+   * `update` on it fails with that fact, exactly as a host with no editor
+   * fails an editor-model binding.
+   */
+  runtime?: JsonStoreRuntime;
 }
 
 /** `0o600` -> `0o700`: adds owner-execute wherever owner-read is set. */
@@ -152,8 +177,9 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * `set` is the store's own write and is an `Effect`. `update` exists only
  * because {@link StateStore} and `ConfigStore` mirror `vscode.Memento`, whose
  * shape the VS Code host cannot change: it is the port's method, the single
- * place this module reaches the process runtime, and it disappears with those
- * two port shapes rather than with this class.
+ * place this module runs an Effect, and it disappears with those two port
+ * shapes rather than with this class. It runs on the runtime the opener
+ * handed over ({@link JsonStoreOptions.runtime}), never on a looked-up one.
  */
 export class JsonStore implements StateStore {
   private constructor(
@@ -213,7 +239,15 @@ export class JsonStore implements StateStore {
    * which is the Effect-side write every caller inside a program uses.
    */
   update(key: string, value: unknown): Promise<void> {
-    return effectRuntime().runPromise(this.set(key, value));
+    const { runtime } = this.options;
+    if (!runtime) {
+      return Promise.reject(
+        new Error(
+          `The JSON store at ${this.filePath} was opened without a runtime, so its Promise-shaped update() has nothing to run the write on. Open it with { runtime } where it backs a ConfigStore or StateStore target, or write through set() from inside an Effect.`,
+        ),
+      );
+    }
+    return runtime.runPromise(this.set(key, value));
   }
 
   snapshot(): JsonRecord {

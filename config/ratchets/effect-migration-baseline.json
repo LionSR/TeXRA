@@ -17,7 +17,6 @@
       "src/utils/system/toolUtils.ts": 1
     },
     "effectRuntime()": {
-      "packages/agent/src/index.ts": 1,
       "packages/cli/src/chat/chatSessionController.ts": 13,
       "packages/cli/src/chat/tui/commands/handlers/loginCommands.ts": 3,
       "packages/cli/src/chat/tui/commands/handlers/modelAccessCommands.ts": 1,
@@ -57,8 +56,6 @@
       "packages/cli/src/runtime/tools.ts": 1,
       "packages/cli/src/runtime/updateChecker.ts": 1,
       "src/agent/implementations/flows/reflection/output/LatexDiffManager.ts": 2,
-      "src/agent/runtime/SessionHandle.ts": 2,
-      "src/platform/defaults/jsonStore.ts": 1,
       "src/tools/approval/latexPreview.ts": 1
     },
     "ambient:asyncLocalStorage": {
