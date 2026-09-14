@@ -1126,10 +1126,12 @@ export class RunRegistry {
  * when that scope closes (`sessionLayer.ts`); the session record carries the
  * same value (`SessionHandle.runs`) for a host that holds the session.
  * Effect code below a launch takes it from context. It is provided where a
- * session is resolved into work: the launch and resume entries (`runAgent`,
- * `executeAgent`, `resumeRun`) from the session they are handed, and the
- * session's own programs (its request handler, its close, its sweep) where
- * the layer built it.
+ * session is resolved into work, from the session that entry is handed:
+ * `executeAgent` (which `runAgent` delegates to), `resumeRun`,
+ * `resumeClaimedRun`, `resumeToolUseFromResumeData`, the session's request
+ * handler (`SessionRequests`), the session layer's leftover-run sweep, and
+ * the VS Code language-model tools that call a tool outside any run.
+ * `closeSession` reads it from the session entry rather than providing it.
  */
 export class Runs extends Context.Service<Runs, RunRegistry>()(
   '@texra/session/Runs',
