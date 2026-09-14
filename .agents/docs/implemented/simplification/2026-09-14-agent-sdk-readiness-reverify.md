@@ -125,28 +125,32 @@ multiple callers. The state the loop continues from is exactly what `appendBatch
 returns (`foldRunState` over committed rows), so live and resume are the same
 function — no cursor, no graph, no intermediate writer service.
 
-Single writer holds for the rows that actually fold run state: the durable rows
-`foldRunState` mutates state from (`flow.snapshot`, `model.message`,
-`model.compaction`, `tool.intent`, `tool.result`, `flow.step`, loop-owned
-`request.opened`) have one writer, `RunLedger.appendBatch`
-(`src/agent/runtime/RunLedger.ts:361` — the 455-LoC runtime implementation,
-distinct from the 139-LoC session contract `src/shared/session/runLedger.ts`
-cited in §0/§2; the doc uses both, so the capitalization disambiguates them).
-**`stream.end` is
-not one of them** — it is a trace/display-plane event emitted through
-`TraceEmitter` (`src/agent/trace/TraceEmitter.ts:379`) and explicitly folds to
-no state mutation (`runStateFold.ts:961` returns `null`, "the ledger row beside
-it is the fact"); an earlier draft mislisted it here. Likewise the two
-`session.publish` sites in `loop/` (`toolUse.ts` `run.workspaceFiles`,
-`run.record`) are display-plane events, not run-state rows. Two documented,
-intentional second-plane exceptions exist for the run-state rows and are
-not migration accidents: `RunLedger.acquire` (`RunLedger.ts:272`) publishing
-`request.decided` cancellation rows (`:300`) for a dead owner's unbound requests
-(in-service, file-header-documented), and the host request plane writing
-`request.opened`/`request.decided` through `SessionHandle.openRequest`/`commit`
-("the one door for a request outside the loop's own batches"). No silent
-degradation found in any of the four areas (no empty `catch {}`; every `??` is a
-fallback over an optional field or documented restore, never over a failed read).
+The single-writer claim is scoped to the **six loop-owned ledger arms** that
+`foldRunState` mutates state from — `flow.snapshot`, `model.message`,
+`model.compaction`, `tool.intent`, `tool.result`, `flow.step` — which have one
+writer, `RunLedger.appendBatch` (`src/agent/runtime/RunLedger.ts:361` — the
+455-LoC runtime implementation, distinct from the 139-LoC session contract
+`src/shared/session/runLedger.ts` cited in §0/§2; the doc uses both, so the
+capitalization disambiguates them). `stream.end` is **not** a run-state row at
+all — it is a trace/display-plane event emitted through `TraceEmitter`
+(`src/agent/trace/TraceEmitter.ts:379`) that folds to no state mutation
+(`runStateFold.ts:961` returns `null`, "the ledger row beside it is the fact");
+likewise the two `session.publish` sites in `loop/` (`toolUse.ts`
+`run.workspaceFiles`, `run.record`) are display-plane events. An earlier draft
+mislisted `stream.end` among the run-state rows.
+
+The **two request rows are the deliberate multi-plane exception**, and they are
+the reason the single-writer headline holds only for the six arms above rather
+than for every state-folding row: `request.opened` (`runStateFold.ts:965`) and
+`request.decided` (`:986`) both fold run state, but each is authored on more than
+one plane by design — the loop opens and commits them via `appendBatch`,
+`RunLedger.acquire` (`RunLedger.ts:272`) publishes `request.decided` cancellation
+rows (`:300`) for a dead owner's unbound requests, and the host request plane
+writes both through `SessionHandle.openRequest`/`commit` ("the one door for a
+request outside the loop's own batches"). This is documented, intentional
+choreography, not a migration accident. No silent degradation found in any of the
+four areas (no empty `catch {}`; every `??` is a fallback over an optional field
+or documented restore, never over a failed read).
 
 ## 4. Subagent boundaries — shipped 4-implementor SPI; one boundary correctly open
 
@@ -247,7 +251,7 @@ state), and the logger re-verify clean with no silent degradation. The public
 surface is clean but for one documentation defect — the README `effect`
 peer-version drift (§5.5), fixed in this PR. The subagent SPI is a real
 four-implementor contract; `agentCreator` is the single, correctly-open boundary.
-Of the five §5 items, four are minor cleanups and one doc re-enumeration (none a
-defect, none warranting a speculative edit into the green tree absent a maintainer
-request this scheduled firing does not carry); the fifth was a real defect and is
-fixed here.
+Of the five §5 items, three are minor cleanups and one is doc re-enumeration
+(none a defect, none warranting a speculative edit into the green tree absent a
+maintainer request this scheduled firing does not carry); the fifth was a real
+defect and is fixed here.
