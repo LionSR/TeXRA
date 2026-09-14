@@ -1,8 +1,6 @@
-// Node.js imports
-import { isIP } from 'node:net';
-
 // Third-party imports
 import { Effect, Stream } from 'effect';
+import ipaddr from 'ipaddr.js';
 import ky from 'ky';
 import { z } from 'zod';
 
@@ -36,14 +34,30 @@ const WebFetchInputSchema = z.strictObject({
 
 type WebFetchInput = z.infer<typeof WebFetchInputSchema>;
 
-const BLOCKED_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1']);
-const PRIVATE_IPV4_PATTERNS = [
-  /^10\./u,
-  /^192\.168\./u,
-  /^172\.(1[6-9]|2[0-9]|3[0-1])\./u,
-  /^169\.254\./u,
-];
-const PRIVATE_IPV6_PREFIXES = ['fc', 'fd', 'fe80'];
+const BLOCKED_HOSTNAMES = new Set(['localhost']);
+
+/**
+ * Default-deny, not a denylist: `ipaddr.js` classifies every address into a
+ * named range (`private`, `loopback`, `carrierGradeNat`, `reserved`, …) with
+ * `unicast` as the single fallback for none-of-the-above. Blocking everything
+ * but `unicast` avoids the incomplete-range-list bypasses that hit hand-rolled
+ * checks and even the `ip`/`private-ip` packages (e.g. missing the CGNAT
+ * range, or an IPv4-mapped IPv6 literal like `::ffff:127.0.0.1` slipping past
+ * an IPv6-only prefix check) — `ipaddr.process` normalizes that mapped form to
+ * plain IPv4 before classification, so it is covered too.
+ *
+ * `hostname` is a WHATWG `URL#hostname`, which brackets an IPv6 literal
+ * (`[::1]`); `ipaddr.isValid` rejects the bracketed form outright, so an
+ * unstripped hostname would fail open on every IPv6 target.
+ */
+function isRestrictedIp(hostname: string): boolean {
+  const candidate =
+    hostname.startsWith('[') && hostname.endsWith(']')
+      ? hostname.slice(1, -1)
+      : hostname;
+  if (!ipaddr.isValid(candidate)) return false;
+  return ipaddr.process(candidate).range() !== 'unicast';
+}
 
 /** Fetch `url` with transient retries, as text plus its content type. */
 const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
@@ -152,13 +166,7 @@ export class WebFetchTool extends defineTool({
         );
       }
 
-      const ipVersion = isIP(hostname);
-      const isPrivateIp =
-        (ipVersion === 4 &&
-          PRIVATE_IPV4_PATTERNS.some((p) => p.test(hostname))) ||
-        (ipVersion === 6 &&
-          PRIVATE_IPV6_PREFIXES.some((prefix) => hostname.startsWith(prefix)));
-      if (isPrivateIp) {
+      if (isRestrictedIp(hostname)) {
         return yield* Effect.fail(
           new ToolError(
             'Cannot fetch private network IPs. Provide a public URL instead.',
