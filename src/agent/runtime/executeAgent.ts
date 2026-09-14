@@ -454,8 +454,12 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
      */
     agentDefaultOutputFiles: readonly string[],
   ) => Promise<RunOutcome | void>;
-  /** Cancel launch preparation before the per-run handle is available. */
-  launchSignal?: AbortSignal;
+  /**
+   * The stop latch of a launch that owns a stop before the run has a handle
+   * of its own (`runAgent`'s launch handle): launch assembly fails at its
+   * next step once it is completed, and the run adopts it as its one stop.
+   */
+  launchStopped?: Deferred.Deferred<void>;
   /**
    * The run's `run.start` was committed by an earlier activation (a resume).
    * That row is also where this run's parent edge comes from: `runAgent`
@@ -554,7 +558,7 @@ export function executeAgent(
       session: options.session,
       modelCompatibilityKey: options.modelCompatibilityKey,
       ownApiKeyFallback: options.ownApiKeyFallback,
-      signal: options.launchSignal,
+      stopped: options.launchStopped,
       toolPolicy: {
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         runtimeUnavailableTools: options.runtimeUnavailableTools,

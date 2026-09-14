@@ -231,7 +231,6 @@ type LeaseOptions = {
   beforeLeaseRelease?: () => Promise<boolean | void>;
   openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   onRun?: () => void;
-  launchSignal?: AbortSignal;
   session?: SessionHandle;
   onRunLeaseAcquired?: (runId: RunId) => void;
 };
@@ -931,37 +930,49 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        const launch = yield* Deferred.make<AbortSignal | undefined>();
+        const launch = yield* Deferred.make<RunHandle>();
         mocks.runAgent.mockImplementationOnce(
-          async (_request: unknown, options: LeaseOptions) => {
-            await new Promise<void>((_resolve, reject) => {
-              options.launchSignal?.addEventListener(
-                'abort',
-                () =>
-                  reject(new DOMException('Launch interrupted.', 'AbortError')),
-                { once: true },
-              );
-              // Published after the listener exists: the gate resumes the test
-              // fiber synchronously and its shutdown aborts this signal.
-              Deferred.doneUnsafe(launch, Effect.succeed(options.launchSignal));
-            });
-            return COMPLETED_RUN;
+          async (request: { runId: RunId }, options: LeaseOptions) => {
+            // `runAgent` tracks its launch handle before preparation; its
+            // interrupt is the launch's stop, which fails preparation.
+            const launchHandle = new RunHandle(
+              {
+                runId: request.runId,
+                identity: { kind: 'agent', agent: 'chat' },
+                category: 'toolUse',
+              },
+              null,
+            );
+            try {
+              await new Promise<void>((_resolve, reject) => {
+                launchHandle.attachInterruptHandler({
+                  interrupt: () =>
+                    reject(new DOMException('Launch stopped.', 'AbortError')),
+                });
+                options.session?.runs.track(launchHandle);
+                // Published once the handle is tracked: the gate resumes the
+                // test fiber synchronously and its shutdown stops the launch.
+                Deferred.doneUnsafe(launch, Effect.succeed(launchHandle));
+              });
+              return COMPLETED_RUN;
+            } finally {
+              options.session?.runs.untrack(request.runId);
+            }
           },
         );
 
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {}),
         );
-        const launchSignal = yield* Deferred.await(launch);
+        const launchHandle = yield* Deferred.await(launch);
         yield* settle;
-        expect(launchSignal).toBeDefined();
 
         yield* Effect.promise(() => platform.lifecycle.runShutdown());
         expect(yield* Fiber.join(run)).toEqual({
           ok: false,
           exitCode: CliExitCode.Interrupted,
         });
-        expect(launchSignal?.aborted).toBe(true);
+        expect(launchHandle.stopRequested).toBe(true);
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
       }),
   );

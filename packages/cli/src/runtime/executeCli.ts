@@ -153,7 +153,7 @@ export function executeCliConfig<
       return { ok: false as const, exitCode: CliExitCode.Usage };
     }
 
-    const request: RunAgentRequest = resumedRunId
+    const request: RunAgentRequest & { readonly runId: RunId } = resumedRunId
       ? { kind: 'resume', ...validation.request, runId }
       : { kind: 'fresh', ...validation.request, runId };
     const run = yield* executeCliRequest(request, runContext, {
@@ -252,7 +252,9 @@ export function executeCliToolUseConfig(
  * so the crash handler still reports it.
  */
 export function executeCliRequest(
-  request: RunAgentRequest,
+  // The run id is decided before launch: a shutdown stops the launch through
+  // the session's registry under it (`runs.kill`), from launch preparation on.
+  request: RunAgentRequest & { readonly runId: RunId },
   runContext: CliContext,
   options: CliExecuteOptions,
 ): Effect.Effect<
@@ -312,11 +314,6 @@ export function executeCliRequest(
       : () => undefined;
     const launchRunId = request.runId;
     let ownedRunId: RunId | undefined;
-    // Feeds `runAgent`'s `launchSignal` option: the agent runtime's launch
-    // contract is still AbortSignal-native, so the launch-cancellation signal
-    // stays until that lane migrates it to fiber interruption (PRD R5 adapts
-    // signals only at such edges).
-    const launchAbortController = new AbortController();
     let shutdownRequested = false;
     // Workflow-output publication and shutdown-driven interruption race on the
     // same synchronous tick (see tryCommitWorkflowOutputPublication and the
@@ -425,7 +422,6 @@ export function executeCliRequest(
       SHUTDOWN_PHASE.BEFORE,
       async (shutdownDeadline) => {
         shutdownRequested = true;
-        launchAbortController.abort();
         // Paired with tryCommitWorkflowOutputPublication: keep this read of
         // launchVerdict and the assignment below in one synchronous turn.
         // Headless shutdown deliberately cascades into active children: a
@@ -434,7 +430,7 @@ export function executeCliRequest(
         // why this stop's admission is decided here, before its settlement
         // runs: only a detaching stop waits for the sever to interrupt.
         const stop =
-          launchVerdict.kind !== 'published' && launchRunId
+          launchVerdict.kind !== 'published'
             ? session.runs.kill(launchRunId, {
                 detachActiveChildren: false,
               })
@@ -528,7 +524,6 @@ export function executeCliRequest(
                   ),
                 ),
         modelCompatibilityKey: options.modelCompatibilityKey,
-        launchSignal: launchAbortController.signal,
         beforeLeaseRelease: async () => {
           const handled = await finalizeShutdownStatus();
           if (

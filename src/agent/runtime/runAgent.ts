@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Deferred, Effect, Exit } from 'effect';
 
 import { registerRun, getRunRecords } from '@agent/storage';
 import {
@@ -17,9 +17,12 @@ import {
   type RunId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { aggregateError, generateRunId, linkAbortSignals } from '@utils/core';
+import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
-import { prepareAgentDefinition } from './AgentLaunchContext';
+import {
+  failIfLaunchStopped,
+  prepareAgentDefinition,
+} from './AgentLaunchContext';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { RunHandle } from './RunHandle';
@@ -44,7 +47,6 @@ export interface RunAgentOptions extends Pick<
   | 'onRun'
   | 'onRunResolved'
   | 'onIdle'
-  | 'launchSignal'
   | 'openWorkflowOutput'
 > {
   readonly session: SessionHandle;
@@ -127,19 +129,18 @@ export const runAgent = Effect.fn('runAgent')(function* (
     return yield* Effect.fail(new Error(`Run not found: ${runId}`));
   // A resumed run's lineage, read before its handle is registered below: from
   // that moment a stop of the parent sees this child, so it cascades into the
-  // launch (the handle's interrupt aborts launch preparation) or detaches it,
+  // launch (the handle's interrupt stops launch preparation) or detaches it,
   // and a parent whose stop has already begun refuses the admission outright.
   // The launch reads the edge back off the handle instead of deriving it a
   // second time, so nothing can install a parent after its stop finished.
   const resumedParentRunId = shouldRegister
     ? undefined
     : yield* persistedParentRunId(runSession, runId);
-  const launchAbortController = new AbortController();
-  const detachLaunchAbortLink = linkAbortSignals(
-    [executeAgentOptions.launchSignal],
-    launchAbortController,
-  );
-  const launchSignal = launchAbortController.signal;
+  // The launch's one stop: the launch handle's interrupt completes it, the
+  // launch fails at its next preparation step once it has, and the run
+  // adopts it as its own stop, so a stop reaches the run wherever the launch
+  // has got to.
+  const launchStopped = Deferred.makeUnsafe<void>();
   const launchHandle = runSession.runs.getHandle(runId)
     ? undefined
     : new RunHandle(
@@ -151,7 +152,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
         resumedParentRunId ?? null,
       );
   const detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
-    interrupt: () => launchAbortController.abort(),
+    interrupt: () => Deferred.doneUnsafe(launchStopped, Effect.void),
   });
 
   return yield* Effect.gen(function* () {
@@ -179,9 +180,9 @@ export const runAgent = Effect.fn('runAgent')(function* (
           config: requestedConfig,
           session: runSession,
           enforceCategory: request.kind === 'resume' || options.enforceCategory,
-          signal: launchSignal,
           suppressErrorNotification,
         });
+        yield* failIfLaunchStopped(launchStopped);
         const { config } = definition;
         const userFollowUpSupport =
           config.agentCategory === AgentCategory.ToolUse &&
@@ -219,7 +220,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
               runSession.runs.detachChildren(formerParent, [runId]);
             return yield* executeAgent(definition, runId, {
               ...executeAgentOptions,
-              launchSignal,
+              launchStopped,
               session: runSession,
               resumed: !shouldRegister,
               onRun: async (handle) => {
@@ -298,7 +299,6 @@ export const runAgent = Effect.fn('runAgent')(function* (
   }).pipe(
     Effect.ensuring(
       Effect.sync(() => {
-        detachLaunchAbortLink();
         detachLaunchInterrupt?.();
         if (launchHandle && runSession.runs.getHandle(runId) === launchHandle) {
           runSession.runs.untrack(runId);

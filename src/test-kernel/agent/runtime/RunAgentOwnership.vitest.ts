@@ -1,7 +1,5 @@
-import { getEventListeners } from 'node:events';
-
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
@@ -43,7 +41,10 @@ vi.mock('@agent/storage/runLifecycle', async (importActual) => ({
     }),
 }));
 
-vi.mock('@agent/runtime/AgentLaunchContext', () => ({
+vi.mock('@agent/runtime/AgentLaunchContext', async (importActual) => ({
+  failIfLaunchStopped: (
+    await importActual<typeof import('@agent/runtime/AgentLaunchContext')>()
+  ).failIfLaunchStopped,
   prepareAgentDefinition: (...args: unknown[]) =>
     Effect.sync(() => mocks.prepareAgentDefinition(...args)),
 }));
@@ -181,8 +182,6 @@ describe('runAgent run ownership', () => {
     'cleans up a partially tracked launch when run tracking throws',
     () =>
       Effect.gen(function* () {
-        const signal = new AbortController().signal;
-        const removeEventListener = vi.spyOn(signal, 'removeEventListener');
         const trackError = new Error('run tracking failed');
         let partiallyTrackedHandle: RunHandle | undefined;
         trackRun.mockImplementationOnce((handle) => {
@@ -191,18 +190,12 @@ describe('runAgent run ownership', () => {
           throw trackError;
         });
 
-        const exit = yield* Effect.exit(
-          launch({ kind: 'fresh', launchSignal: signal }),
-        );
+        const exit = yield* Effect.exit(launch({ kind: 'fresh' }));
         expect(Exit.isFailure(exit)).toBe(true);
         expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toBe(
           trackError,
         );
 
-        expect(removeEventListener).toHaveBeenCalledWith(
-          'abort',
-          expect.any(Function),
-        );
         expect(untrackRun).toHaveBeenCalledOnce();
         expect(untrackRun).toHaveBeenCalledWith(RUN_ID);
         expect(trackedHandle).toBeUndefined();
@@ -229,24 +222,21 @@ describe('runAgent run ownership', () => {
       }),
   );
 
-  it.effect(
-    'does not retain an abort listener when the resumed run is not found',
-    () =>
-      Effect.gen(function* () {
-        const signal = new AbortController().signal;
-        mocks.runExists.mockReturnValueOnce(false);
-        expect(
-          yield* Effect.flip(
-            launchRun(
-              { kind: 'resume', config: CONFIG, runId: RUN_ID },
-              { session: SESSION, launchSignal: signal },
-            ),
+  it.effect('refuses a resume of a missing run before tracking a handle', () =>
+    Effect.gen(function* () {
+      mocks.runExists.mockReturnValueOnce(false);
+      expect(
+        yield* Effect.flip(
+          launchRun(
+            { kind: 'resume', config: CONFIG, runId: RUN_ID },
+            { session: SESSION },
           ),
-        ).toMatchObject({
-          message: `Run not found: ${RUN_ID}`,
-        });
-        expect(getEventListeners(signal, 'abort')).toEqual([]);
-      }),
+        ),
+      ).toMatchObject({
+        message: `Run not found: ${RUN_ID}`,
+      });
+      expect(trackRun).not.toHaveBeenCalled();
+    }),
   );
 
   it.effect(
@@ -321,7 +311,7 @@ describe('runAgent run ownership', () => {
         yield* Fiber.join(fiber);
 
         const executeOptions = mocks.executeAgent.mock.calls[0]?.[2];
-        expect(executeOptions?.launchSignal?.aborted).toBe(true);
+        expect(Deferred.isDoneUnsafe(executeOptions?.launchStopped)).toBe(true);
       }),
   );
 
