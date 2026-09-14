@@ -391,6 +391,13 @@ function issue(
       Effect.catchCause((cause) =>
         Effect.sync(() => {
           if (Cause.hasInterruptsOnly(cause)) return;
+          // The durable request never recorded the decision; reopen it the
+          // same way a typed refusal does, or `currentApproval` keeps
+          // filtering it out and the run waits with no UI.
+          const next = new Set(decided.get());
+          next.delete(requestId);
+          decided.set(next);
+          onRefused?.();
           appendLocalAssistantTranscript(reportRequestDefect(cause), runId);
         }),
       ),
