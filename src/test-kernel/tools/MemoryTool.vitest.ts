@@ -221,7 +221,7 @@ describe('MemoryTool invocation storage root', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it.effect(
-    'keeps concurrent projects in their own captured memory roots',
+    'uses each tool call root instead of its ambient invocation scope',
     () =>
       Effect.gen(function* () {
         const first = createFakeWorkspaceRoots({ storagePath: '/storage/one' });
@@ -242,7 +242,7 @@ describe('MemoryTool invocation storage root', () => {
             [first, 'one.md'],
             [second, 'two.md'],
           ] as const,
-          ([roots, file]) =>
+          ([roots, file], index) =>
             new MemoryTool()
               .call({
                 command: 'create',
@@ -252,8 +252,12 @@ describe('MemoryTool invocation storage root', () => {
               .pipe(
                 Effect.provide(
                   nativeToolTestLayer({
+                    roots,
                     inScope: (operation) =>
-                      runWithWorkspaceRoots(roots, operation),
+                      runWithWorkspaceRoots(
+                        index === 0 ? second : first,
+                        operation,
+                      ),
                   }),
                 ),
               ),
