@@ -47,6 +47,17 @@ import { uploadCache, type UploadCache } from './uploadCache.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 type ResponseOrigin = RemoteOperation['origin'];
+/**
+ * What a Files API upload must return before its id is cached. The SDK's
+ * type is not a check on the JSON, so a missing or empty id, or an expiry
+ * that is not whole non-negative Unix seconds (absent means the file does
+ * not expire), is a malformed response: the upload counts as failed and the
+ * bytes are sent.
+ */
+const UploadedFileSchema = z.object({
+  id: z.string().min(1),
+  expires_at: z.int().nonnegative().nullish(),
+});
 type HttpTurnResult = Extract<TurnResult, { providerResponseId: string }>;
 
 const ItemStatusSchema = z.enum(['in_progress', 'completed', 'incomplete']);
@@ -416,8 +427,12 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
     ResolvedTurn['messages'][number],
     { role: 'user' }
   >['content'][number],
-  /** The live file id this binding holds for some bytes, or `null`. */
-  fileIdFor: (base64: string) => string | null,
+  documents: {
+    /** The route takes input files at all. */
+    readonly accepted: boolean;
+    /** The live file id this binding holds for some bytes, or `null`. */
+    readonly fileIdFor: (base64: string) => string | null;
+  },
 ): Effect.fn.Return<OpenAI.Responses.ResponseInputContent, ModelError> {
   switch (part.kind) {
     case 'text':
@@ -446,7 +461,13 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
       };
     }
     case 'document': {
-      const fileId = fileIdFor(part.base64);
+      if (!documents.accepted)
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'This Responses route takes no input files, so the document cannot be sent.',
+        });
+      const fileId = documents.fileIdFor(part.base64);
       if (fileId !== null) return { type: 'input_file', file_id: fileId };
       return {
         type: 'input_file',
@@ -468,13 +489,17 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
 
 const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  config: OpenAIResponsesConfiguration,
   uploads: UploadCache | null,
 ) {
   const nowMs = yield* Clock.currentTimeMillis;
-  const content = (part: Parameters<typeof responsesContent>[0]) =>
-    responsesContent(part, (base64) =>
+  const documents = {
+    accepted: config.supportsDocumentInput,
+    fileIdFor: (base64: string) =>
       uploads === null ? null : uploads.fileIdFor(base64, nowMs),
-    );
+  };
+  const content = (part: Parameters<typeof responsesContent>[0]) =>
+    responsesContent(part, documents);
   const input: OpenAI.Responses.ResponseInput = [];
   let callIds: string[] = [];
   for (const message of turn.messages) {
@@ -711,7 +736,11 @@ export const openaiResponsesContinuation = Effect.fn(
       content: result.content,
     },
   ];
-  const encoded = yield* lowerInput({ ...turn, messages: prefix }, null);
+  const encoded = yield* lowerInput(
+    { ...turn, messages: prefix },
+    configuration,
+    null,
+  );
   return ContinuationSchema.parse({
     origin: result.requestedOrigin,
     coveredMessages: prefix.length,
@@ -731,14 +760,19 @@ export const openaiResponsesContinuation = Effect.fn(
 
 const responseInput = Effect.fn('llm.responses.input')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  config: OpenAIResponsesConfiguration,
   uploads: UploadCache | null,
 ) {
-  const input = yield* lowerInput(turn, uploads);
+  const input = yield* lowerInput(turn, config, uploads);
   const continuation = turn.continuation;
   if (!continuation) return { input };
   const prefix = turn.messages.slice(0, continuation.coveredMessages);
   // Counted only: a file id and the bytes it stands for are one item.
-  const encodedPrefix = yield* lowerInput({ ...turn, messages: prefix }, null);
+  const encodedPrefix = yield* lowerInput(
+    { ...turn, messages: prefix },
+    config,
+    null,
+  );
   if (
     !sameModelOrigin(turn, continuation.origin) ||
     continuation.coveredMessages > turn.messages.length ||
@@ -1231,7 +1265,7 @@ const responseParameters = Effect.fn('llm.responses.parameters')(function* (
       kind: 'unsupported',
       message: 'The prepared controls are unsupported by the selected route.',
     });
-  const wireInput = yield* responseInput(turn, uploads);
+  const wireInput = yield* responseInput(turn, config, uploads);
   const reasoning = turn.controls.reasoning;
   const parameters: ResponseCreateParamsBase = {
     model: turn.requestedModel,
@@ -1536,23 +1570,21 @@ export function openaiResponsesModel(
                     model: origin.requestedModel,
                   }),
               });
-              // Unix seconds, absent when the file does not expire. An
-              // expiry that is not a whole, non-negative second is refused
-              // rather than read as "never".
-              const expiresAt = uploaded.expires_at;
-              if (
-                expiresAt !== undefined &&
-                !(Number.isSafeInteger(expiresAt) && expiresAt >= 0)
-              )
+              const parsed = UploadedFileSchema.safeParse(uploaded);
+              if (!parsed.success)
                 return yield* new ModelError({
                   kind: 'malformed-output',
                   message:
-                    'OpenAI returned a file expiry that is not a timestamp.',
+                    'OpenAI returned an upload without a usable file id.',
                   model: origin.requestedModel,
+                  cause: parsed.error,
                 });
               return {
-                fileId: uploaded.id,
-                expiresAtMs: expiresAt === undefined ? null : expiresAt * 1000,
+                fileId: parsed.data.id,
+                expiresAtMs:
+                  parsed.data.expires_at == null
+                    ? null
+                    : parsed.data.expires_at * 1000,
               };
             }),
           // A 404 means the provider already expired the file.

@@ -870,9 +870,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   // bytes. Concurrent, each under a short deadline: a slow or failing files
   // endpoint delays delivery by at most one deadline and changes nothing the
   // model reads now. The binding deletes what it uploaded when it closes.
-  // The optional upload is looked for only when there is a document to give
-  // it, so a delivery without one never touches it.
-  const documents = settledPending.calls.flatMap((fact) =>
+  // A batch that ends the turn completes the run straight after this
+  // delivery (the same `endTurn` this dispatch returns), so no later request
+  // could send the id: its documents stay local. The optional upload is
+  // looked for only when there is a document to give it.
+  const documents = (endTurn ? [] : settledPending.calls).flatMap((fact) =>
     (settledPending.settled[fact.callId]?.attachments ?? []).flatMap(
       (attachment) => {
         if (attachment.content.kind !== 'base64') return [];

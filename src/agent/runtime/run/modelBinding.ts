@@ -395,6 +395,7 @@ function configurationFor(
           supportsMaxOutputTokens: false,
           supportsStorage: false,
           supportsResponseChaining: false,
+          supportsDocumentInput: capabilities.supportsNativePdf,
           webSocketStreamParameter: 'required',
           allowedReasoningEfforts: [...CODEX_ALLOWED_EFFORTS],
           instructions: {
@@ -428,6 +429,7 @@ function configurationFor(
         supportsMaxOutputTokens: true,
         supportsStorage: true,
         supportsResponseChaining: true,
+        supportsDocumentInput: capabilities.supportsNativePdf,
         webSocketStreamParameter: 'implicit',
         allowedReasoningEfforts: supportedEfforts.length
           ? [...supportedEfforts]

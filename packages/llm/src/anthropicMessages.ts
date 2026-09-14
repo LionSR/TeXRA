@@ -44,6 +44,16 @@ import type {
 } from '@anthropic-ai/sdk/resources/messages';
 
 const CountSchema = z.int().nonnegative();
+/**
+ * What a Files API upload must return before its id is cached. The SDK's
+ * type is not a check on the JSON, so a missing or empty id, or an expiry
+ * that is not an RFC 3339 time (null means the file does not expire), is a
+ * malformed response: the upload counts as failed and the bytes are sent.
+ */
+const UploadedFileSchema = z.object({
+  id: z.string().min(1),
+  expires_at: z.iso.datetime({ offset: true }).nullish(),
+});
 const RefusalSchema = z.strictObject({
   type: z.literal('refusal'),
   category: z
@@ -486,17 +496,21 @@ export function anthropicMessagesModel(
               model: origin.requestedModel,
             }),
         });
-        // RFC 3339, or null when the file does not expire. An expiry that
-        // cannot be read is refused rather than read as "never".
-        const expiresAtMs =
-          uploaded.expires_at == null ? null : Date.parse(uploaded.expires_at);
-        if (expiresAtMs !== null && !Number.isFinite(expiresAtMs))
+        const parsed = UploadedFileSchema.safeParse(uploaded);
+        if (!parsed.success)
           return yield* new ModelError({
             kind: 'malformed-output',
-            message: 'Anthropic returned a file expiry that is not a date.',
+            message: 'Anthropic returned an upload without a usable file id.',
             model: origin.requestedModel,
+            cause: parsed.error,
           });
-        return { fileId: uploaded.id, expiresAtMs };
+        return {
+          fileId: parsed.data.id,
+          expiresAtMs:
+            parsed.data.expires_at == null
+              ? null
+              : Date.parse(parsed.data.expires_at),
+        };
       }),
     // A 404 means the provider already expired the file: the outcome asked for.
     remove: (fileId) =>

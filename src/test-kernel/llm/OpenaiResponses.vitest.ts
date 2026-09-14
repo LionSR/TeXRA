@@ -37,6 +37,7 @@ const CONFIG: OpenAIResponsesConfiguration = {
   supportsMaxOutputTokens: true,
   supportsStorage: true,
   supportsResponseChaining: true,
+  supportsDocumentInput: true,
   allowedReasoningEfforts: [
     'none',
     'minimal',
@@ -64,6 +65,7 @@ const SUBSCRIPTION_CONFIG: OpenAIResponsesConfiguration = {
   supportsMaxOutputTokens: false,
   supportsStorage: false,
   supportsResponseChaining: false,
+  supportsDocumentInput: false,
   allowedReasoningEfforts: ['low', 'medium'],
   instructions: {
     kind: 'required',
@@ -1177,6 +1179,33 @@ describe('native OpenAI Responses protocol', () => {
       expect(fetch).toHaveBeenCalledTimes(1);
       for (const log of logs) expect(log).not.toHaveBeenCalled();
     },
+  );
+
+  it.effect(
+    'refuses a document locally on a route that takes no input files',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi.fn<typeof globalThis.fetch>();
+        const model = modelWith(fetch, SUBSCRIPTION_CONFIG);
+        const refused = yield* Effect.flip(
+          model.prepareTurn({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    kind: 'document',
+                    mimeType: 'application/pdf',
+                    base64: Buffer.from('%PDF-1.7').toString('base64'),
+                  },
+                ],
+              },
+            ],
+          }),
+        );
+        expect(refused).toMatchObject({ kind: 'unsupported' });
+        expect(fetch).not.toHaveBeenCalled();
+      }),
   );
 
   it.effect(

@@ -909,6 +909,8 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     supportsMaxOutputTokens: z.boolean(),
     supportsStorage: z.boolean(),
     supportsResponseChaining: z.boolean(),
+    /** The route takes input files; a document is refused locally otherwise. */
+    supportsDocumentInput: z.boolean(),
     webSocketStreamParameter: z.enum(['implicit', 'required']),
     allowedReasoningEfforts: z
       .array(ResponsesReasoningSchema.unwrap().unwrap().shape.effort.unwrap())
