@@ -93,11 +93,18 @@ export function classifyModelFailure(
     packageError?.kind === 'authentication'
       ? false
       : isProviderErrorAutoRetryable(error);
+  // The package reads `retry-after` off the response itself; the chain walk
+  // below can only find it where an SDK error carried its headers through.
+  // Where both answer, the provider's own statement wins over the guess.
+  const verdict = classifyModelRouteFailure(error);
   return {
     error,
     formatted: withPackageFacts,
     info: toRetryErrorInfo(withPackageFacts),
     autoRetryable,
-    verdict: classifyModelRouteFailure(error),
+    verdict:
+      packageError?.retryAfterMs === undefined
+        ? verdict
+        : { ...verdict, retryAfterMs: packageError.retryAfterMs },
   };
 }

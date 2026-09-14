@@ -10,6 +10,7 @@ import {
   ModelConfigurationSchema,
   ModelError,
   authOrRejectionKind,
+  chatToolResultMessages,
   enrichModelError,
   hasErrorField,
   parseInboundToolArguments,
@@ -349,20 +350,13 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
   let calls: Extract<Part, { kind: 'local-call' }>[] = [];
   for (const message of turn.messages) {
     if (message.role === 'tool') {
-      for (const result of message.results) {
-        if (result.content.some((part) => part.kind !== 'text'))
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'OpenRouter tool results require materialized text.',
-          });
-        const text = result.content
-          .map((part) => (part.kind === 'text' ? part.text : ''))
-          .join('');
-        messages.push({
-          role: 'tool',
-          tool_call_id: calls[result.callOrdinal].providerCallId,
-          content: result.status === 'error' ? `Error: ${text}` : text,
-        });
+      const toolResults = yield* chatToolResultMessages(
+        message.results,
+        calls.map((call) => call.providerCallId),
+        'OpenRouter tool results require materialized text.',
+      );
+      for (const result of toolResults) {
+        messages.push({ role: 'tool', ...result });
       }
       continue;
     }

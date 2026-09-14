@@ -37,6 +37,7 @@ const CONFIG: OpenAIResponsesConfiguration = {
   supportsMaxOutputTokens: true,
   supportsStorage: true,
   supportsResponseChaining: true,
+  supportsDocumentInput: true,
   allowedReasoningEfforts: [
     'none',
     'minimal',
@@ -64,6 +65,7 @@ const SUBSCRIPTION_CONFIG: OpenAIResponsesConfiguration = {
   supportsMaxOutputTokens: false,
   supportsStorage: false,
   supportsResponseChaining: false,
+  supportsDocumentInput: false,
   allowedReasoningEfforts: ['low', 'medium'],
   instructions: {
     kind: 'required',
@@ -356,8 +358,24 @@ describe('native OpenAI Responses protocol', () => {
                     role: 'user' as const,
                     content: [
                       {
+                        kind: 'audio' as const,
+                        mimeType: 'audio/wav',
+                        base64: '',
+                      },
+                    ],
+                  },
+                ],
+              },
+              // An image format Responses does not take is refused locally.
+              {
+                ...turn,
+                messages: [
+                  {
+                    role: 'user' as const,
+                    content: [
+                      {
                         kind: 'image' as const,
-                        mimeType: 'image/png',
+                        mimeType: 'image/svg+xml',
                         base64: '',
                       },
                     ],
@@ -1161,6 +1179,126 @@ describe('native OpenAI Responses protocol', () => {
       expect(fetch).toHaveBeenCalledTimes(1);
       for (const log of logs) expect(log).not.toHaveBeenCalled();
     },
+  );
+
+  it.effect(
+    'refuses a document locally on a route that takes no input files',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi.fn<typeof globalThis.fetch>();
+        const model = modelWith(fetch, SUBSCRIPTION_CONFIG);
+        const refused = yield* Effect.flip(
+          model.prepareTurn({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    kind: 'document',
+                    mimeType: 'application/pdf',
+                    base64: Buffer.from('%PDF-1.7').toString('base64'),
+                  },
+                ],
+              },
+            ],
+          }),
+        );
+        expect(refused).toMatchObject({ kind: 'unsupported' });
+        expect(fetch).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'sends a settlement document by its cached file id beside the result text, and by bytes once released',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async (url, init) => {
+            const target = String(url);
+            if (target.startsWith('data:')) return new Response('%PDF-1.7');
+            if (target.endsWith('/files'))
+              return new Response(
+                JSON.stringify({ id: 'file_uploaded', expires_at: 86_400 }),
+                { headers: { 'content-type': 'application/json' } },
+              );
+            if (init?.method === 'DELETE')
+              return new Response(
+                JSON.stringify({
+                  id: 'file_uploaded',
+                  object: 'file',
+                  deleted: true,
+                }),
+                { headers: { 'content-type': 'application/json' } },
+              );
+            return response(events([MESSAGE]));
+          });
+        const model = modelWith(fetch);
+        assert(model.uploadFile && model.releaseUploads);
+        const pdf = Buffer.from('%PDF-1.7').toString('base64');
+        yield* model.uploadFile({
+          mimeType: 'application/pdf',
+          filename: 'paper.pdf',
+          base64: pdf,
+        });
+        const turn = yield* model.prepareTurn({
+          ...REQUEST,
+          messages: [
+            ...REQUEST.messages,
+            {
+              role: 'assistant',
+              origin: OPERATION.origin,
+              content: [
+                {
+                  kind: 'local-call',
+                  providerCallId: 'call_1',
+                  name: 'read_file',
+                  argumentsText: '{}',
+                },
+              ],
+            },
+            {
+              role: 'tool',
+              results: [
+                {
+                  callOrdinal: 0,
+                  status: 'success',
+                  content: [
+                    { kind: 'text', text: 'Downloaded paper.pdf' },
+                    {
+                      kind: 'document',
+                      mimeType: 'application/pdf',
+                      base64: pdf,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+        assert(turn.mode === 'foreground');
+        const sentOutput = Effect.gen(function* () {
+          yield* model.generateTurn(turn);
+          const request = fetch.mock.calls.findLast(([url]) =>
+            String(url).endsWith('/responses'),
+          );
+          assert(request);
+          return JSON.parse(String(request[1]?.body)).input.at(-1).output;
+        });
+        expect(yield* sentOutput).toStrictEqual([
+          { type: 'input_text', text: 'Downloaded paper.pdf' },
+          { type: 'input_file', file_id: 'file_uploaded' },
+        ]);
+        expect(yield* model.releaseUploads()).toStrictEqual([]);
+        expect(yield* sentOutput).toStrictEqual([
+          { type: 'input_text', text: 'Downloaded paper.pdf' },
+          {
+            type: 'input_file',
+            filename: 'document.pdf',
+            file_data: `data:application/pdf;base64,${pdf}`,
+          },
+        ]);
+      }),
   );
 
   it.effect(

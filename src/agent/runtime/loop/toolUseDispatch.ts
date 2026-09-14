@@ -47,7 +47,7 @@ import {
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
-import { generateShortId, isNonEmptyString } from '@utils/core';
+import { generateShortId, getBasename, isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
@@ -177,18 +177,21 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
 });
 
 /**
- * The model-visible content of one settlement: text, then inline media.
+ * How long delivery waits on the provider to take one upload. Uploading is
+ * an optimisation for later rounds, so a stalled files endpoint must cost
+ * delivery no more than this; the bytes are delivered either way.
+ */
+const UPLOAD_DEADLINE = '5 seconds';
+
+/**
+ * The model-visible content of one settlement: text, then inline media. The
+ * ledger keeps the bytes; whether a later request sends them or a file id is
+ * the bound model's in-memory upload cache's decision, made when it lowers.
  *
  * An attachment the binding cannot carry inline (a PDF on a route without
  * native PDF support, an image on a text-only route, any other type) reaches
  * the model as the text mention only, and says so in the transcript rather
- * than degrading silently. Carrying those bytes by reference instead is
- * blocked on the package: `InputPartSchema` (`@llm/turn`) admits inline
- * base64 only and no `Model` exposes an upload, so the provider Files API
- * paths (`anthropicDocumentHandling`, `openAIResponseFileUploads`) have no
- * lowering to reach through and stay on the handlers that still call them.
- * The system design lists that gap as package work that gates the handler
- * retirement (2026-09-10-effect-native-runtime-system-design.md §5.4, slice 0).
+ * than degrading silently.
  */
 function settlementContent(
   settlement: Settlement,
@@ -862,6 +865,75 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       ),
     };
   });
+  // Offer each delivered document to the binding's upload cache, so the
+  // requests that replay this history can send a file id instead of the
+  // bytes. Concurrent under the same in-flight bound as parallel tool
+  // calls, the batch under one aggregate deadline: a stalled files
+  // endpoint delays delivery by at most one deadline however many
+  // documents there are, warns with the paths that never finished, and
+  // changes nothing the model reads now. The binding deletes what it
+  // uploaded when it closes. A batch that ends the turn completes the run
+  // straight after this delivery (the same `endTurn` this dispatch
+  // returns), and a batch delivered while a model switch waits for the
+  // next boundary is replayed by the replacement binding, whose cache
+  // never saw these ids: both keep their documents local. The optional
+  // upload is looked for only when there is a document to give it.
+  const documents = (
+    endTurn || run.pendingModelSwitch.value !== null ? [] : settledPending.calls
+  ).flatMap((fact) =>
+    (settledPending.settled[fact.callId]?.attachments ?? []).flatMap(
+      (attachment) => {
+        if (attachment.content.kind !== 'base64') return [];
+        const part = inlineMediaPart(
+          attachment.mimeType,
+          attachment.content.data,
+          bound,
+        );
+        return part?.kind === 'document'
+          ? [{ path: attachment.path, part }]
+          : [];
+      },
+    ),
+  );
+  const uploadFile =
+    documents.length === 0 ? undefined : bound.model.uploadFile;
+  if (uploadFile !== undefined) {
+    // Settled uploads leave the set; the aggregate deadline names the rest.
+    const pending = new Set(documents.map(({ path }) => path));
+    yield* Effect.forEach(
+      documents,
+      ({ path, part }) =>
+        uploadFile({
+          mimeType: part.mimeType,
+          filename: getBasename(path) || 'attachment',
+          base64: part.base64,
+        }).pipe(
+          Effect.catchTag('ModelError', (error) =>
+            Effect.sync(() =>
+              logger.warn(
+                `Sending "${path}" as bytes: the provider did not accept it as an upload (${error.message}).`,
+              ),
+            ),
+          ),
+          Effect.tap(Effect.sync(() => pending.delete(path))),
+        ),
+      { concurrency: MAX_PARALLEL_TOOL_CALLS, discard: true },
+    ).pipe(
+      // The dispatch runs inside the loop's uninterruptible handoff; the
+      // aggregate deadline only bounds the uploads if it can interrupt
+      // them, so say it here rather than depend on how the race forks.
+      Effect.interruptible,
+      Effect.timeoutOrElse({
+        duration: UPLOAD_DEADLINE,
+        orElse: () =>
+          Effect.sync(() =>
+            logger.warn(
+              `Sending ${[...pending].map((path) => `"${path}"`).join(', ')} as bytes: their uploads did not finish within ${UPLOAD_DEADLINE} in all.`,
+            ),
+          ),
+      }),
+    );
+  }
   const group: Message = { role: 'tool', results };
   const flow = toolUseFlowState(settledState);
   if (flow === null) {

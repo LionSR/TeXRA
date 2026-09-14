@@ -25,6 +25,7 @@ import {
 } from 'effect';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
+import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 // Local imports
@@ -234,6 +235,7 @@ function agentRun(
   tools: RuntimeToolRegistry,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
   rootUserInstruction: string | undefined,
+  pendingSwitch: string | null = null,
 ): AgentRunShape {
   const config = AgentConfigSchema.parse({
     agent: 'assistant',
@@ -265,7 +267,7 @@ function agentRun(
     model,
     scope: Scope.makeUnsafe(),
     declinedRoutes: [],
-    pendingModelSwitch: { value: null },
+    pendingModelSwitch: { value: pendingSwitch },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
       { logger, runId, runStageId: undefined, config: workspaceRoots().config },
@@ -295,6 +297,10 @@ interface HarnessOptions {
   /** Opened with the slices a real run carries, for the cases that read the
    *  workspace a settlement persisted. */
   readonly stateSlices?: ToolUseFlowState['stateSlices'];
+  /** The run's binding, for the cases that read more than capabilities. */
+  readonly bound?: BoundModel;
+  /** A model switch waiting for the next boundary, for the upload gating. */
+  readonly pendingSwitch?: string;
 }
 
 /** The slices of a run that has yet to touch a file. */
@@ -357,7 +363,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       },
     },
   ]);
-  const model = yield* SynchronizedRef.make(boundModel());
+  const model = yield* SynchronizedRef.make(options.bound ?? boundModel());
   const layer = Layer.mergeAll(
     nativeToolTestLayer(),
     Layer.succeed(
@@ -369,6 +375,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         tools,
         model,
         options.rootUserInstruction,
+        options.pendingSwitch ?? null,
       ),
     ),
     Layer.succeed(RunLedger, session.ledger),
@@ -838,6 +845,179 @@ describe('tool-use dispatch', () => {
       // Accidental re-emissions get the primary's result, not an error.
       expect(delivered[1]?.status).toBe('success');
       expect(delivered[1]?.text).toBe(delivered[0]?.text);
+      yield* kit.session.dispose();
+    }),
+  );
+
+  it.effect(
+    'keeps delivered documents as bytes and bounds a stalled upload by its deadline',
+    () =>
+      Effect.gen(function* () {
+        const pdf = Buffer.from('%PDF-1.7').toString('base64');
+        const warnings: string[] = [];
+        // `a.pdf` finishes only once `b.pdf` has started, and `b.pdf` never
+        // answers: uploads taken one at a time would never reach `b.pdf`.
+        const bStarted = yield* Deferred.make<void>();
+        const uploading: Model = {
+          ...boundModel().model,
+          uploadFile: (file) =>
+            file.filename === 'a.pdf'
+              ? Deferred.await(bStarted)
+              : Effect.sync(() =>
+                  Deferred.doneUnsafe(bStarted, Effect.void),
+                ).pipe(Effect.andThen(Effect.never)),
+        };
+        const kit = yield* openDispatch({
+          tools: {
+            fetch_papers: {
+              definition: { name: 'fetch_papers' },
+              call: () =>
+                Effect.succeed({
+                  status: 'executed',
+                  output: 'fetched',
+                  files: ['a.pdf', 'b.pdf'].map((path) => ({
+                    path,
+                    mimeType: 'application/pdf',
+                    base64Data: pdf,
+                  })),
+                } satisfies ToolResult),
+            } as ITool,
+          },
+          calls: [makeCall('fetch', 'fetch_papers', {})],
+          logger: {
+            ...noopTrace,
+            warn: (message: string) => {
+              warnings.push(message);
+            },
+          },
+          bound: {
+            ...boundModel(),
+            model: uploading,
+            supportsVision: true,
+            supportsNativePdf: true,
+          },
+        });
+        const delivering = yield* Effect.forkChild(dispatch(kit));
+        yield* Deferred.await(bStarted);
+        yield* TestClock.adjust('5 seconds');
+        const outcome = yield* Fiber.join(delivering);
+        expect(warnings).toStrictEqual([expect.stringContaining('"b.pdf"')]);
+        const group = outcome.state.messages.at(-1);
+        if (group?.role !== 'tool') {
+          throw new Error('The dispatch delivered no tool group.');
+        }
+        // The ledger holds the bytes; a file id only ever lives in memory.
+        expect(group.results[0]?.content.slice(1)).toStrictEqual([
+          { kind: 'document', mimeType: 'application/pdf', base64: pdf },
+          { kind: 'document', mimeType: 'application/pdf', base64: pdf },
+        ]);
+        yield* kit.session.dispose();
+      }),
+  );
+
+  it.effect('bounds the whole upload batch by one aggregate deadline', () =>
+    Effect.gen(function* () {
+      const pdf = Buffer.from('%PDF-1.7').toString('base64');
+      const warnings: string[] = [];
+      // Five stalled uploads: past the four-wide window, a per-item
+      // deadline would hold delivery for two waves.
+      const started = yield* Deferred.make<void>();
+      const uploading: Model = {
+        ...boundModel().model,
+        uploadFile: () =>
+          Effect.sync(() => Deferred.doneUnsafe(started, Effect.void)).pipe(
+            Effect.andThen(Effect.never),
+          ),
+      };
+      const kit = yield* openDispatch({
+        tools: {
+          fetch_papers: {
+            definition: { name: 'fetch_papers' },
+            call: () =>
+              Effect.succeed({
+                status: 'executed',
+                output: 'fetched',
+                files: ['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf', 'e.pdf'].map(
+                  (path) => ({
+                    path,
+                    mimeType: 'application/pdf',
+                    base64Data: pdf,
+                  }),
+                ),
+              } satisfies ToolResult),
+          } as ITool,
+        },
+        calls: [makeCall('fetch', 'fetch_papers', {})],
+        logger: {
+          ...noopTrace,
+          warn: (message: string) => {
+            warnings.push(message);
+          },
+        },
+        bound: {
+          ...boundModel(),
+          model: uploading,
+          supportsVision: true,
+          supportsNativePdf: true,
+        },
+      });
+      const delivering = yield* Effect.forkChild(dispatch(kit));
+      yield* Deferred.await(started);
+      yield* TestClock.adjust('5 seconds');
+      const outcome = yield* Fiber.join(delivering);
+      expect(warnings).toStrictEqual([
+        expect.stringContaining('"a.pdf", "b.pdf", "c.pdf", "d.pdf", "e.pdf"'),
+      ]);
+      expect(outcome.state.messages.at(-1)?.role).toBe('tool');
+      yield* kit.session.dispose();
+    }),
+  );
+
+  it.effect('uploads nothing while a model switch waits for the boundary', () =>
+    Effect.gen(function* () {
+      const pdf = Buffer.from('%PDF-1.7').toString('base64');
+      let uploads = 0;
+      const uploading: Model = {
+        ...boundModel().model,
+        uploadFile: () => Effect.sync(() => uploads++),
+      };
+      const kit = yield* openDispatch({
+        tools: {
+          fetch_papers: {
+            definition: { name: 'fetch_papers' },
+            call: () =>
+              Effect.succeed({
+                status: 'executed',
+                output: 'fetched',
+                files: [
+                  {
+                    path: 'a.pdf',
+                    mimeType: 'application/pdf',
+                    base64Data: pdf,
+                  },
+                ],
+              } satisfies ToolResult),
+          } as ITool,
+        },
+        calls: [makeCall('fetch', 'fetch_papers', {})],
+        pendingSwitch: 'claude-sonnet-4',
+        bound: {
+          ...boundModel(),
+          model: uploading,
+          supportsVision: true,
+          supportsNativePdf: true,
+        },
+      });
+      const { state } = yield* dispatch(kit);
+      expect(uploads).toBe(0);
+      // The bytes still deliver; only the optional upload is skipped.
+      const group = state.messages.at(-1);
+      if (group?.role !== 'tool') {
+        throw new Error('The dispatch delivered no tool group.');
+      }
+      expect(group.results[0]?.content.slice(1)).toStrictEqual([
+        { kind: 'document', mimeType: 'application/pdf', base64: pdf },
+      ]);
       yield* kit.session.dispose();
     }),
   );

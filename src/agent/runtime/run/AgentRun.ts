@@ -7,14 +7,7 @@
  * replaces. Nothing here is threaded through node fields or a services bag;
  * the loop and the invoker take it from context.
  */
-import {
-  Context,
-  Data,
-  Effect,
-  Layer,
-  SynchronizedRef,
-  type Scope,
-} from 'effect';
+import { Context, Data, Effect, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
@@ -127,9 +120,13 @@ export interface AgentRunShape {
    */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /**
-   * The run's scope: the layer's, closed when the run's layer is released.
-   * A model bound mid-run (a manual retry's rebind, a host-admitted switch)
-   * is acquired into it, so an editor model it holds retires with the run.
+   * The run's scope: a parallel-strategy child of the layer's, closed when
+   * the run's layer is released. A model bound mid-run (a manual retry's
+   * rebind, a host-admitted switch) is acquired into it, so an editor model
+   * or uploaded file it holds retires with the run. Parallel, so a run that
+   * replaced its binding repeatedly closes every retained release — each
+   * already bounded — concurrently, instead of paying one release per
+   * replaced binding in sequence.
    */
   readonly scope: Scope.Scope;
   /**
@@ -188,7 +185,11 @@ export const agentRunLayer = (
       const { runId, session } = ctx.runScope;
       const { logger, config } = ctx;
       const ledger = yield* RunLedger;
-      const scope = yield* Effect.scope;
+      const layerScope = yield* Effect.scope;
+      // One parallel child holds every binding the run acquires: at close,
+      // each replaced binding's remaining release runs concurrently under
+      // its own deadline rather than one after another.
+      const scope = yield* Scope.fork(layerScope, 'parallel');
 
       const baseRegistry = getDefaultToolRegistry();
       const resolvedTools = yield* resolveAgentTools({
@@ -288,7 +289,7 @@ export const agentRunLayer = (
         agentCategory: config.agentCategory,
         temperature: input.setting.temperature,
         inScope: input.inScope,
-      });
+      }).pipe(Scope.provide(scope));
       const model = yield* SynchronizedRef.make(bound);
       const pendingModelSwitch: { value: string | null } = { value: null };
 

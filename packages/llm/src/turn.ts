@@ -909,6 +909,8 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     supportsMaxOutputTokens: z.boolean(),
     supportsStorage: z.boolean(),
     supportsResponseChaining: z.boolean(),
+    /** The route takes input files; a document is refused locally otherwise. */
+    supportsDocumentInput: z.boolean(),
     webSocketStreamParameter: z.enum(['implicit', 'required']),
     allowedReasoningEfforts: z
       .array(ResponsesReasoningSchema.unwrap().unwrap().shape.effort.unwrap())
@@ -1548,6 +1550,12 @@ const ModelErrorFieldsSchema = z.strictObject({
   responseId: z.string().optional(),
   model: z.string().optional(),
   status: z.int().optional(),
+  /**
+   * The provider's own "come back in" delay, in milliseconds, as its
+   * response stated it. The retry gate reads this instead of guessing a
+   * backoff, so a rate limit waits exactly as long as it was told to.
+   */
+  retryAfterMs: z.int().nonnegative().optional(),
   operation: RemoteOperationSchema.optional(),
   providerEvidence: z
     .discriminatedUnion('kind', [
@@ -1635,6 +1643,37 @@ export const parseJsonOrModelError = (
 /** True when a parsed provider payload embeds an `{ error }` field. */
 export const hasErrorField = (value: unknown): value is { error: unknown } =>
   typeof value === 'object' && value !== null && 'error' in value;
+
+/**
+ * The delay one response asks the caller to wait, in milliseconds:
+ * `retry-after-ms` where the provider sends it, else `retry-after` as
+ * seconds or as an HTTP date. Undefined when the response says nothing —
+ * the caller's own backoff then owns the wait.
+ */
+export function retryAfterMsOf(
+  headers: Headers | undefined,
+): number | undefined {
+  // `Number('')` and `Number(null)` are both 0, so an absent header has to be
+  // recognised as absent before it is read as a delay of zero.
+  const read = (name: string): string | undefined => {
+    const value = headers?.get(name);
+    return value === null || value === undefined || value.trim() === ''
+      ? undefined
+      : value.trim();
+  };
+  const explicit = read('retry-after-ms');
+  if (explicit !== undefined) {
+    const ms = Number(explicit);
+    if (Number.isFinite(ms) && ms >= 0) return Math.round(ms);
+  }
+  const retryAfter = read('retry-after');
+  if (retryAfter === undefined) return undefined;
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds) && seconds >= 0)
+    return Math.round(seconds * 1000);
+  const date = Date.parse(retryAfter);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
+}
 
 /**
  * The server-sent events carried by a byte stream, ending at the `[DONE]`
@@ -1757,6 +1796,45 @@ export const parseInboundToolArguments = (
   });
 
 /**
+ * A tool-result row translated to its Chat wire shape: OpenAI Chat and
+ * OpenRouter build this identically (materialize the text parts, an error
+ * status prefixes them), and diverge only in how the surrounding message is
+ * typed. `callIds` is the calling assistant turn's provider call ids, in
+ * `callOrdinal` order.
+ */
+export const chatToolResultMessages = Effect.fn('llm.chatToolResultMessages')(
+  function* (
+    results: Extract<
+      ResolvedTurn['messages'][number],
+      { role: 'tool' }
+    >['results'],
+    callIds: readonly string[],
+    unsupportedMessage: string,
+  ) {
+    const messages: { tool_call_id: string; content: string }[] = [];
+    for (const result of results) {
+      const text: string[] = [];
+      for (const part of result.content) {
+        if (part.kind !== 'text') {
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message: unsupportedMessage,
+          });
+        }
+        text.push(part.text);
+      }
+      messages.push({
+        // The canonical grammar already guarantees adjacent, complete ordinals.
+        tool_call_id: callIds[result.callOrdinal],
+        content:
+          result.status === 'error' ? `Error: ${text.join('')}` : text.join(''),
+      });
+    }
+    return messages;
+  },
+);
+
+/**
  * The request signal for a streamed body, with the body reader cancelled at
  * scope close. The cancel finalizer is registered before the signal's abort
  * finalizer, so LIFO order aborts the request before cancellation joins a
@@ -1810,6 +1888,33 @@ export const InputTokenEstimateSchema = z
 export type InputTokenEstimate = z.infer<typeof InputTokenEstimateSchema>;
 
 /** A configured executable value; it owns neither conversation nor retry policy. */
+/** The bytes an upload takes. */
+export const FileUploadSchema = z
+  .strictObject({
+    mimeType: z.string().min(1),
+    filename: z.string().min(1),
+    base64: z.base64(),
+  })
+  .readonly();
+export type FileUpload = z.infer<typeof FileUploadSchema>;
+
+/**
+ * The lifetime every upload asks its provider for, in seconds: one day, long
+ * enough for a typical run and inside both files endpoints' accepted range
+ * (OpenAI `expires_after.seconds` 3600-2592000, Anthropic
+ * `expires_in_seconds` 3600-7776000, per the pinned SDK typings). Without it
+ * OpenAI keeps a non-batch file until it is deleted. A binding deletes what
+ * it uploaded when its scope closes; this bound is what still clears a file
+ * a crashed process never got to delete.
+ */
+export const FILE_UPLOAD_LIFETIME_SECONDS = 86_400;
+
+/** A file a binding uploaded and could not confirm it deleted. */
+export interface UnreleasedUpload {
+  readonly fileId: string;
+  readonly reason: string;
+}
+
 export interface Model {
   prepareTurn(request: TurnRequest): Effect.Effect<ResolvedTurn, ModelError>;
   streamTurn(
@@ -1818,6 +1923,20 @@ export interface Model {
   generateTurn(
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
   ): Effect.Effect<TurnResult, ModelError>;
+  /**
+   * Upload a document's bytes so later turns on this same model can send the
+   * provider's file id in their place. The id lives only in this model's
+   * memory, keyed by a digest of the bytes; nothing durable ever holds it,
+   * so a new binding (a resumed run, a rebind, another model) starts empty
+   * and sends bytes. Present only where the binding serves a files endpoint.
+   */
+  uploadFile?(file: FileUpload): Effect.Effect<void, ModelError>;
+  /**
+   * Delete every file `uploadFile` created, concurrently under one deadline,
+   * and forget them, so no later turn can send an id that no longer resolves.
+   * Never fails: what could not be confirmed deleted is returned.
+   */
+  releaseUploads?(): Effect.Effect<readonly UnreleasedUpload[]>;
   /** Estimate supported prepared input and report the counted scope. */
   estimateInputTokens?(
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,

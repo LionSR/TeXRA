@@ -143,9 +143,9 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
 /**
  * A base64 payload already in hand, as the part the package lowers, or null
  * when the binding carries no such attachment inline. Null is a degradation
- * the model can't see, so the caller names it in the transcript: the package
- * takes inline bytes only (`InputPartSchema`), so there is no by-reference
- * lowering to fall back to.
+ * the model can't see, so the caller names it in the transcript. An upload
+ * is no way around it: a file id only ever stands in for bytes the binding
+ * already takes.
  */
 export function inlineMediaPart(
   mimeType: string,

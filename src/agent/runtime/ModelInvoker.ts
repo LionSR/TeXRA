@@ -79,6 +79,7 @@ import { AgentRun } from './run/AgentRun';
 import {
   backgroundDelivery,
   bindModel,
+  releaseBindingUploads,
   type BoundModel,
 } from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
@@ -965,8 +966,11 @@ export const modelInvokerLayer = (): Layer.Layer<
           Effect.gen(function* () {
             // A switch may have landed while the panel waited; never undo it.
             if (current !== failed) return current;
+            // A personal-key retry leaves the failed route's overlay behind
+            // (subscription window, prices, PDF admission, a Kimi coding
+            // endpoint) and binds the catalog model.
             const config =
-              selection === 'personal' && failed.routedOnKimiCode
+              selection === 'personal'
                 ? ((yield* Effect.tryPromise({
                     try: () => resolveRuntimeModelConfig(failed.modelId),
                     catch: ensureError,
@@ -981,6 +985,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               temperature: run.setting.temperature,
               inScope: run.inScope,
             }).pipe(Scope.provide(run.scope));
+            yield* releaseBindingUploads(current.model, current.modelId);
             logger.debug('Refreshed model binding before manual retry');
             return next;
           }),

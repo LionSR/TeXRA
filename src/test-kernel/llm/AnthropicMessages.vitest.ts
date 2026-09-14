@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Logger, Stream } from 'effect';
+import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { anthropicMessagesModel } from '@llm/anthropicMessages';
 import type { AnthropicMessagesConfiguration, TurnRequest } from '@llm/turn';
@@ -198,6 +199,177 @@ describe('canonical Anthropic Messages protocol', () => {
     fetchModel.mockImplementation(async () => response(signedEvents()));
   });
   afterEach(() => vi.unstubAllEnvs());
+
+  it.effect(
+    'sends an uploaded document by file id only from this binding while live, and deletes it on release',
+    () =>
+      Effect.gen(function* () {
+        const requests: { method: string; url: string }[] = [];
+        fetchModel.mockImplementation(async (url, init) => {
+          requests.push({ method: init?.method ?? 'GET', url: String(url) });
+          if (String(url).endsWith('/v1/files'))
+            return Response.json({
+              id: 'file_uploaded',
+              expires_at: '1970-01-01T01:00:00Z',
+            });
+          if (init?.method === 'DELETE')
+            return Response.json({ id: 'file_uploaded', type: 'file_deleted' });
+          return response(signedEvents());
+        });
+        const document = {
+          kind: 'document' as const,
+          mimeType: 'application/pdf',
+          base64: 'AA==',
+        };
+        const sentSource = (bound: ReturnType<typeof model>) =>
+          Effect.gen(function* () {
+            const turn = yield* bound.prepareTurn({
+              messages: [{ role: 'user', content: [document] }],
+            });
+            assert(turn.mode === 'foreground');
+            yield* bound.generateTurn(turn);
+            return JSON.parse(fetchModel.mock.calls.at(-1)![1]!.body as string)
+              .messages[0].content[0].source;
+          });
+        const bytes = {
+          type: 'base64',
+          media_type: 'application/pdf',
+          data: 'AA==',
+        };
+        const configured = model();
+        assert(configured.uploadFile && configured.releaseUploads);
+        expect(yield* sentSource(configured)).toStrictEqual(bytes);
+        yield* configured.uploadFile({
+          mimeType: 'application/pdf',
+          filename: 'paper.pdf',
+          base64: 'AA==',
+        });
+        expect(yield* sentSource(configured)).toStrictEqual({
+          type: 'file',
+          file_id: 'file_uploaded',
+        });
+        // A resumed run binds a new model: its cache is empty, so the id the
+        // earlier binding held is never sent.
+        expect(yield* sentSource(model())).toStrictEqual(bytes);
+
+        expect(yield* configured.releaseUploads()).toStrictEqual([]);
+        expect(
+          requests.filter((request) => request.method === 'DELETE'),
+        ).toStrictEqual([
+          {
+            method: 'DELETE',
+            url: 'https://synthetic.invalid/v1/files/file_uploaded',
+          },
+        ]);
+        expect(yield* sentSource(configured)).toStrictEqual(bytes);
+
+        // An upload the provider will expire lowers from bytes near expiry.
+        const expiring = model();
+        assert(expiring.uploadFile);
+        yield* expiring.uploadFile({
+          mimeType: 'application/pdf',
+          filename: 'paper.pdf',
+          base64: 'AA==',
+        });
+        yield* TestClock.adjust('1 hour');
+        expect(yield* sentSource(expiring)).toStrictEqual(bytes);
+
+        // Release runs as the binding scope's finalizer, and finalizers run
+        // uninterruptibly: a DELETE the provider never answers must still
+        // let the scope close at the release deadline, reporting the file.
+        const deleteIssued = yield* Deferred.make<void>();
+        fetchModel.mockImplementation(async (url, init) => {
+          if (String(url).endsWith('/v1/files'))
+            return Response.json({ id: 'file_stalled', expires_at: null });
+          if (init?.method === 'DELETE') {
+            Deferred.doneUnsafe(deleteIssued, Effect.void);
+            return new Promise<Response>((_, reject) =>
+              init.signal?.addEventListener('abort', () =>
+                reject(init.signal?.reason),
+              ),
+            );
+          }
+          return response(signedEvents());
+        });
+        const stalling = model();
+        assert(stalling.uploadFile && stalling.releaseUploads);
+        const { uploadFile, releaseUploads } = stalling;
+        let unreleased: unknown;
+        const binding = yield* Effect.forkChild(
+          Effect.scoped(
+            Effect.gen(function* () {
+              yield* uploadFile({
+                mimeType: 'application/pdf',
+                filename: 'paper.pdf',
+                base64: 'AQ==',
+              });
+              yield* Effect.addFinalizer(() =>
+                releaseUploads().pipe(
+                  Effect.flatMap((result) =>
+                    Effect.sync(() => {
+                      unreleased = result;
+                    }),
+                  ),
+                ),
+              );
+            }),
+          ),
+        );
+        yield* Deferred.await(deleteIssued);
+        yield* TestClock.adjust('10 seconds');
+        yield* Fiber.join(binding);
+        expect(unreleased).toStrictEqual([
+          {
+            fileId: 'file_stalled',
+            reason: expect.stringContaining('no answer'),
+          },
+        ]);
+      }),
+  );
+
+  it.effect(
+    'warns when an upload that finishes after release cannot be deleted',
+    () => {
+      const warnings: unknown[] = [];
+      const capture = Logger.make((options) => {
+        warnings.push(options.message);
+      });
+      return Effect.gen(function* () {
+        // The provider answers the upload only once the release has run,
+        // then refuses the late delete.
+        const uploadIssued = yield* Deferred.make<void>();
+        const answerUpload = yield* Deferred.make<void>();
+        fetchModel.mockImplementation(async (url, init) => {
+          if (init?.method === 'DELETE')
+            return Response.json({}, { status: 500 });
+          if (String(url).endsWith('/v1/files')) {
+            Deferred.doneUnsafe(uploadIssued, Effect.void);
+            await Effect.runPromise(Deferred.await(answerUpload));
+            return Response.json({ id: 'file_late', expires_at: null });
+          }
+          return response(signedEvents());
+        });
+        const bound = model();
+        assert(bound.uploadFile && bound.releaseUploads);
+        const late = yield* Effect.forkChild(
+          bound.uploadFile({
+            mimeType: 'application/pdf',
+            filename: 'paper.pdf',
+            base64: 'AA==',
+          }),
+        );
+        yield* Deferred.await(uploadIssued);
+        // Nothing is owned yet, so the release finishes empty; the late
+        // upload's id is deleted instead of cached.
+        expect(yield* bound.releaseUploads()).toStrictEqual([]);
+        yield* Deferred.done(answerUpload, Exit.void);
+        yield* Fiber.join(late);
+        expect(warnings.flat()).toStrictEqual([
+          expect.stringContaining('file_late'),
+        ]);
+      }).pipe(Effect.withLogger(capture));
+    },
+  );
 
   it.effect.each([
     [undefined, '1h'],

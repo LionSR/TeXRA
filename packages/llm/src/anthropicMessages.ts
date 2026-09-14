@@ -1,10 +1,14 @@
+// Node imports
+import { Buffer } from 'node:buffer';
+
 // Third-party imports
 import Anthropic, {
   APIError,
   APIConnectionError,
   APIUserAbortError,
+  toFile,
 } from '@anthropic-ai/sdk';
-import { Cause, Effect, Exit, Stream } from 'effect';
+import { Cause, Clock, Effect, Exit, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
@@ -14,10 +18,12 @@ import {
   ModelError,
   authOrRejectionKind,
   enrichModelError,
+  FILE_UPLOAD_LIFETIME_SECONDS,
   parseInboundToolArguments,
   parseOutboundToolArguments,
   pullStream,
   ResolvedTurnSchema,
+  retryAfterMsOf,
   sameModelOrigin,
   TurnRequestSchema,
   TurnResultSchema,
@@ -29,6 +35,7 @@ import {
   type TurnResult,
   completedTurn,
 } from './turn.js';
+import { uploadCache, type UploadCache } from './uploadCache.js';
 import type {
   ContentBlockParam,
   MessageCreateParamsStreaming,
@@ -37,6 +44,16 @@ import type {
 } from '@anthropic-ai/sdk/resources/messages';
 
 const CountSchema = z.int().nonnegative();
+/**
+ * What a Files API upload must return before its id is cached. The SDK's
+ * type is not a check on the JSON, so a missing or empty id, or an expiry
+ * that is not an RFC 3339 time (null means the file does not expire), is a
+ * malformed response: the upload counts as failed and the bytes are sent.
+ */
+const UploadedFileSchema = z.object({
+  id: z.string().min(1),
+  expires_at: z.iso.datetime({ offset: true }).nullish(),
+});
 const RefusalSchema = z.strictObject({
   type: z.literal('refusal'),
   category: z
@@ -155,6 +172,8 @@ const EventSchema = z.discriminatedUnion('type', [
 ]);
 
 function sdkFailure(cause: unknown): ModelError {
+  const retryAfterMs =
+    cause instanceof APIError ? retryAfterMsOf(cause.headers) : undefined;
   let kind: ModelError['kind'] = 'transport';
   if (cause instanceof SyntaxError) kind = 'malformed-output';
   else if (
@@ -172,6 +191,7 @@ function sdkFailure(cause: unknown): ModelError {
     ...(cause instanceof APIError
       ? { status: cause.status, requestId: cause.requestID ?? undefined }
       : {}),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     cause,
   });
 }
@@ -181,6 +201,8 @@ const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
     ResolvedTurn['messages'][number],
     { role: 'user' }
   >['content'][number],
+  /** The live file id this binding holds for some bytes, or `null`. */
+  fileIdFor: (base64: string) => string | null,
 ) {
   if (part.kind === 'text') return { type: 'text', text: part.text } as const;
   if (part.kind === 'image' && part.detail === undefined) {
@@ -194,14 +216,21 @@ const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
       } as const;
   }
   if (part.kind === 'document' && part.mimeType === 'application/pdf') {
-    return {
-      type: 'document',
-      source: {
-        type: 'base64',
-        media_type: 'application/pdf',
-        data: part.base64,
-      },
-    } as const;
+    // Only this binding's own live upload stands in for the bytes.
+    const fileId = fileIdFor(part.base64);
+    return fileId !== null
+      ? ({
+          type: 'document',
+          source: { type: 'file', file_id: fileId },
+        } as const)
+      : ({
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: part.base64,
+          },
+        } as const);
   }
   return yield* new ModelError({
     kind: 'unsupported',
@@ -214,6 +243,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   turn: ResolvedTurn,
   origin: ModelOrigin,
   config: AnthropicMessagesConfiguration,
+  uploads: UploadCache,
 ) {
   if (
     turn.protocol !== 'anthropic-messages' ||
@@ -259,6 +289,9 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       });
     }
   }
+  const nowMs = yield* Clock.currentTimeMillis;
+  const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
+    inputPart(part, (base64) => uploads.fileIdFor(base64, nowMs));
   const messages: MessageParam[] = [];
   let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
     [];
@@ -266,7 +299,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
     if (message.role === 'user') {
       messages.push({
         role: 'user',
-        content: yield* Effect.forEach(message.content, inputPart),
+        content: yield* Effect.forEach(message.content, lowerPart),
       });
     } else if (message.role === 'tool') {
       const content: ToolResultBlockParam[] = [];
@@ -282,7 +315,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
           type: 'tool_result',
           tool_use_id: call.providerCallId,
           is_error: result.status === 'error',
-          content: yield* Effect.forEach(result.content, inputPart),
+          content: yield* Effect.forEach(result.content, lowerPart),
         });
       }
       messages.push({ role: 'user', content });
@@ -442,6 +475,56 @@ export function anthropicMessagesModel(
     logLevel: 'off',
     timeout: 600_000,
   });
+  const uploads = uploadCache({
+    send: (upload) =>
+      Effect.gen(function* () {
+        const uploaded = yield* Effect.tryPromise({
+          try: async (signal) =>
+            client.files.upload(
+              {
+                file: await toFile(
+                  Buffer.from(upload.base64, 'base64'),
+                  upload.filename,
+                  { type: upload.mimeType },
+                ),
+                expires_in_seconds: FILE_UPLOAD_LIFETIME_SECONDS,
+              },
+              { signal },
+            ),
+          catch: (cause) =>
+            enrichModelError(sdkFailure(cause), {
+              model: origin.requestedModel,
+            }),
+        });
+        const parsed = UploadedFileSchema.safeParse(uploaded);
+        if (!parsed.success)
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message: 'Anthropic returned an upload without a usable file id.',
+            model: origin.requestedModel,
+            cause: parsed.error,
+          });
+        return {
+          fileId: parsed.data.id,
+          expiresAtMs:
+            parsed.data.expires_at == null
+              ? null
+              : Date.parse(parsed.data.expires_at),
+        };
+      }),
+    // A 404 means the provider already expired the file: the outcome asked for.
+    remove: (fileId) =>
+      Effect.tryPromise({
+        try: (signal) => client.files.delete(fileId, null, { signal }),
+        catch: (cause) =>
+          enrichModelError(sdkFailure(cause), { model: origin.requestedModel }),
+      }).pipe(
+        Effect.asVoid,
+        Effect.catchTag('ModelError', (error) =>
+          error.status === 404 ? Effect.void : Effect.fail(error),
+        ),
+      ),
+  });
   const prepareTurn: Model['prepareTurn'] = Effect.fn(
     'llm.anthropic.prepareTurn',
   )(function* (request) {
@@ -511,7 +594,7 @@ export function anthropicMessagesModel(
         message: 'Anthropic requires complete supported invocation controls.',
         cause: prepared.error,
       });
-    yield* invocationBody(prepared.data, origin, config);
+    yield* invocationBody(prepared.data, origin, config, uploads);
     return prepared.data;
   });
 
@@ -533,7 +616,12 @@ export function anthropicMessagesModel(
               message: 'The prepared Anthropic invocation is invalid.',
               cause: prepared.error,
             });
-          const body = yield* invocationBody(prepared.data, origin, config);
+          const body = yield* invocationBody(
+            prepared.data,
+            origin,
+            config,
+            uploads,
+          );
           const signal = yield* Effect.abortSignal;
           const source = yield* Effect.tryPromise({
             try: () => client.messages.create(body, { signal }),
@@ -940,7 +1028,7 @@ export function anthropicMessagesModel(
           message: 'The prepared Anthropic count invocation is unsupported.',
         });
       const turn = parsed.data;
-      const body = yield* invocationBody(turn, origin, config);
+      const body = yield* invocationBody(turn, origin, config, uploads);
       const message = turn.messages[0];
       if (
         turn.tools.length !== 0 ||
@@ -1041,6 +1129,8 @@ export function anthropicMessagesModel(
     prepareTurn,
     streamTurn,
     generateTurn,
+    uploadFile: uploads.uploadFile,
+    releaseUploads: uploads.releaseUploads,
     ...(config.supportsInputTokenEstimation ? { estimateInputTokens } : {}),
   });
 }

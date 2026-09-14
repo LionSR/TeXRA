@@ -52,7 +52,11 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun, RunHalted } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
-import { bindModel, type BoundModel } from '../run/modelBinding';
+import {
+  bindModel,
+  releaseBindingUploads,
+  type BoundModel,
+} from '../run/modelBinding';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
@@ -303,6 +307,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         },
       ]);
       yield* SynchronizedRef.set(run.model, next);
+      yield* releaseBindingUploads(current.model, current.modelId);
       run.callbacks.onModelChanged(next.modelId);
       logger.emit({ type: 'run.config', runId, config: nextAgentConfig });
       return yield* commit(switched);

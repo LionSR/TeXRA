@@ -1,4 +1,5 @@
 // Node imports
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -20,6 +21,7 @@ import {
   ModelError,
   authOrRejectionKind,
   enrichModelError,
+  FILE_UPLOAD_LIFETIME_SECONDS,
   pullStream,
   ObservationPolicySchema,
   parseInboundToolArguments,
@@ -41,9 +43,21 @@ import {
   type RemoteOperation,
   completedTurn,
 } from './turn.js';
+import { uploadCache, type UploadCache } from './uploadCache.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 type ResponseOrigin = RemoteOperation['origin'];
+/**
+ * What a Files API upload must return before its id is cached. The SDK's
+ * type is not a check on the JSON, so a missing or empty id, or an expiry
+ * that is not whole non-negative Unix seconds (absent means the file does
+ * not expire), is a malformed response: the upload counts as failed and the
+ * bytes are sent.
+ */
+const UploadedFileSchema = z.object({
+  id: z.string().min(1),
+  expires_at: z.int().nonnegative().nullish(),
+});
 type HttpTurnResult = Extract<TurnResult, { providerResponseId: string }>;
 
 const ItemStatusSchema = z.enum(['in_progress', 'completed', 'incomplete']);
@@ -328,49 +342,258 @@ const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
   },
 );
 
-const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
-  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+/** Canonical image detail as the Responses vocabulary names it. */
+const RESPONSES_IMAGE_DETAIL = {
+  low: 'low',
+  medium: 'auto',
+  high: 'high',
+  'ultra-high': 'high',
+} as const satisfies Record<
+  NonNullable<
+    Extract<
+      Extract<
+        ResolvedTurn['messages'][number],
+        { role: 'user' }
+      >['content'][number],
+      { kind: 'image' }
+    >['detail']
+  >,
+  OpenAI.Responses.ResponseInputImage['detail']
+>;
+
+/**
+ * The image formats sent to Responses. The pinned `openai` typings name no
+ * input-image formats (only image generation's output formats), so this is
+ * the conservative raster set; a GIF must also be a single frame. An exact
+ * match on the lowercased MIME type also keeps a value carrying data-URL
+ * delimiters out of the URL built from it.
+ */
+const RESPONSES_IMAGE_MIME_TYPES: ReadonlySet<string> = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+]);
+
+/**
+ * How many image frames a GIF holds, by walking its blocks, or `null` when
+ * the bytes are not a well-formed GIF. Only the structure is read: the
+ * header, the optional colour tables, then extension and image blocks and
+ * their data sub-blocks up to the trailer.
+ */
+function gifFrameCount(bytes: Uint8Array): number | null {
+  const header = String.fromCharCode(...bytes.subarray(0, 6));
+  if (bytes.length < 13 || (header !== 'GIF87a' && header !== 'GIF89a'))
+    return null;
+  const tableSize = (flags: number): number =>
+    flags & 0x80 ? 3 * 2 ** ((flags & 0x07) + 1) : 0;
+  let offset = 13 + tableSize(bytes[10]!);
+  const skipSubBlocks = (): boolean => {
+    while (offset < bytes.length) {
+      const size = bytes[offset]!;
+      offset += 1;
+      if (size === 0) return true;
+      offset += size;
+    }
+    return false;
+  };
+  let frames = 0;
+  while (offset < bytes.length) {
+    const block = bytes[offset]!;
+    if (block === 0x3b) return frames;
+    if (block === 0x21) {
+      offset += 2;
+      if (!skipSubBlocks()) return null;
+    } else if (block === 0x2c) {
+      if (offset + 10 > bytes.length) return null;
+      frames += 1;
+      offset += 10 + tableSize(bytes[offset + 9]!) + 1;
+      if (!skipSubBlocks()) return null;
+    } else {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * One canonical input part as Responses content. Inline bytes travel as a
+ * data URL; a document this binding already uploaded travels as its live
+ * file id. An image outside the formats Responses takes is refused here,
+ * before any request, rather than by the provider.
+ */
+const responsesContent = Effect.fn('llm.responses.content')(function* (
+  part: Extract<
+    ResolvedTurn['messages'][number],
+    { role: 'user' }
+  >['content'][number],
+  documents: {
+    /** The route takes input files at all. */
+    readonly accepted: boolean;
+    /** The live file id this binding holds for some bytes, or `null`. */
+    readonly fileIdFor: (base64: string) => string | null;
+  },
+): Effect.fn.Return<OpenAI.Responses.ResponseInputContent, ModelError> {
+  switch (part.kind) {
+    case 'text':
+      return { type: 'input_text', text: part.text };
+    case 'image': {
+      const mimeType = part.mimeType.toLowerCase();
+      if (
+        !RESPONSES_IMAGE_MIME_TYPES.has(mimeType) ||
+        (mimeType === 'image/gif' &&
+          gifFrameCount(Buffer.from(part.base64, 'base64')) !== 1)
+      )
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Responses takes PNG, JPEG, WEBP and single-frame GIF images; this image attachment is none of those.',
+        });
+      return {
+        type: 'input_image',
+        // No stated detail keeps the provider's own choice rather than
+        // forcing high-detail cost; `medium` has no Responses counterpart.
+        detail:
+          part.detail === undefined
+            ? 'auto'
+            : RESPONSES_IMAGE_DETAIL[part.detail],
+        image_url: `data:${mimeType};base64,${part.base64}`,
+      };
+    }
+    case 'document': {
+      if (!documents.accepted)
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'This Responses route takes no input files, so the document cannot be sent.',
+        });
+      const fileId = documents.fileIdFor(part.base64);
+      if (fileId !== null) return { type: 'input_file', file_id: fileId };
+      return {
+        type: 'input_file',
+        // OpenAI reads the type off the name when the bytes are inline, and
+        // the canonical document part carries no name of its own.
+        filename: `document.${part.mimeType.split('/').pop() ?? 'bin'}`,
+        file_data: `data:${part.mimeType};base64,${part.base64}`,
+      };
+    }
+    case 'audio':
+    case 'video':
+      return yield* new ModelError({
+        kind: 'unsupported',
+        message:
+          'Responses takes text, images and documents, not audio or video.',
+      });
+  }
+});
+
+/**
+ * The document access one lowering consults: whether the route takes input
+ * files at all, and the live file id this binding already holds for some
+ * bytes, read against one clock reading for the whole lowering.
+ */
+interface DocumentAccess {
+  /** The route takes input files at all. */
+  readonly accepted: boolean;
+  /** The live file id this binding holds for some bytes, or `null`. */
+  readonly fileIdFor: (base64: string) => string | null;
+}
+
+const documentAccess = Effect.fn('llm.responses.documentAccess')(function* (
+  config: OpenAIResponsesConfiguration,
+  uploads: UploadCache | null,
 ) {
+  const nowMs = yield* Clock.currentTimeMillis;
+  return {
+    accepted: config.supportsDocumentInput,
+    fileIdFor: (base64: string) =>
+      uploads === null ? null : uploads.fileIdFor(base64, nowMs),
+  } satisfies DocumentAccess;
+});
+
+/**
+ * The items one admitted message lowers to: one per tool result, one per
+ * user message, one per assistant content part. A continuation's covered
+ * prefix is counted with this instead of lowered, so the bytes it covers
+ * are never materialized again; a count that drifts from the lowering fails
+ * the continuation's `coveredItems` check loudly.
+ */
+const loweredItemCount = (
+  message: Extract<
+    ResolvedTurn,
+    { protocol: 'openai-responses' }
+  >['messages'][number],
+): number => {
+  if (message.role === 'tool') return message.results.length;
+  return message.role === 'user' ? 1 : message.content.length;
+};
+
+/**
+ * The call ids one message leaves for the next tool message, replayed
+ * without lowering: any non-tool message resets the run, and an assistant
+ * message then appends its local calls. A continuation's suffix lowers
+ * against the ids its covered prefix left.
+ */
+const replayCallIds = (
+  message: Extract<
+    ResolvedTurn,
+    { protocol: 'openai-responses' }
+  >['messages'][number],
+  callIds: string[],
+): void => {
+  if (message.role === 'tool') return;
+  callIds.length = 0;
+  if (message.role !== 'assistant') return;
+  for (const part of message.content) {
+    if (part.kind === 'local-call') callIds.push(part.providerCallId);
+  }
+};
+
+/**
+ * The messages as Responses input items. `callIds` is the mutable call-id
+ * run the loop keeps: seeded with the ids a covered prefix left when
+ * lowering only a continuation's suffix.
+ */
+const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
+  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  messages: Extract<ResolvedTurn, { protocol: 'openai-responses' }>['messages'],
+  documents: DocumentAccess,
+  callIds: string[],
+) {
+  const content = (part: Parameters<typeof responsesContent>[0]) =>
+    responsesContent(part, documents);
   const input: OpenAI.Responses.ResponseInput = [];
-  let callIds: string[] = [];
-  for (const message of turn.messages) {
+  for (const message of messages) {
     if (message.role === 'tool') {
       for (const result of message.results) {
-        const text: string[] = [];
-        for (const part of result.content) {
-          if (part.kind !== 'text') {
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message:
-                'This Responses implementation requires text tool results.',
-            });
-          }
-          text.push(part.text);
+        // A settlement that carries only text keeps the plain string output
+        // the API has always taken. Attachments keep `result.content` order
+        // so a label still sits next to the file it names.
+        let output: string | OpenAI.Responses.ResponseInputContent[];
+        if (result.content.every((part) => part.kind === 'text')) {
+          const text = result.content.map((part) => part.text).join('');
+          output = result.status === 'error' ? `Error: ${text}` : text;
+        } else {
+          const lowered = yield* Effect.forEach(result.content, content);
+          output =
+            result.status === 'error'
+              ? [{ type: 'input_text' as const, text: 'Error: ' }, ...lowered]
+              : lowered;
         }
         input.push({
           type: 'function_call_output',
           call_id: callIds[result.callOrdinal],
-          output:
-            result.status === 'error'
-              ? `Error: ${text.join('')}`
-              : text.join(''),
+          output,
         });
       }
       continue;
     }
-    callIds = [];
+    callIds.length = 0;
     if (message.role === 'user') {
-      const content: OpenAI.Responses.ResponseInputText[] = [];
-      for (const part of message.content) {
-        if (part.kind !== 'text') {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'This Responses implementation requires text user input.',
-          });
-        }
-        content.push({ type: 'input_text', text: part.text });
-      }
-      input.push({ role: 'user', content });
+      input.push({
+        role: 'user',
+        content: yield* Effect.forEach(message.content, content),
+      });
       continue;
     }
     for (const part of message.content) {
@@ -486,16 +709,34 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
       }
     }
   }
+  return input;
+});
+
+/** The required tool must be among the supplied definitions. */
+const checkToolChoice = (
+  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+): Effect.Effect<void, ModelError> => {
   const choice = turn.controls.toolChoice;
-  if (
-    choice !== 'auto' &&
-    !turn.tools.some((tool) => tool.name === choice.name)
-  ) {
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message: 'The required tool must be present in the supplied definitions.',
-    });
-  }
+  return choice === 'auto' ||
+    turn.tools.some((tool) => tool.name === choice.name)
+    ? Effect.void
+    : Effect.fail(
+        new ModelError({
+          kind: 'invalid-request',
+          message:
+            'The required tool must be present in the supplied definitions.',
+        }),
+      );
+};
+
+const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
+  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  config: OpenAIResponsesConfiguration,
+  uploads: UploadCache | null,
+) {
+  const documents = yield* documentAccess(config, uploads);
+  const input = yield* lowerMessages(turn, turn.messages, documents, []);
+  yield* checkToolChoice(turn);
   return input;
 });
 
@@ -571,7 +812,6 @@ export const openaiResponsesContinuation = Effect.fn(
       content: result.content,
     },
   ];
-  const encoded = yield* lowerInput({ ...turn, messages: prefix });
   return ContinuationSchema.parse({
     origin: result.requestedOrigin,
     coveredMessages: prefix.length,
@@ -584,23 +824,29 @@ export const openaiResponsesContinuation = Effect.fn(
     anchor: {
       kind: 'stored',
       responseId: result.providerResponseId,
-      coveredItems: encoded.length,
+      // Counted, not lowered: the covered prefix is never materialized
+      // again, and the same count validates the continuation later.
+      coveredItems: prefix.reduce(
+        (count, message) => count + loweredItemCount(message),
+        0,
+      ),
     },
   });
 });
 
 const responseInput = Effect.fn('llm.responses.input')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  config: OpenAIResponsesConfiguration,
+  uploads: UploadCache | null,
 ) {
-  const input = yield* lowerInput(turn);
   const continuation = turn.continuation;
-  if (!continuation) return { input };
+  if (!continuation) return { input: yield* lowerInput(turn, config, uploads) };
   const prefix = turn.messages.slice(0, continuation.coveredMessages);
-  const encodedPrefix = yield* lowerInput({ ...turn, messages: prefix });
   if (
     !sameModelOrigin(turn, continuation.origin) ||
     continuation.coveredMessages > turn.messages.length ||
-    continuation.anchor.coveredItems !== encodedPrefix.length ||
+    continuation.anchor.coveredItems !==
+      prefix.reduce((count, message) => count + loweredItemCount(message), 0) ||
     continuation.prefixFingerprint !==
       prefixFingerprint(
         RESPONSES_PREFIX_DOMAIN,
@@ -613,8 +859,22 @@ const responseInput = Effect.fn('llm.responses.input')(function* (
       kind: 'invalid-request',
       message: 'Continuation does not cover the exact admitted prefix.',
     });
+  // The stored response already holds the covered prefix, so only the
+  // uncovered suffix is lowered: a covered document's bytes are never
+  // materialized again. The suffix still lowers against the call ids the
+  // prefix's last assistant message left.
+  const callIds: string[] = [];
+  for (const message of prefix) replayCallIds(message, callIds);
+  const documents = yield* documentAccess(config, uploads);
+  const input = yield* lowerMessages(
+    turn,
+    turn.messages.slice(continuation.coveredMessages),
+    documents,
+    callIds,
+  );
+  yield* checkToolChoice(turn);
   return {
-    input: input.slice(continuation.anchor.coveredItems),
+    input,
     previous_response_id: continuation.anchor.responseId,
   };
 });
@@ -971,6 +1231,7 @@ const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
   origin: ResponseOrigin,
   transport: ResponsesTransport,
   request: TurnRequest,
+  uploads: UploadCache | null,
 ) {
   const parsed = TurnRequestSchema.safeParse(request);
   if (!parsed.success)
@@ -1036,7 +1297,14 @@ const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
       kind: 'unsupported',
       message: 'The prepared protocol changed.',
     });
-  yield* responseParameters(config, origin, transport, turn, turn.mode);
+  yield* responseParameters(
+    config,
+    origin,
+    transport,
+    turn,
+    turn.mode,
+    uploads,
+  );
   return turn;
 });
 
@@ -1047,6 +1315,7 @@ const responseParameters = Effect.fn('llm.responses.parameters')(function* (
   transport: ResponsesTransport,
   input: ResolvedTurn,
   mode: 'foreground' | 'background',
+  uploads: UploadCache | null,
 ) {
   const parsed = ResolvedTurnSchema.safeParse(input);
   if (
@@ -1080,7 +1349,7 @@ const responseParameters = Effect.fn('llm.responses.parameters')(function* (
       kind: 'unsupported',
       message: 'The prepared controls are unsupported by the selected route.',
     });
-  const wireInput = yield* responseInput(turn);
+  const wireInput = yield* responseInput(turn, config, uploads);
   const reasoning = turn.controls.reasoning;
   const parameters: ResponseCreateParamsBase = {
     model: turn.requestedModel,
@@ -1184,12 +1453,14 @@ const estimateResponseInput = Effect.fn('llm.responses.estimateInputTokens')(
     client: OpenAI,
     input: Extract<ResolvedTurn, { mode: 'foreground' }>,
   ) {
+    // Estimation admits a single text message, so no file id can apply.
     const { turn, parameters } = yield* responseParameters(
       config,
       origin,
       transport,
       input,
       'foreground',
+      null,
     );
     if (
       turn.continuation !== undefined ||
@@ -1354,8 +1625,70 @@ export function openaiResponsesModel(
     project: null,
     logLevel: 'off',
   });
+  // Uploads need a files endpoint and a stable account: an API-key binding.
+  // A subscription token rotates and its backend serves no files endpoint.
+  const uploads =
+    transport.authentication.kind === 'api-key'
+      ? uploadCache({
+          send: (upload) =>
+            Effect.gen(function* () {
+              const uploaded = yield* Effect.tryPromise({
+                try: async (signal) =>
+                  client.files.create(
+                    {
+                      file: await OpenAI.toFile(
+                        Buffer.from(upload.base64, 'base64'),
+                        upload.filename,
+                        { type: upload.mimeType },
+                      ),
+                      purpose: 'user_data',
+                      expires_after: {
+                        anchor: 'created_at',
+                        seconds: FILE_UPLOAD_LIFETIME_SECONDS,
+                      },
+                    },
+                    { signal },
+                  ),
+                catch: (cause) =>
+                  enrichModelError(openaiFailure(cause), {
+                    model: origin.requestedModel,
+                  }),
+              });
+              const parsed = UploadedFileSchema.safeParse(uploaded);
+              if (!parsed.success)
+                return yield* new ModelError({
+                  kind: 'malformed-output',
+                  message:
+                    'OpenAI returned an upload without a usable file id.',
+                  model: origin.requestedModel,
+                  cause: parsed.error,
+                });
+              return {
+                fileId: parsed.data.id,
+                expiresAtMs:
+                  parsed.data.expires_at == null
+                    ? null
+                    : parsed.data.expires_at * 1000,
+              };
+            }),
+          // A 404 means the provider already expired the file.
+          remove: (fileId) =>
+            Effect.tryPromise({
+              try: (signal) => client.files.delete(fileId, { signal }),
+              catch: (cause) =>
+                enrichModelError(openaiFailure(cause), {
+                  model: origin.requestedModel,
+                }),
+            }).pipe(
+              Effect.asVoid,
+              Effect.catchTag('ModelError', (error) =>
+                error.status === 404 ? Effect.void : Effect.fail(error),
+              ),
+            ),
+        })
+      : null;
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, { kind: 'http' }, request);
+    prepareResponsesTurn(config, origin, { kind: 'http' }, request, uploads);
 
   const createResponse = Effect.fn('llm.responses.create')(function* (
     input: ResolvedTurn,
@@ -1367,6 +1700,7 @@ export function openaiResponsesModel(
       { kind: 'http' },
       input,
       mode,
+      uploads,
     );
     const signal = yield* Effect.abortSignal;
     const opened = yield* Effect.tryPromise({
@@ -2008,6 +2342,12 @@ export function openaiResponsesModel(
     prepareTurn,
     streamTurn,
     generateTurn,
+    ...(uploads !== null
+      ? {
+          uploadFile: uploads.uploadFile,
+          releaseUploads: uploads.releaseUploads,
+        }
+      : {}),
     ...(config.supportsInputTokenEstimation
       ? {
           estimateInputTokens: (
@@ -2257,7 +2597,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   }).pipe(Effect.forkScoped);
 
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, transport, request);
+    prepareResponsesTurn(config, origin, transport, request, null);
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.suspend(() => {
       let responseId: string | undefined;
@@ -2276,6 +2616,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
             transport,
             input,
             'foreground',
+            null,
           );
           const now = yield* Clock.currentTimeMillis;
           yield* Effect.acquireRelease(

@@ -395,6 +395,7 @@ function configurationFor(
           supportsMaxOutputTokens: false,
           supportsStorage: false,
           supportsResponseChaining: false,
+          supportsDocumentInput: capabilities.supportsNativePdf,
           webSocketStreamParameter: 'required',
           allowedReasoningEfforts: [...CODEX_ALLOWED_EFFORTS],
           instructions: {
@@ -428,6 +429,7 @@ function configurationFor(
         supportsMaxOutputTokens: true,
         supportsStorage: true,
         supportsResponseChaining: true,
+        supportsDocumentInput: capabilities.supportsNativePdf,
         webSocketStreamParameter: 'implicit',
         allowedReasoningEfforts: supportedEfforts.length
           ? [...supportedEfforts]
@@ -798,6 +800,28 @@ function withReasoningLevelOverride(
 }
 
 /**
+ * Delete every file this binding uploaded. Idempotent: a second call finds
+ * nothing. A delete the provider refuses or leaves unanswered is logged and
+ * left to the upload's own expiry; it never fails.
+ */
+export function releaseBindingUploads(
+  model: Model,
+  modelId: string,
+): Effect.Effect<void> {
+  const release = model.releaseUploads;
+  if (release === undefined) return Effect.void;
+  return release().pipe(
+    Effect.flatMap((unreleased) =>
+      unreleased.length === 0
+        ? Effect.void
+        : Effect.logWarning(
+            `Could not delete ${unreleased.length} uploaded file(s) when the ${modelId} binding closed; the provider expires them on its own.`,
+          ).pipe(Effect.annotateLogs({ unreleased })),
+    ),
+  );
+}
+
+/**
  * Bind one model for a run. The route is `resolveRouteCredential`'s
  * decision, read through the same resolver every other route reader uses;
  * the persisted compatibility key of a resumed conversation wins over
@@ -945,6 +969,12 @@ export const bindModel = Effect.fn('bindModel')(function* (
           try: () => constructModel(configuration, credential),
           catch: ensureError,
         });
+  // Uploads live only in this model's memory. They are deleted when a
+  // switch or retry replaces the binding, and again when the run's scope
+  // closes (a second release retries IDs the first pass did not confirm).
+  if (model.releaseUploads !== undefined) {
+    yield* Effect.addFinalizer(() => releaseBindingUploads(model, config.name));
+  }
   const origin: ModelOrigin = {
     protocol: configuration.protocol,
     codecVersion: 1,
