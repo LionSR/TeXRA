@@ -48,7 +48,9 @@ describe('maybeRunCliOnboarding gate', () => {
   let services: ModelOptionStores & { readonly runtime: ProcessRuntime };
 
   beforeEach(() => {
-    mocks.hasUsableSetupCredential.mockReset().mockResolvedValue(false);
+    mocks.hasUsableSetupCredential
+      .mockReset()
+      .mockReturnValue(Effect.succeed(false));
     services = {
       ...createFakePlatform(),
       globalState: createFakeWorkspaceRoots().globalState,
@@ -73,7 +75,7 @@ describe('maybeRunCliOnboarding gate', () => {
     'skips (configured:false) when the user already has a credential',
     () =>
       Effect.gen(function* () {
-        mocks.hasUsableSetupCredential.mockResolvedValue(true);
+        mocks.hasUsableSetupCredential.mockReturnValue(Effect.succeed(true));
         expect(yield* maybeRunCliOnboarding(services, INTERACTIVE)).toEqual(
           SKIPPED,
         );
@@ -100,7 +102,7 @@ describe('maybeRunCliOnboarding gate', () => {
         yield* Effect.promise(() =>
           services.globalState.update(GlobalStateKey.ONBOARDING_DECLINED, true),
         );
-        mocks.hasUsableSetupCredential.mockResolvedValue(true);
+        mocks.hasUsableSetupCredential.mockReturnValue(Effect.succeed(true));
 
         // `configured` stays false: only the picker actually configuring a
         // credential in this process is a post-picker continuation. A pre-existing

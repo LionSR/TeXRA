@@ -372,7 +372,9 @@ export function createDesktopSettingsIpc(
   async function postGitHubTokenStatus(): Promise<void> {
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
-      status: await resolveGitHubTokenSource(options.secrets),
+      status: await runtime.runPromise(
+        resolveGitHubTokenSource(options.secrets),
+      ),
     });
   }
 

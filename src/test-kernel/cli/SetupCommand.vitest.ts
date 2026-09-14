@@ -47,7 +47,9 @@ const INTERACTIVE_CONTEXT = createTestCliContext({
 
 describe('texra setup combined flow', () => {
   beforeEach(() => {
-    mocks.hasUsableSetupCredential.mockReset().mockResolvedValue(false);
+    mocks.hasUsableSetupCredential
+      .mockReset()
+      .mockReturnValue(Effect.succeed(false));
     mocks.runCliOnboarding
       .mockReset()
       .mockReturnValue(Effect.succeed({ configured: false, declined: true }));
@@ -120,7 +122,7 @@ describe('texra setup combined flow', () => {
   });
 
   it('skips the picker for already-credentialed users — straight to the agent', async () => {
-    mocks.hasUsableSetupCredential.mockResolvedValue(true);
+    mocks.hasUsableSetupCredential.mockReturnValue(Effect.succeed(true));
 
     const exit = await runSetup(INTERACTIVE_CONTEXT);
 

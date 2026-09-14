@@ -11,7 +11,6 @@ import { request as octokitRequest } from '@octokit/request';
 import { RequestError } from '@octokit/request-error';
 import { Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
-import { hostPort } from '@common/hostPort';
 import { Secrets } from '@platform/secrets';
 import { isNonEmptyString } from '@utils/core';
 
@@ -86,7 +85,7 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
   etag?: string,
 ): Effect.fn.Return<ConditionalResponse<T>, unknown, Secrets> {
   const secrets = yield* Secrets;
-  const token = yield* hostPort(() => getGitHubToken(secrets));
+  const token = yield* getGitHubToken(secrets);
   const headers: Record<string, string> = {
     'X-GitHub-Api-Version': API_VERSION,
     'user-agent': 'TeXRA-Extension',

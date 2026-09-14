@@ -9,7 +9,10 @@
  * explicit fallback. Because every host provides the `Secrets` service, GitHub
  * tools work in the CLI and desktop too, not just the extension.
  */
-import type { PlatformSecrets } from '@platform/secrets';
+import { Effect } from 'effect';
+
+import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
 export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';
@@ -61,13 +64,42 @@ function getGitHubEnvToken(
   return undefined;
 }
 
-export async function getGitHubToken(
+/**
+ * The token's persisted value as a typed read. `get` and `getStored` are the
+ * two members of {@link PlatformSecrets} that are still Promise-shaped, so
+ * this is where a store rejection becomes a {@link SecretsFailed} for both
+ * readers below rather than an untyped rejection their callers cannot match
+ * on.
+ */
+function readStoredToken(
   secrets: PlatformSecrets,
-): Promise<string | undefined> {
-  const stored = await secrets.get(GITHUB_TOKEN_STORAGE_KEY);
-  return (
-    normalizeGitHubToken(stored) ??
-    getGitHubEnvToken((name) => secrets.getEnv(name))
+  operation: 'get' | 'getStored',
+): Effect.Effect<string | undefined, SecretsFailed> {
+  return Effect.tryPromise({
+    try: () =>
+      operation === 'get'
+        ? secrets.get(GITHUB_TOKEN_STORAGE_KEY)
+        : secrets.getStored(GITHUB_TOKEN_STORAGE_KEY),
+    catch: (cause) =>
+      new SecretsFailed({
+        reason: 'io',
+        operation,
+        message: `Reading the GitHub token failed: ${toErrorMessage(cause)}`,
+        key: GITHUB_TOKEN_STORAGE_KEY,
+        cause,
+      }),
+  });
+}
+
+export function getGitHubToken(
+  secrets: PlatformSecrets,
+): Effect.Effect<string | undefined, SecretsFailed> {
+  return readStoredToken(secrets, 'get').pipe(
+    Effect.map(
+      (stored) =>
+        normalizeGitHubToken(stored) ??
+        getGitHubEnvToken((name) => secrets.getEnv(name)),
+    ),
   );
 }
 
@@ -80,11 +112,13 @@ export async function getGitHubToken(
  * `SecretManager.gitHubTokenExists()`, which previously duplicated this
  * precedence chain.
  */
-export async function resolveGitHubTokenSource(
+export function resolveGitHubTokenSource(
   secrets: PlatformSecrets,
-): Promise<'secret' | 'env' | 'none'> {
-  if (normalizeGitHubToken(await secrets.getStored(GITHUB_TOKEN_STORAGE_KEY))) {
-    return 'secret';
-  }
-  return getGitHubEnvToken((name) => secrets.getEnv(name)) ? 'env' : 'none';
+): Effect.Effect<'secret' | 'env' | 'none', SecretsFailed> {
+  return readStoredToken(secrets, 'getStored').pipe(
+    Effect.map((stored) => {
+      if (normalizeGitHubToken(stored)) return 'secret';
+      return getGitHubEnvToken((name) => secrets.getEnv(name)) ? 'env' : 'none';
+    }),
+  );
 }

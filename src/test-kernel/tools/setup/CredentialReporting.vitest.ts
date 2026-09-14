@@ -45,8 +45,8 @@ function outputOf(result: { output?: string }): string {
  * usable credential: the ChatGPT-subscription-only shape.
  */
 function installChatGptOnlySetupPlatform(): void {
-  vi.spyOn(setupCredentialAccess, 'hasUsableSetupCredential').mockResolvedValue(
-    true,
+  vi.spyOn(setupCredentialAccess, 'hasUsableSetupCredential').mockReturnValue(
+    Effect.succeed(true),
   );
   vi.spyOn(setupPlatformModule, 'getChatGptSubscriptionStatus').mockReturnValue(
     Effect.succeed({ signedIn: true, enabled: true }),
@@ -132,10 +132,6 @@ describe('setup credential reporting', () => {
       vi.spyOn(apiProviders, 'lookupApiKeyOrigin').mockRejectedValue(
         new Error('Keychain unavailable'),
       );
-      vi.spyOn(
-        setupCredentialAccess,
-        'hasUsableSetupCredential',
-      ).mockRejectedValue(new Error('Credential scan unavailable'));
 
       const result = yield* new ProbeEnvironmentTool()
         .call({})
@@ -145,24 +141,7 @@ describe('setup credential reporting', () => {
       assert.match(outputOf(result), /"origin": "unknown"/);
       assert.match(outputOf(result), /provider API key status unavailable/);
       assert.match(outputOf(result), /"anyApiKeySet": false/);
-      assert.match(outputOf(result), /"usableCredentialStatus": "unknown"/);
-    }),
-  );
-
-  it.effect('reports when aggregate credential readiness is unavailable', () =>
-    Effect.gen(function* () {
-      vi.spyOn(
-        setupCredentialAccess,
-        'hasUsableSetupCredential',
-      ).mockRejectedValue(new Error('Credential scan unavailable'));
-
-      const result = yield* new ProbeEnvironmentTool()
-        .call({})
-        .pipe(Effect.provide(nativeToolTestLayer()));
-
-      assert.equal(result.status, 'executed');
-      assert.match(outputOf(result), /overall credential status unavailable/);
-      assert.match(outputOf(result), /"usableCredentialStatus": "unknown"/);
+      assert.match(outputOf(result), /"hasAnyUsableCredential": false/);
     }),
   );
 

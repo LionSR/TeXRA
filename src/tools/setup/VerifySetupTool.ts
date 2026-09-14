@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
@@ -81,7 +80,7 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
   const [core, hasUsableCredential] = yield* Effect.all(
     [
       collectCoreSetupStatus(platform),
-      hostPort(() => hasUsableSetupCredential(secrets, credentialLog.warn)),
+      hasUsableSetupCredential(secrets, credentialLog.warn),
     ],
     { concurrency: 'unbounded' },
   );

@@ -149,10 +149,10 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
       return NO_ONBOARDING_RESULT;
     }
     const { globalState } = services;
-    const hasCredential = yield* Effect.tryPromise({
-      try: () => hasUsableSetupCredential(services.secrets, credentialLog.warn),
-      catch: ensureError,
-    });
+    const hasCredential = yield* hasUsableSetupCredential(
+      services.secrets,
+      credentialLog.warn,
+    );
     // Route through the same funnel-transition planner the extension/desktop
     // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
     // is discarded: the CLI has no launcher agent list to steer. Clearing a

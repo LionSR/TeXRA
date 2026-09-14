@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  loadGitHubTokenStatus,
   removeGitHubToken,
   saveGitHubToken,
   type GitHubTokenStatus,
@@ -20,6 +19,7 @@ import {
   type SettingsStores,
 } from '@shared/config/settingsAccess';
 import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
+import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -149,9 +149,12 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     () => loadProviderApiKeyStatuses(secrets),
     [secrets],
   );
+  const { runtime } = props;
+  // The status read is a program like the save and remove rows below it, so
+  // this surface settles all three on the runtime it was handed.
   const loadGitHubToken = useCallback(
-    () => loadGitHubTokenStatus(secrets),
-    [secrets],
+    () => runtime.runPromise(resolveGitHubTokenSource(secrets)),
+    [runtime, secrets],
   );
 
   const {

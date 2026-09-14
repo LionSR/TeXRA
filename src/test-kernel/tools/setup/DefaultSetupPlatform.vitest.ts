@@ -39,9 +39,7 @@ describe('shared setup capabilities', () => {
   it.effect('keeps API-key-only setup usable without reporting sign-in', () =>
     Effect.gen(function* () {
       expect(
-        yield* Effect.promise(() =>
-          hasUsableSetupCredential(hostStores().secrets, () => {}),
-        ),
+        yield* hasUsableSetupCredential(hostStores().secrets, () => {}),
       ).toBe(true);
       expect(yield* getSetupAuthStatus()).toEqual({
         authenticated: false,

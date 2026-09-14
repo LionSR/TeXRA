@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
@@ -39,8 +40,10 @@ vi.resetModules();
 const { hasUsableSetupCredential } =
   await import('@model/setupCredentialAccess');
 
-function hasCredential(): ReturnType<typeof hasUsableSetupCredential> {
-  return hasUsableSetupCredential(secrets, mocks.reportProbeFailure);
+function hasCredential(): Promise<boolean> {
+  return Effect.runPromise(
+    hasUsableSetupCredential(secrets, mocks.reportProbeFailure),
+  );
 }
 
 describe('setup credential access', () => {

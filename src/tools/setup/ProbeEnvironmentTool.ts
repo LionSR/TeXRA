@@ -50,7 +50,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
     core,
     optionalTools,
     apiKeys,
-    credentialReadiness,
+    hasAnyUsableCredential,
     githubToken,
     chatGptStatus,
   ] = yield* Effect.all(
@@ -69,16 +69,18 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         ),
         { concurrency: 'unbounded' },
       ),
-      hostPort(() =>
-        hasUsableSetupCredential(secrets, credentialLog.warn),
-      ).pipe(
-        Effect.map((available) => ({ available, status: 'known' as const })),
-        Effect.catch(() =>
-          Effect.succeed({ available: false, status: 'unknown' as const }),
+      hasUsableSetupCredential(secrets, credentialLog.warn),
+      resolveGitHubTokenSource(secrets).pipe(
+        // A store the host cannot read is not a token; say so in the log
+        // rather than reporting "no token" as if it were an answer.
+        Effect.catch((failure) =>
+          Effect.sync(() => {
+            credentialLog.warn(
+              `GitHub token check failed; reporting no token: ${failure.message}`,
+            );
+            return 'none' as const;
+          }),
         ),
-      ),
-      hostPort(() => resolveGitHubTokenSource(secrets)).pipe(
-        Effect.catch(() => Effect.succeed('none' as const)),
       ),
       getChatGptSubscriptionStatus().pipe(
         Effect.catch(() => Effect.succeed({ signedIn: false, enabled: false })),
@@ -122,8 +124,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
       // model right now" signal — direct key, ChatGPT subscription,
       // or server-side TeXRA account. Kept as a separate field
       // so the agent can reason about API keys separately.
-      hasAnyUsableCredential: credentialReadiness.available,
-      usableCredentialStatus: credentialReadiness.status,
+      hasAnyUsableCredential,
       apiKeys,
       researcherAccess: {
         authenticated: auth.authenticated,
@@ -150,9 +151,6 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
   if (origins.has('env')) creds.push('provider API key in environment');
   if (origins.has('unknown')) {
     creds.push('provider API key status unavailable');
-  }
-  if (summary.credentials.usableCredentialStatus === 'unknown') {
-    creds.push('overall credential status unavailable');
   }
   if (summary.credentials.chatGptSubscription.enabled) {
     creds.push('ChatGPT subscription enabled');

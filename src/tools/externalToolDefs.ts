@@ -162,8 +162,7 @@ interface GitHubPRPrerequisites {
 const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
   function* () {
     const secrets = yield* Secrets;
-    const tokenPresent =
-      (yield* hostPort(() => getGitHubToken(secrets))) !== undefined;
+    const tokenPresent = (yield* getGitHubToken(secrets)) !== undefined;
     const inGitRepo = yield* hostPort(isGitRepository);
     return { tokenPresent, inGitRepo };
   },

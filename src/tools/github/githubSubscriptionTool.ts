@@ -166,7 +166,7 @@ function parsePath(raw: string): ParsedPath {
 const requireToken = (): Effect.Effect<void, unknown, Secrets> =>
   Effect.gen(function* () {
     const secrets = yield* Secrets;
-    const token = yield* hostPort(() => getGitHubToken(secrets));
+    const token = yield* getGitHubToken(secrets);
     if (!token) {
       return yield* Effect.fail(
         new ToolError(

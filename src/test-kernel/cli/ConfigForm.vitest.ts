@@ -77,9 +77,14 @@ vi.mock('@cli/runtime/providerApiKey', () => ({
   saveProviderApiKey: providerApiKeyRuntime.save,
 }));
 vi.mock('@cli/runtime/githubToken', () => ({
-  loadGitHubTokenStatus: githubTokenRuntime.load,
   saveGitHubToken: githubTokenRuntime.save,
   removeGitHubToken: githubTokenRuntime.remove,
+}));
+// The form reads the token's source through the shared credential program and
+// settles it on the runtime prop, so the status stub is a program too.
+vi.mock('@tools/github/githubAuth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/github/githubAuth')>()),
+  resolveGitHubTokenSource: githubTokenRuntime.load,
 }));
 
 type ConfigFormProps = Parameters<
@@ -119,7 +124,7 @@ beforeEach(() => {
   providerApiKeyRuntime.save.mockReset();
   providerApiKeyRuntime.save.mockReturnValue(Effect.void);
   githubTokenRuntime.load.mockReset();
-  githubTokenRuntime.load.mockResolvedValue('none');
+  githubTokenRuntime.load.mockReturnValue(Effect.succeed('none'));
   githubTokenRuntime.save.mockReset();
   githubTokenRuntime.save.mockReturnValue(Effect.void);
   githubTokenRuntime.remove.mockReset();
@@ -447,8 +452,8 @@ describe('CliConfigForm API-key status lifecycle', () => {
 
   it('saves a GitHub token from /config without rendering the secret', async () => {
     githubTokenRuntime.load
-      .mockResolvedValueOnce('none')
-      .mockResolvedValueOnce('secret');
+      .mockReturnValueOnce(Effect.succeed('none'))
+      .mockReturnValueOnce(Effect.succeed('secret'));
     const rendered = await renderCliConfigForm();
 
     try {
