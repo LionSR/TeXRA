@@ -14,7 +14,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { createFlushableDebounce } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -30,6 +30,7 @@ function watchRepository(
   repository: GitRepository,
   context: vscode.ExtensionContext,
   watchedRoots: Set<string>,
+  runtime: ProcessRuntime,
 ): void {
   // Only watch the repository containing the workspace root.
   const workspacePath = WorkspaceFS.getPath();
@@ -84,7 +85,7 @@ function watchRepository(
       pendingBaseRef = undefined;
       pendingBranchName = undefined;
       if (lastName !== undefined) {
-        effectRuntime().runFork(AgentReviewService.clear());
+        runtime.runFork(AgentReviewService.clear());
       }
       lastName = name;
       lastCommit = commit;
@@ -128,6 +129,7 @@ function watchRepository(
 /** Register the run-on-commit watcher. No-op when the git extension is unavailable. */
 export function registerAgentReviewCommitWatcher(
   context: vscode.ExtensionContext,
+  runtime: ProcessRuntime,
 ): void {
   void (async () => {
     const git = await getGitAPI();
@@ -135,11 +137,11 @@ export function registerAgentReviewCommitWatcher(
 
     const watchedRoots = new Set<string>();
     for (const repository of git.repositories) {
-      watchRepository(repository, context, watchedRoots);
+      watchRepository(repository, context, watchedRoots, runtime);
     }
     context.subscriptions.push(
       git.onDidOpenRepository((repository) =>
-        watchRepository(repository, context, watchedRoots),
+        watchRepository(repository, context, watchedRoots, runtime),
       ),
     );
   })().catch((err: unknown) => {

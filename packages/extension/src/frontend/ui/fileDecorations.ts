@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { defaultSession, type SessionHandle } from '@agent/runtime';
 import { appSignals } from '@eventBus/AppSignals';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
+import type { ProcessRuntime } from '@platform/processRuntime';
 
 // Session-scoped: the touched set is not persisted across window reloads so
 // the badges clear on restart and track only the current session's activity.
@@ -49,6 +50,7 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
 
 export function registerFileDecorations(
   context: vscode.ExtensionContext,
+  runtime: ProcessRuntime,
   session: Pick<SessionHandle, 'events' | 'now'> = defaultSession(),
 ): void {
   const provider = new TeXRAFileDecorationProvider();
@@ -70,6 +72,7 @@ export function registerFileDecorations(
       }
       provider.markTouched(paths);
     },
+    runtime,
   );
 
   const unsubscribeWritten = appSignals.on(

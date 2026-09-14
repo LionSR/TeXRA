@@ -10,7 +10,7 @@ import {
   resumeRunWithRefusalNotice,
 } from '@controllers/session/resumeRunPresentation';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -21,6 +21,7 @@ const logger = createLog('resumeFromResumeData');
 
 export async function tryResumeFromResumeData(
   runId: RunId,
+  runtime: ProcessRuntime,
   recovery?: RecoveryContinuation,
 ): Promise<boolean> {
   const session = defaultSession();
@@ -30,7 +31,7 @@ export async function tryResumeFromResumeData(
   );
   const isCancellationRequested = resumeCancellationLatch(session, runId);
   try {
-    return await effectRuntime().runPromise(
+    return await runtime.runPromise(
       resumeRunWithRefusalNotice(
         runId,
         {
@@ -38,11 +39,14 @@ export async function tryResumeFromResumeData(
           recovery,
           isCancellationRequested,
           executeWorkflow: (config, id, modelCompatibilityKey) =>
-            runExecuteCommand({
-              config,
-              runId: id,
-              modelCompatibilityKey,
-            }),
+            runExecuteCommand(
+              {
+                config,
+                runId: id,
+                modelCompatibilityKey,
+              },
+              runtime,
+            ),
         },
         (failure) => {
           logger.warn(`Run ${runId} was not resumed: ${failure}`);

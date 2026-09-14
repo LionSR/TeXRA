@@ -23,7 +23,7 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { DiffSession, DiffViewHost } from '@hosts/uiHosts';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import type { ApprovalTempFiles } from '@tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
@@ -46,6 +46,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     private readonly storageDirectory: string,
     /** The window's `request.decide`: where a staged request's decision goes. */
     readonly decide: ToolEditApprovalHost['decide'],
+    private readonly runtime: ProcessRuntime,
   ) {}
 
   async stagePreview(
@@ -53,7 +54,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     context: ToolEditPreviewContext,
   ): Promise<ToolEditPreview> {
     await mkdir(this.storageDirectory, { recursive: true });
-    const staged = await effectRuntime().runPromise(
+    const staged = await this.runtime.runPromise(
       writeApprovalTempFiles({
         directory: this.storageDirectory,
         targetPath: request.path,
@@ -66,6 +67,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
       request,
       context,
       staged,
+      this.runtime,
     );
   }
 
@@ -90,6 +92,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     private readonly request: ToolEditApprovalRequest,
     private readonly context: ToolEditPreviewContext,
     private readonly staged: ApprovalTempFiles,
+    private readonly runtime: ProcessRuntime,
   ) {
     this.diffSession = {
       original: { filePath: staged.originalPath },
@@ -140,7 +143,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     // Stop listening for tab closes before closing the diff ourselves.
     this.tabCloseListener?.dispose();
     await this.diffViewHost.closeDiff(this.diffSession);
-    await effectRuntime().runPromise(this.staged.cleanup);
+    await this.runtime.runPromise(this.staged.cleanup);
   }
 
   private openDiff(): Promise<void> {

@@ -16,6 +16,7 @@ import {
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
   UpdateChatGptAuthStatusMessage,
@@ -43,6 +44,7 @@ export class SubscriptionHandlers {
     private readonly ctx: SettingsHandlerContext,
     private readonly secrets: PlatformSecrets,
     private readonly refreshModelAccess: () => Promise<void>,
+    private readonly runtime: ProcessRuntime,
   ) {
     this.provider = subscriptionProvider(providerId);
   }
@@ -59,7 +61,11 @@ export class SubscriptionHandlers {
   }
 
   readonly handleSignIn = async (): Promise<void> => {
-    await signInWithSubscription(this.ctx.channel, this.providerId);
+    await signInWithSubscription(
+      this.ctx.channel,
+      this.providerId,
+      this.runtime,
+    );
     await this.refreshState();
   };
 

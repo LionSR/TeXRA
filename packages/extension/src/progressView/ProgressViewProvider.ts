@@ -62,7 +62,7 @@ import { getLinterMessages } from '@frontend/latex/linter';
 import { AgentReviewService } from '@frontend/review/AgentReviewService';
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -106,9 +106,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly snapshot: HostSnapshotSource;
   public readonly toolEditApprovals: ToolEditApprovalController;
 
-  /** This view's handle on the process runtime, taken once for the session
-   *  edges below rather than re-fetched at each. */
-  private readonly runtime = effectRuntime();
   /** The bridge's lifetime: every port and request it owns ends when
    *  {@link dispose} closes it. */
   private readonly bridgeScope = Scope.makeUnsafe();
@@ -138,6 +135,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly secrets: PlatformSecrets,
+    /** This view's handle on the process runtime, handed down by the host
+     *  entry for the session edges below. */
+    private readonly runtime: ProcessRuntime,
   ) {
     this.logger = createChannelTrace('ProgressViewProvider');
     const session = defaultSession();
@@ -241,6 +241,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
         decideRequest,
+        this.runtime,
       ),
     });
     // A workflow run's `run.end` is the completion chime, one per process
@@ -268,6 +269,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     const hostRequests = createExtensionHostRequests({
       session,
+      runtime: this.runtime,
       extensionPath: context.extensionPath,
       globalState: context.globalState,
       secrets,

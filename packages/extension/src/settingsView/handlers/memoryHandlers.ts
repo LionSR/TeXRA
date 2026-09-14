@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
@@ -28,11 +28,12 @@ export class MemoryHandlers {
     private readonly ctx: SettingsHandlerContext,
     private readonly memory: SettingsMemoryController,
     private readonly viewName: string,
+    private readonly runtime: ProcessRuntime,
   ) {}
 
   async sendMemoryData(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      await effectRuntime().runPromise(this.memory.getMemoryDataMessage()),
+      await this.runtime.runPromise(this.memory.getMemoryDataMessage()),
     );
   }
 
@@ -48,7 +49,7 @@ export class MemoryHandlers {
     await this.ctx.withActiveWebview(async (webview) => {
       try {
         await webview.postMessage(
-          await effectRuntime().runPromise(
+          await this.runtime.runPromise(
             this.memory.getMemoryPreviewMessage(data.storagePath),
           ),
         );
@@ -113,7 +114,7 @@ export class MemoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
     try {
-      const message = await effectRuntime().runPromise(
+      const message = await this.runtime.runPromise(
         this.memory.deleteMemory(data),
       );
       if (message != null) {
@@ -134,7 +135,7 @@ export class MemoryHandlers {
       this.ctx,
       `Failed to ${pinned ? 'pin' : 'unpin'} memory`,
       async () => {
-        const message = await effectRuntime().runPromise(
+        const message = await this.runtime.runPromise(
           this.memory.setMemoryPinned(storagePath, pinned),
         );
         if (message != null) {

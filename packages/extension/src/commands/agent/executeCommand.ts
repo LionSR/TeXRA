@@ -6,7 +6,7 @@ import { z, ZodError } from 'zod';
 import { AgentConfigSchema, runAgent, defaultSession } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { ModelCompatibilityKeySchema, RunIdSchema } from '@shared/schemas';
 
@@ -36,7 +36,10 @@ const WrappedExecuteInputSchema = z.object({
  *
  * Tool-use sessions resume through `tryResumeFromResumeData` instead.
  */
-export async function runExecuteCommand(input: unknown): Promise<void> {
+export async function runExecuteCommand(
+  input: unknown,
+  runtime: ProcessRuntime,
+): Promise<void> {
   try {
     const isWrapped =
       input !== null && typeof input === 'object' && 'config' in input;
@@ -50,7 +53,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     const request = wrapped?.runId
       ? ({ kind: 'resume', config, runId: wrapped.runId } as const)
       : ({ kind: 'fresh', config } as const);
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       runAgent(request, {
         session: defaultSession(),
         openWorkflowOutput: openFinalOutputIfAvailable,

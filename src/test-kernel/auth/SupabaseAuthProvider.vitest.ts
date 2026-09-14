@@ -127,6 +127,7 @@ import type { SupabaseSession } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import type { SupabaseUriHandler } from '@frontend/auth/UriHandler';
+import { effectRuntime } from '@platform/processRuntime';
 
 const PENDING_STATE_PREFIX = 'texra.extension.pendingOAuthState.';
 const TEST_NONCE = '0123456789abcdef0123456789abcdef';
@@ -198,6 +199,7 @@ function createProvider(options: {
       showSignInPrompt,
     },
     testDoubles.secretsPort,
+    effectRuntime(),
   );
   const emitter = testDoubles.emitters[0];
   if (!emitter) throw new Error('provider did not create a session emitter');

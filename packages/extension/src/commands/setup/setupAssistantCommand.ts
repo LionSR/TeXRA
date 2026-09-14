@@ -13,7 +13,7 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { agentName } from '@shared/schemas';
@@ -93,6 +93,7 @@ export async function hasAnyUsableSetupCredential(
 
 async function ensureCredentialOrPrompt(
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ): Promise<boolean> {
   if (await hasAnyUsableSetupCredential(secrets)) return true;
 
@@ -128,7 +129,7 @@ async function ensureCredentialOrPrompt(
   // credential; only the walkthrough leaves setup un-launched.
   switch (picked.id) {
     case 'chatgpt':
-      await signInWithSubscription(CHANNEL, 'chatgpt');
+      await signInWithSubscription(CHANNEL, 'chatgpt', runtime);
       break;
     case 'apiKey':
       await vscode.commands.executeCommand(EXTENSION_COMMANDS.SET_API_KEY);
@@ -184,6 +185,7 @@ async function ensureRoutingConfigured(
 export async function launchSetupAssistant(
   secrets: PlatformSecrets,
   globalState: StateStore,
+  runtime: ProcessRuntime,
 ): Promise<'launched' | 'already-running' | 'not-started'> {
   try {
     // Every setup entry point funnels through here (command, status pill,
@@ -215,7 +217,7 @@ export async function launchSetupAssistant(
       return 'not-started';
     }
 
-    const proceed = await ensureCredentialOrPrompt(secrets);
+    const proceed = await ensureCredentialOrPrompt(secrets, runtime);
     if (!proceed) {
       void vscode.window.showInformationMessage(
         'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, turned on your ChatGPT subscription, or set an API key.',
@@ -254,10 +256,10 @@ export async function launchSetupAssistant(
     // idempotent: it joins the in-flight load through the catalog lane if one
     // is running, returns immediately if already initialized, or kicks off a
     // fresh load.
-    await effectRuntime().runPromise(loadAgents());
+    await runtime.runPromise(loadAgents());
 
     const launch = () =>
-      effectRuntime().runPromise(
+      runtime.runPromise(
         runAgent(
           { kind: 'fresh', config },
           {

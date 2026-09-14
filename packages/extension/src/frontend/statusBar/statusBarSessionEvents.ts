@@ -2,7 +2,7 @@ import { Effect, Fiber, Stream } from 'effect';
 
 // Local imports - runtime events
 import type { SessionHandle } from '@agent/runtime';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { StatusBarUsageTracker } from './StatusBarUsageTracker';
 
 interface StatusBarSessionEventOptions {
@@ -12,6 +12,8 @@ interface StatusBarSessionEventOptions {
   tracker: Pick<StatusBarUsageTracker, 'activeRunCount' | 'totalUsage'>;
   onStatusChanged: () => void;
   onUsageChanged: () => void;
+  /** The host entry's process runtime, which the subscription fiber runs on. */
+  runtime: ProcessRuntime;
 }
 
 /**
@@ -30,6 +32,7 @@ export function subscribeStatusBarSessionEvents({
   tracker,
   onStatusChanged,
   onUsageChanged,
+  runtime,
 }: StatusBarSessionEventOptions): () => void {
   // Unseeded on purpose: `viewChanges` replays the current view on subscribe,
   // and that first emission must paint both projections (a run already
@@ -37,7 +40,7 @@ export function subscribeStatusBarSessionEvents({
   // next changes).
   let activeRuns: number | undefined;
   let usage: StatusBarUsageTracker['totalUsage'] | undefined;
-  const fiber = effectRuntime().runFork(
+  const fiber = runtime.runFork(
     Stream.runForEach(session.viewChanges, () =>
       Effect.sync(() => {
         const nextActiveRuns = tracker.activeRunCount;
@@ -59,6 +62,6 @@ export function subscribeStatusBarSessionEvents({
     ),
   );
   return () => {
-    effectRuntime().runFork(Fiber.interrupt(fiber));
+    runtime.runFork(Fiber.interrupt(fiber));
   };
 }

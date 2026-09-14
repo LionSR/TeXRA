@@ -2,7 +2,7 @@ import { Effect, Fiber, Stream } from 'effect';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { aggregateTarget, type AddOutputFilesPayload } from '@shared/schemas';
 import { goalStateChanges, type GoalStateChange } from '@tools/goal';
 
@@ -10,8 +10,9 @@ import { goalStateChanges, type GoalStateChange } from '@tools/goal';
 export function subscribeAddOutputFilesRunFact(
   session: Pick<SessionHandle, 'events' | 'now'>,
   listener: (payload: AddOutputFilesPayload) => void,
+  runtime: ProcessRuntime,
 ): () => void {
-  const fiber = effectRuntime().runFork(
+  const fiber = runtime.runFork(
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => {
         if (event.type !== 'addOutputFiles') return;
@@ -22,7 +23,7 @@ export function subscribeAddOutputFilesRunFact(
     ),
   );
   return () => {
-    effectRuntime().runFork(Fiber.interrupt(fiber));
+    runtime.runFork(Fiber.interrupt(fiber));
   };
 }
 
@@ -30,13 +31,14 @@ export function subscribeAddOutputFilesRunFact(
 export function subscribeGoalStateChanges(
   session: Pick<SessionHandle, 'folded' | 'now'>,
   listener: (change: GoalStateChange) => void,
+  runtime: ProcessRuntime,
 ): () => void {
-  const fiber = effectRuntime().runFork(
+  const fiber = runtime.runFork(
     Stream.runForEach(goalStateChanges(session), (change) =>
       Effect.sync(() => listener(change)),
     ),
   );
   return () => {
-    effectRuntime().runFork(Fiber.interrupt(fiber));
+    runtime.runFork(Fiber.interrupt(fiber));
   };
 }

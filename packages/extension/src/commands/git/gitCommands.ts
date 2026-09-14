@@ -17,7 +17,7 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { readPlatformSetting } from '@utils/config/platformSettings';
@@ -294,6 +294,7 @@ function buildOverleafClonePorts(
 
 export async function cloneOverleafProject(
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   const input = await promptInput(
     'Clone Overleaf/ShareLaTeX Project',
@@ -313,7 +314,7 @@ export async function cloneOverleafProject(
     return;
   }
 
-  await effectRuntime().runPromise(
+  await runtime.runPromise(
     runOverleafClone(
       remote,
       workspacePath,

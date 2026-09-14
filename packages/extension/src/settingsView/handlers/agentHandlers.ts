@@ -33,7 +33,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKey,
@@ -70,6 +70,7 @@ export class AgentHandlers {
       agentCatalogAlreadyFresh?: boolean,
     ) => Promise<void>,
     globalState: StateStore,
+    private readonly runtime: ProcessRuntime,
   ) {
     const controllers = createSettingsAgentControllers({
       workspaceState: workspaceRoots().workspaceState,
@@ -120,7 +121,7 @@ export class AgentHandlers {
   // ── Agent selection data ──
 
   async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
-    await effectRuntime().runPromise(loadAgents());
+    await this.runtime.runPromise(loadAgents());
     await webview.postMessage(
       buildAgentSelectionMessage({
         buildSelectionItems: () => this.catalogController.buildSelectionItems(),
@@ -295,7 +296,7 @@ export class AgentHandlers {
       'Failed to apply agent team',
       async () => {
         await withAgentCatalogAuthRefreshDeferred(() =>
-          effectRuntime().runPromise(
+          this.runtime.runPromise(
             applySettingsTeamRoster(data.presetId, {
               catalog: this.catalogController,
               loadLocalCatalog: () => loadAgents({ includeRemote: false }),
@@ -343,7 +344,7 @@ export class AgentHandlers {
         });
         if (!name) return; // cancelled
 
-        await effectRuntime().runPromise(loadAgents());
+        await this.runtime.runPromise(loadAgents());
 
         await this.catalogController.saveCurrentPreset(name);
 

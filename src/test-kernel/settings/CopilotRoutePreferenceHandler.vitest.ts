@@ -82,6 +82,7 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
+import { effectRuntime } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -134,6 +135,7 @@ function createHandler(): SettingsViewMessageHandler {
       languageModelAccessInformation: { canSendRequest: mocks.canSendRequest },
     } as unknown as vscode.ExtensionContext,
     secrets,
+    effectRuntime(),
   );
   vi.spyOn(
     handler as unknown as RefreshSurface,

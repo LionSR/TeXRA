@@ -8,7 +8,6 @@ import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import {
   AuthPortError,
   callPort,
-  installAuthProgramEdge,
   runAuthProgram,
   SerializedWrites,
 } from '@auth/authProgram';
@@ -38,7 +37,7 @@ import {
 import { classifyAuthFailureStatus } from '@auth/TokenProvider';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import * as logger from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/unstable/http';
@@ -89,12 +88,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   constructor(
     private readonly notifier: AuthNotifier,
     private readonly secrets: PlatformSecrets,
+    private readonly runtime: ProcessRuntime,
   ) {
-    // The auth subsystem's run edge lives at this host entry (PRD R1): every
-    // Promise-facing auth surface settles on the process runtime from here.
-    installAuthProgramEdge((program) =>
-      effectRuntime().runPromiseExit(program),
-    );
     this.sessionCoordinator = createHostAuthCoordinator({
       secrets,
       whenReady: async () => {
@@ -120,7 +115,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private async settleAuthEffect<A>(
     program: Effect.Effect<A, unknown, HttpClient.HttpClient>,
   ): Promise<Exit.Exit<A, unknown>> {
-    const exit = await effectRuntime().runPromiseExit(program);
+    const exit = await this.runtime.runPromiseExit(program);
     if (Exit.isSuccess(exit)) return exit;
     return Exit.failCause(
       Cause.map(exit.cause, (error: unknown) =>
@@ -710,7 +705,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private async afterLocalSessionCleared(sessionId: string): Promise<void> {
     await refreshRemoteAgentCatalogAfterSignOut(
-      () => effectRuntime().runPromise(invalidateRemoteAgentsAfterSignOut()),
+      () => this.runtime.runPromise(invalidateRemoteAgentsAfterSignOut()),
       log.warn,
     );
     this._onDidChangeSessions.fire({
@@ -761,7 +756,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           yield* Effect.acquireRelease(
             Effect.sync(() => {
               subscription = uriHandler.onDidReceiveCallback((uri) => {
-                effectRuntime().runFork(
+                this.runtime.runFork(
                   this.handleAttemptCallback(uri, attempt, outcome, () => {
                     subscription?.dispose();
                     Deferred.doneUnsafe(callbackSeen, Effect.void);
