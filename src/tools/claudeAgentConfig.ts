@@ -12,6 +12,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
+import type { StateStore } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type {
   ClaudeAgentEffort,
@@ -41,34 +42,36 @@ const log = createLog('claudeAgent');
 // Model — defaults to Sonnet 5; users can override per-call or via workspace state
 // ============================================================================
 
-export const getClaudeAgentModel: () => ClaudeAgentModel =
+export const getClaudeAgentModel = (state: StateStore): ClaudeAgentModel =>
   createEnumStateGetter(
     WorkspaceStateKey.CLAUDE_AGENT_MODEL,
     CLAUDE_AGENT_DEFAULT_MODEL,
     parseClaudeAgentModel,
-  );
+  )(state);
 
 // ============================================================================
 // Permission mode
 // ============================================================================
 
-export const getClaudeAgentPermissionMode: () => ClaudeAgentPermissionMode =
+export const getClaudeAgentPermissionMode = (
+  state: StateStore,
+): ClaudeAgentPermissionMode =>
   createEnumStateGetter(
     WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
     CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
     parseClaudeAgentPermissionMode,
-  );
+  )(state);
 
 // ============================================================================
 // Effort — adaptive thinking depth hint passed via `effort` SDK option
 // ============================================================================
 
-export const getClaudeAgentEffort: () => ClaudeAgentEffort =
+export const getClaudeAgentEffort = (state: StateStore): ClaudeAgentEffort =>
   createEnumStateGetter(
     WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
     CLAUDE_AGENT_DEFAULT_EFFORT,
     parseClaudeAgentEffort,
-  );
+  )(state);
 
 // ============================================================================
 // Auth env — pulls ANTHROPIC_API_KEY from secrets if set

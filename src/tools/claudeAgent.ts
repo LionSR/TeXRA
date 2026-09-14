@@ -40,7 +40,6 @@ import {
 } from '@agent/runtime/SessionHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
-import { runInSession } from '@agent/runtime/RunContext';
 import { Secrets } from '@platform/secrets';
 import { ToolError } from '@shared/schemas';
 import {
@@ -555,13 +554,15 @@ export class ClaudeAgentTool extends defineTool({
     AgentCliToolFailure,
     Secrets | ToolCall | Runs
   > {
-    const config = yield* agentCliCall(() =>
-      runInSession(session, getClaudeAgentConfig),
-    );
+    const config = yield* agentCliCall(() => getClaudeAgentConfig());
     const permissionMode =
-      input.permission_mode ?? config.getClaudeAgentPermissionMode();
-    const model = input.model ?? config.getClaudeAgentModel();
-    const effort = input.effort ?? config.getClaudeAgentEffort();
+      input.permission_mode ??
+      config.getClaudeAgentPermissionMode(toolCall.roots.workspaceState);
+    const model =
+      input.model ?? config.getClaudeAgentModel(toolCall.roots.workspaceState);
+    const effort =
+      input.effort ??
+      config.getClaudeAgentEffort(toolCall.roots.workspaceState);
     const sessionId = input.session_id ?? undefined;
     const isFork = input.fork_session === true;
 
@@ -614,9 +615,7 @@ const launchClaudeAgentSession = Effect.fn(
   AgentCliToolFailure,
   Secrets | ToolCall | Runs
 > {
-  const config = yield* agentCliCall(() =>
-    runInSession(session, getClaudeAgentConfig),
-  );
+  const config = yield* agentCliCall(() => getClaudeAgentConfig());
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   // Mirrors codex behavior so subagents can see the project: when the call
   // is made from inside the workspace, the agent runs in that directory but

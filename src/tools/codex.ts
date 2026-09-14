@@ -36,7 +36,7 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { runInSession } from '@agent/runtime/RunContext';
+import type { StateStore } from '@platform/interfaces';
 import type {
   RunId,
   TodoItem,
@@ -424,6 +424,7 @@ function startCodexLoop(params: {
 async function createCodexThread(
   input: CodexInput,
   sandboxMode: SandboxMode,
+  state: StateStore,
   workingDir?: string,
 ): Promise<Thread> {
   const CodexClass = await importCodexClass();
@@ -439,15 +440,16 @@ async function createCodexThread(
       : {};
   // Probe Extra High support only when that tier is selected so other
   // efforts do not wait on a slow or hung Codex binary.
-  const requestedEffort = config.getCodexCliReasoningEffort(true);
+  const requestedEffort = config.getCodexCliReasoningEffort(state, true);
   const threadOptions: ThreadOptions = {
     ...workspace,
     sandboxMode,
-    approvalPolicy: config.getCodexApprovalPolicy(),
+    approvalPolicy: config.getCodexApprovalPolicy(state),
     model: config.CODEX_CLI_MODEL,
     modelReasoningEffort:
       requestedEffort === 'xhigh'
         ? config.getCodexCliReasoningEffort(
+            state,
             await codexBinarySupportsXhigh(codexPath),
           )
         : requestedEffort,
@@ -497,11 +499,10 @@ export class CodexTool extends defineTool({
   ): Effect.fn.Return<ToolResult, AgentCliToolFailure, ToolCall | Runs> {
     // Resolve the effective sandbox mode once (per-call override, else the
     // user-configured default) rather than mutating the parsed input object.
+    const config = yield* agentCliCall(() => getCodexConfig());
     const sandboxMode =
       input.sandbox_mode ??
-      (yield* agentCliCall(() =>
-        runInSession(session, getCodexConfig),
-      )).getCodexSandboxMode();
+      config.getCodexSandboxMode(toolCall.roots.workspaceState);
 
     return yield* dispatchAgentCliTool({
       session,
@@ -526,6 +527,7 @@ export class CodexTool extends defineTool({
           context.parentWorkingDirectory,
           context.releaseFallbackClaim,
           session,
+          toolCall.roots.workspaceState,
         ),
     });
   });
@@ -538,16 +540,15 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
+  state: StateStore,
 ): Effect.fn.Return<ToolResult, AgentCliToolFailure, ToolCall | Runs> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const thread = yield* agentCliCall(() =>
-    runInSession(session, () =>
-      createCodexThread(input, sandboxMode, workingDir),
-    ),
+    createCodexThread(input, sandboxMode, state, workingDir),
   );
-  const config = (yield* agentCliCall(() =>
-    runInSession(session, getCodexConfig),
-  )).buildCodexConfig(input.prompt);
+  const config = (yield* agentCliCall(() => getCodexConfig())).buildCodexConfig(
+    input.prompt,
+  );
   const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({
