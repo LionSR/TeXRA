@@ -78,10 +78,10 @@ interface ResolveAgentToolsInput {
   /** The run's pinned delegation roster scope, when this is a delegated run. */
   delegationScope?: AgentDelegationScope;
   /**
-   * The run's session frame, applied around the worktree read this resolver
-   * makes. It is handed in rather than wrapped around the call because this
-   * resolver is an Effect, so a wrapper would enter the frame around building
-   * the program instead of around running it.
+   * The run's session frame, applied around the model-availability and worktree
+   * reads this resolver makes. It is handed in rather than wrapped around the
+   * call because this resolver is an Effect, so a wrapper would enter the frame
+   * around building the program instead of around running it.
    */
   inScope?: ModelAvailabilityScope;
 }

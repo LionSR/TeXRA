@@ -623,11 +623,11 @@ const launchClaudeAgentSession = Effect.fn(
   // sibling files. Out-of-workspace cwds run isolated (matches codex). The
   // claude-agent-sdk's `Options` type names these fields `cwd` /
   // `additionalDirectories`, unlike codex's `workingDirectory`.
+  const { roots } = yield* ToolCall;
   const { workingDirectory, additionalDirectories } =
-    buildAgentWorkspaceOptions(workingDir);
-  // No session frame here, unlike the module read above: the env block reads
-  // only the process environment and the `Secrets` service, neither of which
-  // is workspace-scoped, so it needs no `runInSession` scope of its own.
+    buildAgentWorkspaceOptions(roots.workspace, workingDir);
+  // The env block reads only the process environment and the `Secrets`
+  // service, neither of which is workspace-scoped.
   const env = yield* config.buildClaudeAgentEnv();
   const pathToClaudeCodeExecutable = yield* agentCliCall(() =>
     findClaudeBinaryPath(),

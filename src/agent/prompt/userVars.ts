@@ -157,18 +157,16 @@ export async function buildUserVars(
 
   for (const issue of runtimeSkills.issues) {
     const location = issue.path ? ` (${issue.path})` : '';
-    warnAtStage(
-      logger,
-      `Skill import ${issue.severity}: ${issue.message}${location}`,
-      options.stageId,
-    );
+    logger.warn(`Skill import ${issue.severity}: ${issue.message}${location}`, {
+      stageId: options.stageId,
+    });
   }
 
   if (agentSetting.agentCategory === AgentCategory.ToolUse) {
     logger.emit({
       type: 'skills.snapshot',
       skills: runtimeSkills.skills,
-      ...(options.stageId === undefined ? {} : { stageId: options.stageId }),
+      stageId: options.stageId,
     });
   }
 
@@ -198,11 +196,7 @@ export async function buildUserVars(
 
   // Emit aggregated file list if any files were loaded
   if (requiredFiles.length > 0) {
-    if (options.stageId === undefined) {
-      logFilesLoaded(logger, 'all', requiredFiles);
-    } else {
-      logFilesLoaded(logger, 'all', requiredFiles, options.stageId);
-    }
+    logFilesLoaded(logger, 'all', requiredFiles, options.stageId);
   }
 
   return userVars;
@@ -358,18 +352,6 @@ type FileCategoryVars = {
 /** File-based variables: readable categories plus the display-only MEDIA slots. */
 type FileVars = FileCategoryVars & Pick<UserVars, 'MEDIA_FILE'>;
 
-function warnAtStage(
-  logger: AgentTrace,
-  message: string,
-  stageId: string | undefined,
-): void {
-  if (stageId === undefined) {
-    logger.warn(message);
-  } else {
-    logger.warn(message, { stageId });
-  }
-}
-
 async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
@@ -410,10 +392,9 @@ async function getFileVars(
       primaryFile == null ? null : await setVarFromFile(primaryFile, prefix);
     const primaryFileOk = primaryFileResult != null;
     if (primaryFile != null && !primaryFileOk) {
-      warnAtStage(
-        logger,
+      logger.warn(
         `Failed to load primary file into prompt variables: ${primaryFile}`,
-        stageId,
+        { stageId },
       );
     }
     if (primaryFileResult != null) {
@@ -424,10 +405,9 @@ async function getFileVars(
     // A dropped file changes what the model sees, so report it on the run's own
     // channel rather than leaving it on a module logger nobody reads.
     for (const { file, reason } of skipped) {
-      warnAtStage(
-        logger,
+      logger.warn(
         `Skipping unreadable file in prompt context: ${file} (${reason})`,
-        stageId,
+        { stageId },
       );
     }
 
@@ -448,11 +428,7 @@ async function getFileVars(
         path: file,
         ok: file === primaryFile ? primaryFileOk : readable.has(file),
       }));
-      if (stageId === undefined) {
-        logFileCategory(logger, cardLabel, entries);
-      } else {
-        logFileCategory(logger, cardLabel, entries, stageId);
-      }
+      logFileCategory(logger, cardLabel, entries, stageId);
     }
 
     userVars[`ALL_${prefix}S`] = xml;
