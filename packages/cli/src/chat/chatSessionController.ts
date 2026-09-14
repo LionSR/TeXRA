@@ -11,7 +11,6 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import PQueue from 'p-queue';
 
 import { getRunRecords } from '@agent/storage';
 import {
@@ -104,6 +103,7 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
+import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { PastedImageEntry } from './tui/input/draftAttachments';
 
@@ -234,7 +234,7 @@ export interface ChatSessionControllerInit {
   readonly disposables: DisposableStore;
 
   /** Serial queue for follow-up message delivery (cleared on resume). */
-  readonly followUpQueue: PQueue;
+  readonly followUpQueue: FollowUpDeliveryQueue;
 
   readonly initialAgent: string;
   readonly initialModel: string;
@@ -1148,7 +1148,7 @@ export function createChatSessionController(
       if (!started) restoreReservedSkillActivations();
       return;
     }
-    void followUpQueue.add(async () => {
+    const deliverFollowUp = async (): Promise<void> => {
       let delivered = false;
       let followUpTarget = childFollowUpTarget;
       try {
@@ -1243,7 +1243,14 @@ export function createChatSessionController(
       } finally {
         if (!delivered) restoreReservedSkillActivations();
       }
-    });
+    };
+    followUpQueue.enqueue(
+      hostPort(deliverFollowUp).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => appendLocalErrorTranscript(toErrorMessage(error))),
+        ),
+      ),
+    );
   };
 
   const submit = async (

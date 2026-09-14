@@ -56,7 +56,6 @@ import {
   type TuiSession,
 } from './state/sessionRunState';
 import { terminalCapabilities } from './state/terminalCapabilities';
-import type PQueue from 'p-queue';
 import type { Instance as InkInstance } from 'ink';
 
 const log = createLog('cli.sessionExit');
@@ -87,8 +86,9 @@ interface SessionExitControllerContext {
   readonly disposables: DisposableStore;
   /** Removes the process-exit terminal backstop after terminal restoration. */
   readonly disposeTerminalRestoreOnExit: () => void;
-  /** Follow-up delivery queue drained before a graceful exit returns. */
-  readonly followUpQueue: PQueue;
+  /** Settles once the follow-up delivery queue has drained; a graceful exit
+   *  waits on it before it returns. */
+  readonly awaitFollowUpsIdle: () => Promise<void>;
   /** Reads the live approval policy for the resume hint. */
   readonly getApprovalPolicy: () => TexraApprovalPolicy;
   /** Materialize buffered trace chunks + drain debounced StreamLog writes. */
@@ -359,7 +359,7 @@ export function createSessionExitController(
     // behind a long model turn. Re-check after the drain for a run the drain
     // itself started.
     let interrupted = interruptPendingRun();
-    await ctx.followUpQueue.onIdle();
+    await ctx.awaitFollowUpsIdle();
     interrupted = interruptPendingRun() || interrupted;
     const resumableIdle = ctx.isResumableIdle();
     if (interrupted) {

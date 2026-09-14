@@ -4,10 +4,10 @@
 // registry, event hub, run status, host interactions) are the real
 // runtime objects wherever a test asserts through them.
 
-import { Cause, Effect, SubscriptionRef } from 'effect';
-import PQueue from 'p-queue';
+import { it } from '@effect/vitest';
+import { Cause, Deferred, Effect, Exit, Fiber, Scope, SubscriptionRef } from 'effect';
 import pDefer from 'p-defer';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
@@ -131,6 +131,7 @@ import { readCliRunOutcomeState } from '@cli/runtime/terminalStatus';
 import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
+import { makeFollowUpDeliveryQueue } from '@cli/chat/followUpDeliveryQueue';
 import {
   patchSessionMeta,
   rootRunPending,
@@ -255,7 +256,9 @@ function makeInit(
     runtimeSession: mocks.defaultSession(),
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
-    followUpQueue: new PQueue({ concurrency: 1 }),
+    followUpQueue: Effect.runSync(
+      makeFollowUpDeliveryQueue(Scope.makeUnsafe()),
+    ),
     initialAgent: 'demo-agent',
     initialModel: 'demo-model',
     initialModelSource: 'builtin-default',
@@ -1686,4 +1689,49 @@ describe('createChatSessionController', () => {
       }),
     );
   });
+});
+
+describe('follow-up delivery queue', () => {
+  it.effect(
+    'delivers one at a time, drops only unstarted deliveries on clear, and idles after the running one settles',
+    () =>
+      Effect.gen(function* () {
+        const scope = yield* Scope.make();
+        const queue = yield* makeFollowUpDeliveryQueue(scope);
+        const delivered: string[] = [];
+        const record = (label: string) =>
+          Effect.sync(() => {
+            delivered.push(label);
+          });
+        const firstStarted = yield* Deferred.make<void>();
+        const releaseFirst = yield* Deferred.make<void>();
+
+        queue.enqueue(
+          record('first:start').pipe(
+            Effect.andThen(Deferred.succeed(firstStarted, undefined)),
+            Effect.andThen(Deferred.await(releaseFirst)),
+            Effect.andThen(record('first:end')),
+          ),
+        );
+        queue.enqueue(record('dropped'));
+        yield* Deferred.await(firstStarted);
+        queue.clear();
+        queue.enqueue(record('after-clear'));
+        const idle = yield* queue.idle.pipe(
+          Effect.andThen(record('idle')),
+          Effect.forkChild,
+        );
+
+        yield* Deferred.succeed(releaseFirst, undefined);
+        yield* Fiber.join(idle);
+
+        expect(delivered).toEqual([
+          'first:start',
+          'first:end',
+          'after-clear',
+          'idle',
+        ]);
+        yield* Scope.close(scope, Exit.void);
+      }),
+  );
 });

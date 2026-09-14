@@ -716,8 +716,8 @@ describe('handleTuiSlashCommand', () => {
 
     expect(handled).toBe(true);
     // `stopRequested` is set here and nowhere else on this path: the graceful
-    // teardown's `followUpQueue.onIdle()` await depends on it. The interrupt
-    // is deliberately NOT raised — the teardown owns that policy.
+    // teardown's wait on the follow-up queue's `idle` depends on it. The
+    // interrupt is deliberately NOT raised — the teardown owns that policy.
     expect(session.stopRequested).toBe(true);
     expect(requestInputExit).toHaveBeenCalledOnce();
     expect(activeRunId.get()).toBeUndefined();
