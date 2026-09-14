@@ -14,7 +14,6 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runInSession } from '@agent/runtime/RunContext';
 
 import {
   RUN_OUTCOME,
@@ -35,7 +34,6 @@ import {
   type SessionEvent,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -44,13 +42,15 @@ import {
   type ChildRecord,
 } from './runRecords';
 
-function pinRunWorkingDirectory(record: RunRecord): RunRecord {
+function pinRunWorkingDirectory(
+  record: RunRecord,
+  workspaceRoot: string | undefined,
+): RunRecord {
   // First non-blank candidate wins, stored verbatim (untrimmed) — trimming
   // here previously mangled resumed workflow paths (2e3197f92f).
-  const workingDirectory = [
-    record.workingDirectory,
-    WorkspaceFS.getPath(),
-  ].find((dir) => dir?.trim());
+  const workingDirectory = [record.workingDirectory, workspaceRoot].find(
+    (dir) => dir?.trim(),
+  );
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
@@ -99,9 +99,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
         return yield* Effect.fail(
           new Error(`Parent run ${options.parentRunId} is unavailable.`),
         );
-      const pinned = runInSession(session, () =>
-        pinRunWorkingDirectory(record),
-      );
+      const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
       const target = aggregateId('run', runId);
       const category = isAgentRunRecord(pinned)
         ? pinned.agentCategory

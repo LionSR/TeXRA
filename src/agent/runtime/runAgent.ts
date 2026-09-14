@@ -60,8 +60,10 @@ export interface RunAgentOptions extends Pick<
   /**
    * Persist host-owned final state before the ordinary session drain. Return
    * true when the hook already drained artifacts and disposed of ownership.
+   * The owning session is passed explicitly so the hook does not depend on an
+   * ambient run frame during Effect resumption.
    */
-  beforeLeaseRelease?: () => Promise<boolean | void>;
+  beforeLeaseRelease?: (session: SessionHandle) => Promise<boolean | void>;
   /** Fires once this run owns its run lease. */
   onRunLeaseAcquired?: (runId: RunId) => void;
   /**
@@ -319,8 +321,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
 
         const artifacts = yield* Effect.exit(
           Effect.tryPromise({
-            try: async () =>
-              runInSession(runSession, async () => beforeLeaseRelease?.()),
+            try: async () => beforeLeaseRelease?.(runSession),
             catch: ensureError,
           }),
         );

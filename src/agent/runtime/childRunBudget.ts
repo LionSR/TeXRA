@@ -13,14 +13,14 @@
  */
 import * as os from 'node:os';
 
+import type { ConfigProvider } from '@platform/interfaces';
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   ChildRunConcurrencyBudgetSchema,
 } from '@shared/schemas';
-import { getValidatedConfig } from '@utils/config/configUtils';
+import { readValidatedConfig } from '@utils/config/configUtils';
 
-import { runInSession } from './RunContext';
 import type { RunRegistry } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
 
@@ -34,8 +34,11 @@ import type { SessionHandle } from './SessionHandle';
  * read it here. Resolved host-side because `src/shared` is loaded by the settings
  * webview and must stay free of `node:os`.
  */
-export function resolveChildRunConcurrencyBudget(): number {
-  const configured = getValidatedConfig(
+export function resolveChildRunConcurrencyBudget(
+  config: ConfigProvider,
+): number {
+  const configured = readValidatedConfig(
+    config,
     CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
     ChildRunConcurrencyBudgetSchema,
     CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
@@ -56,6 +59,6 @@ export function resolveChildRunConcurrencyBudget(): number {
  */
 export function childRunBudgetFor(session: SessionHandle, runs: RunRegistry) {
   return runs.childRunBudget(
-    runInSession(session, resolveChildRunConcurrencyBudget),
+    resolveChildRunConcurrencyBudget(session.roots.config),
   );
 }

@@ -294,7 +294,9 @@ export function createWorkflowScriptStrategy(
             signal,
             // The session's child-run budget is the one owner of "how many at
             // once": the engine's own default is a library fallback only.
-            concurrency: resolveChildRunConcurrencyBudget(),
+            concurrency: resolveChildRunConcurrencyBudget(
+              params.session.roots.config,
+            ),
             runAgent,
             // The one place a child's terminal fact becomes the documented
             // agent() envelope: its output, flattened, beside the outcome and
