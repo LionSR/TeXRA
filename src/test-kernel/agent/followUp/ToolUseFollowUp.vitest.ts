@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Semaphore } from 'effect';
 import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 
 import * as resumability from '@agent/storage/resumability';
@@ -11,15 +11,15 @@ import {
 import {
   ToolUseFollowUpQueue,
   type FollowUpConsumerLease,
-  type FollowUpRowPort,
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { aggregateId, type RunId } from '@shared/schemas';
+import { aggregateId, type RunId, type SessionEvent } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
 } from '@shared/session/database';
+import type { Append } from '@shared/session/sessionEvents';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { generateRunId } from '@utils/core';
 
@@ -33,16 +33,63 @@ function mockTryResume(): Mock<() => Promise<boolean>> {
 }
 
 /**
- * The admission boundary over a recorded row port: `queued(runId)` is the
- * text of every `followup.queued` row it wrote for the run, in order, which
- * is what the run's next consumer seeds from; `claims` is every run it
- * claimed before writing. `claimRefused` answers each claim the way a live
- * foreign owner does.
+ * The admission boundary over a recorded session plane: one serializer (a
+ * one-permit semaphore standing in for the publisher), the rows it appended,
+ * and the runs it claimed. `queued(runId)` is the text of every
+ * `followup.queued` row written for the run, in order, which is what the
+ * run's next consumer seeds from. `claimRefused` answers each claim the way
+ * a live foreign owner does; `failWrites` refuses that many appends.
  */
-function recordedFollowUps(options: { claimRefused?: boolean } = {}) {
-  const rows: Parameters<FollowUpRowPort['write']>[0][] = [];
+function recordedFollowUps(
+  options: {
+    claimRefused?: boolean;
+    failWrites?: number;
+    /** Refuse any transaction carrying a follow-up with this text. */
+    failText?: string;
+  } = {},
+) {
+  const rows: SessionEvent[] = [];
   const claims: RunId[] = [];
+  let failWrites = options.failWrites ?? 0;
+  const publisher = Semaphore.makeUnsafe(1);
+  const append: Append = (events) =>
+    Effect.suspend(() => {
+      const refusedText = events.some(
+        (event) =>
+          event.type === 'followup.queued' &&
+          event.content.text === options.failText,
+      );
+      if (failWrites > 0 || refusedText) {
+        if (!refusedText) failWrites -= 1;
+        return Effect.fail(
+          new DatabaseWriteFailed({
+            path: ':memory:',
+            cause: new Error('disk full'),
+          }),
+        );
+      }
+      const committed = events.map(
+        (event) =>
+          ({
+            ...event,
+            seq: rows.length + 1,
+            commit: rows.length + 1,
+            ownerId: null,
+            at: 0,
+          }) as SessionEvent,
+      );
+      rows.push(...committed);
+      return Effect.succeed(committed);
+    });
   const followUps = new ToolUseFollowUpQueue({
+    exclusive: (job) => publisher.withPermits(1)(job(append)),
+    detach: (job) => {
+      Effect.runFork(publisher.withPermits(1)(job));
+    },
+    rows: (runId) =>
+      Effect.sync(() =>
+        rows.filter((row) => row.aggregateId === aggregateId('run', runId)),
+      ),
     acquireClaim: (runId) =>
       Effect.suspend(() => {
         claims.push(runId);
@@ -57,21 +104,6 @@ function recordedFollowUps(options: { claimRefused?: boolean } = {}) {
               }),
             )
           : Effect.succeed(Effect.void);
-      }),
-    write: (row, replayable) =>
-      Effect.sync(() => {
-        if (
-          replayable &&
-          rows.some(
-            (known) =>
-              known.aggregateId === row.aggregateId &&
-              known.followUpId === row.followUpId,
-          )
-        ) {
-          return 'pending' as const;
-        }
-        rows.push(row);
-        return 'written' as const;
       }),
   });
   const queuedRows = (runId: RunId) =>
@@ -670,6 +702,31 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
   );
 
   it.effect(
+    'judges a concurrent duplicate against the first write, never before it settles',
+    () =>
+      Effect.gen(function* () {
+        // The first write fails: the second submission of the same delivery
+        // must not have been told `duplicate` for a row that never landed.
+        const { followUps, queued } = recordedFollowUps({ failWrites: 1 });
+        const id = generateRunId();
+        followUps.claimLive(id, 'flow');
+        const delivery = childResult('exec-2:turn:1:delivery');
+
+        const [first, second] = yield* Effect.all(
+          [
+            Effect.exit(followUps.submit(id, delivery, 'live_owner')),
+            Effect.exit(followUps.submit(id, delivery, 'live_owner')),
+          ],
+          { concurrency: 'unbounded' },
+        );
+
+        expect(Exit.isFailure(first)).toBe(true);
+        expect(second).toEqual(Exit.succeed({ kind: 'delivered_live' }));
+        expect(queued(id)).toEqual(['child result']);
+      }),
+  );
+
+  it.effect(
     'keeps distinct delivery ids distinct even with identical text',
     () =>
       Effect.gen(function* () {
@@ -693,8 +750,39 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
       }),
   );
 
+  it.effect('queues a batch as one transaction: whole, or not at all', () =>
+    Effect.gen(function* () {
+      const { followUps, queued } = recordedFollowUps({
+        failText: 'second',
+      });
+      const id = generateRunId();
+      followUps.claimLive(id, 'child');
+
+      const failed = yield* Effect.exit(
+        followUps.submitBatch(
+          id,
+          [{ text: 'first' }, { text: 'second' }],
+          'live_owner',
+        ),
+      );
+      // The second row's refusal takes the first with it: a caller that
+      // restores the batch offers nothing that already committed.
+      expect(Exit.isFailure(failed)).toBe(true);
+      expect(queued(id)).toEqual([]);
+
+      expect(
+        yield* followUps.submitBatch(
+          id,
+          [{ text: 'first' }, { text: 'third' }],
+          'live_owner',
+        ),
+      ).toEqual({ kind: 'queued' });
+      expect(queued(id)).toEqual(['first', 'third']);
+    }),
+  );
+
   it.effect(
-    'keeps suppressing a replayed id across a recoverable release',
+    'finds a replayed id still queued across a recoverable release, writing nothing',
     () =>
       Effect.gen(function* () {
         const { followUps, queued } = recordedFollowUps();
@@ -704,9 +792,11 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
         yield* followUps.submit(id, delivery, 'live_owner');
         followUps.release(child, 'recoverable');
 
-        expect(yield* followUps.submit(id, delivery, 'recoverable')).toEqual({
-          kind: 'duplicate',
-        });
+        // Still queued on the rows: the run is woken for it, and no second
+        // row is written.
+        expect(
+          yield* followUps.submit(id, delivery, 'recoverable'),
+        ).toMatchObject({ kind: 'queued', lease: { kind: 'recovery' } });
         expect(queued(id)).toEqual(['child result']);
       }),
   );

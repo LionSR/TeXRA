@@ -335,35 +335,11 @@ export class SessionHandle {
     this.subscriptions = graph.subscriptions;
     this.runs = graph.runs;
     this.followUps = new ToolUseFollowUpQueue({
+      exclusive: (job) => graph.exclusive(job),
+      detach: (job) => graph.detach(() => job),
+      rows: (runId) => graph.aggregateRows(qualifyAggregateId('run', runId)),
       acquireClaim: (runId) =>
         this.acquireClaims(qualifyAggregateId('run', runId)),
-      write: (row, replayable) =>
-        replayable
-          ? graph.exclusive((append) =>
-              Effect.gen(function* () {
-                // The replay check and the append are one publisher job: no
-                // consumption of this id can commit between them.
-                let found: 'pending' | 'consumed' | null = null;
-                for (const event of yield* graph.aggregateRows(
-                  row.aggregateId,
-                )) {
-                  if (
-                    (event.type === 'followup.queued' ||
-                      event.type === 'followup.consumed') &&
-                    event.followUpId === row.followUpId
-                  ) {
-                    found =
-                      event.type === 'followup.consumed'
-                        ? 'consumed'
-                        : 'pending';
-                  }
-                }
-                if (found !== null) return found;
-                yield* append([row]);
-                return 'written' as const;
-              }),
-            )
-          : graph.publish([row]).pipe(Effect.as('written' as const)),
     });
     this.modelRetries = init.modelRetries;
     this.responseTextProcessing =

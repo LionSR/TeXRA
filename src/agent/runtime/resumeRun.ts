@@ -434,17 +434,17 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   let undelivered = false;
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
-      // Each follow-up is durable before the next is offered. The run's
-      // claim is taken on the first write and held by this attempt's lease,
-      // so only the first can be refused as held elsewhere, before anything
-      // is queued: the batch then stays the caller's.
-      for (const followUp of options.extraFollowUps ?? []) {
-        const submitted = yield* followUps.submit(
+      // The batch is one admission and one transaction: queued whole, or
+      // refused (another process holds the run) with nothing written, so it
+      // stays the caller's.
+      const extra = options.extraFollowUps ?? [];
+      if (extra.length > 0) {
+        const submitted = yield* followUps.submitBatch(
           runId,
-          followUp,
+          extra,
           'live_owner',
         );
-        if (submitted.kind === 'refused' && submitted.reason) {
+        if (submitted.kind === 'refused') {
           refusedElsewhere = true;
           return undefined;
         }

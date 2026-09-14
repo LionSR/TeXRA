@@ -314,7 +314,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       })),
       useRecovery: vi.fn((recovery: FollowUpRecoveryLease) => recovery),
       release: vi.fn(),
-      submit: mocks.followUpSubmit.mockReturnValue(
+      submitBatch: mocks.followUpSubmit.mockReturnValue(
         Effect.succeed({ kind: 'queued' }),
       ),
     },
@@ -1481,7 +1481,7 @@ describe('createChatSessionController', () => {
     await expect(admission.completion).resolves.toBe(true);
     expect(mocks.followUpSubmit).toHaveBeenCalledWith(
       'a11111',
-      { text: 'Transfer this accepted message.' },
+      [{ text: 'Transfer this accepted message.' }],
       'live_owner',
     );
   });

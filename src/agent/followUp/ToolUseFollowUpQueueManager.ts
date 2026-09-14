@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Effect, Exit, Result } from 'effect';
+import { Cause, Effect, Exit, Result } from 'effect';
 
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
@@ -8,6 +8,7 @@ import {
   aggregateId,
   type FollowUpContent,
   type RunId,
+  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
 import {
@@ -15,10 +16,8 @@ import {
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import {
-  createBoundedIdSet,
-  type BoundedIdSet,
-} from '@utils/core/boundedIdSet';
+import type { Append } from '@shared/session/sessionEvents';
+import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import type { QueuedFollowUp, RunInput } from './RunInput';
 
 const logger = createLog('ToolUseFollowUpQueue');
@@ -34,9 +33,8 @@ export interface FollowUpQueueInput {
    * Stable logical identity of one delivery its producer may repeat: a
    * child-run result (#9531), an inquiry continuation re-delivered after a
    * decision that failed before the queue saw it. It becomes the queued
-   * row's `followUpId`, and the admission boundary suppresses replays of an
-   * id it already admitted; inputs without one get a minted id and are never
-   * suppressed.
+   * row's `followUpId`, and a replay of an id the run's rows already hold
+   * writes nothing; inputs without one get a minted id.
    */
   readonly deliveryId?: string;
 }
@@ -44,12 +42,6 @@ export interface FollowUpQueueInput {
 type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
 
 interface QueueEntry {
-  /**
-   * Delivery ids already admitted for this run (#9531). In-memory,
-   * transport-level replay suppression only: a restart (or LRU eviction past
-   * the cap) forgets admitted ids, so a replay after that is admitted again.
-   */
-  readonly admittedDeliveryIds: BoundedIdSet<string>;
   /** At most one consumer; an unowned entry is a recoverable persisted run. */
   owner?: FollowUpConsumerLease;
   /**
@@ -60,15 +52,27 @@ interface QueueEntry {
    */
   input?: RunInput;
   held: QueuedFollowUp[];
+  /** The admission job running for this run (at most one: jobs are serial). */
+  admitting: boolean;
+  /** A release its owner asked for while an admission was running, applied
+   *  when that admission settles. */
+  pendingRelease?: 'recoverable' | 'terminal';
+  /**
+   * The run aggregate's database claim an admission took for a recovery
+   * owner that had not launched its run yet. The recovery lease owns its
+   * release: a consumer attaching to the lease adopts the claim (its own
+   * run lease ends it), and a lease that exits without one releases it.
+   */
+  adoptedClaim?: Effect.Effect<void, Error>;
 }
 
 /**
  * Exclusive authority to consume one run's follow-up input.
  *
- * The manager issues at most one lease per entry. Claims and releases are
- * synchronous, and a lease is valid only while it is the entry's owner, so a
- * release from an older flow/child cannot clear or terminalize a successor.
- * Producers submit through the manager and cannot manufacture a consumer.
+ * The manager issues at most one lease per entry. Claims are synchronous,
+ * and a lease is valid only while it is the entry's owner, so a release from
+ * an older flow/child cannot clear or terminalize a successor. Producers
+ * submit through the manager and cannot manufacture a consumer.
  */
 export interface FollowUpConsumerLease {
   readonly runId: RunId;
@@ -81,13 +85,15 @@ export interface FollowUpRecoveryLease
 }
 
 /**
- * How one submission landed, reported once its row is durable: a replayed
- * delivery id, input a live flow consumer will read this turn, input queued
- * on the run (with the recovery lease when this submission claimed it), or
- * a refusal. A refusal without a reason means the boundary has no entry to
- * join and will not create one (disposed session, terminalized run, or a
- * live-owner submission to a run whose entry is gone); `owned_elsewhere`
- * means another live process holds the run, so no row was written.
+ * How one submission landed, decided from the run's owner after its rows
+ * committed: every follow-up a replay of a delivery a turn already carried;
+ * input a live flow consumer holds this turn; input queued on the run (with
+ * the recovery lease when this submission claimed it), which a consumer
+ * holds or the next resume seeds from its rows; or a refusal. A refusal
+ * without a reason means the boundary has no entry to join (disposed
+ * session, terminalized run, or a live-owner submission to a run whose
+ * entry is gone); `owned_elsewhere` means another live process holds the
+ * run, so no row was written.
  */
 type FollowUpSubmission =
   | { readonly kind: 'duplicate' }
@@ -95,17 +101,20 @@ type FollowUpSubmission =
   | { readonly kind: 'queued'; readonly lease?: FollowUpRecoveryLease }
   | { readonly kind: 'refused'; readonly reason?: 'owned_elsewhere' };
 
-/** A `followup.queued` draft, as the admission boundary writes it. */
-type FollowUpQueuedDraft = Extract<
-  SessionEventDraft,
-  { type: 'followup.queued' }
->;
-
 /**
- * The session doors the admission boundary writes through, wired by
- * `SessionHandle` over its graph, so there is no second append path.
+ * The session doors the admission boundary works through, wired by
+ * `SessionHandle` over its graph: one serializer, no second append path.
  */
 export interface FollowUpRowPort {
+  /** One job on the session's publisher: nothing else is written, and no
+   *  other job runs, while it does (`SessionGraph.exclusive`). */
+  readonly exclusive: <A, E>(
+    job: (append: Append) => Effect.Effect<A, E>,
+  ) => Effect.Effect<A, E>;
+  /** Enqueue a job on that publisher and return (`SessionGraph.detach`). */
+  readonly detach: (job: Effect.Effect<void>) => void;
+  /** Every committed row of the run's aggregate. */
+  readonly rows: (runId: RunId) => Effect.Effect<readonly SessionEvent[]>;
   /**
    * The run aggregate's claim, acquired the way a resume acquires it (prior
    * owners proven dead first): returns the release of what this call took,
@@ -114,19 +123,6 @@ export interface FollowUpRowPort {
   readonly acquireClaim: (
     runId: RunId,
   ) => Effect.Effect<Effect.Effect<void, Error>, Error>;
-  /**
-   * Write the row, awaited. A producer-supplied id is read against the run's
-   * rows and appended in the same publisher job, so a delivery its producer
-   * replays after a restart finds its row: `pending` when it is still
-   * queued, `consumed` when a turn already carried it.
-   */
-  readonly write: (
-    row: FollowUpQueuedDraft,
-    replayable: boolean,
-  ) => Effect.Effect<
-    'written' | 'pending' | 'consumed',
-    DatabaseNotOwner | DatabaseWriteFailed
-  >;
 }
 
 /** The refusals that mean another live process holds the run. */
@@ -138,13 +134,17 @@ const heldElsewhere = (error: unknown): boolean =>
 /**
  * Session-owned admission boundary indexed by run ID.
  *
- * An admitted follow-up is a `followup.queued` row on the run. Admission
- * decides synchronously (replay suppression, the recovery claim), then
- * writes the row, awaited, before it is acknowledged or handed to a
- * consumer: an acknowledgement means the row is durable. A run no consumer
- * here holds is claimed first, as a resume claims it. The row is the input:
- * an owned entry also hands it to its consumer's queue, and an unowned
- * run's next consumer seeds that queue from the fold.
+ * An admitted follow-up is a `followup.queued` row on the run. One run's
+ * admission is one job on the session's publisher (`exclusive`): it claims
+ * the run unless a live consumer here holds it, reads the run's rows for a
+ * replayed delivery id, appends every new row of the submission in one
+ * transaction, and only then reads the run's owner to hand the rows over and
+ * decide what the caller is told. Two admissions therefore never overlap, a
+ * duplicate is judged against rows that committed, and an acknowledgement
+ * means the rows are durable. A release that arrives while an admission is
+ * running is applied when that admission settles, and an admission that
+ * wrote rows keeps the run recoverable, so no committed row is reported to
+ * a consumer that already left.
  *
  * An owned entry has a live or recovering consumer, an unowned entry is a
  * recoverable persisted run, and a terminal entry is gone. A run whose
@@ -157,7 +157,6 @@ const heldElsewhere = (error: unknown): boolean =>
  * callers must revalidate persisted authority before recoverable admission.
  */
 export class ToolUseFollowUpQueue {
-  static readonly DELIVERY_ID_CAP = 1000;
   static readonly TERMINALIZED_CAP = 500;
   private readonly entries = new Map<RunId, QueueEntry>();
   private readonly terminalized = createBoundedIdSet<RunId>(
@@ -165,9 +164,12 @@ export class ToolUseFollowUpQueue {
   );
   private readonly releaseObservers = new Set<(runId: RunId) => void>();
   private readonly sentObservers = new Set<(runId: RunId) => void>();
+  /** Leases nobody holds that keep an entry owned while the claim an
+   *  admission took for it is released ({@link releaseAdoptedClaim}). */
+  private readonly releasing = new WeakSet<FollowUpConsumerLease>();
   private disposed = false;
 
-  constructor(private readonly rows: FollowUpRowPort) {}
+  constructor(private readonly port: FollowUpRowPort) {}
 
   onRelease(observer: (runId: RunId) => void): () => void {
     if (this.disposed) return () => {};
@@ -232,115 +234,58 @@ export class ToolUseFollowUpQueue {
     recovery: RecoveryContinuation,
   ): FollowUpRecoveryLease | undefined {
     const entry = this.entries.get(recovery.runId);
-    return entry?.owner === recovery && recovery.kind === 'recovery'
+    return entry?.owner === recovery &&
+      recovery.kind === 'recovery' &&
+      entry.pendingRelease === undefined
       ? (entry.owner as FollowUpRecoveryLease)
       : undefined;
   }
 
   /**
-   * Submit through the ownership boundary. `live_owner` joins a live flow or
-   * child consumer, or queues without claiming when the entry has no live
-   * owner (so live notifications can reach a WAITING parent). `recoverable`
-   * admits a registry-approved persisted run and creates its entry when
-   * needed.
-   *
-   * Everything admission decides happens synchronously when this is called,
-   * so a caller that looks up its target in the same synchronous step cannot
-   * interleave with another submission; the returned effect writes the row
-   * and is run at once. A run another live process holds is `refused` with
-   * `owned_elsewhere`; that refusal and any write failure (which fails the
-   * effect) roll the admission back, so the input can be offered again.
+   * Submit one follow-up through the ownership boundary. `live_owner` joins
+   * a live flow or child consumer, or queues without claiming when the
+   * entry has no owner (so live notifications can reach a WAITING parent).
+   * `recoverable` admits a registry-approved persisted run, creates its
+   * entry when needed, and claims its recovery lease when no consumer holds
+   * it. A run another live process holds is `refused` with
+   * `owned_elsewhere`, writing nothing; any other write failure fails the
+   * effect, writing nothing.
    */
   submit(
     runId: RunId,
     followUp: FollowUpQueueInput,
     admission: 'live_owner' | 'recoverable',
   ): Effect.Effect<FollowUpSubmission, Error> {
-    if (this.disposed) return Effect.succeed({ kind: 'refused' });
+    return this.submitBatch(runId, [followUp], admission);
+  }
 
-    let entry = this.entries.get(runId);
-    if (admission === 'live_owner') {
-      if (!entry) return Effect.succeed({ kind: 'refused' });
-    } else {
-      if (!entry && this.terminalized.has(runId)) {
-        return Effect.succeed({ kind: 'refused' });
-      }
-      entry ??= this.createEntry(runId);
-    }
-
-    // Replay suppression is synchronous check-and-add: concurrent submissions
-    // of one delivery id admit at most once (#9531). Ids are minted per
-    // logical delivery by their producer (an accepted child-run turn, an
-    // inquiry turn); identical text under a distinct id is a distinct
-    // delivery. The row read in `write` is the crash-safe half of the rule.
-    const deliveryId = followUp.deliveryId;
-    if (deliveryId !== undefined) {
-      if (entry.admittedDeliveryIds.has(deliveryId)) {
-        return Effect.succeed({ kind: 'duplicate' });
-      }
-      entry.admittedDeliveryIds.add(deliveryId);
-    }
-
-    const owner = entry.owner;
-    // A live flow or child holds the run's claim for as long as it holds
-    // the lease; every other admission claims the run before writing to it.
-    const consumerHoldsClaim =
-      owner?.kind === 'flow' || owner?.kind === 'child';
-    let submission: FollowUpSubmission;
-    let lease: FollowUpRecoveryLease | undefined;
-    if (owner?.kind === 'flow') {
-      submission = { kind: 'delivered_live' };
-    } else if (owner !== undefined || admission === 'live_owner') {
-      // Live notifications use the live_owner path to reach WAITING parents,
-      // whose next consumer seeds its queue from the row.
-      submission = { kind: 'queued' };
-    } else {
-      // The recovery claim precedes the row, so the input it admits is
-      // already the recovering consumer's.
-      lease = this.claim(entry, runId, 'recovery');
-      submission = lease ? { kind: 'queued', lease } : { kind: 'queued' };
-    }
-    const queued: QueuedFollowUp = {
-      followUpId: deliveryId ?? randomUUID(),
+  /**
+   * Submit follow-ups as one admission: their new rows are one transaction,
+   * so the batch is queued whole or not at all.
+   */
+  submitBatch(
+    runId: RunId,
+    followUps: readonly FollowUpQueueInput[],
+    admission: 'live_owner' | 'recoverable',
+  ): Effect.Effect<FollowUpSubmission, Error> {
+    const queued = followUps.map((followUp): QueuedFollowUp => ({
+      followUpId: followUp.deliveryId ?? randomUUID(),
       content: {
         text: followUp.text,
         displayText: followUp.displayText,
         mediaFiles: followUp.mediaFiles ? [...followUp.mediaFiles] : undefined,
         origin: followUp.origin ?? 'user',
       },
-    };
-    const admitted = entry;
-    const rollback = (): void => {
-      if (deliveryId !== undefined) {
-        admitted.admittedDeliveryIds.delete(deliveryId);
-      }
-      if (lease) this.release(lease, 'recoverable');
-    };
-    return this.write(runId, queued, {
-      consumerHoldsClaim,
-      replayable: deliveryId !== undefined,
-      ownLease: lease,
-    }).pipe(
-      Effect.map((written): FollowUpSubmission => {
-        if (written !== 'consumed') return submission;
-        // A replay of a delivery a turn already carried: nothing to queue
-        // and nothing to wake.
-        if (lease) this.release(lease, 'recoverable');
-        return { kind: 'duplicate' };
-      }),
-      Effect.catch((error) => {
-        rollback();
-        if (!heldElsewhere(error)) return Effect.fail(error);
-        logger.warn(
-          `Follow-up for run ${runId} was not queued: another process holds the run.`,
-          { data: error },
-        );
-        return Effect.succeed<FollowUpSubmission>({
-          kind: 'refused',
-          reason: 'owned_elsewhere',
-        });
-      }),
-      Effect.uninterruptible,
+    }));
+    const replayable = new Set(
+      followUps.flatMap((followUp) =>
+        followUp.deliveryId === undefined ? [] : [followUp.deliveryId],
+      ),
+    );
+    // A session that has closed takes no admission: its publisher is gone.
+    if (this.disposed) return Effect.succeed({ kind: 'refused' });
+    return this.port.exclusive((append) =>
+      this.admit(runId, queued, replayable, admission, append),
     );
   }
 
@@ -363,7 +308,8 @@ export class ToolUseFollowUpQueue {
    * child or recovery owner holds (an inner loop reads the queue its outer
    * owner consumes). A queue already attached for this owner wins, so every
    * consumer of one generation reads one queue. `undefined` when there is no
-   * such owner.
+   * such owner. The consumer that attaches runs the run under its own run
+   * lease, so it adopts any claim an admission took for the owner.
    */
   attachInput(
     runId: RunId,
@@ -372,8 +318,11 @@ export class ToolUseFollowUpQueue {
   ): RunInput | undefined {
     const entry = this.entries.get(runId);
     const owner = entry?.owner;
-    if (!entry || !owner) return undefined;
+    if (!entry || !owner || entry.pendingRelease !== undefined) {
+      return undefined;
+    }
     if (lease ? owner !== lease : owner.kind === 'flow') return undefined;
+    entry.adoptedClaim = undefined;
     if (entry.input) return entry.input;
     for (const followUp of entry.held) input.offer(followUp);
     entry.held = [];
@@ -385,20 +334,23 @@ export class ToolUseFollowUpQueue {
    * Release the entry `lease` owns, if it still does. Its input queue ends
    * either way: queued rows stay on the run for the next consumer to seed
    * from. `recoverable` keeps the entry for a successor claim; `terminal`
-   * forgets it.
+   * forgets it. While an admission for the run is running, the release is
+   * applied when that admission settles; a recovery lease that exits
+   * without its run launching releases the claim an admission took for it,
+   * and keeps the run owned until that release has run.
    */
   release(
     lease: FollowUpConsumerLease,
     next: 'recoverable' | 'terminal',
   ): boolean {
     const entry = this.entryForLease(lease);
-    if (!entry) return false;
-    entry.owner = undefined;
+    if (!entry || entry.pendingRelease !== undefined) return false;
     this.endInput(entry);
-    if (next === 'recoverable') return true;
-    this.entries.delete(lease.runId);
-    logger.debug(`Terminalized follow-up queue for run ${lease.runId}.`);
-    this.notifyReleaseObservers(lease.runId);
+    if (entry.admitting) {
+      entry.pendingRelease = next;
+      return true;
+    }
+    this.applyRelease(lease.runId, entry, next);
     return true;
   }
 
@@ -409,7 +361,10 @@ export class ToolUseFollowUpQueue {
   terminalize(runId: RunId): boolean {
     if (this.disposed) return false;
     const entry = this.entries.get(runId);
-    if (entry) this.endInput(entry);
+    if (entry) {
+      this.endInput(entry);
+      this.releaseAdoptedClaim(runId, entry, () => {});
+    }
     this.entries.delete(runId);
     this.terminalized.add(runId);
     this.notifyReleaseObservers(runId);
@@ -432,65 +387,257 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Write one admitted follow-up's row, then hand it to the run's consumer.
-   * A run no consumer here holds is claimed first. A claim this call took is
-   * released once the write settles, unless another generation's lease holds
-   * the run by then: that generation adopts the claim and ends it with its
-   * own lease release. Releasing cannot pull the claim from under an
-   * in-process acquirer: every one holds this boundary's lease for the run
-   * first (a lease this very submission claimed launches its resume only
-   * after this returns), and the lease is read in the synchronous step that
-   * starts the release.
+   * One admission, run as a job on the session's publisher. Everything that
+   * reads or writes the entry after the rows commit is synchronous, so a
+   * release or a claim lands before that decision or after it, never inside.
    */
-  private write(
+  private admit(
     runId: RunId,
-    followUp: QueuedFollowUp,
-    options: {
-      readonly consumerHoldsClaim: boolean;
-      readonly replayable: boolean;
-      readonly ownLease: FollowUpRecoveryLease | undefined;
-    },
-  ): Effect.Effect<'written' | 'pending' | 'consumed', Error> {
-    const rows = this.rows;
-    const entries = this.entries;
-    return Effect.gen(function* () {
-      const release = options.consumerHoldsClaim
-        ? Effect.void
-        : yield* rows.acquireClaim(runId);
+    followUps: readonly QueuedFollowUp[],
+    replayable: ReadonlySet<string>,
+    admission: 'live_owner' | 'recoverable',
+    append: Append,
+  ): Effect.Effect<FollowUpSubmission, Error> {
+    return Effect.gen({ self: this }, function* (): Effect.fn.Return<
+      FollowUpSubmission,
+      Error
+    > {
+      if (this.disposed) return { kind: 'refused' };
+      let entry = this.entries.get(runId);
+      if (!entry) {
+        if (admission === 'live_owner' || this.terminalized.has(runId)) {
+          return { kind: 'refused' };
+        }
+        entry = this.createEntry(runId);
+      }
+      const admitted = entry;
+      // A live flow or child holds the run's claim for as long as it holds
+      // the lease; every other admission claims the run before writing.
+      const consumerHoldsClaim =
+        admitted.owner?.kind === 'flow' || admitted.owner?.kind === 'child';
+      admitted.admitting = true;
       const written = yield* Effect.exit(
-        rows.write(
-          {
-            type: 'followup.queued',
-            aggregateId: aggregateId('run', runId),
-            ...followUp,
-          },
-          options.replayable,
+        this.writeRows(
+          runId,
+          followUps,
+          replayable,
+          consumerHoldsClaim,
+          append,
         ),
       );
-      const owner = entries.get(runId)?.owner;
-      const adopted =
-        Exit.isSuccess(written) &&
-        owner !== undefined &&
-        owner !== options.ownLease;
-      if (!adopted) {
-        const released = yield* Effect.exit(release);
-        if (Exit.isFailure(released) && Exit.isSuccess(written)) {
-          logger.warn(
-            `Run ${runId}: the claim taken to queue a follow-up was not released`,
-            { data: released.cause },
+
+      // From here to the returned status, nothing yields until the claim's
+      // disposition is decided.
+      admitted.admitting = false;
+      const pending = admitted.pendingRelease;
+      if (pending !== undefined) {
+        // A run that now holds rows this admission queued stays recoverable.
+        this.applyRelease(
+          runId,
+          admitted,
+          Exit.isSuccess(written) && written.value.wrote
+            ? 'recoverable'
+            : pending,
+        );
+      }
+      if (Exit.isFailure(written)) {
+        const error = Cause.squash(written.cause);
+        if (!heldElsewhere(error)) {
+          return yield* Effect.fail(
+            error instanceof Error
+              ? error
+              : new Error(`Follow-up admission failed for run ${runId}`, {
+                  cause: error,
+                }),
           );
         }
+        logger.warn(
+          `Follow-up for run ${runId} was not queued: another process holds the run.`,
+          { data: error },
+        );
+        return { kind: 'refused', reason: 'owned_elsewhere' };
       }
-      if (Exit.isFailure(written))
-        return yield* Effect.failCause(written.cause);
-      logger.debug(`Queued follow-up for run ${runId} (${written.value}).`);
-      const entry = entries.get(runId);
-      if (written.value !== 'consumed' && entry?.owner) {
-        if (entry.input) entry.input.offer(followUp);
-        else entry.held.push(followUp);
+
+      const { queued, wrote, releaseClaim } = written.value;
+      const current = !this.disposed && this.entries.get(runId) === admitted;
+      let owner =
+        current &&
+        admitted.owner !== undefined &&
+        !this.releasing.has(admitted.owner)
+          ? admitted.owner
+          : undefined;
+      let lease: FollowUpRecoveryLease | undefined;
+      if (current && queued.length > 0) {
+        if (owner === undefined && admission === 'recoverable') {
+          lease = this.claim(admitted, runId, 'recovery');
+          owner = lease;
+        }
+        if (owner !== undefined) this.offer(admitted, queued);
       }
-      return written.value;
+      if (releaseClaim) {
+        if (
+          owner?.kind === 'recovery' &&
+          queued.length > 0 &&
+          admitted.adoptedClaim === undefined
+        ) {
+          // The recovery owner has not launched its run: the claim is its to
+          // end, when a consumer adopts it or the lease exits without one.
+          admitted.adoptedClaim = releaseClaim;
+        } else if (owner === undefined || queued.length === 0) {
+          yield* this.releaseClaim(runId, releaseClaim);
+        }
+        // A flow or child that claimed the run meanwhile runs it under its
+        // own run lease, whose release ends the claim.
+      }
+      if (!current) return { kind: 'refused' };
+      // Every follow-up already on the rows: a replay. One still queued for a
+      // run no consumer holds was just claimed for its wake; any other replay
+      // was accepted before and changes nothing.
+      if (lease) return { kind: 'queued', lease };
+      if (!wrote) return { kind: 'duplicate' };
+      if (owner?.kind === 'flow') return { kind: 'delivered_live' };
+      return { kind: 'queued' };
     });
+  }
+
+  /**
+   * Claim the run unless a live consumer here holds it, judge replayed
+   * delivery ids against the run's committed rows, and append every new row
+   * in one transaction. A failure releases the claim this took.
+   */
+  private writeRows(
+    runId: RunId,
+    followUps: readonly QueuedFollowUp[],
+    replayable: ReadonlySet<string>,
+    consumerHoldsClaim: boolean,
+    append: Append,
+  ): Effect.Effect<
+    {
+      readonly queued: readonly QueuedFollowUp[];
+      readonly wrote: boolean;
+      readonly releaseClaim: Effect.Effect<void, Error> | null;
+    },
+    unknown
+  > {
+    const port = this.port;
+    return Effect.gen({ self: this }, function* () {
+      const releaseClaim = consumerHoldsClaim
+        ? null
+        : yield* port.acquireClaim(runId);
+      const settled = yield* Effect.exit(
+        Effect.gen(function* () {
+          // This job is the only admission running, so an id is judged
+          // against rows that committed, never against one being written.
+          const known = new Map<string, 'pending' | 'consumed'>();
+          if (replayable.size > 0) {
+            for (const row of yield* port.rows(runId)) {
+              if (
+                (row.type === 'followup.queued' ||
+                  row.type === 'followup.consumed') &&
+                replayable.has(row.followUpId)
+              ) {
+                known.set(
+                  row.followUpId,
+                  row.type === 'followup.consumed' ? 'consumed' : 'pending',
+                );
+              }
+            }
+          }
+          const fresh = followUps.filter((f) => !known.has(f.followUpId));
+          if (fresh.length > 0) {
+            yield* append(
+              fresh.map((followUp): SessionEventDraft => ({
+                type: 'followup.queued',
+                aggregateId: aggregateId('run', runId),
+                ...followUp,
+              })),
+            );
+          }
+          return {
+            queued: followUps.filter(
+              (f) => known.get(f.followUpId) !== 'consumed',
+            ),
+            wrote: fresh.length > 0,
+          };
+        }),
+      );
+      if (Exit.isFailure(settled)) {
+        if (releaseClaim) yield* this.releaseClaim(runId, releaseClaim);
+        return yield* Effect.failCause(settled.cause);
+      }
+      return { ...settled.value, releaseClaim };
+    });
+  }
+
+  private offer(entry: QueueEntry, followUps: readonly QueuedFollowUp[]): void {
+    for (const followUp of followUps) {
+      if (entry.input) entry.input.offer(followUp);
+      else entry.held.push(followUp);
+    }
+  }
+
+  private applyRelease(
+    runId: RunId,
+    entry: QueueEntry,
+    next: 'recoverable' | 'terminal',
+  ): void {
+    entry.pendingRelease = undefined;
+    this.endInput(entry);
+    const finish = (): void => {
+      entry.owner = undefined;
+      if (next === 'recoverable' || this.entries.get(runId) !== entry) return;
+      this.entries.delete(runId);
+      logger.debug(`Terminalized follow-up queue for run ${runId}.`);
+      this.notifyReleaseObservers(runId);
+    };
+    this.releaseAdoptedClaim(runId, entry, finish);
+  }
+
+  /**
+   * End the claim an admission took for a recovery owner whose run never
+   * launched, on the session's publisher. Until that release has run, the
+   * entry stays owned (by a lease nobody holds), so no successor can claim
+   * the run and acquire the database claim this release is about to drop.
+   */
+  private releaseAdoptedClaim(
+    runId: RunId,
+    entry: QueueEntry,
+    finish: () => void,
+  ): void {
+    const claim = entry.adoptedClaim;
+    entry.adoptedClaim = undefined;
+    if (!claim) {
+      finish();
+      return;
+    }
+    const releasing: FollowUpConsumerLease = { runId, kind: 'recovery' };
+    this.releasing.add(releasing);
+    entry.owner = releasing;
+    this.port.detach(
+      this.releaseClaim(runId, claim).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (entry.owner === releasing) finish();
+          }),
+        ),
+      ),
+    );
+  }
+
+  private releaseClaim(
+    runId: RunId,
+    release: Effect.Effect<void, Error>,
+  ): Effect.Effect<void> {
+    return release.pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          logger.warn(
+            `Run ${runId}: the claim taken to queue a follow-up was not released`,
+            { data: error },
+          );
+        }),
+      ),
+    );
   }
 
   private endInput(entry: QueueEntry): void {
@@ -514,12 +661,7 @@ export class ToolUseFollowUpQueue {
   }
 
   private createEntry(runId: RunId): QueueEntry {
-    const entry: QueueEntry = {
-      admittedDeliveryIds: createBoundedIdSet(
-        ToolUseFollowUpQueue.DELIVERY_ID_CAP,
-      ),
-      held: [],
-    };
+    const entry: QueueEntry = { held: [], admitting: false };
     this.entries.set(runId, entry);
     return entry;
   }
