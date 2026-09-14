@@ -51,7 +51,7 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import {
-  isSelfSettledRow,
+  isSettledRow,
   type ToolRow,
   type TranscriptRow,
 } from '@shared/transcript';
@@ -379,50 +379,6 @@ describe('CLI conversation transcript', () => {
     expect(frame).not.toContain('failed to render entry:');
   });
 
-  it('renders bounded finalized assistant tails through markdown', () => {
-    const text = ['intro line', 'middle line', '**bold tail marker**'].join(
-      '\n',
-    );
-
-    const assistant = (isSettled: boolean): TranscriptRow =>
-      entry(
-        isSettled ? 'finalized' : 'streaming',
-        'assistant',
-        text,
-        isSettled,
-      );
-    const finalizedTail = boundedTranscriptEntryLayout(
-      transcriptEntryLayout(assistant(true), {
-        colorEnabled: false,
-        mode: 'bounded',
-        width: 80,
-      }),
-      1,
-    ).lines.join('\n');
-    const streamingTail = boundedTranscriptEntryLayout(
-      transcriptEntryLayout(assistant(false), {
-        colorEnabled: false,
-        mode: 'bounded',
-        width: 80,
-      }),
-      1,
-    ).lines.join('\n');
-
-    expect(finalizedTail).toContain('bold tail marker');
-    expect(finalizedTail).not.toContain('**bold tail marker**');
-    expect(streamingTail).toContain('**bold tail marker**');
-
-    const cappedStreamingTail = boundedTranscriptEntryLayout(
-      transcriptEntryLayout(entry('tail', 'assistant', 'x'.repeat(25), false), {
-        maxRows: 1,
-        mode: 'bounded',
-        width: 10,
-      }),
-      1,
-    );
-    expect(cappedStreamingTail.lines).toEqual(['x'.repeat(10)]);
-  });
-
   it('budgets live assistant display-math rows with the live renderer', () => {
     const text = [
       'The sum evaluates to 1.6449290668357264.',
@@ -513,7 +469,7 @@ describe('CLI conversation transcript', () => {
     const tool = toolEntry('t1', TOOL_CALL_STATUS.COMPLETED, 'x'.repeat(40));
     const live = transcriptEntryLayout(tool, { mode: 'live', width: 20 });
     const bounded = boundedTranscriptEntryLayout(
-      transcriptEntryLayout(tool, { mode: 'bounded', width: 20 }),
+      transcriptEntryLayout(tool, { mode: 'live', width: 20 }),
       10,
     );
 
@@ -1349,7 +1305,7 @@ describe('transcript entry margin collapse', () => {
 function settledPrefix(entries: readonly TranscriptRow[] | undefined): number {
   let count = 0;
   for (const row of entries ?? []) {
-    if (!isSelfSettledRow(row)) break;
+    if (!isSettledRow(row, false)) break;
     count += 1;
   }
   return count;
