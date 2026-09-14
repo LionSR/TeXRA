@@ -192,6 +192,17 @@ export const runAgent = Effect.fn('runAgent')(function* (
           });
         } else {
           yield* acquireResumedRunOwnership(runSession, runId);
+          // Ownership is the fence for the edge as well: a detach another
+          // host committed while this launch prepared has folded by now, and
+          // a foreign row never reaches a handle this session tracks, so the
+          // handle takes the severed edge here, before the lifecycle reads
+          // its lineage back off it.
+          if (
+            launchHandle !== undefined &&
+            launchHandle.deliveryTarget !== null &&
+            (yield* persistedParentRunId(runSession, runId)) === null
+          )
+            launchHandle.detach();
         }
 
         let lifecycleStarted = false;
@@ -219,30 +230,34 @@ export const runAgent = Effect.fn('runAgent')(function* (
           const restoredOutcome = shouldRegister
             ? RUN_OUTCOME.FAILED
             : priorEnd?.outcome;
-          // A resume restores its snapshot only while the snapshot is still
-          // the run's terminal fact: a generation that admitted itself beside
-          // this one (both passed the duplicate check before either awaited)
-          // may have written a newer end, which this failure must not undo.
-          const snapshotHolds =
-            shouldRegister ||
-            JSON.stringify(
-              yield* getRunRecords(runSession, runId).readRunEnd(),
-            ) === JSON.stringify(priorEnd);
-          if (
-            !lifecycleStarted &&
-            restoredOutcome !== undefined &&
-            snapshotHolds
-          ) {
-            const finalization = yield* Effect.exit(
-              finalizeRun(runSession, {
-                runId,
-                outcome: restoredOutcome,
-              }),
-            );
-            if (Exit.isFailure(finalization))
-              failures.push(Cause.squash(finalization.cause));
-            else if (!finalization.value.ok)
-              failures.push(finalization.value.error);
+          if (!lifecycleStarted && restoredOutcome !== undefined) {
+            // A resume restores its snapshot only while the snapshot is
+            // still the run's terminal fact: a generation that admitted
+            // itself beside this one (both passed the duplicate check before
+            // either awaited) may have written a newer end, which this
+            // failure must not undo. A read that fails here is one more
+            // failure to report, never a reason to skip the release below.
+            const current = shouldRegister
+              ? Exit.succeed(priorEnd)
+              : yield* Effect.exit(
+                  getRunRecords(runSession, runId).readRunEnd(),
+                );
+            if (Exit.isFailure(current)) {
+              failures.push(Cause.squash(current.cause));
+            } else if (
+              JSON.stringify(current.value) === JSON.stringify(priorEnd)
+            ) {
+              const finalization = yield* Effect.exit(
+                finalizeRun(runSession, {
+                  runId,
+                  outcome: restoredOutcome,
+                }),
+              );
+              if (Exit.isFailure(finalization))
+                failures.push(Cause.squash(finalization.cause));
+              else if (!finalization.value.ok)
+                failures.push(finalization.value.error);
+            }
           }
         }
 
