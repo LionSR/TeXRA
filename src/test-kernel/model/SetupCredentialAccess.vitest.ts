@@ -11,7 +11,12 @@ const mocks = vi.hoisted(() => ({
   isXaiSubscriptionActive: vi.fn<(model: string) => Promise<boolean>>(),
   reportProbeFailure: vi.fn(),
   hasUsableApiKey:
-    vi.fn<(secrets: PlatformSecrets, provider: string) => Promise<boolean>>(),
+    vi.fn<
+      (
+        secrets: PlatformSecrets,
+        provider: string,
+      ) => Effect.Effect<boolean, Error>
+    >(),
 }));
 
 const secrets = {} as PlatformSecrets;
@@ -69,13 +74,13 @@ describe('setup credential access', () => {
       events.push('subscription:grok');
       return access.grokSubscription;
     });
-    mocks.hasUsableApiKey
-      .mockReset()
-      .mockImplementation(async (_, provider) => {
+    mocks.hasUsableApiKey.mockReset().mockImplementation((_, provider) =>
+      Effect.sync(() => {
         events.push(`key:${provider}`);
         // Mirrors the real check: a blank stored key is not usable.
         return (access.keys[provider] ?? '').trim().length > 0;
-      });
+      }),
+    );
   });
 
   it('stops after an active ChatGPT subscription', async () => {
@@ -133,10 +138,12 @@ describe('setup credential access', () => {
       kind: 'openai API key',
       fail: () => {
         access.keys.anthropic = 'sk-ant-test';
-        mocks.hasUsableApiKey.mockImplementationOnce(async (_, provider) => {
-          events.push(`key:${provider}`);
-          throw new Error('keychain locked');
-        });
+        mocks.hasUsableApiKey.mockImplementationOnce((_, provider) =>
+          Effect.suspend(() => {
+            events.push(`key:${provider}`);
+            return Effect.fail(new Error('keychain locked'));
+          }),
+        );
       },
       message: 'keychain locked',
       expectedResult: true,

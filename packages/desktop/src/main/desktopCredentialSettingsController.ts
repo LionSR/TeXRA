@@ -196,8 +196,12 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     this.profileController = new SettingsProfileController({
       host: 'desktop',
       globalState: options.globalState,
+      // The key-status read is an Effect; this controller holds the runtime
+      // that settles it, as it does for the availability read above.
       loadProviderKeyStatuses: () =>
-        loadApiKeyStatusMap(options.secrets, API_PROVIDERS),
+        options.runtime.runPromise(
+          loadApiKeyStatusMap(options.secrets, API_PROVIDERS),
+        ),
       getConfig: (key, defaultValue) => options.config.get(key, defaultValue),
     });
     this.profileKeyController = new SettingsProfileKeyController({

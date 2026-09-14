@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 // Third-party imports
 import { build } from 'esbuild';
-import PQueue from 'p-queue';
+import { Effect } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
@@ -79,11 +79,15 @@ describe('tool module closures', () => {
   beforeAll(async () => {
     // Bounded concurrency: 50 unthrottled esbuild bundles saturate the box and
     // push the neighbouring architecture ratchets past their own timeouts.
-    const queue = new PQueue({ concurrency: 4 });
-    await queue.addAll(
-      defineToolModules().map((entry) => async () => {
-        closures.set(entry, await valueClosure(entry));
-      }),
+    await Effect.runPromise(
+      Effect.forEach(
+        defineToolModules(),
+        (entry) =>
+          Effect.tryPromise(() => valueClosure(entry)).pipe(
+            Effect.map((files) => closures.set(entry, files)),
+          ),
+        { concurrency: 4, discard: true },
+      ),
     );
   }, 120_000);
 

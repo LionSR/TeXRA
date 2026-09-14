@@ -13,6 +13,7 @@ import {
 import { AppState } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   shouldUseSubscriptionDeviceCode,
@@ -32,28 +33,40 @@ interface CliModelAccessSelectionResult {
   readonly message: string;
 }
 
-export async function readCliModelAccessStatus(
-  secrets: PlatformSecrets,
-): Promise<CliModelAccessStatus> {
-  const [chatGpt, grok, codingPlanEntries] = await Promise.all([
-    subscriptionProvider('chatgpt').getStatus(secrets),
-    subscriptionProvider('grok').getStatus(secrets),
-    Promise.all(
-      codingPlanSubscriptionRuntimes.map(
-        async (runtime) =>
-          [
-            runtime.descriptor.id,
-            {
-              preferred: runtime.getEnabled(),
-              keySet: await hasUsableApiKey(
-                secrets,
-                runtime.descriptor.apiProvider,
-              ),
-            },
-          ] as const,
+/**
+ * A program: each coding plan's key status is a credential read that types its
+ * own failure, so the surface that wants this status yields it or settles it
+ * on the runtime it holds.
+ */
+export const readCliModelAccessStatus = Effect.fn(
+  'modelAccessSelection.readCliModelAccessStatus',
+)(function* (secrets: PlatformSecrets) {
+  const [chatGpt, grok, codingPlanEntries] = yield* Effect.all(
+    [
+      Effect.tryPromise({
+        try: () => subscriptionProvider('chatgpt').getStatus(secrets),
+        catch: ensureError,
+      }),
+      Effect.tryPromise({
+        try: () => subscriptionProvider('grok').getStatus(secrets),
+        catch: ensureError,
+      }),
+      Effect.forEach(
+        codingPlanSubscriptionRuntimes,
+        (runtime) =>
+          Effect.map(
+            hasUsableApiKey(secrets, runtime.descriptor.apiProvider),
+            (keySet) =>
+              [
+                runtime.descriptor.id,
+                { preferred: runtime.getEnabled(), keySet },
+              ] as const,
+          ),
+        { concurrency: 'unbounded' },
       ),
-    ),
-  ]);
+    ] as const,
+    { concurrency: 'unbounded' },
+  );
   const codingPlans = Object.fromEntries(
     codingPlanEntries,
   ) as CliModelAccessStatus['codingPlans'];
@@ -70,8 +83,8 @@ export async function readCliModelAccessStatus(
     grokSignedIn: grok.signedIn,
     grokAccountLabel: grok.email,
     codingPlans,
-  };
-}
+  } satisfies CliModelAccessStatus;
+});
 
 export function mergeCliTexraAccountStatus(
   access: CliModelAccessStatus,
@@ -154,9 +167,7 @@ const updateKeyedCliModelAccess = Effect.fn(
   // The provider API key is the subscription credential — there is no
   // separate sign-in flow.
   const secrets = yield* Secrets;
-  const keySet = yield* hostPort(() =>
-    hasUsableApiKey(secrets, plan.apiProvider),
-  );
+  const keySet = yield* hasUsableApiKey(secrets, plan.apiProvider);
   if (!keySet) {
     return {
       message: `No ${plan.credentialName} API key configured — add one with /key or /config → API keys (get one at ${plan.credentialSetupUrl}).`,

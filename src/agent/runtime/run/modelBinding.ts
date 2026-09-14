@@ -853,20 +853,15 @@ export const bindModel = Effect.fn('bindModel')(function* (
   const onOpenRouter = compatibilityKey === 'OpenRouterNative';
   let config = requested;
   if (compatibilityKey === 'Kimi' && isKimiSubscriptionEligible(config)) {
-    config = yield* Effect.tryPromise({
-      try: () =>
-        input.inScope(async () =>
-          kimiCodeEffectiveConfig(
-            config,
-            await resolveKimiCodeRoutingFacts(
-              input.stores.secrets,
-              onOpenRouter,
-              input.declinedRoutes,
-            ),
-          ),
-        ),
-      catch: ensureError,
-    });
+    config = kimiCodeEffectiveConfig(
+      config,
+      yield* resolveKimiCodeRoutingFacts(
+        input.stores.secrets,
+        onOpenRouter,
+        input.declinedRoutes,
+        input.inScope,
+      ),
+    );
   }
   if (protocol === 'validation') {
     const bound = validationModel(config);

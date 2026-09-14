@@ -193,9 +193,8 @@ export function createTuiHostInteractions(
         missingPersonalApiKeyMessage = missingApiKeyRetryMessage(provider);
         if (provider) {
           try {
-            personalApiKeyAvailable = await hasUsableApiKey(
-              stores.secrets,
-              provider,
+            personalApiKeyAvailable = await stores.runtime.runPromise(
+              hasUsableApiKey(stores.secrets, provider),
             );
           } catch (error) {
             // A keychain failure must not permit a credential switch nobody asked for.
@@ -390,9 +389,8 @@ async function ensurePersonalApiKey(
       'The failed API provider could not be identified, so TeXRA did not switch this retry to your own key.',
     );
   }
-  const keyExists = await apiKeyExistsUncached(
-    stores.secrets,
-    requestedProvider,
+  const keyExists = await stores.runtime.runPromise(
+    apiKeyExistsUncached(stores.secrets, requestedProvider),
   );
   if (!keyExists) {
     throw new Error(missingApiKeyRetryMessage(requestedProvider));

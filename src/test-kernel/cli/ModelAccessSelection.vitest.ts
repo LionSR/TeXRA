@@ -104,12 +104,17 @@ vi.mock('@model/apiProviders', () => {
     API_PROVIDERS: providers,
     hasUsableApiKey: mocks.hasUsableApiKey,
     lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
-    configuredApiKeyProviders: async () => {
-      const origins = await Promise.all(
-        providers.map((provider) => mocks.lookupApiKeyOrigin({}, provider)),
-      );
-      return providers.filter((_, index) => origins[index] !== 'none');
-    },
+    configuredApiKeyProviders: () =>
+      Effect.map(
+        Effect.forEach(
+          providers,
+          (provider: string) =>
+            mocks.lookupApiKeyOrigin({}, provider) as Effect.Effect<string>,
+          { concurrency: 'unbounded' },
+        ),
+        (origins: readonly string[]) =>
+          providers.filter((_, index) => origins[index] !== 'none'),
+      ),
   };
 });
 
@@ -191,8 +196,8 @@ beforeEach(() => {
     target: 'global',
   });
   mocks.shouldUseSubscriptionDeviceCode.mockReturnValue(false);
-  mocks.hasUsableApiKey.mockResolvedValue(false);
-  mocks.lookupApiKeyOrigin.mockResolvedValue('none');
+  mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
+  mocks.lookupApiKeyOrigin.mockReturnValue(Effect.succeed('none'));
   mocks.getPreferKimiCode.mockReturnValue(false);
   mocks.writePlatformSetting.mockResolvedValue(undefined);
   mocks.getGLMCodingPlan.mockReturnValue(false);
@@ -248,7 +253,7 @@ describe('CLI model access routes', () => {
     });
     mocks.isPreferCodexSubscription.mockReturnValue(true);
 
-    await expect(readCliModelAccessStatus(secrets)).resolves.toEqual(
+    expect(await Effect.runPromise(readCliModelAccessStatus(secrets))).toEqual(
       expectedAccessStatus({
         preferences: {
           chatGpt: 'on',
@@ -260,7 +265,7 @@ describe('CLI model access routes', () => {
     );
 
     mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
-    await expect(readCliModelAccessStatus(secrets)).resolves.toEqual(
+    expect(await Effect.runPromise(readCliModelAccessStatus(secrets))).toEqual(
       expectedAccessStatus({
         preferences: {
           chatGpt: 'on',
@@ -271,12 +276,12 @@ describe('CLI model access routes', () => {
   });
 
   it('reports the Kimi preference independently of key', async () => {
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider) => provider === 'kimiCode',
+    mocks.hasUsableApiKey.mockImplementation((_secrets, provider) =>
+      Effect.succeed(provider === 'kimiCode'),
     );
     mocks.getPreferKimiCode.mockReturnValue(true);
 
-    await expect(readCliModelAccessStatus(secrets)).resolves.toEqual(
+    expect(await Effect.runPromise(readCliModelAccessStatus(secrets))).toEqual(
       expectedAccessStatus(
         {
           preferences: {
@@ -288,8 +293,10 @@ describe('CLI model access routes', () => {
       ),
     );
 
-    mocks.hasUsableApiKey.mockResolvedValue(false);
-    await expect(readCliModelAccessStatus(secrets)).resolves.toMatchObject({
+    mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
+    expect(
+      await Effect.runPromise(readCliModelAccessStatus(secrets)),
+    ).toMatchObject({
       codingPlans: { kimiCode: { preferred: true, keySet: false } },
     });
   });
@@ -298,7 +305,7 @@ describe('CLI model access routes', () => {
     'enables Kimi Code routing on a personal fallback when a key exists',
     () =>
       Effect.gen(function* () {
-        mocks.hasUsableApiKey.mockResolvedValue(true);
+        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
 
         const result = yield* updateCliModelAccess(
           context,
@@ -338,7 +345,7 @@ describe('CLI model access routes', () => {
     'enables GLM Coding Plan routing on a personal fallback when a key exists',
     () =>
       Effect.gen(function* () {
-        mocks.hasUsableApiKey.mockResolvedValue(true);
+        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
 
         const result = yield* updateCliModelAccess(
           context,
@@ -466,11 +473,9 @@ describe('CLI model access routes', () => {
         });
         mocks.isPreferCodexSubscription.mockReturnValue(true);
         mocks.getPreferKimiCode.mockReturnValue(true);
-        mocks.hasUsableApiKey.mockResolvedValue(true);
+        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
 
-        const status = yield* Effect.promise(() =>
-          readCliModelAccessStatus(secrets),
-        );
+        const status = yield* readCliModelAccessStatus(secrets);
         expect(status.preferences).toEqual({
           chatGpt: 'on',
           grok: 'off',
@@ -533,9 +538,7 @@ describe('CLI model access routes', () => {
         target: 'global',
       });
 
-      const status = yield* Effect.promise(() =>
-        readCliModelAccessStatus(secrets),
-      );
+      const status = yield* readCliModelAccessStatus(secrets);
       const selection = buildCliModelAccessItems({
         kind: 'loaded',
         access: status,
@@ -558,9 +561,7 @@ describe('CLI model access routes', () => {
   it.effect('turns off a stale Kimi preference without requiring a key', () =>
     Effect.gen(function* () {
       mocks.getPreferKimiCode.mockReturnValue(true);
-      const status = yield* Effect.promise(() =>
-        readCliModelAccessStatus(secrets),
-      );
+      const status = yield* readCliModelAccessStatus(secrets);
       const selection = buildCliModelAccessItems({
         kind: 'loaded',
         access: status,
