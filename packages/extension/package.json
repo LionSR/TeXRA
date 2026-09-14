@@ -1037,7 +1037,7 @@
     "@vscode/vsce": "^3.9.2",
     "concurrently": "^10.0.5",
     "esbuild": "^0.28.2",
-    "vite": "^8.2.2"
+    "vite": "^8.3.0"
   },
   "scripts": {
     "clean:dist": "node ../../scripts/clean-extension-dist.mjs",
