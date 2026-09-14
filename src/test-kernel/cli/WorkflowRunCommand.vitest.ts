@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
 // import (enforced by architecture/supportMockImportOrder.vitest.ts).
-import '@test/support/agentCatalogMock';
+import { agentCatalogMock } from '@test/support/agentCatalogMock';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
@@ -658,6 +658,45 @@ describe('CLI run command, workflow agents', () => {
           copiedOutputs: [path.join(workspace, 'out', 'paper.tex')],
           outputs: [outputSummary],
           compileFailures: [],
+        }),
+      );
+    });
+  });
+
+  // Issue #12162: a remote agent's catalog listing carries no
+  // `defaultOutputFiles`, so only the definition the launch loads declares
+  // them. Finalization reads them off the entry that load refreshed.
+  it('expects the output files the launched definition declares', async () => {
+    await withTempDir('texra-workflow-', async (root) => {
+      const generated = await writeGeneratedOutput(root);
+      mockWorkflowRun(
+        workflowRun('exec-declared-outputs', {
+          outputs: [runOutputSummary(generated, path.join(root, 'paper.tex'))],
+        }),
+        true,
+      );
+      agentCatalogMock.resolveAgentForLaunch.mockReturnValue({
+        name: 'polish',
+        source: 'remote',
+        path: '',
+        category: AgentCategory.Workflow,
+        defaultOutputFiles: ['slides.tex'],
+      });
+
+      const exitCode = await runWorkflow(
+        { outputDir: 'out' },
+        createRunCommandCliContext({ cwd: root }),
+      );
+
+      expect(exitCode).toBe(CliExitCode.AgentError);
+      // The launch persisted only the input-derived names; the declared
+      // `slides.tex` is what the copy is held to.
+      expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
+        cli: { expectedOutputFiles: ['paper.tex'] },
+      });
+      expect(cliLogSinksMock.writeErrorStderr).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('slides.tex'),
         }),
       );
     });

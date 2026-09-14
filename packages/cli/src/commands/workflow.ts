@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import { Effect, Result } from 'effect';
 
+import { resolveAgentForLaunch } from '@agent/index';
 import {
   buildCliWorkflowResultMeta,
   deriveResumability,
@@ -31,7 +32,6 @@ import {
 } from '../runtime/runModel';
 import {
   LAUNCHABLE_AGENT_NAME_DESCRIPTION,
-  resolveCliAgentDefaultOutputFiles,
   resolveCliRunAgent,
 } from '../runtime/agents';
 import {
@@ -69,8 +69,8 @@ import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
   type CliWorkflowRunResult,
-  expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
+  inputDerivedOutputFiles,
   resolveWorkflowOutput,
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
@@ -180,20 +180,12 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           catch: ensureError,
         });
         const runContext = buildHeadlessRunContext(context);
-        // Read the defaults off the agent's current definition, not the
-        // catalog listing: a remote entry's listing carries none.
-        const agentDefaultOutputFiles = init.outputDir
-          ? yield* Effect.tryPromise({
-              try: () => resolveCliAgentDefaultOutputFiles(agent),
-              catch: ensureError,
-            })
-          : undefined;
+        // Only the input-derived names are knowable here: the agent's declared
+        // defaults live in a definition the launch below loads, and loading it
+        // twice would pay a second remote fetch and could observe a different
+        // revision than the run executes. They are applied at finalization.
         const expectedOutputFiles = init.outputDir
-          ? expectedOutputFilesForOutputDir(
-              agentDefaultOutputFiles,
-              inputFiles,
-              stdinInputPath,
-            )
+          ? inputDerivedOutputFiles(inputFiles, stdinInputPath)
           : undefined;
         // Persist CLI destinations absolutely so resumption has one path
         // representation and never reconstructs output locations.
@@ -338,7 +330,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     // writes; never take the destinations a second time as call options.
     const output = resumeWorkflowOutputFile(config);
     const outputDir = resumeWorkflowOutputDirectory(config);
-    const expectedOutputFiles = config.cli?.expectedOutputFiles ?? undefined;
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
     const canAdvertiseInterruptedRun = (
@@ -393,6 +384,20 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       expectedCategory: AgentCategory.Workflow,
       openWorkflowOutput: (result, tryCommitPublication) =>
         Effect.gen(function* () {
+          // Resolved here, not before the launch: the run has loaded the
+          // agent's definition by now and a remote load refreshes the catalog
+          // entry it resolved, so these are the defaults this run actually
+          // executed, read without a second load that could fetch a different
+          // revision. `cli.expectedOutputFiles` holds the input-derived names
+          // the launch computed, which stand in when an agent declares none.
+          const declaredOutputFiles = resolveAgentForLaunch(
+            AgentCategory.Workflow,
+            config.agent,
+            config.agentSource,
+          )?.defaultOutputFiles?.filter(Boolean);
+          const expectedOutputFiles = declaredOutputFiles?.length
+            ? declaredOutputFiles
+            : (config.cli?.expectedOutputFiles ?? undefined);
           const outputResult = yield* Effect.result(
             Effect.tryPromise({
               try: () =>

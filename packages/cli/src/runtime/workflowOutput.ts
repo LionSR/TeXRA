@@ -209,9 +209,20 @@ function commonDirectory(paths: readonly string[]): string {
   );
 }
 
-function expectedInputOutputFiles(
+/**
+ * The output names an `--output-dir` run expects when its agent declares no
+ * `defaultOutputFiles`: one per input, with a stdin-materialized input
+ * reported under its stable basename.
+ *
+ * Computed at launch, while the stdin materialization path is still known, and
+ * persisted with the run so a resume reports the same names. The agent's own
+ * declared defaults — which only its loaded definition carries — take
+ * precedence over these at output finalization.
+ */
+export function inputDerivedOutputFiles(
   inputFiles: readonly string[],
-  stdinInputPath: string | undefined,
+  /** The path this run materialized stdin to, when it read stdin. */
+  stdinInputPath?: string,
 ): readonly string[] {
   const absoluteInputs = inputFiles
     .filter((input) => path.isAbsolute(input))
@@ -225,22 +236,6 @@ function expectedInputOutputFiles(
     if (!path.isAbsolute(input)) return getSafeDocumentRelativePath(input);
     return getSafeDocumentRelativePath(path.relative(absoluteRoot, input));
   });
-}
-
-export function expectedOutputFilesForOutputDir(
-  /**
-   * The agent's declared defaults, resolved from its current definition — a
-   * remote agent's catalog listing does not carry them.
-   */
-  agentDefaultOutputFiles: readonly string[] | undefined,
-  inputFiles: readonly string[],
-  /** The path this run materialized stdin to, when it read stdin. */
-  stdinInputPath?: string,
-): readonly string[] {
-  const defaultOutputFiles = (agentDefaultOutputFiles ?? []).filter(Boolean);
-  return defaultOutputFiles.length > 0
-    ? defaultOutputFiles
-    : expectedInputOutputFiles(inputFiles, stdinInputPath);
 }
 
 export async function resolveWorkflowOutput(
