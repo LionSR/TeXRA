@@ -10,7 +10,8 @@
 // concurrency/error packages, `Effect.run*` boundary calls (rule R1), and
 // raw catch clauses in files that already import `effect` at runtime (rule
 // R7). Every row is a per-file allowlist: a file absent from a row fails on
-// its first site. The PR that zeroes a row deletes the row.
+// its first site. The PR that zeroes a row deletes the row from the
+// baseline; the survey list stays, so a later site fails as a new file.
 //
 // The owner's second ruling of 2026-09-06 ("fully embrace Effect. No more
 // pass-throughs nor adapters"; PRD R1 and execution rule 3 as amended) shapes
@@ -54,7 +55,7 @@ const INJECTION_PLAN =
 /** This script, for the message that tells a reader where to retire a row. */
 const SCRIPT_REL = 'scripts/check-effect-migration-ratchet.mjs';
 
-const SUPERSEDED_PACKAGES = ['p-defer', 'async-mutex'];
+const SUPERSEDED_PACKAGES = ['p-queue', 'p-defer', 'async-mutex'];
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
 const PROCESS_RUNTIME_MODULE = '@platform/processRuntime';
@@ -208,7 +209,7 @@ const SEMANTICS =
   "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, or packages/agent/src/**; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
-  'The PR that zeroes a row deletes the row.';
+  'The PR that zeroes a row deletes the row from the baseline; SUPERSEDED_PACKAGES and the other survey lists stay, so a later site fails as a new file.';
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -598,11 +599,11 @@ function selfTestSurvey() {
     {
       // The `await import(...)` is the only case exercising the
       // ImportKeyword branch of moduleSpecifier, so it must always name a
-      // live row: without it, a dynamic `import('async-mutex')` would dodge
-      // its row undetected, in a ratchet whose whole subject is import rows.
-      // `p-queue` is retired from SUPERSEDED_PACKAGES and must not count.
+      // live row: without it, a dynamic `import('p-queue')` would dodge its
+      // row undetected, in a ratchet whose whole subject is import rows.
       text: "import PQueue from 'p-queue';\nimport type { Options } from 'p-defer';\nimport pd from 'p-queue-plus';\nimport local from './p-queue';\nconst defer = require('p-defer');\nexport { default as deferred } from 'p-defer';\nawait import('async-mutex');\n",
       expected: {
+        [importRow('p-queue')]: 1,
         [importRow('p-defer')]: 3,
         [importRow('async-mutex')]: 1,
       },
@@ -764,16 +765,18 @@ function readBaseline() {
     });
   }
   const rows = parsed?.rows;
-  const expectedIds = ROWS.map((row) => row.id);
+  const expectedIds = new Set(ROWS.map((row) => row.id));
+  const baselineIds =
+    rows != null && typeof rows === 'object' ? Object.keys(rows) : [];
+  const extraIds = baselineIds.filter((id) => !expectedIds.has(id));
   if (
     typeof parsed?.semantics !== 'string' ||
     rows == null ||
     typeof rows !== 'object' ||
-    JSON.stringify(Object.keys(rows).toSorted(compareCodePoints)) !==
-      JSON.stringify(expectedIds.toSorted(compareCodePoints))
+    extraIds.length > 0
   ) {
     throw new Error(
-      `Baseline shape out of sync with the script rows (${expectedIds.join(', ')}): ${baselinePath}. Run --update.`,
+      `Baseline shape out of sync with the script rows (${[...expectedIds].join(', ')}): ${baselinePath}. Run --update.`,
     );
   }
   for (const [row, entries] of Object.entries(rows)) {
@@ -831,7 +834,10 @@ function readCommittedCounts() {
 
 function writeBaseline(rows) {
   const sortedRows = Object.fromEntries(
-    ROWS.map((row) => [row.id, sortObject(rows[row.id])]),
+    ROWS.flatMap((row) => {
+      const entries = sortObject(rows[row.id]);
+      return Object.keys(entries).length === 0 ? [] : [[row.id, entries]];
+    }),
   );
   writeFileSync(
     baselinePath,
@@ -856,7 +862,7 @@ function diffRows(current, baseline, unseeded = new Set()) {
   for (const row of ROWS) {
     if (unseeded.has(row.id)) continue;
     const now = current[row.id];
-    const was = baseline[row.id];
+    const was = baseline[row.id] ?? {};
     for (const [file, count] of Object.entries(now)) {
       if (!(file in was)) {
         failures.push({ row, file, was: 0, now: count, kind: 'new file' });
@@ -944,7 +950,7 @@ function main() {
   );
   for (const row of ROWS) {
     const now = rows[row.id];
-    const was = baseline.rows[row.id];
+    const was = baseline.rows[row.id] ?? {};
     console.log(
       `  ${row.id.padEnd(24)} ${Object.keys(now).length} files / ${sites(now)} sites` +
         ` (baseline ${Object.keys(was).length} files / ${sites(was)} sites)`,
@@ -958,9 +964,13 @@ function main() {
   // a mechanism the tree no longer has. `import:neverthrow` sat that way.
   // The gate keys on the BASELINE row being empty, not on the tree count: a
   // tree that has fallen below a non-empty baseline is stale headroom, which
-  // the stale report below already names loudly and correctly.
+  // the stale report below already names loudly and correctly. A surveyed
+  // row omitted from the baseline is the finished state: the survey still
+  // runs, so a later site fails as a new file.
   const emptyRows = ROWS.filter(
-    (row) => Object.keys(baseline.rows[row.id]).length === 0,
+    (row) =>
+      Object.hasOwn(baseline.rows, row.id) &&
+      Object.keys(baseline.rows[row.id]).length === 0,
   );
   if (emptyRows.length > 0) {
     failed = true;
@@ -977,8 +987,8 @@ function main() {
       );
       console.error(
         pkg == null
-          ? `  - [${row.id}] Delete its row-id constant, its ROWS entry, the bump('${row.id}') site in surveySource and its case in selfTestSurvey, all in ${SCRIPT_REL}; then run --update so the row leaves the baseline.`
-          : `  - [${row.id}] Delete '${pkg}' from SUPERSEDED_PACKAGES in ${SCRIPT_REL} (the row and its rule text are generated from that list); if the dynamic-import self-test fixture in selfTestSurvey still names '${pkg}', re-point it at another superseded package rather than deleting it, since it is the only case exercising the import() branch; drop the dependency from package.json once nothing outside the scanned roots needs it; then run --update so the row leaves the baseline.`,
+          ? `  - [${row.id}] Delete its empty object from the baseline; keep its row-id constant, ROWS entry, bump('${row.id}') site and selfTestSurvey case in ${SCRIPT_REL} so a later site fails as a new file.`
+          : `  - [${row.id}] Delete the empty '${row.id}' object from the baseline; keep '${pkg}' in SUPERSEDED_PACKAGES in ${SCRIPT_REL} so a later import fails as a new file. Drop the dependency from package.json once nothing outside the scanned roots needs it.`,
       );
     }
   }

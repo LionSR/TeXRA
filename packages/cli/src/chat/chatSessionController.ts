@@ -323,18 +323,16 @@ export function createChatSessionController(
   /** `runId` once the fold holds it, from the first view level that does. */
   const awaitRunFolded = (
     runId: RunId | undefined,
-  ): Promise<RunId | undefined> =>
+  ): Effect.Effect<RunId | undefined> =>
     runId === undefined
-      ? Promise.resolve(undefined)
-      : runtime.runPromise(
-          Stream.concat(
-            Stream.make(SubscriptionRef.getUnsafe(runtimeSession.view)),
-            SubscriptionRef.changes(runtimeSession.view),
-          ).pipe(
-            Stream.filter((view) => view.runs.has(runId)),
-            Stream.runHead,
-            Effect.map((head) => (Option.isSome(head) ? runId : undefined)),
-          ),
+      ? Effect.succeed(undefined)
+      : Stream.concat(
+          Stream.make(SubscriptionRef.getUnsafe(runtimeSession.view)),
+          SubscriptionRef.changes(runtimeSession.view),
+        ).pipe(
+          Stream.filter((view) => view.runs.has(runId)),
+          Stream.runHead,
+          Effect.map((head) => (Option.isSome(head) ? runId : undefined)),
         );
 
   /** Issue one request to the session's runtime and read its Effect result
@@ -1148,17 +1146,20 @@ export function createChatSessionController(
       if (!started) restoreReservedSkillActivations();
       return;
     }
-    const deliverFollowUp = async (): Promise<void> => {
-      let delivered = false;
-      let followUpTarget = childFollowUpTarget;
-      try {
+    let delivered = false;
+    followUpQueue.enqueue(
+      Effect.gen(function* () {
+        let followUpTarget = childFollowUpTarget;
         // The fold states when the pending run exists: the first view level
         // holding the run this controller minted, unless the run settles
         // first.
-        followUpTarget ??= await Promise.race([
+        const pendingRun = session.runPromise;
+        followUpTarget ??= yield* Effect.raceFirst(
           awaitRunFolded(session.runId),
-          session.runPromise?.then(() => undefined),
-        ]);
+          pendingRun == null
+            ? Effect.succeed(undefined)
+            : hostPort(() => pendingRun).pipe(Effect.as(undefined)),
+        );
         if (session.stopRequested) {
           requestDraftRestore(line, images);
           return;
@@ -1171,35 +1172,33 @@ export function createChatSessionController(
           );
           return;
         }
-        const outcome = await runtime.runPromise(
-          runtimeSession.requests
-            .request({
-              kind: 'followUp.send',
-              runId: followUpTarget,
-              text: prepared.instruction,
-              displayText: prepared.displayInstruction,
-              mediaFiles: mediaFiles ? [...mediaFiles] : undefined,
-            })
-            .pipe(
-              Effect.match({
-                onFailure: (error) => ({
-                  refused: describeRequestError(error),
-                }),
-                onSuccess: (value) => ({ refused: undefined, value }),
+        const outcome = yield* runtimeSession.requests
+          .request({
+            kind: 'followUp.send',
+            runId: followUpTarget,
+            text: prepared.instruction,
+            displayText: prepared.displayInstruction,
+            mediaFiles: mediaFiles ? [...mediaFiles] : undefined,
+          })
+          .pipe(
+            Effect.match({
+              onFailure: (error) => ({
+                refused: describeRequestError(error),
               }),
-              // `match` recovers only the typed refusal; a collaborator that
-              // rejects defects, and the queued task would swallow it into an
-              // unhandled rejection. Read the defect the way `SessionBridge`
-              // answers `Internal`: logged, worded, the message handed back.
-              Effect.catchCause((cause) =>
-                Effect.sync(() =>
-                  Cause.hasInterruptsOnly(cause)
-                    ? { interrupted: true as const }
-                    : { defect: reportRequestDefect(cause) },
-                ),
+              onSuccess: (value) => ({ refused: undefined, value }),
+            }),
+            // `match` recovers only the typed refusal; a collaborator that
+            // rejects defects, and the queued task would swallow it into an
+            // unhandled rejection. Read the defect the way `SessionBridge`
+            // answers `Internal`: logged, worded, the message handed back.
+            Effect.catchCause((cause) =>
+              Effect.sync(() =>
+                Cause.hasInterruptsOnly(cause)
+                  ? { interrupted: true as const }
+                  : { defect: reportRequestDefect(cause) },
               ),
             ),
-        );
+          );
         if ('value' in outcome && outcome.value.kind === 'followUp') {
           runtimeSession.followUps.notifySent(followUpTarget);
           delivered = true;
@@ -1240,12 +1239,12 @@ export function createChatSessionController(
             );
           }
         }
-      } finally {
-        if (!delivered) restoreReservedSkillActivations();
-      }
-    };
-    followUpQueue.enqueue(
-      hostPort(deliverFollowUp).pipe(
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (!delivered) restoreReservedSkillActivations();
+          }),
+        ),
         Effect.catch((error) =>
           Effect.sync(() => appendLocalErrorTranscript(toErrorMessage(error))),
         ),
