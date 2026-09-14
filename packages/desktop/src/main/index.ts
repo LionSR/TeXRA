@@ -427,7 +427,14 @@ function createWindow(options: {
   const refreshFunnelAfterLaunch = (): void => {
     const refresh = onboardingIpcRef.current?.refreshOnboardingFunnel();
     if (!refresh) return;
-    refresh.catch(reportAsyncError);
+    runtime.runFork(
+      Effect.tryPromise({
+        try: () => refresh,
+        catch: (error) => error,
+      }).pipe(
+        Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+      ),
+    );
   };
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
