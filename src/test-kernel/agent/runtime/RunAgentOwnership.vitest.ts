@@ -273,6 +273,29 @@ describe('runAgent run ownership', () => {
   );
 
   it.effect(
+    'takes a detach another host committed while the launch prepared',
+    () =>
+      Effect.gen(function* () {
+        persistedRuns.set(RUN_ID, { parentId: PARENT_RUN_ID });
+        // The foreign `run.detach` folds before this launch owns the run; a
+        // foreign row never reaches the handle this session tracked.
+        mocks.acquireResumedRunLease.mockImplementationOnce(async () => {
+          persistedRuns.delete(RUN_ID);
+          return 'acquired';
+        });
+        let launched: RunHandle | undefined;
+        trackRun.mockImplementationOnce((handle) => {
+          trackedHandle = handle;
+          launched = handle;
+        });
+
+        yield* launch();
+
+        expect(launched?.parent).toBeNull();
+      }),
+  );
+
+  it.effect(
     'makes a fresh launch interruptible before registration settles',
     () =>
       Effect.gen(function* () {

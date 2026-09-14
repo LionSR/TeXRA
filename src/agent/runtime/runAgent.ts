@@ -199,8 +199,8 @@ export const runAgent = Effect.fn('runAgent')(function* (
           // its lineage back off it.
           if (
             launchHandle !== undefined &&
-            launchHandle.deliveryTarget !== null &&
-            (yield* persistedParentRunId(runSession, runId)) === null
+            launchHandle.parent !== null &&
+            (yield* persistedParentRunId(runSession, runId)) === undefined
           )
             launchHandle.detach();
         }
