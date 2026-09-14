@@ -1094,6 +1094,7 @@ function createWindow(options: {
     const credentialSettingsController =
       new DefaultDesktopCredentialSettingsController({
         runtime,
+        inScope: (read) => runInSession(project.session, read),
         workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
         config: project.roots.config,

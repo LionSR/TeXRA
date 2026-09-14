@@ -21,6 +21,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
+import type { ModelAvailabilityScope } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -43,6 +44,13 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
   readonly config: ConfigProvider;
   readonly secrets: PlatformSecrets;
+  /**
+   * The paper's session frame. The availability read resolves the workspace
+   * subscription preferences inside it; a fiber started on the runtime
+   * carries no AsyncLocalStorage frame of its own, so the read is handed the
+   * frame explicitly rather than inheriting the caller's.
+   */
+  readonly inScope: ModelAvailabilityScope;
   readonly renderer: {
     postToRenderer(message: unknown): void;
   };
@@ -181,7 +189,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       resolveModelOptions: async (stores, models) =>
         modelOptionsFrom(
           await options.runtime.runPromise(
-            readModelAvailabilityInputs(stores, models),
+            readModelAvailabilityInputs(stores, models, options.inScope),
           ),
         ),
     });
