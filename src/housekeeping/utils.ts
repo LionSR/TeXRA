@@ -2,12 +2,13 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem } from 'effect';
 import { globIterate } from 'glob';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 import { normalizeFilePath } from '@utils/core';
 
 import { CHANNEL } from './constants';
@@ -27,6 +28,34 @@ export class GlobFailed extends Data.TaggedError('GlobFailed')<{
     return `Failed to list ${this.pattern}: ${String(this.cause)}`;
   }
 }
+
+/**
+ * The filesystem a housekeeping path is handled through, with the path in
+ * absolute form. The extension's picker keeps a selection outside the
+ * workspace as an absolute path, and the old `WorkspaceFS` facade passed such
+ * paths through; so does this, whole: every path of an external selection —
+ * its sources, the `History/` or `Diffs/` folder beside it, the artifacts
+ * swept there — is absolute and goes through the process `FileSystem` at its
+ * own location. Every other path (workspace-relative, or absolute inside the
+ * workspace) goes through the confined workspace view, which is never
+ * loosened. Deciding per path also covers a multi-file pack that copies an
+ * external output file into the workspace folder beside its main input.
+ */
+export const filesystemFor = Effect.fn('housekeeping.filesystemFor')(function* (
+  workspaceFs: RootedFileSystem,
+  target: string,
+) {
+  const external =
+    path.isAbsolute(target) &&
+    (workspaceFs.root === undefined ||
+      relativeToRoot(workspaceFs.root, target) === undefined);
+  if (external) {
+    const fs: FileSystem.FileSystem = yield* FileSystem.FileSystem;
+    return { fs, absolutePath: target };
+  }
+  const fs: FileSystem.FileSystem = workspaceFs;
+  return { fs, absolutePath: yield* workspaceFs.resolve(target) };
+});
 
 /**
  * Produce an ISO-8601 timestamp stripped of separators, suitable for use in

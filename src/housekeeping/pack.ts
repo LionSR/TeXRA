@@ -18,7 +18,11 @@ import {
   HISTORY_DIR,
   CHANNEL,
 } from './constants';
-import { generateTimestamp, collectFilesFromPatterns } from './utils';
+import {
+  collectFilesFromPatterns,
+  filesystemFor,
+  generateTimestamp,
+} from './utils';
 
 /** Every pack failure reaches the host as the same result shape. */
 const asErrorResult = (error: unknown) =>
@@ -89,7 +93,8 @@ export const runPackSingle = Effect.fn('housekeeping.runPackSingle')(function* (
         `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}`,
       );
 
-    yield* workspaceFs.makeDirectory(resolvedOutputFolder, {
+    const outputSide = yield* filesystemFor(workspaceFs, resolvedOutputFolder);
+    yield* outputSide.fs.makeDirectory(outputSide.absolutePath, {
       recursive: true,
     });
     yield* Effect.logDebug(
@@ -106,8 +111,8 @@ export const runPackSingle = Effect.fn('housekeeping.runPackSingle')(function* (
       // concurrently, the losing copy fails with `AlreadyExists` and its pack
       // reports the collision instead of silently omitting its file.
       yield* copyFileExclusive(
-        yield* workspaceFs.resolve(file),
-        yield* workspaceFs.resolve(destination),
+        (yield* filesystemFor(workspaceFs, file)).absolutePath,
+        (yield* filesystemFor(workspaceFs, destination)).absolutePath,
       );
     }
     yield* Effect.logInfo(`Files packed into ${resolvedOutputFolder}`).pipe(
@@ -125,7 +130,8 @@ export const runPackSingle = Effect.fn('housekeeping.runPackSingle')(function* (
     );
     for (const file of sweepable) {
       if (!packed.has(file)) {
-        yield* workspaceFs.remove(file, { force: true });
+        const artifact = yield* filesystemFor(workspaceFs, file);
+        yield* artifact.fs.remove(artifact.absolutePath, { force: true });
       }
     }
 

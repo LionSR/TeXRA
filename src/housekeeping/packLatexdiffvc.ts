@@ -8,7 +8,11 @@ import type { FileOpResult } from '@shared/schemas';
 import { copyFileExclusive } from '@utils/files/fsDurability';
 
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';
-import { collectFilesFromPatterns, generateTimestamp } from './utils';
+import {
+  collectFilesFromPatterns,
+  filesystemFor,
+  generateTimestamp,
+} from './utils';
 
 /**
  * Reuses FileOpResult's `noFiles` and `success` shapes for the outcomes this
@@ -70,7 +74,9 @@ export const runPackLatexdiffvc = Effect.fn('housekeeping.packLatexdiffvc')(
     /** `force`: the sweep tolerates a file a sibling host already removed. */
     const discard = (files: Iterable<string>) =>
       Effect.forEach(files, (file) =>
-        workspaceFs.remove(file, { force: true }),
+        Effect.flatMap(filesystemFor(workspaceFs, file), (artifact) =>
+          artifact.fs.remove(artifact.absolutePath, { force: true }),
+        ),
       );
 
     if (mainFiles.size === 0 && tempFiles.size === 0) {
@@ -98,20 +104,25 @@ export const runPackLatexdiffvc = Effect.fn('housekeeping.packLatexdiffvc')(
       `${generateTimestamp()}_${baseName}_${commitHash}`,
     );
 
-    yield* workspaceFs.makeDirectory(outputFolder, { recursive: true });
+    const outputSide = yield* filesystemFor(workspaceFs, outputFolder);
+    yield* outputSide.fs.makeDirectory(outputSide.absolutePath, {
+      recursive: true,
+    });
     // Move each file without replacing an existing one: an exclusive copy
     // (`AlreadyExists` when the name is taken — a second pack of the same
     // commit within the timestamp's second) followed by removing the source.
     // `FileSystem.rename` would silently replace the earlier archive, and a
     // crash between the two steps leaves the source in place, never a loss.
     for (const file of mainFiles) {
+      const source = yield* filesystemFor(workspaceFs, file);
       yield* copyFileExclusive(
-        yield* workspaceFs.resolve(file),
-        yield* workspaceFs.resolve(
+        source.absolutePath,
+        (yield* filesystemFor(
+          workspaceFs,
           path.join(outputFolder, path.basename(file)),
-        ),
+        )).absolutePath,
       );
-      yield* workspaceFs.remove(file);
+      yield* source.fs.remove(source.absolutePath);
     }
 
     yield* discard(tempFiles);

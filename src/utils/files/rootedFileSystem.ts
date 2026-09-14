@@ -113,6 +113,89 @@ function resolverFor(root: string | undefined, path: Path.Path) {
     });
 }
 
+/** More brace alternatives than this is a pattern no caller writes. */
+const MAX_GLOB_ALTERNATIVES = 256;
+
+/** Split a brace body on its top-level commas, honouring escapes and
+ *  nested braces. */
+function topLevelAlternatives(body: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < body.length; i++) {
+    const char = body[i];
+    if (char === '\\') i++;
+    else if (char === '{') depth++;
+    else if (char === '}') depth--;
+    else if (char === ',' && depth === 0) {
+      parts.push(body.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(body.slice(start));
+  return parts;
+}
+
+/**
+ * Every brace alternative of `pattern`, so `{a,../b}/**` is checked as both
+ * `a/**` and `../b/**`. A group without a top-level comma (`{a}`, a range
+ * like `{1..3}`) is left as written; the scan continues past it. `undefined`
+ * when the expansion exceeds {@link MAX_GLOB_ALTERNATIVES}.
+ */
+function braceAlternatives(pattern: string): string[] | undefined {
+  let depth = 0;
+  let open = -1;
+  for (let i = 0; i < pattern.length; i++) {
+    const char = pattern[i];
+    if (char === '\\') {
+      i++;
+    } else if (char === '{') {
+      if (depth++ === 0) open = i;
+    } else if (char === '}' && depth > 0 && --depth === 0) {
+      const parts = topLevelAlternatives(pattern.slice(open + 1, i));
+      if (parts.length > 1) {
+        const expanded: string[] = [];
+        for (const part of parts) {
+          const rest = braceAlternatives(
+            pattern.slice(0, open) + part + pattern.slice(i + 1),
+          );
+          if (rest === undefined) return undefined;
+          expanded.push(...rest);
+          if (expanded.length > MAX_GLOB_ALTERNATIVES) return undefined;
+        }
+        return expanded;
+      }
+    }
+  }
+  return [pattern];
+}
+
+/**
+ * The alternative of a glob pattern that names a place outside the root, or
+ * `undefined` when none does: an absolute alternative (POSIX, UNC or drive
+ * letter), or one with a `..` segment — including a `..` inside an extglob
+ * group such as `@(..|x)`. Separators are both `/` and `\`, which on POSIX
+ * also rejects the rare pattern that escapes a dot. A pattern too large to
+ * expand is reported as escaping rather than delegated unchecked.
+ */
+function globEscape(pattern: string, path: Path.Path): string | undefined {
+  const alternatives = braceAlternatives(pattern);
+  if (alternatives === undefined) return pattern;
+  return alternatives.find(
+    (alternative) =>
+      path.isAbsolute(alternative) ||
+      /^[A-Za-z]:/.test(alternative) ||
+      alternative.startsWith('\\') ||
+      alternative
+        .split(/[\\/]/)
+        .some((segment) =>
+          segment
+            .split(/[()|]/)
+            .some((token) => token.replace(/^[?*+@!]/, '') === '..'),
+        ),
+  );
+}
+
 /**
  * A view of `fs` rooted at `root`. One implementation for every rooted
  * service: the tags in `@platform/rootedFs` differ only in which root they
@@ -158,10 +241,34 @@ export function rootedFileSystem(
     copy: (from, to, options) =>
       onPair('copy', (a, b) => fs.copy(a, b, options))(from, to),
     copyFile: (from, to) => onPair('copyFile', fs.copyFile)(from, to),
+    // Confined lexically, like every other method: the pattern may not name
+    // an absolute path or a `..` segment in any brace or extglob alternative,
+    // and every match must still resolve under the root. A symlinked
+    // directory inside the root is followed, as a read through it would be.
     glob: (pattern, options) =>
-      Effect.flatMap(inRoot('glob', options?.root), (resolvedRoot) =>
-        fs.glob(pattern, { ...options, root: resolvedRoot }),
-      ),
+      Effect.gen(function* () {
+        const resolvedRoot = yield* inRoot('glob', options?.root);
+        const escaping = globEscape(pattern, path);
+        if (escaping !== undefined) {
+          return yield* Effect.fail(
+            PlatformError.badArgument({
+              module: MODULE,
+              method: 'glob',
+              description: `pattern escapes the root ${root}: ${escaping}`,
+            }),
+          );
+        }
+        const matches = yield* fs.glob(pattern, {
+          ...options,
+          root: resolvedRoot,
+        });
+        yield* Effect.forEach(
+          matches,
+          (match) => at('glob', path.resolve(resolvedRoot, match)),
+          { discard: true },
+        );
+        return matches;
+      }),
     link: (from, to) => onPair('link', fs.link)(from, to),
     makeDirectory: (target, options) =>
       on('makeDirectory', (resolved) => fs.makeDirectory(resolved, options))(

@@ -41,7 +41,7 @@ import {
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
   withSessionFs,
   type StorageFs,
@@ -268,7 +268,7 @@ async function runDiffAndOpen(
  *  captured at registration. */
 function onSessionFiles<A, E>(
   runtime: ProcessRuntime,
-  program: Effect.Effect<A, E, WorkspaceFs | StorageFs>,
+  program: Effect.Effect<A, E, WorkspaceFs | StorageFs | ProcessServices>,
 ): Promise<A> {
   return runtime.runPromise(withSessionFs(defaultSession().roots, program));
 }

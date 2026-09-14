@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runPackSingle, runPackMultiple } from '@housekeeping/pack';
 import { runPackRunDir } from '@housekeeping/runDirOps';
+import { filesystemFor } from '@housekeeping/utils';
 import { WorkspaceFs } from '@platform/rootedFs';
 
 import {
@@ -16,8 +17,8 @@ import { type PackConfig } from './fileOpSchemas';
 
 const CHANNEL = 'packCommands';
 
-/** `folderPath` is the packed folder's absolute path, resolved by the
- *  session's workspace filesystem rather than an ambient root. */
+/** `folderPath` is the packed folder's absolute path: resolved by the
+ *  session's workspace view, or where it is for an external selection. */
 function showPackResult(
   result: FileOpResult,
   inputFile: string,
@@ -75,6 +76,8 @@ export const handlePack = Effect.fn('packCommands.handlePack')(function* (
     : yield* packWorkspace;
 
   const folder = result.status === 'success' ? result.outputFolder : undefined;
-  const folderPath = folder ? yield* workspaceFs.resolve(folder) : undefined;
+  const folderPath = folder
+    ? (yield* filesystemFor(workspaceFs, folder)).absolutePath
+    : undefined;
   yield* Effect.sync(() => showPackResult(result, inputFile, folderPath));
 });

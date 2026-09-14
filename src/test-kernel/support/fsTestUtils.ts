@@ -9,7 +9,7 @@ import { stat } from 'node:fs/promises';
 // Third-party imports
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { Layer } from 'effect';
+import { type FileSystem, Layer, type Path } from 'effect';
 
 // Local imports
 import {
@@ -29,15 +29,17 @@ export const nodePlatformLayer = Layer.mergeAll(
 );
 
 /**
- * The session's rooted filesystems over real temp roots, complete with the
+ * The session's rooted filesystems over real temp roots, together with the
  * Node `FileSystem` and `Path` beneath them — what a suite running a
- * `WorkspaceFs` / `StorageFs` consumer on `it.effect`'s own runtime provides.
+ * `WorkspaceFs` / `StorageFs` consumer on `it.effect`'s own runtime provides,
+ * including one that reads a selection outside the roots through the
+ * process `FileSystem`.
  */
 export function rootedFsLayer(roots: {
   readonly workspace: string | undefined;
   readonly storage: string;
-}): Layer.Layer<WorkspaceFs | StorageFs> {
-  return Layer.provide(sessionFsLayer(roots), nodePlatformLayer);
+}): Layer.Layer<WorkspaceFs | StorageFs | FileSystem.FileSystem | Path.Path> {
+  return Layer.provideMerge(sessionFsLayer(roots), nodePlatformLayer);
 }
 
 /**

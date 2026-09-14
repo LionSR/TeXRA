@@ -37,7 +37,7 @@ import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/g
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild } from '@housekeeping/clean';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
   withSessionFs,
   type StorageFs,
@@ -72,7 +72,7 @@ export function createExtensionCommandActions(
    * reopened later is a new session with its own snapshot of roots.
    */
   const onSessionFiles = <A, E>(
-    program: Effect.Effect<A, E, WorkspaceFs | StorageFs>,
+    program: Effect.Effect<A, E, WorkspaceFs | StorageFs | ProcessServices>,
   ): Promise<A> =>
     runtime.runPromise(withSessionFs(defaultSession().roots, program));
 

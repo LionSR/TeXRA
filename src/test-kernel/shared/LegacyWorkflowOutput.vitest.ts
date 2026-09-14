@@ -97,4 +97,49 @@ describe('Save-as-copy stem and workspace pack', () => {
         );
       }),
   );
+
+  it.live(
+    'packs a picker selection outside the workspace next to the selection',
+    () =>
+      Effect.gen(function* () {
+        // The picker keeps an out-of-workspace selection absolute; the whole
+        // pack happens where the selection is, as the old facade did.
+        const externalDir = yield* Effect.promise(() =>
+          makeTempDir('texra-legacy-workflow-external-', tempDirs),
+        );
+        yield* Effect.promise(() =>
+          Promise.all(
+            ['notes.tex', 'notes.pdf', 'notes.aux'].map((name) =>
+              writeFile(path.join(externalDir, name), 'fixture'),
+            ),
+          ),
+        );
+
+        const result = yield* runPackSingle(
+          'gpt-4',
+          path.join(externalDir, 'notes.tex'),
+          'custom:polish',
+        ).pipe(
+          Effect.provide(
+            rootedFsLayer({
+              workspace: workspacePath,
+              storage: path.join(workspacePath, '.texra'),
+            }),
+          ),
+        );
+
+        expect(result).toMatchObject({ status: 'success' });
+        const outputFolder =
+          result.status === 'success' ? (result.outputFolder ?? '') : '';
+        expect(path.dirname(outputFolder)).toBe(
+          path.join(externalDir, 'History'),
+        );
+        const exists = (target: string) =>
+          Effect.promise(() => pathExists(target));
+        expect(yield* exists(path.join(outputFolder, 'notes.pdf'))).toBe(true);
+        expect(yield* exists(path.join(workspacePath, 'History'))).toBe(false);
+        expect(yield* exists(path.join(externalDir, 'notes.pdf'))).toBe(true);
+        expect(yield* exists(path.join(externalDir, 'notes.aux'))).toBe(false);
+      }),
+  );
 });
