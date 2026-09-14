@@ -67,9 +67,9 @@ async function setupTool(
       config: approvalSkippingConfig,
       setup: createFakeSetupPlatform({
         terminal: {
-          async runCommand(args) {
+          runCommand(args) {
             runs.push(args);
-            return result;
+            return Effect.succeed(result);
           },
         },
       }),

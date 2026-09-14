@@ -50,6 +50,7 @@ export async function importClaudeAgentSdk(): Promise<QueryFn> {
     if (isModuleNotFoundError(err)) {
       throw new Error(
         '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
+        { cause: err },
       );
     }
     throw err;

@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import type { SetupPlatformShape } from '@tools/setup/platform';
@@ -25,8 +28,12 @@ export function createFakeSetupPlatform(
       ...overrides.extensions,
     },
     terminal: {
-      async runCommand(): Promise<TerminalRunResult> {
-        return { exitCode: undefined, output: '', timedOut: false };
+      runCommand(): Effect.Effect<TerminalRunResult> {
+        return Effect.succeed({
+          exitCode: undefined,
+          output: '',
+          timedOut: false,
+        });
       },
       ...overrides.terminal,
     },

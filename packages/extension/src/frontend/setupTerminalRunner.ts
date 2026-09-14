@@ -8,41 +8,65 @@
  * disabled the auto-inject, remote SSH edge cases — falls back to
  * `sendText` and returns an empty captured result; the caller sees the
  * same shape as a Ctrl+C interruption and re-probes with `verify_setup`.
+ *
+ * The runner is an `Effect`: VS Code refusing a terminal or faulting the
+ * shell execution reaches the setup tool as `TerminalRunFailed`, and the
+ * output drain runs on a child fiber, so a stream error is a value this
+ * program discards rather than a rejection nobody is waiting on.
  */
 
-// Standard library imports
-import { setTimeout as sleep } from 'node:timers/promises';
-
 // Third-party imports
+import { Effect, Fiber } from 'effect';
 import stripAnsi from 'strip-ansi';
 import * as vscode from 'vscode';
 
 // Local imports - common
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
 // Local imports - hosts
-import type { TerminalRunRequest, TerminalRunResult } from '@hosts/uiHosts';
+import {
+  TerminalRunFailed,
+  type TerminalRunRequest,
+  type TerminalRunResult,
+} from '@hosts/uiHosts';
 
 import { raceWithTimeout } from './vscode/raceWithTimeout';
 
 const SHELL_INTEGRATION_WAIT_MS = 2_000;
 const READER_DRAIN_MS = 250;
 
-export async function runTerminalCommand(
-  args: TerminalRunRequest,
-): Promise<TerminalRunResult> {
-  const terminal = revealTerminal(args);
-  const integration = await waitForShellIntegration(
-    terminal,
-    SHELL_INTEGRATION_WAIT_MS,
-  );
+export const runTerminalCommand = Effect.fn('setupTerminalRunner.runCommand')(
+  function* (
+    args: TerminalRunRequest,
+  ): Effect.fn.Return<TerminalRunResult, TerminalRunFailed> {
+    const terminal = yield* Effect.try({
+      try: () => revealTerminal(args),
+      catch: (cause) =>
+        new TerminalRunFailed({
+          reason: 'terminal-unavailable',
+          message: 'VS Code would not open an integrated terminal.',
+          command: args.command,
+          cause,
+        }),
+    });
+    const integration = yield* Effect.tryPromise({
+      try: () => waitForShellIntegration(terminal, SHELL_INTEGRATION_WAIT_MS),
+      catch: (cause) =>
+        new TerminalRunFailed({
+          reason: 'terminal-unavailable',
+          message: 'VS Code would not report terminal shell integration.',
+          command: args.command,
+          cause,
+        }),
+    });
 
-  if (!integration) {
-    terminal.sendText(args.command, true);
-    return { exitCode: undefined, output: '', timedOut: false };
-  }
+    if (!integration) {
+      terminal.sendText(args.command, true);
+      return { exitCode: undefined, output: '', timedOut: false };
+    }
 
-  return captureExecution(integration, args.command, args.timeoutMs);
-}
+    return yield* captureExecution(integration, args);
+  },
+);
 
 /**
  * Reuse a same-named, still-running terminal so repeated calls don't
@@ -74,43 +98,68 @@ async function waitForShellIntegration(
   return raced.timedOut ? undefined : raced.value;
 }
 
-async function captureExecution(
+const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   integration: vscode.TerminalShellIntegration,
-  command: string,
-  timeoutMs: number,
-): Promise<TerminalRunResult> {
-  const execution = integration.executeCommand(command);
+  args: TerminalRunRequest,
+): Effect.fn.Return<TerminalRunResult, TerminalRunFailed> {
+  const execution = yield* Effect.try({
+    try: () => integration.executeCommand(args.command),
+    catch: (cause) =>
+      new TerminalRunFailed({
+        reason: 'execution-failed',
+        message: 'The integrated terminal refused to run the command.',
+        command: args.command,
+        cause,
+      }),
+  });
+
+  // Open the stream on this frame so no chunk is missed, then drain it on a
+  // child fiber: a late stream error (terminal closed after we stopped
+  // reading) is a value this program discards, not an unhandled rejection.
+  const stream = execution.read();
+  const reader = yield* Effect.forkChild(
+    Effect.tryPromise({
+      try: () => drainStreamTail(stream, TERMINAL_OUTPUT_MAX_CHARS),
+      catch: (cause) => cause,
+    }).pipe(Effect.catch(() => Effect.succeed(''))),
+    // Start on this frame, as the abandoned promise did, so iteration begins
+    // before the caller suspends on the exit-code event.
+    { startImmediately: true },
+  );
 
   // Exit code is delivered via the global end-event, not the execution
   // object itself, so subscribe before reading.
-  const raced = raceWithTimeout<number | undefined>(
-    (resolve) =>
-      vscode.window.onDidEndTerminalShellExecution((event) => {
-        if (event.execution === execution) resolve(event.exitCode);
+  const raced = yield* Effect.tryPromise({
+    try: () =>
+      raceWithTimeout<number | undefined>(
+        (resolve) =>
+          vscode.window.onDidEndTerminalShellExecution((event) => {
+            if (event.execution === execution) resolve(event.exitCode);
+          }),
+        args.timeoutMs,
+      ),
+    catch: (cause) =>
+      new TerminalRunFailed({
+        reason: 'execution-failed',
+        message: 'VS Code would not report the command exit code.',
+        command: args.command,
+        cause,
       }),
-    timeoutMs,
-  );
-
-  // Drain the stream into a sliding-window tail. `.catch` swallows
-  // late stream errors (terminal closed after we stopped awaiting)
-  // so they cannot bubble up as unhandled rejections.
-  const reader = drainStreamTail(
-    execution.read(),
-    TERMINAL_OUTPUT_MAX_CHARS,
-  ).catch(() => '');
-
-  const result = await raced;
+  });
 
   // Drain any final chunks; bound the wait so a hung reader can't
   // block the agent forever.
-  const output = await Promise.race([reader, sleep(READER_DRAIN_MS, '')]);
+  const output = yield* Fiber.join(reader).pipe(
+    Effect.timeout(READER_DRAIN_MS),
+    Effect.catch(() => Effect.succeed('')),
+  );
 
   return {
-    exitCode: result.timedOut ? undefined : result.value,
+    exitCode: raced.timedOut ? undefined : raced.value,
     output: truncateTerminalOutput(output),
-    timedOut: result.timedOut,
+    timedOut: raced.timedOut,
   };
-}
+});
 
 /** Strip ANSI control sequences and retain the captured output tail. */
 function truncateTerminalOutput(output: string): string {
@@ -120,9 +169,8 @@ function truncateTerminalOutput(output: string): string {
 /**
  * Drain an async iterable into a length-capped sliding-window tail,
  * bounding in-flight memory while streaming. The final ANSI strip and cap
- * happen via {@link truncateTerminalOutput}. Caller may abandon the
- * returned promise; chunk errors are surfaced to the caller for them to
- * decide whether to swallow.
+ * happen via {@link truncateTerminalOutput}. Chunk errors reject; the fiber
+ * that drains decides what to do with them.
  */
 async function drainStreamTail(
   stream: AsyncIterable<string>,
