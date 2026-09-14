@@ -16,7 +16,6 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { hostPort } from '@common/hostPort';
@@ -27,9 +26,9 @@ import { byStringProp } from '@utils/core';
 // swap; safe here since the input is a storage-relative path produced by the
 // walk below, not raw user input.
 import { toPosixPath } from '@utils/core/pathCore';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { isDirectory } from '@utils/files/fsEntryType';
-import { findExistingRunStoragePath } from '@utils/files/runStorageFs';
-import { StorageFS } from '@utils/files/storageFS';
+import { runDirUnder } from '@utils/files/runStorageFs';
 
 const log = createLog('runGeneratedFiles');
 
@@ -47,32 +46,24 @@ export interface RunGeneratedFile {
  * List the generated (non-KV) files under a run's storage directory, sorted by
  * path. Returns `[]` when the run has no storage directory at all.
  *
- * Every storage read runs in `session`'s scope: `StorageFS` resolves its root
- * from the ambient session, and a fiber's continuation carries no caller's
- * scope, so a host holding one session per open paper would otherwise walk the
- * wrong root.
+ * The run directory is resolved once under `session.roots.storage`, as data
+ * rather than from an ambient session scope a fiber's continuation may not
+ * carry, so a host holding one session per open paper walks this session's
+ * storage.
  */
 export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
   function* (
     runId: RunId,
     session: SessionHandle,
   ): Effect.fn.Return<RunGeneratedFile[], unknown> {
-    const runDir = yield* hostPort(() =>
-      runInSession(session, () => findExistingRunStoragePath(runId)),
-    );
-    if (!runDir) return [];
-    const files = yield* walkRunStorage(
-      session,
-      runDir,
-      '',
-      RUN_FILE_SCAN_DEPTH,
-    );
+    const runDir = runDirUnder(session.roots.storage, runId);
+    if (!(yield* hostPort(() => AbsoluteFS.exists(runDir)))) return [];
+    const files = yield* walkRunStorage(runDir, '', RUN_FILE_SCAN_DEPTH);
     return files.sort(byStringProp((file) => file.path));
   },
 );
 
 function walkRunStorage(
-  session: SessionHandle,
   basePath: string,
   relativePath: string,
   maxDepth: number,
@@ -82,9 +73,7 @@ function walkRunStorage(
       ? path.join(basePath, relativePath)
       : basePath;
 
-    const entries = yield* hostPort(() =>
-      runInSession(session, () => StorageFS.readDir(fullPath)),
-    ).pipe(
+    const entries = yield* hostPort(() => AbsoluteFS.readDir(fullPath)).pipe(
       // Deliberately warn-and-continue rather than rethrow: an unreadable
       // subdirectory must not blank out the rest of the listing. A missing
       // directory is the expected "nothing persisted here" case; any other read
@@ -110,9 +99,7 @@ function walkRunStorage(
       const childPath = path.join(basePath, rawRelative);
       const entryIsDirectory = isDirectory(type);
 
-      const stat = yield* hostPort(() =>
-        runInSession(session, () => StorageFS.stat(childPath)),
-      ).pipe(
+      const stat = yield* hostPort(() => AbsoluteFS.stat(childPath)).pipe(
         // An entry that vanished (or whose parent stopped being a directory)
         // between readDir and stat is a benign race; anything else is a real
         // fault and propagates.
@@ -132,12 +119,7 @@ function walkRunStorage(
 
       if (entryIsDirectory && maxDepth > 1) {
         files.push(
-          ...(yield* walkRunStorage(
-            session,
-            basePath,
-            rawRelative,
-            maxDepth - 1,
-          )),
+          ...(yield* walkRunStorage(basePath, rawRelative, maxDepth - 1)),
         );
       }
     }

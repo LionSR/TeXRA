@@ -40,7 +40,6 @@ import {
 } from '@agent/runtime/SessionHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
-import { runInSession } from '@agent/runtime/RunContext';
 import { Secrets } from '@platform/secrets';
 import { ToolError } from '@shared/schemas';
 import {
@@ -555,13 +554,13 @@ export class ClaudeAgentTool extends defineTool({
     AgentCliToolFailure,
     Secrets | ToolCall | Runs
   > {
-    const config = yield* agentCliCall(() =>
-      runInSession(session, getClaudeAgentConfig),
-    );
+    const config = yield* agentCliCall(getClaudeAgentConfig);
+    const { workspaceState } = toolCall.roots;
     const permissionMode =
-      input.permission_mode ?? config.getClaudeAgentPermissionMode();
-    const model = input.model ?? config.getClaudeAgentModel();
-    const effort = input.effort ?? config.getClaudeAgentEffort();
+      input.permission_mode ??
+      config.getClaudeAgentPermissionMode(workspaceState);
+    const model = input.model ?? config.getClaudeAgentModel(workspaceState);
+    const effort = input.effort ?? config.getClaudeAgentEffort(workspaceState);
     const sessionId = input.session_id ?? undefined;
     const isFork = input.fork_session === true;
 
@@ -614,9 +613,8 @@ const launchClaudeAgentSession = Effect.fn(
   AgentCliToolFailure,
   Secrets | ToolCall | Runs
 > {
-  const config = yield* agentCliCall(() =>
-    runInSession(session, getClaudeAgentConfig),
-  );
+  const config = yield* agentCliCall(getClaudeAgentConfig);
+  const { roots } = yield* ToolCall;
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   // Mirrors codex behavior so subagents can see the project: when the call
   // is made from inside the workspace, the agent runs in that directory but
@@ -625,10 +623,9 @@ const launchClaudeAgentSession = Effect.fn(
   // claude-agent-sdk's `Options` type names these fields `cwd` /
   // `additionalDirectories`, unlike codex's `workingDirectory`.
   const { workingDirectory, additionalDirectories } =
-    buildAgentWorkspaceOptions(workingDir);
-  // No session frame here, unlike the module read above: the env block reads
-  // only the process environment and the `Secrets` service, neither of which
-  // is workspace-scoped, so it needs no `runInSession` scope of its own.
+    buildAgentWorkspaceOptions(roots.workspace, workingDir);
+  // The env block reads only the process environment and the `Secrets`
+  // service, neither of which is workspace-scoped.
   const env = yield* config.buildClaudeAgentEnv();
   const pathToClaudeCodeExecutable = yield* agentCliCall(() =>
     findClaudeBinaryPath(),
