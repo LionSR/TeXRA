@@ -13,7 +13,6 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   wolframApprovalCommand,
-  wolframRunSummary,
   WolframTool,
 } from '@tools/wolfram/WolframTool';
 import * as toolUtils from '@utils/system/toolUtils';
