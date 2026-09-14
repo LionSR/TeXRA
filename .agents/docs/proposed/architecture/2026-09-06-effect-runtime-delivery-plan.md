@@ -116,6 +116,8 @@ gate. Use the official driver and its public transaction ownership, without a
 custom SQLite driver or VFS. This selection does not complete the remaining
 responsiveness measurements or persistence cutover.
 
+> **Amendment 2026-09-14 (#12328, #11952).** The floor is now `^22.19.0 || >=24.0.0`. `undici@8` declares `engines: node >=22.19.0` and is a runtime dependency of `@texra-ai/agent` and bundled into the CLI, so 22.16 through 22.18 are no longer installable or supported. The driver reasoning above (Node 23 lacks `setReturnArrays()`) still holds for the `>=24` arm.
+
 Effect Solutions was consulted (`list`, `basics`, `services-and-layers`, `error-handling`,
 `testing`). Its examples were checked against installed rc.112 source and the local
 reference checkout at `2a30248b6eb739f22403456209bc468f2f4ef26a`. Follow its construction,
