@@ -1,7 +1,6 @@
 /** Shared draft operations and the process recorder's originating request. */
 import { Deferred, Effect } from 'effect';
 
-import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import { hostPort } from '@common/hostPort';
@@ -159,8 +158,11 @@ export class HostDraftRequests {
         // Transcription binds its OpenAI credential against the process
         // secret store the host root provides.
         const secrets = yield* Secrets;
-        const started = yield* hostPort(async () =>
-          runInSession(take.session, startRecording),
+        // The recorder writes under the take's own session storage, so its
+        // roots travel with the call instead of through a roots scope the
+        // detached take fiber would have to stay inside.
+        const started = yield* hostPort(() =>
+          startRecording(take.session.roots),
         );
         if (!started.success) {
           return yield* new Rejected({
@@ -174,8 +176,8 @@ export class HostDraftRequests {
             reason: 'The recording was cancelled.',
           });
         }
-        const result = yield* hostPort(async () =>
-          runInSession(take.session, () => stopRecordingAndTranscribe(secrets)),
+        const result = yield* hostPort(() =>
+          stopRecordingAndTranscribe(secrets, take.session.roots),
         );
         if (!result.success) {
           return yield* new Rejected({

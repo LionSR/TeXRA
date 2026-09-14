@@ -18,9 +18,6 @@ const audio = vi.hoisted(() => ({
 }));
 
 vi.mock('@tools/media/audio', () => audio);
-vi.mock('@agent/runtime/RunContext', () => ({
-  runInSession: (_session: SessionHandle, run: () => unknown) => run(),
-}));
 vi.mock('@agent/runtime/textEnhancement', () => ({
   polishTextWithAI: vi.fn(),
 }));

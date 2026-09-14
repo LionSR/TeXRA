@@ -33,6 +33,7 @@ import {
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { pluralize } from '@utils/text/stringUtils';
+import type { Effect } from 'effect';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -76,6 +77,10 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     await Promise.resolve(
       vscode.commands.executeCommand('texra.showProgressView'),
     ).catch(() => {});
+  }
+
+  runPreview(program: Effect.Effect<void>): Promise<void> {
+    return this.runtime.runPromise(program);
   }
 
   reportError(message: string): void {

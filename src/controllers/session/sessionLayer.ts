@@ -369,17 +369,18 @@ const sessionHandleLayer = (
         runRecords: (id) =>
           eventLog.readRunRecords(qualifyAggregateId('run', id)),
         ownsRun: (id) =>
-          eventLog.aggregateState([qualifyAggregateId('run', id)]).pipe(
-            Effect.map((states) =>
-              states.some(
-                (state) =>
-                  state.startCommit !== null &&
-                  !state.closed &&
-                  state.ownerId === identity.ownerId,
+          eventLog
+            .aggregateState([qualifyAggregateId('run', id)])
+            .pipe(
+              Effect.map((states) =>
+                states.some(
+                  (state) =>
+                    state.startCommit !== null &&
+                    !state.closed &&
+                    state.ownerId === identity.ownerId,
+                ),
               ),
             ),
-            Effect.orDie,
-          ),
         claimOwner: (id) => eventLog.claimOwner(qualifyAggregateId('run', id)),
         runChildren: (id) =>
           eventLog.readRunChildren(qualifyAggregateId('run', id)),

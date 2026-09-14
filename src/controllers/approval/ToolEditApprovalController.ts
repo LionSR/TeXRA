@@ -29,6 +29,7 @@ import {
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import type { Effect } from 'effect';
 
 const log = createLog('ToolEditApproval');
 
@@ -71,6 +72,12 @@ export interface ToolEditApprovalHost {
   /** Reopen the host surface containing the pending request's controls. */
   revealApprovalSurface(): Promise<void>;
   readonly openBuildDisplay: BuildDisplayFn;
+  /**
+   * Run a LaTeX preview program, or a temp-file removal one registered, on
+   * the host's process runtime. The controller holds no runtime of its own,
+   * so every Effect it starts runs through here.
+   */
+  runPreview(program: Effect.Effect<void>): Promise<void>;
   reportError(message: string): void;
   /**
    * Send the decision for a staged request: the host's `request.decide` on
@@ -126,6 +133,8 @@ interface PendingToolEditApproval
   readonly request: ToolEditApprovalRequest;
   readonly relativePath: string;
   readonly preview: ToolEditPreview;
+  /** Resolve {@link LatexPreviewEntry.settled}: the release that drops the entry calls it. */
+  readonly settle: () => void;
 }
 
 type ToolEditApprovalState =
@@ -213,6 +222,12 @@ export class ToolEditApprovalController {
         return;
       }
 
+      // The executor runs synchronously, so `settle` is assigned before the
+      // entry below is built.
+      let settle!: () => void;
+      const settled = new Promise<void>((resolve) => {
+        settle = resolve;
+      });
       const staged: PendingToolEditApproval = {
         phase: 'pending',
         requestId,
@@ -224,6 +239,8 @@ export class ToolEditApprovalController {
         originalContent: request.originalContent,
         proposedContent: request.proposedContent,
         isSettled: () => this.requests.get(requestId) !== staged,
+        settled,
+        settle,
         workspaceTempCleanup: [],
         latexOperationInProgress: false,
         onError: (message) => this.options.host.reportError(message),
@@ -294,10 +311,12 @@ export class ToolEditApprovalController {
       case 'showLatexdiff':
         // ONLYCHANGEDPAGE keeps a tool-edit diff focused on the changes.
         void this.runAction(entry, () =>
-          runLatexdiff(entry, {
-            subtype: 'ONLYCHANGEDPAGE',
-            openBuildDisplay: this.options.host.openBuildDisplay,
-          }),
+          this.options.host.runPreview(
+            runLatexdiff(entry, {
+              subtype: 'ONLYCHANGEDPAGE',
+              openBuildDisplay: this.options.host.openBuildDisplay,
+            }),
+          ),
         );
         return;
     }
@@ -424,6 +443,9 @@ export class ToolEditApprovalController {
     const entry = this.requests.get(requestId);
     if (!entry) return;
     this.requests.delete(requestId);
+    // A LaTeX preview still running on the entry stops here, subprocess and
+    // all, rather than finishing for a request nobody is looking at.
+    if (entry.phase === 'pending') entry.settle();
 
     // Removing the entry is what tells a `present` call still in flight that
     // its request is settled; waiting for that call is what makes a returned
@@ -447,7 +469,9 @@ export class ToolEditApprovalController {
       try {
         await entry.preview.dispose();
         await Promise.all(
-          entry.workspaceTempCleanup.map((removeTemp) => removeTemp()),
+          entry.workspaceTempCleanup.map((removeTemp) =>
+            this.options.host.runPreview(removeTemp),
+          ),
         );
       } catch (error) {
         this.options.host.reportError(toErrorMessage(error));
@@ -474,9 +498,11 @@ export class ToolEditApprovalController {
 
   private async previewProposed(entry: PendingToolEditApproval): Promise<void> {
     if (isLatexFile(entry.request.path)) {
-      await previewProposedLatex(entry, {
-        openBuildDisplay: this.options.host.openBuildDisplay,
-      });
+      await this.options.host.runPreview(
+        previewProposedLatex(entry, {
+          openBuildDisplay: this.options.host.openBuildDisplay,
+        }),
+      );
       return;
     }
     await entry.preview.openProposed();

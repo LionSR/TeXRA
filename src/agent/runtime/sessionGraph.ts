@@ -91,7 +91,7 @@ export interface SessionGraph {
     id: RunId,
   ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
   /** Whether this process holds an existing, open run in the database. */
-  readonly ownsRun: (id: RunId) => Effect.Effect<boolean>;
+  readonly ownsRun: (id: RunId) => Effect.Effect<boolean, DatabaseReadFailed>;
   /** Who holds one run right now, with its owner's liveness proved in the
    *  call: the ownership read a resume gate and the run listing ask, so a
    *  run outside the live view is never reported held by a dead owner. */

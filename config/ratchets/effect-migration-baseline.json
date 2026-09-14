@@ -13,9 +13,6 @@
       "src/utils/files/baseFS.ts": 13,
       "src/utils/system/toolUtils.ts": 1
     },
-    "effectRuntime()": {
-      "src/tools/approval/latexPreview.ts": 1
-    },
     "ambient:asyncLocalStorage": {
       "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx": 1,
       "packages/cli/src/runtime/agentRoster.ts": 1,
@@ -36,7 +33,6 @@
       "src/agent/storage/runLifecycle.ts": 1,
       "src/controllers/mainView/teamCatalogPorts.ts": 1,
       "src/controllers/progressView/ChatExportController.ts": 1,
-      "src/controllers/session/hostDraftRequests.ts": 2,
       "src/model/subscriptionPreference.ts": 2,
       "src/tools/agentCliShared.ts": 1,
       "src/tools/claudeAgent.ts": 2,
@@ -65,8 +61,7 @@
       "src/utils/core/keyedMutex.ts": 1
     },
     "Effect.run*": {
-      "src/platform/defaults/jsonStore.ts": 1,
-      "src/tools/approval/latexPreview.ts": 1
+      "src/platform/defaults/jsonStore.ts": 1
     },
     "catch:effect-importer": {
       "packages/desktop/src/main/index.ts": 1,
