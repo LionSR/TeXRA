@@ -152,8 +152,13 @@ const BOUNDARY_HOST_EXCLUSIONS = [
  * composition root, and its runs are that root's, the way `extension.ts` runs
  * on the host runtime. The list is closed: every other file under the
  * exclusions above stays fenced, and adding a file here is a ruling, not a
- * refactor. An entry must hold its runtime as a local or take it as a
- * parameter; one that reaches a process global does not qualify.
+ * refactor. Only a run whose receiver the entry binds itself -- a variable or
+ * a parameter, never an import -- is admitted (`localRuntimeRuns` in
+ * surveySource); `Effect.runFork(...)` or a run on an imported runtime in the
+ * same file stays on the row, and a local bound to the process-global
+ * `effectRuntime()` is caught by that row instead. An entry whose file no
+ * longer exists fails the check (see main), so a dormant exemption cannot
+ * apply to unrelated code created later at the same path.
  */
 const BOUNDARY_RUNTIME_ENTRIES = new Map([
   [
@@ -166,17 +171,52 @@ const BOUNDARY_RUNTIME_ENTRIES = new Map([
   ],
 ]);
 
-const BOUNDARY_PATHS_TEXT =
-  'packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a named runtime entry (' +
-  [...BOUNDARY_RUNTIME_ENTRIES.keys()].join(', ') +
-  ')';
+const RUNTIME_ENTRY_PATHS = [...BOUNDARY_RUNTIME_ENTRIES.keys()];
+const RUNTIME_ENTRY_NAMES = RUNTIME_ENTRY_PATHS.map((file) =>
+  posix.basename(file),
+);
+const BOUNDARY_PATHS_TEXT = `packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a run on a local or parameter runtime in a named runtime entry (${RUNTIME_ENTRY_PATHS.join(', ')})`;
 
+/** Whether a whole file sits at a host root (named runtime entries are
+ *  classified per run instead: {@link belowBoundaryRuns}). */
 function isBoundaryPath(file) {
-  if (BOUNDARY_RUNTIME_ENTRIES.has(file)) return true;
   if (BOUNDARY_HOST_EXCLUSIONS.some((root) => file.startsWith(root))) {
     return false;
   }
   return BOUNDARY_HOST_ROOTS.some((root) => file.startsWith(root));
+}
+
+/**
+ * The runs in a file that stay on the `Effect.run*` row: none at a host root;
+ * at a named runtime entry, every run whose receiver is not a runtime the
+ * file itself binds; everywhere else, all of them.
+ */
+function belowBoundaryRuns(file, runs, localRuntimeRuns) {
+  if (BOUNDARY_RUNTIME_ENTRIES.has(file)) return runs - localRuntimeRuns;
+  return isBoundaryPath(file) ? 0 : runs;
+}
+
+/** Names a file binds itself as a variable or a parameter; an imported name
+ *  never counts, so a run on an imported runtime is not a local one. */
+function localValueBindings(sourceFile) {
+  const locals = new Set();
+  const imported = new Set();
+  const visit = (node) => {
+    if (
+      (ts.isVariableDeclaration(node) || ts.isParameter(node)) &&
+      ts.isIdentifier(node.name)
+    ) {
+      locals.add(node.name.text);
+    }
+    if (ts.isImportClause(node) && node.name) imported.add(node.name.text);
+    if (ts.isImportSpecifier(node) || ts.isNamespaceImport(node)) {
+      imported.add(node.name.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  for (const name of imported) locals.delete(name);
+  return locals;
 }
 
 const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them`;
@@ -218,7 +258,7 @@ const ROWS = [
   })),
   {
     id: ROW_RUN_BOUNDARY,
-    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli, plus the named webview runtime entries: sessionTransport.ts, signals.ts — owner ruling 2026-09-14), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
+    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli, plus runs on a local or parameter runtime in the named webview runtime entries: ${RUNTIME_ENTRY_NAMES.join(', ')} — owner ruling 2026-09-14), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
   },
   {
     id: ROW_CATCH,
@@ -235,7 +275,7 @@ const SEMANTICS =
   `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the three AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
   "'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a named webview runtime entry — packages/extension/src/progressView/frontend/sessionTransport.ts, src/shared/signals.ts; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
+  `'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a run on a runtime the file binds as a local or parameter inside a named webview runtime entry — ${RUNTIME_ENTRY_PATHS.join(', ')}; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); ` +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
   'The PR that zeroes a row deletes the row from the baseline; SUPERSEDED_PACKAGES and the other survey lists stay, so a later site fails as a new file.';
@@ -529,6 +569,8 @@ function surveySource(text, fileName) {
         callee.expression.name.text === 'Effect'));
   let effectImporter = false;
   let catches = 0;
+  const locals = localValueBindings(sourceFile);
+  let localRuntimeRuns = 0;
 
   const visit = (node) => {
     const specifier = moduleSpecifier(node);
@@ -542,7 +584,16 @@ function surveySource(text, fileName) {
       if (isPlatformRead(callee)) bump(ROW_PLATFORM);
       if (isRuntimeRead(callee)) bump(ROW_EFFECT_RUNTIME);
       if (isAmbientRead(callee)) bump(ROW_AMBIENT);
-      if (name != null && RUN_BOUNDARY_NAMES.has(name)) bump(ROW_RUN_BOUNDARY);
+      if (name != null && RUN_BOUNDARY_NAMES.has(name)) {
+        bump(ROW_RUN_BOUNDARY);
+        if (
+          ts.isPropertyAccessExpression(callee) &&
+          ts.isIdentifier(callee.expression) &&
+          locals.has(callee.expression.text)
+        ) {
+          localRuntimeRuns += 1;
+        }
+      }
       if (
         name === 'catch' &&
         ts.isPropertyAccessExpression(callee) &&
@@ -564,7 +615,7 @@ function surveySource(text, fileName) {
   visit(sourceFile);
 
   if (effectImporter && catches > 0) counts.set(ROW_CATCH, catches);
-  return { counts };
+  return { counts, localRuntimeRuns };
 }
 
 /** Fail the ratchet itself if the classifier regresses. */
@@ -694,9 +745,11 @@ function sortObject(object) {
 /** Survey the tree: { rows: { rowId: { file: count } } }. */
 function surveyTree(files) {
   const rows = Object.fromEntries(ROWS.map((row) => [row.id, {}]));
+  const localRuns = new Map();
   for (const file of files) {
     const text = readFileSync(join(rootDir, file), 'utf8');
-    const { counts } = surveySource(text, file);
+    const { counts, localRuntimeRuns } = surveySource(text, file);
+    if (localRuntimeRuns > 0) localRuns.set(file, localRuntimeRuns);
     for (const [row, count] of counts) {
       const entries = rows[row];
       // A row retired from ROWS whose counting site survives in surveySource
@@ -719,15 +772,62 @@ function surveyTree(files) {
   // rather than obeyed. Dropping them makes "this row only ever shrinks" true
   // by construction instead of by exception.
   rows[ROW_RUN_BOUNDARY] = Object.fromEntries(
-    Object.entries(rows[ROW_RUN_BOUNDARY]).filter(
-      ([file]) => !isBoundaryPath(file),
-    ),
+    Object.entries(rows[ROW_RUN_BOUNDARY]).flatMap(([file, count]) => {
+      const below = belowBoundaryRuns(file, count, localRuns.get(file) ?? 0);
+      return below > 0 ? [[file, below]] : [];
+    }),
   );
   return { rows };
 }
 
 /** Fail the ratchet itself if the boundary gate regresses. */
 function selfTestBoundary() {
+  // A named runtime entry admits only runs on a runtime it binds itself: an
+  // `Effect.run*` or a run on an imported runtime in the same file stays on
+  // the row, and a sibling in the same frontend keeps every run.
+  const probe = surveySource(
+    "import { Effect } from 'effect';\nimport { shared } from './runtime';\nconst runtime = make();\nruntime.runFork(a);\nfunction f(rt) { return rt.runSync(b); }\nEffect.runFork(c);\nshared.runPromise(d);\n",
+    'src/shared/signals.ts',
+  );
+  const runCases = [
+    [(probe.counts.get(ROW_RUN_BOUNDARY) ?? 0) === 4, 'probe run count'],
+    [probe.localRuntimeRuns === 2, 'probe local runtime runs'],
+    [
+      belowBoundaryRuns('src/shared/signals.ts', 4, 2) === 2,
+      'entry keeps non-local runs',
+    ],
+    [
+      belowBoundaryRuns(
+        'packages/extension/src/progressView/frontend/sessionTransport.ts',
+        4,
+        4,
+      ) === 0,
+      'entry admits local runs',
+    ],
+    [
+      belowBoundaryRuns(
+        'packages/extension/src/progressView/frontend/ProgressApp.ts',
+        3,
+        3,
+      ) === 3,
+      'sibling stays fenced',
+    ],
+    [
+      belowBoundaryRuns('packages/cli/src/chat/tui/App.tsx', 2, 0) === 0,
+      'host root admits all runs',
+    ],
+    [
+      belowBoundaryRuns('src/controllers/session/SessionBridge.ts', 2, 2) === 2,
+      'below boundary keeps local runs',
+    ],
+  ];
+  for (const [ok, label] of runCases) {
+    if (!ok) {
+      console.error(`belowBoundaryRuns self-test failed: ${label}`);
+      process.exit(1);
+    }
+  }
+
   const boundaryCases = [
     ['packages/extension/src/commands/run.ts', true],
     ['packages/desktop/src/main/ipc.ts', true],
@@ -746,11 +846,11 @@ function selfTestBoundary() {
     ['packages/trace-viewer/src/main.ts', false],
     // A webview frontend sits under a host package but is a VS Code-free
     // zone, not a host entry, so R1 does not admit a run there.
-    // The webview's composition root is admitted by name (owner ruling
-    // 2026-09-14); its siblings in the same frontend stay fenced.
-    ['packages/extension/src/progressView/frontend/sessionTransport.ts', true],
+    // A named runtime entry is not a whole-file boundary: its runs are
+    // classified per receiver (belowBoundaryRuns, pinned below).
+    ['packages/extension/src/progressView/frontend/sessionTransport.ts', false],
     ['packages/extension/src/progressView/frontend/ProgressApp.ts', false],
-    ['src/shared/signals.ts', true],
+    ['src/shared/signals.ts', false],
     ['src/shared/session/sessionFold.ts', false],
     ['packages/extension/src/webview/frontend/app.ts', false],
     ['packages/extension/src/settingsView/frontend/settings.ts', false],
@@ -930,6 +1030,14 @@ function main() {
   selfTestSurvey();
   selfTestBoundary();
   const files = productionFiles();
+  const fileSet = new Set(files);
+  const staleEntries = RUNTIME_ENTRY_PATHS.filter((file) => !fileSet.has(file));
+  if (staleEntries.length > 0) {
+    console.error(
+      `Effect migration ratchet failed: named runtime entries no longer exist: ${staleEntries.join(', ')}. Remove each from BOUNDARY_RUNTIME_ENTRIES in ${SCRIPT_REL} in the change that moved or deleted it; admitting the moved file again is a new ruling, not a rename.`,
+    );
+    process.exit(1);
+  }
   const { rows } = surveyTree(files);
   let failed = false;
 
