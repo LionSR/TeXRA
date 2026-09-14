@@ -96,7 +96,7 @@ describe('compiled PDF artifacts', () => {
     vi.restoreAllMocks();
   });
 
-  it.effect('treats a missing compiled PDF as no artifact', () =>
+  it.live('treats a missing compiled PDF as no artifact', () =>
     Effect.gen(function* () {
       const runDirectory = yield* Effect.promise(makeTempDir);
 
@@ -113,7 +113,7 @@ describe('compiled PDF artifacts', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('propagates unexpected compiled PDF stat failures', () =>
+  it.live('propagates unexpected compiled PDF stat failures', () =>
     Effect.gen(function* () {
       const runDirectory = yield* Effect.promise(makeTempDir);
       const statError = platformFailure('PermissionDenied', 'stat');
@@ -136,7 +136,7 @@ describe('compiled PDF artifacts', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('continues when destination cleanup reports file not found', () =>
+  it.live('continues when destination cleanup reports file not found', () =>
     Effect.gen(function* () {
       const runDirectory = yield* Effect.promise(makeTempDir);
       const compiledPdfPath = path.join(runDirectory, 'build', 'paper.pdf');
@@ -163,7 +163,7 @@ describe('compiled PDF artifacts', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('propagates unexpected destination cleanup failures', () =>
+  it.live('propagates unexpected destination cleanup failures', () =>
     Effect.gen(function* () {
       const runDirectory = yield* Effect.promise(makeTempDir);
       const compiledPdfPath = path.join(runDirectory, 'build', 'paper.pdf');
@@ -188,7 +188,7 @@ describe('compiled PDF artifacts', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('publishes per-round and latest stable PDF paths', () =>
+  it.live('publishes per-round and latest stable PDF paths', () =>
     Effect.gen(function* () {
       const runDirectory = yield* Effect.promise(makeTempDir);
       const buildDir = path.join(
@@ -224,7 +224,7 @@ describe('compiled PDF artifacts', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('derives diff PDF names from the same source path rule', () =>
+  it.live('derives diff PDF names from the same source path rule', () =>
     Effect.gen(function* () {
       const runDirectory = yield* Effect.promise(makeTempDir);
       const buildDir = path.join(runDirectory, 'diff', 'r4', 'build');
@@ -251,7 +251,7 @@ describe('compiled PDF artifacts', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('strips a Windows-style round prefix without duplicating it', () =>
+  it.live('strips a Windows-style round prefix without duplicating it', () =>
     Effect.gen(function* () {
       const runDirectory = yield* Effect.promise(makeTempDir);
       const compiledPdfPath = path.join(runDirectory, 'build', 'main.pdf');
@@ -277,7 +277,7 @@ describe('compiled PDF artifacts', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('keeps distinct diff kinds for the same revised source', () =>
+  it.live('keeps distinct diff kinds for the same revised source', () =>
     Effect.gen(function* () {
       const runDirectory = yield* Effect.promise(makeTempDir);
       const buildDir = path.join(runDirectory, 'diff', 'r5', 'build');
@@ -329,7 +329,7 @@ describe('compiled PDF artifacts', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('preserves source subdirectories for duplicate basenames', () =>
+  it.live('preserves source subdirectories for duplicate basenames', () =>
     Effect.gen(function* () {
       const runDirectory = yield* Effect.promise(makeTempDir);
       const buildDir = path.join(runDirectory, 'compile', 'build', 'r3');

@@ -106,32 +106,33 @@ export class LatexDiffManager {
 
   /**
    * Mirror an existing workspace dependency into run storage so latexdiff's
-   * relative `\input{}` resolution finds it. A mirror that fails is reported
-   * and skipped — the diff below still runs and names whatever it could not
-   * resolve.
+   * relative `\input{}` resolution finds it. A dependency whose existence
+   * check or mirror fails (a permission denial, a transient I/O error) is
+   * reported with its path and cause and skipped: the other file pairs still
+   * diff, and this diff still runs and names whatever it could not resolve.
    */
   private ensureWorkspaceDependency(
     targetLocation: FileLocation | null | undefined,
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void> {
+    if (!targetLocation) return Effect.void;
+    const dependencyPath = targetLocation.absolutePath;
     return Effect.gen({ self: this }, function* () {
-      if (!targetLocation) return;
-      const exists = yield* fsCall(() =>
-        AbsoluteFS.exists(targetLocation.absolutePath),
-      );
+      const exists = yield* fsCall(() => AbsoluteFS.exists(dependencyPath));
       if (!exists) return;
-      yield* fsCall(() =>
-        this.fileService.mirrorWorkspaceFile(targetLocation),
-      ).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            this.logger.warn('Unable to mirror workspace dependency', {
-              data: { path: targetLocation.absolutePath, error },
+      yield* fsCall(() => this.fileService.mirrorWorkspaceFile(targetLocation));
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          this.logger.warn(
+            `Unable to mirror workspace dependency ${dependencyPath}: ${toErrorMessage(error)}`,
+            {
+              data: { path: dependencyPath, error },
               messageType: MESSAGE_TYPES.INTERNAL,
-            });
-          }),
-        ),
-      );
-    });
+            },
+          );
+        }),
+      ),
+    );
   }
 
   handleLatexdiffOfOutput(

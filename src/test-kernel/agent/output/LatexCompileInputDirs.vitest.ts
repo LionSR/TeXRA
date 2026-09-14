@@ -126,7 +126,7 @@ describe('workflow LaTeX compile input directories', () => {
       .mockReturnValue(Effect.succeed(null));
   });
 
-  it.effect('derives compile-check input dirs from outputFile.source', () =>
+  it.live('derives compile-check input dirs from outputFile.source', () =>
     Effect.gen(function* () {
       const runId = 'compile-source-dir' as RunId;
       const texPath = path.join(runDir(runId), 'r1', 'main.tex');
@@ -157,7 +157,7 @@ describe('workflow LaTeX compile input directories', () => {
   // does. The check runs on the run's fiber, outside any roots scope, so the
   // setting and the source directory must come from the session roots it is
   // handed, not from the process fallback.
-  it.effect(
+  it.live(
     'reads the compile setting and source dir from the session roots, not the process roots',
     () =>
       Effect.gen(function* () {
@@ -205,7 +205,7 @@ describe('workflow LaTeX compile input directories', () => {
   );
 
   for (const source of ['', fakePath('external/source/main.tex')]) {
-    it.effect(
+    it.live(
       `falls back to the output location for source ${JSON.stringify(source)}`,
       () =>
         Effect.gen(function* () {
@@ -301,7 +301,7 @@ describe('workflow LaTeX compile input directories', () => {
     ).toBeUndefined();
   });
 
-  it.effect(
+  it.live(
     'compiles diffs with revised round inputs before workspace fallbacks',
     () =>
       Effect.gen(function* () {
@@ -334,7 +334,7 @@ describe('workflow LaTeX compile input directories', () => {
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('keeps an external latexdiff reference in its own directory', () =>
+  it.live('keeps an external latexdiff reference in its own directory', () =>
     Effect.gen(function* () {
       const runId = 'latexdiff-external-input-dir' as RunId;
       yield* Effect.promise(() => initLatexPlatform({}));
@@ -358,7 +358,7 @@ describe('workflow LaTeX compile input directories', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('keeps a successful diff when publishing its PDF fails', () =>
+  it.live('keeps a successful diff when publishing its PDF fails', () =>
     Effect.gen(function* () {
       const runId = 'latexdiff-publish-failure' as RunId;
       yield* Effect.promise(() => initLatexPlatform({}));
@@ -386,7 +386,7 @@ describe('workflow LaTeX compile input directories', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect(
+  it.live(
     'keeps a failed latexdiff compiler transcript out of the warning message',
     () =>
       Effect.gen(function* () {

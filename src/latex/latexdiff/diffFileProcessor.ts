@@ -1,9 +1,12 @@
 import { Effect } from 'effect';
 
 import type { ConfigProvider } from '@platform/interfaces';
-import replacementEngine from '@replacement/engine';
+import replacementEngine, {
+  type ReplacementConfigRead,
+} from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { readConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
@@ -56,7 +59,14 @@ const BIBITEM_START = /(?:^|\n)\s*(?:\\DIF(?:add|del)\{)?\\bibitem\b/;
 export class DiffFileProcessor {
   /** `config`: the workspace configuration held as data, when the caller has
    *  one; otherwise the replacement rules read the calling context's. */
-  constructor(private readonly config?: ConfigProvider) {}
+  /** The replacement rules' reader over `config`, when one was given. */
+  private readonly readReplacementConfig: ReplacementConfigRead | undefined;
+
+  constructor(config?: ConfigProvider) {
+    this.readReplacementConfig = config
+      ? (path) => readConfig(config, path)
+      : undefined;
+  }
 
   // Intentionally does not swallow failures: a read/transform/write error here
   // means the diff output is missing or corrupt, so it must stay in the error
@@ -85,7 +95,7 @@ export class DiffFileProcessor {
       processedContent = this.processLineByLine(processedContent);
       processedContent = replacementEngine.applyAll(
         processedContent,
-        this.config,
+        this.readReplacementConfig,
       );
       for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
         processedContent = processedContent.replace(pattern, replacement);

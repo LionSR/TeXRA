@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -87,30 +88,38 @@ function createXmlManager(
 }
 
 /**
- * Write a response and unpack it. The extraction pipeline is an Effect
- * program; this suite pins the pure extraction tiers over ordinary Vitest
- * cases, so the fiber is run here at the suite's own boundary rather than in
- * each of the cases below.
+ * The real-filesystem calls these cases seed their run directory with. The
+ * fake host roots every path in a real temp directory, so the cases that use
+ * them run as `it.live`.
  */
-async function writeAndSplitDocuments(
+const fsEffect = {
+  write: (target: string, content: string) =>
+    Effect.promise(() => AbsoluteFS.write(target, content)),
+  ensureDir: (target: string) =>
+    Effect.promise(() => AbsoluteFS.ensureDir(target)),
+};
+
+/** Write a response and unpack it through the extraction pipeline. */
+const writeAndSplitDocuments = Effect.fn('writeAndSplitDocuments')(function* (
   output: string | readonly string[],
   inputFiles: string[] = ['paper.tex'],
   options: XmlManagerOptions = {},
-): Promise<OutputFileInfo[]> {
-  await AbsoluteFS.write(
+) {
+  yield* fsEffect.write(
     fakePath('tmp/run/output.xml'),
     typeof output === 'string' ? output : output.join('\n'),
   );
-  return Effect.runPromise(
-    createXmlManager(inputFiles, options).splitScratchpadMultipleOutputXml(
-      createExternalLocation(fakePath('tmp/run/output.xml')),
-      0,
-      options.baseFiles?.map((name) =>
-        createExternalLocation(fakePath('tmp/run', name)),
-      ),
+  return yield* createXmlManager(
+    inputFiles,
+    options,
+  ).splitScratchpadMultipleOutputXml(
+    createExternalLocation(fakePath('tmp/run/output.xml')),
+    0,
+    options.baseFiles?.map((name) =>
+      createExternalLocation(fakePath('tmp/run', name)),
     ),
   );
-}
+});
 
 const RECOVERED_DOCUMENT_LINES = [
   '\\documentclass{article}',
@@ -127,40 +136,44 @@ function expectSources(
   expect(outputs.map((output) => output.source)).toEqual(expected);
 }
 
-async function expectWritten(path: string, content: string): Promise<void> {
-  await expect(AbsoluteFS.read(fakePath('tmp/run', path))).resolves.toBe(
-    content,
+const expectWritten = Effect.fn('expectWritten')(function* (
+  path: string,
+  content: string,
+) {
+  const written = yield* Effect.promise(() =>
+    AbsoluteFS.read(fakePath('tmp/run', path)),
   );
-}
+  expect(written).toBe(content);
+});
 
-async function expectAbsent(path: string): Promise<void> {
-  await expect(AbsoluteFS.exists(fakePath('tmp/run', path))).resolves.toBe(
-    false,
+const expectAbsent = Effect.fn('expectAbsent')(function* (path: string) {
+  const exists = yield* Effect.promise(() =>
+    AbsoluteFS.exists(fakePath('tmp/run', path)),
   );
-}
+  expect(exists).toBe(false);
+});
 
-async function assertRecoveredDocuments(
-  outputs: readonly { source: string }[],
-  files: Record<string, string>,
-  absent: readonly string[] = [],
-): Promise<void> {
-  expectSources(outputs, Object.keys(files));
-  for (const [source, content] of Object.entries(files)) {
-    await expectWritten(source, content);
-  }
-  for (const path of absent) {
-    await expectAbsent(path);
-  }
-}
+const assertRecoveredDocuments = Effect.fn('assertRecoveredDocuments')(
+  function* (
+    outputs: readonly { source: string }[],
+    files: Record<string, string>,
+    absent: readonly string[] = [],
+  ) {
+    expectSources(outputs, Object.keys(files));
+    for (const [source, content] of Object.entries(files)) {
+      yield* expectWritten(source, content);
+    }
+    for (const path of absent) {
+      yield* expectAbsent(path);
+    }
+  },
+);
 
 /**
  * A recovery scenario against the default single `paper.tex` input: the raw
  * output lines, the files that must be written (keyed by run-relative path,
  * in expected source order), and any paths that must not be written.
  */
-// Mutable tuple types: vitest's it.each infers spread-arg callback types only
-// for mutable tuples (readonly tuples with optional elements hit its
-// union-of-elements fallback).
 type RecoveryCase = [
   name: string,
   output: string[],
@@ -839,11 +852,11 @@ describe('XmlOutputManager', () => {
     });
   });
 
-  it('writes extracted full-document outputs with one final newline', async () => {
-    const manager = createXmlManager();
+  it.live('writes extracted full-document outputs with one final newline', () =>
+    Effect.gen(function* () {
+      const manager = createXmlManager();
 
-    await Effect.runPromise(
-      manager.processMultipleLatexDocuments(
+      yield* manager.processMultipleLatexDocuments(
         [
           {
             name: 'paper.tex',
@@ -853,123 +866,146 @@ describe('XmlOutputManager', () => {
         ],
         createExternalLocation(fakePath('tmp/run/output.xml')),
         0,
-      ),
+      );
+
+      yield* expectWritten(
+        'paper.tex',
+        '\\documentclass{article}\n\\begin{document}\nHi.\n\\end{document}\n',
+      );
+    }),
+  );
+
+  it.live(
+    'keeps legacy trailing end-document removal and adds one final newline',
+    () =>
+      Effect.gen(function* () {
+        const manager = createXmlManager();
+
+        yield* manager.processMultipleLatexDocuments(
+          [
+            {
+              name: 'fragment.tex',
+              content: '\nBody only.\n\\end{document}\n\n',
+            },
+          ],
+          createExternalLocation(fakePath('tmp/run/output.xml')),
+          0,
+        );
+
+        yield* expectWritten('fragment.tex', 'Body only.\n');
+      }),
+  );
+
+  it.live(
+    'creates parent directories for extracted document names with subdirectories',
+    () =>
+      Effect.gen(function* () {
+        const manager = createXmlManager();
+
+        yield* manager.processMultipleLatexDocuments(
+          [{ name: 'sections/main.tex', content: 'Nested section.\n' }],
+          createExternalLocation(fakePath('tmp/run/output.xml')),
+          0,
+        );
+
+        yield* expectWritten('sections/main.tex', 'Nested section.\n');
+      }),
+  );
+
+  for (const [name, output, files, absent = []] of RECOVERY_CASES) {
+    it.live(name, () =>
+      Effect.gen(function* () {
+        yield* assertRecoveredDocuments(
+          yield* writeAndSplitDocuments(output),
+          files,
+          absent,
+        );
+      }),
     );
+  }
 
-    await expectWritten(
-      'paper.tex',
-      '\\documentclass{article}\n\\begin{document}\nHi.\n\\end{document}\n',
-    );
-  });
+  it.live(
+    'continues percent recovery for multi-input outputs after leading LaTeX content',
+    () =>
+      Effect.gen(function* () {
+        const outputs = yield* writeAndSplitDocuments(
+          ['\\section{Unroutable preface}', '% appendix.tex', 'Appendix.'],
+          ['main.tex', 'appendix.tex'],
+        );
 
-  it('keeps legacy trailing end-document removal and adds one final newline', async () => {
-    const manager = createXmlManager();
+        expectSources(outputs, ['appendix.tex']);
+        yield* expectWritten('appendix.tex', 'Appendix.\n');
+      }),
+  );
 
-    await Effect.runPromise(
-      manager.processMultipleLatexDocuments(
-        [
-          {
-            name: 'fragment.tex',
-            content: '\nBody only.\n\\end{document}\n\n',
-          },
-        ],
-        createExternalLocation(fakePath('tmp/run/output.xml')),
-        0,
-      ),
-    );
+  it.live(
+    'deduplicates percent filename headers after final output path mapping',
+    () =>
+      Effect.gen(function* () {
+        const outputs = yield* writeAndSplitDocuments([
+          '% output.tex',
+          'Primary fallback.',
+          '% output_extracted.tex',
+          'Explicit extracted fallback.',
+        ]);
 
-    await expectWritten('fragment.tex', 'Body only.\n');
-  });
+        expectSources(outputs, ['output.tex', 'output_extracted-2.tex']);
+        yield* expectWritten('output_extracted.tex', 'Primary fallback.\n');
+        yield* expectWritten(
+          'output_extracted-2.tex',
+          'Explicit extracted fallback.\n',
+        );
+      }),
+  );
 
-  it('creates parent directories for extracted document names with subdirectories', async () => {
-    const manager = createXmlManager();
-
-    await Effect.runPromise(
-      manager.processMultipleLatexDocuments(
-        [{ name: 'sections/main.tex', content: 'Nested section.\n' }],
-        createExternalLocation(fakePath('tmp/run/output.xml')),
-        0,
-      ),
-    );
-
-    await expectWritten('sections/main.tex', 'Nested section.\n');
-  });
-
-  it.each(RECOVERY_CASES)('%s', async (_name, output, files, absent = []) => {
-    await assertRecoveredDocuments(
-      await writeAndSplitDocuments(output),
-      files,
-      absent,
-    );
-  });
-
-  it('continues percent recovery for multi-input outputs after leading LaTeX content', async () => {
-    const outputs = await writeAndSplitDocuments(
-      ['\\section{Unroutable preface}', '% appendix.tex', 'Appendix.'],
-      ['main.tex', 'appendix.tex'],
-    );
-
-    expectSources(outputs, ['appendix.tex']);
-    await expectWritten('appendix.tex', 'Appendix.\n');
-  });
-
-  it('deduplicates percent filename headers after final output path mapping', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% output.tex',
-      'Primary fallback.',
-      '% output_extracted.tex',
-      'Explicit extracted fallback.',
-    ]);
-
-    expectSources(outputs, ['output.tex', 'output_extracted-2.tex']);
-    await expectWritten('output_extracted.tex', 'Primary fallback.\n');
-    await expectWritten(
-      'output_extracted-2.tex',
-      'Explicit extracted fallback.\n',
-    );
-  });
-
-  it('does not auto-format extracted workflow outputs', async () => {
-    await AbsoluteFS.write(
-      fakePath('tmp/run/output.xml'),
-      `<documents><document name="main.tex">
+  it.live('does not auto-format extracted workflow outputs', () =>
+    Effect.gen(function* () {
+      yield* fsEffect.write(
+        fakePath('tmp/run/output.xml'),
+        `<documents><document name="main.tex">
 \\[
   f(x)=x^4-2x^2+1.
 \\]
 </document><document name="appendix.tex">
 Appendix.
 </document></documents>`,
-    );
-    const manager = createXmlManager();
-    const state = createOutputState();
-    await Effect.runPromise(
-      extractFilesFromXml(
+      );
+      const manager = createXmlManager();
+      const state = createOutputState();
+      yield* extractFilesFromXml(
         state,
         processorDeps({ logger: spiedTrace() }),
         manager,
         createExternalLocation(fakePath('tmp/run/output.xml')),
         0,
-      ),
-    );
-
-    const roundOutputs = state.rounds.get(0)?.outputs ?? [];
-    expect(roundOutputs).toHaveLength(2);
-    expect(formatterMocks.runLatexFormatter).not.toHaveBeenCalled();
-    await expectWritten('main.tex', '\\[\n  f(x)=x^4-2x^2+1.\n\\]\n');
-  });
-
-  it.each(LABELED_RECOVERY_CASES)(
-    '%s',
-    async (_name, output, inputFiles, files, absent = []) => {
-      await assertRecoveredDocuments(
-        await writeAndSplitDocuments(output, [...inputFiles]),
-        files,
-        absent,
       );
-    },
+
+      const roundOutputs = state.rounds.get(0)?.outputs ?? [];
+      expect(roundOutputs).toHaveLength(2);
+      expect(formatterMocks.runLatexFormatter).not.toHaveBeenCalled();
+      yield* expectWritten('main.tex', '\\[\n  f(x)=x^4-2x^2+1.\n\\]\n');
+    }),
   );
 
-  it.each([
+  for (const [
+    name,
+    output,
+    inputFiles,
+    files,
+    absent = [],
+  ] of LABELED_RECOVERY_CASES) {
+    it.live(name, () =>
+      Effect.gen(function* () {
+        yield* assertRecoveredDocuments(
+          yield* writeAndSplitDocuments(output, [...inputFiles]),
+          files,
+          absent,
+        );
+      }),
+    );
+  }
+
+  for (const [name, output, inputFiles, expectedSources] of [
     [
       'matches a bare label by basename when the model drops the directory prefix',
       ['Draft3.tex:', '```latex', 'Recovered by basename.', '```'],
@@ -1013,58 +1049,66 @@ Appendix.
     readonly string[],
     readonly string[],
     readonly string[],
-  ])[])('%s', async (_name, output, inputFiles, expectedSources) => {
-    const outputs = await writeAndSplitDocuments(output, [...inputFiles]);
+  ])[]) {
+    it.live(name, () =>
+      Effect.gen(function* () {
+        const outputs = yield* writeAndSplitDocuments(output, [...inputFiles]);
 
-    expectSources(outputs, expectedSources);
-  });
+        expectSources(outputs, expectedSources);
+      }),
+    );
+  }
 
-  it('falls back to content-similarity matching for unlabeled fenced blocks against the original inputs', async () => {
-    await AbsoluteFS.write(
-      fakePath('tmp/run/appendices.tex'),
-      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a shared Lean repository.\n',
-    );
-    await AbsoluteFS.write(
-      fakePath('tmp/run/cost_section.tex'),
-      '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
-    );
+  it.live(
+    'falls back to content-similarity matching for unlabeled fenced blocks against the original inputs',
+    () =>
+      Effect.gen(function* () {
+        yield* fsEffect.write(
+          fakePath('tmp/run/appendices.tex'),
+          '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a shared Lean repository.\n',
+        );
+        yield* fsEffect.write(
+          fakePath('tmp/run/cost_section.tex'),
+          '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
+        );
 
-    // Response order is deliberately swapped relative to inputFiles, and
-    // neither fence carries any filename label, to prove the match is
-    // driven by content rather than declaration or response order.
-    const outputs = await writeAndSplitDocuments(
-      [
-        '# Phase 2: Revised Documents',
-        '',
-        '```latex',
-        '% !TEX root = Draft3SM.tex',
-        '\\section{Computational cost}',
-        'Revised numbers from the local interactive logs.',
-        '```',
-        '',
-        '```latex',
-        '\\appendix',
-        '\\section{Agent architecture}',
-        'The formalization system uses a multi-agent architecture with a persistent shared memory.',
-        '```',
-      ],
-      ['appendices.tex', 'cost_section.tex'],
-      { baseFiles: ['appendices.tex', 'cost_section.tex'] },
-    );
+        // Response order is deliberately swapped relative to inputFiles, and
+        // neither fence carries any filename label, to prove the match is
+        // driven by content rather than declaration or response order.
+        const outputs = yield* writeAndSplitDocuments(
+          [
+            '# Phase 2: Revised Documents',
+            '',
+            '```latex',
+            '% !TEX root = Draft3SM.tex',
+            '\\section{Computational cost}',
+            'Revised numbers from the local interactive logs.',
+            '```',
+            '',
+            '```latex',
+            '\\appendix',
+            '\\section{Agent architecture}',
+            'The formalization system uses a multi-agent architecture with a persistent shared memory.',
+            '```',
+          ],
+          ['appendices.tex', 'cost_section.tex'],
+          { baseFiles: ['appendices.tex', 'cost_section.tex'] },
+        );
 
-    expect(outputs.map((output) => output.source).sort()).toEqual([
-      'appendices.tex',
-      'cost_section.tex',
-    ]);
-    await expectWritten(
-      'appendices.tex',
-      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a persistent shared memory.\n',
-    );
-    await expectWritten(
-      'cost_section.tex',
-      '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nRevised numbers from the local interactive logs.\n',
-    );
-  });
+        expect(outputs.map((output) => output.source).sort()).toEqual([
+          'appendices.tex',
+          'cost_section.tex',
+        ]);
+        yield* expectWritten(
+          'appendices.tex',
+          '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a persistent shared memory.\n',
+        );
+        yield* expectWritten(
+          'cost_section.tex',
+          '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nRevised numbers from the local interactive logs.\n',
+        );
+      }),
+  );
 
   // Agents like ocr/paper2slide declare one defaultOutputFiles entry while
   // accepting several attached input files. runReflectionFlow.ts then builds
@@ -1076,7 +1120,7 @@ Appendix.
   };
   const singleArtifactInputs = ['page1.png', 'page2.png'];
 
-  it.each([
+  for (const [name, output, inputFiles, expectedContent] of [
     [
       // Content-similarity matching against inputFiles must not run in this
       // shape (it would label the block with an input media name); instead
@@ -1114,18 +1158,22 @@ Appendix.
     readonly string[],
     readonly string[],
     string,
-  ])[])('%s', async (_name, output, inputFiles, expectedContent) => {
-    const outputs = await writeAndSplitDocuments(
-      output,
-      [...inputFiles],
-      singleArtifactOptions,
+  ])[]) {
+    it.live(name, () =>
+      Effect.gen(function* () {
+        const outputs = yield* writeAndSplitDocuments(
+          output,
+          [...inputFiles],
+          singleArtifactOptions,
+        );
+
+        expectSources(outputs, ['ocr_result.tex']);
+        yield* expectWritten('ocr_result.tex', expectedContent);
+      }),
     );
+  }
 
-    expectSources(outputs, ['ocr_result.tex']);
-    await expectWritten('ocr_result.tex', expectedContent);
-  });
-
-  it.each([
+  for (const [name, output] of [
     [
       'coalesces repeated labels for the sole declared output',
       [
@@ -1168,90 +1216,106 @@ Appendix.
         '```',
       ],
     ],
-  ] satisfies readonly (readonly [string, readonly string[]])[])(
-    '%s',
-    async (_name, output) => {
-      const outputs = await writeAndSplitDocuments(
-        output,
-        singleArtifactInputs,
-        singleArtifactOptions,
-      );
+  ] satisfies readonly (readonly [string, readonly string[]])[]) {
+    it.live(name, () =>
+      Effect.gen(function* () {
+        const outputs = yield* writeAndSplitDocuments(
+          output,
+          singleArtifactInputs,
+          singleArtifactOptions,
+        );
 
-      expectSources(outputs, ['ocr_result.tex']);
-      await expectWritten(
-        'ocr_result.tex',
-        'Page one transcription.\n\nPage two transcription.\n',
-      );
-      await expectAbsent('ocr_result-2.tex');
-    },
+        expectSources(outputs, ['ocr_result.tex']);
+        yield* expectWritten(
+          'ocr_result.tex',
+          'Page one transcription.\n\nPage two transcription.\n',
+        );
+        yield* expectAbsent('ocr_result-2.tex');
+      }),
+    );
+  }
+
+  it.live(
+    'does not coalesce explanatory fences after a sole-output header chunk',
+    () =>
+      Effect.gen(function* () {
+        const outputs = yield* writeAndSplitDocuments(
+          [
+            'ocr_result.tex:',
+            '```latex',
+            'Page one transcription.',
+            '```',
+            '',
+            'Explanation:',
+            '```latex',
+            '\\LaTeX{} example, not output.',
+            '```',
+          ],
+          singleArtifactInputs,
+          singleArtifactOptions,
+        );
+
+        expectSources(outputs, ['ocr_result.tex']);
+        yield* expectWritten('ocr_result.tex', 'Page one transcription.\n');
+      }),
   );
 
-  it('does not coalesce explanatory fences after a sole-output header chunk', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        'ocr_result.tex:',
-        '```latex',
-        'Page one transcription.',
-        '```',
-        '',
-        'Explanation:',
-        '```latex',
-        '\\LaTeX{} example, not output.',
-        '```',
-      ],
-      singleArtifactInputs,
-      singleArtifactOptions,
-    );
+  it.live(
+    'does not concatenate later explanatory fences for single-input edits',
+    () =>
+      Effect.gen(function* () {
+        const outputs = yield* writeAndSplitDocuments(
+          [
+            '```latex',
+            'Revised paper body.',
+            '```',
+            '',
+            'Explanation:',
+            '```latex',
+            '\\LaTeX{} example, not output.',
+            '```',
+          ],
+          ['paper.tex'],
+        );
 
-    expectSources(outputs, ['ocr_result.tex']);
-    await expectWritten('ocr_result.tex', 'Page one transcription.\n');
-  });
+        expectSources(outputs, ['paper.tex']);
+        yield* expectWritten('paper.tex', 'Revised paper body.\n');
+      }),
+  );
 
-  it('does not concatenate later explanatory fences for single-input edits', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        '```latex',
-        'Revised paper body.',
-        '```',
-        '',
-        'Explanation:',
-        '```latex',
-        '\\LaTeX{} example, not output.',
-        '```',
-      ],
-      ['paper.tex'],
-    );
+  it.live(
+    'ignores scratchpad fenced blocks when recovering a single-input edit',
+    () =>
+      Effect.gen(function* () {
+        const outputs = yield* writeAndSplitDocuments(
+          [
+            '<scratchpad>',
+            'Draft attempt before I settled on the real revision:',
+            '```latex',
+            '\\section{Scratch}',
+            'Rejected draft.',
+            '```',
+            '</scratchpad>',
+            '```latex',
+            '\\section{Final}',
+            'Accepted revision.',
+            '```',
+          ],
+          ['paper.tex'],
+        );
 
-    expectSources(outputs, ['paper.tex']);
-    await expectWritten('paper.tex', 'Revised paper body.\n');
-  });
-
-  it('ignores scratchpad fenced blocks when recovering a single-input edit', async () => {
-    const outputs = await writeAndSplitDocuments(
-      [
-        '<scratchpad>',
-        'Draft attempt before I settled on the real revision:',
-        '```latex',
-        '\\section{Scratch}',
-        'Rejected draft.',
-        '```',
-        '</scratchpad>',
-        '```latex',
-        '\\section{Final}',
-        'Accepted revision.',
-        '```',
-      ],
-      ['paper.tex'],
-    );
-
-    expectSources(outputs, ['paper.tex']);
-    await expectWritten('paper.tex', '\\section{Final}\nAccepted revision.\n');
-  });
+        expectSources(outputs, ['paper.tex']);
+        yield* expectWritten(
+          'paper.tex',
+          '\\section{Final}\nAccepted revision.\n',
+        );
+      }),
+  );
 
   // A tagged <latex_document> is the model's declared final answer; an
   // untagged fence before it is an example or a draft. Both agent shapes must
   // prefer the tag, or fence recovery would overwrite the answer with a draft.
-  it.each([
+  for (const [name, inputFiles, options] of [
     ['single-input edit agents', ['paper.tex'], {} satisfies XmlManagerOptions],
     [
       'single-artifact agents',
@@ -1262,249 +1326,282 @@ Appendix.
     string,
     readonly string[],
     XmlManagerOptions,
-  ])[])(
-    'prefers a tagged <latex_document> over an earlier untagged fence for %s',
-    async (_name, inputFiles, options) => {
-      const outputs = await writeAndSplitDocuments(
-        [
-          '```latex',
-          '\\section{Draft}',
-          '```',
-          '<latex_document>\\section{Final}\\end{document}</latex_document>',
-        ],
-        [...inputFiles],
-        options,
-      );
+  ])[]) {
+    it.live(
+      `prefers a tagged <latex_document> over an earlier untagged fence for ${name}`,
+      () =>
+        Effect.gen(function* () {
+          const outputs = yield* writeAndSplitDocuments(
+            [
+              '```latex',
+              '\\section{Draft}',
+              '```',
+              '<latex_document>\\section{Final}\\end{document}</latex_document>',
+            ],
+            [...inputFiles],
+            options,
+          );
 
-      expectSources(outputs, ['paper.tex']);
-      await expectWritten('paper.tex', '\\section{Final}\n');
-    },
+          expectSources(outputs, ['paper.tex']);
+          yield* expectWritten('paper.tex', '\\section{Final}\n');
+        }),
+    );
+  }
+
+  it.live(
+    'leaves an unlabeled block unmatched when identical base files make the match ambiguous',
+    () =>
+      Effect.gen(function* () {
+        const stub = '\\section{Stub}\nShared template content.\n';
+        yield* fsEffect.write(fakePath('tmp/run/a.tex'), stub);
+        yield* fsEffect.write(fakePath('tmp/run/b.tex'), stub);
+
+        const outputs = yield* writeAndSplitDocuments(
+          [
+            '```latex',
+            '\\section{Stub}',
+            'Shared template content, revised.',
+            '```',
+          ],
+          ['a.tex', 'b.tex'],
+          { baseFiles: ['a.tex', 'b.tex'] },
+        );
+
+        // Both base files score identically, so there is no evidence which one
+        // the block revises — refusing to guess beats corrupting one of them.
+        expect(outputs).toEqual([]);
+      }),
   );
 
-  it('leaves an unlabeled block unmatched when identical base files make the match ambiguous', async () => {
-    const stub = '\\section{Stub}\nShared template content.\n';
-    await AbsoluteFS.write(fakePath('tmp/run/a.tex'), stub);
-    await AbsoluteFS.write(fakePath('tmp/run/b.tex'), stub);
+  it.live(
+    'routes the revision, not the echoed original, when the model quotes both',
+    () =>
+      Effect.gen(function* () {
+        yield* fsEffect.write(
+          fakePath('tmp/run/cost.tex'),
+          '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
+        );
+        yield* fsEffect.write(
+          fakePath('tmp/run/arch.tex'),
+          '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n',
+        );
 
-    const outputs = await writeAndSplitDocuments(
-      [
-        '```latex',
-        '\\section{Stub}',
-        'Shared template content, revised.',
-        '```',
-      ],
-      ['a.tex', 'b.tex'],
-      { baseFiles: ['a.tex', 'b.tex'] },
-    );
-
-    // Both base files score identically, so there is no evidence which one
-    // the block revises — refusing to guess beats corrupting one of them.
-    expect(outputs).toEqual([]);
-  });
-
-  it('routes the revision, not the echoed original, when the model quotes both', async () => {
-    await AbsoluteFS.write(
-      fakePath('tmp/run/cost.tex'),
-      '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
-    );
-    await AbsoluteFS.write(
-      fakePath('tmp/run/arch.tex'),
-      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n',
-    );
-
-    const outputs = await writeAndSplitDocuments(
-      [
-        'The original cost section for reference:',
-        '```latex',
-        '\\section{Computational cost}',
-        'Preliminary numbers from the local interactive logs.',
-        '```',
-        '',
-        'And my revision:',
-        '```latex',
-        '\\section{Computational cost}',
-        'Final numbers from the local interactive logs.',
-        '```',
-        '',
-        '```latex',
-        '\\appendix',
-        '\\section{Agent architecture}',
-        'The formalization system uses a revised multi-agent architecture.',
-        '```',
-      ],
-      ['cost.tex', 'arch.tex'],
-      { baseFiles: ['cost.tex', 'arch.tex'] },
-    );
-
-    expect(outputs.map((output) => output.source).sort()).toEqual([
-      'arch.tex',
-      'cost.tex',
-    ]);
-    await expectWritten(
-      'cost.tex',
-      '\\section{Computational cost}\nFinal numbers from the local interactive logs.\n',
-    );
-  });
-
-  it('matches later-round unlabeled fences against the previous round outputs', async () => {
-    // Round-0 originals are placeholders that no longer resemble the content
-    // being revised; only the previous round's outputs do. The similarity
-    // fallback must compare against those, or every later-round recovery
-    // would score below the threshold and drop the round.
-    await AbsoluteFS.ensureDir(fakePath('tmp/run/r0'));
-    await AbsoluteFS.ensureDir(fakePath('tmp/run/r1'));
-    await AbsoluteFS.write(fakePath('tmp/run/appendices.tex'), 'placeholder A');
-    await AbsoluteFS.write(
-      fakePath('tmp/run/cost_section.tex'),
-      'placeholder B',
-    );
-    await AbsoluteFS.write(
-      fakePath('tmp/run/r0/appendices.tex'),
-      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with shared memory.\n',
-    );
-    await AbsoluteFS.write(
-      fakePath('tmp/run/r0/cost_section.tex'),
-      '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the interactive logs.\n',
-    );
-    await AbsoluteFS.write(
-      fakePath('tmp/run/r1/output.xml'),
-      [
-        '```latex',
-        '% !TEX root = Draft3SM.tex',
-        '\\section{Computational cost}',
-        'Final numbers from the interactive logs.',
-        '```',
-        '',
-        '```latex',
-        '\\appendix',
-        '\\section{Agent architecture}',
-        'The formalization system uses a revised multi-agent architecture with shared memory.',
-        '```',
-      ].join('\n'),
-    );
-
-    const manager = createXmlManager(['appendices.tex', 'cost_section.tex']);
-    const state = createOutputState();
-    ensureRoundData(state, 0).outputs = [
-      {
-        source: 'appendices.tex',
-        round: 0,
-        location: createExternalLocation(fakePath('tmp/run/r0/appendices.tex')),
-        lineage: null,
-        diff: null,
-      },
-      {
-        source: 'cost_section.tex',
-        round: 0,
-        location: createExternalLocation(
-          fakePath('tmp/run/r0/cost_section.tex'),
-        ),
-        lineage: null,
-        diff: null,
-      },
-    ];
-    await Effect.runPromise(
-      extractFilesFromXml(
-        state,
-        processorDeps({
-          logger: spiedTrace(),
-          baseFiles: [
-            createExternalLocation(fakePath('tmp/run/appendices.tex')),
-            createExternalLocation(fakePath('tmp/run/cost_section.tex')),
+        const outputs = yield* writeAndSplitDocuments(
+          [
+            'The original cost section for reference:',
+            '```latex',
+            '\\section{Computational cost}',
+            'Preliminary numbers from the local interactive logs.',
+            '```',
+            '',
+            'And my revision:',
+            '```latex',
+            '\\section{Computational cost}',
+            'Final numbers from the local interactive logs.',
+            '```',
+            '',
+            '```latex',
+            '\\appendix',
+            '\\section{Agent architecture}',
+            'The formalization system uses a revised multi-agent architecture.',
+            '```',
           ],
-        }),
-        manager,
-        createExternalLocation(fakePath('tmp/run/r1/output.xml')),
-        1,
-      ),
-    );
+          ['cost.tex', 'arch.tex'],
+          { baseFiles: ['cost.tex', 'arch.tex'] },
+        );
 
-    const roundOutputs = state.rounds.get(1)?.outputs ?? [];
-
-    expect(roundOutputs.map((output) => output.source).sort()).toEqual([
-      'appendices.tex',
-      'cost_section.tex',
-    ]);
-    await expectWritten(
-      'r1/cost_section.tex',
-      '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nFinal numbers from the interactive logs.\n',
-    );
-  });
-
-  it('reports input files left unmatched by content-similarity recovery', async () => {
-    const logger = spiedTrace();
-    await AbsoluteFS.write(
-      fakePath('tmp/run/cost.tex'),
-      '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
-    );
-    await AbsoluteFS.write(
-      fakePath('tmp/run/arch.tex'),
-      '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n',
-    );
-
-    const outputs = await writeAndSplitDocuments(
-      [
-        '```latex',
-        '\\section{Computational cost}',
-        'Final numbers from the local interactive logs.',
-        '```',
-      ],
-      ['cost.tex', 'arch.tex'],
-      { logger, baseFiles: ['cost.tex', 'arch.tex'] },
-    );
-
-    expectSources(outputs, ['cost.tex']);
-    expect(logger.domain).toHaveBeenCalledWith(
-      expect.objectContaining({
-        key: 'missingOutputs',
-        data: expect.objectContaining({ missing: ['arch.tex'] }),
+        expect(outputs.map((output) => output.source).sort()).toEqual([
+          'arch.tex',
+          'cost.tex',
+        ]);
+        yield* expectWritten(
+          'cost.tex',
+          '\\section{Computational cost}\nFinal numbers from the local interactive logs.\n',
+        );
       }),
-    );
-  });
+  );
 
-  it('reports expected files left unmatched by filename-header recovery', async () => {
-    const logger = spiedTrace();
-    const outputs = await writeAndSplitDocuments(
-      [
-        'main.tex:',
-        '```latex',
-        'Main body.',
-        '```',
-        '',
-        '```latex',
-        'Appendix body with no label.',
-        '```',
-      ],
-      ['main.tex', 'appendix.tex'],
-      { logger },
-    );
+  it.live(
+    'matches later-round unlabeled fences against the previous round outputs',
+    () =>
+      Effect.gen(function* () {
+        // Round-0 originals are placeholders that no longer resemble the content
+        // being revised; only the previous round's outputs do. The similarity
+        // fallback must compare against those, or every later-round recovery
+        // would score below the threshold and drop the round.
+        yield* fsEffect.ensureDir(fakePath('tmp/run/r0'));
+        yield* fsEffect.ensureDir(fakePath('tmp/run/r1'));
+        yield* fsEffect.write(
+          fakePath('tmp/run/appendices.tex'),
+          'placeholder A',
+        );
+        yield* fsEffect.write(
+          fakePath('tmp/run/cost_section.tex'),
+          'placeholder B',
+        );
+        yield* fsEffect.write(
+          fakePath('tmp/run/r0/appendices.tex'),
+          '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with shared memory.\n',
+        );
+        yield* fsEffect.write(
+          fakePath('tmp/run/r0/cost_section.tex'),
+          '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the interactive logs.\n',
+        );
+        yield* fsEffect.write(
+          fakePath('tmp/run/r1/output.xml'),
+          [
+            '```latex',
+            '% !TEX root = Draft3SM.tex',
+            '\\section{Computational cost}',
+            'Final numbers from the interactive logs.',
+            '```',
+            '',
+            '```latex',
+            '\\appendix',
+            '\\section{Agent architecture}',
+            'The formalization system uses a revised multi-agent architecture with shared memory.',
+            '```',
+          ].join('\n'),
+        );
 
-    expectSources(outputs, ['main.tex']);
-    expect(logger.domain).toHaveBeenCalledWith(
-      expect.objectContaining({
-        key: 'missingOutputs',
-        data: expect.objectContaining({ missing: ['appendix.tex'] }),
+        const manager = createXmlManager([
+          'appendices.tex',
+          'cost_section.tex',
+        ]);
+        const state = createOutputState();
+        ensureRoundData(state, 0).outputs = [
+          {
+            source: 'appendices.tex',
+            round: 0,
+            location: createExternalLocation(
+              fakePath('tmp/run/r0/appendices.tex'),
+            ),
+            lineage: null,
+            diff: null,
+          },
+          {
+            source: 'cost_section.tex',
+            round: 0,
+            location: createExternalLocation(
+              fakePath('tmp/run/r0/cost_section.tex'),
+            ),
+            lineage: null,
+            diff: null,
+          },
+        ];
+        yield* extractFilesFromXml(
+          state,
+          processorDeps({
+            logger: spiedTrace(),
+            baseFiles: [
+              createExternalLocation(fakePath('tmp/run/appendices.tex')),
+              createExternalLocation(fakePath('tmp/run/cost_section.tex')),
+            ],
+          }),
+          manager,
+          createExternalLocation(fakePath('tmp/run/r1/output.xml')),
+          1,
+        );
+
+        const roundOutputs = state.rounds.get(1)?.outputs ?? [];
+
+        expect(roundOutputs.map((output) => output.source).sort()).toEqual([
+          'appendices.tex',
+          'cost_section.tex',
+        ]);
+        yield* expectWritten(
+          'r1/cost_section.tex',
+          '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nFinal numbers from the interactive logs.\n',
+        );
       }),
-    );
-  });
+  );
 
-  it('logs discarded unclosed latex fences during similarity recovery', async () => {
-    const logger = spiedTrace();
-    await AbsoluteFS.write(fakePath('tmp/run/a.tex'), 'Original A.');
-    await AbsoluteFS.write(fakePath('tmp/run/b.tex'), 'Original B.');
+  it.live(
+    'reports input files left unmatched by content-similarity recovery',
+    () =>
+      Effect.gen(function* () {
+        const logger = spiedTrace();
+        yield* fsEffect.write(
+          fakePath('tmp/run/cost.tex'),
+          '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
+        );
+        yield* fsEffect.write(
+          fakePath('tmp/run/arch.tex'),
+          '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n',
+        );
 
-    const outputs = await writeAndSplitDocuments(
-      ['```latex', 'Unclosed revised content.'],
-      ['a.tex', 'b.tex'],
-      { logger, baseFiles: ['a.tex', 'b.tex'] },
-    );
+        const outputs = yield* writeAndSplitDocuments(
+          [
+            '```latex',
+            '\\section{Computational cost}',
+            'Final numbers from the local interactive logs.',
+            '```',
+          ],
+          ['cost.tex', 'arch.tex'],
+          { logger, baseFiles: ['cost.tex', 'arch.tex'] },
+        );
 
-    expect(outputs).toEqual([]);
-    expect(logger.debug).toHaveBeenCalledWith(
-      expect.stringContaining('Dropped unclosed LaTeX fence'),
-      expect.anything(),
-    );
-  });
+        expectSources(outputs, ['cost.tex']);
+        expect(logger.domain).toHaveBeenCalledWith(
+          expect.objectContaining({
+            key: 'missingOutputs',
+            data: expect.objectContaining({ missing: ['arch.tex'] }),
+          }),
+        );
+      }),
+  );
+
+  it.live(
+    'reports expected files left unmatched by filename-header recovery',
+    () =>
+      Effect.gen(function* () {
+        const logger = spiedTrace();
+        const outputs = yield* writeAndSplitDocuments(
+          [
+            'main.tex:',
+            '```latex',
+            'Main body.',
+            '```',
+            '',
+            '```latex',
+            'Appendix body with no label.',
+            '```',
+          ],
+          ['main.tex', 'appendix.tex'],
+          { logger },
+        );
+
+        expectSources(outputs, ['main.tex']);
+        expect(logger.domain).toHaveBeenCalledWith(
+          expect.objectContaining({
+            key: 'missingOutputs',
+            data: expect.objectContaining({ missing: ['appendix.tex'] }),
+          }),
+        );
+      }),
+  );
+
+  it.live(
+    'logs discarded unclosed latex fences during similarity recovery',
+    () =>
+      Effect.gen(function* () {
+        const logger = spiedTrace();
+        yield* fsEffect.write(fakePath('tmp/run/a.tex'), 'Original A.');
+        yield* fsEffect.write(fakePath('tmp/run/b.tex'), 'Original B.');
+
+        const outputs = yield* writeAndSplitDocuments(
+          ['```latex', 'Unclosed revised content.'],
+          ['a.tex', 'b.tex'],
+          { logger, baseFiles: ['a.tex', 'b.tex'] },
+        );
+
+        expect(outputs).toEqual([]);
+        expect(logger.debug).toHaveBeenCalledWith(
+          expect.stringContaining('Dropped unclosed LaTeX fence'),
+          expect.anything(),
+        );
+      }),
+  );
 });
 
 describe('assignByContentSimilarity', () => {
@@ -1598,77 +1695,78 @@ describe('assignByContentSimilarity', () => {
 });
 
 describe('extractFilesFromXml', () => {
-  it.each([
+  for (const { name, failure, round } of [
     {
       name: 'when extraction throws',
       failure: new Error('invalid xml'),
       round: 3,
     },
     { name: 'when extraction yields no files', failure: null, round: 4 },
-  ])(
-    'publishes the run-wide missing-output map $name',
-    async ({ failure, round }) => {
-      const logger = new TraceEmitter();
-      const { events } = recordTraceEvents(logger);
-      const state = createOutputState();
-      // An earlier round already reported a missing file: the row this round
-      // publishes carries the run's whole map, since a cold fold keeps only
-      // the newest row of the type.
-      ensureRoundData(state, round - 1).missingOutputs = ['earlier.tex'];
-      const manager = createXmlManager(['paper.tex'], {
-        logger,
-        outputState: state,
-      });
-      const split = vi.spyOn(manager, 'splitScratchpadMultipleOutputXml');
-      if (failure) split.mockReturnValueOnce(Effect.fail(failure));
-      else split.mockReturnValueOnce(Effect.succeed([]));
-      await AbsoluteFS.write(fakePath('tmp/run/empty-output.xml'), '');
+  ]) {
+    it.live(`publishes the run-wide missing-output map ${name}`, () =>
+      Effect.gen(function* () {
+        const logger = new TraceEmitter();
+        const { events } = recordTraceEvents(logger);
+        const state = createOutputState();
+        // An earlier round already reported a missing file: the row this round
+        // publishes carries the run's whole map, since a cold fold keeps only
+        // the newest row of the type.
+        ensureRoundData(state, round - 1).missingOutputs = ['earlier.tex'];
+        const manager = createXmlManager(['paper.tex'], {
+          logger,
+          outputState: state,
+        });
+        const split = vi.spyOn(manager, 'splitScratchpadMultipleOutputXml');
+        if (failure) split.mockReturnValueOnce(Effect.fail(failure));
+        else split.mockReturnValueOnce(Effect.succeed([]));
+        yield* fsEffect.write(fakePath('tmp/run/empty-output.xml'), '');
 
-      await Effect.runPromise(
-        extractFilesFromXml(
+        yield* extractFilesFromXml(
           state,
           processorDeps({ logger }),
           manager,
           createExternalLocation(fakePath('tmp/run/empty-output.xml')),
           round,
-        ),
+        );
+
+        expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject(
+          [{ filesByRound: { [round - 1]: ['earlier.tex'], [round]: [] } }],
+        );
+        expect(state.rounds.get(round)?.outputs).toEqual([]);
+      }),
+    );
+  }
+
+  it.live('warns when a non-empty response yields zero extracted files', () =>
+    Effect.gen(function* () {
+      // A run where the model returned content but nothing could be extracted
+      // (it did not wrap files in <documents>) must surface a warning rather
+      // than completing silently with only the raw output.
+      const logger = new TraceEmitter();
+      const warn = vi.spyOn(logger, 'warn');
+      const manager = createXmlManager(['paper.tex'], { logger });
+      vi.spyOn(manager, 'splitScratchpadMultipleOutputXml').mockReturnValueOnce(
+        Effect.succeed([]),
+      );
+      yield* fsEffect.write(
+        fakePath('tmp/run/untagged-output.xml'),
+        '% chunk.tex\n\\section{Untagged content}\n',
       );
 
-      expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
-        { filesByRound: { [round - 1]: ['earlier.tex'], [round]: [] } },
-      ]);
-      expect(state.rounds.get(round)?.outputs).toEqual([]);
-    },
-  );
-
-  it('warns when a non-empty response yields zero extracted files', async () => {
-    // A run where the model returned content but nothing could be extracted
-    // (it did not wrap files in <documents>) must surface a warning rather
-    // than completing silently with only the raw output.
-    const logger = new TraceEmitter();
-    const warn = vi.spyOn(logger, 'warn');
-    const manager = createXmlManager(['paper.tex'], { logger });
-    vi.spyOn(manager, 'splitScratchpadMultipleOutputXml').mockReturnValueOnce(
-      Effect.succeed([]),
-    );
-    await AbsoluteFS.write(
-      fakePath('tmp/run/untagged-output.xml'),
-      '% chunk.tex\n\\section{Untagged content}\n',
-    );
-
-    await Effect.runPromise(
-      extractFilesFromXml(
+      yield* extractFilesFromXml(
         createOutputState(),
         processorDeps({ logger }),
         manager,
         createExternalLocation(fakePath('tmp/run/untagged-output.xml')),
         5,
-      ),
-    );
+      );
 
-    expect(warn).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('no files could be extracted'),
-      expect.objectContaining({ data: expect.objectContaining({ round: 5 }) }),
-    );
-  });
+      expect(warn).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining('no files could be extracted'),
+        expect.objectContaining({
+          data: expect.objectContaining({ round: 5 }),
+        }),
+      );
+    }),
+  );
 });

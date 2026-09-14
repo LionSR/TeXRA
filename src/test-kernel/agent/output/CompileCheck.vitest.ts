@@ -92,41 +92,39 @@ describe('runCompileCheck', () => {
     mocks.hasLatexCompiler.mockReset().mockResolvedValue(true);
   });
 
-  it.effect(
-    'counts a per-file exception as a failure, never a silent skip',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'compile-exception' as RunId;
-        // No file is seeded at the tex path, so AbsoluteFS.read throws ENOENT
-        // before compileLatex2Pdf is ever invoked.
-        yield* Effect.promise(() => initLatexPlatform({}));
+  it.live('counts a per-file exception as a failure, never a silent skip', () =>
+    Effect.gen(function* () {
+      const runId = 'compile-exception' as RunId;
+      // No file is seeded at the tex path, so AbsoluteFS.read throws ENOENT
+      // before compileLatex2Pdf is ever invoked.
+      yield* Effect.promise(() => initLatexPlatform({}));
 
-        const outputState = seedMainTexOutput(runId);
+      const outputState = seedMainTexOutput(runId);
 
-        const result = yield* runCompileCheck(
-          compileContext(runId, outputState),
-          0,
-        );
+      const result = yield* runCompileCheck(
+        compileContext(runId, outputState),
+        0,
+      );
 
-        const failures = compileFailuresOf(result.compileResult);
-        expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
-        expect(result.compileResult?.status).toBe('failed');
-        expect(failures).toHaveLength(1);
-        expect(failures[0].displayName).toBe('main.tex');
-        expect(failedExcerpt(result)).toContain(
-          'Compile check errored for main.tex',
-        );
+      const failures = compileFailuresOf(result.compileResult);
+      expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
+      expect(result.compileResult?.status).toBe('failed');
+      expect(failures).toHaveLength(1);
+      expect(failures[0].displayName).toBe('main.tex');
+      expect(failedExcerpt(result)).toContain(
+        'Compile check errored for main.tex',
+      );
 
-        // The synthetic excerpt is persisted like a real failure so it stays
-        // discoverable on disk, not just in-memory.
-        const persisted = yield* Effect.promise(() =>
-          AbsoluteFS.read(failures[0].log.absolutePath),
-        );
-        expect(persisted).toContain('Compile check errored for main.tex');
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      // The synthetic excerpt is persisted like a real failure so it stays
+      // discoverable on disk, not just in-memory.
+      const persisted = yield* Effect.promise(() =>
+        AbsoluteFS.read(failures[0].log.absolutePath),
+      );
+      expect(persisted).toContain('Compile check errored for main.tex');
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect(
+  it.live(
     'treats a fragment with no \\documentclass as a graceful skip, not a failure',
     () =>
       Effect.gen(function* () {
@@ -160,7 +158,7 @@ describe('runCompileCheck', () => {
   // receives from the shared { ok, logTail } return shape is threaded
   // through, unmodified, into the persisted failure excerpt -- it is not
   // read from disk a second time.
-  it.effect(
+  it.live(
     'sources the failing log tail from compileLatex2Pdf, not a separate disk read',
     () =>
       Effect.gen(function* () {
@@ -187,7 +185,7 @@ describe('runCompileCheck', () => {
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect('truncates the combined excerpt to the last 12000 characters', () =>
+  it.live('truncates the combined excerpt to the last 12000 characters', () =>
     Effect.gen(function* () {
       const runId = 'compile-char-truncation' as RunId;
       yield* Effect.promise(() => seedCompilableMainTex(runId));
@@ -220,7 +218,7 @@ describe('runCompileCheck', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect(
+  it.live(
     'clears a stale failure log once a later attempt at the same round succeeds',
     () =>
       Effect.gen(function* () {
@@ -263,7 +261,7 @@ describe('runCompileCheck', () => {
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect(
+  it.live(
     'gives colliding-after-sanitization paths distinct, non-clobbering log slots',
     () =>
       Effect.gen(function* () {

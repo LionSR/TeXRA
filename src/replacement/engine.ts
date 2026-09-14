@@ -5,9 +5,8 @@
 import { LRUCache } from 'lru-cache';
 
 import { createLog } from '@logger/logUtils';
-import type { ConfigProvider } from '@platform/interfaces';
 import { assertNever } from '@utils/core';
-import { getConfig, readConfig } from '@utils/config/configUtils';
+import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -54,9 +53,12 @@ import {
 
 const log = createLog('ReplacementEngine');
 
-/** How a policy reads its replacement settings: the calling context's
- *  configuration, or a configuration the caller holds as data. */
-type ConfigRead = <T>(path: string) => T;
+/**
+ * How a policy reads its replacement settings by key: the calling context's
+ * configuration by default, or a reader over a configuration the caller holds
+ * as data.
+ */
+export type ReplacementConfigRead = <T>(path: string) => T;
 
 function applyNonRegexPolicy(text: string): string {
   const processed = applyReplacements(
@@ -68,10 +70,10 @@ function applyNonRegexPolicy(text: string): string {
     : processed;
 }
 
-function applyAllPolicy(text: string, config?: ConfigProvider): string {
-  const read: ConfigRead = config
-    ? (path) => readConfig(config, path)
-    : getConfig;
+function applyAllPolicy(
+  text: string,
+  read: ReplacementConfigRead = getConfig,
+): string {
   const replacements = getAllReplacements(read);
   const wrapCritique = shouldWrapCritiqueInAlign(read);
 
@@ -97,7 +99,7 @@ const replacementEngine = {
    * replacements run before and after regex replacements to fix artifacts they
    * may introduce. Config values are read once and reused across all passes, and
    * whole-document cleanup runs once at the end instead of after each pass.
-   * Pass `config` to read the rules from a workspace's configuration held as
+   * Pass `read` to read the rules from a workspace's configuration held as
    * data instead of the calling context's.
    */
   applyAll: applyAllPolicy,
@@ -173,7 +175,7 @@ export const REGEX_CATEGORIES: RegexReplacementCategory[] = [
   MAX_REGEX_REPLACEMENTS,
 ];
 
-function shouldWrapCritiqueInAlign(read: ConfigRead): boolean {
+function shouldWrapCritiqueInAlign(read: ReplacementConfigRead): boolean {
   return read('texra.latex.wrapCritiqueInAlign');
 }
 
@@ -189,7 +191,9 @@ function selectEnabledCategories<T extends ReplacementCategory>(
  * Combine every enabled non-regex category into a single category. Custom
  * replacements from user settings take precedence over predefined rules.
  */
-function getAllReplacements(read: ConfigRead): NonRegexReplacementCategory {
+function getAllReplacements(
+  read: ReplacementConfigRead,
+): NonRegexReplacementCategory {
   const enabledNames = read<string[]>('texra.latex.enabledReplacements');
   const customReplacements = read<Record<string, string>>(
     'texra.latex.customReplacements',
@@ -215,7 +219,9 @@ function getAllReplacements(read: ConfigRead): NonRegexReplacementCategory {
  * Return every enabled regex category in application order, appending a custom
  * category built from user settings whenever custom regex replacements exist.
  */
-function getAllReplacementsRegex(read: ConfigRead): RegexReplacementCategory[] {
+function getAllReplacementsRegex(
+  read: ReplacementConfigRead,
+): RegexReplacementCategory[] {
   const enabledNames = read<string[]>('texra.latex.enabledReplacementsRegex');
   const customReplacements = read<Record<string, ReplacementValue>>(
     'texra.latex.customReplacementsRegex',

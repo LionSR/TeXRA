@@ -155,7 +155,7 @@ describe('LaTeXdiffService shadow output', () => {
   // A run holds its session roots as data: on the desktop they differ from
   // the process roots, and the run's fiber can leave the session's roots
   // scope (#12433), so a round diff must read the session's settings.
-  it.effect(
+  it.live(
     'reads latexdiff settings from the session roots it is handed, not the process roots',
     () =>
       Effect.gen(function* () {
