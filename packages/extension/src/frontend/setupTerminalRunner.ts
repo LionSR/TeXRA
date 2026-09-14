@@ -60,7 +60,20 @@ export const runTerminalCommand = Effect.fn('setupTerminalRunner.runCommand')(
     });
 
     if (!integration) {
-      terminal.sendText(args.command, true);
+      // The terminal can be closed during the shell-integration wait; a
+      // disposed terminal throws from sendText, and that is a typed failure
+      // of this run, not a defect.
+      yield* Effect.try({
+        try: () => terminal.sendText(args.command, true),
+        catch: (cause) =>
+          new TerminalRunFailed({
+            reason: 'terminal-unavailable',
+            message:
+              'The integrated terminal closed before the command was sent.',
+            command: args.command,
+            cause,
+          }),
+      });
       return { exitCode: undefined, output: '', timedOut: false };
     }
 
