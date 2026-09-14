@@ -65,7 +65,9 @@ vi.mock('@agent/runtime/executeAgent', async () => {
 });
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { RunHandle } from '@agent/runtime/RunHandle';
+import { RunHandle } from '@agent/runtime/RunHandle';
+import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent } from '@agent/runtime/runAgent';
 import {
@@ -349,6 +351,73 @@ describe('runAgent run ownership', () => {
       });
       expect(mocks.executeAgent).not.toHaveBeenCalled();
     }),
+  );
+
+  it.effect(
+    'stops a resume through a kill of its parked predecessor, which still tears down',
+    () =>
+      Effect.gen(function* () {
+        // A real registry: the kill goes through `runs.kill`, the parked
+        // handle carries the launch's stop, and its WAITING teardown must
+        // still run and finalize the run as cancelled.
+        const finalizeParked = vi.fn((_input: { readonly outcome: string }) =>
+          Effect.succeed({ ok: true as const }),
+        );
+        const runs = new RunRegistry({
+          runView: () => undefined,
+          commit: () => Effect.void,
+          approvals: createSessionApprovals({ setApprovalBypassState() {} }),
+          releaseRootRunLease: () => Effect.void,
+          finalizeRun: finalizeParked as never,
+          acquireRunClaim: () => Effect.succeed(Effect.void),
+        });
+        const parked = new RunHandle(
+          {
+            runId: RUN_ID,
+            identity: { kind: 'agent', agent: CONFIG.agent },
+            category: 'toolUse',
+          },
+          null,
+        );
+        runs.track(parked);
+        let tornDown = false;
+        parked.suspend(
+          Effect.sync(() => {
+            tornDown = true;
+          }),
+        );
+        let finishRead!: (value: null) => void;
+        mocks.readRunEnd.mockImplementationOnce(
+          () =>
+            new Promise<null>((resolve) => {
+              finishRead = resolve;
+            }),
+        );
+
+        const fiber = yield* Effect.forkChild(
+          launchRun(
+            { kind: 'resume', config: CONFIG, runId: RUN_ID },
+            { session: { ...(SESSION as object), runs } as never },
+          ),
+          { startImmediately: true },
+        );
+        const stop = runs.kill(RUN_ID);
+        yield* stop.settlement;
+        finishRead(null);
+        const exit = yield* Effect.exit(Fiber.join(fiber));
+
+        expect({
+          accepted: stop.accepted(),
+          tornDown,
+          finalized: finalizeParked.mock.calls.map(([input]) => input.outcome),
+          launch: Exit.isFailure(exit) && Cause.squash(exit.cause),
+        }).toMatchObject({
+          accepted: true,
+          tornDown: true,
+          finalized: [RUN_OUTCOME.CANCELLED],
+          launch: { name: 'AbortError' },
+        });
+      }),
   );
 
   it.effect(
