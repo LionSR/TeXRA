@@ -446,12 +446,16 @@ function recordTerminalFact(
 
 describe('headless delegation', () => {
   let restoreAgentEngine = (): void => {};
-  /** The session's one exit choreography, observed where it runs for real. */
-  let releaseRunLease: MockInstance<SessionHandle['releaseRunLease']>;
+  /**
+   * The claim release the session's exit choreography ends with. The failure
+   * paths fail it rather than `releaseRunLease` itself, so the drain, the
+   * terminal write and the settle above it still run for real.
+   */
+  let releaseClaims: MockInstance<SessionHandle['releaseClaims']>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    releaseRunLease = vi.spyOn(SessionHandle.prototype, 'releaseRunLease');
+    releaseClaims = vi.spyOn(SessionHandle.prototype, 'releaseClaims');
     // A child registers under its parent, and a run's aggregate must begin
     // with its own `run.start`.
     inBandSession = createTestSession();
@@ -692,7 +696,7 @@ describe('headless delegation', () => {
           }),
         );
         expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
-          releaseRunLease.mock.invocationCallOrder[0] ?? 0,
+          releaseClaims.mock.invocationCallOrder[0] ?? 0,
         );
       }),
   );
@@ -701,7 +705,8 @@ describe('headless delegation', () => {
     'returns the committed result when the final claim release fails',
     () =>
       Effect.gen(function* () {
-        releaseRunLease.mockReturnValueOnce(
+        const drain = vi.spyOn(inBandSession, 'flushArtifacts');
+        releaseClaims.mockReturnValueOnce(
           Effect.fail(new Error('claim release failed')),
         );
 
@@ -709,6 +714,11 @@ describe('headless delegation', () => {
 
         expect(result.result.outcome).toBe('completed');
         expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+        // The release that failed is the last step: everything the exit
+        // choreography owes the run happened before it.
+        expect(drain).toHaveBeenCalled();
+        // The failure injected is the run's own release, not a neighbour's.
+        expect(releaseClaims).toHaveBeenCalledOnce();
       }),
   );
 
@@ -851,12 +861,14 @@ describe('headless delegation', () => {
       Effect.gen(function* () {
         const childFailure = new Error('review model failed');
         mocks.executeAgent.mockRejectedValueOnce(childFailure);
-        releaseRunLease.mockReturnValueOnce(
-          Effect.fail(new Error('artifact flush failed')),
+        releaseClaims.mockReturnValueOnce(
+          Effect.fail(new Error('claim release failed')),
         );
         expect(yield* Effect.flip(runInBand(delegationOptions()))).toBe(
           childFailure,
         );
+        // The failure manifest is written above the release that failed.
+        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
       }),
   );
 

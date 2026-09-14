@@ -227,7 +227,9 @@ export class Database extends Context.Service<
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** C5: who holds one aggregate right now, with its owner's liveness
      *  proved in this call. The one ownership read that is fresh by
-     *  construction, so a cold run's long-dead owner is never reported held. */
+     *  construction, so a cold run's long-dead owner is never reported held.
+     *  An absent or tombstoned aggregate is unclaimed: a closed row keeps the
+     *  owner that closed it, and there is nothing left for it to hold. */
     readonly claimOwner: (
       id: AggregateId,
     ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;

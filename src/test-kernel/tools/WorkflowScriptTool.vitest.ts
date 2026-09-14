@@ -1180,22 +1180,34 @@ return null`;
     () =>
       Effect.gen(function* () {
         const runId = runIdFor('tool-test');
-        // The claim never refuses its own holder, so a live generation of the
-        // id in this process is what the registry answers with.
-        vi.spyOn(currentSession().runs, 'isActiveOrResuming').mockReturnValue(
-          true,
+        // The claim never refuses its own holder, so the run's lane is what
+        // separates two dispatches of one deterministic id: the first holds
+        // it from admission through registration, and the second is refused
+        // where a read of the same fact would have let it register too.
+        const registering = yield* Deferred.make<void>();
+        const finishRegistration = yield* Deferred.make<void>();
+        mocks.registerRun.mockImplementation(() =>
+          Deferred.succeed(registering, undefined).pipe(
+            Effect.andThen(Deferred.await(finishRegistration)),
+          ),
         );
 
-        const result = yield* callTool();
+        const first = yield* Effect.forkChild(callTool());
+        yield* Deferred.await(registering);
+        const second = yield* Fiber.join(yield* Effect.forkChild(callTool()));
 
-        expect(result).toMatchObject({
+        expect(second).toMatchObject({
           status: 'executed',
           summary: "Workflow script 'tool-test' is already running",
         });
-        expect(result.output).toContain(`Run ID: ${runId}`);
-        expect(mocks.registerRun).not.toHaveBeenCalled();
-        expect(mocks.createChildRun).not.toHaveBeenCalled();
-        expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+        expect(second.output).toContain(`Run ID: ${runId}`);
+
+        yield* Deferred.succeed(finishRegistration, undefined);
+        expect((yield* Fiber.join(first)).status).toBe('executed');
+        // One admission, so one registration and one child loop.
+        expect(mocks.registerRun).toHaveBeenCalledOnce();
+        expect(mocks.createChildRun).toHaveBeenCalledOnce();
+        expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
       }),
   );
 });
