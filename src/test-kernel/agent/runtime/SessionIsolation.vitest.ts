@@ -1,7 +1,8 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import {
   createRunContext,
@@ -124,76 +125,73 @@ describe('session isolation', () => {
     }
   });
 
-  it('the host-exit drain settles each session under its own root, outside any scope', async () => {
-    const sessionA = createTestSession({
-      roots: createFakeWorkspaceRoots({
-        workspacePath: fakePath('papers/a'),
-        storagePath: fakePath('storage/a'),
-      }),
-    });
-    const sessionB = createTestSession({
-      roots: createFakeWorkspaceRoots({
-        workspacePath: fakePath('papers/b'),
-        storagePath: fakePath('storage/b'),
-      }),
-    });
-    const live = [
-      [sessionA, 'a0da01' as RunId],
-      [sessionB, 'b0db01' as RunId],
-    ] as const;
-    const closures = live.map(([session]) =>
-      vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {}),
-    );
-    try {
-      for (const [session, runId] of live) {
-        publishTestRunStart(session, runId);
-        session.publish([
-          {
-            type: 'stage.start',
-            aggregateId: aggregateId('run', runId),
-            id: `stage:${runId}`,
-            label: 'Running stage',
-          },
-        ]);
-        await session.settlePublications();
-        session.runs.track(
-          testRunHandle({
-            runId,
-            agent: 'assistant',
+  it.effect(
+    'the host-exit drain settles each session under its own root, outside any scope',
+    () =>
+      Effect.gen(function* () {
+        const sessionA = createTestSession({
+          roots: createFakeWorkspaceRoots({
+            workspacePath: fakePath('papers/a'),
+            storagePath: fakePath('storage/a'),
           }),
-        );
-        // The run's first append claimed its aggregate for this process.
-        expect(await Effect.runPromise(session.ownsRun(runId))).toBe(true);
-      }
-      // Each session claims runs in its own root: paper B never holds
-      // paper A's run.
-      expect(await Effect.runPromise(sessionB.ownsRun('a0da01' as RunId))).toBe(
-        false,
-      );
-      await Effect.runPromise(
-        settleLiveSessionRuns(new AbortController().signal),
-      );
-      for (const [index, [, runId]] of live.entries()) {
-        expect(closures[index]).toHaveBeenCalledWith(runId, {
-          type: 'stage.end',
-          id: `stage:${runId}`,
-          status: RUN_OUTCOME.CANCELLED,
         });
-      }
-      expect(storageMocks.settledUnder.get('a0da01')).toBe(
-        fakePath('storage/a'),
-      );
-      expect(storageMocks.settledUnder.get('b0db01')).toBe(
-        fakePath('storage/b'),
-      );
-      for (const [session, runId] of live) {
-        expect(await Effect.runPromise(session.ownsRun(runId))).toBe(false);
-      }
-    } finally {
-      await Effect.runPromise(sessionA.dispose());
-      await Effect.runPromise(sessionB.dispose());
-    }
-  });
+        yield* Effect.addFinalizer(() => sessionA.dispose());
+        const sessionB = createTestSession({
+          roots: createFakeWorkspaceRoots({
+            workspacePath: fakePath('papers/b'),
+            storagePath: fakePath('storage/b'),
+          }),
+        });
+        yield* Effect.addFinalizer(() => sessionB.dispose());
+        const live = [
+          [sessionA, 'a0da01' as RunId],
+          [sessionB, 'b0db01' as RunId],
+        ] as const;
+        const closures = live.map(([session]) =>
+          vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {}),
+        );
+        for (const [session, runId] of live) {
+          publishTestRunStart(session, runId);
+          session.publish([
+            {
+              type: 'stage.start',
+              aggregateId: aggregateId('run', runId),
+              id: `stage:${runId}`,
+              label: 'Running stage',
+            },
+          ]);
+          yield* session.settlePublications();
+          session.runs.track(
+            testRunHandle({
+              runId,
+              agent: 'assistant',
+            }),
+          );
+          // The run's first append claimed its aggregate for this process.
+          expect(yield* session.ownsRun(runId)).toBe(true);
+        }
+        // Each session claims runs in its own root: paper B never holds
+        // paper A's run.
+        expect(yield* sessionB.ownsRun('a0da01' as RunId)).toBe(false);
+        yield* settleLiveSessionRuns(new AbortController().signal);
+        for (const [index, [, runId]] of live.entries()) {
+          expect(closures[index]).toHaveBeenCalledWith(runId, {
+            type: 'stage.end',
+            id: `stage:${runId}`,
+            status: RUN_OUTCOME.CANCELLED,
+          });
+        }
+        expect(storageMocks.settledUnder.get('a0da01')).toBe(
+          fakePath('storage/a'),
+        );
+        expect(storageMocks.settledUnder.get('b0db01')).toBe(
+          fakePath('storage/b'),
+        );
+        for (const [session, runId] of live) {
+          expect(yield* session.ownsRun(runId)).toBe(false);
+        }
+      }),
+  );
 
   it('a handle interrupt target lands in the run session only', async () => {
     const sessionB = createTestSession();
