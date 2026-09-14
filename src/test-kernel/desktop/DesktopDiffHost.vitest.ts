@@ -7,6 +7,7 @@ import path from 'node:path';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
+import { effectRuntime } from '@platform/processRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { loadSourceModule } from './loadSourceModule.ts';
 
@@ -28,6 +29,7 @@ function createHost(overrides: Partial<DiffHostOptions> = {}) {
     openedPaths.push(filePath);
   });
   const host = createDesktopDiffHost({
+    runtime: effectRuntime(),
     openPath,
     recordPatchDir: (tempDir: string) => {
       recordedPatchDirs.push(tempDir);

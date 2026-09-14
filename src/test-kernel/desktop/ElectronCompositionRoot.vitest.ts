@@ -13,6 +13,7 @@ import {
   nodeProcesses,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
+import { effectRuntime } from '@platform/processRuntime';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -120,6 +121,7 @@ describe('desktop composition root and launch environment', () => {
             processRoots: host.roots,
             globalConfigStore: config,
             records,
+            runtime: effectRuntime(),
             runWrite: (write) => Effect.runPromise(write),
             stores: {
               secrets: host.secrets,
@@ -195,6 +197,7 @@ describe('desktop composition root and launch environment', () => {
           processRoots: host.roots,
           globalConfigStore: config,
           records,
+          runtime: effectRuntime(),
           runWrite: (write) => Effect.runPromise(write),
           stores: {
             secrets: host.secrets,

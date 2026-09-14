@@ -14,7 +14,7 @@ import type {
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
 import type { DiffSource } from '@hosts/uiHosts';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -49,6 +49,8 @@ interface DesktopToolEditApprovalHostOptions {
   ui: DesktopToolEditApprovalUi;
   /** The window's `request.decide`: where a staged request's decision goes. */
   decide: ToolEditApprovalHost['decide'];
+  /** The process runtime this window's run wiring was handed. */
+  runtime: ProcessRuntime;
 }
 
 export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
@@ -67,14 +69,15 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
     context: ToolEditPreviewContext,
   ): Promise<ToolEditPreview> {
     const tempDir = await createTexraTempDir('texra-tool-edit-');
-    const { originalPath, proposedPath } = await effectRuntime().runPromise(
-      writeApprovalTempFiles({
-        directory: tempDir,
-        targetPath: request.path,
-        originalContent: request.originalContent,
-        proposedContent: request.proposedContent,
-      }),
-    );
+    const { originalPath, proposedPath } =
+      await this.options.runtime.runPromise(
+        writeApprovalTempFiles({
+          directory: tempDir,
+          targetPath: request.path,
+          originalContent: request.originalContent,
+          proposedContent: request.proposedContent,
+        }),
+      );
     return new DesktopToolEditPreview(this.options.ui, context, {
       tempDir,
       originalPath,

@@ -46,7 +46,7 @@ import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { DisposableStore } from '@platform/disposable';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
@@ -299,11 +299,15 @@ function createWindow(options: {
   agentDirectories: AgentDirectoriesPort;
   /** See ElectronPlatformInitResult.resourcesPath. */
   resourcesPath: string;
+  /**
+   * The process runtime the composition root built. Every Effect this window
+   * runs settles on it, and every handler and service below is handed it.
+   */
+  runtime: ProcessRuntime;
 }): void {
   const activeProject = () => options.projects.active();
-  // This window's handle on the process runtime, taken once for the project
-  // bindings below.
-  const runtime = effectRuntime();
+  // This window's handle on the process runtime, as its opener handed it over.
+  const runtime = options.runtime;
   const initialProject = activeProject();
   const initialWindowTitle = getDesktopWindowTitle(
     initialProject.session,
@@ -397,7 +401,7 @@ function createWindow(options: {
   const showErrorMessage = showMessageBoxOfType('error');
   const reportAsyncError = (error: unknown) => {
     console.error('Desktop asynchronous operation failed:', error);
-    effectRuntime().runFork(
+    runtime.runFork(
       hostPort(() =>
         showErrorMessage(
           `A desktop operation failed: ${toErrorMessage(error)}`,
@@ -467,7 +471,7 @@ function createWindow(options: {
   // `app.whenReady()` block, which the lock-losing process never reaches, so
   // no extra single-instance gate is needed here; `checkForDesktopUpdate`
   // itself dedupes concurrent calls and window reopens.
-  effectRuntime().runFork(
+  runtime.runFork(
     checkForDesktopUpdate({
       currentVersion: app.getVersion(),
       isPackaged: app.isPackaged,
@@ -515,7 +519,7 @@ function createWindow(options: {
   /** Open a documentation URL without keeping the caller waiting; the browser
    *  never opening is reported, not swallowed. */
   const openExternalInBackground = (url: string): void => {
-    effectRuntime().runFork(
+    runtime.runFork(
       hostPort(() => previewHost.openExternal(url)).pipe(
         Effect.catch((error) =>
           Effect.sync(() => reportBackgroundError(error)),
@@ -567,7 +571,7 @@ function createWindow(options: {
   const refreshDesktopAuthSurfaces = async () => {
     await Promise.all(
       [...projectBindings.values()].map((binding) =>
-        effectRuntime().runPromise(binding.snapshot.refreshAuth),
+        runtime.runPromise(binding.snapshot.refreshAuth),
       ),
     );
     await settingsIpcRef.current?.refreshAuthDependentData({
@@ -590,6 +594,7 @@ function createWindow(options: {
       callbackState: options.authCallbackState,
       host: desktopAuthHost,
       log: console,
+      runtime,
     }),
   );
   /**
@@ -642,7 +647,7 @@ function createWindow(options: {
     const project = projectByKey(key);
     if (!project || project.root === undefined || project === activeProject())
       return;
-    effectRuntime().runFork(
+    runtime.runFork(
       options.projects
         .activate(project.root)
         .pipe(
@@ -658,7 +663,7 @@ function createWindow(options: {
     if (!project || project.root === undefined) return;
     if (hasUnsavedChanges && showDiscardDialog() !== 1) return;
     const root = project.root;
-    effectRuntime().runFork(
+    runtime.runFork(
       options.projects
         .close(root)
         .pipe(
@@ -675,13 +680,14 @@ function createWindow(options: {
     });
     const selectedPath = result.canceled ? undefined : result.filePaths[0];
     if (!selectedPath) return;
-    const project = await effectRuntime().runPromise(
+    const project = await runtime.runPromise(
       options.projects.open(selectedPath),
     );
     if (project.root !== undefined) selectProject(project.key);
   };
   attachRendererConsoleLog(window.webContents);
   const desktopDiffHost = createDesktopDiffHost({
+    runtime,
     openPath: previewHost.openPath,
     recordPatchDir: (tempDir) => {
       externalDiffPatchDirs.add(tempDir);
@@ -703,7 +709,7 @@ function createWindow(options: {
    * run behind it.
    */
   const awaitOrReport = (started: Promise<void>): Promise<void> =>
-    effectRuntime().runPromise(
+    runtime.runPromise(
       hostPort(() => started).pipe(
         Effect.catch((error) =>
           Effect.sync(() => reportBackgroundError(error)),
@@ -711,6 +717,7 @@ function createWindow(options: {
       ),
     );
   const requestDiffHost = createDesktopDiffHost({
+    runtime,
     openPath: requestPreviewHost.openPath,
     recordPatchDir: (tempDir) => {
       externalDiffPatchDirs.add(tempDir);
@@ -821,6 +828,7 @@ function createWindow(options: {
     const funnel = onboardingIpcRef.current?.funnelState();
     if (funnel) snapshot.setOnboarding(funnel);
     const run = createDesktopAgentRun({
+      runtime,
       host: agentRunHost,
       toolEditPreview: {
         openPath: requestPreviewHost.openPath,
@@ -834,6 +842,7 @@ function createWindow(options: {
       onLaunched: (runId) => bridge.surfaceAction({ kind: 'select', runId }),
     });
     const hostRequests = createDesktopHostRequests({
+      runtime,
       session: project.session,
       secrets: options.secrets,
       globalState: options.globalState,
@@ -937,7 +946,7 @@ function createWindow(options: {
     await Promise.all(
       [...projectBindings.values()].map((binding) =>
         runInSession(binding.project.session, () =>
-          effectRuntime().runPromise(binding.snapshot.refreshCatalogs),
+          runtime.runPromise(binding.snapshot.refreshCatalogs),
         ),
       ),
     );
@@ -1017,9 +1026,10 @@ function createWindow(options: {
       void runInSession(previous.session, () => previousResources.dispose());
     }
     projectResources.add(
-      installDesktopWindowTitle(window, project.session, project.root),
+      installDesktopWindowTitle(window, project.session, project.root, runtime),
     );
     const agentSettingsController = new DefaultDesktopAgentSettingsController({
+      runtime,
       workspaceState: project.roots.workspaceState,
       globalState: options.globalState,
       registry: {
@@ -1083,6 +1093,7 @@ function createWindow(options: {
     });
     const credentialSettingsController =
       new DefaultDesktopCredentialSettingsController({
+        runtime,
         workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
         config: project.roots.config,
@@ -1180,13 +1191,13 @@ function createWindow(options: {
           buildItems: async (cachedResults) => {
             const { buildToolDashboardItems } =
               await import('@controllers/settingsView/ToolDashboardData');
-            return effectRuntime().runPromise(
+            return runtime.runPromise(
               buildToolDashboardItems('desktop', cachedResults),
             );
           },
           getCachedCheckResults: async () => getLastCheckResults() ?? undefined,
           refreshAvailability: () =>
-            effectRuntime().runPromise(refreshToolAvailability()),
+            runtime.runPromise(refreshToolAvailability()),
           planTerminalAction: async (toolId, kind) => {
             const { planToolTerminalAction } =
               await import('@controllers/settingsView/ToolDashboardData');
@@ -1228,6 +1239,7 @@ function createWindow(options: {
       secrets: options.secrets,
       ui: settingsUi,
       session: project.session,
+      runtime,
     });
     settingsIpcRef.current = settingsIpc;
     // Holds project-scoped subscriptions (goal state and app signals) that
@@ -1269,7 +1281,7 @@ function createWindow(options: {
       // later "Run Setup" click can retry.
       kickoffSetup: async () => {
         const setupSession = activeProject().session;
-        await effectRuntime().runPromise(
+        await runtime.runPromise(
           Effect.tryPromise({
             try: async () => {
               // The project the user started setup in, taken before the first await:
@@ -1292,7 +1304,7 @@ function createWindow(options: {
               // Idempotent: joins the in-flight/initialized registry so a kickoff
               // racing the startup `loadAgents()` cannot hit "Could not find agent:
               // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
-              await effectRuntime().runPromise(loadAgents());
+              await runtime.runPromise(loadAgents());
               await runInSession(binding.project.session, async () =>
                 binding.run.runValidated(request),
               );
@@ -1329,6 +1341,7 @@ function createWindow(options: {
       },
       signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
       onAsyncError: reportAsyncError,
+      runtime,
     },
   );
   onboardingIpcRef.current = onboardingIpc;
@@ -1340,7 +1353,7 @@ function createWindow(options: {
       }
     }),
   );
-  effectRuntime().runFork(
+  runtime.runFork(
     hostPort(() => onboardingIpc.refreshOnboardingFunnel()).pipe(
       Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
     ),
@@ -1569,7 +1582,7 @@ function createWindow(options: {
   window.once('closed', () => {
     const continueQuit = continueQuitAfterWindowClose;
     continueQuitAfterWindowClose = undefined;
-    effectRuntime().runSync(
+    runtime.runSync(
       Effect.try({
         try: () => windowResources.dispose(),
         catch: (error) => error,
@@ -1618,18 +1631,22 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // Every resume call is run-time or user-triggered, so the registry is
       // open by the time the owner reads it.
       let projects!: DesktopProjectRegistry;
+      // Both are read through thunks by the resume owner below, which must
+      // exist before `initializeElectronPlatform` builds either of them: it is
+      // the resume port that call installs. Neither thunk is a lookup; each
+      // reads this entry's own local.
       const processResumeOwner = new DesktopProcessResumeOwner({
         sessions: () =>
           [projects.fallback(), ...projects.list()].map((p) => p.session),
+        runtime: () => runtime,
       });
       const platformInit = await initializeElectronPlatform(
         desktopMainDir,
         processResumeOwner,
       );
-      const { lifecycle } = platformInit;
-      // The process runtime the platform above installed, in a local: the
-      // shutdown handlers and the startup program below run on it.
-      const runtime = effectRuntime();
+      // The process runtime the platform above built: the shutdown handlers,
+      // the startup program, and every surface they wire run on it.
+      const { lifecycle, runtime } = platformInit;
       // Process root: session-lifetime resources register at creation and are
       // disposed LIFO in the ON phase (every project's process stores → result
       // toast), then every project's session, most recently opened first.
@@ -1686,6 +1703,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                 secrets: platformInit.secrets,
                 globalState: platformInit.globalState,
               },
+              runtime,
             }),
           );
           // Reopen every folder left open last time and show the one shown
@@ -1727,8 +1745,10 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           const authCoordinator = createDesktopAuthCoordinator({
             secrets: platformInit.secrets,
             log: console,
+            runtime,
           });
           const authCallbackState = createDesktopAuthCallbackState(
+            runtime,
             console,
             platformInit.globalState,
           );
@@ -1742,10 +1762,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               secrets: platformInit.secrets,
               agentDirectories: platformInit.agentDirectories,
               resourcesPath: platformInit.resourcesPath,
+              runtime,
             });
           reopenMainWindow();
           if (unopenedProjects.length > 0) {
-            effectRuntime().runFork(
+            runtime.runFork(
               hostPort(() =>
                 showDesktopWarningDialog(
                   `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
@@ -1770,11 +1791,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       }
     })
     // The one catch this entry keeps. It guards `initializeElectronPlatform`
-    // itself, which is what installs the process Effect runtime, so there is
-    // no runtime to fold this failure on: a platform init that dies before
-    // `installProcessRuntime` would make `effectRuntime()` throw over the
-    // error it was meant to report. Electron's `whenReady()` promise is the
-    // real foreign boundary here.
+    // itself, which is what builds the process Effect runtime, so there is no
+    // runtime to fold this failure on: a platform init that dies before
+    // `installProcessRuntime` never returns the runtime this entry would have
+    // folded the error on. Electron's `whenReady()` promise is the real
+    // foreign boundary here.
     .catch((error: unknown) => {
       reportFatalStartupError(error);
     });

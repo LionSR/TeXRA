@@ -21,7 +21,7 @@ import { createSettingsAgentControllers } from '@controllers/settingsView/Settin
 import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import type { MessageHost } from '@hosts/uiHosts';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   agentKey,
@@ -62,6 +62,9 @@ type DesktopAgentHandlers = Pick<
 >;
 
 interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
+  /** The process runtime the composition root built; the registry and roster
+   *  programs below run on it. */
+  readonly runtime: ProcessRuntime;
   readonly registry: {
     readonly loadAgents: typeof loadAgents;
     readonly refreshAgents: typeof refresh;
@@ -142,6 +145,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly notifications: DefaultDesktopAgentSettingsControllerOptions['notifications'];
   private readonly resourcesPath: string;
   private readonly agentActions;
+  private readonly runtime: ProcessRuntime;
 
   constructor(options: DefaultDesktopAgentSettingsControllerOptions) {
     const {
@@ -156,6 +160,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       notifications,
       resourcesPath,
     } = options;
+    this.runtime = options.runtime;
     this.registry = registry;
     this.directory = directory;
     this.renderer = renderer;
@@ -252,7 +257,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   private async postAgentSelectionData(): Promise<void> {
-    await effectRuntime().runPromise(this.registry.loadAgents());
+    await this.runtime.runPromise(this.registry.loadAgents());
     this.renderer.postToRenderer(
       buildAgentSelectionMessage({
         buildSelectionItems: () => this.catalogController.buildSelectionItems(),
@@ -325,7 +330,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
    * registry was built from, so a plain re-post would serve a stale catalog.
    */
   private async refreshAfterAgentMutation(): Promise<void> {
-    await effectRuntime().runPromise(this.registry.refreshAgents());
+    await this.runtime.runPromise(this.registry.refreshAgents());
     await this.refreshCatalogData();
   }
 
@@ -434,7 +439,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       typeof SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET
     >,
   ): Promise<void> {
-    await effectRuntime().runPromise(
+    await this.runtime.runPromise(
       applySettingsTeamRoster(message.presetId, {
         catalog: this.catalogController,
         loadLocalCatalog: () =>
@@ -465,7 +470,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       prompt: 'Name for the new team',
     });
     if (!name?.trim()) return;
-    await effectRuntime().runPromise(this.registry.loadAgents());
+    await this.runtime.runPromise(this.registry.loadAgents());
     const preset = await this.catalogController.saveCurrentPreset(name);
     this.postAgentModePresets();
     await this.onCatalogChanged();

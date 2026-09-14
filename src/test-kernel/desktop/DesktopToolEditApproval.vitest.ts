@@ -8,6 +8,7 @@ import { afterEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 import type { DesktopToolEditApprovalUi } from '@desktop/main/desktopToolEditApproval';
 import type { DiffSource } from '@hosts/uiHosts';
+import { effectRuntime } from '@platform/processRuntime';
 
 import type { RunId } from '@shared/schemas';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -138,6 +139,7 @@ function createApprovalFixture(
     const session = createTestSession();
     yield* Effect.addFinalizer(() => session.dispose());
     const host = new modules.desktopModule.DesktopToolEditApprovalHost({
+      runtime: effectRuntime(),
       ui: {
         ...createStubDesktopAgentRunHost(),
         closeDiff: async () => undefined,

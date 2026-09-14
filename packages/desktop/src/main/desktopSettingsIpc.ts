@@ -10,7 +10,7 @@ import {
 import { appSignals } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
@@ -107,6 +107,9 @@ export interface DesktopSettingsIpcOptions {
    * process-default session, so it must be passed.
    */
   session: SessionHandle;
+  /** The process runtime this window was handed; every Effect below runs on
+   *  it. */
+  runtime: ProcessRuntime;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
@@ -127,7 +130,7 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): DesktopSettingsIpc {
-  const { globalState } = options;
+  const { globalState, runtime } = options;
   const { workspaceState, config } = options.session.roots;
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
@@ -160,7 +163,7 @@ export function createDesktopSettingsIpc(
 
   async function postMemoryData(): Promise<void> {
     options.postToRenderer(
-      await effectRuntime().runPromise(memoryController.getMemoryDataMessage()),
+      await runtime.runPromise(memoryController.getMemoryDataMessage()),
     );
   }
 
@@ -172,7 +175,7 @@ export function createDesktopSettingsIpc(
   async function postMemoryMutation(
     mutation: Effect.Effect<unknown>,
   ): Promise<void> {
-    const message = await effectRuntime().runPromise(mutation);
+    const message = await runtime.runPromise(mutation);
     if (message != null) options.postToRenderer(message);
   }
 
@@ -184,7 +187,7 @@ export function createDesktopSettingsIpc(
   async function postMemoryPreview(storagePath: string): Promise<void> {
     try {
       options.postToRenderer(
-        await effectRuntime().runPromise(
+        await runtime.runPromise(
           memoryController.getMemoryPreviewMessage(storagePath),
         ),
       );
@@ -357,8 +360,10 @@ export function createDesktopSettingsIpc(
   // needs the push. The session outlives the window, so the subscription is
   // window-scoped and released in `dispose` below.
   const subscriptions = [
-    subscribeDesktopGoalChanges(options.session, () =>
-      runAsyncInPaper(postGoalList),
+    subscribeDesktopGoalChanges(
+      options.session,
+      () => runAsyncInPaper(postGoalList),
+      runtime,
     ),
   ];
 
@@ -392,14 +397,14 @@ export function createDesktopSettingsIpc(
     });
     await options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
     await postGitHubTokenStatus();
-    await effectRuntime().runPromise(refreshToolAvailability());
+    await runtime.runPromise(refreshToolAvailability());
   }
 
   async function removeGitHubToken(): Promise<void> {
     await options.secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
     await options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
     await postGitHubTokenStatus();
-    await effectRuntime().runPromise(refreshToolAvailability());
+    await runtime.runPromise(refreshToolAvailability());
   }
 
   async function postGitHubSubscriptions(): Promise<void> {

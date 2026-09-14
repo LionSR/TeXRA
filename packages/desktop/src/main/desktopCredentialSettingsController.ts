@@ -18,7 +18,7 @@ import {
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import type { ConfigProvider } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -72,6 +72,9 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
    *  it (PRD 8.1). */
   readonly onModelOptionsChanged: () => Promise<void>;
   readonly onError: (error: unknown) => void;
+  /** The process runtime the composition root built; this controller's
+   *  Effect-typed provider calls settle on it. */
+  readonly runtime: ProcessRuntime;
 }
 
 type DesktopProfileHandlers = Pick<
@@ -340,7 +343,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       (provider, error) =>
         `${provider.displayName} sign-in failed: ${toErrorMessage(error)}`,
       async (provider) => {
-        const account = await effectRuntime().runPromise(
+        const account = await this.options.runtime.runPromise(
           provider.signIn({
             transport: 'auto',
             present: this.signInPresenter(provider.displayName),

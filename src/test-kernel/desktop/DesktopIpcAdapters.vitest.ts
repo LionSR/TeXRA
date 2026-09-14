@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { effectRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -87,6 +88,7 @@ async function createOnboardingHarness({
       kickoffSetup: async () => {},
       signInWithChatGpt: async () => {},
       onAsyncError: vi.fn(),
+      runtime: effectRuntime(),
       ...options,
       state,
     },

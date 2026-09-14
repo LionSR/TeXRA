@@ -9,6 +9,7 @@ import { DefaultDesktopCredentialSettingsController } from '@desktop/main/deskto
 import * as logger from '@logger/logUtils';
 import { apiKeySecretName } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import { effectRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -135,6 +136,7 @@ async function createFixture({
   );
 
   const controller = new DefaultDesktopCredentialSettingsController({
+    runtime: effectRuntime(),
     workspaceState,
     globalState,
     config: new FakeConfigProvider(),

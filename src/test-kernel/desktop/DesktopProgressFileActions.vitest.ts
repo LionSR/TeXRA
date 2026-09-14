@@ -7,6 +7,7 @@ import type { SessionHandle } from '@agent/runtime';
 
 import type { LaTeXdiffResult } from '@latex/latexdiff';
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { OutputFileInfo } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -104,9 +105,6 @@ async function loadFileActions(options: {
   mocks.doMock('@platform/platform', () => ({
     platform: () => ({ fs: { readDirectory: vi.fn(), isSymlink: vi.fn() } }),
   }));
-  mocks.doMock('@platform/processRuntime', () => ({
-    effectRuntime: () => ({ runPromise: Effect.runPromise }),
-  }));
   mocks.doMock('@latex/latexdiff/runLatexdiff', () => ({
     runLatexdiffForRun,
   }));
@@ -144,6 +142,11 @@ async function loadFileActions(options: {
       listWorkspaceCandidateFiles: vi.fn(async () => []),
       session: { snapshots: { read: vi.fn() } } as unknown as SessionHandle,
       globalState: new FakeStateStore(),
+      // Every latexdiff program this suite reaches is mocked, so the runtime
+      // only has to settle them.
+      runtime: {
+        runPromise: Effect.runPromise,
+      } as unknown as ProcessRuntime,
     },
   );
 
