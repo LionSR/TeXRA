@@ -1,6 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
-import { Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 // Test composition imports
 
@@ -23,10 +23,6 @@ import {
   decideRequest,
   sessionWithInteractions,
 } from '../agent/progressTestUtils';
-import { waitForCondition } from '../support/asyncTestUtils';
-
-/** Sessions and request watchers the cases opened, released after each. */
-const cleanups: Array<() => Promise<void>> = [];
 
 /**
  * Dispatch the tool on its own run and hold the command request it opens: the
@@ -35,14 +31,24 @@ const cleanups: Array<() => Promise<void>> = [];
  */
 function dispatchWolfram(runId: RunId, code: string) {
   return Effect.gen(function* () {
-    const session = sessionWithInteractions(createRecordingHost().interactions);
+    const session = yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        sessionWithInteractions(createRecordingHost().interactions),
+      ),
+      (session) => session.dispose(),
+    );
     publishTestRunStart(session, runId);
     yield* Effect.promise(() => session.settlePublications());
-    const requests = autoDecideRequests(session, () => null);
-    cleanups.push(() => {
-      requests.detach();
-      return Effect.runPromise(session.dispose());
-    });
+    const requestOpened = yield* Deferred.make<void>();
+    const requests = yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        autoDecideRequests(session, () => {
+          Deferred.doneUnsafe(requestOpened, Effect.void);
+          return null;
+        }),
+      ),
+      (requests) => Effect.sync(() => requests.detach()),
+    );
 
     const result = yield* Effect.forkChild(
       new WolframTool().call({ code }).pipe(
@@ -53,11 +59,7 @@ function dispatchWolfram(runId: RunId, code: string) {
         ),
       ),
     );
-    yield* Effect.promise(() =>
-      waitForCondition(() => requests.opened.length > 0, {
-        timeoutMessage: 'Timed out waiting for the command request to open',
-      }),
-    );
+    yield* Deferred.await(requestOpened);
     const opened = requests.opened[0]!;
     if (opened.payload.kind !== 'bash') {
       throw new Error(`Expected a bash request, not ${opened.payload.kind}.`);
@@ -75,9 +77,12 @@ function dispatchWolfram(runId: RunId, code: string) {
   });
 }
 
+// it.live: the `request.opened` row these cases wait on is delivered by the
+// Stream consumer `autoDecideRequests` forks on the process runtime, and the
+// mocked `runToolWithCheck` resolves on the promise queue; nothing on the
+// approval path sleeps through the Effect clock.
 describe('WolframTool approval', () => {
-  afterEach(async () => {
-    for (const release of cleanups.splice(0)) await release();
+  afterEach(() => {
     vi.restoreAllMocks();
   });
 
