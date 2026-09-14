@@ -119,6 +119,22 @@ export class SettingsProfileKeyController {
    * write, a host that could not prompt — is reported to the user rather than
    * raised: every caller of this controller is a message handler with nowhere
    * to put an error.
+   *
+   * Cancellation is not one of those failures. `Effect.exit` absorbs an
+   * interruption exactly as it absorbs a failure, so an interrupted action
+   * would otherwise tell the user the key could not be set over a credential
+   * the store's uninterruptible commit had already written. Each exit is
+   * checked for interrupts and re-raised instead, which also skips the report
+   * and the refresh below — both are host ports, and what interrupts these
+   * fibers is the process runtime being disposed on the shutdown path, with
+   * the surfaces they would repaint going away with it.
+   *
+   * Nothing durable is lost with them. The refresh writes nothing: it drops
+   * the process's API-key lookup cache — five seconds of TTL, in memory, gone
+   * with the process — and repaints host surfaces. The credential is already
+   * on disk, and everything that has to outlive the fiber belongs to the
+   * write path, where `saveProviderApiKey` and `UnsetApiKeyTool` carry their
+   * post-commit steps as `Effect.ensuring` finalizers.
    */
   private run(
     provider: string,
@@ -128,6 +144,7 @@ export class SettingsProfileKeyController {
     return Effect.gen({ self: this }, function* () {
       const changed = yield* Effect.exit(action);
       if (Exit.isFailure(changed)) {
+        if (Cause.hasInterrupts(changed.cause)) return yield* Effect.interrupt;
         yield* this.report(
           `Failed to ${verb} ${this.deps.getProviderDisplayName(provider)} API key`,
           Cause.squash(changed.cause),
@@ -140,6 +157,9 @@ export class SettingsProfileKeyController {
         this.fromPort(() => this.deps.refreshAfterKeyChange(provider)),
       );
       if (Exit.isFailure(refreshed)) {
+        if (Cause.hasInterrupts(refreshed.cause)) {
+          return yield* Effect.interrupt;
+        }
         const gerund = verb === 'set' ? 'setting' : 'removing';
         yield* this.report(
           `Failed to refresh after ${gerund} ${this.deps.getProviderDisplayName(provider)} API key`,

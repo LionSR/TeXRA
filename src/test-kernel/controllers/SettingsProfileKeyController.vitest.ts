@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 
-import { Effect } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 import { describe, it } from 'vitest';
 
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
@@ -224,5 +224,28 @@ describe('SettingsProfileKeyController', () => {
     assert.match(failures[0] ?? '', /Failed to remove OpenAI API key/);
     assert.deepEqual(deleted, []);
     assert.equal(refreshCount(), 0);
+  });
+
+  // Regression pin: `Effect.exit` absorbs an interruption the same way it
+  // absorbs a failure, so a cancelled write used to tell the user the key
+  // could not be set — over a credential the store's uninterruptible commit
+  // may already have written.
+  it('propagates interruption instead of reporting a cancelled write', async () => {
+    const { controller, secrets, failures, refreshCount } =
+      await createController({ inputResponses: ['sk-real-openai-key'] });
+    secrets.set = () => Effect.interrupt;
+
+    const exit = await Effect.runPromise(
+      Effect.exit(controller.setProviderKey('openai')),
+    );
+
+    assert.deepEqual(
+      {
+        interrupted: Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause),
+        failures,
+        refreshes: refreshCount(),
+      },
+      { interrupted: true, failures: [], refreshes: 0 },
+    );
   });
 });

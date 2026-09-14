@@ -183,7 +183,9 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * the atomic rename is the only guarantee, so two hosts flushing the same file
  * in the same instant can still lose one of the two mutations. Reads (`get`,
  * `has`, `snapshot`, `keys`) still serve this instance's view: open-time
- * contents plus its own mutations; they don't observe other writers' changes.
+ * contents plus its own committed mutations — a `set` still queued behind
+ * another one has changed nothing yet; they don't observe other writers'
+ * changes.
  *
  * `set` is the store's own write and is an `Effect`. `update` exists only
  * because {@link StateStore} and `ConfigStore` mirror `vscode.Memento`, whose
@@ -224,35 +226,50 @@ export class JsonStore implements StateStore {
   }
 
   /**
-   * Apply the mutation in memory, then flush it on the file's lane in
-   * {@link writeLanes}. Both steps happen in the effect's first synchronous
-   * step, so flushes run in `set()` order rather than racing on
-   * `mkdir`/read/`write-file-atomic` timing; a failed flush doesn't stop the
-   * lane from running subsequent flushes.
+   * Commit one mutation: take the file's lane in {@link writeLanes}, apply
+   * the mutation to this instance's record, and flush it. Lanes are claimed
+   * in the effect's first synchronous step, so commits run in `set()` order
+   * rather than racing on `mkdir`/read/`write-file-atomic` timing; a failed
+   * flush doesn't stop the lane from running subsequent commits.
    *
-   * Waiting for the lane is interruptible, the flush behind it is not: a
-   * writer still queued can be cancelled, and one that has entered the lane
-   * runs its read-modify-write to completion rather than leaving the file
-   * holding a record it read before another writer's mutation. That is where
-   * the credential stores' Q2 guarantee lives — this store owns the lane, so
-   * it owns the mask too, and a caller must not wrap `set` in one of its own.
+   * Waiting for the lane is interruptible, the commit behind it is not — and
+   * the in-memory mutation is part of that commit, not of the wait. A writer
+   * cancelled while queued leaves the record and the file exactly as it found
+   * them; one that has entered the lane runs its read-modify-write to
+   * completion rather than leaving the file holding a record it read before
+   * another writer's mutation, or leaving this instance serving a value that
+   * never reached disk — the store outlives the fiber that wrote through it
+   * (`ElectronSecrets` answers `getStored`/`listStoredKeys` from here), so a
+   * mutation applied ahead of the wait would survive a cancellation that
+   * wrote nothing and read as committed until the process restarts. There is
+   * one mutator: a removal is `set(key, undefined)` and `update` is `set` on
+   * the opener's runtime, so both inherit this region rather than carrying
+   * one of their own. That is also where the credential stores' Q2 guarantee
+   * lives — this store owns the lane, so it owns the mask too, and a caller
+   * must not wrap `set` in one of its own.
    */
   set(key: string, value: unknown) {
-    return Effect.suspend(() => {
-      if (value === undefined) {
-        delete this.data[key];
-      } else {
-        this.data[key] = value;
-      }
-      return withPerKeyLane(
-        writeLanes,
-        this.filePath,
-      )(
-        Effect.uninterruptible(
-          flush(this.filePath, this.options.mode, key, value, this.snapshot()),
-        ),
-      );
-    });
+    return withPerKeyLane(
+      writeLanes,
+      this.filePath,
+    )(
+      Effect.uninterruptible(
+        Effect.suspend(() => {
+          if (value === undefined) {
+            delete this.data[key];
+          } else {
+            this.data[key] = value;
+          }
+          return flush(
+            this.filePath,
+            this.options.mode,
+            key,
+            value,
+            this.snapshot(),
+          );
+        }),
+      ),
+    );
   }
 
   /**
