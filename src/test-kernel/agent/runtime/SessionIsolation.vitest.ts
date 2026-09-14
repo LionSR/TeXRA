@@ -15,7 +15,6 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
-import { acquireFreshRunLease, ownsRunLease } from '@agent/storage/runLease';
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -142,10 +141,8 @@ describe('session isolation', () => {
       [sessionA, 'a0da01' as RunId],
       [sessionB, 'b0db01' as RunId],
     ] as const;
-    const closures = live.map(([session, runId]) =>
-      vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {
-        expect(runInSession(session, () => ownsRunLease(runId))).toBe(true);
-      }),
+    const closures = live.map(([session]) =>
+      vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {}),
     );
     try {
       for (const [session, runId] of live) {
@@ -158,19 +155,21 @@ describe('session isolation', () => {
             label: 'Running stage',
           },
         ]);
-        await runInSession(session, async () => {
-          await acquireFreshRunLease(runId);
-          session.runs.track(
-            testRunHandle({
-              runId,
-              agent: 'assistant',
-            }),
-          );
-        });
+        await session.settlePublications();
+        session.runs.track(
+          testRunHandle({
+            runId,
+            agent: 'assistant',
+          }),
+        );
+        // The run's first append claimed its aggregate for this process.
+        expect(await Effect.runPromise(session.ownsRun(runId))).toBe(true);
       }
-      // A quit handler runs in no session scope; the process roots answer
-      // there, and neither paper's lease is keyed under them.
-      expect(ownsRunLease('a0da01' as RunId)).toBe(false);
+      // Each session claims runs in its own root: paper B never holds
+      // paper A's run.
+      expect(await Effect.runPromise(sessionB.ownsRun('a0da01' as RunId))).toBe(
+        false,
+      );
       await Effect.runPromise(
         settleLiveSessionRuns(new AbortController().signal),
       );
@@ -188,7 +187,7 @@ describe('session isolation', () => {
         fakePath('storage/b'),
       );
       for (const [session, runId] of live) {
-        expect(runInSession(session, () => ownsRunLease(runId))).toBe(false);
+        expect(await Effect.runPromise(session.ownsRun(runId))).toBe(false);
       }
     } finally {
       await Effect.runPromise(sessionA.dispose());

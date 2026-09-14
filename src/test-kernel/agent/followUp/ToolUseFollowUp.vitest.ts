@@ -27,6 +27,10 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
   return {
     runs: { getToolUseFollowUpTarget: () => target },
     readRunRecords: () => Effect.succeed([]),
+    // No database behind this fixture, so the claim read fails and the
+    // refusal is the unclassified one, as it was when the ownership fact
+    // lived on disk.
+    claimOwner: () => Effect.fail(new Error('claim store unavailable')),
     status: { clearHold: () => {}, markUnavailable: () => {} },
     followUps: new ToolUseFollowUpQueue(),
   } as unknown as SessionHandle;

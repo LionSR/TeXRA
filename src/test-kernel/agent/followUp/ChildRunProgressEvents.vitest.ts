@@ -8,8 +8,6 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { getRunRecords, registerRun } from '@agent/storage';
-import { inspectRunLease } from '@agent/storage/runLease';
-import { runInSession } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { Runs } from '@agent/runtime/runRegistry';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -478,11 +476,7 @@ describe('child run progress events', () => {
           expect(
             (yield* getRunRecords(session, id).readRunEnd())?.outcome,
           ).toBe(RUN_OUTCOME.CANCELLED);
-          expect(
-            yield* Effect.promise(() =>
-              runInSession(session, () => inspectRunLease(id)),
-            ),
-          ).toEqual({ status: 'free' });
+          expect(yield* session.ownsRun(id)).toBe(false);
           expect(
             Exit.isFailure(
               yield* Effect.exit(

@@ -4,13 +4,11 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { runInSession } from '@agent/runtime/RunContext';
 import {
   finalizeRun,
   acquireResumedRunOwnership,
   registerRun,
 } from '@agent/storage/runLifecycle';
-import { inspectRunLease } from '@agent/storage/runLease';
 import { aggregateId, type RunId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -66,7 +64,7 @@ describe('run registration and finalization', () => {
   );
 
   it.effect(
-    'rolls back file ownership when the registration transaction fails',
+    "rolls back the run's claim when the registration transaction fails",
     () =>
       Effect.gen(function* () {
         const failure = new Error('database write failed');
@@ -74,17 +72,13 @@ describe('run registration and finalization', () => {
           Effect.die(failure),
         );
         expect(yield* Effect.flip(register())).toBe(failure);
-        expect(
-          yield* Effect.promise(() =>
-            runInSession(session, () => inspectRunLease(runId)),
-          ),
-        ).toEqual({ status: 'free' });
+        expect(yield* session.ownsRun(runId)).toBe(false);
         expect(yield* getRunRecords(session, runId).exists()).toBe(false);
       }),
   );
 
   it.effect.each([false, true])(
-    'preserves preexisting file ownership %s when database admission fails',
+    'preserves preexisting ownership %s when database admission fails',
     (alreadyOwned) =>
       Effect.gen(function* () {
         yield* register();
@@ -96,10 +90,7 @@ describe('run registration and finalization', () => {
         expect(
           yield* Effect.flip(acquireResumedRunOwnership(session, runId)),
         ).toBe(failure);
-        const lease = yield* Effect.promise(() =>
-          runInSession(session, () => inspectRunLease(runId)),
-        );
-        expect(lease.status).toBe(alreadyOwned ? 'owned' : 'free');
+        expect(yield* session.ownsRun(runId)).toBe(alreadyOwned);
       }),
   );
 
@@ -138,11 +129,7 @@ describe('run registration and finalization', () => {
           getRunRecords(session, runId).writeReport('unowned'),
         );
         expect(refused).toBeInstanceOf(Error);
-        expect(
-          yield* Effect.promise(() =>
-            runInSession(session, () => inspectRunLease(runId)),
-          ),
-        ).toEqual({ status: 'free' });
+        expect(yield* session.ownsRun(runId)).toBe(false);
       }),
   );
 

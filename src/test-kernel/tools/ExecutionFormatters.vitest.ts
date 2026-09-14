@@ -1,6 +1,13 @@
 // Third-party imports
 import * as assert from 'node:assert';
-import { beforeEach, afterEach, describe, it, vi } from 'vitest';
+import {
+  beforeEach,
+  afterEach,
+  describe,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
 import { Effect } from 'effect';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -21,12 +28,7 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 const RUN_ID = RunIdSchema.parse('ec1000000001');
 
 const mocks = vi.hoisted(() => ({
-  inspectRunLease: vi.fn(),
   readRunEnd: vi.fn(),
-}));
-
-vi.mock('@agent/storage/runLease', () => ({
-  inspectRunLease: mocks.inspectRunLease,
 }));
 
 vi.mock('@agent/storage/runRecords', async (importOriginal) => ({
@@ -39,9 +41,17 @@ import { getRunStatusInfo } from '@tools/executionFormatters';
 import { turnAttributionNote } from '@tools/executions/turnAttribution';
 
 let session: SessionHandle;
+/** The claim read the status ladder asks; stubbed per case. */
+let claimOwner: MockInstance<SessionHandle['claimOwner']>;
 beforeEach(() => {
   session = createTestSession();
+  claimOwner = vi.spyOn(session, 'claimOwner');
 });
+
+/** A foreign owner's recorded identity, as the database stores it. */
+function foreignOwner(pid: number): string {
+  return JSON.stringify(['other-host', pid, 'start-1']);
+}
 
 /** Run a status read on the suite session's runs. */
 function onSessionRuns<A, E>(effect: Effect.Effect<A, E, Runs>): Promise<A> {
@@ -83,9 +93,11 @@ function persisted(outcome: RunOutcome | null): void {
 describe('getRunStatusInfo', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Unowned unless a case says otherwise: the lease is the only thing an
+    // Unclaimed unless a case says otherwise: the claim is the only thing an
     // outcome-less row has left to ask.
-    mocks.inspectRunLease.mockResolvedValue({ status: 'free' });
+    claimOwner.mockReturnValue(
+      Effect.succeed({ ownerId: null, liveness: null }),
+    );
   });
 
   it('reports the recorded outcome when the live handle is gone', async () => {
@@ -96,7 +108,7 @@ describe('getRunStatusInfo', () => {
     assert.strictEqual(info.status, 'cancelled');
   });
 
-  it('reads no durable row and no lease for a run the caller already settled', async () => {
+  it('reads no durable row and no claim for a run the caller already settled', async () => {
     // The listing's whole budget: one terminal row (here the caller's own),
     // and nothing else for a run that already said how it ended.
     persisted(null);
@@ -107,17 +119,16 @@ describe('getRunStatusInfo', () => {
 
     assert.strictEqual(info.status, 'completed');
     assert.strictEqual(mocks.readRunEnd.mock.calls.length, 0);
-    assert.strictEqual(mocks.inspectRunLease.mock.calls.length, 0);
+    assert.strictEqual(claimOwner.mock.calls.length, 0);
   });
 
   it('reports an outcome-less run a live foreign owner holds as held', async () => {
-    // A background shell holds its run lease for its whole lifetime and
+    // A background shell holds its run's claim for its whole lifetime and
     // records no outcome until it ends, so the claim is what decides it.
     persisted(null);
-    mocks.inspectRunLease.mockResolvedValue({
-      status: 'held',
-      owner: { pid: 5150, hostname: 'other-host' },
-    });
+    claimOwner.mockReturnValue(
+      Effect.succeed({ ownerId: foreignOwner(5150), liveness: 'alive' }),
+    );
 
     const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session, null));
 
@@ -127,7 +138,9 @@ describe('getRunStatusInfo', () => {
 
   it('calls a run nobody owns and nothing recorded interrupted', async () => {
     persisted(null);
-    mocks.inspectRunLease.mockResolvedValue({ status: 'free' });
+    claimOwner.mockReturnValue(
+      Effect.succeed({ ownerId: null, liveness: null }),
+    );
 
     const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
@@ -142,10 +155,9 @@ describe('getRunStatusInfo', () => {
 
   it('does not call a run cancelled while another process holds it', async () => {
     persisted(null);
-    mocks.inspectRunLease.mockResolvedValue({
-      status: 'held',
-      owner: { pid: 4242, hostname: 'other-host' },
-    });
+    claimOwner.mockReturnValue(
+      Effect.succeed({ ownerId: foreignOwner(4242), liveness: 'alive' }),
+    );
 
     const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
@@ -153,10 +165,12 @@ describe('getRunStatusInfo', () => {
     assert.match(info.detail ?? '', /pid 4242 on other-host/);
   });
 
-  it('does not settle a run whose lease this process holds with no run', async () => {
-    // Nothing durable behind the lease: no outcome ever written.
+  it('does not settle a run whose claim this process holds with no run', async () => {
+    // Nothing durable behind the claim: no outcome ever written.
     persisted(null);
-    mocks.inspectRunLease.mockResolvedValue({ status: 'owned' });
+    claimOwner.mockReturnValue(
+      Effect.succeed({ ownerId: foreignOwner(process.pid), liveness: 'self' }),
+    );
 
     const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
@@ -164,26 +178,28 @@ describe('getRunStatusInfo', () => {
     assert.match(info.detail ?? '', /no live run/);
   });
 
-  it('still reports the outcome while this process lags releasing the lease', async () => {
+  it('still reports the outcome while this process lags releasing the claim', async () => {
     // A finished child untracks its handle and writes the outcome long before
-    // its loop releases the run lease (#8093), and the parent reads the
+    // its loop releases the run's claim (#8093), and the parent reads the
     // run inside exactly that window.
     persisted('completed');
-    mocks.inspectRunLease.mockResolvedValue({ status: 'owned' });
+    claimOwner.mockReturnValue(
+      Effect.succeed({ ownerId: foreignOwner(process.pid), liveness: 'self' }),
+    );
 
     const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'completed');
   });
 
-  it('reports an unreadable lease rather than a terminal reading', async () => {
+  it('reports an unreadable claim rather than a terminal reading', async () => {
     persisted(null);
-    mocks.inspectRunLease.mockRejectedValue(new Error('lease corrupt'));
+    claimOwner.mockReturnValue(Effect.fail(new Error('claim unreadable')));
 
     const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'unknown');
-    assert.match(info.detail ?? '', /cannot read \(lease corrupt\)/);
+    assert.match(info.detail ?? '', /cannot read \(claim unreadable\)/);
   });
 });
 

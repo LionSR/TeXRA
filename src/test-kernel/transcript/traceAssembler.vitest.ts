@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import { registerRun } from '@agent/storage/runLifecycle';
-import { releaseOwnedRunLease } from '@agent/storage/runLease';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -115,7 +114,6 @@ describe('assembleTrace', () => {
         identity: { kind: 'agent', agent: 'review' },
       }),
     );
-    await releaseOwnedRunLease(runId);
     await appendLogEntry(runId, 'registered row');
 
     const { trace } = unwrapOk(

@@ -11,24 +11,7 @@ const mocks = vi.hoisted(() => ({
   runToolUse: vi.fn(),
   agentRunLayer: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
-  acquireResumedRunLease: vi.fn(),
-  validateOwnedRunLease: vi.fn(),
-  runWithRunLeaseWriteFence: vi.fn(
-    async (_runId: RunId, operation: () => Promise<unknown>) => operation(),
-  ),
-  releaseOwnedRunLease: vi.fn(),
   releaseClaims: vi.fn(),
-}));
-
-vi.mock('@agent/storage/runLease', async (importOriginal) => ({
-  // The lease verbs are inert here, but the release choreography runs for
-  // real and reads the module's error types.
-  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
-  acquireResumedRunLease: mocks.acquireResumedRunLease,
-  assertOwnedRunLease: vi.fn(),
-  releaseOwnedRunLease: mocks.releaseOwnedRunLease,
-  validateOwnedRunLease: mocks.validateOwnedRunLease,
-  runWithRunLeaseWriteFence: mocks.runWithRunLeaseWriteFence,
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', async () => {
@@ -232,12 +215,10 @@ function noopFlowHandle(): unknown {
 describe('resumeToolUseFromResumeData cancellation handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.acquireResumedRunLease.mockResolvedValue('existing');
     mocks.retrieveSessionResumeData.mockImplementation(
       async (runId, agentConfig) =>
         createToolUseResumeData({ runId, agentConfig }),
     );
-    mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
     mocks.releaseClaims.mockReturnValue(Effect.void);
     mocks.readView.mockReset().mockResolvedValue(emptySessionView('resume'));
     // Default: the lifecycle wrapper just runs the flow against a no-op
@@ -262,7 +243,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       );
 
       expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
-      expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(snapshot.runId);
       expect(mocks.releaseClaims).toHaveBeenCalledWith(
         qualifyAggregateId('run', snapshot.runId),
       );
@@ -392,7 +372,9 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
           context,
           expect.objectContaining({ tools }),
         );
-        expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(runId);
+        expect(mocks.releaseClaims).toHaveBeenCalledWith(
+          qualifyAggregateId('run', runId),
+        );
         expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
         expect(order).toEqual([
           'attach',

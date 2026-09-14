@@ -14,6 +14,7 @@ import type {
   CommitOrdinal,
   RunId,
   OwnerId,
+  OwnerLiveness,
   SessionEvent,
   SessionEventDraft,
   InquiryThreadRecord,
@@ -48,6 +49,18 @@ export const AggregateStateSchema = z.object({
   startCommit: z.int().positive().nullable(),
 });
 export type AggregateState = z.infer<typeof AggregateStateSchema>;
+
+/**
+ * C5's current claim on one aggregate, with the liveness of its owner proved
+ * in the same call: `self` is this process, and a null owner (with a null
+ * verdict) is an unclaimed or absent aggregate. The read a resume gate and
+ * the run listing ask, never the fold, whose liveness comes from a prober
+ * that only watches owners of runs already resident in the view.
+ */
+export interface AggregateClaim {
+  readonly ownerId: OwnerId | null;
+  readonly liveness: OwnerLiveness | 'self' | null;
+}
 
 /** The database could not be opened, or its schema could not be applied. */
 export class DatabaseOpenFailed extends Data.TaggedError('DatabaseOpenFailed')<{
@@ -212,6 +225,12 @@ export class Database extends Context.Service<
       id: AggregateId,
       fromSeq: number,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** C5: who holds one aggregate right now, with its owner's liveness
+     *  proved in this call. The one ownership read that is fresh by
+     *  construction, so a cold run's long-dead owner is never reported held. */
+    readonly claimOwner: (
+      id: AggregateId,
+    ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
     /** Atomically acquire existing, open aggregates after proving prior owners dead. */
     readonly acquireClaims: (
       ids: readonly AggregateId[],

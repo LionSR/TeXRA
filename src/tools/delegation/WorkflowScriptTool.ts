@@ -11,7 +11,6 @@ import {
 import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { registerRun } from '@agent/storage/runLifecycle';
-import { RunLeaseActiveError } from '@agent/storage/runLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -27,6 +26,10 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   WorkflowScriptFilesSchema,
 } from '@shared/schemas';
+import {
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
@@ -438,9 +441,28 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       if (declined) return withScriptReference(declined, scriptPath);
 
       const runStore = getRunRecords(session, runId);
+      // A relaunch whose prior run is still in flight shares this
+      // deterministic id, and must point the model at the live run instead of
+      // starting a second run over the same journal.
+      const alreadyRunning = (): ToolResult =>
+        withScriptReference(
+          executed(
+            [
+              `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run: wait for it, then resume with the same meta.name and agent if it did not complete.`,
+              `Run ID: ${runId}`,
+              `To check progress or collect the result: executions tool with path=/executions/${runId} and action=wait (returns immediately if it already finished).`,
+            ].join('\n'),
+            `Workflow script '${meta.name}' is already running`,
+          ),
+          scriptPath,
+        );
       const runResult = Effect.gen(function* () {
         const launched = yield* Effect.uninterruptibleMask((restore) =>
           Effect.gen(function* () {
+            // The database claim refuses a foreign owner but never this
+            // process's own, so a live run of this id in this process is the
+            // registry's answer, asked before the registration appends.
+            if (session.runs.isActiveOrResuming(runId)) return alreadyRunning();
             const registration = yield* Effect.exit(
               registerRun(
                 session,
@@ -469,22 +491,13 @@ Durability: the journal is keyed by meta.name and the agent field within this se
             );
             if (Exit.isFailure(registration)) {
               const error = Cause.squash(registration.cause);
-              // A relaunch whose prior run is still in flight shares this deterministic
-              // id: the fresh-lease acquisition fails closed rather than starting a
-              // second competing run over the same journal. Point the model at the
-              // live run instead of erroring.
-              if (error instanceof RunLeaseActiveError) {
-                return withScriptReference(
-                  executed(
-                    [
-                      `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run: wait for it, then resume with the same meta.name and agent if it did not complete.`,
-                      `Run ID: ${runId}`,
-                      `To check progress or collect the result: executions tool with path=/executions/${runId} and action=wait (returns immediately if it already finished).`,
-                    ].join('\n'),
-                    `Workflow script '${meta.name}' is already running`,
-                  ),
-                  scriptPath,
-                );
+              // Another live TeXRA process holds the run this id names: the
+              // claim acquisition refuses rather than moving the aggregate.
+              if (
+                error instanceof DatabaseWriteFailed &&
+                error.cause instanceof DatabaseClaimRefused
+              ) {
+                return alreadyRunning();
               }
               throw workflowScriptToolError(
                 new ToolError(
@@ -494,10 +507,10 @@ Durability: the journal is keyed by meta.name and the agent field within this se
               );
             }
 
-            // Attempt-scoped setup runs inside the lease launch guard: it runs after
-            // the deterministic run lease is held, so a throw here must release the
-            // lease - otherwise the record survives for this process's lifetime and
-            // a prompt relaunch is refused.
+            // Attempt-scoped setup runs inside the launch guard: it runs after
+            // the deterministic run's claim is held, so a throw here must
+            // release the claim - otherwise the run stays claimed for this
+            // process's lifetime and a prompt relaunch is refused.
             return yield* startDetachedChildRunLoop({
               session,
               runId,

@@ -9,7 +9,6 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import { createChannelTrace } from '@agent/trace';
-import { RunLeaseLostError } from '@agent/storage/runLease';
 import {
   type FinalizeRunInput,
   type FinalizeRunResult,
@@ -93,13 +92,9 @@ export class WaitingTermination {
             if (Exit.isFailure(untracking)) {
               recoveryFailures.push(Cause.squash(untracking.cause));
             }
-            // A lost lease is already gone: releasing it would reach whatever holds
-            // the record now. Every other failure still owes the release.
-            if (
-              untracked &&
-              !handle.isChild &&
-              !(error instanceof RunLeaseLostError)
-            ) {
+            // Releasing a claim this process no longer holds is a no-op by
+            // construction, so every untracked root still owes the release.
+            if (untracked && !handle.isChild) {
               const released = yield* Effect.exit(
                 this.context.releaseRootRunLease(handle.runId),
               );

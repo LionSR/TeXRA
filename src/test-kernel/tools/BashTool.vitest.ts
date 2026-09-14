@@ -147,6 +147,14 @@ function launchedIds(result: ToolResult): {
 }
 
 function launchBackgroundBash(parentRunId: RunId) {
+  // A child's registration reads its parent's existence, so the parent's own
+  // `run.start` has to be committed before the launch.
+  return Effect.promise(() => defaultSession().settlePublications()).pipe(
+    Effect.andThen(backgroundBashCall(parentRunId)),
+  );
+}
+
+function backgroundBashCall(parentRunId: RunId) {
   return new BashTool()
     .call({
       command: 'make build',

@@ -737,15 +737,6 @@ describe('CLI run command, workflow agents', () => {
           (owned) => owned.dispose(),
         );
         const runId = 'abc123abc123' as RunId;
-        const { runInSession } = yield* Effect.promise(
-          () => import('@agent/runtime/RunContext'),
-        );
-        const { acquireFreshRunLease } = yield* Effect.promise(
-          () => import('@agent/storage/runLease'),
-        );
-        yield* Effect.promise(() =>
-          runInSession(session, () => acquireFreshRunLease(runId)),
-        );
         const run = workflowRun(runId);
         if (!run.ok) throw new Error('Expected workflow result.');
         // The command reads the session off the services its init returns.
@@ -755,6 +746,8 @@ describe('CLI run command, workflow agents', () => {
         });
         const records = storage.getRunRecords(session, runId);
         vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(records);
+        // The run's first append claims its aggregate for this process; the
+        // release below is what makes a later write refuse.
         yield* session.commit([
           {
             type: 'run.start',

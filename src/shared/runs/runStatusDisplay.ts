@@ -1,9 +1,12 @@
 import {
+  ownerIdentity,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
+  type OwnerId,
   type RoundStage,
   type RunFlow,
+  type RunId,
   type RunLifecycleStatus,
   type RunSubstate,
 } from '@shared/schemas';
@@ -112,6 +115,16 @@ export function runInterruptedMessage(): string {
  *  its pid: the one part of a process identity a user can act on. */
 export function runHeldMessage(pid: number): string {
   return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the run.`;
+}
+
+/** The refusal a host prints when another TeXRA process holds a run: the
+ *  owner named by the pid and machine recorded in its claim. */
+export function runHeldByProcessMessage(
+  runId: RunId,
+  ownerId: OwnerId,
+): string {
+  const { pid, hostname } = ownerIdentity(ownerId);
+  return `Run ${runId} is held by another TeXRA process (pid ${pid} on ${hostname}).`;
 }
 
 /** Banner and tooltip copy for a run whose saved state could not be read. */

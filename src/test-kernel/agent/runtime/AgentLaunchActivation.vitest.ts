@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  acquireResumedRunLease: vi.fn(),
   buildVars: vi.fn(),
   createTrace: vi.fn(),
   load: vi.fn(),
@@ -23,11 +22,6 @@ vi.mock('@transcript', async (importActual) => ({
   createRunTrace: mocks.createTrace,
 }));
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
-vi.mock('@agent/storage/runLease', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
-  acquireResumedRunLease: mocks.acquireResumedRunLease,
-  assertOwnedRunLease: vi.fn(),
-}));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
@@ -217,7 +211,6 @@ function expectActivatedThenFailed(launch: StartedLaunch): void {
 describe('native agent launch activation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.acquireResumedRunLease.mockResolvedValue('existing');
   });
 
   it.effect.each([

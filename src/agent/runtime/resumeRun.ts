@@ -19,7 +19,6 @@ import {
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { RunLeaseActiveError, inspectRunLease } from '@agent/storage/runLease';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
@@ -27,12 +26,17 @@ import type { ProcessServices } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
+  ownerPid,
   RUN_PHASE,
   RUN_SUBSTATE,
   type ModelCompatibilityKey,
   type RunId,
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
+import {
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -269,17 +273,23 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     return { failed: recordRunRefusal(runId, session, classification) };
   }
   const willLaunch = (resume.type === 'toolUse') === (queueLease !== undefined);
-  const lease =
+  const claim =
     willLaunch && options.onResumeResolved
-      ? yield* Effect.tryPromise({
-          try: () => inspectRunLease(runId),
-          catch: ensureError,
-        }).pipe(Effect.onError(() => Effect.sync(releaseQueue)))
+      ? yield* session
+          .claimOwner(runId)
+          .pipe(Effect.onError(() => Effect.sync(releaseQueue)))
       : undefined;
   session.clearUnreadable(runId);
-  if (lease?.status === 'held') {
+  // A claim whose owner is this process, or provably dead, is one the resume
+  // takes over; anything else is another live TeXRA process's run.
+  if (
+    claim !== undefined &&
+    claim.ownerId !== null &&
+    claim.liveness !== 'self' &&
+    claim.liveness !== 'dead'
+  ) {
     releaseQueue();
-    session.markUnreadable(runId, runHeldMessage(lease.owner.pid));
+    session.markUnreadable(runId, runHeldMessage(ownerPid(claim.ownerId)));
     return { failed: 'owned_elsewhere' };
   }
   if (willLaunch && options.onResumeResolved) {
@@ -348,8 +358,14 @@ function refusalFor(
   session: SessionHandle,
   runId: RunId,
 ): ResumeRunResult | undefined {
-  if (error instanceof RunLeaseActiveError) {
-    session.markUnreadable(runId, runHeldMessage(error.owner.pid));
+  if (
+    error instanceof DatabaseWriteFailed &&
+    error.cause instanceof DatabaseClaimRefused
+  ) {
+    session.markUnreadable(
+      runId,
+      runHeldMessage(ownerPid(error.cause.ownerId)),
+    );
     return { failed: 'owned_elsewhere' };
   }
   if (error instanceof ResumeSessionUnavailableError) {

@@ -53,12 +53,6 @@ vi.mock('@agent/runtime/runClassification', async (importActual) => ({
     Effect.promise(() => classifyRunMock(...args)),
 }));
 
-const inspectRunLeaseMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/storage/runLease', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/runLease')>()),
-  inspectRunLease: inspectRunLeaseMock,
-}));
-
 const RUN = 'aabbcc' as RunId;
 const completed: ToolUseFlowResult = {
   outcome: RUN_OUTCOME.COMPLETED,
@@ -118,7 +112,6 @@ describe('resumeRun tool-use queue ownership', () => {
     runExistsMock.mockReset().mockReturnValue(Effect.succeed(true));
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
     classifyRunMock.mockReset().mockResolvedValue({ kind: 'finished' });
-    inspectRunLeaseMock.mockReset().mockResolvedValue({ status: 'free' });
     resumeToolUseFromResumeDataMock.mockReset();
     resumeToolUseFromResumeDataMock.mockImplementation(
       (_resume: unknown, options: ResumeToolUseFromResumeDataOptions) =>
@@ -437,7 +430,7 @@ describe('resumeRun tool-use queue ownership', () => {
   );
 
   // An empty retrieval is also what a torn read of the owner's rewrite looks
-  // like, so the refusal is decided from the lease: a run another process is
+  // like, so the refusal is decided from the claim: a run another process is
   // executing keeps its hold instead of being reported finished.
   it.effect(
     'refuses an empty retrieval held elsewhere as owned elsewhere',
@@ -448,7 +441,7 @@ describe('resumeRun tool-use queue ownership', () => {
         retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
         classifyRunMock.mockResolvedValueOnce({
           kind: 'held_elsewhere',
-          owner: { pid: 4321, processStart: null, hostname: 'other-host' },
+          owner: JSON.stringify(['other-host', 4321, null]),
         });
 
         expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
@@ -508,16 +501,18 @@ describe('resumeRun tool-use queue ownership', () => {
       }),
   );
 
-  // The launch's own acquire would raise `RunLeaseActiveError` only
-  // after the host cleared its window and switched onto the resumed stream.
+  // The launch's own claim acquisition would refuse only after the host
+  // cleared its window and switched onto the resumed stream.
   it.effect(
     'refuses a run a live foreign owner holds before the host rearranges',
     () =>
       Effect.gen(function* () {
         const session = createSession();
         const markUnreadable = vi.spyOn(session, 'markUnreadable');
-        const owner = { pid: 4321, hostname: 'other-host' };
-        inspectRunLeaseMock.mockResolvedValue({ status: 'held', owner });
+        const ownerId = JSON.stringify(['other-host', 4321, 'start-1']);
+        vi.spyOn(session, 'claimOwner').mockReturnValue(
+          Effect.succeed({ ownerId, liveness: 'alive' }),
+        );
         const onResumeResolved = vi.fn();
 
         expect(
@@ -529,10 +524,7 @@ describe('resumeRun tool-use queue ownership', () => {
         ).toEqual({ failed: 'owned_elsewhere' });
         expect(onResumeResolved).not.toHaveBeenCalled();
         expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-        expect(markUnreadable).toHaveBeenCalledWith(
-          RUN,
-          runHeldMessage(owner.pid),
-        );
+        expect(markUnreadable).toHaveBeenCalledWith(RUN, runHeldMessage(4321));
       }),
   );
 });

@@ -72,12 +72,6 @@ vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
   persistChildRunDelivery: mocks.persistChildRunDelivery,
 }));
 
-vi.mock('@agent/storage/runLease', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
-  assertOwnedRunLease: vi.fn(),
-  validateOwnedRunLease: vi.fn(async () => {}),
-}));
-
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));

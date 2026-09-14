@@ -37,12 +37,6 @@ import { Cause, Effect, Exit, Option, Stream, SubscriptionRef } from 'effect';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import {
-  ownsRunLease,
-  releaseOwnedRunLease,
-  RunLeaseLostError,
-  validateOwnedRunLease,
-} from '@agent/storage/runLease';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
@@ -71,9 +65,10 @@ import {
   type SessionEventDraft,
   type TranscriptSubscription,
 } from '@shared/schemas';
-import type {
+import {
   DatabaseNotOwner,
-  DatabaseWriteFailed,
+  type AggregateClaim,
+  type DatabaseWriteFailed,
 } from '@shared/session/database';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -451,18 +446,17 @@ export class SessionHandle {
     return Effect.gen({ self: this }, function* () {
       const drained = yield* Effect.exit(
         Effect.tryPromise({
-          try: () =>
-            runInSession(this, async () => {
-              await validateOwnedRunLease(runId);
-              await this.flushArtifacts(runId);
-            }),
+          try: () => runInSession(this, () => this.flushArtifacts(runId)),
           // The drain is the ordered publisher's settle, so anything that
           // fails here left facts this run had queued uncommitted. The one
-          // exception is a lost lease, which keeps its own identity: it
-          // says this process no longer owns the run, and the callers that
-          // treat shutdown contention as expected read that type.
+          // exception is a refused append, which keeps its own identity: it
+          // says this process no longer holds the run's claim, and the
+          // callers that treat shutdown contention as expected read that
+          // type. A drain that refused several publications aggregates them
+          // and the identity is lost; one refusal, the case those callers
+          // exercise, arrives unwrapped.
           catch: (cause) =>
-            cause instanceof RunLeaseLostError
+            cause instanceof DatabaseNotOwner
               ? cause
               : new RunArtifactDrainError(runId, cause),
         }),
@@ -475,9 +469,9 @@ export class SessionHandle {
         ),
       );
       // Settle whatever the drain and the post-drain step did. When the drain
-      // rejected (including in `validateOwnedExecutionLease`), this settle
-      // still stops claim release from overtaking facts the owner already
-      // queued, and it covers the facts `afterArtifactsDrained` published.
+      // rejected, this settle still stops claim release from overtaking facts
+      // the owner already queued, and it covers the facts
+      // `afterArtifactsDrained` published.
       const published = yield* Effect.exit(
         Effect.tryPromise({
           try: () => this.settlePublications(runId),
@@ -493,24 +487,12 @@ export class SessionHandle {
       const claimRelease = yield* Effect.exit(
         this.releaseClaims(qualifyAggregateId('run', runId)),
       );
-      const fileRelease = yield* Effect.exit(
-        Effect.tryPromise({
-          try: () => runInSession(this, () => releaseOwnedRunLease(runId)),
-          catch: ensureError,
-        }),
-      );
-      const failures = [
-        drained,
-        finalized,
-        published,
-        claimRelease,
-        fileRelease,
-      ].flatMap((exit) =>
-        Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
+      const failures = [drained, finalized, published, claimRelease].flatMap(
+        (exit) => (Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : []),
       );
       const primary = failures.shift();
       for (const error of failures)
-        logger.warn(`Run ${runId}: lease release also failed`, {
+        logger.warn(`Run ${runId}: claim release also failed`, {
           data: error,
         });
       if (primary !== undefined)
@@ -536,6 +518,31 @@ export class SessionHandle {
         Effect.fail(ensureError(Cause.squash(cause))),
       ),
     );
+  }
+
+  /**
+   * Whether this process holds `runId` open in the database: the durable
+   * claim, read from SQLite rather than from the fold, which lags it by a
+   * drain. The one ownership question a caller outside this class asks.
+   */
+  ownsRun(runId: RunId): Effect.Effect<boolean> {
+    return this.graph.ownsRun(runId);
+  }
+
+  /**
+   * Who holds `runId` right now, with the owner's liveness proved in the
+   * call. A resume gate and the run listing word their refusal from this,
+   * never from the view: the view's liveness comes from a prober that only
+   * watches owners of runs already resident in it.
+   */
+  claimOwner(runId: RunId): Effect.Effect<AggregateClaim, Error> {
+    return this.graph
+      .claimOwner(runId)
+      .pipe(
+        Effect.catchCause((cause) =>
+          Effect.fail(ensureError(Cause.squash(cause))),
+        ),
+      );
   }
 
   /** Drop this process's claim on one aggregate, so the next process resumes
@@ -1259,7 +1266,7 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
         continue;
       }
       const settlement = Effect.gen(function* () {
-        if (!runInSession(session, () => ownsRunLease(runId))) return;
+        if (!(yield* session.ownsRun(runId))) return;
         const tracked = session.runs.getHandle(runId) !== undefined;
         // Read the committed transcript once after queued publications settle.
         // Host exit needs no presentation residency or mutable writer handle.

@@ -782,12 +782,6 @@
       "name": "resolveOutputFiles"
     },
     {
-      "file": "src/agent/storage/runLease.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "RunLeaseSchema"
-    },
-    {
       "file": "src/agent/trace/index.ts",
       "category": "production-dead",
       "kind": "exports",

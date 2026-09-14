@@ -5,12 +5,12 @@ import type { Runs } from '@agent/runtime/runRegistry';
  * Shared detached-child launch choreography for delegation launch sites.
  *
  * Every detached child run (delegate_agent/subagent, delegate_multi_agents)
- * starts with the same lifecycle: hold the owned-run lease launch guard
+ * starts with the same lifecycle: hold the owned-run launch guard
  * from child-stream creation through child-run-loop handoff, and attach a
  * completion error trace so a late loop failure is diagnosed. Callers keep
  * their own run-id derivation, approval wiring, and result shaping; this
  * module owns the guard-and-trace skeleton so its invariant (a throw inside
- * the guard releases the lease; a late loop failure is surfaced) lives in one
+ * the guard releases the claim; a late loop failure is surfaced) lives in one
  * place, plus native-agent registration.
  */
 
@@ -35,7 +35,7 @@ import {
 import type { ChildRun } from './childRun';
 
 /**
- * Register a native agent child and take its owned-run lease. The identity
+ * Register a native agent child and take its run's claim. The identity
  * derives from the canonical config's `agent`, never from `agentName`, which
  * callers resolve differently (an approved override's display name vs. its
  * registry name) and which reaches only the durable launch label.
@@ -87,7 +87,7 @@ export type DetachedChildRunInput<
 > = DetachedChildRunInputBase &
   (
     | {
-        /** Create the stream inside the lease guard, before any stream-dependent setup. */
+        /** Create the stream inside the launch guard, before any stream-dependent setup. */
         readonly createChildRun: () => Effect.Effect<ChildRun, Error, Runs>;
         /** Build attempt-scoped setup around the stream retained by the launch guard. */
         readonly buildLaunch: (
@@ -98,8 +98,8 @@ export type DetachedChildRunInput<
         /** Native strategies let `executeAgent` own handle creation for every turn. */
         readonly createChildRun?: undefined;
         /**
-         * Build the strategy (and any attempt-scoped setup) inside the lease launch
-         * guard so a throw releases the owned-run lease.
+         * Build the strategy (and any attempt-scoped setup) inside the owned-run
+         * launch guard so a throw releases the run's claim.
          */
         readonly buildLaunch: () => Effect.Effect<
           DetachedChildRunLaunch<TTurn, R>,
@@ -110,7 +110,7 @@ export type DetachedChildRunInput<
 
 /**
  * Run the shared detached-child launch choreography: hold the owned-run
- * lease launch guard while creating any child stream and handing it to the run
+ * owned-run launch guard while creating any child stream and handing it to the run
  * loop, then attach the completion error trace. Returns the launched loop's
  * stream id and completion so in-band callers can await it.
  */

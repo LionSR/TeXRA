@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
   releaseRunLeaseAfterArtifacts: vi.fn(
     async (_session: unknown, _runId: RunId) => {},
   ),
-  assertOwnedRunLease: vi.fn((_runId: RunId) => undefined),
 }));
 
 // Turn attribution is committed as `child.turn` rows on the run aggregate,
@@ -32,11 +31,6 @@ vi.mock('@agent/storage', async (importOriginal) => ({
 vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
   finalizeRun: mocks.finalizeRun,
-}));
-
-vi.mock('@agent/storage/runLease', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
-  assertOwnedRunLease: mocks.assertOwnedRunLease,
 }));
 
 vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
@@ -71,6 +65,7 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
+import { DatabaseNotOwner } from '@shared/session/database';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -300,41 +295,31 @@ afterEach(() => {
 
 describe('childRunLoop E2E fixtures', () => {
   it.effect(
-    'validates the captured lease before registering loop resources',
+    'a turn refused as DatabaseNotOwner stops the loop instead of taking another turn',
     () =>
       Effect.gen(function* () {
         const runId = loopRunId();
-        const { strategy, callCount } = createFakeStrategy();
-        mocks.assertOwnedRunLease.mockImplementationOnce(() => {
-          throw new Error('lease generation lost');
-        });
+        const { strategy, callCount, rejectTurn, turnStarted } =
+          createFakeStrategy();
+        trackChildHandle(runId, PARENT_RUN_ID);
 
-        const error = yield* Effect.flip(startLoop(runId, strategy));
-        expect(error.message).toContain('lease generation lost');
+        const loop = yield* startLoop(runId, strategy);
+        yield* turnStarted(1);
+        // The claim moved to another process mid-run: the append the turn
+        // made is refused, and the loop stops rather than take another turn.
+        yield* rejectTurn(
+          1,
+          new DatabaseNotOwner({
+            aggregateId: qualifyAggregateId('run', runId),
+            ownerId: null,
+            closed: false,
+          }),
+        );
 
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-        expect(callCount()).toBe(0);
+        yield* Fiber.join(loop);
+        expect(callCount()).toBe(1);
+        expect(session.runs.getHandle(runId)).toBeUndefined();
       }),
-  );
-
-  it.effect('revalidates the lease when claiming a new queue generation', () =>
-    Effect.gen(function* () {
-      const runId = loopRunId();
-      const { strategy, callCount } = createFakeStrategy();
-      const claimChildRun = vi.spyOn(session.followUps, 'claimChildRun');
-      mocks.assertOwnedRunLease
-        .mockImplementationOnce(() => undefined)
-        .mockImplementationOnce(() => {
-          throw new Error('lease generation lost during setup');
-        });
-
-      const error = yield* Effect.flip(startLoop(runId, strategy));
-      expect(error.message).toContain('lease generation lost during setup');
-
-      expect(claimChildRun).not.toHaveBeenCalled();
-      expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-      expect(callCount()).toBe(0);
-    }),
   );
 
   it.effect(

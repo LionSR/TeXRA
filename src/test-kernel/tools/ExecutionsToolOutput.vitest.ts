@@ -127,6 +127,9 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     const { host } = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession());
     publishTestRunStart(defaultSession(), PARENT_RUN_ID);
+    // A child's registration reads its parent's existence, so the parent's
+    // own `run.start` has to be committed before the launch.
+    yield* Effect.promise(() => defaultSession().settlePublications());
     const launched = yield* new BashTool()
       .call({
         command: 'make build',

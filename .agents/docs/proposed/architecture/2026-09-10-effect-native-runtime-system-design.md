@@ -906,11 +906,11 @@ Recommended options are taken and stated, per the owner's 2026-09-10 rule.
 8. **Injection Q4:** the dispatcher retires R1 kind (b).
 9. **The file lease is deleted at the KV cutover**, not kept as a fence (ownership note
    F2 read to its conclusion; revision 3 had it backwards). The database claim is the
-   only write authority. **Status 2026-09-13: the cutover (#12329) landed and the lease
-   did not go with it** — `src/agent/storage/runLease.ts` is still imported across the
-   runtime paths and still admits writes beside the database claim. The reading stands as
-   the target; its execution is the open deletion item under #12082 (see the §10
-   amendment), and until it lands the lease, not the claim alone, gates writes.
+   only write authority. **Status 2026-09-14: landed.** The cutover (#12329) left the
+   lease behind, and the follow-up deletion under #12082 removed it:
+   `src/agent/storage/runLease.ts` is gone, ownership reads go through
+   `Database.claimOwner` and `ownsRun`, and a refused append (`DatabaseNotOwner`) is
+   what tells a run it no longer owns itself.
 10. **`Runs` and `Requests` are one implementation with two tags**: a run is either
     executing or parked, and `interrupt` must handle both states with one code path.
     Streamless requests carry `Option<RunId>`.
@@ -937,9 +937,9 @@ ratchet admitted because the dispatcher already carried the run site. Not landed
 slice tables: `Runs`/`Requests` as tags (§7.11's ≈4,500 LoC session tier: `runRegistry.ts`,
 `RunHandle.ts`, `runLanes.ts`, `waitingTermination.ts`, `runApprovalQueue.ts` survive),
 `followup.*` rows + the seeded `Queue` (§7.8; `FollowUpQueue.ts` still imports `p-defer`),
-the SDK on session services (§7.13), and **the file lease** — `runLease.ts` survived the
-KV cutover it was pinned to (§9 item 9; lease note D1), so its deletion is now its own
-item under #12082. `ModelRetryGate` remains the automatic retry owner inside
+the SDK on session services (§7.13). **The file lease** survived the KV cutover it was
+pinned to (§9 item 9; lease note D1) and was deleted separately under #12082, so
+`runLease.ts` is gone and the claim is the only write authority. `ModelRetryGate` remains the automatic retry owner inside
 `ModelInvoker` (AGENTS.md "Run loop architecture") pending its Effect rewrite.
 
 | Slice | Content                                                                                                                                                                                                                                                                                                                                                                                                                              | Deletes (symbols that cease to exist)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Rows                                                                                                                                                                                  | Alone?                          |

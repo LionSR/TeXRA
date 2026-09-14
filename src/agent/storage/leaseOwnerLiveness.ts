@@ -1,42 +1,24 @@
 import * as os from 'node:os';
 
-import { z } from 'zod';
-
 import { createLog } from '@logger/logUtils';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import type { OwnerLiveness } from '@shared/schemas';
 
 const log = createLog('LeaseOwnerLiveness');
 
 /**
- * Identity of the process that owns a run lease: a pid, the opaque
- * process-start identity `nodeProcesses` produced for it when the lease
- * was written (null where the host could not read one), and the machine it
- * runs on. Liveness is a kernel fact derived from these three fields;
+ * Identity of the process recorded as an aggregate's claim owner: a pid, the
+ * opaque process-start identity `nodeProcesses` produced for it when the
+ * claim was taken (null where the host could not read one), and the machine
+ * it runs on. Liveness is a kernel fact derived from these three fields;
  * nothing here is compared to a clock and no socket protocol is involved.
+ * The owner id the database stores decodes to exactly this shape
+ * (`ownerIdentity` in `@shared/schemas`).
  */
-export const LeaseOwnerSchema = z.strictObject({
-  pid: z.int().positive(),
-  processStart: z.string().min(1).nullable(),
-  hostname: z.string().min(1),
-});
-
-export type LeaseOwnerRecord = z.infer<typeof LeaseOwnerSchema>;
-
-/**
- * A verdict is a proof or an admission that no proof exists. `unprovable`
- * means "do not touch automatically": every acquire path treats it exactly
- * like `alive`, and the user sees the run as held. The user's explicit
- * deletion of the run is the one path that reaps it.
- */
-export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
-
-/** The identity this process stamps into the leases it claims. */
-export async function currentLeaseOwner(): Promise<LeaseOwnerRecord> {
-  return {
-    pid: process.pid,
-    processStart: (await nodeProcesses.selfIdentity()) ?? null,
-    hostname: os.hostname(),
-  };
+interface ClaimOwnerRecord {
+  readonly pid: number;
+  readonly processStart: string | null;
+  readonly hostname: string;
 }
 
 /**
@@ -69,12 +51,12 @@ function pidProvablyDead(pid: number): boolean {
  * about a process on another machine sharing the storage directory.
  */
 export async function proveOwnerLiveness(
-  owner: LeaseOwnerRecord,
+  owner: ClaimOwnerRecord,
 ): Promise<OwnerLiveness> {
   const localHostname = os.hostname();
   if (owner.hostname.toLowerCase() !== localHostname.toLowerCase()) {
     log.warn(
-      `Lease owner pid ${owner.pid} was recorded on host ${owner.hostname}; its liveness is unprovable from ${localHostname}`,
+      `Claim owner pid ${owner.pid} was recorded on host ${owner.hostname}; its liveness is unprovable from ${localHostname}`,
     );
     return 'unprovable';
   }
@@ -84,13 +66,13 @@ export async function proveOwnerLiveness(
     // The process may have exited between the two probes.
     if (pidProvablyDead(owner.pid)) return 'dead';
     log.warn(
-      `Lease owner pid ${owner.pid} exists but its start identity cannot be read; its liveness is unprovable`,
+      `Claim owner pid ${owner.pid} exists but its start identity cannot be read; its liveness is unprovable`,
     );
     return 'unprovable';
   }
   if (owner.processStart === null) {
     log.warn(
-      `Lease owner pid ${owner.pid} exists but its record carries no start identity; its liveness is unprovable`,
+      `Claim owner pid ${owner.pid} exists but its record carries no start identity; its liveness is unprovable`,
     );
     return 'unprovable';
   }

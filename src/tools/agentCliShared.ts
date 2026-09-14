@@ -63,7 +63,7 @@ type AgentCliSessionStoreAccessor = (
 
 /**
  * A Promise collaborator of the dispatch/launch chain (bash approval,
- * follow-up submission, thread/session setup, the owned-lease launch guard)
+ * follow-up submission, thread/session setup, the owned-run launch guard)
  * rejected. `cause` is what it raised. The tools' `execute()` edges re-raise
  * the cause itself, so the tool runner surfaces the same error instance the
  * collaborator raised, exactly as the previous `await` chain did.

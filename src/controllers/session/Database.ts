@@ -984,6 +984,20 @@ export const databaseLayer = (
         readAggregate: (id, fromSeq) =>
           query(decodedRows(aggregate, [id, fromSeq])),
         aggregateState: (ids) => query(readState(ids)),
+        claimOwner: (id) =>
+          Effect.gen(function* () {
+            const owner = (yield* query(readState([id])))[0]?.ownerId ?? null;
+            if (owner === null) return { ownerId: null, liveness: null };
+            if (owner === identity.ownerId)
+              return { ownerId: owner, liveness: 'self' as const };
+            return {
+              ownerId: owner,
+              liveness: yield* Effect.tryPromise({
+                try: () => proveOwnerLiveness(ownerIdentity(owner)),
+                catch: readFailed,
+              }),
+            };
+          }),
         readInputBatch: (ids, fromCommit, checkedIds = ids) =>
           transaction(
             'read',

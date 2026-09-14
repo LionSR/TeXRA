@@ -105,6 +105,14 @@ export function ownerPid(ownerId: OwnerId): number {
 }
 
 /**
+ * A verdict about an owner is a proof or an admission that no proof exists.
+ * `unprovable` means "do not touch automatically": every acquire path treats
+ * it exactly like `alive`, and the user sees the aggregate as held. The
+ * user's explicit deletion of the run is the one path that reaps it.
+ */
+export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
+
+/**
  * C2 separates independent lifecycles even when their logical ids coincide.
  * `run` is keyed by the run id; every other kind by its own logical id.
  */

@@ -6,8 +6,7 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  validateOwnedRunLease: vi.fn(),
-  acquireResumedRunLease: vi.fn(),
+  acquireClaims: vi.fn(),
   prepareAgentDefinition: vi.fn(),
   readRunEnd: vi.fn(),
   runExists: vi.fn(),
@@ -15,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
   finalizeRun: vi.fn(),
   registerRun: vi.fn(),
-  releaseOwnedRunLease: vi.fn(),
+  releaseClaims: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -33,12 +32,6 @@ vi.mock('@agent/storage', () => ({
     readRunEnd: () => Effect.sync(() => mocks.readRunEnd()),
     exists: () => Effect.sync(() => mocks.runExists()),
   }),
-}));
-
-vi.mock('@agent/storage/runLease', () => ({
-  acquireResumedRunLease: mocks.acquireResumedRunLease,
-  releaseOwnedRunLease: mocks.releaseOwnedRunLease,
-  validateOwnedRunLease: mocks.validateOwnedRunLease,
 }));
 
 vi.mock('@agent/storage/runLifecycle', async (importActual) => ({
@@ -77,7 +70,11 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+} from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -100,7 +97,7 @@ const untrackRun = vi.fn((runId: RunId) => {
   if (trackedHandle?.runId === runId) trackedHandle = undefined;
 });
 // The real exit choreography over the fake's flushArtifacts and the mocked
-// lease verbs, so the existing flush/release assertions keep
+// claim verbs, so the existing flush/release assertions keep
 // observing the same tree through its one owner.
 const SESSION = {
   runs: {
@@ -126,8 +123,10 @@ const SESSION = {
   },
   flushArtifacts,
   readView: () => Effect.succeed({ runs: persistedRuns }),
-  acquireClaims: () => Effect.succeed(Effect.void),
-  graph: { releaseClaims: () => Effect.void },
+  acquireClaims: (...args: unknown[]) => mocks.acquireClaims(...args),
+  graph: {
+    releaseClaims: (...args: unknown[]) => mocks.releaseClaims(...args),
+  },
   releaseClaims: SessionHandle.prototype.releaseClaims,
   settlePublications: vi.fn(async () => {}),
   releaseRunLease: SessionHandle.prototype.releaseRunLease,
@@ -166,14 +165,13 @@ describe('runAgent run ownership', () => {
     trackedHandle = undefined;
     persistedRuns.clear();
     mocks.registerRun.mockResolvedValue(undefined);
-    mocks.acquireResumedRunLease.mockResolvedValue('acquired');
+    mocks.acquireClaims.mockReturnValue(Effect.succeed(Effect.void));
+    mocks.releaseClaims.mockReturnValue(Effect.void);
     mocks.prepareAgentDefinition.mockImplementation(({ config }) => ({
       config,
     }));
     mocks.readRunEnd.mockReturnValue(null);
     mocks.runExists.mockReturnValue(true);
-    mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
-    mocks.validateOwnedRunLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
     mocks.finalizeRun.mockResolvedValue(FINALIZE_RESULT);
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
@@ -285,10 +283,12 @@ describe('runAgent run ownership', () => {
         persistedRuns.set(RUN_ID, { parentId: PARENT_RUN_ID });
         // The foreign `run.detach` folds before this launch owns the run; a
         // foreign row never reaches the handle this session tracked.
-        mocks.acquireResumedRunLease.mockImplementationOnce(async () => {
-          persistedRuns.delete(RUN_ID);
-          return 'acquired';
-        });
+        mocks.acquireClaims.mockImplementationOnce(() =>
+          Effect.sync(() => {
+            persistedRuns.delete(RUN_ID);
+            return Effect.void;
+          }),
+        );
         let launched: RunHandle | undefined;
         trackRun.mockImplementationOnce((handle) => {
           trackedHandle = handle;
@@ -346,7 +346,9 @@ describe('runAgent run ownership', () => {
         mocks.registerRun.mock.invocationCallOrder[0] ??
           Number.POSITIVE_INFINITY,
       ).toBeLessThan(mocks.executeAgent.mock.invocationCallOrder[0] ?? 0);
-      expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(RUN_ID);
+      expect(mocks.releaseClaims).toHaveBeenCalledWith(
+        qualifyAggregateId('run', RUN_ID),
+      );
     }),
   );
 
@@ -355,8 +357,12 @@ describe('runAgent run ownership', () => {
       yield* launch();
 
       expect(mocks.registerRun).not.toHaveBeenCalled();
-      expect(mocks.acquireResumedRunLease).toHaveBeenCalledWith(RUN_ID);
-      expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(RUN_ID);
+      expect(mocks.acquireClaims).toHaveBeenCalledWith(
+        qualifyAggregateId('run', RUN_ID),
+      );
+      expect(mocks.releaseClaims).toHaveBeenCalledWith(
+        qualifyAggregateId('run', RUN_ID),
+      );
     }),
   );
   it.effect(
@@ -395,9 +401,11 @@ describe('runAgent run ownership', () => {
         order.push('finalize');
         return FINALIZE_RESULT;
       });
-      mocks.releaseOwnedRunLease.mockImplementationOnce(async () => {
-        order.push('release');
-      });
+      mocks.releaseClaims.mockImplementationOnce(() =>
+        Effect.sync(() => {
+          order.push('release');
+        }),
+      );
       expect(yield* Effect.flip(launch({ kind: 'fresh' }))).toBe(launchError);
 
       expect(order).toEqual(['finalize', 'release']);
@@ -421,7 +429,9 @@ describe('runAgent run ownership', () => {
       expect(yield* Effect.flip(launch({ kind: 'fresh' }))).toBe(launchError);
 
       expect(mocks.finalizeRun).not.toHaveBeenCalled();
-      expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(RUN_ID);
+      expect(mocks.releaseClaims).toHaveBeenCalledWith(
+        qualifyAggregateId('run', RUN_ID),
+      );
     }),
   );
 
@@ -442,7 +452,9 @@ describe('runAgent run ownership', () => {
           runId: RUN_ID,
           outcome: RUN_OUTCOME.CANCELLED,
         });
-        expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(RUN_ID);
+        expect(mocks.releaseClaims).toHaveBeenCalledWith(
+          qualifyAggregateId('run', RUN_ID),
+        );
       }),
   );
 
@@ -453,9 +465,11 @@ describe('runAgent run ownership', () => {
         order.push('execute');
         return EXECUTE_RESULT;
       });
-      mocks.releaseOwnedRunLease.mockImplementationOnce(async () => {
-        order.push('release');
-      });
+      mocks.releaseClaims.mockImplementationOnce(() =>
+        Effect.sync(() => {
+          order.push('release');
+        }),
+      );
       flushArtifacts.mockImplementationOnce(async () => {
         order.push('session-artifacts');
       });
@@ -512,7 +526,7 @@ describe('runAgent run ownership', () => {
 
         expect(order).toEqual(['execute', 'host-artifacts-and-release']);
         expect(flushArtifacts).not.toHaveBeenCalled();
-        expect(mocks.releaseOwnedRunLease).not.toHaveBeenCalled();
+        expect(mocks.releaseClaims).not.toHaveBeenCalled();
       }),
   );
 
@@ -579,8 +593,10 @@ describe('runAgent run ownership', () => {
             : { type: 'error', payload: { message: primaryError.message } },
         );
         // A failed host hook never changes ownership: the one drain still runs
-        // and releases the lease.
-        expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(RUN_ID);
+        // and releases the claim.
+        expect(mocks.releaseClaims).toHaveBeenCalledWith(
+          qualifyAggregateId('run', RUN_ID),
+        );
         expect(flushArtifacts).toHaveBeenCalledOnce();
       }),
   );
