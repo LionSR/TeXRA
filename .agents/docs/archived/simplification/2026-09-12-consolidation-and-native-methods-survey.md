@@ -257,11 +257,22 @@ now with a comment recording why it isn't deduped against the shared one.
   findings.
 - **Scripts, resources, prompts, Supabase, utils**: a real duplicated LaTeX
   `\criticize` color-coding macro across seven
-  `prompts/agents/remote/workflow/*.yaml` files has drifted into a genuine
-  severity-mapping bug (`criticize.yaml` and `enhance.yaml` gate the lowest
-  severity on `\ifnum#2=0`, which never fires given the documented 1–5
-  severity scale, while `elevate.yaml` has the correct `\ifnum#2=1`), and a
-  15-line style-guide `itemize` block is duplicated verbatim across
+  `prompts/agents/remote/workflow/*.yaml` files has drifted, but the drift is
+  narrower than an earlier draft of this entry claimed (corrected after PR
+  review): only `enhance.yaml` gates its lowest color on a dead
+  `\ifnum#2=0` branch — its own scale is "impact: 1-5" with no impact-0
+  documented (`enhance.yaml:34`), so that branch never fires and severity 1
+  falls through to gray. `criticize.yaml` and `firstread.yaml` use the same
+  `\ifnum#2=0 green` mapping deliberately: both document an explicit
+  severity-0 "Verified Correct" tier (`criticize.yaml:274,304,324`;
+  `firstread.yaml:47,70`), so their `#2=0` branch is intentional, not drift
+  — it is _their_ severity 1 that falls through to gray with no dedicated
+  color. `elevate.yaml` is the one file that keys green to `\ifnum#2=1`
+  instead. The real, worth-fixing inconsistency is that three files
+  (`criticize.yaml`, `enhance.yaml`, `firstread.yaml`) leave severity/impact
+  1 uncolored while `elevate.yaml` colors it green — not that any of them
+  has an always-false branch outside `enhance.yaml`. A 15-line style-guide
+  `itemize` block is also duplicated verbatim across
   `correct.yaml`, `polish.yaml`, and `generic.yaml`. Both are real findings
   but are prompt-content fixes with no include/anchor mechanism available
   (`agentLoad.ts` parses each YAML as a standalone document) and land in
