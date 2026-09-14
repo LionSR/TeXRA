@@ -2,14 +2,7 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import {
-  Effect,
-  FileSystem,
-  Layer,
-  Path,
-  type ManagedRuntime,
-  type PlatformError,
-} from 'effect';
+import { Effect, FileSystem, Layer, Path, type PlatformError } from 'effect';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import writeFileAtomic from 'write-file-atomic';
 
@@ -23,21 +16,21 @@ import type { StateStore } from '../interfaces';
 type JsonRecord = Record<string, unknown>;
 
 /**
- * What {@link JsonStore.update} runs its write on: a runtime over the
- * filesystem services the flush reads, which every host's process runtime
- * provides. Narrower than `ProcessRuntime` on purpose -- this store needs a
- * place to run a file write, not the process's whole service set.
+ * Runs one durable store write to completion. `StateStore` and `ConfigStore`
+ * mirror `vscode.Memento`, whose `update` is a Promise, and R1 puts that
+ * conversion at a host entry: the entry that opens a store supplies the run.
+ * A rejected write is the caller's failure, never a logged best-effort.
  */
-export type JsonStoreRuntime = ManagedRuntime.ManagedRuntime<
-  FileSystem.FileSystem | Path.Path,
-  never
->;
+export type RunStateWrite = (
+  write: Effect.Effect<void, Error>,
+) => Promise<void>;
 
 /**
  * The filesystem services a `JsonStore` reads and writes over, as a layer a
  * caller can provide itself. A store opened for a port whose members are
- * requirement-free by contract (the secret stores) provides these rather than
- * making every consumer of that port carry `FileSystem | Path` in its type.
+ * requirement-free by contract (the secret stores, and this store's own
+ * `update`) provides these rather than making every consumer of that port
+ * carry `FileSystem | Path` in its type.
  */
 export const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path> =
   Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
@@ -61,14 +54,14 @@ export interface JsonStoreOptions {
    */
   mode?: number;
   /**
-   * The runtime {@link JsonStore.update} runs its write on: the one the host
-   * that opened this store built. Only a store that backs a `ConfigStore` or
+   * How {@link JsonStore.update} runs its write: the host entry that opened
+   * this store supplies it. Only a store that backs a `ConfigStore` or
    * `StateStore` target has that `vscode.Memento`-shaped Promise face, so a
    * store opened for Effect-side writes alone (`set`) leaves this unset and
    * `update` on it fails with that fact, exactly as a host with no editor
    * fails an editor-model binding.
    */
-  runtime?: JsonStoreRuntime;
+  runWrite?: RunStateWrite;
 }
 
 /** `0o600` -> `0o700`: adds owner-execute wherever owner-read is set. */
@@ -189,10 +182,10 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  *
  * `set` is the store's own write and is an `Effect`. `update` exists only
  * because {@link StateStore} and `ConfigStore` mirror `vscode.Memento`, whose
- * shape the VS Code host cannot change: it is the port's method, the single
- * place this module runs an Effect, and it disappears with those two port
- * shapes rather than with this class. It runs on the runtime the opener
- * handed over ({@link JsonStoreOptions.runtime}), never on a looked-up one.
+ * shape the VS Code host cannot change: it is the port's method, and it
+ * disappears with those two port shapes rather than with this class. This
+ * module never runs an Effect: `update` hands `set` to the runner the opener
+ * supplied ({@link JsonStoreOptions.runWrite}).
  */
 export class JsonStore implements StateStore {
   private constructor(
@@ -242,8 +235,8 @@ export class JsonStore implements StateStore {
    * (`ElectronSecrets` answers `getStored`/`listStoredKeys` from here), so a
    * mutation applied ahead of the wait would survive a cancellation that
    * wrote nothing and read as committed until the process restarts. There is
-   * one mutator: a removal is `set(key, undefined)` and `update` is `set` on
-   * the opener's runtime, so both inherit this region rather than carrying
+   * one mutator: a removal is `set(key, undefined)` and `update` is `set` run
+   * by the opener's runner, so both inherit this region rather than carrying
    * one of their own. That is also where the credential stores' Q2 guarantee
    * lives — this store owns the lane, so it owns the mask too, and a caller
    * must not wrap `set` in one of its own.
@@ -278,15 +271,15 @@ export class JsonStore implements StateStore {
    * which is the Effect-side write every caller inside a program uses.
    */
   update(key: string, value: unknown): Promise<void> {
-    const { runtime } = this.options;
-    if (!runtime) {
+    const { runWrite } = this.options;
+    if (!runWrite) {
       return Promise.reject(
         new Error(
-          `The JSON store at ${this.filePath} was opened without a runtime, so its Promise-shaped update() has nothing to run the write on. Open it with { runtime } where it backs a ConfigStore or StateStore target, or write through set() from inside an Effect.`,
+          `The JSON store at ${this.filePath} was opened without a write runner, so its Promise-shaped update() has nothing to run the write on. Open it with { runWrite } where it backs a ConfigStore or StateStore target, or write through set() from inside an Effect.`,
         ),
       );
     }
-    return runtime.runPromise(this.set(key, value));
+    return runWrite(Effect.provide(this.set(key, value), nodeFileServices));
   }
 
   snapshot(): JsonRecord {

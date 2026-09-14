@@ -54,9 +54,6 @@
     "import:async-mutex": {
       "src/utils/core/keyedMutex.ts": 1
     },
-    "Effect.run*": {
-      "src/platform/defaults/jsonStore.ts": 1
-    },
     "catch:effect-importer": {
       "packages/desktop/src/main/index.ts": 1,
       "src/agent/remote/RemoteAgentLoader.ts": 1,

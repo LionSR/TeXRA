@@ -15,15 +15,13 @@ import {
 } from '@agent/runtime';
 import { hostPort } from '@common/hostPort';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import {
-  openAppStateStore,
-  type RunStateWrite,
-} from '@controllers/session/appStateStore';
+import { openAppStateStore } from '@controllers/session/appStateStore';
 import {
   createTexraResponseTextProcessing,
   type ResponseTextProcessing,
 } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
@@ -284,7 +282,7 @@ export function openDesktopProjectRegistry(
                 storage,
                 root,
                 options.warn,
-                options.runtime,
+                options.runWrite,
               ),
             ],
             { concurrency: 'unbounded' },
