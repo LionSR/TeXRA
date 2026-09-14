@@ -140,10 +140,19 @@ export class ElectronSecrets implements PlatformSecrets {
   }
 
   /**
-   * Encrypt and commit one secret. Host-controller study Q2 rules that a
-   * credential commit survives cancellation, so the encrypt-and-write region
-   * is uninterruptible: a cancelled caller either never started the commit or
-   * observes a finished one.
+   * Encrypt and commit one secret. `safeStorage.encryptString` throws rather
+   * than returns when the keychain refuses the key despite the availability
+   * probe above, so it is a step of the program with its own typed failure,
+   * not a synchronous call in the middle of building one — a throw there is a
+   * failed write, not a defect.
+   *
+   * Host-controller study Q2 rules that a credential commit survives
+   * cancellation. That region is the commit alone, and {@link JsonStore.set}
+   * owns it: the mask starts once the write lane is entered, so a write still
+   * queued behind another can be cancelled. Encryption stays outside it and
+   * interruptible on purpose — it is one synchronous step with nothing to
+   * leave half-done, and a fiber interrupted between it and the commit has
+   * written nothing.
    */
   set(key: string, value: string): Effect.Effect<void, SecretsFailed> {
     return Effect.suspend(() => {
@@ -158,11 +167,20 @@ export class ElectronSecrets implements PlatformSecrets {
       const storageMode = getSecretStorageMode();
       switch (storageMode) {
         case 'encrypted':
-          return Effect.uninterruptible(
-            this.commit(key, {
-              encrypted: true,
-              value: safeStorage.encryptString(value).toString('base64'),
+          return Effect.flatMap(
+            Effect.try({
+              try: () => safeStorage.encryptString(value).toString('base64'),
+              catch: (cause) =>
+                new SecretsFailed({
+                  reason: 'io',
+                  operation: 'set',
+                  key,
+                  message: `The system keychain refused to encrypt the secret "${key}": ${toErrorMessage(cause)}`,
+                  cause,
+                }),
             }),
+            (encrypted) =>
+              this.commit(key, { encrypted: true, value: encrypted }),
           );
         case 'unavailable':
           return Effect.fail(
@@ -181,9 +199,9 @@ export class ElectronSecrets implements PlatformSecrets {
     });
   }
 
-  /** The commit region of a removal, uninterruptible for the same reason. */
+  /** A removal is the commit alone, masked where every commit is. */
   delete(key: string): Effect.Effect<void, SecretsFailed> {
-    return Effect.uninterruptible(this.commit(key, undefined));
+    return this.commit(key, undefined);
   }
 
   listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
@@ -212,7 +230,11 @@ export class ElectronSecrets implements PlatformSecrets {
     });
   }
 
-  /** Persist (or clear) one entry of the desktop secrets store. */
+  /**
+   * Persist (or clear) one entry of the desktop secrets store. The store's
+   * own write carries the Q2 mask: the lane wait is interruptible, the
+   * read-modify-write behind it is not.
+   */
   private commit(
     key: string,
     stored: StoredSecret | undefined,

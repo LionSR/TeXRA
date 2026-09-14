@@ -229,6 +229,13 @@ export class JsonStore implements StateStore {
    * step, so flushes run in `set()` order rather than racing on
    * `mkdir`/read/`write-file-atomic` timing; a failed flush doesn't stop the
    * lane from running subsequent flushes.
+   *
+   * Waiting for the lane is interruptible, the flush behind it is not: a
+   * writer still queued can be cancelled, and one that has entered the lane
+   * runs its read-modify-write to completion rather than leaving the file
+   * holding a record it read before another writer's mutation. That is where
+   * the credential stores' Q2 guarantee lives — this store owns the lane, so
+   * it owns the mask too, and a caller must not wrap `set` in one of its own.
    */
   set(key: string, value: unknown) {
     return Effect.suspend(() => {
@@ -240,7 +247,11 @@ export class JsonStore implements StateStore {
       return withPerKeyLane(
         writeLanes,
         this.filePath,
-      )(flush(this.filePath, this.options.mode, key, value, this.snapshot()));
+      )(
+        Effect.uninterruptible(
+          flush(this.filePath, this.options.mode, key, value, this.snapshot()),
+        ),
+      );
     });
   }
 

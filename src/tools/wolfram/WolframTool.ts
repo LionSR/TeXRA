@@ -30,7 +30,7 @@ const WOLFRAM_NOT_INSTALLED_ERROR =
  * Mirrors bash's `Executed: <preview>` convention; uses the first non-blank
  * line of the code so multi-line scripts still get a meaningful header.
  */
-export function wolframRunSummary(code: string): string {
+function wolframRunSummary(code: string): string {
   const firstLine = splitContentLines(code).find((line) => line.trim());
   const preview = firstLine ? previewLabel(firstLine.trim()) : '';
   return preview ? `Executed: ${preview}` : 'Executed';

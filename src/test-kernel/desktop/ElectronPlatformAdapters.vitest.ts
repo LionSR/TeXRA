@@ -196,6 +196,28 @@ describe('desktop platform adapters', () => {
   );
 
   it.effect(
+    'reports a keychain that refuses encryption as a failed write, not a defect',
+    () =>
+      Effect.gen(function* () {
+        const { store, secrets } = yield* loadSecrets();
+
+        vi.spyOn(electronSafeStorage, 'encryptString').mockImplementation(
+          () => {
+            throw new Error('keychain refused the encryption');
+          },
+        );
+
+        expect(yield* secretWriteError(secrets)).toMatchObject({
+          _tag: 'SecretsFailed',
+          reason: 'io',
+          operation: 'set',
+          key: testSecretKey,
+        });
+        expect(store.snapshot()).toEqual({});
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+
+  it.effect(
     'warns once and rejects secret writes on the Linux basic_text safe storage backend',
     () =>
       Effect.gen(function* () {

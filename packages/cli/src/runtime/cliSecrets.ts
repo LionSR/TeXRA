@@ -50,9 +50,12 @@ const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
  * before the open — so same-key writes preserve caller order. `JsonStore`
  * handles cross-instance and cross-process exclusion while flushing.
  *
- * Waiting for that lane is interruptible; the read-modify-write behind it is
- * not (host-controller study Q2). The port's remaining Promise-shaped reads
- * are run here on the process runtime the composition root hands over.
+ * Waiting for that lane is interruptible, and so is opening the store behind
+ * it: a mutation cancelled there has written nothing. The commit itself is
+ * not — `JsonStore.set` masks its own read-modify-write once it holds the
+ * file's write lane, which is where host-controller study Q2's guarantee
+ * lives. The port's remaining Promise-shaped reads are run here on the
+ * process runtime the composition root hands over.
  */
 export class CliSecrets implements PlatformSecrets {
   constructor(
@@ -100,9 +103,10 @@ export class CliSecrets implements PlatformSecrets {
   }
 
   /**
-   * One mutation of the secrets file. The lane wait is interruptible; the
-   * read-modify-write it guards is not, so a cancelled caller either never
-   * started the commit or observes a finished one.
+   * One mutation of the secrets file. Taking this lane and opening the store
+   * are both interruptible; the commit `JsonStore.set` runs behind the file's
+   * own write lane is not, so a cancelled caller either never started the
+   * commit or observes a finished one.
    */
   private mutate(
     operation: Extract<SecretsOperation, 'set' | 'delete'>,
@@ -113,10 +117,8 @@ export class CliSecrets implements PlatformSecrets {
       mutationLanes,
       this.filePath,
     )(
-      Effect.uninterruptible(
-        Effect.flatMap(this.openStore(), (store) =>
-          Effect.provide(store.set(key, value), nodeFileServices),
-        ),
+      Effect.flatMap(this.openStore(), (store) =>
+        Effect.provide(store.set(key, value), nodeFileServices),
       ),
     ).pipe(
       Effect.mapError(

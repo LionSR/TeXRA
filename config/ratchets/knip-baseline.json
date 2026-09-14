@@ -1244,12 +1244,6 @@
       "name": "wolframApprovalCommand"
     },
     {
-      "file": "src/tools/wolfram/WolframTool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "wolframRunSummary"
-    },
-    {
       "file": "src/utils/files/pastedImageUtils.ts",
       "category": "production-dead",
       "kind": "exports",

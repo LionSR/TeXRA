@@ -28,15 +28,23 @@ export function saveProviderApiKey(
   provider: ApiProvider,
   key: string,
 ): Effect.Effect<void, Error | SecretsFailed> {
-  // Write before invalidating so a concurrent lookup cannot restore a stale
-  // missing-key cache entry after the credential has been saved.
-  return Effect.tap(
+  // The cache drop is a finalizer of the write, not a step after it. A write
+  // the store committed under its uninterruptible region still exits as
+  // interrupted when the caller was cancelled during it, so a `tap` — or an
+  // exit-inspecting finalizer — would be skipped over a key that is now on
+  // disk, leaving it invisible behind a stale missing-key entry for the cache
+  // TTL. The finalizer runs on every exit instead: dropping the cache when
+  // nothing was written costs one uncached lookup, while missing the drop
+  // after a commit costs a credential the process cannot see. Ordering is
+  // unchanged — the write settles first, so a concurrent lookup cannot
+  // repopulate the stale entry.
+  return Effect.ensuring(
     storeCredential(secrets, {
       secretName: apiKeySecretName(provider),
       value: key,
       kind: 'provider',
       label: providerDisplayName(provider),
     }),
-    () => Effect.sync(invalidateApiKeyCache),
+    Effect.sync(invalidateApiKeyCache),
   );
 }

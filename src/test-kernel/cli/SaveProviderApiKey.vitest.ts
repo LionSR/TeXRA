@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -81,6 +81,38 @@ describe('saveProviderApiKey', () => {
     );
 
     expect(order).toEqual(['set', 'invalidateApiKeyCache']);
+  });
+
+  it('drops the key cache when the write lands under a pending interrupt', async () => {
+    // The store's commit region is uninterruptible, so a fiber interrupted
+    // mid-write still persists the key; the cache drop has to land with it or
+    // the saved key stays invisible behind a stale entry for the cache TTL.
+    const writing = Deferred.makeUnsafe<void>();
+    const release = Deferred.makeUnsafe<void>();
+    // The commit ends on a scheduler yield, as a file-backed one does, which
+    // is where the runtime delivers the interrupt it held during the write.
+    set.mockImplementation(() =>
+      Effect.uninterruptible(
+        Effect.andThen(
+          Deferred.succeed(writing, undefined),
+          Effect.andThen(Deferred.await(release), Effect.yieldNow),
+        ),
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const saving = yield* Effect.forkChild(
+          saveProviderApiKey(secrets, 'anthropic', 'sk-ant-secret'),
+        );
+        yield* Deferred.await(writing);
+        const interrupting = yield* Effect.forkChild(Fiber.interrupt(saving));
+        yield* Deferred.succeed(release, undefined);
+        yield* Fiber.join(interrupting);
+      }),
+    );
+
+    expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
   });
 });
 

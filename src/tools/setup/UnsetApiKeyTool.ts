@@ -64,11 +64,17 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
     );
   }
 
-  yield* secrets.delete(apiKeySecretName(provider));
-  // Mirror the manual `texra.setApiKey` command ordering: drop the cached
-  // key lookups so models that just lost their credential stop appearing
-  // selectable, then refresh the status surfaces.
-  invalidateApiKeyCache();
+  // Mirror the manual `texra.setApiKey` command ordering: drop the cached key
+  // lookups so models that just lost their credential stop appearing
+  // selectable, then refresh the status surfaces. The drop is a finalizer of
+  // the removal rather than the next statement: a removal the store committed
+  // under its uninterruptible region still exits as interrupted when this
+  // fiber was cancelled during it, and the next statement would never run
+  // over a credential that is already gone.
+  yield* Effect.ensuring(
+    secrets.delete(apiKeySecretName(provider)),
+    Effect.sync(invalidateApiKeyCache),
+  );
   const commands = platform.commands;
   if (commands) {
     // Credential changes must remain successful when a host cannot refresh

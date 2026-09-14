@@ -28,7 +28,7 @@ import { Context, Data, Effect, Layer } from 'effect';
  * the model-availability computation, which is its own slice (#12424, lane A
  * finding), not a port change.
  */
-export type SecretsFailureReason =
+type SecretsFailureReason =
   'enumeration-unsupported' | 'store-unavailable' | 'decrypt-failed' | 'io';
 
 /** Which member of the port failed. */
@@ -57,10 +57,19 @@ export class SecretsFailed extends Data.TaggedError('SecretsFailed')<{
  * program gets the failure typed as {@link SecretsFailed} instead of
  * `unknown`. {@link PlatformSecrets.set} and {@link PlatformSecrets.delete}
  * carry one extra rule, ruled for host-controller study Q2: a credential
- * commit survives cancellation, so every implementation runs its commit
- * region under `Effect.uninterruptible` — interruption is honoured before the
- * commit starts and observed after it lands, never in the middle of a write,
- * while waiting for the store's own write lane stays interruptible.
+ * commit survives cancellation. The uninterruptible region is the commit
+ * itself and nothing before it — for the file-backed stores it begins once
+ * the write lane has been entered, inside `JsonStore.set`, so a write still
+ * queued behind another one can be cancelled; for the VS Code store it is the
+ * single `SecretStorage` call, which is the whole commit. Everything that
+ * prepares a write — the lane wait, opening the store, the desktop store's
+ * encrypt step — stays interruptible, because interruption there means
+ * nothing was written. A caller with a post-commit step of its own (dropping
+ * a key cache, say) owes it the same guarantee and cannot get it from a step
+ * after the write: a commit the store landed still exits as interrupted when
+ * its caller was cancelled during it, so the step — and any finalizer that
+ * reads the exit — is skipped over a credential that is now on disk. Run it
+ * as an `Effect.ensuring` finalizer, which runs on every exit.
  */
 export interface PlatformSecrets {
   /** Get a raw secret by key name. */
