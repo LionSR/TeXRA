@@ -315,26 +315,17 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
  * The PRD 9 selection rule: `selected` if the view still has that run,
  * else the first top-level run, else `null`. The fallback applies only to
  * a non-null id that has disappeared; an explicit `null` resolves to
- * itself. A Surface-only id the view never holds (the CLI's pre-run local
- * conversation) is the caller's to keep out of this rule: the view lists
- * every run of the workspace, so a fallback from it would land on an
- * unrelated run.
+ * itself. This surface browses the whole project; a chat's selection is
+ * confined to its own run tree instead.
  */
-export function resolveSelectedId(
-  view: SessionView,
-  selected: RunId | null,
-): RunId | null {
-  if (selected === null) return null;
-  if (view.runs.has(selected)) return selected;
-  return view.order.at(0) ?? null;
-}
-
-/** What a surface shows: {@link resolveSelectedId} applied to `surface.selected`. */
 export function resolveSelected(
   view: SessionView,
   surface: Surface,
 ): RunId | null {
-  return resolveSelectedId(view, surface.selected);
+  const selected = surface.selected;
+  if (selected === null) return null;
+  if (view.runs.has(selected)) return selected;
+  return view.order.at(0) ?? null;
 }
 
 /**
