@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import { API_PROVIDERS, apiKeySecretName } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
@@ -23,7 +22,7 @@ type ListApiKeysInput = z.infer<typeof ListApiKeysInputSchema>;
 
 const listApiKeys = Effect.fn('ListApiKeysTool.execute')(function* () {
   const secrets = yield* Secrets;
-  const storedKeys = yield* hostPort(() => secrets.listStoredKeys());
+  const storedKeys = yield* secrets.listStoredKeys();
 
   if (storedKeys.length === 0) {
     return executed(

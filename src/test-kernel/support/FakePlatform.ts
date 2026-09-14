@@ -9,6 +9,9 @@ import {
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
@@ -20,7 +23,7 @@ import {
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -367,16 +370,20 @@ export class FakeSecrets implements PlatformSecrets {
     return this.values.get(key);
   }
 
-  async set(key: string, value: string): Promise<void> {
-    this.values.set(key, value);
+  set(key: string, value: string): Effect.Effect<void, SecretsFailed> {
+    return Effect.sync(() => {
+      this.values.set(key, value);
+    });
   }
 
-  async delete(key: string): Promise<void> {
-    this.values.delete(key);
+  delete(key: string): Effect.Effect<void, SecretsFailed> {
+    return Effect.sync(() => {
+      this.values.delete(key);
+    });
   }
 
-  async listStoredKeys(): Promise<readonly string[]> {
-    return [...this.values.keys()];
+  listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
+    return Effect.sync(() => [...this.values.keys()]);
   }
 
   getEnv(name: string): string | undefined {

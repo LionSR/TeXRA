@@ -58,7 +58,7 @@ function restoreProcessRun(
 }
 
 beforeEach(() => {
-  mocks.saveProviderApiKey.mockReset().mockResolvedValue(undefined);
+  mocks.saveProviderApiKey.mockReset().mockReturnValue(Effect.void);
   mocks.writeTextStderr.mockReset();
   mocks.writeTextStdout.mockReset();
 });

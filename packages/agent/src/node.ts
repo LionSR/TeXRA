@@ -1,7 +1,9 @@
 import process from 'node:process';
 
+import { Effect } from 'effect';
+
 // Local imports - types
-import type { PlatformSecrets } from '@platform/secrets';
+import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
 
 // Local imports - platform defaults
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -25,16 +27,25 @@ export interface NodePlatformOptions {
   readonly storageDir?: string;
 }
 
+const NO_PERSISTED_SECRETS =
+  'The default Node platform does not persist secrets.';
+
+const unpersisted = (operation: 'set' | 'delete', key: string) =>
+  Effect.fail(
+    new SecretsFailed({
+      reason: 'store-unavailable',
+      operation,
+      key,
+      message: NO_PERSISTED_SECRETS,
+    }),
+  );
+
 const environmentSecrets: PlatformSecrets = {
   get: async (key) => process.env[key],
   getStored: async () => undefined,
-  set: async () => {
-    throw new Error('The default Node platform does not persist secrets.');
-  },
-  delete: async () => {
-    throw new Error('The default Node platform does not persist secrets.');
-  },
-  listStoredKeys: async () => [],
+  set: (key) => unpersisted('set', key),
+  delete: (key) => unpersisted('delete', key),
+  listStoredKeys: () => Effect.succeed([]),
   getEnv: (name) => process.env[name],
 };
 

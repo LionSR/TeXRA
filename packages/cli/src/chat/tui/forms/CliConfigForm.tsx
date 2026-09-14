@@ -255,7 +255,9 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             availableRows={props.availableRows}
             statusView={apiKeyStatusView}
             onSave={async (provider, key) => {
-              await saveProviderApiKey(secrets, provider, key);
+              await props.runtime.runPromise(
+                saveProviderApiKey(secrets, provider, key),
+              );
               markApiKey((current) => ({
                 statuses: { ...current.statuses, [provider]: 'set' },
               }));
@@ -270,12 +272,12 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             availableRows={props.availableRows}
             statusView={githubTokenStatusView}
             onSave={async (token) => {
-              await saveGitHubToken(secrets, token);
+              await props.runtime.runPromise(saveGitHubToken(secrets, token));
               markGitHubToken(() => ({ status: 'secret' }));
               await refreshGitHubTokenStatus();
             }}
             onRemove={async () => {
-              await removeGitHubToken(secrets);
+              await props.runtime.runPromise(removeGitHubToken(secrets));
               await refreshGitHubTokenStatus();
             }}
             onDone={onBack}

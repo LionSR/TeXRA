@@ -19,11 +19,15 @@ const providerMocks = vi.hoisted(() => ({
     );
     return testDoubles.effectFrom(result);
   }),
-  secretDelete: vi.fn(async (key: string) => {
-    testDoubles.secrets.delete(key);
-  }),
+  secretDelete: vi.fn((key: string) =>
+    Effect.sync(() => {
+      testDoubles.secrets.delete(key);
+    }),
+  ),
   secretGetStored: vi.fn(async (key: string) => testDoubles.secrets.get(key)),
-  secretListStoredKeys: vi.fn(async () => [...testDoubles.secrets.keys()]),
+  secretListStoredKeys: vi.fn(() =>
+    Effect.sync(() => [...testDoubles.secrets.keys()]),
+  ),
   signInWithOAuth: vi.fn(),
   signOut: vi.fn(async () => {}),
 }));
@@ -41,9 +45,10 @@ const testDoubles = vi.hoisted(() => ({
   secretsPort: {
     get: async (key: string) => testDoubles.secrets.get(key),
     getStored: providerMocks.secretGetStored,
-    set: async (key: string, value: string) => {
-      testDoubles.secrets.set(key, value);
-    },
+    set: (key: string, value: string) =>
+      Effect.sync(() => {
+        testDoubles.secrets.set(key, value);
+      }),
     delete: providerMocks.secretDelete,
     listStoredKeys: providerMocks.secretListStoredKeys,
     getEnv: (_name: string): string | undefined => undefined,

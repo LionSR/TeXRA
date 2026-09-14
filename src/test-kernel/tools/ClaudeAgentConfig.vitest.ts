@@ -40,13 +40,15 @@ async function loadBuildClaudeAgentEnv(): Promise<
 const fakeSecrets: PlatformSecrets = {
   get: async (key) => secretStore.get(key),
   getStored: async (key) => secretStore.get(key),
-  set: async (key, value) => {
-    secretStore.set(key, value);
-  },
-  delete: async (key) => {
-    secretStore.delete(key);
-  },
-  listStoredKeys: async () => [...secretStore.keys()],
+  set: (key, value) =>
+    Effect.sync(() => {
+      secretStore.set(key, value);
+    }),
+  delete: (key) =>
+    Effect.sync(() => {
+      secretStore.delete(key);
+    }),
+  listStoredKeys: () => Effect.sync(() => [...secretStore.keys()]),
   getEnv: (name) => process.env[name],
 };
 

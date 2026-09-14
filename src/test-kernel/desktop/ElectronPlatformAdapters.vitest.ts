@@ -77,14 +77,18 @@ describe('desktop platform adapters', () => {
       return { module: secretsModule, store, secrets };
     });
 
-  /** The rejection a `secrets.set` write surfaces, in the error channel. */
+  /** The failure a `secrets.set` write surfaces, in the error channel. */
   const secretWriteError = (secrets: ElectronSecrets) =>
-    Effect.flip(
-      Effect.tryPromise({
-        try: () => secrets.set(testSecretKey, 'persisted'),
-        catch: (error) => error,
-      }),
-    );
+    Effect.flip(secrets.set(testSecretKey, 'persisted'));
+
+  /** The store-unavailable failure a write reports, as a plain shape. */
+  const unavailableWrite = (message: string) => ({
+    _tag: 'SecretsFailed',
+    reason: 'store-unavailable',
+    operation: 'set',
+    key: testSecretKey,
+    message,
+  });
 
   it.effect(
     'persists state values and deletes undefined updates through JsonStore',
@@ -144,7 +148,7 @@ describe('desktop platform adapters', () => {
         } = yield* loadSecrets();
 
         expect(getSecretStorageMode()).toBe('encrypted');
-        yield* Effect.promise(() => secrets.set(testSecretKey, 'persisted'));
+        yield* secrets.set(testSecretKey, 'persisted');
 
         expect(yield* Effect.promise(() => secrets.get(testSecretKey))).toBe(
           'persisted',
@@ -160,7 +164,7 @@ describe('desktop platform adapters', () => {
         );
 
         delete process.env[testSecretKey];
-        yield* Effect.promise(() => secrets.delete(testSecretKey));
+        yield* secrets.delete(testSecretKey);
 
         expect(
           yield* Effect.promise(() => secrets.get(testSecretKey)),
@@ -182,9 +186,33 @@ describe('desktop platform adapters', () => {
         configureElectronTestStub({ safeStorageEncryptionAvailable: false });
 
         expect(getSecretStorageMode()).toBe('unavailable');
-        expect(yield* secretWriteError(secrets)).toEqual(
-          new Error('Electron safeStorage is unavailable for secret writes.'),
+        expect(yield* secretWriteError(secrets)).toMatchObject(
+          unavailableWrite(
+            'Electron safeStorage is unavailable for secret writes.',
+          ),
         );
+        expect(store.snapshot()).toEqual({});
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+
+  it.effect(
+    'reports a keychain that refuses encryption as a failed write, not a defect',
+    () =>
+      Effect.gen(function* () {
+        const { store, secrets } = yield* loadSecrets();
+
+        vi.spyOn(electronSafeStorage, 'encryptString').mockImplementation(
+          () => {
+            throw new Error('keychain refused the encryption');
+          },
+        );
+
+        expect(yield* secretWriteError(secrets)).toMatchObject({
+          _tag: 'SecretsFailed',
+          reason: 'io',
+          operation: 'set',
+          key: testSecretKey,
+        });
         expect(store.snapshot()).toEqual({});
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
@@ -207,11 +235,11 @@ describe('desktop platform adapters', () => {
         configureElectronTestStub({ safeStorageBackend: 'basic_text' });
 
         expect(getSecretStorageMode()).toBe('basic_text');
-        expect(yield* secretWriteError(secrets)).toEqual(
-          new Error(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
+        expect(yield* secretWriteError(secrets)).toMatchObject(
+          unavailableWrite(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
         );
-        expect(yield* secretWriteError(secrets)).toEqual(
-          new Error(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
+        expect(yield* secretWriteError(secrets)).toMatchObject(
+          unavailableWrite(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
         );
         expect(showWarningMessage).toHaveBeenCalledTimes(1);
         expect(showWarningMessage).toHaveBeenCalledWith(
@@ -238,8 +266,8 @@ describe('desktop platform adapters', () => {
         vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
         configureElectronTestStub({ safeStorageBackend: 'basic_text' });
 
-        expect(yield* secretWriteError(secrets)).toEqual(
-          new Error(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
+        expect(yield* secretWriteError(secrets)).toMatchObject(
+          unavailableWrite(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
         );
         expect(store.snapshot()).toEqual({});
       }).pipe(Effect.provide(nodePlatformLayer)),

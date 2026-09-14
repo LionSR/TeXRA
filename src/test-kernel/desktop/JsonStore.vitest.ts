@@ -212,6 +212,35 @@ describe('shared JsonStore', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
+  it.effect(
+    'a write cancelled while queued changes neither memory nor file',
+    () =>
+      Effect.gen(function* () {
+        const JsonStore = yield* Effect.promise(() => loadJsonStore());
+        const filePath = yield* Effect.promise(() =>
+          createTempFile('state.json', '{}\n'),
+        );
+        const store = yield* JsonStore.open(filePath);
+
+        // The second set claims the lane and then waits for the first's flush.
+        // Cancelling it there writes nothing, so the instance must not be left
+        // serving the key either: this store outlives the fiber that wrote
+        // through it (`ElectronSecrets` answers `getStored` from one), and a
+        // mutation applied ahead of the wait would read as committed until the
+        // process restarts.
+        const committing = yield* Effect.forkChild(store.set('committed', 'a'));
+        const queued = yield* Effect.forkChild(store.set('cancelled', 'b'));
+        yield* Effect.yieldNow;
+        yield* Fiber.interrupt(queued);
+        yield* Fiber.join(committing);
+
+        expect({
+          memory: store.snapshot(),
+          file: yield* Effect.promise(() => readStoredJson(filePath)),
+        }).toEqual({ memory: { committed: 'a' }, file: { committed: 'a' } });
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+
   it('keeps the lock function callable in a split ESM bundle', async () => {
     tempDir = await makeTempDir('texra-json-store-bundle-', tempDirs);
     const outdir = join(tempDir, 'bundle');

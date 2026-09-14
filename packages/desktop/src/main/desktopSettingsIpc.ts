@@ -390,18 +390,20 @@ export function createDesktopSettingsIpc(
       prompt: GITHUB_TOKEN_PROMPT,
     });
     if (token == null) return;
-    await storeCredential(options.secrets, {
-      secretName: GITHUB_TOKEN_STORAGE_KEY,
-      value: token,
-      kind: 'github',
-    });
+    await runtime.runPromise(
+      storeCredential(options.secrets, {
+        secretName: GITHUB_TOKEN_STORAGE_KEY,
+        value: token,
+        kind: 'github',
+      }),
+    );
     await options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
     await postGitHubTokenStatus();
     await runtime.runPromise(refreshToolAvailability());
   }
 
   async function removeGitHubToken(): Promise<void> {
-    await options.secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
+    await runtime.runPromise(options.secrets.delete(GITHUB_TOKEN_STORAGE_KEY));
     await options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
     await postGitHubTokenStatus();
     await runtime.runPromise(refreshToolAvailability());

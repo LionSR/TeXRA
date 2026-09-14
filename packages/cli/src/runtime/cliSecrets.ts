@@ -5,10 +5,16 @@ import path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
-import { secretsGet, type PlatformSecrets } from '@platform/secrets';
+import {
+  SecretsFailed,
+  secretsGet,
+  type PlatformSecrets,
+  type SecretsOperation,
+} from '@platform/secrets';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { JsonStore } from '@platform/defaults/jsonStore';
+import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type PerKeyLane,
   type PerKeyLanes,
@@ -44,10 +50,12 @@ const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
  * before the open — so same-key writes preserve caller order. `JsonStore`
  * handles cross-instance and cross-process exclusion while flushing.
  *
- * `PlatformSecrets` is a Promise-shaped platform port, so this host
- * implementation is where its programs are run, on the process runtime the
- * composition root hands it; every line of logic above that boundary is an
- * `Effect`.
+ * Waiting for that lane is interruptible, and so is opening the store behind
+ * it: a mutation cancelled there has written nothing. The commit itself is
+ * not — `JsonStore.set` masks its own read-modify-write once it holds the
+ * file's write lane, which is where host-controller study Q2's guarantee
+ * lives. The port's remaining Promise-shaped reads are run here on the
+ * process runtime the composition root hands over.
  */
 export class CliSecrets implements PlatformSecrets {
   constructor(
@@ -68,17 +76,25 @@ export class CliSecrets implements PlatformSecrets {
     );
   }
 
-  set(key: string, value: string): Promise<void> {
-    return this.mutate(key, value);
+  set(key: string, value: string) {
+    return this.mutate('set', key, value);
   }
 
-  delete(key: string): Promise<void> {
-    return this.mutate(key, undefined);
+  delete(key: string) {
+    return this.mutate('delete', key, undefined);
   }
 
-  listStoredKeys(): Promise<readonly string[]> {
-    return this.runtime.runPromise(
-      Effect.map(this.openStore(), (store) => store.keys()),
+  listStoredKeys() {
+    return Effect.map(this.openStore(), (store) => store.keys()).pipe(
+      Effect.mapError(
+        (cause) =>
+          new SecretsFailed({
+            reason: 'io',
+            operation: 'listStoredKeys',
+            message: `Could not read the CLI secrets file at ${this.filePath}: ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      ),
     );
   }
 
@@ -86,17 +102,42 @@ export class CliSecrets implements PlatformSecrets {
     return cliEnvValue(name);
   }
 
-  private mutate(key: string, value: string | undefined): Promise<void> {
-    return this.runtime.runPromise(
-      withPerKeyLane(
-        mutationLanes,
-        this.filePath,
-      )(Effect.flatMap(this.openStore(), (store) => store.set(key, value))),
+  /**
+   * One mutation of the secrets file. Taking this lane and opening the store
+   * are both interruptible; the commit `JsonStore.set` runs behind the file's
+   * own write lane is not, so a cancelled caller either never started the
+   * commit or observes a finished one.
+   */
+  private mutate(
+    operation: Extract<SecretsOperation, 'set' | 'delete'>,
+    key: string,
+    value: string | undefined,
+  ) {
+    return withPerKeyLane(
+      mutationLanes,
+      this.filePath,
+    )(
+      Effect.flatMap(this.openStore(), (store) =>
+        Effect.provide(store.set(key, value), nodeFileServices),
+      ),
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new SecretsFailed({
+            reason: 'io',
+            operation,
+            key,
+            message: `Could not ${operation === 'set' ? 'store' : 'remove'} the CLI secret "${key}": ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      ),
     );
   }
 
   private openStore() {
-    return JsonStore.open(this.filePath, { mode: SECRETS_FILE_MODE });
+    return JsonStore.open(this.filePath, { mode: SECRETS_FILE_MODE }).pipe(
+      Effect.provide(nodeFileServices),
+    );
   }
 }
 

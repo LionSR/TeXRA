@@ -10,6 +10,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import type { AuthTokenProvider } from '@auth/TokenProvider';
 import type { SessionSecretStore } from '@auth/oauth/sessionAccess';
 import * as logger from '@logger/logUtils';
+import { SecretsFailed } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
@@ -139,7 +140,7 @@ describe('SupabaseClient PKCE flow state', () => {
     // legacy key the callback reads. All three are keys GoTrue derives from
     // its storage key; the storage key itself is the session slot and must
     // never appear here.
-    const keys = await secrets.listStoredKeys();
+    const keys = await Effect.runPromise(secrets.listStoredKeys());
     assert.ok(keys.includes(VERIFIER_KEY));
     assert.ok(!keys.includes(SUPABASE_GOTRUE_STORAGE_KEY));
     assert.ok(
@@ -179,7 +180,7 @@ describe('SupabaseClient PKCE flow state', () => {
     // not written here: the host's own session record stays its single owner.
     // (GoTrue leaves the numbered slot behind for a callback that carries no
     // flow id; its own ring caps those at five.)
-    const remaining = await secrets.listStoredKeys();
+    const remaining = await Effect.runPromise(secrets.listStoredKeys());
     assert.ok(!remaining.includes(VERIFIER_KEY));
     assert.ok(!remaining.includes(SUPABASE_GOTRUE_STORAGE_KEY));
   });
@@ -190,10 +191,15 @@ describe('SupabaseClient PKCE flow state', () => {
     // reads and throws on writes; only the in-process mirror remains usable.
     const secrets: SessionSecretStore = {
       get: async () => undefined,
-      set: async () => {
-        throw new Error('keychain locked');
-      },
-      delete: async () => {},
+      set: () =>
+        Effect.fail(
+          new SecretsFailed({
+            reason: 'io',
+            operation: 'set',
+            message: 'keychain locked',
+          }),
+        ),
+      delete: () => Effect.void,
     };
     initializeSupabase(secrets);
 

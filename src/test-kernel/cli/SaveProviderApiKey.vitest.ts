@@ -1,3 +1,4 @@
+import { Deferred, Effect, Fiber } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -19,19 +20,21 @@ const set = vi.spyOn(secrets, 'set');
 
 describe('saveProviderApiKey', () => {
   beforeEach(() => {
-    set.mockReset().mockResolvedValue(undefined);
+    set.mockReset().mockReturnValue(Effect.void);
     mocks.invalidateApiKeyCache.mockReset();
   });
 
   it('stores the trimmed key and drops the key cache', async () => {
-    await saveProviderApiKey(secrets, 'anthropic', '  sk-ant-secret  ');
+    await Effect.runPromise(
+      saveProviderApiKey(secrets, 'anthropic', '  sk-ant-secret  '),
+    );
     expect(set).toHaveBeenCalledWith('apiKey.anthropic', 'sk-ant-secret');
     expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
   });
 
   it('rejects an empty key without writing a secret or changing mode', async () => {
     await expect(
-      saveProviderApiKey(secrets, 'anthropic', '   '),
+      Effect.runPromise(saveProviderApiKey(secrets, 'anthropic', '   ')),
     ).rejects.toThrow('empty');
     expect(set).not.toHaveBeenCalled();
   });
@@ -51,7 +54,9 @@ describe('saveProviderApiKey', () => {
     'rejects the placeholder %s without changing credentials',
     async (placeholder) => {
       await expect(
-        saveProviderApiKey(secrets, 'anthropic', placeholder),
+        Effect.runPromise(
+          saveProviderApiKey(secrets, 'anthropic', placeholder),
+        ),
       ).rejects.toThrow('placeholder');
       expect(set).not.toHaveBeenCalled();
     },
@@ -62,22 +67,58 @@ describe('saveProviderApiKey', () => {
     // the key cache is dropped, or a concurrent read could repopulate a stale
     // "no key" entry for the 5s TTL.
     const order: string[] = [];
-    set.mockImplementation(async () => {
-      order.push('set');
-    });
+    set.mockImplementation(() =>
+      Effect.sync(() => {
+        order.push('set');
+      }),
+    );
     mocks.invalidateApiKeyCache.mockImplementation(() => {
       order.push('invalidateApiKeyCache');
     });
 
-    await saveProviderApiKey(secrets, 'anthropic', 'sk-ant-secret');
+    await Effect.runPromise(
+      saveProviderApiKey(secrets, 'anthropic', 'sk-ant-secret'),
+    );
 
     expect(order).toEqual(['set', 'invalidateApiKeyCache']);
+  });
+
+  it('drops the key cache when the write lands under a pending interrupt', async () => {
+    // The store's commit region is uninterruptible, so a fiber interrupted
+    // mid-write still persists the key; the cache drop has to land with it or
+    // the saved key stays invisible behind a stale entry for the cache TTL.
+    const writing = Deferred.makeUnsafe<void>();
+    const release = Deferred.makeUnsafe<void>();
+    // The commit ends on a scheduler yield, as a file-backed one does, which
+    // is where the runtime delivers the interrupt it held during the write.
+    set.mockImplementation(() =>
+      Effect.uninterruptible(
+        Effect.andThen(
+          Deferred.succeed(writing, undefined),
+          Effect.andThen(Deferred.await(release), Effect.yieldNow),
+        ),
+      ),
+    );
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const saving = yield* Effect.forkChild(
+          saveProviderApiKey(secrets, 'anthropic', 'sk-ant-secret'),
+        );
+        yield* Deferred.await(writing);
+        const interrupting = yield* Effect.forkChild(Fiber.interrupt(saving));
+        yield* Deferred.succeed(release, undefined);
+        yield* Fiber.join(interrupting);
+      }),
+    );
+
+    expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
   });
 });
 
 describe('saveGitHubToken', () => {
   beforeEach(() => {
-    set.mockReset().mockResolvedValue(undefined);
+    set.mockReset().mockReturnValue(Effect.void);
   });
 
   it.each([
@@ -86,9 +127,9 @@ describe('saveGitHubToken', () => {
     'github_pat_***-not-a-real-token',
     '[REDACTED_GITHUB_TOKEN]',
   ])('rejects the GitHub placeholder %s', async (placeholder) => {
-    await expect(saveGitHubToken(secrets, placeholder)).rejects.toThrow(
-      'placeholder',
-    );
+    await expect(
+      Effect.runPromise(saveGitHubToken(secrets, placeholder)),
+    ).rejects.toThrow('placeholder');
     expect(set).not.toHaveBeenCalled();
   });
 });

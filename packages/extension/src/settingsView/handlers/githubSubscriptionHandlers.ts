@@ -14,6 +14,7 @@ import {
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   getProgressRunLabel,
@@ -39,6 +40,8 @@ export class GitHubSubscriptionHandlers {
   constructor(
     private readonly ctx: SettingsHandlerContext,
     private readonly secrets: PlatformSecrets,
+    /** Settles the credential store's programs at this host boundary. */
+    private readonly runtime: ProcessRuntime,
   ) {}
 
   async sendGitHubTokenStatus(webview: vscode.Webview): Promise<void> {
@@ -61,11 +64,13 @@ export class GitHubSubscriptionHandlers {
       this.ctx,
       'Failed to save GitHub token',
       async () => {
-        await storeCredential(this.secrets, {
-          secretName: GITHUB_TOKEN_STORAGE_KEY,
-          value: token,
-          kind: 'github',
-        });
+        await this.runtime.runPromise(
+          storeCredential(this.secrets, {
+            secretName: GITHUB_TOKEN_STORAGE_KEY,
+            value: token,
+            kind: 'github',
+          }),
+        );
         void vscode.window.showInformationMessage(GITHUB_TOKEN_SAVED_MESSAGE);
         await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       },
@@ -77,7 +82,9 @@ export class GitHubSubscriptionHandlers {
       this.ctx,
       'Failed to remove GitHub token',
       async () => {
-        await this.secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
+        await this.runtime.runPromise(
+          this.secrets.delete(GITHUB_TOKEN_STORAGE_KEY),
+        );
         void vscode.window.showInformationMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
         await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       },

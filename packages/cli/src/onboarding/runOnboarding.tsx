@@ -387,10 +387,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
         onSubmit={(key) => {
           setSaving(true);
           void props.runtime.runPromise(
-            Effect.tryPromise({
-              try: () => saveProviderApiKey(props.secrets, keyProvider, key),
-              catch: ensureError,
-            }).pipe(
+            saveProviderApiKey(props.secrets, keyProvider, key).pipe(
               Effect.tap(() =>
                 Effect.sync(() =>
                   finish({

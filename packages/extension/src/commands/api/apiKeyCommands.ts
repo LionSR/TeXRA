@@ -12,6 +12,7 @@ import {
   hasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
@@ -113,6 +114,7 @@ async function pickApiProvider(
 export async function setApiKey(
   secrets: PlatformSecrets,
   refreshAfterKeyChange: (provider: string) => Promise<void>,
+  runtime: ProcessRuntime,
   provider?: ApiProvider,
 ): Promise<void> {
   const target =
@@ -128,10 +130,12 @@ export async function setApiKey(
   const apiKey = await promptForApiKey(target);
   if (!apiKey) return;
 
-  await createProfileKeyController(
-    secrets,
-    refreshAfterKeyChange,
-  ).commitProviderKey(target, apiKey);
+  await runtime.runPromise(
+    createProfileKeyController(
+      secrets,
+      refreshAfterKeyChange,
+    ).commitProviderKey(target, apiKey),
+  );
 }
 
 /**
@@ -141,6 +145,7 @@ export async function setApiKey(
 export async function removeApiKey(
   secrets: PlatformSecrets,
   refreshAfterKeyChange: (provider: string) => Promise<void>,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   const provider = await pickApiProvider(
     secrets,
@@ -152,8 +157,10 @@ export async function removeApiKey(
     return;
   }
 
-  await createProfileKeyController(
-    secrets,
-    refreshAfterKeyChange,
-  ).removeProviderKey(provider);
+  await runtime.runPromise(
+    createProfileKeyController(
+      secrets,
+      refreshAfterKeyChange,
+    ).removeProviderKey(provider),
+  );
 }

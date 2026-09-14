@@ -48,8 +48,11 @@ function buildOverleafClonePorts(
   let canonicalWorkspacePath = workspacePath;
   return {
     getStoredToken: (key) => Effect.promise(() => secrets.get(key)),
-    deleteStoredToken: (key) => Effect.promise(() => secrets.delete(key)),
-    storeToken: (key, token) => Effect.promise(() => secrets.set(key, token)),
+    // `orDie` keeps what `Effect.promise` did with a rejected store write:
+    // a credential store that cannot write is a defect here, not a clone
+    // outcome the workflow reports.
+    deleteStoredToken: (key) => Effect.orDie(secrets.delete(key)),
+    storeToken: (key, token) => Effect.orDie(secrets.set(key, token)),
     promptToken: (spec) =>
       Effect.gen(function* () {
         const tokenGuidance = remote.isOverleaf
