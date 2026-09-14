@@ -206,3 +206,22 @@ the tool `execute()` contract.
 **Forbids.** A bridging module that reads a global and exposes it as a `Layer`; a Promise
 method whose body only runs an Effect; a "release-N" compatibility column; a feature flag
 selecting two engines; dual writes.
+
+## Webview runtime entries are an R1 boundary, admitted by name (ruled 2026-09-14)
+
+**Question.** The `Effect.run*` ratchet row counted the progress webview's transport
+(`packages/extension/src/progressView/frontend/sessionTransport.ts`, 4 sites) and the Lit
+signal bridge (`src/shared/signals.ts`, 2 sites) as below-boundary debt. Are those runs
+debt to convert, or the webview's own entry?
+
+**Ruling.** Boundary. A webview owns its own `ManagedRuntime`: `sessionTransport.ts`
+installs and disposes it, so it is that webview's composition root, and `toSignal` is the
+one documented meeting point between Effect and the components, running on the runtime its
+caller passes. Both files are admitted by name in `BOUNDARY_RUNTIME_ENTRIES` in
+`scripts/check-effect-migration-ratchet.mjs`, each with its reason.
+
+**Forbids.** Admitting a directory: every other file under the webview frontends stays
+fenced, and the self-tests pin a sibling on each side (`ProgressApp.ts`,
+`sessionFold.ts`) as below the boundary. Adding an entry is a ruling, not a refactor, and an
+entry must hold its runtime as a local or take it as a parameter; a module that reaches the
+process-global `effectRuntime()` does not qualify.

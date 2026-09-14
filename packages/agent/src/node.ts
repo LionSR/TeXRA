@@ -41,8 +41,8 @@ const unpersisted = (operation: 'set' | 'delete', key: string) =>
   );
 
 const environmentSecrets: PlatformSecrets = {
-  get: async (key) => process.env[key],
-  getStored: async () => undefined,
+  get: (key) => Effect.sync(() => process.env[key]),
+  getStored: () => Effect.succeed(undefined),
   set: (key) => unpersisted('set', key),
   delete: (key) => unpersisted('delete', key),
   listStoredKeys: () => Effect.succeed([]),

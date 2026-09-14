@@ -22,11 +22,13 @@ import {
 } from '@model/setupModelDefaults';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import { probeSetupCredential } from '@model/setupCredentialAccess';
+import {
+  probeSetupCredential,
+  setupCredentialProbeFailed,
+} from '@model/setupCredentialAccess';
 import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { ensureError } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const credentialLog = createLog('Setup Credentials');
@@ -49,10 +51,9 @@ export function selectSetupCredentialModelExcludingOpenRouter(
     if (
       !useOpenRouter &&
       (yield* probeSetupCredential(
-        'ChatGPT subscription',
         Effect.tryPromise({
           try: () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
-          catch: ensureError,
+          catch: setupCredentialProbeFailed('ChatGPT subscription'),
         }),
         credentialLog.warn,
       ))
@@ -62,10 +63,9 @@ export function selectSetupCredentialModelExcludingOpenRouter(
     if (
       !useOpenRouter &&
       (yield* probeSetupCredential(
-        'Grok subscription',
         Effect.tryPromise({
           try: () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
-          catch: ensureError,
+          catch: setupCredentialProbeFailed('Grok subscription'),
         }),
         credentialLog.warn,
       ))
@@ -82,8 +82,9 @@ export function selectSetupCredentialModelExcludingOpenRouter(
         continue;
       }
       const hasApiKey = yield* probeSetupCredential(
-        `${provider} API key`,
-        hasUsableApiKey(secrets, provider),
+        hasUsableApiKey(secrets, provider).pipe(
+          Effect.mapError(setupCredentialProbeFailed(`${provider} API key`)),
+        ),
         credentialLog.warn,
       );
       if (hasApiKey) return model;
@@ -113,8 +114,9 @@ export function resolveSetupLaunchModel(
   return Effect.gen(function* () {
     const useOpenRouter = getUseOpenRouter();
     const hasOpenRouterKey = yield* probeSetupCredential(
-      'OpenRouter API key',
-      hasUsableApiKey(secrets, 'openRouter'),
+      hasUsableApiKey(secrets, 'openRouter').pipe(
+        Effect.mapError(setupCredentialProbeFailed('OpenRouter API key')),
+      ),
       credentialLog.warn,
     );
     const openRouterModel = hasOpenRouterKey

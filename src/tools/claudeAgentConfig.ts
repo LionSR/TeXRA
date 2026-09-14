@@ -9,7 +9,6 @@ import { execa } from 'execa';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
@@ -29,7 +28,6 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
@@ -242,12 +240,10 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   //    leaves the subprocess with no credential at all, so say so rather than
   //    letting it surface as an opaque "Invalid API key" from Claude Code.
   const secrets = yield* Secrets;
-  const managed = yield* hostPort(() =>
-    lookupApiKey(secrets, 'anthropic'),
-  ).pipe(
-    Effect.catch((error: unknown) => {
+  const managed = yield* lookupApiKey(secrets, 'anthropic').pipe(
+    Effect.catchTag('SecretsFailed', (error) => {
       log.warn(
-        `Failed to read the managed Anthropic API key: ${toErrorMessage(error)}`,
+        `Failed to read the managed Anthropic API key: ${error.message}`,
       );
       return Effect.succeed(undefined);
     }),

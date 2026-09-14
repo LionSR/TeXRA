@@ -135,7 +135,9 @@ const BOUNDARY_HOST_ROOTS = [
  * are VS Code-free zones (CLAUDE.md, "Separation of concerns"), so R1 does not
  * admit a run there. Without this the whole source root reads as a boundary
  * and their runs drop out of the row entirely -- which is how five tracked
- * sites in progressView/frontend/sessionTransport.ts went silently untracked.
+ * sites in progressView/frontend/sessionTransport.ts once went silently
+ * untracked. That file is now admitted deliberately, by name, in
+ * BOUNDARY_RUNTIME_ENTRIES below; the directory exclusion still fences the rest.
  */
 const BOUNDARY_HOST_EXCLUSIONS = [
   'packages/extension/src/webview/frontend/',
@@ -143,14 +145,271 @@ const BOUNDARY_HOST_EXCLUSIONS = [
   'packages/extension/src/settingsView/frontend/',
 ];
 
-const BOUNDARY_PATHS_TEXT =
-  'packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, or packages/agent/src/**';
+/**
+ * Runtime entries outside the host roots, admitted by name and each with its
+ * reason (owner ruling 2026-09-14). A webview owns its own `ManagedRuntime`, so
+ * the module that installs and disposes that runtime is the webview's
+ * composition root, and its runs are that root's, the way `extension.ts` runs
+ * on the host runtime. The list is closed: every other file under the
+ * exclusions above stays fenced, and adding a file here is a ruling, not a
+ * refactor. Each entry declares its one approved runtime binding, and only a
+ * run whose receiver is that binding is admitted (`localRuntimeRuns` in
+ * surveySource). The binding must hold exactly, and every deviation fails
+ * closed (no run in the file is approved):
+ *  - exactly one approved declaration of the name; an import of the name, a
+ *    second approved declaration, or any other declaration of it -- a plain
+ *    shadow or a destructured one -- cancels the exemption;
+ *  - for a factory entry: the variable's initializer is a call to the named
+ *    factory as imported from `factoryModule` (not a same-named local or an
+ *    import from anywhere else), and the runtime is disposed in the same
+ *    file, because the entry's premise is that this module owns the
+ *    runtime's whole lifecycle;
+ *  - for a parameter entry: the parameter belongs to the `parameterOwner`
+ *    function the ruling names, carries no default, and is typed exactly as
+ *    the `parameterType` export of 'effect', because the premise is that the
+ *    entry runs only on the runtime its caller passes. Deleting or renaming
+ *    the owner does not transfer the exemption to another helper's lookalike
+ *    parameter; re-admitting a new owner is a new ruling.
+ * `Effect.runFork(...)`, a run on an imported value, or a run on any other
+ * local stays on the row. An entry whose file no longer exists fails the
+ * check (see main), so a dormant exemption cannot apply to unrelated code
+ * created later at the same path.
+ */
+const BOUNDARY_RUNTIME_ENTRIES = new Map([
+  [
+    'packages/extension/src/progressView/frontend/sessionTransport.ts',
+    {
+      reason:
+        "the progress webview's composition root: it installs the webview runtime (installWebviewRuntime) and disposes it, and every run in it is on that local",
+      // The one approved binding: `const runtime = installWebviewRuntime()`,
+      // the factory imported from its owning module, disposed in dispose().
+      runtime: {
+        name: 'runtime',
+        initializer: 'installWebviewRuntime',
+        factoryModule: {
+          alias: '@controllers/session/webviewSessionLayer',
+          path: 'src/controllers/session/webviewSessionLayer',
+        },
+      },
+    },
+  ],
+  [
+    'src/shared/signals.ts',
+    {
+      reason:
+        'toSignal, the one meeting point between Effect and the components (PRD one-fold-three-renderers 7.5): it runs on the runtime its caller passes and reads no global',
+      // The one approved binding: toSignal's `runtime: ManagedRuntime`
+      // parameter -- pinned to that function by name, so the exemption
+      // cannot transfer to another helper's lookalike parameter.
+      runtime: {
+        name: 'runtime',
+        parameterType: 'ManagedRuntime',
+        parameterOwner: 'toSignal',
+      },
+    },
+  ],
+]);
 
+const RUNTIME_ENTRY_PATHS = [...BOUNDARY_RUNTIME_ENTRIES.keys()];
+const RUNTIME_ENTRY_NAMES = RUNTIME_ENTRY_PATHS.map((file) =>
+  posix.basename(file),
+);
+const BOUNDARY_PATHS_TEXT = `packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a run on a local or parameter runtime in a named runtime entry (${RUNTIME_ENTRY_PATHS.join(', ')})`;
+
+/** Whether a whole file sits at a host root (named runtime entries are
+ *  classified per run instead: {@link belowBoundaryRuns}). */
 function isBoundaryPath(file) {
   if (BOUNDARY_HOST_EXCLUSIONS.some((root) => file.startsWith(root))) {
     return false;
   }
   return BOUNDARY_HOST_ROOTS.some((root) => file.startsWith(root));
+}
+
+/**
+ * The runs in a file that stay on the `Effect.run*` row: none at a host root;
+ * at a named runtime entry, every run whose receiver is not a runtime the
+ * file itself binds; everywhere else, all of them.
+ */
+function belowBoundaryRuns(file, runs, localRuntimeRuns) {
+  if (BOUNDARY_RUNTIME_ENTRIES.has(file)) return runs - localRuntimeRuns;
+  return isBoundaryPath(file) ? 0 : runs;
+}
+
+/**
+ * Whether a binding pattern declares the name, at any nesting depth
+ * (`const { runtime } = client`, `function f({ runtime })`). A destructured
+ * declaration of the approved name is a shadow, not the approved binding.
+ */
+function patternDeclaresName(pattern, name) {
+  for (const element of pattern.elements) {
+    if (!ts.isBindingElement(element)) continue;
+    if (ts.isIdentifier(element.name)) {
+      if (element.name.text === name) return true;
+    } else if (patternDeclaresName(element.name, name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The outermost and innermost identifiers of a type reference's name:
+ * `ManagedRuntime` reads as (ManagedRuntime, ManagedRuntime) and
+ * `ManagedRuntime.ManagedRuntime` likewise. Null for a non-reference type.
+ */
+function typeReferenceEnds(type) {
+  if (!ts.isTypeReferenceNode(type)) return null;
+  let outer = type.typeName;
+  while (ts.isQualifiedName(outer)) outer = outer.left;
+  let inner = type.typeName;
+  while (ts.isQualifiedName(inner)) inner = inner.right;
+  return { outer: outer.text, inner: inner.text };
+}
+
+/**
+ * Whether the file binds the named export of 'effect': a named import from
+ * 'effect' (type-only elements included -- this is a type position), or a
+ * default or namespace import of the 'effect/<name>' submodule.
+ */
+function bindsEffectExport(sourceFile, name) {
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const specifier = staticSpecifierText(statement.moduleSpecifier);
+    const clause = statement.importClause;
+    if (specifier == null || clause == null) continue;
+    if (specifier === 'effect') {
+      const bindings = clause.namedBindings;
+      if (bindings != null && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          if ((element.propertyName ?? element.name).text === name) {
+            return true;
+          }
+        }
+      }
+    } else if (
+      specifier === `effect/${name}` &&
+      (clause.name != null ||
+        (clause.namedBindings != null &&
+          ts.isNamespaceImport(clause.namedBindings)))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether a parameter's type names the approved runtime type exactly: a
+ * reference whose outer and inner identifiers are both `parameterType`
+ * (`ManagedRuntime` or `ManagedRuntime.ManagedRuntime`), with that export of
+ * 'effect' imported by the file. A name that merely contains it
+ * (`FakeManagedRuntime`, `ManagedRuntimeAdapter`) or one no import binds is
+ * not the approved type.
+ */
+function isApprovedRuntimeType(sourceFile, type, parameterType) {
+  const ends = typeReferenceEnds(type);
+  return (
+    ends != null &&
+    ends.outer === parameterType &&
+    ends.inner === parameterType &&
+    bindsEffectExport(sourceFile, parameterType)
+  );
+}
+
+/**
+ * The name of the function a parameter belongs to: the declared name of a
+ * function or method, or the variable an arrow/function expression is
+ * assigned to. Null when the owner has no stable name, which fails closed.
+ */
+function parameterOwnerName(parameter) {
+  const fn = parameter.parent;
+  if (
+    (ts.isFunctionDeclaration(fn) ||
+      ts.isFunctionExpression(fn) ||
+      ts.isMethodDeclaration(fn)) &&
+    fn.name != null &&
+    ts.isIdentifier(fn.name)
+  ) {
+    return fn.name.text;
+  }
+  if (
+    (ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) &&
+    ts.isVariableDeclaration(fn.parent) &&
+    ts.isIdentifier(fn.parent.name)
+  ) {
+    return fn.parent.name.text;
+  }
+  return null;
+}
+
+/**
+ * Whether a named runtime entry binds its approved runtime name in exactly
+ * the approved shape -- see the BOUNDARY_RUNTIME_ENTRIES docblock. Any
+ * deviation fails closed: no run in the file is approved.
+ */
+function bindsApprovedRuntime(sourceFile, fileName, spec) {
+  let approved = 0;
+  let other = 0;
+  // A factory-owned runtime must be disposed in the same file; a caller-owned
+  // parameter is disposed by its caller, not here.
+  let disposed = spec.initializer == null;
+  const factoryLocals =
+    spec.initializer == null
+      ? null
+      : exportBindings(
+          sourceFile,
+          fileName,
+          spec.factoryModule.alias,
+          spec.factoryModule.path,
+          new Set([spec.initializer]),
+        ).locals;
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
+      if (ts.isIdentifier(node.name)) {
+        if (node.name.text === spec.name) {
+          const byFactory =
+            ts.isVariableDeclaration(node) &&
+            spec.initializer != null &&
+            node.initializer != null &&
+            ts.isCallExpression(node.initializer) &&
+            ts.isIdentifier(node.initializer.expression) &&
+            node.initializer.expression.text === spec.initializer &&
+            factoryLocals.has(node.initializer.expression.text);
+          const byType =
+            ts.isParameter(node) &&
+            spec.parameterType != null &&
+            parameterOwnerName(node) === spec.parameterOwner &&
+            node.initializer == null &&
+            node.type != null &&
+            isApprovedRuntimeType(sourceFile, node.type, spec.parameterType);
+          if (byFactory || byType) approved += 1;
+          else other += 1;
+        }
+      } else if (patternDeclaresName(node.name, spec.name)) {
+        other += 1;
+      }
+    }
+    if (
+      ((ts.isImportClause(node) && node.name) ||
+        ts.isImportSpecifier(node) ||
+        ts.isNamespaceImport(node)) &&
+      node.name?.text === spec.name
+    ) {
+      other += 1;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === spec.name &&
+      node.expression.name.text === 'dispose'
+    ) {
+      disposed = true;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return approved === 1 && other === 0 && disposed;
 }
 
 const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them`;
@@ -192,7 +451,7 @@ const ROWS = [
   })),
   {
     id: ROW_RUN_BOUNDARY,
-    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
+    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli, plus runs on a local or parameter runtime in the named webview runtime entries: ${RUNTIME_ENTRY_NAMES.join(', ')} — owner ruling 2026-09-14), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
   },
   {
     id: ROW_CATCH,
@@ -209,7 +468,7 @@ const SEMANTICS =
   `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the three AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
   "'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, or packages/agent/src/**; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
+  `'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a run on a runtime the file binds as a local or parameter inside a named webview runtime entry — ${RUNTIME_ENTRY_PATHS.join(', ')}; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); ` +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
   'The PR that zeroes a row deletes the row from the baseline; SUPERSEDED_PACKAGES and the other survey lists stay, so a later site fails as a new file.';
@@ -453,7 +712,9 @@ function surveySource(text, fileName) {
     fileName,
     text,
     ts.ScriptTarget.Latest,
-    false,
+    // Parent pointers: bindsApprovedRuntime resolves the function a
+    // parameter belongs to through node.parent.
+    true,
   );
   const counts = new Map();
   const bump = (row) => counts.set(row, (counts.get(row) ?? 0) + 1);
@@ -503,6 +764,12 @@ function surveySource(text, fileName) {
         callee.expression.name.text === 'Effect'));
   let effectImporter = false;
   let catches = 0;
+  const entry = BOUNDARY_RUNTIME_ENTRIES.get(fileName);
+  const approvedRuntime =
+    entry != null && bindsApprovedRuntime(sourceFile, fileName, entry.runtime)
+      ? entry.runtime.name
+      : null;
+  let localRuntimeRuns = 0;
 
   const visit = (node) => {
     const specifier = moduleSpecifier(node);
@@ -516,7 +783,16 @@ function surveySource(text, fileName) {
       if (isPlatformRead(callee)) bump(ROW_PLATFORM);
       if (isRuntimeRead(callee)) bump(ROW_EFFECT_RUNTIME);
       if (isAmbientRead(callee)) bump(ROW_AMBIENT);
-      if (name != null && RUN_BOUNDARY_NAMES.has(name)) bump(ROW_RUN_BOUNDARY);
+      if (name != null && RUN_BOUNDARY_NAMES.has(name)) {
+        bump(ROW_RUN_BOUNDARY);
+        if (
+          ts.isPropertyAccessExpression(callee) &&
+          ts.isIdentifier(callee.expression) &&
+          callee.expression.text === approvedRuntime
+        ) {
+          localRuntimeRuns += 1;
+        }
+      }
       if (
         name === 'catch' &&
         ts.isPropertyAccessExpression(callee) &&
@@ -538,7 +814,7 @@ function surveySource(text, fileName) {
   visit(sourceFile);
 
   if (effectImporter && catches > 0) counts.set(ROW_CATCH, catches);
-  return { counts };
+  return { counts, localRuntimeRuns };
 }
 
 /** Fail the ratchet itself if the classifier regresses. */
@@ -668,9 +944,11 @@ function sortObject(object) {
 /** Survey the tree: { rows: { rowId: { file: count } } }. */
 function surveyTree(files) {
   const rows = Object.fromEntries(ROWS.map((row) => [row.id, {}]));
+  const localRuns = new Map();
   for (const file of files) {
     const text = readFileSync(join(rootDir, file), 'utf8');
-    const { counts } = surveySource(text, file);
+    const { counts, localRuntimeRuns } = surveySource(text, file);
+    if (localRuntimeRuns > 0) localRuns.set(file, localRuntimeRuns);
     for (const [row, count] of counts) {
       const entries = rows[row];
       // A row retired from ROWS whose counting site survives in surveySource
@@ -693,15 +971,165 @@ function surveyTree(files) {
   // rather than obeyed. Dropping them makes "this row only ever shrinks" true
   // by construction instead of by exception.
   rows[ROW_RUN_BOUNDARY] = Object.fromEntries(
-    Object.entries(rows[ROW_RUN_BOUNDARY]).filter(
-      ([file]) => !isBoundaryPath(file),
-    ),
+    Object.entries(rows[ROW_RUN_BOUNDARY]).flatMap(([file, count]) => {
+      const below = belowBoundaryRuns(file, count, localRuns.get(file) ?? 0);
+      return below > 0 ? [[file, below]] : [];
+    }),
   );
   return { rows };
 }
 
 /** Fail the ratchet itself if the boundary gate regresses. */
 function selfTestBoundary() {
+  // A named runtime entry admits only runs on a runtime it binds itself: an
+  // `Effect.run*` or a run on an imported runtime in the same file stays on
+  // the row, and a sibling in the same frontend keeps every run.
+  const probe = surveySource(
+    "import { Effect, type ManagedRuntime } from 'effect';\nimport { shared } from './runtime';\nexport function toSignal(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\nfunction g(client) { return client.runPromise(b); }\nconst other = importedApi;\nother.runSync(c);\nEffect.runFork(d);\nshared.runPromise(e);\n",
+    'src/shared/signals.ts',
+  );
+  const transportProbe = surveySource(
+    "import { installWebviewRuntime } from '@controllers/session/webviewSessionLayer';\nconst runtime = installWebviewRuntime();\nruntime.runSync(a);\nconst runtime2 = makeRuntime();\nruntime2.runFork(b);\nvoid runtime.dispose();\n",
+    'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  );
+  const shadowProbe = surveySource(
+    "import { installWebviewRuntime } from '@controllers/session/webviewSessionLayer';\nconst runtime = installWebviewRuntime();\nfunction h(runtime) { return runtime.runFork(x); }\nruntime.runSync(y);\nvoid runtime.dispose();\n",
+    'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  );
+  const destructuredProbe = surveySource(
+    "import { installWebviewRuntime } from '@controllers/session/webviewSessionLayer';\nconst runtime = installWebviewRuntime();\nfunction f({ runtime }) { return runtime.runFork(x); }\nruntime.runSync(y);\nvoid runtime.dispose();\n",
+    'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  );
+  const undisposedProbe = surveySource(
+    "import { installWebviewRuntime } from '@controllers/session/webviewSessionLayer';\nconst runtime = installWebviewRuntime();\nruntime.runSync(a);\n",
+    'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  );
+  const foreignFactoryProbe = surveySource(
+    "import { installWebviewRuntime } from './localRuntime';\nconst runtime = installWebviewRuntime();\nruntime.runSync(a);\nvoid runtime.dispose();\n",
+    'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  );
+  const localFactoryProbe = surveySource(
+    'function installWebviewRuntime() { return makeRuntime(); }\nconst runtime = installWebviewRuntime();\nruntime.runSync(a);\nvoid runtime.dispose();\n',
+    'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  );
+  const twoApprovedProbe = surveySource(
+    "import { type ManagedRuntime } from 'effect';\nexport function toSignal(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\nfunction toSignal(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runSync(b); }\n",
+    'src/shared/signals.ts',
+  );
+  const wrongOwnerProbe = surveySource(
+    "import { type ManagedRuntime } from 'effect';\nfunction helper(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\n",
+    'src/shared/signals.ts',
+  );
+  const wrongTypeProbe = surveySource(
+    "import { type ManagedRuntime } from 'effect';\nexport function toSignal(runtime: FakeManagedRuntime<never, never>) { return runtime.runFork(a); }\n",
+    'src/shared/signals.ts',
+  );
+  const unboundTypeProbe = surveySource(
+    'export function toSignal(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\n',
+    'src/shared/signals.ts',
+  );
+  const defaultedProbe = surveySource(
+    "import { type ManagedRuntime } from 'effect';\nimport { shared } from './runtime';\nexport function toSignal(runtime: ManagedRuntime.ManagedRuntime<never, never> = shared) { return runtime.runFork(a); }\n",
+    'src/shared/signals.ts',
+  );
+  const siblingProbe = surveySource(
+    'const runtime = installWebviewRuntime();\nruntime.runSync(a);\n',
+    'packages/extension/src/progressView/frontend/ProgressApp.ts',
+  );
+  const runCases = [
+    [(probe.counts.get(ROW_RUN_BOUNDARY) ?? 0) === 5, 'probe run count'],
+    [
+      probe.localRuntimeRuns === 1,
+      'only the typed runtime parameter is approved',
+    ],
+    [
+      transportProbe.localRuntimeRuns === 1,
+      'only the factory-initialized local is approved',
+    ],
+    [
+      shadowProbe.localRuntimeRuns === 0,
+      'a second declaration of the name fails closed',
+    ],
+    [
+      destructuredProbe.localRuntimeRuns === 0,
+      'a destructured shadow of the name fails closed',
+    ],
+    [
+      undisposedProbe.localRuntimeRuns === 0,
+      'an undisposed factory runtime fails closed',
+    ],
+    [
+      foreignFactoryProbe.localRuntimeRuns === 0,
+      'the factory imported from another module fails closed',
+    ],
+    [
+      localFactoryProbe.localRuntimeRuns === 0,
+      'a locally defined factory fails closed',
+    ],
+    [
+      twoApprovedProbe.localRuntimeRuns === 0,
+      'a second approved declaration fails closed',
+    ],
+    [
+      wrongOwnerProbe.localRuntimeRuns === 0,
+      'the approved parameter belongs to the named owner function',
+    ],
+    [
+      wrongTypeProbe.localRuntimeRuns === 0,
+      'a type merely containing the type name fails closed',
+    ],
+    [
+      unboundTypeProbe.localRuntimeRuns === 0,
+      'the type name without the effect import fails closed',
+    ],
+    [
+      defaultedProbe.localRuntimeRuns === 0,
+      'a defaulted caller-owned parameter fails closed',
+    ],
+    [
+      siblingProbe.localRuntimeRuns === 0,
+      'a file outside the map has no approved runtime',
+    ],
+    [
+      belowBoundaryRuns('src/shared/signals.ts', 5, 1) === 4,
+      'entry keeps unapproved runs',
+    ],
+    [
+      belowBoundaryRuns(
+        'packages/extension/src/progressView/frontend/sessionTransport.ts',
+        4,
+        4,
+      ) === 0,
+      'entry admits approved runs',
+    ],
+    [
+      belowBoundaryRuns(
+        'packages/extension/src/progressView/frontend/ProgressApp.ts',
+        3,
+        3,
+      ) === 3,
+      'sibling ProgressApp stays fenced',
+    ],
+    [
+      belowBoundaryRuns('src/shared/session/sessionFold.ts', 2, 2) === 2,
+      'sibling sessionFold stays fenced',
+    ],
+    [
+      belowBoundaryRuns('packages/cli/src/chat/tui/App.tsx', 2, 0) === 0,
+      'host root admits all runs',
+    ],
+    [
+      belowBoundaryRuns('src/controllers/session/SessionBridge.ts', 2, 2) === 2,
+      'below boundary keeps local runs',
+    ],
+  ];
+  for (const [ok, label] of runCases) {
+    if (!ok) {
+      console.error(`belowBoundaryRuns self-test failed: ${label}`);
+      process.exit(1);
+    }
+  }
+
   const boundaryCases = [
     ['packages/extension/src/commands/run.ts', true],
     ['packages/desktop/src/main/ipc.ts', true],
@@ -720,7 +1148,12 @@ function selfTestBoundary() {
     ['packages/trace-viewer/src/main.ts', false],
     // A webview frontend sits under a host package but is a VS Code-free
     // zone, not a host entry, so R1 does not admit a run there.
+    // A named runtime entry is not a whole-file boundary: its runs are
+    // classified per receiver (belowBoundaryRuns, pinned below).
     ['packages/extension/src/progressView/frontend/sessionTransport.ts', false],
+    ['packages/extension/src/progressView/frontend/ProgressApp.ts', false],
+    ['src/shared/signals.ts', false],
+    ['src/shared/session/sessionFold.ts', false],
     ['packages/extension/src/webview/frontend/app.ts', false],
     ['packages/extension/src/settingsView/frontend/settings.ts', false],
     // The extension-host frontend (no view-name segment) is host code and
@@ -899,6 +1332,14 @@ function main() {
   selfTestSurvey();
   selfTestBoundary();
   const files = productionFiles();
+  const fileSet = new Set(files);
+  const staleEntries = RUNTIME_ENTRY_PATHS.filter((file) => !fileSet.has(file));
+  if (staleEntries.length > 0) {
+    console.error(
+      `Effect migration ratchet failed: named runtime entries no longer exist: ${staleEntries.join(', ')}. Remove each from BOUNDARY_RUNTIME_ENTRIES in ${SCRIPT_REL} in the change that moved or deleted it; admitting the moved file again is a new ruling, not a rename.`,
+    );
+    process.exit(1);
+  }
   const { rows } = surveyTree(files);
   let failed = false;
 

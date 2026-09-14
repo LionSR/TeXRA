@@ -22,12 +22,22 @@ export class VscodeSecrets implements PlatformSecrets {
     this.storage = context.secrets;
   }
 
-  async get(key: string): Promise<string | undefined> {
+  get(key: string) {
     return secretsGet(this, key);
   }
 
-  async getStored(key: string): Promise<string | undefined> {
-    return this.storage.get(key);
+  getStored(key: string) {
+    return Effect.tryPromise({
+      try: () => Promise.resolve(this.storage.get(key)),
+      catch: (cause) =>
+        new SecretsFailed({
+          reason: 'io',
+          operation: 'getStored',
+          key,
+          message: `VS Code could not read the secret "${key}": ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    });
   }
 
   /**

@@ -18,7 +18,7 @@
  *    differs (`kimi-k3` → `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
  */
 
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 import { type ModelConfig } from 'llm-zoo';
 
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
@@ -80,6 +80,19 @@ export function isKimiCodeRoute(
 }
 
 /**
+ * The "Prefer Kimi Code" switch could not be read at all, because the host's
+ * state store threw. Environmental, not a bug here, so it belongs in the
+ * typed failure channel beside the secret read's own failure — the same rule
+ * `computeModelOptions` applies to its synchronous host facts.
+ */
+class KimiCodeHostFactUnreadable extends Data.TaggedError(
+  'KimiCodeHostFactUnreadable',
+)<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/**
  * Assemble the routing facts from the host: a stored Kimi Code key and the
  * "Prefer Kimi Code" switch. `useOpenRouter` is passed in because the
  * dispatch path derives it from the persisted compatibility key while the
@@ -95,20 +108,40 @@ export function isKimiCodeRoute(
  * availability read takes one: the switch is a workspace-scoped setting, and
  * a fiber that resumes after the key read is no longer inside the frame its
  * caller entered. A caller already in the frame it wants omits it.
+ *
+ * The switch read is a step of the program rather than a synchronous call
+ * inside `Effect.map`: a host whose state store throws answers the channel
+ * with {@link KimiCodeHostFactUnreadable}, which a caller recovers from the
+ * way it recovers from an unreadable secret store, instead of dying as a
+ * defect.
  */
 export function resolveKimiCodeRoutingFacts(
   secrets: PlatformSecrets,
   useOpenRouter: boolean,
   declinedRoutes?: readonly DeclinableUsageRoute[],
   inScope: <A>(read: () => A) => A = (read) => read(),
-): Effect.Effect<KimiCodeRoutingFacts, SecretsFailed> {
-  return Effect.map(hasUsableApiKey(secrets, 'kimiCode'), (keySet) => ({
-    useOpenRouter,
-    keySet,
-    preferKimiCode:
-      inScope(getPreferKimiCode) &&
-      !declinedRoutes?.includes('kimi-code-subscription'),
-  }));
+): Effect.Effect<
+  KimiCodeRoutingFacts,
+  SecretsFailed | KimiCodeHostFactUnreadable
+> {
+  return Effect.gen(function* () {
+    const keySet = yield* hasUsableApiKey(secrets, 'kimiCode');
+    const preferKimiCode = yield* Effect.try({
+      try: () => inScope(getPreferKimiCode),
+      catch: (cause) =>
+        new KimiCodeHostFactUnreadable({
+          message:
+            'Could not read the Kimi Code routing preference from the host.',
+          cause,
+        }),
+    });
+    return {
+      useOpenRouter,
+      keySet,
+      preferKimiCode:
+        preferKimiCode && !declinedRoutes?.includes('kimi-code-subscription'),
+    };
+  });
 }
 
 /**

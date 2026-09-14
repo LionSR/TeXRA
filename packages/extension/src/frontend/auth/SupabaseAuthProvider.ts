@@ -131,7 +131,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private async readPendingOAuthState(
     nonce: string,
   ): Promise<PendingOAuthState | null> {
-    const stored = await this.secrets.getStored(this.pendingStateKey(nonce));
+    const stored = await runAuthProgram(
+      this.secrets.getStored(this.pendingStateKey(nonce)),
+    );
     if (!stored) return null;
     const parsed = parseJsonWith(stored, PendingOAuthStateSchema);
     if (Result.isSuccess(parsed)) return parsed.success;

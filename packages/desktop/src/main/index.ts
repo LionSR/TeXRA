@@ -1281,9 +1281,7 @@ function createWindow(options: {
       // shared by every host (extension, desktop, CLI) so this credential-gating
       // logic can't drift between them.
       hasCredential: () =>
-        runtime.runPromise(
-          hasUsableSetupCredential(options.secrets, credentialLog.warn),
-        ),
+        hasUsableSetupCredential(options.secrets, credentialLog.warn),
       // Launch the setup conversation when the user clicks "Run Setup" on the
       // setup card, mirroring the extension's `launchSetupAssistant` →
       // launch path: resolve a model the user's credentials can call,

@@ -898,36 +898,26 @@ export const bindModel = Effect.fn('bindModel')(function* (
   // preference was turned on since.
   const subscription =
     protocol === 'openai-responses' || protocol === 'xai-chat'
-      ? yield* Effect.tryPromise({
-          try: () =>
-            input.inScope(() =>
-              resolveSubscriptionCredential(
-                config,
-                selectedOpenRouter,
-                input.stores.secrets,
-                input.declinedRoutes,
-              ),
-            ),
-          catch: ensureError,
-        })
+      ? yield* resolveSubscriptionCredential(
+          config,
+          selectedOpenRouter,
+          input.stores.secrets,
+          input.inScope,
+          input.declinedRoutes,
+        )
       : null;
   let credential: RouteCredential;
   if (subscription !== null) {
     config = subscription.config;
     credential = subscription.credential;
   } else {
-    credential = yield* Effect.tryPromise({
-      try: () =>
-        input.inScope(() =>
-          resolveRouteCredential(
-            config,
-            onOpenRouter,
-            input.stores.secrets,
-            input.declinedRoutes,
-          ),
-        ),
-      catch: ensureError,
-    });
+    credential = yield* resolveRouteCredential(
+      config,
+      onOpenRouter,
+      input.stores.secrets,
+      input.inScope,
+      input.declinedRoutes,
+    );
   }
   config = withReasoningLevelOverride(config, input.stores.globalState);
   const configuration = yield* Effect.try({
