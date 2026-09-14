@@ -868,14 +868,19 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   // Offer each delivered document to the binding's upload cache, so the
   // requests that replay this history can send a file id instead of the
   // bytes. Concurrent under the same in-flight bound as parallel tool
-  // calls, each under a short deadline: a stalled files endpoint delays
-  // delivery by at most one deadline per wave and changes nothing the
-  // model reads now. The binding deletes what it uploaded when it closes.
-  // A batch that ends the turn completes the run straight after this
-  // delivery (the same `endTurn` this dispatch returns), so no later request
-  // could send the id: its documents stay local. The optional upload is
-  // looked for only when there is a document to give it.
-  const documents = (endTurn ? [] : settledPending.calls).flatMap((fact) =>
+  // calls, the batch under one aggregate deadline: a stalled files
+  // endpoint delays delivery by at most one deadline however many
+  // documents there are, warns with the paths that never finished, and
+  // changes nothing the model reads now. The binding deletes what it
+  // uploaded when it closes. A batch that ends the turn completes the run
+  // straight after this delivery (the same `endTurn` this dispatch
+  // returns), and a batch delivered while a model switch waits for the
+  // next boundary is replayed by the replacement binding, whose cache
+  // never saw these ids: both keep their documents local. The optional
+  // upload is looked for only when there is a document to give it.
+  const documents = (
+    endTurn || run.pendingModelSwitch.value !== null ? [] : settledPending.calls
+  ).flatMap((fact) =>
     (settledPending.settled[fact.callId]?.attachments ?? []).flatMap(
       (attachment) => {
         if (attachment.content.kind !== 'base64') return [];
@@ -893,6 +898,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const uploadFile =
     documents.length === 0 ? undefined : bound.model.uploadFile;
   if (uploadFile !== undefined) {
+    // Settled uploads leave the set; the aggregate deadline names the rest.
+    const pending = new Set(documents.map(({ path }) => path));
     yield* Effect.forEach(
       documents,
       ({ path, part }) =>
@@ -908,17 +915,23 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               ),
             ),
           ),
-          Effect.timeoutOrElse({
-            duration: UPLOAD_DEADLINE,
-            orElse: () =>
-              Effect.sync(() =>
-                logger.warn(
-                  `Sending "${path}" as bytes: its upload did not finish within ${UPLOAD_DEADLINE}.`,
-                ),
-              ),
-          }),
+          Effect.tap(Effect.sync(() => pending.delete(path))),
         ),
       { concurrency: MAX_PARALLEL_TOOL_CALLS, discard: true },
+    ).pipe(
+      // The dispatch runs inside the loop's uninterruptible handoff; the
+      // aggregate deadline only bounds the uploads if it can interrupt
+      // them, so say it here rather than depend on how the race forks.
+      Effect.interruptible,
+      Effect.timeoutOrElse({
+        duration: UPLOAD_DEADLINE,
+        orElse: () =>
+          Effect.sync(() =>
+            logger.warn(
+              `Sending ${[...pending].map((path) => `"${path}"`).join(', ')} as bytes: their uploads did not finish within ${UPLOAD_DEADLINE} in all.`,
+            ),
+          ),
+      }),
     );
   }
   const group: Message = { role: 'tool', results };
