@@ -559,16 +559,18 @@ describe('LeanServerPool', () => {
     }),
   );
 
-  fakeLakeIt.live(
+  fakeLakeIt.effect(
     'keeps servers started by other runs or outside a run when a run ends',
     () =>
       Effect.gen(function* () {
         const second = makeLakeProject(tempRoot, 'project-b');
         const third = makeLakeProject(tempRoot, 'project-c');
         const { pool } = yield* openPool();
-        yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
-        yield* pool.fetchDiagnosticsForFile(second.filePath, run('e00002'));
-        yield* pool.fetchDiagnosticsForFile(third.filePath, NO_RUN);
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
+        yield* settle(
+          pool.fetchDiagnosticsForFile(second.filePath, run('e00002')),
+        );
+        yield* settle(pool.fetchDiagnosticsForFile(third.filePath, NO_RUN));
         expect(activeServerRoots()).toEqual([
           projectRoot,
           second.projectRoot,
@@ -584,19 +586,19 @@ describe('LeanServerPool', () => {
       }),
   );
 
-  fakeLakeIt.live(
+  fakeLakeIt.effect(
     'stops a shared server after its final owner and lease end',
     () =>
       Effect.gen(function* () {
         const { pool } = yield* openPool();
-        yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
         expect(activeServerRoots()).toEqual([projectRoot]);
         vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
         const build = yield* Effect.forkChild(
           pool.executeProjectCommand('build', run('e00001')),
         );
         yield* Effect.promise(() => delay(50));
-        yield* pool.fetchDiagnosticsForFile(filePath, run('e00002'));
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00002')));
 
         // The reuser joins the original owner. Ending only e00002 keeps the
         // shared server for e00001; ending the final owner defers the stop
@@ -611,22 +613,22 @@ describe('LeanServerPool', () => {
       }),
   );
 
-  fakeLakeIt.live(
+  fakeLakeIt.effect(
     'cancels a deferred stop when a later run takes ownership',
     () =>
       Effect.gen(function* () {
         const { pool } = yield* openPool();
-        yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
         vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
         const build = yield* Effect.forkChild(
           pool.executeProjectCommand('build', run('e00001')),
         );
         yield* Effect.promise(() => delay(50));
-        yield* pool.fetchDiagnosticsForFile(filePath, run('e00002'));
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00002')));
         yield* pool.stopSessionsForRun(run('e00001'));
         yield* pool.stopSessionsForRun(run('e00002'));
 
-        yield* pool.fetchDiagnosticsForFile(filePath, run('e00003'));
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00003')));
         yield* Fiber.join(build);
         expect(activeServerRoots()).toEqual([projectRoot]);
 
@@ -635,10 +637,10 @@ describe('LeanServerPool', () => {
       }),
   );
 
-  fakeLakeIt.live('adds a project-command run as a server owner', () =>
+  fakeLakeIt.effect('adds a project-command run as a server owner', () =>
     Effect.gen(function* () {
       const { pool } = yield* openPool();
-      yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
+      yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
       yield* pool.executeProjectCommand('build', run('e00002'));
 
       yield* pool.stopSessionsForRun(run('e00001'));
@@ -649,13 +651,13 @@ describe('LeanServerPool', () => {
     }),
   );
 
-  fakeLakeIt.live(
+  fakeLakeIt.effect(
     "keeps a parent's reused server until both parent and subagent end",
     () =>
       Effect.gen(function* () {
         const { pool } = yield* openPool();
-        yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
-        yield* pool.fetchDiagnosticsForFile(filePath, run('e00002'));
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00002')));
         expect(yield* starts).toBe(1);
 
         // A subagent joins the parent as an owner; either run ending alone
@@ -699,21 +701,23 @@ describe('LeanServerPool', () => {
     }),
   );
 
-  fakeLakeIt.live('reattributes a restarted server to the restarting run', () =>
-    Effect.gen(function* () {
-      const { pool } = yield* openPool();
-      yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
-      yield* pool.executeProjectCommand('restart_server', run('e00002'));
-      expect(yield* starts).toBe(2);
+  fakeLakeIt.effect(
+    'reattributes a restarted server to the restarting run',
+    () =>
+      Effect.gen(function* () {
+        const { pool } = yield* openPool();
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
+        yield* pool.executeProjectCommand('restart_server', run('e00002'));
+        expect(yield* starts).toBe(2);
 
-      // The replacement process was started by e00002, so e00001's end must
-      // leave it alone and e00002's end must stop it.
-      yield* pool.stopSessionsForRun(run('e00001'));
-      expect(activeServerRoots()).toEqual([projectRoot]);
+        // The replacement process was started by e00002, so e00001's end must
+        // leave it alone and e00002's end must stop it.
+        yield* pool.stopSessionsForRun(run('e00001'));
+        expect(activeServerRoots()).toEqual([projectRoot]);
 
-      yield* pool.stopSessionsForRun(run('e00002'));
-      expect(activeServerRoots()).toEqual([]);
-    }),
+        yield* pool.stopSessionsForRun(run('e00002'));
+        expect(activeServerRoots()).toEqual([]);
+      }),
   );
 });
 

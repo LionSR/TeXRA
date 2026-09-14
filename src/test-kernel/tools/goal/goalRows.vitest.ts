@@ -1,13 +1,13 @@
 import '@test/support/defaultSessionTestSetup';
 
-import { Effect, Fiber, Stream } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Deferred, Effect, Stream } from 'effect';
+import { describe, expect } from 'vitest';
 
 import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   RunIdSchema,
@@ -23,6 +23,7 @@ import {
   goalList,
   goalOf,
   goalStateChanges,
+  type GoalStateChange,
   pauseGoal,
   retargetGoal,
   startGoal,
@@ -41,119 +42,108 @@ function paperRoots(name: string) {
   });
 }
 
-/** Run a goal mutation to the point its row is committed. */
-function mutate<A>(mutation: Effect.Effect<A, Error>): Promise<A> {
-  return effectRuntime().runPromise(mutation);
-}
-
 /** Records every goal-state change delivered to one session. */
-function collectGoalChanges(session: SessionHandle): {
-  seen: unknown[];
-  clear: () => void;
-  detach: () => void;
-} {
-  const seen: unknown[] = [];
-  const fiber = effectRuntime().runFork(
-    Stream.runForEach(goalStateChanges(session), (change) =>
-      Effect.sync(() => {
-        seen.push(change);
-      }),
-    ),
-  );
-  return {
-    seen,
-    clear: () => {
-      seen.length = 0;
-    },
-    detach: () => {
-      effectRuntime().runFork(Fiber.interrupt(fiber));
-    },
-  };
+function collectGoalChanges(session: SessionHandle) {
+  return Effect.gen(function* () {
+    const seen: GoalStateChange[] = [];
+    const delivered = yield* Deferred.make<void>();
+    yield* Effect.forkScoped(
+      Stream.runForEach(goalStateChanges(session), (change) =>
+        Effect.gen(function* () {
+          seen.push(change);
+          yield* Deferred.succeed(delivered, undefined);
+        }),
+      ),
+    );
+    return { seen, first: Deferred.await(delivered) };
+  });
 }
 
 describe('the goal row is the goal', () => {
   setupPlatform();
 
-  it('reads back per run and across runs, and clearing drops one', async () => {
-    const session = createTestSession({ roots: paperRoots('read-back') });
-    publishTestRunStart(session, RUN_A);
-    publishTestRunStart(session, RUN_B);
-    try {
-      await mutate(startGoal(session, RUN_A, 'objective a'));
-      await mutate(startGoal(session, RUN_B, 'objective b'));
+  it.effect('reads back per run and across runs, and clearing drops one', () =>
+    Effect.gen(function* () {
+      const session = createTestSession({ roots: paperRoots('read-back') });
+      yield* Effect.addFinalizer(() => session.dispose());
+      publishTestRunStart(session, RUN_A);
+      publishTestRunStart(session, RUN_B);
+      yield* startGoal(session, RUN_A, 'objective a');
+      yield* startGoal(session, RUN_B, 'objective b');
       expect(
         goalList(session)
           .map((goal) => goal.runId)
           .toSorted(),
       ).toEqual([RUN_A, RUN_B].toSorted());
 
-      await mutate(clearGoal(session, RUN_A));
+      yield* clearGoal(session, RUN_A);
 
       expect(goalOf(session, RUN_A)).toBeNull();
       expect(goalList(session).map((goal) => goal.runId)).toEqual([RUN_B]);
-    } finally {
-      await Effect.runPromise(session.dispose());
-    }
-  });
+    }),
+  );
 
-  it('lets the same run start a fresh goal after the last one is cleared', async () => {
-    const session = createTestSession({ roots: paperRoots('restart') });
-    publishTestRunStart(session, RUN_A);
-    try {
-      const first = await mutate(startGoal(session, RUN_A, 'objective one'));
-      await mutate(clearGoal(session, RUN_A));
+  it.effect(
+    'lets the same run start a fresh goal after the last one is cleared',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession({ roots: paperRoots('restart') });
+        yield* Effect.addFinalizer(() => session.dispose());
+        publishTestRunStart(session, RUN_A);
+        const first = yield* startGoal(session, RUN_A, 'objective one');
+        yield* clearGoal(session, RUN_A);
 
-      const next = await mutate(startGoal(session, RUN_A, 'objective two'));
-      expect(next.goalId).not.toBe(first.goalId);
-      expect(goalOf(session, RUN_A)).toMatchObject({
-        objective: 'objective two',
-        status: 'active',
-      });
-    } finally {
-      await Effect.runPromise(session.dispose());
-    }
-  });
+        const next = yield* startGoal(session, RUN_A, 'objective two');
+        expect(next.goalId).not.toBe(first.goalId);
+        expect(goalOf(session, RUN_A)).toMatchObject({
+          objective: 'objective two',
+          status: 'active',
+        });
+      }),
+  );
 
-  it('parks a pursuit on pause and resumes the same one on retarget', async () => {
-    const session = createTestSession({ roots: paperRoots('lifecycle') });
-    publishTestRunStart(session, RUN_A);
-    try {
-      const started = await mutate(
-        startGoal(session, RUN_A, 'prove the estimate'),
+  it.effect(
+    'parks a pursuit on pause and resumes the same one on retarget',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession({ roots: paperRoots('lifecycle') });
+        yield* Effect.addFinalizer(() => session.dispose());
+        publishTestRunStart(session, RUN_A);
+        const started = yield* startGoal(session, RUN_A, 'prove the estimate');
+
+        yield* pauseGoal(session, RUN_A);
+        expect(goalOf(session, RUN_A)?.status).toBe('paused');
+
+        yield* retargetGoal(session, RUN_A, 'prove the sharp estimate');
+        expect(goalOf(session, RUN_A)).toEqual({
+          ...started,
+          objective: 'prove the sharp estimate',
+          status: 'active',
+        });
+      }),
+  );
+
+  it.effect('refuses a second goal while one is in flight', () =>
+    Effect.gen(function* () {
+      const session = createTestSession({ roots: paperRoots('in-flight') });
+      yield* Effect.addFinalizer(() => session.dispose());
+      publishTestRunStart(session, RUN_A);
+      yield* startGoal(session, RUN_A, 'objective one');
+      const error = yield* Effect.flip(
+        startGoal(session, RUN_A, 'objective two'),
       );
+      expect(error.message).toContain(
+        'A goal is already in progress for this run',
+      );
+    }),
+  );
 
-      await mutate(pauseGoal(session, RUN_A));
-      expect(goalOf(session, RUN_A)?.status).toBe('paused');
-
-      await mutate(retargetGoal(session, RUN_A, 'prove the sharp estimate'));
-      expect(goalOf(session, RUN_A)).toEqual({
-        ...started,
-        objective: 'prove the sharp estimate',
-        status: 'active',
-      });
-    } finally {
-      await Effect.runPromise(session.dispose());
-    }
-  });
-
-  it('refuses a second goal while one is in flight', async () => {
-    const session = createTestSession({ roots: paperRoots('in-flight') });
-    publishTestRunStart(session, RUN_A);
-    try {
-      await mutate(startGoal(session, RUN_A, 'objective one'));
-      await expect(
-        mutate(startGoal(session, RUN_A, 'objective two')),
-      ).rejects.toThrow('A goal is already in progress for this run');
-    } finally {
-      await Effect.runPromise(session.dispose());
-    }
-  });
-
-  it('drops the goal with the run it belongs to', async () => {
-    const session = createTestSession({ roots: paperRoots('removal') });
-    publishTestRunStart(session, RUN_A);
-    try {
-      await mutate(startGoal(session, RUN_A, 'objective a'));
+  it.effect('drops the goal with the run it belongs to', () =>
+    Effect.gen(function* () {
+      const session = createTestSession({ roots: paperRoots('removal') });
+      yield* Effect.addFinalizer(() => session.dispose());
+      publishTestRunStart(session, RUN_A);
+      yield* startGoal(session, RUN_A, 'objective a');
 
       session.publish([
         {
@@ -161,28 +151,28 @@ describe('the goal row is the goal', () => {
           aggregateId: qualifyAggregateId('run', RUN_A),
         },
       ]);
-      await session.settlePublications();
+      yield* Effect.promise(() => session.settlePublications());
 
       expect(goalOf(session, RUN_A)).toBeNull();
       expect(goalList(session)).toEqual([]);
-    } finally {
-      await Effect.runPromise(session.dispose());
-    }
-  });
+    }),
+  );
 });
 
 describe('goalStateChanges', () => {
   setupPlatform();
 
-  it('delivers only goal changes from the supplied session', async () => {
-    // Two papers: a session's plane is its workspace root's.
-    const sessionA = createTestSession({ roots: paperRoots('a') });
-    const sessionB = createTestSession({ roots: paperRoots('b') });
-    publishTestRunStart(sessionA, SAME_SESSION_RUN);
-    publishTestRunStart(sessionB, OTHER_SESSION_RUN);
-    const { seen, detach } = collectGoalChanges(sessionA);
+  it.effect('delivers only goal changes from the supplied session', () =>
+    Effect.gen(function* () {
+      // Two papers: a session's plane is its workspace root's.
+      const sessionA = createTestSession({ roots: paperRoots('a') });
+      yield* Effect.addFinalizer(() => sessionA.dispose());
+      const sessionB = createTestSession({ roots: paperRoots('b') });
+      yield* Effect.addFinalizer(() => sessionB.dispose());
+      publishTestRunStart(sessionA, SAME_SESSION_RUN);
+      publishTestRunStart(sessionB, OTHER_SESSION_RUN);
+      const changes = yield* collectGoalChanges(sessionA);
 
-    try {
       sessionB.publish([
         {
           type: 'goalStateChanged',
@@ -204,35 +194,33 @@ describe('goalStateChanges', () => {
           state: { active: false },
         },
       ]);
-      await Promise.all([
-        sessionA.settlePublications(),
-        sessionB.settlePublications(),
-      ]);
+      yield* Effect.promise(() => sessionA.settlePublications());
+      yield* Effect.promise(() => sessionB.settlePublications());
+      yield* changes.first;
 
-      expect(seen).toEqual([{ runId: SAME_SESSION_RUN }]);
-    } finally {
-      detach();
-      await Effect.runPromise(sessionA.dispose());
-      await Effect.runPromise(sessionB.dispose());
-    }
-  });
+      expect(changes.seen).toEqual([{ runId: SAME_SESSION_RUN }]);
+    }),
+  );
 
-  it('notifies the mutated session alone, once per mutation', async () => {
-    const runSession = createTestSession({ roots: paperRoots('run') });
-    const otherSession = createTestSession({ roots: paperRoots('other') });
-    publishTestRunStart(runSession, SUBSCRIPTION_RUN);
-    const run = collectGoalChanges(runSession);
-    const other = collectGoalChanges(otherSession);
-    const fallback = collectGoalChanges(defaultSession());
+  it.effect('notifies the mutated session alone, once per mutation', () =>
+    Effect.gen(function* () {
+      const runSession = createTestSession({ roots: paperRoots('run') });
+      yield* Effect.addFinalizer(() => runSession.dispose());
+      const otherSession = createTestSession({ roots: paperRoots('other') });
+      yield* Effect.addFinalizer(() => otherSession.dispose());
+      publishTestRunStart(runSession, SUBSCRIPTION_RUN);
+      const run = yield* collectGoalChanges(runSession);
+      const other = yield* collectGoalChanges(otherSession);
+      const fallback = yield* collectGoalChanges(defaultSession());
 
-    try {
-      await mutate(
-        startGoal(runSession, SUBSCRIPTION_RUN, 'prove the estimate'),
+      yield* startGoal(runSession, SUBSCRIPTION_RUN, 'prove the estimate');
+      yield* pauseGoal(runSession, SUBSCRIPTION_RUN);
+      yield* retargetGoal(
+        runSession,
+        SUBSCRIPTION_RUN,
+        'prove the sharp estimate',
       );
-      await mutate(pauseGoal(runSession, SUBSCRIPTION_RUN));
-      await mutate(
-        retargetGoal(runSession, SUBSCRIPTION_RUN, 'prove the sharp estimate'),
-      );
+      yield* run.first;
 
       expect(run.seen).toEqual([
         { runId: SUBSCRIPTION_RUN },
@@ -241,12 +229,6 @@ describe('goalStateChanges', () => {
       ]);
       expect(other.seen).toEqual([]);
       expect(fallback.seen).toEqual([]);
-    } finally {
-      run.detach();
-      other.detach();
-      fallback.detach();
-      await Effect.runPromise(runSession.dispose());
-      await Effect.runPromise(otherSession.dispose());
-    }
-  });
+    }),
+  );
 });
