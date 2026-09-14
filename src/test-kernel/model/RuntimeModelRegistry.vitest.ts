@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 
 import {
@@ -266,141 +267,159 @@ describe('Copilot route in model pickers', () => {
   beforeEach(resetModelCaches);
   afterEach(resetModelCaches);
 
-  it('shows a base model available both directly and through Copilot exactly once', async () => {
-    const port = languageModelPort([GEMINI_PRO]);
-    await installPlatform(
-      {
-        globalState: {
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
-          [GlobalStateKey.REASONING_LEVELS]: { gemini31p: 'low' },
-        },
-        secrets: googleKeySecrets(),
-      },
-      { languageModel: port },
-    );
+  it.effect(
+    'shows a base model available both directly and through Copilot exactly once',
+    () =>
+      Effect.gen(function* () {
+        const port = languageModelPort([GEMINI_PRO]);
+        yield* Effect.promise(() =>
+          installPlatform(
+            {
+              globalState: {
+                [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
+                [GlobalStateKey.REASONING_LEVELS]: { gemini31p: 'low' },
+              },
+              secrets: googleKeySecrets(),
+            },
+            { languageModel: port },
+          ),
+        );
 
-    const options = modelOptionsFrom(
-      await Effect.runPromise(
-        readModelAvailabilityInputs(hostStores(), ['gemini31p']),
-      ),
-    );
+        const options = modelOptionsFrom(
+          yield* readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+        );
 
-    expect(options).toHaveLength(1);
-    expect(options[0]).toEqual(
-      expect.objectContaining({
-        value: 'gemini31p',
-        availability: 'copilot-access',
-        routeLabel: 'Via Copilot',
-        reasoning: 'Default (provider managed)',
-        context: '160K',
-        cost: '$0.000/$0.000',
+        expect(options).toHaveLength(1);
+        expect(options[0]).toEqual(
+          expect.objectContaining({
+            value: 'gemini31p',
+            availability: 'copilot-access',
+            routeLabel: 'Via Copilot',
+            reasoning: 'Default (provider managed)',
+            context: '160K',
+            cost: '$0.000/$0.000',
+          }),
+        );
       }),
-    );
-  });
+  );
 
-  it('never appends route rows to the visible model list', async () => {
-    const port = languageModelPort([GEMINI_PRO, GPT_56]);
-    await installPlatform(
-      {
-        globalState: {
-          [GlobalStateKey.MODEL_SELECTION]: {
-            enabledExtras: ['gpt55'],
-            disabledDefaults: DEFAULT_MODELS,
+  it.effect('never appends route rows to the visible model list', () =>
+    Effect.gen(function* () {
+      const port = languageModelPort([GEMINI_PRO, GPT_56]);
+      yield* Effect.promise(() =>
+        installPlatform(
+          {
+            globalState: {
+              [GlobalStateKey.MODEL_SELECTION]: {
+                enabledExtras: ['gpt55'],
+                disabledDefaults: DEFAULT_MODELS,
+              },
+            },
           },
-        },
-      },
-      { languageModel: port },
-    );
+          { languageModel: port },
+        ),
+      );
 
-    const options = modelOptionsFrom(
-      await Effect.runPromise(
-        readModelAvailabilityInputs(hostStores(), undefined),
-      ),
-    );
+      const options = modelOptionsFrom(
+        yield* readModelAvailabilityInputs(hostStores(), undefined),
+      );
 
-    expect(options.map((option) => option.value)).toEqual(['gpt55']);
-  });
+      expect(options.map((option) => option.value)).toEqual(['gpt55']);
+    }),
+  );
 
-  it('reports consent-required on the base row without adding entries', async () => {
-    const port = languageModelPort([
-      { ...GEMINI_PRO, access: 'consent-required' },
-    ]);
-    await installPlatform(
-      {
-        globalState: {
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
-          [GlobalStateKey.MODEL_SELECTION]: {
-            enabledExtras: [],
-            disabledDefaults: DEFAULT_MODELS.filter(
-              (model) => model !== 'gemini31p',
-            ),
-          },
-        },
-      },
-      { languageModel: port },
-    );
+  it.effect(
+    'reports consent-required on the base row without adding entries',
+    () =>
+      Effect.gen(function* () {
+        const port = languageModelPort([
+          { ...GEMINI_PRO, access: 'consent-required' },
+        ]);
+        yield* Effect.promise(() =>
+          installPlatform(
+            {
+              globalState: {
+                [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
+                [GlobalStateKey.MODEL_SELECTION]: {
+                  enabledExtras: [],
+                  disabledDefaults: DEFAULT_MODELS.filter(
+                    (model) => model !== 'gemini31p',
+                  ),
+                },
+              },
+            },
+            { languageModel: port },
+          ),
+        );
 
-    const options = modelOptionsFrom(
-      await Effect.runPromise(
-        readModelAvailabilityInputs(hostStores(), undefined),
-      ),
-    );
+        const options = modelOptionsFrom(
+          yield* readModelAvailabilityInputs(hostStores(), undefined),
+        );
 
-    expect(options).toHaveLength(1);
-    expect(options[0]).toEqual(
-      expect.objectContaining({
-        value: 'gemini31p',
-        availability: 'copilot-consent-required',
+        expect(options).toHaveLength(1);
+        expect(options[0]).toEqual(
+          expect.objectContaining({
+            value: 'gemini31p',
+            availability: 'copilot-consent-required',
+          }),
+        );
       }),
-    );
-  });
+  );
 
-  it('reports an unavailable route instead of falling back to a direct key', async () => {
-    const port = languageModelPort([{ ...GEMINI_PRO, access: 'unavailable' }]);
-    await installPlatform(
-      {
-        globalState: {
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
-        },
-        secrets: googleKeySecrets(),
-      },
-      { languageModel: port },
-    );
+  it.effect(
+    'reports an unavailable route instead of falling back to a direct key',
+    () =>
+      Effect.gen(function* () {
+        const port = languageModelPort([
+          { ...GEMINI_PRO, access: 'unavailable' },
+        ]);
+        yield* Effect.promise(() =>
+          installPlatform(
+            {
+              globalState: {
+                [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
+              },
+              secrets: googleKeySecrets(),
+            },
+            { languageModel: port },
+          ),
+        );
 
-    const options = modelOptionsFrom(
-      await Effect.runPromise(
-        readModelAvailabilityInputs(hostStores(), ['gemini31p']),
-      ),
-    );
+        const options = modelOptionsFrom(
+          yield* readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+        );
 
-    expect(options).toHaveLength(1);
-    expect(options[0]).toEqual(
-      expect.objectContaining({
-        value: 'gemini31p',
-        availability: 'copilot-unavailable',
+        expect(options).toHaveLength(1);
+        expect(options[0]).toEqual(
+          expect.objectContaining({
+            value: 'gemini31p',
+            availability: 'copilot-unavailable',
+          }),
+        );
       }),
-    );
-  });
+  );
 
-  it('leaves non-preferred models on their ordinary routes', async () => {
-    const port = languageModelPort([GEMINI_PRO]);
-    await installPlatform(
-      { secrets: googleKeySecrets() },
-      { languageModel: port },
-    );
+  it.effect('leaves non-preferred models on their ordinary routes', () =>
+    Effect.gen(function* () {
+      const port = languageModelPort([GEMINI_PRO]);
+      yield* Effect.promise(() =>
+        installPlatform(
+          { secrets: googleKeySecrets() },
+          { languageModel: port },
+        ),
+      );
 
-    const options = modelOptionsFrom(
-      await Effect.runPromise(
-        readModelAvailabilityInputs(hostStores(), ['gemini31p']),
-      ),
-    );
+      const options = modelOptionsFrom(
+        yield* readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+      );
 
-    expect(options[0]).toEqual(
-      expect.objectContaining({
-        value: 'gemini31p',
-        availability: 'provider-key',
-      }),
-    );
-    expect(options[0]).not.toHaveProperty('routeLabel');
-  });
+      expect(options[0]).toEqual(
+        expect.objectContaining({
+          value: 'gemini31p',
+          availability: 'provider-key',
+        }),
+      );
+      expect(options[0]).not.toHaveProperty('routeLabel');
+    }),
+  );
 });

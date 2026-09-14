@@ -1,5 +1,6 @@
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 
 // Local imports
@@ -56,13 +57,19 @@ describe('applyHelperModelPreference', () => {
     );
   });
 
-  async function resolve(config: AgentConfig): Promise<AgentConfig> {
-    const { applyHelperModelPreference } =
-      await import('@agent/runtime/helperModelPreference');
-    return Effect.runPromise(applyHelperModelPreference(config, STORES));
+  function resolve(config: AgentConfig) {
+    // `vi.resetModules()` runs per case, so the module under test is imported
+    // inside the program the case runs.
+    return Effect.promise(
+      () => import('@agent/runtime/helperModelPreference'),
+    ).pipe(
+      Effect.flatMap(({ applyHelperModelPreference }) =>
+        applyHelperModelPreference(config, STORES),
+      ),
+    );
   }
 
-  it.each([
+  it.effect.each([
     { helper: 'opus', scenario: 'the helper model already equals it' },
     {
       helper: 'chatonly',
@@ -78,39 +85,50 @@ describe('applyHelperModelPreference', () => {
       helper: 'undeclared',
       scenario: "the tool-use helper model doesn't declare function calling",
     },
-  ])('keeps the selected model when $scenario', async ({ helper }) => {
-    getHelperModelName.mockReturnValue(helper);
+  ])('keeps the selected model when $scenario', ({ helper }) =>
+    Effect.gen(function* () {
+      getHelperModelName.mockReturnValue(helper);
 
-    const result = await resolve(configFor('opus', 'toolUse'));
+      const result = yield* resolve(configFor('opus', 'toolUse'));
 
-    expect(result.model).toBe('opus');
-    expect(readModelAvailabilityInputs).not.toHaveBeenCalled();
-  });
+      expect(result.model).toBe('opus');
+      expect(readModelAvailabilityInputs).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('swaps a workflow agent without applying the tool-capability guard', async () => {
-    // A workflow agent doesn't use the tool-use flow, so a non-function-calling
-    // helper is fine.
-    getHelperModelName.mockReturnValue('chatonly');
-    modelUnavailableReasonFrom.mockReturnValue(undefined);
+  it.effect(
+    'swaps a workflow agent without applying the tool-capability guard',
+    () =>
+      Effect.gen(function* () {
+        // A workflow agent doesn't use the tool-use flow, so a
+        // non-function-calling helper is fine.
+        getHelperModelName.mockReturnValue('chatonly');
+        modelUnavailableReasonFrom.mockReturnValue(undefined);
 
-    const result = await resolve(configFor('opus', 'workflow'));
+        const result = yield* resolve(configFor('opus', 'workflow'));
 
-    expect(result.model).toBe('chatonly');
-    expect(readModelAvailabilityInputs).toHaveBeenCalledWith(
-      STORES,
-      ['chatonly'],
-      // The launching run hands its session frame down; this suite calls the
-      // preference directly, so it is the default "already in the frame" one.
-      expect.any(Function),
-    );
-  });
+        expect(result.model).toBe('chatonly');
+        expect(readModelAvailabilityInputs).toHaveBeenCalledWith(
+          STORES,
+          ['chatonly'],
+          // The launching run hands its session frame down; this suite calls
+          // the preference directly, so it is the default "already in the
+          // frame" one.
+          expect.any(Function),
+        );
+      }),
+  );
 
-  it('falls back to the selected model when the helper model is unavailable', async () => {
-    getHelperModelName.mockReturnValue('deepseek');
-    modelUnavailableReasonFrom.mockReturnValue('No API key configured.');
+  it.effect(
+    'falls back to the selected model when the helper model is unavailable',
+    () =>
+      Effect.gen(function* () {
+        getHelperModelName.mockReturnValue('deepseek');
+        modelUnavailableReasonFrom.mockReturnValue('No API key configured.');
 
-    const result = await resolve(configFor('opus'));
+        const result = yield* resolve(configFor('opus'));
 
-    expect(result.model).toBe('opus');
-  });
+        expect(result.model).toBe('opus');
+      }),
+  );
 });
