@@ -48,7 +48,7 @@ export interface RunGeneratedFile {
  *
  * The run directory is resolved once under `session.roots.storage`, as data
  * rather than from an ambient session scope a fiber's continuation may not
- * carry, so a host holding one session per open paper walks this session's
+ * carry, so a host holding one session per open project walks this session's
  * storage.
  */
 export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
