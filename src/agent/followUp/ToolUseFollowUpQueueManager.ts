@@ -102,6 +102,18 @@ type FollowUpSubmission =
   | { readonly kind: 'queued'; readonly lease?: FollowUpRecoveryLease }
   | { readonly kind: 'refused'; readonly reason?: 'owned_elsewhere' };
 
+export interface FollowUpSubmitOptions {
+  /**
+   * `deferred` admits the rows without offering them to a live consumer's
+   * input: a child loop whose own finalize must land before the parent can
+   * wake (#8093) takes this path, then re-submits the same delivery id once
+   * finalization completes; the replay check finds the rows durable and
+   * pending, and the offer happens then. `immediate` (the default) offers as
+   * soon as the rows commit.
+   */
+  readonly liveOffer?: 'immediate' | 'deferred';
+}
+
 /**
  * The session doors the admission boundary works through, wired by
  * `SessionHandle` over its graph: one serializer, no second append path.
@@ -258,8 +270,9 @@ export class ToolUseFollowUpQueue {
     runId: RunId,
     followUp: FollowUpQueueInput,
     admission: 'live_owner' | 'recoverable',
+    options?: FollowUpSubmitOptions,
   ): Effect.Effect<FollowUpSubmission, Error> {
-    return this.submitBatch(runId, [followUp], admission);
+    return this.submitBatch(runId, [followUp], admission, options);
   }
 
   /**
@@ -270,6 +283,7 @@ export class ToolUseFollowUpQueue {
     runId: RunId,
     followUps: readonly FollowUpQueueInput[],
     admission: 'live_owner' | 'recoverable',
+    options?: FollowUpSubmitOptions,
   ): Effect.Effect<FollowUpSubmission, Error> {
     const queued = followUps.map((followUp): QueuedFollowUp => ({
       followUpId: followUp.deliveryId ?? randomUUID(),
@@ -288,7 +302,7 @@ export class ToolUseFollowUpQueue {
     // A session that has closed takes no admission: its publisher is gone.
     if (this.disposed) return Effect.succeed({ kind: 'refused' });
     return this.port.exclusive((append) =>
-      this.admit(runId, queued, replayable, admission, append),
+      this.admit(runId, queued, replayable, admission, append, options),
     );
   }
 
@@ -408,6 +422,7 @@ export class ToolUseFollowUpQueue {
     replayable: ReadonlySet<string>,
     admission: 'live_owner' | 'recoverable',
     append: Append,
+    options?: FollowUpSubmitOptions,
   ): Effect.Effect<FollowUpSubmission, Error> {
     return Effect.gen({ self: this }, function* (): Effect.fn.Return<
       FollowUpSubmission,
@@ -479,12 +494,18 @@ export class ToolUseFollowUpQueue {
           ? admitted.owner
           : undefined;
       let lease: FollowUpRecoveryLease | undefined;
+      // A deferred offer leaves a live consumer's input untouched: the caller
+      // re-submits once its own ordering allows, and the offer happens then.
+      const liveOfferDeferred =
+        options?.liveOffer === 'deferred' &&
+        (owner?.kind === 'flow' || owner?.kind === 'child');
       if (current && queued.length > 0) {
         if (owner === undefined && admission === 'recoverable') {
           lease = this.claim(admitted, runId, 'recovery');
           owner = lease;
         }
-        if (owner !== undefined) this.offer(admitted, queued);
+        if (owner !== undefined && !liveOfferDeferred)
+          this.offer(admitted, queued);
       }
       if (releaseClaim) {
         if (
@@ -507,7 +528,8 @@ export class ToolUseFollowUpQueue {
       // was accepted before and changes nothing.
       if (lease) return { kind: 'queued', lease };
       if (!wrote) return { kind: 'duplicate' };
-      if (owner?.kind === 'flow') return { kind: 'delivered_live' };
+      if (owner?.kind === 'flow' && !liveOfferDeferred)
+        return { kind: 'delivered_live' };
       return { kind: 'queued' };
     });
   }

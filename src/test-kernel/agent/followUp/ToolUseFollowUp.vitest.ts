@@ -835,6 +835,38 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
       expect(rows[0]!.followUpId).not.toBe(rows[1]!.followUpId);
     }),
   );
+
+  it.effect(
+    'a deferred admission writes the row without offering it to the live consumer until resubmitted',
+    () =>
+      Effect.gen(function* () {
+        // #8093: a child whose own finalize must land first admits its result
+        // deferred; the row is durable but the parent's live input is not
+        // woken. The post-finalize resubmit of the same delivery id is a
+        // replay against the committed row, and THAT offer is what reaches
+        // the consumer.
+        const { followUps, queued } = recordedFollowUps();
+        const id = generateRunId();
+        const lease = followUps.claimLive(id, 'flow')!;
+        const input = followUps.attachInput(id, yield* RunInput.make, lease)!;
+        input.seed([]);
+        const delivery = childResult('d1');
+
+        expect(
+          yield* followUps.submit(id, delivery, 'recoverable', {
+            liveOffer: 'deferred',
+          }),
+        ).toEqual({ kind: 'queued' });
+        expect(queued(id)).toEqual(['child result']);
+        expect(yield* input.poll).toBeNull();
+
+        expect(yield* followUps.submit(id, delivery, 'recoverable')).toEqual({
+          kind: 'duplicate',
+        });
+        expect(queued(id)).toEqual(['child result']);
+        expect(yield* taken(followUps, lease)).toEqual(['child result']);
+      }),
+  );
 });
 
 describe('ToolUseFollowUpQueue terminal tombstones', () => {

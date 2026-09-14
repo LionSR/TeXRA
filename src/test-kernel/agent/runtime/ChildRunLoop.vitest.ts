@@ -10,12 +10,13 @@ import '@test/support/defaultSessionTestSetup';
 // since delivery/interrupt/terminal choreography all live in the loop.
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   submitFollowUp: vi.fn(),
+  persistChildRunDelivery: vi.fn(),
   releaseRunLeaseAfterArtifacts: vi.fn(
     async (_session: unknown, _runId: RunId) => {},
   ),
@@ -38,12 +39,26 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   submitFollowUp: mocks.submitFollowUp,
 }));
 
+vi.mock(
+  '@agent/storage/childRunDeliveryPersistence',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@agent/storage/childRunDeliveryPersistence')
+    >()),
+    persistChildRunDelivery: mocks.persistChildRunDelivery,
+  }),
+);
+
 import { getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import type { WorkflowJournalEntry } from '@agent/workflowScript/types';
 const { submitFollowUp: realSubmitFollowUp } = await vi.importActual<
   typeof import('@agent/followUp/ToolUseFollowUp')
 >('@agent/followUp/ToolUseFollowUp');
+const { persistChildRunDelivery: realPersistChildRunDelivery } =
+  await vi.importActual<
+    typeof import('@agent/storage/childRunDeliveryPersistence')
+  >('@agent/storage/childRunDeliveryPersistence');
 import {
   startChildRunLoop,
   type ChildRunLoopParams,
@@ -291,6 +306,7 @@ beforeEach(async () => {
   );
   mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
   mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
+  mocks.persistChildRunDelivery.mockImplementation(realPersistChildRunDelivery);
 });
 
 afterEach(() => {
@@ -374,6 +390,62 @@ describe('childRunLoop E2E fixtures', () => {
           registerLoop.mockRestore();
           interruptHandle.mockRestore();
           registry.releaseByRunId(runId);
+        }
+      }),
+  );
+
+  it.effect(
+    'admits a follow-up submitted during startup into the seeded queue',
+    () =>
+      Effect.gen(function* () {
+        // The queue claim precedes the seed's aggregate read, so a submission
+        // landing inside that read is held for the seed instead of being
+        // refused against a child the registry already shows active, or
+        // committing behind the snapshot the seed reads.
+        const runId = loopRunId();
+        const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+          userFollowUpSupport: 'terminalBacked',
+          description: 'Keep an agent-CLI child running',
+          config: childRunConfig,
+        }).pipe(Effect.provideService(Runs, session.runs));
+        trackedRunIds.add(runId);
+
+        const readStarted = yield* Deferred.make<void>();
+        const releaseRead = yield* Deferred.make<void>();
+        const readAggregate = session.readAggregate.bind(session);
+        const gate = vi
+          .spyOn(session, 'readAggregate')
+          .mockImplementationOnce((id) =>
+            Effect.gen(function* () {
+              yield* Deferred.succeed(readStarted, undefined);
+              yield* Deferred.await(releaseRead);
+              return yield* readAggregate(id);
+            }),
+          );
+        try {
+          const starter = yield* Effect.forkScoped(
+            startLoop(runId, strategy, { childRun }),
+          );
+          yield* Deferred.await(readStarted);
+          expect(
+            yield* session.followUps.submit(
+              runId,
+              { text: 'early', origin: 'user' },
+              'live_owner',
+            ),
+          ).toEqual({ kind: 'queued' });
+          yield* Deferred.succeed(releaseRead, undefined);
+          const loop = yield* Fiber.join(starter);
+
+          yield* resolveTurn(1, { kind: 'interim', value: 'first' });
+          // Only the seeded follow-up starts a second turn.
+          yield* turnStarted(2);
+          yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
+          yield* Fiber.join(loop);
+        } finally {
+          gate.mockRestore();
         }
       }),
   );
@@ -877,6 +949,44 @@ describe('childRunLoop E2E fixtures', () => {
         expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
         yield* Fiber.join(loop);
+      }),
+  );
+
+  it.effect(
+    'keeps a consumed prompt queued when the turn result fails to persist',
+    () =>
+      Effect.gen(function* () {
+        // The settle row still commits (it is the re-execution gate), but the
+        // prompt's `followup.consumed` rows must not: with no report and no
+        // parent row durable, consuming them would lose the completed turn,
+        // so the relaunched loop seeds the prompt and runs it again.
+        const runId = loopRunId();
+        const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+          userFollowUpSupport: 'terminalBacked',
+          description: 'Keep an agent-CLI child running',
+          config: childRunConfig,
+        }).pipe(Effect.provideService(Runs, session.runs));
+        trackedRunIds.add(runId);
+        const loop = yield* startLoop(runId, strategy, { childRun });
+
+        yield* resolveTurn(1, { kind: 'interim', value: 'first' });
+        yield* session.followUps.submit(
+          runId,
+          { text: 'keep going', origin: 'user' },
+          'live_owner',
+        );
+        yield* turnStarted(2);
+
+        mocks.persistChildRunDelivery.mockImplementation(() =>
+          Effect.fail(new Error('disk full')),
+        );
+        yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
+
+        expect(Exit.isFailure(yield* Fiber.await(loop))).toBe(true);
+        expect(yield* queuedTexts(runId)).toEqual(['keep going']);
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
       }),
   );
 
