@@ -1,5 +1,5 @@
 // Node imports
-import { writeFile } from 'node:fs/promises';
+import { mkdir, readdir, symlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -96,6 +96,45 @@ describe('Save-as-copy stem and workspace pack', () => {
           false,
         );
       }),
+  );
+
+  it.live('packs a selection made through a symlink into the workspace', () =>
+    Effect.gen(function* () {
+      // The picker path is an alias outside the workspace whose target is
+      // inside it: the pack resolves it as the workspace path it names.
+      const aliasDir = yield* Effect.promise(() =>
+        makeTempDir('texra-legacy-workflow-alias-', tempDirs),
+      );
+      const chapter = path.join(workspacePath, 'chapter');
+      yield* Effect.promise(async () => {
+        await mkdir(chapter);
+        await Promise.all(
+          ['ch.tex', 'ch.pdf'].map((name) =>
+            writeFile(path.join(chapter, name), 'fixture'),
+          ),
+        );
+        await symlink(chapter, path.join(aliasDir, 'alias'), 'dir');
+      });
+
+      const result = yield* runPackSingle(
+        'gpt-4',
+        path.join(aliasDir, 'alias', 'ch.tex'),
+        'custom:polish',
+      ).pipe(
+        Effect.provide(
+          rootedFsLayer({
+            workspace: workspacePath,
+            storage: path.join(workspacePath, '.texra'),
+          }),
+        ),
+      );
+
+      expect(result).toMatchObject({ status: 'success' });
+      const packed = yield* Effect.promise(() =>
+        readdir(path.join(chapter, 'History')),
+      );
+      expect(packed).toHaveLength(1);
+    }),
   );
 
   it.live(

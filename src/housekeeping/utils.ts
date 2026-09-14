@@ -36,25 +36,32 @@ export class GlobFailed extends Data.TaggedError('GlobFailed')<{
  * paths through; so does this, whole: every path of an external selection —
  * its sources, the `History/` or `Diffs/` folder beside it, the artifacts
  * swept there — is absolute and goes through the process `FileSystem` at its
- * own location. Every other path (workspace-relative, or absolute inside the
- * workspace) goes through the confined workspace view, which is never
- * loosened. Deciding per path also covers a multi-file pack that copies an
- * external output file into the workspace folder beside its main input.
+ * own location. Every other path goes through the confined workspace view,
+ * which is never loosened: a relative path as written, and an absolute one as
+ * the workspace-relative path the symlink-aware `relativeToRoot` computes for
+ * it — so a selection made through a symlinked directory whose target is
+ * inside the workspace resolves, and the one computation that decides the
+ * side is also the path handed to that side. Deciding per path also covers a
+ * multi-file pack that copies an external output file into the workspace
+ * folder beside its main input.
  */
 export const filesystemFor = Effect.fn('housekeeping.filesystemFor')(function* (
   workspaceFs: RootedFileSystem,
   target: string,
 ) {
-  const external =
-    path.isAbsolute(target) &&
-    (workspaceFs.root === undefined ||
-      relativeToRoot(workspaceFs.root, target) === undefined);
-  if (external) {
+  let workspacePath: string | undefined = target;
+  if (path.isAbsolute(target)) {
+    workspacePath =
+      workspaceFs.root === undefined
+        ? undefined
+        : relativeToRoot(workspaceFs.root, target);
+  }
+  if (workspacePath === undefined) {
     const fs: FileSystem.FileSystem = yield* FileSystem.FileSystem;
     return { fs, absolutePath: target };
   }
   const fs: FileSystem.FileSystem = workspaceFs;
-  return { fs, absolutePath: yield* workspaceFs.resolve(target) };
+  return { fs, absolutePath: yield* workspaceFs.resolve(workspacePath) };
 });
 
 /**

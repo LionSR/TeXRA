@@ -11,11 +11,27 @@ import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileOpResult } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas';
 import { copyDereferenced } from '@utils/files/fsDurability';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { CHANNEL, HISTORY_DIR } from './constants';
 import { generateTimestamp } from './utils';
+
+/**
+ * Whether the run directory exists, by a `stat` whose only absent answer is
+ * `NotFound`: a directory that cannot be inspected (permissions, I/O) fails,
+ * and the failure reaches {@link asErrorResult} instead of reading as "no
+ * files" — the rule the `StorageFS.exists` this replaces followed.
+ */
+const runDirExists = (storageFs: RootedFileSystem, runDirRelative: string) =>
+  storageFs.stat(runDirRelative).pipe(
+    Effect.as(true),
+    Effect.catchIf(
+      (error) => error.reason._tag === 'NotFound',
+      () => Effect.succeed(false),
+    ),
+  );
 
 /** Every run-directory failure reaches the host as the same result shape. */
 const asErrorResult = (operation: string) => (error: unknown) =>
@@ -49,7 +65,7 @@ export const runPackRunDir = Effect.fn('housekeeping.runPackRunDir')(function* (
 
   return yield* Effect.gen(function* () {
     const runDirRelative = resolveRunStoragePath(runId);
-    if (!(yield* storageFs.exists(runDirRelative))) {
+    if (!(yield* runDirExists(storageFs, runDirRelative))) {
       yield* Effect.logWarning(`Run directory not found for run ${runId}`).pipe(
         withLogChannel(CHANNEL),
       );
@@ -93,7 +109,7 @@ export const runCleanRunDir = Effect.fn('housekeeping.runCleanRunDir')(
 
     return yield* Effect.gen(function* () {
       const runDirRelative = resolveRunStoragePath(runId);
-      if (!(yield* storageFs.exists(runDirRelative))) {
+      if (!(yield* runDirExists(storageFs, runDirRelative))) {
         yield* Effect.logWarning(
           `Run directory not found for run ${runId}`,
         ).pipe(withLogChannel(CHANNEL));
