@@ -153,7 +153,6 @@
     "nunjucks": "^3.2.4",
     "openai": "^7.10.0",
     "p-defer": "^4.0.1",
-    "p-queue": "^9.3.3",
     "pathe": "^2.0.3",
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
