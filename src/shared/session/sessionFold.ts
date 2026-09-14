@@ -1775,21 +1775,9 @@ function foldTraceEvent(
   deferred: DeferredRunModels,
 ): boolean {
   const retained = view.folded.get(event.aggregateId);
+  if (retained === undefined || event.seq <= retained) return false;
   const runId = runIdOf(event.aggregateId);
   let run = runId === null ? undefined : view.runs.get(runId);
-  if (retained === undefined) {
-    // A listing fact reaches every reader, subscribed or not, and folds as
-    // a listing fact alone. A transcript row reaches only a subscriber, so
-    // one for a run the view holds with no `folded` entry is a lost tier,
-    // not a filtered fact: say so rather than drop the row in silence.
-    if (run && isTranscriptEvent(event)) {
-      console.warn(
-        `session fold: ${event.type} seq ${event.seq} for ${event.aggregateId} has no transcript tier; the row is not shown`,
-      );
-    }
-    return false;
-  }
-  if (event.seq <= retained) return false;
   if (!run) return false;
   const indexes = indexesOf(run.transcript);
   if (event.type === 'run.activate') indexes.trace.status(RUN_PHASE.RUNNING);
