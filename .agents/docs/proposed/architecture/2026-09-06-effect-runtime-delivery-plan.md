@@ -395,6 +395,8 @@ the cutover implementation. Compare identical short and long retained sessions, 
 representative media and tool concurrency. Budgets are not yet measured by this planning
 pass; do not replace measurements with guessed percentage wins or a net-LOC promise.
 
+> **Recorded 2026-09-14.** The pre-cutover baseline was measured at `854b36ee69` and is kept as evidence in [`.agents/docs/evidence/2026-09-07-pre-cutover-runtime-baseline/`](../../evidence/2026-09-07-pre-cutover-runtime-baseline/README.md). The cutover landed before it was merged, and its harness writes the pre-cutover event vocabulary, so the post-cutover half of the comparison needs the harness's drafts ported first.
+
 Use existing behavior suites and migrate them to the new durable boundary when the old
 implementation disappears. Add tests only for a consequential uncovered contract or a
 reproduced defect, per repository rules. Crash/multiprocess checks require real processes;
