@@ -1147,106 +1147,131 @@ export function createChatSessionController(
       return;
     }
     let delivered = false;
-    followUpQueue.enqueue(
-      Effect.gen(function* () {
-        let followUpTarget = childFollowUpTarget;
-        // The fold states when the pending run exists: the first view level
-        // holding the run this controller minted, unless the run settles
-        // first.
-        const pendingRun = session.runPromise;
-        followUpTarget ??= yield* Effect.raceFirst(
+    /**
+     * The delivery is an Effect program so the queue's scope reaches it: an
+     * interrupted delivery stops at its next step instead of mutating the
+     * transcript or the session after teardown began. The one Promise it
+     * waits on is the run claim `TuiSession` holds. The `followUp.send`
+     * request and the state it settles (the sent notice, or the restored
+     * draft and the stop) are one uninterruptible step: a request that
+     * committed is always followed by its presentation, and a message is never
+     * both queued on the run and lost from the input.
+     */
+    const deliverFollowUp = Effect.gen(function* () {
+      // The fold states when the pending run exists: the first view level
+      // holding the run this controller minted, unless the run settles
+      // first. Both are read when the delivery starts, not when it queued.
+      const runPromise = session.runPromise;
+      const followUpTarget =
+        childFollowUpTarget ??
+        (yield* Effect.raceFirst(
           awaitRunFolded(session.runId),
-          pendingRun == null
+          runPromise === undefined
             ? Effect.succeed(undefined)
-            : hostPort(() => pendingRun).pipe(Effect.as(undefined)),
+            : Effect.tryPromise({
+                try: () => runPromise,
+                catch: (error) => error,
+              }).pipe(Effect.as(undefined)),
+        ));
+      if (session.stopRequested) {
+        requestDraftRestore(line, images);
+        return;
+      }
+      if (!followUpTarget) {
+        requestDraftRestore(line, images);
+        setTransientNotice(
+          'The conversation ended before the message could be sent. The message has been restored to the input.',
+          { ttlMs: Infinity },
         );
-        if (session.stopRequested) {
-          requestDraftRestore(line, images);
-          return;
-        }
-        if (!followUpTarget) {
-          requestDraftRestore(line, images);
-          setTransientNotice(
-            'The conversation ended before the message could be sent. The message has been restored to the input.',
-            { ttlMs: Infinity },
-          );
-          return;
-        }
-        const outcome = yield* runtimeSession.requests
-          .request({
-            kind: 'followUp.send',
-            runId: followUpTarget,
-            text: prepared.instruction,
-            displayText: prepared.displayInstruction,
-            mediaFiles: mediaFiles ? [...mediaFiles] : undefined,
-          })
-          .pipe(
-            Effect.match({
-              onFailure: (error) => ({
-                refused: describeRequestError(error),
+        return;
+      }
+      yield* Effect.uninterruptible(
+        Effect.gen(function* () {
+          const outcome = yield* runtimeSession.requests
+            .request({
+              kind: 'followUp.send',
+              runId: followUpTarget,
+              text: prepared.instruction,
+              displayText: prepared.displayInstruction,
+              mediaFiles: mediaFiles ? [...mediaFiles] : undefined,
+            })
+            .pipe(
+              Effect.match({
+                onFailure: (error) => ({
+                  refused: describeRequestError(error),
+                }),
+                onSuccess: (value) => ({ refused: undefined, value }),
               }),
-              onSuccess: (value) => ({ refused: undefined, value }),
-            }),
-            // `match` recovers only the typed refusal; a collaborator that
-            // rejects defects, and the queued task would swallow it into an
-            // unhandled rejection. Read the defect the way `SessionBridge`
-            // answers `Internal`: logged, worded, the message handed back.
-            Effect.catchCause((cause) =>
-              Effect.sync(() =>
-                Cause.hasInterruptsOnly(cause)
-                  ? { interrupted: true as const }
-                  : { defect: reportRequestDefect(cause) },
+              // `match` recovers only the typed refusal; a collaborator that
+              // rejects defects. Read the defect the way `SessionBridge`
+              // answers `Internal`: logged, worded, the message handed back.
+              Effect.catchCause((cause) =>
+                Effect.sync(() =>
+                  Cause.hasInterruptsOnly(cause)
+                    ? { interrupted: true as const }
+                    : { defect: reportRequestDefect(cause) },
+                ),
               ),
-            ),
-          );
-        if ('value' in outcome && outcome.value.kind === 'followUp') {
-          runtimeSession.followUps.notifySent(followUpTarget);
-          delivered = true;
-          const presentation = presentFollowUpResult(
-            outcome.value.status === 'sent'
-              ? { status: 'sent' }
-              : { status: 'queued', wake: outcome.value.wake ?? undefined },
-          );
-          if (presentation.severity !== 'none') {
-            appendLocalAssistantTranscript(
-              presentation.message,
-              followUpTarget,
             );
-          }
-        } else if ('interrupted' in outcome) {
-          // Teardown mid-send is not a verdict on the message; hand it back.
-          requestDraftRestore(line, images);
-        } else if ('defect' in outcome) {
-          // The run may be healthy; a defect is no refusal, so it neither
-          // stops the stream nor retargets the conversation.
-          requestDraftRestore(line, images);
-          setTransientNotice(
-            `${outcome.defect} The message has been restored to the input.`,
-            { ttlMs: Infinity },
-          );
-        } else {
-          requestDraftRestore(line, images);
-          setTransientNotice(
-            `${outcome.refused ?? describeFollowUpFailureReason('not_resumable')} The message has been restored to the input.`,
-            { ttlMs: Infinity },
-          );
-          if (followUpTarget === session.runId) {
-            session.stopRequested = true;
+          if ('value' in outcome && outcome.value.kind === 'followUp') {
+            runtimeSession.followUps.notifySent(followUpTarget);
+            delivered = true;
+            const presentation = presentFollowUpResult(
+              outcome.value.status === 'sent'
+                ? { status: 'sent' }
+                : { status: 'queued', wake: outcome.value.wake ?? undefined },
+            );
+            if (presentation.severity !== 'none') {
+              appendLocalAssistantTranscript(
+                presentation.message,
+                followUpTarget,
+              );
+            }
+          } else if ('interrupted' in outcome) {
+            // Teardown mid-send is not a verdict on the message; hand it back.
+            requestDraftRestore(line, images);
+          } else if ('defect' in outcome) {
+            // The run may be healthy; a defect is no refusal, so it neither
+            // stops the stream nor retargets the conversation.
+            requestDraftRestore(line, images);
+            setTransientNotice(
+              `${outcome.defect} The message has been restored to the input.`,
+              { ttlMs: Infinity },
+            );
           } else {
-            appendLocalAssistantTranscript(
-              FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
-              followUpTarget,
+            requestDraftRestore(line, images);
+            setTransientNotice(
+              `${outcome.refused ?? describeFollowUpFailureReason('not_resumable')} The message has been restored to the input.`,
+              { ttlMs: Infinity },
             );
+            if (followUpTarget === session.runId) {
+              session.stopRequested = true;
+            } else {
+              appendLocalAssistantTranscript(
+                FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
+                followUpTarget,
+              );
+            }
           }
-        }
-      }).pipe(
+        }),
+      );
+    });
+    // Recovery is attached before the delivery enters the queue. A failure or
+    // a throw from the body is reported to the transcript; an interruption is
+    // the queue's scope closing, which is not a delivery failure.
+    followUpQueue.enqueue(
+      deliverFollowUp.pipe(
         Effect.ensuring(
           Effect.sync(() => {
             if (!delivered) restoreReservedSkillActivations();
           }),
         ),
-        Effect.catch((error) =>
-          Effect.sync(() => appendLocalErrorTranscript(toErrorMessage(error))),
+        Effect.catchCause((cause) =>
+          Cause.hasInterrupts(cause)
+            ? Effect.interrupt
+            : Effect.sync(() =>
+                appendLocalErrorTranscript(toErrorMessage(Cause.squash(cause))),
+              ),
         ),
       ),
     );
