@@ -128,6 +128,32 @@ describe('desktop app log', () => {
     expect(snapshot.text).toContain(`${workspacePath}.archive\\paper.tex`);
   });
 
+  it.each([
+    ['native separators', 'C:\\work\\project\\paper.tex'],
+    ['forward separators', 'C:/work/project/paper.tex'],
+    ['mixed separators', 'C:/work\\project\\paper.tex'],
+    [
+      'backslashes doubled by JSON encoding',
+      JSON.stringify('C:\\work\\project\\paper.tex').slice(1, -1),
+    ],
+    [
+      'backslashes doubled twice (util.format inspecting an object, then JSON)',
+      JSON.stringify(
+        JSON.stringify('C:\\work\\project\\paper.tex').slice(1, -1),
+      ).slice(1, -1),
+    ],
+  ])('redacts a workspace path spelled with %s', async (_spelling, logged) => {
+    await writeDesktopLog(`Opened ${logged}`);
+    const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+    const snapshot = readDesktopLogSnapshot({
+      workspacePath: 'C:\\work\\project',
+    });
+
+    expect(snapshot.text).toMatch(/^Opened \[path\][\\/]+paper\.tex$/);
+    expect(snapshot.text).not.toContain('work');
+  });
+
   it('redacts descendants of a separator-terminated workspace root', async () => {
     await writeDesktopLog('Opened C:\\Users\\alice\\paper.tex');
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();

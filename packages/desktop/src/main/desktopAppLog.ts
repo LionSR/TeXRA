@@ -21,7 +21,6 @@ import { setLogSink, type LogEntry } from '@logger/logSink';
 import { redactSecrets } from '@logger/redaction';
 import { normalizeFilePath } from '@utils/core';
 
-import { pathSeparatorVariants } from './desktopPathVariants.js';
 import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';
 
 const LOG_FILE_NAME = 'texra-desktop.log';
@@ -208,23 +207,41 @@ function redactDesktopLogText(
   );
 }
 
+/**
+ * Replace each sensitive path prefix with `[path]`, whatever spelling its
+ * separators have in the log: native or forward slashes, a mix of both, or
+ * backslashes doubled once by JSON encoding and again by `util.format`
+ * inspecting an object before the entry is serialized. A prefix is matched by
+ * its segments joined with any run of separators, so every encoding layer is
+ * one pattern rather than one more enumerated spelling. Longer prefixes go
+ * first, so a workspace inside the home directory is not cut at home.
+ */
 function redactPathPrefixes(
   text: string,
   ...prefixes: readonly (string | undefined)[]
 ): string {
   return prefixes
-    .filter((prefix): prefix is string => Boolean(prefix))
-    .flatMap(pathSeparatorVariants)
-    .toSorted((a, b) => b.length - a.length)
-    .reduce((redacted, prefix) => {
-      if (prefix === '/') {
+    .map((prefix) => prefix?.trim() ?? '')
+    .filter((prefix) => prefix.length > 0)
+    .map((prefix) => prefix.split(/[\\/]+/))
+    .toSorted(
+      (a, b) => b.length - a.length || b.join('/').length - a.join('/').length,
+    )
+    .reduce((redacted, segments) => {
+      // The POSIX root: a slash that starts a path, never one inside a URL
+      // or a relative path.
+      if (segments.every((segment) => segment === '')) {
         return redacted.replaceAll(/(?<![A-Za-z0-9:/])\//g, '[path]');
       }
-      const boundary = /[\\/]$/.test(prefix)
-        ? ''
-        : `(?=$|[\\s\\\\/,:;!?\\])}'"]|\\.(?:$|\\s))`;
+      const pattern = segments.map(escapeRegExp).join('[\\\\/]+');
+      // A separator-terminated prefix already ends on a boundary; any other
+      // must stop where the path does, never inside a longer sibling name.
+      const boundary =
+        segments.at(-1) === ''
+          ? ''
+          : `(?=$|[\\s\\\\/,:;!?\\])}'"]|\\.(?:$|\\s))`;
       return redacted.replaceAll(
-        new RegExp(`${escapeRegExp(prefix)}${boundary}`, 'g'),
+        new RegExp(`${pattern}${boundary}`, 'g'),
         '[path]',
       );
     }, text);
