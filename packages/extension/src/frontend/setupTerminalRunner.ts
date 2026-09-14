@@ -136,14 +136,25 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   // instead of holding both until the timeout elapses.
   const exitCode = yield* Effect.forkChild(
     Effect.callback<number | undefined>((resume) => {
-      const subscription = vscode.window.onDidEndTerminalShellExecution(
-        (event) => {
-          if (event.execution === execution) {
-            resume(Effect.succeed(event.exitCode));
-          }
-        },
-      );
-      return Effect.sync(() => subscription.dispose());
+      // One disposal path for every exit. Effect runs the returned effect only
+      // when the wait is interrupted — the timeout below, or the whole run
+      // being interrupted — so the end event that resumes normally has to
+      // unsubscribe itself; without that, every successful command leaves its
+      // listener and this execution closure registered for the window's
+      // lifetime. `dispose` drops the subscription it disposes, so the two
+      // paths can both run.
+      let subscription: vscode.Disposable | undefined;
+      const dispose = () => {
+        subscription?.dispose();
+        subscription = undefined;
+      };
+      subscription = vscode.window.onDidEndTerminalShellExecution((event) => {
+        if (event.execution === execution) {
+          dispose();
+          resume(Effect.succeed(event.exitCode));
+        }
+      });
+      return Effect.sync(dispose);
     }).pipe(Effect.timeoutOption(args.timeoutMs)),
     { startImmediately: true },
   );

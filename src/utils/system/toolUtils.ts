@@ -237,7 +237,10 @@ async function executeWithFallback(
  *   Callers inside an Effect pass the fiber's signal so an interrupted probe
  *   kills the processes instead of leaving several of them running out their
  *   five-second timeout; Promise-shaped callers pass nothing and behave as
- *   before.
+ *   before. An aborted probe answers `false` without reporting a missing
+ *   tool: the killed `<tool> --version` looks exactly like an absent tool,
+ *   and stopping a run must not raise an install prompt or open the setup
+ *   docs. The caller's own interruption decides what that `false` means.
  * @returns Promise<boolean> True if the tool is installed
  */
 export async function checkToolInstalled(
@@ -300,7 +303,10 @@ export async function checkToolInstalled(
       );
     }
 
-    if (!isInstalled && showError) {
+    // `signal.aborted` is read here, after the probes, not captured earlier:
+    // the abort arrives while they run. A cancelled probe is not a missing
+    // tool, whichever way execa surfaced the kill.
+    if (!isInstalled && showError && !signal?.aborted) {
       await reportMissingTool(config.errorMessage, config.openDocsCommand);
     }
 
@@ -309,7 +315,7 @@ export async function checkToolInstalled(
     // The user-facing message is always the tool's own install guidance, so
     // log the underlying cause instead of dropping it.
     log.warn(`Tool check for '${toolName}' failed: ${toErrorMessage(err)}`);
-    if (showError) {
+    if (showError && !signal?.aborted) {
       await reportMissingTool(config.errorMessage);
     }
     return false;
