@@ -241,7 +241,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     ),
   );
 
-  it.live('logs a detached run-loop rejection through the child trace', () =>
+  it.effect('logs a detached run-loop rejection through the child trace', () =>
     Effect.gen(function* () {
       const childRun = createFakeAgentCliChildRun(childRunId);
       const logged = yield* Deferred.make<void>();
@@ -363,13 +363,13 @@ describe('claude_agent tool launch and resume fallback', () => {
     ),
   );
 
-  it.live(
+  it.effect(
     'launches one fallback loop when concurrent calls use the same stale session_id',
     () =>
       Effect.gen(function* () {
         const envStarted = yield* Deferred.make<void>();
         const envReady = yield* Deferred.make<NodeJS.ProcessEnv>();
-        const secondDispatching = yield* Deferred.make<void>();
+        const secondClaimLost = yield* Deferred.make<void>();
         const runs = stubRuns();
         const captured = captureStrategy();
         // The launch path generates the child's run id, and that id is both the
@@ -387,16 +387,21 @@ describe('claude_agent tool launch and resume fallback', () => {
             Effect.andThen(Deferred.await(envReady)),
           ),
         );
-        // The second call's approval is the last step before it claims the id,
-        // so completing the gate there proves it reached the fallback wait
-        // rather than asserting on a fiber that has not started yet.
-        mocks.requestBashApproval
-          .mockReturnValueOnce(Effect.succeed({ action: 'approve' }))
-          .mockImplementationOnce(() =>
-            Deferred.succeed(secondDispatching, undefined).pipe(
-              Effect.as({ action: 'approve' }),
-            ),
-          );
+        // The contention this case claims is a lost claim: dispatch resolves
+        // the registry for this session, which is the instance the suite holds,
+        // so the gate fires from inside the second call's own failed `claim` —
+        // the step that sends it into the fallback wait. Gating on anything
+        // earlier (its approval, say) would let the test release the env and
+        // promote the first launch before the second call ever contended, and
+        // the follow-up assertions would pass on the plain already-active path.
+        const realClaim = ClaudeAgentSessions.claim.bind(ClaudeAgentSessions);
+        const claim = vi
+          .spyOn(ClaudeAgentSessions, 'claim')
+          .mockImplementation((sessionId: string) => {
+            const release = realClaim(sessionId);
+            if (!release) Deferred.doneUnsafe(secondClaimLost, Effect.void);
+            return release;
+          });
 
         const tool = new ClaudeAgentTool();
         const first = yield* Effect.forkChild(
@@ -413,7 +418,7 @@ describe('claude_agent tool launch and resume fallback', () => {
             session_id: 'stale-session',
           }),
         );
-        yield* Deferred.await(secondDispatching);
+        yield* Deferred.await(secondClaimLost);
 
         expect(mocks.buildClaudeAgentEnv).toHaveBeenCalledTimes(1);
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
@@ -435,8 +440,15 @@ describe('claude_agent tool launch and resume fallback', () => {
           expect.objectContaining({ session: expect.anything() }),
         );
 
+        // One claim apiece: the loser parked on the reservation until the
+        // launch promoted it, rather than re-claiming until the id went
+        // active. A spin would still reach the same follow-up, so the count is
+        // what distinguishes waiting from polling.
+        expect(claim).toHaveBeenCalledTimes(2);
+
         captured.strategy?.releaseSessionOwnership?.();
         expect(ClaudeAgentSessions.lookup('stale-session')).toBeUndefined();
+        claim.mockRestore();
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({
