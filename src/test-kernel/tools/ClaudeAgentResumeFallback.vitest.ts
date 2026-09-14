@@ -146,6 +146,8 @@ describe('claude_agent tool launch and resume fallback', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    // A spy on the module-level registry must not outlive a failed case.
+    vi.restoreAllMocks();
     // Clear anything a test registered into the real (module-level) registry.
     ClaudeAgentSessions.releaseByRunId(parentRunId);
     ClaudeAgentSessions.release('stale-session');
