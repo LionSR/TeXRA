@@ -795,6 +795,72 @@ describe('TUI request decisions', () => {
       }),
   );
 
+  it.effect.each(['decision', 'presentation'] as const)(
+    'does not publish a retry %s after its credential lookup outlives the host',
+    (stage) =>
+      Effect.gen(function* () {
+        let finishLookup: (() => void) | undefined;
+        if (stage === 'decision') {
+          mocks.hasUsableApiKey.mockResolvedValue(true);
+          mocks.apiKeyExistsUncached.mockImplementation(
+            () =>
+              new Promise<boolean>((_resolve, reject) => {
+                finishLookup = () => reject(new Error('Keychain unavailable'));
+              }),
+          );
+        } else {
+          mocks.hasUsableApiKey.mockImplementationOnce(
+            () =>
+              new Promise<boolean>((resolve) => {
+                finishLookup = () => resolve(true);
+              }),
+          );
+        }
+        const attached = tui();
+        const permission = chatGptSubscriptionRetry(`disposed-key-${stage}`);
+        const pending = yield* Effect.forkChild(openRetry(permission));
+        if (stage === 'decision') {
+          yield* waitForApproval(
+            'retry',
+            { runId: permission.runId },
+            {
+              personalApiKeyAvailable: true,
+            },
+          );
+          decideRetry(PERSONAL_KEY_RETRY);
+        }
+        yield* waitFor(() => expect(finishLookup).toBeDefined());
+        attached.dispose();
+        if (stage === 'presentation') {
+          // A replacement attachment has already prepared its own card.
+          mocks.hasUsableApiKey.mockResolvedValue(false);
+          tui();
+          yield* waitForApproval(
+            'retry',
+            { runId: permission.runId },
+            {
+              personalApiKeyAvailable: false,
+            },
+          );
+        }
+        finishLookup?.();
+        yield* settle();
+        yield* Effect.promise(() => defaultSession().settlePublications());
+        expect(
+          SubscriptionRef.getUnsafe(defaultSession().view).requests.some(
+            (request) => request.requestId === permission.requestId,
+          ),
+        ).toBe(true);
+        if (stage === 'presentation') {
+          expect(currentApproval.get()?.payload).toMatchObject({
+            kind: 'retry',
+            tui: { personalApiKeyAvailable: false },
+          });
+        }
+        yield* Fiber.interrupt(pending);
+      }),
+  );
+
   it.effect(
     'auto-switches a Kimi Code subscription limit to the stored Moonshot key',
     () =>
