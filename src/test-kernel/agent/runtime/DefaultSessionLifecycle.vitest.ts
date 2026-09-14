@@ -1,7 +1,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { Cause, Effect, Exit } from 'effect';
+import { assert, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 
@@ -62,72 +62,83 @@ async function importSessionRuntime() {
 }
 
 describe('default session lifecycle', () => {
-  it('warns once only when a non-default session is live at resolution', async () => {
-    const {
-      createTestSession,
-      defaultSession,
-      initializeDefaultSession,
-      teardownDefaultSession,
-    } = await importSessionRuntime();
-    const processDefault = await Effect.runPromise(
-      initializeDefaultSession({
-        transcriptMode: { kind: 'ephemeral', reason: 'process default' },
-      }),
-    );
+  // Opens real sessions on the process session owner and keeps the real
+  // clock it runs on today. The finalizers are registered teardown first and
+  // the live session second, so their LIFO order reproduces the nesting the
+  // two `finally` blocks used to give: dispose runs, then teardown.
+  it.live(
+    'warns once only when a non-default session is live at resolution',
+    () =>
+      Effect.gen(function* () {
+        const {
+          createTestSession,
+          defaultSession,
+          initializeDefaultSession,
+          teardownDefaultSession,
+        } = yield* Effect.promise(() => importSessionRuntime());
+        const processDefault = yield* initializeDefaultSession({
+          transcriptMode: { kind: 'ephemeral', reason: 'process default' },
+        });
+        yield* Effect.addFinalizer(() => teardownDefaultSession());
 
-    try {
-      expect(defaultSession()).toBe(processDefault);
-      expect(channelTraceMocks.warn).not.toHaveBeenCalled();
+        expect(defaultSession()).toBe(processDefault);
+        expect(channelTraceMocks.warn).not.toHaveBeenCalled();
 
-      const disposedSession = createTestSession({
-        transcriptMode: { kind: 'ephemeral', reason: 'disposed non-default' },
-      });
-      await Effect.runPromise(disposedSession.dispose());
-      expect(defaultSession()).toBe(processDefault);
-      expect(channelTraceMocks.warn).not.toHaveBeenCalled();
+        const disposedSession = createTestSession({
+          transcriptMode: { kind: 'ephemeral', reason: 'disposed non-default' },
+        });
+        yield* disposedSession.dispose();
+        expect(defaultSession()).toBe(processDefault);
+        expect(channelTraceMocks.warn).not.toHaveBeenCalled();
 
-      const liveSession = createTestSession({
-        transcriptMode: { kind: 'ephemeral', reason: 'live non-default' },
-      });
-      try {
+        const liveSession = createTestSession({
+          transcriptMode: { kind: 'ephemeral', reason: 'live non-default' },
+        });
+        yield* Effect.addFinalizer(() => liveSession.dispose());
+
         expect(defaultSession()).toBe(processDefault);
         expect(channelTraceMocks.warn).toHaveBeenCalledOnce();
         expect(channelTraceMocks.warn).toHaveBeenCalledWith(
           'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
         );
-      } finally {
-        await Effect.runPromise(liveSession.dispose());
-      }
-    } finally {
-      await Effect.runPromise(teardownDefaultSession());
-    }
-  });
+      }),
+  );
 
-  it('rejects access before explicit initialization', async () => {
-    const { defaultSession, initializeDefaultSession, teardownDefaultSession } =
-      await importSessionRuntime();
+  // Opens and releases a real session on the process session owner, and keeps
+  // the real clock it runs on today.
+  it.live('rejects access before explicit initialization', () =>
+    Effect.gen(function* () {
+      const {
+        defaultSession,
+        initializeDefaultSession,
+        teardownDefaultSession,
+      } = yield* Effect.promise(() => importSessionRuntime());
 
-    expect(() => defaultSession()).toThrow(
-      'The default session has not been initialized',
-    );
+      expect(() => defaultSession()).toThrow(
+        'The default session has not been initialized',
+      );
 
-    const transcriptMode = {
-      kind: 'ephemeral',
-      reason: 'default session lifecycle test',
-    } as const;
-    const session = await Effect.runPromise(
-      initializeDefaultSession({ transcriptMode }),
-    );
-    try {
-      expect(defaultSession()).toBe(session);
-      expect(defaultSession().transcripts.mode).toEqual(transcriptMode);
-      await expect(
-        Effect.runPromise(initializeDefaultSession({ transcriptMode })),
-      ).rejects.toThrow('already been initialized');
-    } finally {
-      await Effect.runPromise(teardownDefaultSession());
-    }
-  });
+      const transcriptMode = {
+        kind: 'ephemeral',
+        reason: 'default session lifecycle test',
+      } as const;
+      const session = yield* initializeDefaultSession({ transcriptMode });
+      yield* Effect.gen(function* () {
+        expect(defaultSession()).toBe(session);
+        expect(defaultSession().transcripts.mode).toEqual(transcriptMode);
+        // `initializeDefaultSession` carries no error channel and a second
+        // initialization dies (SessionHandle.ts:1403-1415), so the assertion
+        // reads the exit and its die reason rather than `Effect.flip`.
+        const exit = yield* Effect.exit(
+          initializeDefaultSession({ transcriptMode }),
+        );
+        assert(Exit.isFailure(exit));
+        const defect = exit.cause.reasons.find(Cause.isDieReason)?.defect;
+        expect(defect).toBeInstanceOf(Error);
+        expect((defect as Error).message).toContain('already been initialized');
+      }).pipe(Effect.ensuring(teardownDefaultSession()));
+    }),
+  );
 
   it('throws from the sanctioned fallback in a no-default process', async () => {
     // Explicit-session migration ratchet (#7694). currentSession() is the
@@ -225,18 +236,21 @@ describe('default session lifecycle', () => {
       const first = yield* initializeDefaultSession({
         transcriptMode: { kind: 'ephemeral', reason: 'first activation' },
       });
-      yield* Effect.promise(() =>
-        expect(
-          Effect.runPromise(
-            initializeDefaultSession({
-              transcriptMode: {
-                kind: 'ephemeral',
-                reason: 'replacement attempt',
-              },
-            }),
-          ),
-        ).rejects.toThrow('already been initialized'),
+      // `initializeDefaultSession` carries no error channel and a second
+      // initialization dies (SessionHandle.ts:1403-1415), so the assertion
+      // reads the exit and its die reason rather than `Effect.flip`.
+      const exit = yield* Effect.exit(
+        initializeDefaultSession({
+          transcriptMode: {
+            kind: 'ephemeral',
+            reason: 'replacement attempt',
+          },
+        }),
       );
+      assert(Exit.isFailure(exit));
+      const defect = exit.cause.reasons.find(Cause.isDieReason)?.defect;
+      expect(defect).toBeInstanceOf(Error);
+      expect((defect as Error).message).toContain('already been initialized');
 
       const disposeSpy = vi.spyOn(first, 'dispose');
 
