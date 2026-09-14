@@ -135,7 +135,9 @@ const BOUNDARY_HOST_ROOTS = [
  * are VS Code-free zones (CLAUDE.md, "Separation of concerns"), so R1 does not
  * admit a run there. Without this the whole source root reads as a boundary
  * and their runs drop out of the row entirely -- which is how five tracked
- * sites in progressView/frontend/sessionTransport.ts went silently untracked.
+ * sites in progressView/frontend/sessionTransport.ts once went silently
+ * untracked. That file is now admitted deliberately, by name, in
+ * BOUNDARY_RUNTIME_ENTRIES below; the directory exclusion still fences the rest.
  */
 const BOUNDARY_HOST_EXCLUSIONS = [
   'packages/extension/src/webview/frontend/',
@@ -143,10 +145,34 @@ const BOUNDARY_HOST_EXCLUSIONS = [
   'packages/extension/src/settingsView/frontend/',
 ];
 
+/**
+ * Runtime entries outside the host roots, admitted by name and each with its
+ * reason (owner ruling 2026-09-14). A webview owns its own `ManagedRuntime`, so
+ * the module that installs and disposes that runtime is the webview's
+ * composition root, and its runs are that root's, the way `extension.ts` runs
+ * on the host runtime. The list is closed: every other file under the
+ * exclusions above stays fenced, and adding a file here is a ruling, not a
+ * refactor. An entry must hold its runtime as a local or take it as a
+ * parameter; one that reaches a process global does not qualify.
+ */
+const BOUNDARY_RUNTIME_ENTRIES = new Map([
+  [
+    'packages/extension/src/progressView/frontend/sessionTransport.ts',
+    "the progress webview's composition root: it installs the webview runtime (installWebviewRuntime) and disposes it, and every run in it is on that local",
+  ],
+  [
+    'src/shared/signals.ts',
+    'toSignal, the one meeting point between Effect and the components (PRD one-fold-three-renderers 7.5): it runs on the runtime its caller passes and reads no global',
+  ],
+]);
+
 const BOUNDARY_PATHS_TEXT =
-  'packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, or packages/agent/src/**';
+  'packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a named runtime entry (' +
+  [...BOUNDARY_RUNTIME_ENTRIES.keys()].join(', ') +
+  ')';
 
 function isBoundaryPath(file) {
+  if (BOUNDARY_RUNTIME_ENTRIES.has(file)) return true;
   if (BOUNDARY_HOST_EXCLUSIONS.some((root) => file.startsWith(root))) {
     return false;
   }
@@ -192,7 +218,7 @@ const ROWS = [
   })),
   {
     id: ROW_RUN_BOUNDARY,
-    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
+    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli, plus the named webview runtime entries: sessionTransport.ts, signals.ts — owner ruling 2026-09-14), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
   },
   {
     id: ROW_CATCH,
@@ -209,7 +235,7 @@ const SEMANTICS =
   `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the three AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
   "'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, or packages/agent/src/**; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
+  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a named webview runtime entry — packages/extension/src/progressView/frontend/sessionTransport.ts, src/shared/signals.ts; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
   'The PR that zeroes a row deletes the row from the baseline; SUPERSEDED_PACKAGES and the other survey lists stay, so a later site fails as a new file.';
@@ -720,7 +746,12 @@ function selfTestBoundary() {
     ['packages/trace-viewer/src/main.ts', false],
     // A webview frontend sits under a host package but is a VS Code-free
     // zone, not a host entry, so R1 does not admit a run there.
-    ['packages/extension/src/progressView/frontend/sessionTransport.ts', false],
+    // The webview's composition root is admitted by name (owner ruling
+    // 2026-09-14); its siblings in the same frontend stay fenced.
+    ['packages/extension/src/progressView/frontend/sessionTransport.ts', true],
+    ['packages/extension/src/progressView/frontend/ProgressApp.ts', false],
+    ['src/shared/signals.ts', true],
+    ['src/shared/session/sessionFold.ts', false],
     ['packages/extension/src/webview/frontend/app.ts', false],
     ['packages/extension/src/settingsView/frontend/settings.ts', false],
     // The extension-host frontend (no view-name segment) is host code and
