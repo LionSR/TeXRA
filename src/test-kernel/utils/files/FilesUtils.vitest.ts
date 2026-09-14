@@ -1,5 +1,5 @@
 // Suites for src/utils/files (baseFS predicates, workspaceFS, mime,
-// absoluteFS, relativeFS JSON, pasted images).
+// absoluteFS, relativeFS JSON, pasted images, rooted filesystem confinement).
 
 import * as assert from 'node:assert';
 import * as path from 'node:path';
@@ -14,17 +14,21 @@ import {
   it,
   vi,
 } from 'vitest';
+import { it as effectIt } from '@effect/vitest';
+import { Cause, Effect, Exit, FileSystem, Path } from 'effect';
 import { z } from 'zod';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { getMimeType } from '@utils/files/mimeUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { RelativeFS } from '@utils/files/relativeFS';
 import { pastedImageFileName } from '@utils/files/pastedImageUtils';
+import { rootedFileSystem } from '@utils/files/rootedFileSystem';
 
 // ---------------------------------------------------------------------------
 // BaseFS stat predicates
@@ -190,4 +194,51 @@ describe('pastedImageFileName', () => {
       'Invalid pasted image filename.',
     );
   });
+});
+
+// ---------------------------------------------------------------------------
+// Rooted filesystem confinement
+// ---------------------------------------------------------------------------
+
+describe('rootedFileSystem confinement', () => {
+  const escapes: ReadonlyArray<
+    readonly [
+      string,
+      (
+        view: ReturnType<typeof rootedFileSystem>,
+      ) => Effect.Effect<unknown, unknown>,
+    ]
+  > = [
+    ['an escaped `..` glob segment', (view) => view.glob('\\.\\./outside/**')],
+    [
+      'a bracket-class `..` glob segment',
+      (view) => view.glob('[.][.]/outside/**'),
+    ],
+    [
+      'a `../`-prefixed temp name',
+      (view) => view.makeTempFile({ prefix: '../escape-' }),
+    ],
+  ];
+
+  effectIt.live.each(escapes)('rejects %s with BadArgument', ([, operate]) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      // The root sits alone in a scoped parent, so anything an escape
+      // created beside it shows up there and is removed with the parent.
+      const parent = yield* fs.makeTempDirectoryScoped({
+        prefix: 'texra-rooted-fs-',
+      });
+      const root = path.join(parent, 'root');
+      yield* fs.makeDirectory(root);
+      const exit = yield* Effect.exit(
+        operate(rootedFileSystem(root, fs, path)),
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(
+        Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined,
+      ).toMatchObject({ reason: { _tag: 'BadArgument' } });
+      expect(yield* fs.readDirectory(parent)).toEqual(['root']);
+    }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer)),
+  );
 });

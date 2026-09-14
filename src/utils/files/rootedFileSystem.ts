@@ -15,8 +15,12 @@
  * underlying filesystem reports (`SystemError`, matched by `reason._tag`).
  */
 
+// Node imports
+import { platform } from 'node:process';
+
 // Third-party imports
 import { Effect, FileSystem, Path, PlatformError, Stream } from 'effect';
+import { Glob } from 'glob';
 
 // Local imports
 import {
@@ -113,86 +117,73 @@ function resolverFor(root: string | undefined, path: Path.Path) {
     });
 }
 
-/** More brace alternatives than this is a pattern no caller writes. */
-const MAX_GLOB_ALTERNATIVES = 256;
+/**
+ * The options Node's `fs.glob` compiles a pattern with (`createMatcher` in
+ * `lib/internal/fs/glob.js`). Effect's Node `FileSystem.glob` delegates to
+ * `fs.glob`, whose matcher is its bundled minimatch; `glob`'s `Glob`
+ * compiles with the same minimatch release line, so given these options it
+ * produces the segment matchers the walker will run.
+ */
+const NODE_GLOB_MATCHER_OPTIONS = {
+  nocase: platform === 'win32' || platform === 'darwin',
+  windowsPathsNoEscape: true,
+  nonegate: true,
+  nocomment: true,
+  optimizationLevel: 2,
+  platform,
+  nocaseMagicOnly: true,
+} as const;
 
-/** Split a brace body on its top-level commas, honouring escapes and
- *  nested braces. */
-function topLevelAlternatives(body: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < body.length; i++) {
-    const char = body[i];
-    if (char === '\\') i++;
-    else if (char === '{') depth++;
-    else if (char === '}') depth--;
-    else if (char === ',' && depth === 0) {
-      parts.push(body.slice(start, i));
-      start = i + 1;
-    }
-  }
-  parts.push(body.slice(start));
-  return parts;
-}
+type CompiledGlobSegment = Glob<
+  typeof NODE_GLOB_MATCHER_OPTIONS
+>['patterns'][number];
 
 /**
- * Every brace alternative of `pattern`, so `{a,../b}/**` is checked as both
- * `a/**` and `../b/**`. A group without a top-level comma (`{a}`, a range
- * like `{1..3}`) is left as written; the scan continues past it. `undefined`
- * when the expansion exceeds {@link MAX_GLOB_ALTERNATIVES}.
+ * The first compiled alternative of `pattern` that can leave `root`, or
+ * `undefined` when none can. The rule is the engine's own: compile the
+ * pattern as the walker does — brace expansion, escapes, bracket classes,
+ * extglobs and separators all resolved by minimatch — then reject an
+ * alternative that is absolute, or that has a segment whose matcher accepts
+ * the literal `..`. Nothing is recognised by spelling, so `\.\./x`,
+ * `[.][.]/x`, `{a,../b}` and `@(..|a)` all fall to the same check.
  */
-function braceAlternatives(pattern: string): string[] | undefined {
-  let depth = 0;
-  let open = -1;
-  for (let i = 0; i < pattern.length; i++) {
-    const char = pattern[i];
-    if (char === '\\') {
-      i++;
-    } else if (char === '{') {
-      if (depth++ === 0) open = i;
-    } else if (char === '}' && depth > 0 && --depth === 0) {
-      const parts = topLevelAlternatives(pattern.slice(open + 1, i));
-      if (parts.length > 1) {
-        const expanded: string[] = [];
-        for (const part of parts) {
-          const rest = braceAlternatives(
-            pattern.slice(0, open) + part + pattern.slice(i + 1),
-          );
-          if (rest === undefined) return undefined;
-          expanded.push(...rest);
-          if (expanded.length > MAX_GLOB_ALTERNATIVES) return undefined;
-        }
-        return expanded;
+function globEscape(pattern: string, root: string): string | undefined {
+  const { patterns } = new Glob(pattern, {
+    ...NODE_GLOB_MATCHER_OPTIONS,
+    cwd: root,
+  });
+  for (const alternative of patterns) {
+    if (alternative.isAbsolute()) return alternative.globString();
+    for (
+      let segment: CompiledGlobSegment | null = alternative;
+      segment !== null;
+      segment = segment.rest()
+    ) {
+      const matcher = segment.pattern();
+      if (
+        matcher === '..' ||
+        (matcher instanceof RegExp && matcher.test('..'))
+      ) {
+        return alternative.globString();
       }
     }
   }
-  return [pattern];
+  return undefined;
 }
 
 /**
- * The alternative of a glob pattern that names a place outside the root, or
- * `undefined` when none does: an absolute alternative (POSIX, UNC or drive
- * letter), or one with a `..` segment — including a `..` inside an extglob
- * group such as `@(..|x)`. Separators are both `/` and `\`, which on POSIX
- * also rejects the rare pattern that escapes a dot. A pattern too large to
- * expand is reported as escaping rather than delegated unchecked.
+ * The first temp-name fragment that is not a plain filename fragment, or
+ * `undefined`: the platform joins `prefix`/`suffix` onto the directory, so a
+ * separator, `.`/`..` or a NUL would place the entry somewhere else.
  */
-function globEscape(pattern: string, path: Path.Path): string | undefined {
-  const alternatives = braceAlternatives(pattern);
-  if (alternatives === undefined) return pattern;
-  return alternatives.find(
-    (alternative) =>
-      path.isAbsolute(alternative) ||
-      /^[A-Za-z]:/.test(alternative) ||
-      alternative.startsWith('\\') ||
-      alternative
-        .split(/[\\/]/)
-        .some((segment) =>
-          segment
-            .split(/[()|]/)
-            .some((token) => token.replace(/^[?*+@!]/, '') === '..'),
-        ),
+function tempNameEscape(options: {
+  readonly prefix?: string | undefined;
+  readonly suffix?: string | undefined;
+}): string | undefined {
+  return [options.prefix, options.suffix].find(
+    (fragment) =>
+      fragment !== undefined &&
+      (/[/\\\0]/.test(fragment) || fragment === '.' || fragment === '..'),
   );
 }
 
@@ -230,6 +221,39 @@ export function rootedFileSystem(
   /** A temp-path option set confined to the root. */
   const inRoot = (method: string, directory: string | undefined) =>
     at(method, directory ?? '.');
+  /**
+   * A temporary entry created under the root: `directory` confined, `prefix`
+   * and `suffix` accepted only as filename fragments, and the created path
+   * checked against the root once more before it is handed back.
+   */
+  const temp = <R>(
+    method: string,
+    options:
+      | {
+          readonly directory?: string | undefined;
+          readonly prefix?: string | undefined;
+          readonly suffix?: string | undefined;
+        }
+      | undefined,
+    create: (
+      directory: string,
+    ) => Effect.Effect<string, PlatformError.PlatformError, R>,
+  ) =>
+    Effect.gen(function* () {
+      const fragment = tempNameEscape(options ?? {});
+      if (fragment !== undefined) {
+        return yield* Effect.fail(
+          PlatformError.badArgument({
+            module: MODULE,
+            method,
+            description: `temp name fragment is not a file name: ${fragment}`,
+          }),
+        );
+      }
+      const directory = yield* inRoot(method, options?.directory);
+      const created = yield* create(directory);
+      return yield* at(method, created);
+    });
 
   const base = FileSystem.make({
     access: (target, options) =>
@@ -241,14 +265,23 @@ export function rootedFileSystem(
     copy: (from, to, options) =>
       onPair('copy', (a, b) => fs.copy(a, b, options))(from, to),
     copyFile: (from, to) => onPair('copyFile', fs.copyFile)(from, to),
-    // Confined lexically, like every other method: the pattern may not name
-    // an absolute path or a `..` segment in any brace or extglob alternative,
-    // and every match must still resolve under the root. A symlinked
-    // directory inside the root is followed, as a read through it would be.
+    // Confined like every other method: no compiled alternative of the
+    // pattern may be absolute or have a segment matching `..`, and every
+    // match must still resolve under the root. A symlinked directory inside
+    // the root is followed, as a read through it would be.
     glob: (pattern, options) =>
       Effect.gen(function* () {
         const resolvedRoot = yield* inRoot('glob', options?.root);
-        const escaping = globEscape(pattern, path);
+        const escaping = yield* Effect.try({
+          try: () => globEscape(pattern, resolvedRoot),
+          catch: (cause) =>
+            PlatformError.badArgument({
+              module: MODULE,
+              method: 'glob',
+              description: `pattern does not compile: ${pattern}`,
+              cause,
+            }),
+        });
         if (escaping !== undefined) {
           return yield* Effect.fail(
             PlatformError.badArgument({
@@ -275,23 +308,20 @@ export function rootedFileSystem(
         target,
       ),
     makeTempDirectory: (options) =>
-      Effect.flatMap(
-        inRoot('makeTempDirectory', options?.directory),
-        (directory) => fs.makeTempDirectory({ ...options, directory }),
+      temp('makeTempDirectory', options, (directory) =>
+        fs.makeTempDirectory({ ...options, directory }),
       ),
     makeTempDirectoryScoped: (options) =>
-      Effect.flatMap(
-        inRoot('makeTempDirectoryScoped', options?.directory),
-        (directory) => fs.makeTempDirectoryScoped({ ...options, directory }),
+      temp('makeTempDirectoryScoped', options, (directory) =>
+        fs.makeTempDirectoryScoped({ ...options, directory }),
       ),
     makeTempFile: (options) =>
-      Effect.flatMap(inRoot('makeTempFile', options?.directory), (directory) =>
+      temp('makeTempFile', options, (directory) =>
         fs.makeTempFile({ ...options, directory }),
       ),
     makeTempFileScoped: (options) =>
-      Effect.flatMap(
-        inRoot('makeTempFileScoped', options?.directory),
-        (directory) => fs.makeTempFileScoped({ ...options, directory }),
+      temp('makeTempFileScoped', options, (directory) =>
+        fs.makeTempFileScoped({ ...options, directory }),
       ),
     open: (target, options) =>
       on('open', (resolved) => fs.open(resolved, options))(target),
