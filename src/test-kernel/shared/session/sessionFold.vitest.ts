@@ -884,6 +884,43 @@ describe('sessionFold', () => {
     expect(root.status).toBe(RUN_PHASE.COMPLETED);
     expect(root.childIds).toStrictEqual([CHILD]);
     expect(evicted.policy.get(ROOT)).toStrictEqual(ROOT_POLICY);
+
+    // A subscription can name a stream before its `run.start` commits: the
+    // reader reports that aggregate as absent, having no sequence row for
+    // it, and the tier must survive that reconciliation or the run's first
+    // rows fold into nothing.
+    const early = new Log();
+    const id = qualifyAggregateId('run', PROCESS);
+    const start = early.emit(PROCESS, 5000, {
+      type: 'run.start',
+      identity: { kind: 'process', tool: 'bash' },
+      userFollowUpSupport: 'unsupported',
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      parent: null,
+    });
+    const row = early.emit(PROCESS, 5010, {
+      type: 'log',
+      level: 'info',
+      messageType: MESSAGE_TYPES.DEFAULT,
+      message: 'the first row\n',
+    });
+    const started = foldAll([
+      subscribe(PROCESS),
+      {
+        _tag: 'drained',
+        cursor: 0,
+        existence: {
+          checkedAggregateIds: [id],
+          removedAggregateIds: [id],
+          claims: [],
+        },
+      },
+      tail(start),
+      tail(row),
+    ]);
+    expect(started.folded.get(id)).toBe(row.seq);
+    expect(runView(started, PROCESS).transcript.rows).toHaveLength(1);
   });
 
   it('re-roots the children of a tombstoned run, keeps the tombstone final, and closes the listing at the marker', () => {

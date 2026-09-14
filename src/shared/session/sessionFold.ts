@@ -249,7 +249,12 @@ function reconcileExistence(
   }
   for (const id of existence.removedAggregateIds) {
     claims.delete(id);
-    if (view.folded.has(id)) writableMap(view, 'folded').delete(id);
+    // The transcript tier belongs to the subscription set alone (5.2,
+    // "Residency"): `foldSubscriptions` opens the `folded` entry and closes
+    // it, and the tombstone below ends it with its run. A reader reports an
+    // aggregate with no sequence row as absent whether it was removed or has
+    // not started yet, so ending the tier here would drop the rows of a
+    // stream a subscription named before its `run.start` committed.
     const target = aggregateTarget(id);
     if (target.kind === 'run') foldRunRemoved(view, target.id, deferred);
     if (
