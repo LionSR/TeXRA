@@ -79,6 +79,7 @@ import { AgentRun } from './run/AgentRun';
 import {
   backgroundDelivery,
   bindModel,
+  releaseBindingUploads,
   type BoundModel,
 } from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
@@ -981,6 +982,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               temperature: run.setting.temperature,
               inScope: run.inScope,
             }).pipe(Scope.provide(run.scope));
+            yield* releaseBindingUploads(current.model, current.modelId);
             logger.debug('Refreshed model binding before manual retry');
             return next;
           }),

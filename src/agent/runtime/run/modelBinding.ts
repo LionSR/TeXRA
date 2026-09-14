@@ -800,6 +800,28 @@ function withReasoningLevelOverride(
 }
 
 /**
+ * Delete every file this binding uploaded. Idempotent: a second call finds
+ * nothing. A delete the provider refuses or leaves unanswered is logged and
+ * left to the upload's own expiry; it never fails.
+ */
+export function releaseBindingUploads(
+  model: Model,
+  modelId: string,
+): Effect.Effect<void> {
+  const release = model.releaseUploads;
+  if (release === undefined) return Effect.void;
+  return release().pipe(
+    Effect.flatMap((unreleased) =>
+      unreleased.length === 0
+        ? Effect.void
+        : Effect.logWarning(
+            `Could not delete ${unreleased.length} uploaded file(s) when the ${modelId} binding closed; the provider expires them on its own.`,
+          ).pipe(Effect.annotateLogs({ unreleased })),
+    ),
+  );
+}
+
+/**
  * Bind one model for a run. The route is `resolveRouteCredential`'s
  * decision, read through the same resolver every other route reader uses;
  * the persisted compatibility key of a resumed conversation wins over
@@ -962,23 +984,11 @@ export const bindModel = Effect.fn('bindModel')(function* (
           try: () => constructModel(configuration, credential),
           catch: ensureError,
         });
-  // What the binding uploaded lives only in the model's memory, so it is
-  // deleted when the binding's scope closes: after the run settles, on every
-  // exit. A delete the provider refuses or leaves unanswered is logged and
-  // left to the upload's own expiry; it never fails the close.
-  const releaseUploads = model.releaseUploads;
-  if (releaseUploads !== undefined) {
-    yield* Effect.addFinalizer(() =>
-      releaseUploads().pipe(
-        Effect.flatMap((unreleased) =>
-          unreleased.length === 0
-            ? Effect.void
-            : Effect.logWarning(
-                `Could not delete ${unreleased.length} uploaded file(s) when the ${config.name} binding closed; the provider expires them on its own.`,
-              ).pipe(Effect.annotateLogs({ unreleased })),
-        ),
-      ),
-    );
+  // Uploads live only in this model's memory. They are deleted when a
+  // switch or retry replaces the binding, and again when the run's scope
+  // closes (a second release is empty).
+  if (model.releaseUploads !== undefined) {
+    yield* Effect.addFinalizer(() => releaseBindingUploads(model, config.name));
   }
   const origin: ModelOrigin = {
     protocol: configuration.protocol,
