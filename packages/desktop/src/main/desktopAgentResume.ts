@@ -46,6 +46,12 @@ export class DesktopProcessResumeOwner {
        * own local, not over a process-wide lookup.
        */
       readonly runtime: () => ProcessRuntime;
+      /**
+       * After an awaited resume launch settles. The composition root
+       * recomputes the onboarding funnel here so a first run that completes
+       * via resume still clears the setup card.
+       */
+      readonly onLaunchSettled?: () => void;
     },
   ) {}
 
@@ -93,46 +99,53 @@ export class DesktopProcessResumeOwner {
     if (isCancellationRequested()) return false;
     // Taken once here: the generator below has its own `this`.
     const runtime = this.options.runtime();
-    const result = await runtime.runPromise(
-      Effect.exit(
-        Effect.gen(function* () {
-          const { getDefaultUnavailableToolNames } = yield* Effect.tryPromise({
-            try: () => import('@tools/registry'),
-            catch: ensureError,
-          });
-          const exists =
-            (yield* session.transcripts.readEvents(runId)).length > 0;
-          if (!exists) return false;
-          return yield* resumeRunWithRefusalNotice(runId, {
-            session,
-            recovery,
-            runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
-            isCancellationRequested,
-            executeWorkflow: (config, id, modelCompatibilityKey) =>
-              launchDesktopAgent(
-                { kind: 'resume', config, runId: id },
-                { session, runtime },
-                { modelCompatibilityKey },
-              ),
-          });
-        }),
-      ),
-    );
-    if (Exit.isSuccess(result)) return result.value;
-    const error = Cause.squash(result.cause);
-    if (isCancellationRequested()) return false;
-    this.logger.error(`Failed to resume desktop run ${runId}`, {
-      data: toLogData(error),
-    });
-    const primaryError = primaryAgentError(error);
-    presentAgentFailure(
-      session.interactions,
-      {
-        kind: classifyAgentError(primaryError),
-        message: `Resume failed: ${toErrorMessage(primaryError)}`,
-      },
-      { replayWhenAttached: true },
-    );
-    return false;
+    try {
+      const result = await runtime.runPromise(
+        Effect.exit(
+          Effect.gen(function* () {
+            const { getDefaultUnavailableToolNames } = yield* Effect.tryPromise(
+              {
+                try: () => import('@tools/registry'),
+                catch: ensureError,
+              },
+            );
+            const exists =
+              (yield* session.transcripts.readEvents(runId)).length > 0;
+            if (!exists) return false;
+            return yield* resumeRunWithRefusalNotice(runId, {
+              session,
+              recovery,
+              runtimeUnavailableTools:
+                getDefaultUnavailableToolNames('desktop'),
+              isCancellationRequested,
+              executeWorkflow: (config, id, modelCompatibilityKey) =>
+                launchDesktopAgent(
+                  { kind: 'resume', config, runId: id },
+                  { session, runtime },
+                  { modelCompatibilityKey },
+                ),
+            });
+          }),
+        ),
+      );
+      if (Exit.isSuccess(result)) return result.value;
+      const error = Cause.squash(result.cause);
+      if (isCancellationRequested()) return false;
+      this.logger.error(`Failed to resume desktop run ${runId}`, {
+        data: toLogData(error),
+      });
+      const primaryError = primaryAgentError(error);
+      presentAgentFailure(
+        session.interactions,
+        {
+          kind: classifyAgentError(primaryError),
+          message: `Resume failed: ${toErrorMessage(primaryError)}`,
+        },
+        { replayWhenAttached: true },
+      );
+      return false;
+    } finally {
+      this.options.onLaunchSettled?.();
+    }
   }
 }

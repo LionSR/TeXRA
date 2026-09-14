@@ -173,6 +173,9 @@ const credentialLog = createLog('Setup Credentials');
 const DESKTOP_RECENT_COMMIT_LIMIT = 20;
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
+/** Window-owned post-launch funnel refresh. The process resume owner reads
+ *  this; createWindow assigns it when onboarding IPC exists. */
+const afterLaunchFunnelRefresh: { current?: () => void } = {};
 let continueQuitAfterWindowClose: (() => void) | undefined;
 // Temp directories holding the `.diff` patch files written by the
 // external-editor fallback of every window's diff host. The OS editor may
@@ -420,6 +423,11 @@ function createWindow(options: {
   };
   const reportBackgroundError = (error: unknown) => {
     console.error('Desktop background operation failed:', error);
+  };
+  const refreshFunnelAfterLaunch = (): void => {
+    const refresh = onboardingIpcRef.current?.refreshOnboardingFunnel();
+    if (!refresh) return;
+    refresh.catch(reportAsyncError);
   };
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
@@ -872,9 +880,7 @@ function createWindow(options: {
       // Recompute the onboarding funnel when a launch settles so a first
       // successful run leaves the setup card without a restart. The awaited
       // runPromise includes AgentRunLifecycle's firstRunDone write.
-      onRunCompleted: () => {
-        void onboardingIpcRef.current?.refreshOnboardingFunnel();
-      },
+      onRunCompleted: refreshFunnelAfterLaunch,
     });
     const hostRequests = createDesktopHostRequests({
       runtime,
@@ -1382,6 +1388,7 @@ function createWindow(options: {
     },
   );
   onboardingIpcRef.current = onboardingIpc;
+  afterLaunchFunnelRefresh.current = refreshFunnelAfterLaunch;
   // The funnel is host state every open project's snapshot carries (8.1).
   windowResources.add(
     onboardingIpc.onFunnelChange((state) => {
@@ -1676,6 +1683,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         sessions: () =>
           [projects.fallback(), ...projects.list()].map((p) => p.session),
         runtime: () => runtime,
+        onLaunchSettled: () => afterLaunchFunnelRefresh.current?.(),
       });
       const platformInit = await initializeElectronPlatform(
         desktopMainDir,
