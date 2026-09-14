@@ -219,7 +219,20 @@ export const runAgent = Effect.fn('runAgent')(function* (
           const restoredOutcome = shouldRegister
             ? RUN_OUTCOME.FAILED
             : priorEnd?.outcome;
-          if (!lifecycleStarted && restoredOutcome !== undefined) {
+          // A resume restores its snapshot only while the snapshot is still
+          // the run's terminal fact: a generation that admitted itself beside
+          // this one (both passed the duplicate check before either awaited)
+          // may have written a newer end, which this failure must not undo.
+          const snapshotHolds =
+            shouldRegister ||
+            JSON.stringify(
+              yield* getRunRecords(runSession, runId).readRunEnd(),
+            ) === JSON.stringify(priorEnd);
+          if (
+            !lifecycleStarted &&
+            restoredOutcome !== undefined &&
+            snapshotHolds
+          ) {
             const finalization = yield* Effect.exit(
               finalizeRun(runSession, {
                 runId,

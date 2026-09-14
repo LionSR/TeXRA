@@ -401,7 +401,8 @@ describe('runAgent run ownership', () => {
     () =>
       Effect.gen(function* () {
         const launchError = new Error('resume launch failed');
-        mocks.readRunEnd.mockReturnValueOnce({
+        // Read twice: the snapshot, then the revalidation before it is restored.
+        mocks.readRunEnd.mockReturnValue({
           outcome: RUN_OUTCOME.CANCELLED,
         });
         mocks.executeAgent.mockRejectedValueOnce(launchError);
