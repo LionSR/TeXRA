@@ -224,7 +224,7 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  // Memory lives under this paper's storage root: the paths the OS opens are
+  // Memory lives under this project's storage root: the paths the OS opens are
   // joined onto that root as data, and the folder is created through the
   // session's storage view.
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
