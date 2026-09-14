@@ -26,6 +26,7 @@ import {
 import type { RunId, WorkflowScriptFiles } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
@@ -1173,6 +1174,65 @@ return null`;
         expect(mocks.createChildRun).not.toHaveBeenCalled();
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
       }),
+  );
+
+  it.effect(
+    'reports already-running when a first launch loses the birth-append claim race',
+    () =>
+      Effect.gen(function* () {
+        const runId = runIdFor('tool-test');
+        // A first launch of this id has no prior row to acquire the claim
+        // from, so the claim rides the birth append and a foreign winner
+        // refuses that append as `DatabaseNotOwner` rather than as a refused
+        // claim acquisition.
+        mocks.registerRun.mockReturnValueOnce(
+          Effect.fail(
+            new DatabaseNotOwner({
+              aggregateId: aggregateId('run', runId),
+              ownerId: JSON.stringify(['other-host', 2, '1']),
+              closed: false,
+            }),
+          ),
+        );
+
+        const result = yield* callTool();
+
+        expect(result).toMatchObject({
+          status: 'executed',
+          summary: "Workflow script 'tool-test' is already running",
+        });
+        expect(result.output).toContain(`Run ID: ${runId}`);
+        expect(mocks.createChildRun).not.toHaveBeenCalled();
+        expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect('fails the launch when the deterministic id is a tombstone', () =>
+    Effect.gen(function* () {
+      // A closed aggregate reads as absent, so its birth append refuses the
+      // same way. That id can never start again, so it stays a failure: no
+      // live run exists for the model to wait on.
+      mocks.registerRun.mockReturnValueOnce(
+        Effect.fail(
+          new DatabaseNotOwner({
+            aggregateId: aggregateId('run', runIdFor('tool-test')),
+            ownerId: null,
+            closed: true,
+          }),
+        ),
+      );
+
+      const result = yield* callTool();
+
+      expect(result).toMatchObject({
+        status: 'error',
+        error: expect.stringContaining(
+          "Failed to launch workflow script 'tool-test'",
+        ),
+      });
+      expect(mocks.createChildRun).not.toHaveBeenCalled();
+      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+    }),
   );
 
   it.effect(
