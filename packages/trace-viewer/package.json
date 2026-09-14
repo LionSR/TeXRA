@@ -9,7 +9,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@^7.0.2",

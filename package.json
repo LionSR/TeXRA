@@ -94,22 +94,22 @@
     "ws": "8.21.3"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.263",
-    "@anthropic-ai/sdk": "^0.124.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.268",
+    "@anthropic-ai/sdk": "^0.125.0",
     "@awesome.me/webawesome": "^3.12.0",
     "@cantoo/pdf-lib": "^2.9.2",
     "@date-fns/tz": "^1.5.0",
     "@effect/platform-node": "4.0.0-rc.115",
     "@effect/sql-sqlite-node": "4.0.0-rc.115",
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
-    "@google/genai": "^2.21.0",
+    "@google/genai": "^2.22.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@lit-labs/signals": "^0.3.0",
     "@octokit/request": "^10.0.16",
     "@octokit/request-error": "^7.1.2",
-    "@openai/codex-sdk": "^0.153.4",
-    "@openrouter/sdk": "^1.2.108",
+    "@openai/codex-sdk": "^0.154.0",
+    "@openrouter/sdk": "^1.2.119",
     "@supabase/supabase-js": "2.116.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
@@ -144,7 +144,7 @@
     "lit": "^3.3.3",
     "llm-zoo": "^1.36.0",
     "lru-cache": "^11.5.2",
-    "markdown-it": "^15.0.1",
+    "markdown-it": "^15.0.2",
     "markdown-it-texmath": "^1.0.0",
     "mime-types": "^3.0.1",
     "monaco-editor": "^0.56.0",
@@ -178,6 +178,6 @@
     "which": "^5.0.0",
     "write-file-atomic": "^7.0.1",
     "yaml": "^2.9.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.2"
   }
 }
