@@ -102,7 +102,7 @@ describe('run-scoped tool resolution', () => {
           Effect.provide(
             Layer.mergeAll(
               observingInvokerLayer(seen),
-              followUpsLayer(),
+              followUpsLayer,
               nativeToolTestLayer(),
             ).pipe(
               Layer.provideMerge(

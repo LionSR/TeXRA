@@ -109,10 +109,11 @@ export function ConversationRegion({
     activeRun?.category === AgentCategory.ToolUse ? activeRun.todos : [];
   const activePlan =
     activeRun?.category === AgentCategory.ToolUse ? activeRun.plan : null;
-  const queuedFollowUpMessages =
+  const queuedFollowUpMessages = (
     activeRunId === undefined
       ? []
-      : (view.queuedFollowUps.get(activeRunId) ?? []);
+      : (view.queuedFollowUps.get(activeRunId) ?? [])
+  ).map((followUp) => followUp.text);
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
   // Round-border chrome is the default input height minus its single content

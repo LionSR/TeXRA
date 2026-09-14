@@ -215,6 +215,8 @@ const freshState = (): RunState => ({
   pendingResponse: null,
   pendingIntents: {},
   requests: {},
+  followUps: [],
+  followUpIds: new Set(),
   usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
   flow: null,
 });

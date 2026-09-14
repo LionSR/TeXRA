@@ -65,7 +65,7 @@ vi.mock('@agent/runtime/ModelInvoker', async () => {
 
 vi.mock('@agent/runtime/FollowUps', async () => {
   const { Layer } = await import('effect');
-  return { followUpsLayer: () => Layer.empty };
+  return { followUpsLayer: Layer.empty };
 });
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
@@ -102,7 +102,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 /** The part of `ToolUseStart` this suite drives. */
 interface InterruptibleLoopStart {
-  takePendingFollowUps?: () => readonly unknown[];
   attachment: {
     attach: (flowContext: TestFlowContext) => void;
     detach: (flowContext: TestFlowContext) => void;
@@ -335,7 +334,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
                 },
               };
               start.attachment.attach(flowContext);
-              start.takePendingFollowUps?.();
               if (!interrupted) mocks.invokeModelOrTool();
               start.attachment.detach(flowContext);
               return {
@@ -354,10 +352,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
 
         const result = yield* resumeToolUseFromResumeData(snapshot, {
           tools,
-          takePendingFollowUps: () => {
-            order.push('take');
-            return [];
-          },
           isCancellationRequested: () => {
             order.push('query');
             expect(attachedContext).toBeDefined();
@@ -381,7 +375,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
           'query',
           'cancel',
           'interrupt',
-          'take',
           'detach',
         ]);
       }),

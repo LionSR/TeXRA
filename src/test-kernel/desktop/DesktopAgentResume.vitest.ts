@@ -30,6 +30,7 @@ import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   createProcessSession,
   publishTestRunStart,
+  queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -284,7 +285,13 @@ describe('desktop process resume owner', () => {
     );
     const harness = await createResumeHarness();
     const flow = harness.session.followUps.claimLive(runId, 'flow')!;
-    harness.session.followUps.queue(flow).enqueue({ text: 'keep this queued' });
+    await Effect.runPromise(
+      harness.session.followUps.submit(
+        runId,
+        { text: 'keep this queued' },
+        'live_owner',
+      ),
+    );
     harness.session.followUps.release(flow, 'recoverable');
     resumeToolUseFromResumeData.mockImplementation((_resume, options) =>
       Effect.tryPromise({
@@ -305,9 +312,9 @@ describe('desktop process resume owner', () => {
       presenter,
       'Resume failed: tool-use lifecycle failed',
     );
-    expect(harness.session.followUps.getAll(runId)).toEqual([
-      'keep this queued',
-    ]);
+    expect(
+      await Effect.runPromise(queuedFollowUps(harness.session, runId)),
+    ).toMatchObject([{ text: 'keep this queued' }]);
   });
 
   it('does not duplicate a terminal resume failure presentation', async () => {

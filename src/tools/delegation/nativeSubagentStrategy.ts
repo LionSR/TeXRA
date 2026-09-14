@@ -318,7 +318,9 @@ export function createNativeSubagentStrategy(
         }),
       ),
 
-    runTurn: (followUps, ports, signal) =>
+    // The resumed flow takes and consumes the queued batch itself, from the
+    // queue this child's loop owns; the loop hands a native child none.
+    runTurn: (_followUps, ports, signal) =>
       runNative(ports, signal, (onRun) =>
         Effect.gen(function* () {
           const runId = runHandle?.runId;
@@ -351,28 +353,11 @@ export function createNativeSubagentStrategy(
               ),
             );
 
-          // childRunLoop already consumed this batch from the stream queue. A
-          // queued-resume wrapper would append it to the run's `FollowUps`,
-          // which is backed by that same queue; the next WAITING result would
-          // therefore feed the identical batch back into this method forever.
-          // Hand it directly to the persisted WAITING cursor instead. Any item
-          // that races into the queue after this drain remains there for the
-          // loop's next turn.
           return yield* engine().resumeToolUseTurn(resume, {
             session: params.session,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
             runtimeUnavailableTools: params.runtimeUnavailableTools,
-            // The loop's queue never admits synthetic goal continuations for
-            // a subagent, but its batch type is shared with root flows. Keep
-            // the existing defensive downgrade rather than silently dropping
-            // a future synthetic item.
-            drainedFollowUps: followUps.map((item) => ({
-              text: item.text,
-              displayText: item.displayText,
-              mediaFiles: item.mediaFiles,
-              origin: item.origin === 'synthetic' ? 'user' : item.origin,
-            })),
             onProgress: (update) => ports.notify(update),
             onRunError: (err) => {
               lastErr = err;

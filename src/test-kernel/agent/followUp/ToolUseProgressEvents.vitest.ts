@@ -345,7 +345,7 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
     Effect.provide(
       Layer.mergeAll(
         invokerLayer(init.script, requests),
-        followUpsLayer(),
+        followUpsLayer,
         nativeToolTestLayer(),
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),

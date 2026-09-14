@@ -1143,8 +1143,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     if (start.resume) yield* ledger.acquire(runId);
     const loaded = yield* ledger.load(runId);
     let state: RunState;
-    if (loaded === null) {
-      if (start.resume) {
+    if (loaded === null || loaded.phase === null) {
+      if (start.resume && loaded === null) {
         return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
       }
       state = yield* openFresh();

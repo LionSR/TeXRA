@@ -105,6 +105,17 @@ export function publishTestRunStart(
   return runId;
 }
 
+/**
+ * The follow-ups a run's rows still queue, as every view lists them: the
+ * session's publications settled, then one cold read of the fold.
+ */
+export const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
+  Effect.gen(function* () {
+    yield* session.settlePublications();
+    const view = yield* session.readView([runId]);
+    return view.queuedFollowUps.get(runId) ?? [];
+  });
+
 /** Exercise the pure transcript projection with deterministic source coordinates. */
 export function attachTestTranscriptFold(
   trace: AgentTrace,

@@ -23,13 +23,13 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { runInSession } from '@agent/runtime/RunContext';
 import {
   emptyUsageStats,
   RUN_OUTCOME,
   sumUsageStats,
   ToolError,
+  type FollowUpContent,
   type RunId,
   type TokenUsageStats,
   type ToolResult,
@@ -599,7 +599,7 @@ export function startAgentCliLoop<TTurn>(
     /** The child run's spend across every turn this loop has run. */
     let cumulativeUsage: TokenUsageStats = emptyUsageStats();
     const runTurn = (
-      followUps: readonly FollowUpQueueBatchItem[],
+      followUps: readonly FollowUpContent[],
       ports: ChildRunPorts,
       signal: AbortSignal,
     ): Effect.Effect<TTurn, Error> =>

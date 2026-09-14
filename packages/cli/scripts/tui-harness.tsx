@@ -383,15 +383,6 @@ const harnessRuntimeSession = await effectRuntime().runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );
 harnessRuntimeSession.setApprovalPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
-const harnessFollowUpLease = defaultSession().followUps.claimLive(
-  HARNESS_RUN_ID,
-  'flow',
-)!;
-const harnessFollowUpQueue =
-  defaultSession().followUps.queue(harnessFollowUpLease);
-for (const followUp of QUEUED_FOLLOW_UPS) {
-  harnessFollowUpQueue.enqueue({ text: followUp });
-}
 if (
   process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined ||
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
@@ -1294,13 +1285,14 @@ seedRun(HARNESS_RUN_ID);
 activeRunIdSignal.set(HARNESS_RUN_ID);
 rootRunId.set(HARNESS_RUN_ID);
 seedRows(HARNESS_RUN_ID, harnessInitialEntries());
-if (QUEUED_FOLLOW_UPS.length > 0) {
-  publish({
-    type: 'updateQueuedFollowUps',
+publish(
+  ...QUEUED_FOLLOW_UPS.map((text, index) => ({
+    type: 'followup.queued' as const,
     aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
-    messages: QUEUED_FOLLOW_UPS,
-  });
-}
+    followUpId: `harness-follow-up-${index + 1}`,
+    content: { text, origin: 'user' as const },
+  })),
+);
 const HARNESS_INITIAL_RUN_PHASE = harnessInitialRunStatus();
 if (HARNESS_INITIAL_RUN_PHASE) {
   seedPhase(HARNESS_RUN_ID, HARNESS_INITIAL_RUN_PHASE);
@@ -1770,7 +1762,9 @@ function appendHarnessStatus(): void {
           : undefined,
       // The harness never emits an ACTIVE_SKILLS snapshot.
       activeSkills: [],
-      queuedFollowUpMessages: view.queuedFollowUps.get(runId) ?? [],
+      queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(
+        (followUp) => followUp.text,
+      ),
     }),
   );
 }
@@ -1778,7 +1772,6 @@ function appendHarnessStatus(): void {
 function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   cancelHarnessRequests('Session interrupted.');
-  harnessFollowUpQueue.drainItems();
   void effectRuntime().runPromise(clearGoal(defaultSession(), HARNESS_RUN_ID));
   for (const runId of [...currentView().runs.keys()]) {
     removeRun(runId);

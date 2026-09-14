@@ -296,10 +296,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       displayRunId === undefined
         ? undefined
         : view.policy.get(displayRunId)?.bypasses,
-    queuedFollowUpMessages:
-      displayRunId === undefined
-        ? []
-        : (view.queuedFollowUps.get(displayRunId) ?? []),
+    queuedFollowUpMessages: (displayRunId === undefined
+      ? []
+      : (view.queuedFollowUps.get(displayRunId) ?? [])
+    ).map((followUp) => followUp.text),
     usage: displayUsage,
     contextState: displayRun?.context ?? undefined,
     flow: displayRun?.flow ?? undefined,

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Effect, Exit, type Fiber } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Queue, Result } from 'effect';
 
 // One driver for every child-run type (agent-CLI codex/claude sessions, native
 // subagents of either category, workflow-script runs, background shells). Each
@@ -23,14 +23,15 @@ import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import { stepRow } from '@agent/runtime/loop/rows';
 import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
+import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
 import type {
-  FollowUpQueue,
-  FollowUpQueueBatchItem,
+  FollowUpConsumerLease,
   FollowUpQueueInput,
-} from '@agent/followUp/FollowUpQueue';
-import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
+  FollowUpRecoveryLease,
+} from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   enqueueLiveFollowUp,
+  startFollowUpWake,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
@@ -39,6 +40,7 @@ import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   RUN_OUTCOME,
   aggregateId,
+  type FollowUpContent,
   type ResultMeta,
   type RunId,
   type RunOutcome,
@@ -48,6 +50,7 @@ import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
+import { foldRunState } from '@shared/session/runStateFold';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { aggregateError, formatDuration, onAbort } from '@utils/core';
@@ -138,10 +141,11 @@ interface ChildRunPort {
  *
  * `launch` produces the first turn's outcome (agent-CLI: delegates to
  * `runTurn` with the seeded initial prompt; native: the `executeAgent`
- * call itself). `runTurn` produces every following turn's outcome, given the
- * follow-up items the loop drained since the previous turn (agent-CLI joins
- * their text into one prompt; native injects the already-consumed batch at
- * the resumed flow's persisted WAITING boundary without re-enqueueing it).
+ * call itself). `runTurn` produces every following turn's outcome once the
+ * child's queue has input: an agent-CLI child is handed the batch the loop
+ * took and consumed (it joins their text into one prompt); a native child is
+ * handed none, because its resumed flow takes and consumes its own batch
+ * from the same queue.
  *
  * Per-turn call order: `launch`/`runTurn` → `getUsage` (turn summary) →
  * `isTurnError` → `onTurnError` (if true) → `publishUsage` →
@@ -208,7 +212,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
    * `isTerminal` is always true on that child's first turn.
    */
   runTurn?(
-    followUps: readonly FollowUpQueueBatchItem[],
+    followUps: readonly FollowUpContent[],
     ports: ChildRunPorts,
     signal: AbortSignal,
   ): Effect.Effect<TTurn, Error, R>;
@@ -346,13 +350,13 @@ export interface ChildRunLoopParams<TTurn, R = never> {
  * path, which joins this loop's live lease instead of creating a competing
  * continuation.
  *
- * A running turn is reached through `signal` alone: every strategy binds the
- * turn it launches to it, and a native turn's flow subscribes to its own run
- * signal downstream of that binding.
+ * A running turn and the between-turn wait are reached through `signal`
+ * alone: every strategy binds the turn it launches to it, a native turn's
+ * flow subscribes to its own run signal downstream of that binding, and the
+ * loop races its queue wait against it.
  */
 class ChildRunInterruptible implements RunInterruptHandler {
   private readonly controller = new AbortController();
-  private queue: FollowUpQueue | null = null;
 
   constructor(
     /**
@@ -365,11 +369,6 @@ class ChildRunInterruptible implements RunInterruptHandler {
 
   interrupt(): void {
     this.controller.abort();
-    this.queue?.cancelWait();
-  }
-
-  setQueue(q: FollowUpQueue): void {
-    this.queue = q;
   }
 
   isInterrupted(): boolean {
@@ -447,14 +446,25 @@ function attemptTurn<TTurn, R>(
 
 /**
  * The delivery id one accepted turn's single parent delivery is admitted
- * under (#9531): derived from the turn's structural identity, the
- * `child.turn` row's key (run, attempt, turn index), never persisted beside
- * it, so the two can never disagree. Stable within one child-run attempt and
- * distinct across attempts, even when a workflow deliberately reuses its run
- * id, so a producer replaying the same accepted turn presents the same id
- * while a later workflow run cannot collide with its prior delivery.
+ * under (#9531). A turn that ran queued follow-ups as its prompt takes its
+ * identity from the prompt's durable rows, not from the attempt: the parent
+ * row is admitted before this child's settlement consumes the prompt, so a
+ * crash between the two re-executes the prompt under a new attempt id, and
+ * only the prompt-anchored id lets admission judge the second delivery a
+ * replay of the first instead of handing the parent both results. Every
+ * other turn takes the `child.turn` row's key (run, attempt, turn index).
+ * Neither is persisted beside its row, so the two can never disagree. The
+ * turn-key form stays distinct across attempts, even when a workflow
+ * deliberately reuses its run id, so a later workflow run cannot collide
+ * with its prior delivery.
  */
-function turnDeliveryId(runId: RunId, turn: ChildTurnKey): string {
+function turnDeliveryId(
+  runId: RunId,
+  turn: ChildTurnKey,
+  consumed: readonly QueuedFollowUp[],
+): string {
+  const prompt = consumed[0]?.followUpId;
+  if (prompt !== undefined) return `${runId}:${prompt}:delivery`;
   return `${runId}:${turn.attemptId}:${turn.turnIndex}:delivery`;
 }
 
@@ -502,15 +512,31 @@ function emitTurnDiagnostic(
  * failure. `not-owner` means this process no longer holds the run and the
  * loop stops rather than deliver under a claim it lost (R7); a write failure
  * is a fact the slots cannot be labeled without.
+ *
+ * An agent-CLI turn's settlement also consumes the follow-ups that were its
+ * prompt (C3): no ledger message carries that prompt, and its provider's
+ * thread holds it only once the turn has run, so the rows stay queued until
+ * then. The parent delivery is admitted before this commit, so a crash after
+ * settlement still leaves the result on the parent; a crash before it
+ * re-delivers the prompt to the next loop, whose re-executed turn admits its
+ * result under the same prompt-anchored delivery id, so the parent is not
+ * handed both results. A turn whose own result persistence failed settles
+ * with no consumption at all, so its prompt stays queued for that loop.
  */
 function commitChildTurn(
   session: SessionHandle,
   runId: RunId,
   turn: ChildTurnKey,
   phase: 'accepted' | 'settled',
+  consumed: readonly QueuedFollowUp[] = [],
 ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
   return session
     .commit([
+      ...consumed.map((followUp) => ({
+        type: 'followup.consumed' as const,
+        aggregateId: aggregateId('run', runId),
+        followUpId: followUp.followUpId,
+      })),
       {
         type: 'child.turn',
         aggregateId: aggregateId('run', runId),
@@ -524,7 +550,7 @@ function commitChildTurn(
 
 /**
  * Move an agent-CLI child's phase across its park (one run model, 3.3):
- * `waiting` before the loop blocks on its queue, `turn.begin` when the drained
+ * `waiting` before the loop blocks on its queue, `turn.begin` when the taken
  * batch starts the next turn. Written with the loops' own step-row
  * constructor, so the child protocol carries no second phase vocabulary. A run
  * this loop is the only driver of has no `flow.snapshot` and no rounds: its
@@ -578,6 +604,14 @@ function resolveDeliveryTarget<TTurn, R>(
 interface PendingChildDelivery {
   readonly resolveTargetRunId: () => RunId | undefined;
   readonly followUp: FollowUpQueueInput;
+  /**
+   * The parent follow-up row is already durable. A recovery lease means this
+   * process still has to wake the parent after this child's finalize; a
+   * deferred live offer carries no lease, and the resubmit in
+   * `submitPendingDelivery` offers the durable row to the live parent at
+   * that same post-finalize point.
+   */
+  readonly recovery?: FollowUpRecoveryLease;
 }
 
 /**
@@ -611,6 +645,8 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   logger: AgentTrace;
   turn: TTurn | null;
   turnKey: ChildTurnKey;
+  /** The queued follow-ups this turn ran as its prompt. */
+  consumed: readonly QueuedFollowUp[];
   err: unknown;
   wallTimeMs: number;
   isError: boolean;
@@ -655,13 +691,76 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   const persisted = yield* Effect.exit(
     persistChildRunDelivery(params.session, runId, msg, resultMeta),
   );
+  const resolveTargetRunId = (): RunId | undefined =>
+    resolveDeliveryTarget(strategy, resolveDefaultDeliveryTarget);
+  const followUp: FollowUpQueueInput = {
+    text: msg,
+    origin: 'subagent_result',
+    deliveryId: turnDeliveryId(runId, turnKey, params.consumed),
+  };
+  let pending: PendingChildDelivery | undefined;
+  if (Exit.isSuccess(persisted) && strategy.deliveryMode !== 'persistOnly') {
+    const targetRunId = resolveTargetRunId();
+    if (!targetRunId) {
+      warnDetachedChildDelivery(logger, runId);
+    } else if (prepareParentDelivery?.() !== false) {
+      // Admit the parent row before consuming the prompt: a crash after
+      // settlement then still leaves the result on the parent, and a crash
+      // before it re-executes the prompt under the same delivery id, which
+      // admission judges a replay. A turn this loop finalizes after
+      // (failed, terminal, or a strategy with no next turn) defers the live
+      // offer until that finalize has run, so a live parent cannot wake and
+      // wait on a child that still reports RUNNING (#8093); the deferred
+      // resubmit in submitPendingDelivery offers the durable row then.
+      const finalizing =
+        isError ||
+        turn == null ||
+        strategy.isTerminal(turn) ||
+        !strategy.runTurn;
+      const submitted = yield* params.session.followUps.submit(
+        targetRunId,
+        followUp,
+        'recoverable',
+        { liveOffer: finalizing ? 'deferred' : 'immediate' },
+      );
+      if (submitted.kind === 'refused') {
+        logger.warn(
+          `Turn result not delivered: parent run is unavailable (${submitted.reason ?? 'not_resumable'}). The result remains in the run report.`,
+          {
+            data: {
+              runId,
+              parentRunId: targetRunId,
+              reason: submitted.reason,
+            },
+          },
+        );
+      } else {
+        pending = {
+          resolveTargetRunId,
+          followUp,
+          ...(submitted.kind === 'queued' && submitted.lease
+            ? { recovery: submitted.lease }
+            : {}),
+        };
+      }
+    }
+  }
   // The turn settled whatever the delivery persistence did: its settle path
   // ran, which is the fact a recovering caller's re-execution gate reads (a
   // settled `child.turn` under a run with no outcome refuses repetition,
   // manifest or not, since the manifest is written for a failed delivery
   // too and so cannot say whether the turn succeeded), so the row lands
-  // before that failure is raised.
-  yield* commitChildTurn(params.session, runId, turnKey, 'settled');
+  // before that failure is raised. The prompt's consumption commits only
+  // when its result is durable: when persistence failed, no report and no
+  // parent row carries the outcome, so the prompt rows stay queued for the
+  // relaunched loop to deliver again rather than recording the turn as spent.
+  yield* commitChildTurn(
+    params.session,
+    runId,
+    turnKey,
+    'settled',
+    Exit.isSuccess(persisted) ? params.consumed : [],
+  );
 
   params.onTurnSettled?.({
     message: msg,
@@ -671,24 +770,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   });
   if (Exit.isFailure(persisted))
     return yield* Effect.failCause(persisted.cause);
-
-  if (strategy.deliveryMode === 'persistOnly') return undefined;
-
-  const resolveTargetRunId = (): RunId | undefined =>
-    resolveDeliveryTarget(strategy, resolveDefaultDeliveryTarget);
-  if (!resolveTargetRunId()) {
-    warnDetachedChildDelivery(logger, runId);
-    return undefined;
-  }
-  if (prepareParentDelivery?.() === false) return undefined;
-  return {
-    resolveTargetRunId,
-    followUp: {
-      text: msg,
-      origin: 'subagent_result',
-      deliveryId: turnDeliveryId(runId, turnKey),
-    },
-  };
+  return pending;
 });
 
 /**
@@ -707,6 +789,23 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
     warnDetachedChildDelivery(logger, runId);
     return;
   }
+  const recovery = pending.recovery;
+  if (recovery) {
+    const resumed = yield* Effect.tryPromise({
+      try: () => startFollowUpWake(targetRunId, recovery, session),
+      catch: ensureError,
+    });
+    if (!resumed) {
+      logger.warn(
+        'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+        { data: { runId, parentRunId: targetRunId } },
+      );
+    }
+  }
+  // Duplicate-safe: the parent row was admitted before the child prompt
+  // was consumed. This wake still goes through submitFollowUp so a mocked
+  // delivery site (and a live parent that needs no recovery lease) still
+  // sees it at the original post-finalize point.
   const delivery = yield* submitFollowUp(targetRunId, pending.followUp, {
     session,
   });
@@ -728,6 +827,20 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
     );
   }
 });
+
+/** Race a queue wait against the child loop's interrupt; null when stopped. */
+function untilInterrupted<A>(
+  wait: Effect.Effect<A>,
+  loop: ChildRunInterruptible,
+): Effect.Effect<A | null> {
+  return Effect.raceFirst(
+    wait,
+    Effect.callback<null>((resume) => {
+      const detach = onAbort(loop.signal, () => resume(Effect.succeed(null)));
+      return Effect.sync(detach);
+    }),
+  ).pipe(Effect.interruptible);
+}
 
 /**
  * Own admitted run cleanup until the child loop takes over. Failure or
@@ -819,7 +932,7 @@ export function startChildRunLoop<TTurn, R = never>(
       strategy.releaseSessionOwnership?.();
     };
 
-    let queue!: FollowUpQueue;
+    let input!: RunInput;
     let queueLease: FollowUpConsumerLease | undefined;
     let attachedHandle: RunHandle | undefined;
     let detachLoopInterrupt: (() => void) | undefined;
@@ -860,21 +973,58 @@ export function startChildRunLoop<TTurn, R = never>(
         );
       });
 
-    const setup = yield* Effect.exit(
+    const created = yield* RunInput.make;
+    // Claim and attach before any startup read: an admission that lands while
+    // this loop is starting then finds the live owner and is held behind the
+    // seed, instead of being refused against a run the registry already shows
+    // active, or committing behind the snapshot the seed is about to read.
+    const claimed = yield* Effect.exit(
       Effect.sync(() => {
-        strategy.onLoopStart?.(runSession);
         queueLease = runSession.followUps.claimChildRun(runId);
         if (!queueLease) {
           throw new Error(
             `Follow-up continuation already has an owner for child ${runId}.`,
           );
         }
-        queue = runSession.followUps.queue(queueLease);
-        loop.setQueue(queue);
-        attachLoopInterrupt();
-        sessionStage = childRun
-          ? logger.openStage(strategy.stageLabel)
-          : undefined;
+        input = runSession.followUps.attachInput(runId, created, queueLease)!;
+      }),
+    );
+    if (Exit.isFailure(claimed)) {
+      return yield* Effect.fail(
+        yield* unwindSetup(Cause.squash(claimed.cause)),
+      );
+    }
+    const setup = yield* Effect.exit(
+      Effect.gen(function* () {
+        // An agent-CLI child has no flow to fold: its loop seeds the queue
+        // from the run's rows itself, so follow-ups a crash left queued (or a
+        // turn it never settled) reach the relaunched loop. A native child's
+        // resumed flow seeds the same queue from its own load.
+        const folded = childRun
+          ? foldRunState(
+              null,
+              yield* runSession.readAggregate(aggregateId('run', runId)),
+            )
+          : null;
+        yield* Effect.sync(() => {
+          strategy.onLoopStart?.(runSession);
+          if (folded !== null) {
+            if (Result.isFailure(folded)) {
+              throw new Error(
+                `Child run ${runId} has rows its follow-up queue cannot be seeded from: ${folded.failure.detail}`,
+                { cause: folded.failure },
+              );
+            }
+            input.seed(
+              folded.success?.followUps ?? [],
+              folded.success?.followUpIds,
+            );
+          }
+          attachLoopInterrupt();
+          sessionStage = childRun
+            ? logger.openStage(strategy.stageLabel)
+            : undefined;
+        });
       }),
     );
     if (Exit.isFailure(setup)) {
@@ -888,6 +1038,14 @@ export function startChildRunLoop<TTurn, R = never>(
     const childRunHandle = childRun ? runs.getHandle(runId) : undefined;
 
     let bestCostUsd: number | undefined;
+    // Progress reaches the parent as queued follow-ups. The port is
+    // synchronous, so it admits each one where it is reported (the target and
+    // the admission decided then) and one drainer the loop's body owns writes
+    // the rows in that order.
+    const notices = yield* Queue.unbounded<
+      Effect.Effect<void, Error>,
+      Cause.Done
+    >();
     const ports: ChildRunPorts = {
       notify: (update) => {
         if (params.notify) {
@@ -900,11 +1058,16 @@ export function startChildRunLoop<TTurn, R = never>(
           childRun ? childRunHandle?.deliveryTarget : parentRunId,
         );
         if (!targetRunId) return;
-        const msg = formatSubagentProgress(runId, agentName, update);
-        enqueueLiveFollowUp(
-          targetRunId,
-          { text: msg, origin: 'subagent_result' },
-          runSession,
+        Queue.offerUnsafe(
+          notices,
+          enqueueLiveFollowUp(
+            targetRunId,
+            {
+              text: formatSubagentProgress(runId, agentName, update),
+              origin: 'subagent_result',
+            },
+            runSession,
+          ),
         );
       },
       recordCost: (totalCost) => {
@@ -958,6 +1121,43 @@ export function startChildRunLoop<TTurn, R = never>(
       const body = yield* Effect.exit(
         Effect.scoped(
           Effect.gen(function* () {
+            const runNotice = (notice: Effect.Effect<void, Error>) =>
+              notice.pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => {
+                    logger.warn('Child progress was not queued', {
+                      data: { runId, error },
+                    });
+                  }),
+                ),
+              );
+            const drainer = yield* Effect.forkScoped(
+              Effect.gen(function* () {
+                for (;;) {
+                  const notice = yield* Queue.take(notices).pipe(
+                    Effect.catchTag('Done', () => Effect.succeed(null)),
+                  );
+                  if (notice === null) return;
+                  yield* runNotice(notice);
+                }
+              }),
+            );
+            // Notices await SQLite admission. Offer a sentinel so the
+            // drainer finishes every progress job already queued before a
+            // parent result can commit (otherwise the result is a separate
+            // stale model turn).
+            const drainNotices = Effect.gen(function* () {
+              const done = yield* Deferred.make<void>();
+              yield* Queue.offer(notices, Deferred.succeed(done, undefined));
+              yield* Deferred.await(done);
+            });
+            yield* Effect.addFinalizer(() =>
+              Queue.end(notices).pipe(
+                Effect.andThen(Fiber.await(drainer)),
+                Effect.asVoid,
+              ),
+            );
+            let consumed: readonly QueuedFollowUp[] = [];
             while (!loop.isInterrupted()) {
               turnIndex += 1;
               const turnKey: ChildTurnKey = { attemptId, turnIndex };
@@ -991,6 +1191,11 @@ export function startChildRunLoop<TTurn, R = never>(
                 strategy.publishUsage?.(turn);
               }
 
+              // Progress notices are admitted on the forked drainer and can
+              // lag the turn; deliverTurn persists the report and admits the
+              // parent row, so drain first or the result commits ahead of
+              // progress the parent then receives as a separate stale turn.
+              yield* drainNotices;
               const delivery = yield* deliverTurn({
                 session: runSession,
                 strategy,
@@ -1000,6 +1205,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 logger,
                 turn,
                 turnKey,
+                consumed,
                 err,
                 wallTimeMs,
                 isError: turnFailed,
@@ -1058,23 +1264,34 @@ export function startChildRunLoop<TTurn, R = never>(
               // being refused against a run that only looks busy.
               if (childRun)
                 yield* commitFlowStep(runSession, runId, turnIndex, 'waiting');
-              const batch = yield* Effect.tryPromise({
-                try: () => queue.waitAndDrainAll(loop.signal),
-                catch: ensureError,
-              });
+              const nextRunTurn = strategy.runTurn;
+              if (!childRun) {
+                // The native flow takes and consumes its own batch; this loop
+                // only waits for there to be one. Its first turn seeded the
+                // queue from the run's rows; one that never reached that load
+                // leaves nothing older than what this loop was handed.
+                input.seed([]);
+                const ready = yield* untilInterrupted(input.ready, loop);
+                if (!ready || loop.isInterrupted()) break;
+                runner = (signal) => nextRunTurn([], ports, signal);
+                continue;
+              }
+              const batch = yield* untilInterrupted(input.take, loop);
               if (!batch || loop.isInterrupted()) break;
               // The batch leaves the park: the next turn's index is the one
               // the top of the loop is about to accept.
-              if (childRun)
-                yield* commitFlowStep(
-                  runSession,
-                  runId,
-                  turnIndex + 1,
-                  'turn.begin',
-                );
-
-              const nextRunTurn = strategy.runTurn;
-              runner = (signal) => nextRunTurn(batch.items, ports, signal);
+              const taken = batch.synthetic ? [] : batch.followUps;
+              yield* commitFlowStep(
+                runSession,
+                runId,
+                turnIndex + 1,
+                'turn.begin',
+              );
+              consumed = taken;
+              const prompts: readonly FollowUpContent[] = batch.synthetic
+                ? [{ text: batch.text, origin: 'user' }]
+                : taken.map((followUp) => followUp.content);
+              runner = (signal) => nextRunTurn(prompts, ports, signal);
             }
           }),
         ),
