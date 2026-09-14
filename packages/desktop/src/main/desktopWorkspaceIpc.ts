@@ -19,7 +19,7 @@ import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { appSignals } from '@eventBus/AppSignals';
 import { platform } from '@platform/platform';
 import { normalizeFilePath } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { locateInWorkspace, WorkspaceFS } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
@@ -50,9 +50,12 @@ interface DesktopWorkspaceIpcOptions {
    */
   toWindowBounds(bounds: DesktopBrowserBounds): DesktopBrowserBounds;
   /**
-   * Root of the paper this window shows. App-signal listeners run in the
-   * emitter's context, which for a run in another open paper is that paper's
-   * session; the window's own paper is what a re-list decision compares to.
+   * Root of the paper this window shows, and the only workspace root this
+   * handler resolves against — a request names a path relative to the paper
+   * it was sent for, not to whichever paper happens to be active. App-signal
+   * listeners run in the emitter's context, which for a run in another open
+   * paper is that paper's session; the window's own paper is what a re-list
+   * decision compares to.
    */
   getWorkspacePath(): string | undefined;
   getEnvironmentSummary(): Promise<DesktopEnvironmentSummary>;
@@ -97,17 +100,24 @@ function assertWithinWorkspace(
   return canonicalTarget;
 }
 
-/** Lexical workspace containment check: rejects `..` traversal, or throws. */
-function locateWorkspaceTarget(inputPath: string): {
+/**
+ * Lexical workspace containment check against `root`: rejects `..` traversal,
+ * or throws. The root is the paper this handler was built for, passed in
+ * rather than read from the calling context's roots scope, so a request can
+ * only ever be resolved against its own paper.
+ */
+function locateWorkspaceTarget(
+  root: string | undefined,
+  inputPath: string,
+): {
   absolutePath: string;
   root: string;
 } {
-  const located = WorkspaceFS.locatePath(inputPath);
+  const located = locateInWorkspace(root, inputPath);
   if (located.kind !== 'workspace') {
     throw new Error(WORKSPACE_BOUNDARY_ERROR);
   }
 
-  const root = WorkspaceFS.getPath();
   if (!root) {
     throw new Error('Workspace path is not available.');
   }
@@ -120,8 +130,14 @@ function locateWorkspaceTarget(inputPath: string): {
  * The lexical check rejects `..` traversal first. Canonical paths are then
  * compared so a workspace symlink cannot lead the editor outside the project.
  */
-async function resolveWorkspacePath(inputPath: string): Promise<string> {
-  const { absolutePath, root } = locateWorkspaceTarget(inputPath);
+async function resolveWorkspacePath(
+  workspaceRoot: string | undefined,
+  inputPath: string,
+): Promise<string> {
+  const { absolutePath, root } = locateWorkspaceTarget(
+    workspaceRoot,
+    inputPath,
+  );
   const [canonicalRoot, canonicalTarget] = await Promise.all([
     platform().fs.realPath(root),
     platform().fs.realPath(absolutePath),
@@ -134,14 +150,20 @@ async function resolveWorkspacePath(inputPath: string): Promise<string> {
  * The canonical parent remains mandatory, so recreating an externally deleted
  * file cannot bypass the workspace or symlink boundary.
  */
-async function resolveWorkspaceWritePath(inputPath: string): Promise<string> {
+async function resolveWorkspaceWritePath(
+  workspaceRoot: string | undefined,
+  inputPath: string,
+): Promise<string> {
   try {
-    return await resolveWorkspacePath(inputPath);
+    return await resolveWorkspacePath(workspaceRoot, inputPath);
   } catch (error) {
     if (!isFileNotFoundError(error)) throw error;
   }
 
-  const { absolutePath, root } = locateWorkspaceTarget(inputPath);
+  const { absolutePath, root } = locateWorkspaceTarget(
+    workspaceRoot,
+    inputPath,
+  );
 
   // A dangling symlink also makes realPath fail with ENOENT. It must remain
   // rejected: writing through it could create a target outside the workspace.
@@ -217,7 +239,7 @@ export function createDesktopWorkspaceIpc(
       .replace(/^\.\//, '')
       .replace(/\/$/, '');
     try {
-      const root = WorkspaceFS.getPath();
+      const root = options.getWorkspacePath();
       if (!root) {
         renderer.postToRenderer({
           command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
@@ -246,7 +268,7 @@ export function createDesktopWorkspaceIpc(
         excludeFiles: [],
       });
       const absoluteDirectory = normalizedDirectory
-        ? await resolveWorkspacePath(normalizedDirectory)
+        ? await resolveWorkspacePath(root, normalizedDirectory)
         : root;
       const entries = await platform().fs.readDirectory(absoluteDirectory);
       const files = entries
@@ -289,7 +311,9 @@ export function createDesktopWorkspaceIpc(
 
   async function readFile(requestId: string, path: string): Promise<void> {
     try {
-      const contents = await WorkspaceFS.read(await resolveWorkspacePath(path));
+      const contents = await WorkspaceFS.read(
+        await resolveWorkspacePath(options.getWorkspacePath(), path),
+      );
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
         requestId,
@@ -308,7 +332,10 @@ export function createDesktopWorkspaceIpc(
     contents: string,
   ): Promise<void> {
     try {
-      await WorkspaceFS.write(await resolveWorkspaceWritePath(path), contents);
+      await WorkspaceFS.write(
+        await resolveWorkspaceWritePath(options.getWorkspacePath(), path),
+        contents,
+      );
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
         requestId,
