@@ -5,17 +5,29 @@ import { isNonEmptyString, isObject, isString } from '@utils/core';
 
 import { pickStatus } from './sdkErrorKinds';
 
+/** Direct-or-enveloped candidates for a loosely-typed error shape: the value
+ *  itself, then its nested carriers at `keys` in order (some SDKs preserve
+ *  the full envelope, others unwrap it before it reaches us). Only object
+ *  candidates are returned, so callers read fields directly instead of
+ *  re-guarding each element. Shared by {@link errorBodyCandidates} (raw
+ *  provider error bodies) and `sdkErrorCandidates` (thrown SDK errors). */
+function candidateList(
+  value: unknown,
+  keys: readonly string[],
+): Record<string, unknown>[] {
+  if (!isObject(value)) return [];
+  return [value, ...keys.map((key) => value[key])].filter(isObject);
+}
+
 /** Direct-or-enveloped candidate objects for a raw provider error body: the
  *  body itself, then its nested `.error` (some SDKs preserve the full
  *  `{ error: {...} }` envelope, others unwrap it before it reaches us).
  *  Shared by every subscription-limit/credit-depletion body detector,
- *  each of which must check both forms. Only object candidates are returned,
- *  so detectors read fields directly instead of re-guarding each element. */
+ *  each of which must check both forms. */
 export function errorBodyCandidates(
   rawErrorBody: unknown,
 ): Record<string, unknown>[] {
-  if (!isObject(rawErrorBody)) return [];
-  return [rawErrorBody, rawErrorBody.error].filter(isObject);
+  return candidateList(rawErrorBody, ['error']);
 }
 
 /** Pick a non-blank string field off an error-body object. Shared by the
@@ -131,13 +143,11 @@ type SdkErrorLike = {
 /** Direct-or-enveloped SDK error candidates: the thrown error itself, then
  *  its nested `.response` and `.error` carriers (some SDKs preserve the full
  *  envelope, others unwrap it before it reaches us). Mirrors
- *  {@link errorBodyCandidates} for the analogous raw-body case. Shared by
- *  `detectStatusCode`/`detectStatusText`, which both check the same fields
- *  across the same three shapes. */
+ *  {@link errorBodyCandidates} for the analogous raw-body case, via the same
+ *  {@link candidateList}. Shared by `detectStatusCode`/`detectStatusText`,
+ *  which both check the same fields across the same three shapes. */
 function sdkErrorCandidates(err: unknown): Record<string, unknown>[] {
-  if (!isObject(err)) return [];
-  const candidate = err as SdkErrorLike;
-  return [candidate, candidate.response, candidate.error].filter(isObject);
+  return candidateList(err, ['response', 'error']);
 }
 
 /** Canonical HTTP status extractor for thrown SDK/provider errors. The only
