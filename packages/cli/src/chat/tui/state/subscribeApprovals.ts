@@ -36,7 +36,7 @@ import {
 } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { RetryPermission } from '@shared/schemas';
+import type { RequestDecision, RetryPermission } from '@shared/schemas';
 import { isCodingPlanQuotaRoute } from '@shared/quotaFallbackRoutes';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { subscribeToSignalChanges } from '@shared/signals';
@@ -118,44 +118,33 @@ export function createTuiHostInteractions(
       return;
     }
     void (async () => {
+      let decision: RequestDecision;
       try {
         await ensurePersonalApiKey(permission, stores);
-        // Re-read after the key lookup, which takes time: a retry another
-        // surface settled meanwhile is not this attachment's to decide.
-        if (disposed || pendingRetry(requestId) === undefined) {
-          logWarning(
-            'cli.tui',
-            `Request ${requestId} was settled elsewhere before its credential switch: nothing was decided here.`,
-          );
-          return;
-        }
-        // Switching without asking also skips the modal's quota warning, so
-        // say it happened.
-        if (automaticSwitches.has(requestId)) notify('credentialSwitched');
-        // The decision lands as itself, not through the surface decision
-        // vocabulary: a personal-credential retry decomposes into this very
-        // capability, so re-deciding it here would call back into this
-        // function and the request would never be answered.
-        landRequestDecision(
-          stores.runtime,
-          permission.runId,
-          requestId,
-          { action: 'retry', credentials: 'personal' },
-          actAgainOnRefusal(requestId),
-        );
+        decision = { action: 'retry', credentials: 'personal' };
       } catch (error) {
+        decision = { action: 'deny', reason: toErrorMessage(error) };
+      }
+      // Success and failure have the same lifetime: a lookup that finishes
+      // after this attachment leaves must not answer for its next owner.
+      if (disposed || pendingRetry(requestId) === undefined) return;
+      if (decision.action === 'deny') {
         logWarning(
           'cli.tui',
-          `The retry could not switch to your own API key: ${toErrorMessage(error)}`,
+          `The retry could not switch to your own API key: ${decision.reason}`,
         );
-        landRequestDecision(
-          stores.runtime,
-          permission.runId,
-          requestId,
-          { action: 'deny', reason: toErrorMessage(error) },
-          actAgainOnRefusal(requestId),
-        );
+      } else if (automaticSwitches.has(requestId)) {
+        notify('credentialSwitched');
       }
+      // This capability already selected the credential route; decomposing
+      // the decision again would call the capability recursively.
+      landRequestDecision(
+        stores.runtime,
+        permission.runId,
+        requestId,
+        decision,
+        actAgainOnRefusal(requestId),
+      );
     })();
   };
 
@@ -221,16 +210,6 @@ export function createTuiHostInteractions(
             );
           }
         }
-        const route = cliRetryQuotaRoute(permission);
-        if (
-          personalApiKeyAvailable &&
-          route &&
-          isCodingPlanQuotaRoute(route.id)
-        ) {
-          automaticSwitches.add(requestId);
-          useOwnApiKey(requestId);
-          return;
-        }
       } catch (error) {
         // The card shows on the payload alone: no own-key offer, since
         // nothing here proved a stored key exists.
@@ -239,6 +218,19 @@ export function createTuiHostInteractions(
           'cli.tui',
           `The retry card for request ${requestId} could not be prepared: ${toErrorMessage(error)}`,
         );
+      }
+      // Preparation has the same attachment lifetime as the decision: an
+      // old lookup cannot replace the next host's card or switch its retry.
+      if (disposed || pendingRetry(requestId) === undefined) return;
+      const route = cliRetryQuotaRoute(permission);
+      if (
+        personalApiKeyAvailable &&
+        route &&
+        isCodingPlanQuotaRoute(route.id)
+      ) {
+        automaticSwitches.add(requestId);
+        useOwnApiKey(requestId);
+        return;
       }
       stagePresentation({
         kind: 'retry',
