@@ -317,7 +317,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // -------------------------------------------------------------- opening
   const openFresh = Effect.fn('toolUse.open')(function* (): Effect.fn.Return<
     RunState,
-    Error
+    Error,
+    ProcessServices
   > {
     const bound = yield* SynchronizedRef.get(run.model);
     const resolvedToolNames = run.setting.tools.map((tool) => tool.name);

@@ -10,7 +10,7 @@
  * continues, and a follow-up batch is restored to its queue with the failure
  * reported. Nothing drops an attachment silently.
  */
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import type { MessageSchema } from '@llm/turn';
@@ -20,7 +20,6 @@ import {
   type MediaAttachmentKind,
 } from '@shared/schemas';
 import { getExtensionLowercase } from '@utils/core/pathCore';
-import { ensureError } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import {
   countPdfPages,
@@ -58,7 +57,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
   capabilities: MediaCapabilities,
   logger: AgentTrace,
   inScope: <A>(operation: () => A) => A,
-): Effect.fn.Return<MediaInputParts, Error> {
+): Effect.fn.Return<MediaInputParts, Error, FileSystem.FileSystem> {
   const path = location.absolutePath;
   const display = fileLocationDisplayPath(location);
   const mimeType = getMimeType(path);
@@ -68,29 +67,20 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
       logger.warn(`Skipping ${display}: the model does not accept documents.`);
       return { parts: [], kinds: [] };
     }
-    const pageCount = yield* Effect.tryPromise({
-      try: () => countPdfPages(path),
-      catch: ensureError,
-    });
+    const pageCount = yield* countPdfPages(path);
     if (pageCount === 0) {
       return yield* Effect.fail(
         new Error(`Failed to process PDF file as image: ${display}`),
       );
     }
     if (capabilities.supportsNativePdf) {
-      const base64 = yield* Effect.tryPromise({
-        try: () => getBase64EncodedMedia(path),
-        catch: ensureError,
-      });
+      const base64 = yield* getBase64EncodedMedia(path);
       return {
         parts: [{ kind: 'document', mimeType: 'application/pdf', base64 }],
         kinds: ['document'],
       };
     }
-    const pages = yield* Effect.tryPromise({
-      try: () => processPdf2Png(path),
-      catch: ensureError,
-    });
+    const pages = yield* processPdf2Png(path);
     if (pages === null) {
       return yield* Effect.fail(
         new Error(`Failed to process PDF file as image: ${display}`),
@@ -115,10 +105,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
       logger.warn(`Skipping ${display}: the model does not accept audio.`);
       return { parts: [], kinds: [] };
     }
-    const base64 = yield* Effect.tryPromise({
-      try: () => getBase64EncodedMedia(path),
-      catch: ensureError,
-    });
+    const base64 = yield* getBase64EncodedMedia(path);
     return { parts: [{ kind: 'audio', mimeType, base64 }], kinds: [] };
   }
   if (!isImageMimeType(mimeType) || mimeType === null) {
@@ -132,10 +119,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
     logger.warn(`Skipping ${display}: the model does not accept images.`);
     return { parts: [], kinds: [] };
   }
-  const base64 = yield* Effect.tryPromise({
-    try: () => getBase64EncodedMedia(path),
-    catch: ensureError,
-  });
+  const base64 = yield* getBase64EncodedMedia(path);
   return { parts: [{ kind: 'image', mimeType, base64 }], kinds: ['image'] };
 });
 
@@ -145,7 +129,7 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
   capabilities: MediaCapabilities,
   logger: AgentTrace,
   inScope: <A>(operation: () => A) => A,
-): Effect.fn.Return<MediaInputParts, Error> {
+): Effect.fn.Return<MediaInputParts, Error, FileSystem.FileSystem> {
   const parts: InputPart[] = [];
   const kinds: MediaAttachmentKind[] = [];
   for (const location of locations) {
