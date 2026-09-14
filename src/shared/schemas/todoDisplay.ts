@@ -10,18 +10,21 @@ export const STATUS_ICONS: Readonly<Record<TodoStatus, TeXRAIconName>> =
     [TODO_STATUS.COMPLETED]: 'circle-check',
   });
 
-/** Text-based status display for tool output formatting. */
+/**
+ * Text glyph + human label per status, shared by tool output formatting and by
+ * the webview and terminal renderers. One casing for every host.
+ */
 export const STATUS_DISPLAY: Readonly<
   Record<TodoStatus, Readonly<{ icon: string; label: string }>>
 > = Object.freeze({
-  [TODO_STATUS.PENDING]: Object.freeze({ icon: '\u25CB', label: 'PENDING' }),
+  [TODO_STATUS.PENDING]: Object.freeze({ icon: '\u25CB', label: 'Pending' }),
   [TODO_STATUS.IN_PROGRESS]: Object.freeze({
     icon: '\u25D0',
-    label: 'IN PROGRESS',
+    label: 'In progress',
   }),
   [TODO_STATUS.COMPLETED]: Object.freeze({
     icon: '\u25CF',
-    label: 'COMPLETED',
+    label: 'Completed',
   }),
 });
 

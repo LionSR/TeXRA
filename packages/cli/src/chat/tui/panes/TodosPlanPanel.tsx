@@ -15,11 +15,15 @@ import {
 } from '@shared/schemas';
 import { pluralize } from '@utils/text/stringUtils';
 
-// Marker glyph + color per todo status; statuses absent here (e.g. PENDING)
-// fall back to the default empty box with no color.
-const TODO_STATUS_DISPLAY: Partial<
-  Record<TodoStatus, { marker: string; color: string }>
+// The terminal glyph and theme color for each canonical status entry. Both
+// values are CLI-only (box-drawing glyphs, ink colors), so this table adds
+// them to the shared entry rather than restating the status vocabulary; being
+// total, a new status compile-fails here instead of rendering a default.
+const TODO_STATUS_MARKERS: Record<
+  TodoStatus,
+  { marker: string; color: string | undefined }
 > = {
+  [TODO_STATUS.PENDING]: { marker: TODO_PENDING, color: undefined },
   [TODO_STATUS.COMPLETED]: { marker: TODO_DONE, color: COLOR_SUCCESS },
   [TODO_STATUS.IN_PROGRESS]: { marker: TODO_ACTIVE, color: COLOR_HINT },
 };
@@ -27,11 +31,11 @@ const TODO_STATUS_DISPLAY: Partial<
 function TodoRow({ todo }: { readonly todo: TodoItem }): React.JSX.Element {
   const label =
     todo.status === TODO_STATUS.IN_PROGRESS ? todo.activeForm : todo.content;
-  const display = TODO_STATUS_DISPLAY[todo.status];
+  const display = TODO_STATUS_MARKERS[todo.status];
   return (
     <Box height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
-        <Text color={display?.color}>{display?.marker ?? TODO_PENDING} </Text>
+        <Text color={display.color}>{display.marker} </Text>
       </Box>
       <Text
         dimColor={todo.status === TODO_STATUS.COMPLETED}
