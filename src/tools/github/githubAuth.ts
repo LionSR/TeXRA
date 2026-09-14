@@ -9,6 +9,8 @@
  * explicit fallback. Because every host provides the `Secrets` service, GitHub
  * tools work in the CLI and desktop too, not just the extension.
  */
+import { Effect } from 'effect';
+
 import type { PlatformSecrets } from '@platform/secrets';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
@@ -61,15 +63,15 @@ function getGitHubEnvToken(
   return undefined;
 }
 
-export async function getGitHubToken(
+export const getGitHubToken = Effect.fn('githubAuth.getGitHubToken')(function* (
   secrets: PlatformSecrets,
-): Promise<string | undefined> {
-  const stored = await secrets.get(GITHUB_TOKEN_STORAGE_KEY);
+) {
+  const stored = yield* secrets.get(GITHUB_TOKEN_STORAGE_KEY);
   return (
     normalizeGitHubToken(stored) ??
     getGitHubEnvToken((name) => secrets.getEnv(name))
   );
-}
+});
 
 /**
  * Precedence-ordered GitHub-token *source* check: a persisted secret wins
@@ -80,11 +82,12 @@ export async function getGitHubToken(
  * `SecretManager.gitHubTokenExists()`, which previously duplicated this
  * precedence chain.
  */
-export async function resolveGitHubTokenSource(
-  secrets: PlatformSecrets,
-): Promise<'secret' | 'env' | 'none'> {
-  if (normalizeGitHubToken(await secrets.getStored(GITHUB_TOKEN_STORAGE_KEY))) {
-    return 'secret';
-  }
-  return getGitHubEnvToken((name) => secrets.getEnv(name)) ? 'env' : 'none';
-}
+export const resolveGitHubTokenSource = Effect.fn(
+  'githubAuth.resolveGitHubTokenSource',
+)(function* (secrets: PlatformSecrets) {
+  const stored = yield* secrets.getStored(GITHUB_TOKEN_STORAGE_KEY);
+  if (normalizeGitHubToken(stored)) return 'secret' as const;
+  return getGitHubEnvToken((name) => secrets.getEnv(name))
+    ? ('env' as const)
+    : ('none' as const);
+});

@@ -41,10 +41,7 @@ export const helperModel = Effect.fn('helperModel')(function* (
   stores: ModelOptionStores,
 ): Effect.fn.Return<BoundModel, HelperModelUnavailable | Error, Scope.Scope> {
   const modelName = getHelperModelName(stores.globalState);
-  const reason = yield* Effect.tryPromise({
-    try: () => getModelUnavailableReason(modelName, stores),
-    catch: ensureError,
-  });
+  const reason = yield* getModelUnavailableReason(modelName, stores);
   if (reason) return yield* new HelperModelUnavailable({ message: reason });
   const config = yield* Effect.tryPromise({
     try: () => resolveRuntimeModelConfig(modelName),

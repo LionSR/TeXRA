@@ -4,10 +4,7 @@ import { Effect } from 'effect';
 
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import {
-  openAppStateStore,
-  type RunStateWrite,
-} from '@controllers/session/appStateStore';
+import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -15,7 +12,7 @@ import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import { AppState, SHUTDOWN_PHASE } from '@platform/interfaces';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,
@@ -24,7 +21,6 @@ import type {
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
@@ -66,9 +62,6 @@ export interface ElectronPlatformInitResult {
    * setting changed from one project is what the others read.
    */
   globalConfigStore: ConfigStore;
-  /** Runs a project state store's durable writes on this process's runtime:
-   *  the store is below the boundary, so its Promise face is made here. */
-  runWrite: RunStateWrite;
   lifecycle: LifecycleHost;
   /**
    * The process-wide services the composition root builds and `initPlatform`
@@ -127,51 +120,45 @@ export async function initializeElectronPlatform(
   // face an asynchronous layer build.
   const processStart = await nodeProcesses.selfIdentity();
   installLongRunningModelDispatcher();
-  // The secrets and global state stores below open on this runtime, so the
-  // process services bind them through thunks over this root's own locals,
-  // resolved at first use — after this function has assigned them.
+  // The secret store is a value: an Effect-typed `PlatformSecrets` needs no
+  // runtime of its own, so this root builds it before the runtime and hands
+  // it over. Global state opens on the runtime being installed, so the
+  // process service takes its open program and builds it as part of the
+  // layer — the store the rest of this function reads back below.
+  const secrets = new ElectronSecrets(join(userDataPath, 'secrets.json'), {
+    showWarningMessage: showDesktopWarningDialog,
+  });
   const runtime = installProcessRuntime({
     processStart,
     globalStorage: () => storage.getGlobalStoragePath(),
     updateCheckStorage: () => resolveGlobalStoragePath(userDataPath),
-    secrets: () => secrets,
-    appState: () => globalStateStore,
+    secrets: Effect.succeed(secrets),
+    // Global state stays in the Electron profile, beside this profile's
+    // update-check records and apart from the shared `~/.texra` root the
+    // workspace scopes use.
+    appState: Effect.orDie(
+      openAppStateStore(resolveGlobalStoragePath(userDataPath)),
+    ),
     setup: desktopSetupPlatform,
     lean: directLeanLanguageServices(),
   });
-  // The Promise face of `StateStore.update`, run on this process's runtime:
-  // the store itself is below the boundary and never runs an Effect.
-  const runWrite = (write: Effect.Effect<void, Error>) =>
-    runtime.runPromise(write);
-  const { globalStateStore, workspaceStateStore, configStores, secretsStore } =
+  const { globalStateStore, workspaceStateStore, configStores } =
     await runtime.runPromise(
       Effect.gen(function* () {
-        const [globalState, workspaceState, config, secrets] =
-          yield* Effect.all(
-            [
-              // Global state stays in the Electron profile, beside this
-              // profile's update-check records and apart from the shared
-              // `~/.texra` root the workspace scopes use.
-              openAppStateStore(
-                resolveGlobalStoragePath(userDataPath),
-                runWrite,
-              ),
-              openAppStateStore(storage.getStoragePath(), runWrite),
-              openTexraConfigStores(
-                storage,
-                undefined,
-                (message) => console.warn(`[desktop] ${message}`),
-                runtime,
-              ),
-              JsonStore.open(join(userDataPath, 'secrets.json')),
-            ],
-            { concurrency: 'unbounded' },
-          );
+        const [globalState, workspaceState, config] = yield* Effect.all(
+          [
+            AppState,
+            openAppStateStore(storage.getStoragePath()),
+            openTexraConfigStores(storage, undefined, (message) =>
+              console.warn(`[desktop] ${message}`),
+            ),
+          ],
+          { concurrency: 'unbounded' },
+        );
         return {
           globalStateStore: globalState,
           workspaceStateStore: workspaceState,
           configStores: config,
-          secretsStore: secrets,
         };
       }),
     );
@@ -186,9 +173,6 @@ export async function initializeElectronPlatform(
     customDirectoryStore: {
       get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
     },
-  });
-  const secrets = new ElectronSecrets(secretsStore, runtime, {
-    showWarningMessage: showDesktopWarningDialog,
   });
   initPlatform(
     createNodePlatform({
@@ -234,7 +218,6 @@ export async function initializeElectronPlatform(
   return {
     processRoots,
     globalConfigStore: configStores.global,
-    runWrite,
     lifecycle,
     globalState: globalStateStore,
     ownerId: processOwnerId(processStart),

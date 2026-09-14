@@ -25,16 +25,19 @@
  * the first thing built on the runtime.
  *
  * The process services every entry provides the same way: `Secrets` over the
- * one `CliSecrets` of this storage root, `SetupPlatform` over the CLI's
- * sign-in, and `AppState` over the global state store `initCliPlatform`
- * binds here once it has opened it. That binding exists because the store
- * opens on the runtime being installed, and because the entry that installs
- * the runtime may not be the one that opens the store; it goes with the
- * six-entry shape when the CLI gets its single composition root.
+ * one `CliSecrets` of this storage root — a value, because an Effect-typed
+ * secret store runs nothing of its own — `SetupPlatform` over the CLI's
+ * sign-in, and `AppState` over the global state store, opened as this
+ * layer's own build step. Whichever entry arrives first therefore fixes both
+ * stores, and `initCliPlatform` reads the state store back off the service
+ * rather than opening a second view of the same file.
  */
+import { Effect } from 'effect';
+
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import type { StateStore } from '@platform/interfaces';
+
 import {
   tryProcessRuntime,
   type ProcessRuntime,
@@ -47,7 +50,6 @@ import { getCliSecrets } from './cliSecrets';
 import { signInCliSupabase } from './supabaseAuth';
 
 let pending: Promise<ProcessRuntime> | null = null;
-let globalState: StateStore | undefined;
 
 /**
  * Install the process runtime, or join the one already installed, and hand
@@ -70,8 +72,8 @@ export function installCliProcessRuntime(
       processStart,
       globalStorage: () => storage.getGlobalStoragePath(),
       updateCheckStorage: () => storage.getGlobalStoragePath(),
-      secrets: () => getCliSecrets(runtime, storageRoot),
-      appState: () => cliGlobalState(),
+      secrets: Effect.succeed(getCliSecrets(storageRoot)),
+      appState: Effect.orDie(openAppStateStore(storage.getGlobalStoragePath())),
       setup: {
         host: 'cli',
         signIn: async () => {
@@ -86,36 +88,4 @@ export function installCliProcessRuntime(
     pending = null;
   });
   return pending;
-}
-
-/**
- * Bind the global state store `initCliPlatform` opened as this process's
- * `AppState`. Called once, right after the store opens; a service read before
- * that throws rather than reading a default.
- *
- * This is the one interim of its kind, and it exists only because of the
- * first-arrival latch above: `notifyCliUpdate` and `clone` install the
- * runtime before `initCliPlatform` runs, so a thunk handed in at install
- * time would belong to the wrong entry. It goes with the latch when the CLI
- * gets its single composition root (injection plan §6 step 2), where the
- * store is a local of that root and is threaded like every other host's.
- * Until then: exactly one binder, no second `bind*` beside it, and no other
- * process service registered this way.
- */
-export function bindCliGlobalState(store: StateStore): void {
-  globalState = store;
-}
-
-/**
- * The store {@link bindCliGlobalState} bound, for the composition root's own
- * services bag and for the `AppState` thunk above. A read before the bind
- * throws rather than reading a default.
- */
-export function cliGlobalState(): StateStore {
-  if (!globalState) {
-    throw new Error(
-      'CLI global state is not open: initCliPlatform() has not bound its store to the process runtime yet.',
-    );
-  }
-  return globalState;
 }

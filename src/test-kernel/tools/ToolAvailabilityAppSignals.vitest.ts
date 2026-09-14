@@ -12,14 +12,16 @@ const unreadSecret = (): never => {
   throw new Error('The mocked external tool defs must not read secrets.');
 };
 
-const secretsLayer = Secrets.layer((): PlatformSecrets => ({
-  get: unreadSecret,
-  getStored: unreadSecret,
-  set: unreadSecret,
-  delete: unreadSecret,
-  listStoredKeys: unreadSecret,
-  getEnv: unreadSecret,
-}));
+const secretsLayer = Secrets.layer(
+  Effect.succeed<PlatformSecrets>({
+    get: unreadSecret,
+    getStored: unreadSecret,
+    set: unreadSecret,
+    delete: unreadSecret,
+    listStoredKeys: unreadSecret,
+    getEnv: unreadSecret,
+  }),
+);
 
 /** The services a group's availability callbacks may read. */
 const probeServices = Layer.mergeAll(

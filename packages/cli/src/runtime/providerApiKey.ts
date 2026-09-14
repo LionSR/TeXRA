@@ -10,9 +10,7 @@ import {
 import type { PlatformSecrets } from '@platform/secrets';
 import { providerDisplayName } from '@shared/constants/providers';
 
-export function loadProviderApiKeyStatuses(
-  secrets: PlatformSecrets,
-): Promise<Record<ApiProvider, ApiKeyStatus>> {
+export function loadProviderApiKeyStatuses(secrets: PlatformSecrets) {
   return loadApiKeyStatusMap(secrets, API_PROVIDERS);
 }
 

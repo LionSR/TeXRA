@@ -10,6 +10,7 @@
  * own `CliPlatformServices`, or the `AppState` service), so the read and the
  * write that follows it hit the same store.
  */
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -57,6 +58,7 @@ export function listCliEnabledModelCatalog(
  * (`grok-4.5` → `grok45`) before handing the id to the shared writer.
  */
 export async function setCliModelEnabled(
+  runtime: ProcessRuntime,
   state: StateStore,
   modelInput: string,
   enabled: boolean,
@@ -72,6 +74,8 @@ export async function setCliModelEnabled(
     );
   }
 
-  const list = await setModelEnabled({ model, enabled, state });
+  const list = await runtime.runPromise(
+    setModelEnabled({ model, enabled, state }),
+  );
   return { model, enabled: list.includes(model), list };
 }

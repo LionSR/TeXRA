@@ -1,4 +1,5 @@
 import { Box, Text, useStderr, useWindowSize } from 'ink';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
@@ -54,10 +55,12 @@ interface StatusBarProps {
   /** True when the focused stream has a composer for slash commands and text. */
   readonly chatInputAvailable: boolean;
   /**
-   * The secret store the subscription quota and route probes read, threaded
-   * from the chat surface that opened it — this component runs no Effect.
+   * The secret store the subscription quota and route probes read, and the
+   * runtime they settle on, both threaded from the chat surface that opened
+   * this bar.
    */
   readonly secrets: PlatformSecrets;
+  readonly runtime: ProcessRuntime;
   readonly childListFocused?: boolean;
   readonly childListSelectionKillable?: boolean;
   readonly childListSelectionResumable?: boolean;
@@ -172,7 +175,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       if (subscriptionInFlightKeyRef.current === readKey) return;
       subscriptionInFlightKeyRef.current = readKey;
       const requestGeneration = ++subscriptionRequestGenerationRef.current;
-      void activeSubscriptionUsageRoute(accessModel, props.secrets)
+      void props.runtime
+        .runPromise(activeSubscriptionUsageRoute(accessModel, props.secrets))
         .then((route) => {
           if (
             subscriptionDesiredKeyRef.current !== readKey ||

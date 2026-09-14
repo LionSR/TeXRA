@@ -52,13 +52,10 @@ export class WorktreeStateStore implements StateStore {
     );
   }
 
-  async update(key: string, value: unknown): Promise<void> {
-    if (!this.sharedKeys.has(key)) {
-      await this.workspaceState.update(key, value);
-      return;
-    }
-
-    await this.globalState.update(this.namespacedKey(key), value);
+  update(key: string, value: unknown) {
+    return this.sharedKeys.has(key)
+      ? this.globalState.update(this.namespacedKey(key), value)
+      : this.workspaceState.update(key, value);
   }
 
   private namespacedKey(key: string): string {

@@ -492,6 +492,7 @@ export function createChatSessionController(
     runtimeSession.interactions.use(
       createTuiHostInteractions(presentationHost, sessionContext, {
         secrets,
+        runtime: effectRuntime(),
       }),
     ),
   );
@@ -1023,6 +1024,7 @@ export function createChatSessionController(
           const currentModel = meta.model || initialModel;
           const selection = yield* hostPort(() =>
             selectCliRunnableModel(currentModel, {
+              runtime: effectRuntime(),
               stores: { secrets, globalState: state },
               fallbackReason: meta.model
                 ? meta.modelSource

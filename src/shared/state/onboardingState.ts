@@ -10,11 +10,8 @@ import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/core';
 
-export async function setOnboardingDeclined(
-  state: StateStore,
-  declined: boolean,
-): Promise<void> {
-  await state.update(GlobalStateKey.ONBOARDING_DECLINED, declined);
+export function setOnboardingDeclined(state: StateStore, declined: boolean) {
+  return state.update(GlobalStateKey.ONBOARDING_DECLINED, declined);
 }
 
 export function getFirstRunDone(state: StateStore): boolean {
@@ -23,11 +20,8 @@ export function getFirstRunDone(state: StateStore): boolean {
   );
 }
 
-export async function setFirstRunDone(
-  state: StateStore,
-  done: boolean,
-): Promise<void> {
-  await state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, done);
+export function setFirstRunDone(state: StateStore, done: boolean) {
+  return state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, done);
 }
 
 /** User-level default team id, written by the setup agent's `apply_team`. */
@@ -36,16 +30,13 @@ export function getDefaultTeamId(state: StateStore): string | undefined {
   return isNonEmptyString(value) ? value : undefined;
 }
 
-export async function setDefaultTeamId(
-  state: StateStore,
-  teamId: string,
-): Promise<void> {
-  await state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, teamId);
+export function setDefaultTeamId(state: StateStore, teamId: string) {
+  return state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, teamId);
 }
 
 /** Drop the user-level default team, restoring the inherited roster. */
-export async function clearDefaultTeamId(state: StateStore): Promise<void> {
-  await state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, undefined);
+export function clearDefaultTeamId(state: StateStore) {
+  return state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, undefined);
 }
 
 export function readOnboardingFlags(state: StateStore): {

@@ -853,20 +853,16 @@ export const bindModel = Effect.fn('bindModel')(function* (
   const onOpenRouter = compatibilityKey === 'OpenRouterNative';
   let config = requested;
   if (compatibilityKey === 'Kimi' && isKimiSubscriptionEligible(config)) {
-    config = yield* Effect.tryPromise({
-      try: () =>
-        input.inScope(async () =>
-          kimiCodeEffectiveConfig(
-            config,
-            await resolveKimiCodeRoutingFacts(
-              input.stores.secrets,
-              onOpenRouter,
-              input.declinedRoutes,
-            ),
-          ),
-        ),
-      catch: ensureError,
-    });
+    // The routing facts read the process-global preference switches and the
+    // secret store handed in, so the host workspace frame is not consulted.
+    config = kimiCodeEffectiveConfig(
+      config,
+      yield* resolveKimiCodeRoutingFacts(
+        input.stores.secrets,
+        onOpenRouter,
+        input.declinedRoutes,
+      ),
+    );
   }
   if (protocol === 'validation') {
     const bound = validationModel(config);
@@ -921,18 +917,12 @@ export const bindModel = Effect.fn('bindModel')(function* (
     config = subscription.config;
     credential = subscription.credential;
   } else {
-    credential = yield* Effect.tryPromise({
-      try: () =>
-        input.inScope(() =>
-          resolveRouteCredential(
-            config,
-            onOpenRouter,
-            input.stores.secrets,
-            input.declinedRoutes,
-          ),
-        ),
-      catch: ensureError,
-    });
+    credential = yield* resolveRouteCredential(
+      config,
+      onOpenRouter,
+      input.stores.secrets,
+      input.declinedRoutes,
+    );
   }
   config = withReasoningLevelOverride(config, input.stores.globalState);
   const configuration = yield* Effect.try({

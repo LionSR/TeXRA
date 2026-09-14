@@ -182,7 +182,14 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   // (tool-use) model config rather than `run` (workflow agents). Resolve the
   // model after agent validation so usage errors stay focused on bad agents.
   const model = yield* Effect.tryPromise({
-    try: () => selectCliRunModel(context, init.model, 'chat', services),
+    try: () =>
+      selectCliRunModel(
+        services.runtime,
+        context,
+        init.model,
+        'chat',
+        services,
+      ),
     catch: ensureError,
   });
   const runContext = buildHeadlessRunContext(context);

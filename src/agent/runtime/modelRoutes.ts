@@ -1,5 +1,6 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
+import { Effect } from 'effect';
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
 import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
 import {
@@ -277,31 +278,34 @@ export async function resolveSubscriptionCredential(
  * resolver above so route and credential are decided in one place. `secrets`
  * is the process secret store the caller already holds.
  */
-export async function resolveRouteCredential(
+export const resolveRouteCredential = Effect.fn(
+  'modelRoutes.resolveRouteCredential',
+)(function* (
   config: ModelConfig,
   useOpenRouter: boolean,
   secrets: PlatformSecrets,
   declinedRoutes?: readonly DeclinableUsageRoute[],
-): Promise<ApiKeyRouteCredential> {
+): Generator<Effect.Effect<unknown, Error>, ApiKeyRouteCredential> {
   const provider = useOpenRouter
     ? 'openRouter'
     : resolveDirectModelApiKeyProvider(config);
   if (!provider) {
     throw new Error(`Model "${config.name}" has no direct API-key provider.`);
   }
-  let apiKey: string;
-  try {
-    apiKey = exposeApiKey(await getApiKey(secrets, provider));
-  } catch (cause) {
-    const error = new Error(
-      useOpenRouter
-        ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
-        : `Missing API key for ${provider}. Set a provider API key in settings.`,
-      { cause },
-    );
-    attachMissingApiKeyError(error);
-    throw error;
-  }
+  const apiKey = exposeApiKey(
+    yield* getApiKey(secrets, provider).pipe(
+      Effect.mapError((cause) => {
+        const error = new Error(
+          useOpenRouter
+            ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
+            : `Missing API key for ${provider}. Set a provider API key in settings.`,
+          { cause },
+        );
+        attachMissingApiKeyError(error);
+        return error;
+      }),
+    ),
+  );
   const endpoint = resolveRouteEndpoint(config, useOpenRouter, declinedRoutes);
   return {
     apiKey,
@@ -312,7 +316,7 @@ export async function resolveRouteCredential(
       endpoint.usageRoute ??
       (provider === 'kimiCode' ? 'kimi-code-subscription' : 'api-key'),
   };
-}
+});
 
 /**
  * The config a binding sends on the wire under the user's "prefer short model

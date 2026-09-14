@@ -1,4 +1,5 @@
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import { Effect } from 'effect';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { fakeSetupPlatform, installedHost } from './setupPlatform';
 /**
@@ -31,8 +32,8 @@ export function installTestSessionGraphs(): void {
     processStart: 'vitest',
     globalStorage: () => installedHost().roots.globalStorage,
     updateCheckStorage: () => installedHost().roots.globalStorage,
-    secrets: () => installedHost().secrets,
-    appState: () => installedHost().roots.globalState,
+    secrets: Effect.sync(() => installedHost().secrets),
+    appState: Effect.sync(() => installedHost().roots.globalState),
     setup: fakeSetupPlatform,
     // The Node hosts' layer: inert until a Lean tool is invoked.
     lean: directLeanLanguageServices(),

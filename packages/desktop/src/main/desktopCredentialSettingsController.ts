@@ -177,7 +177,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       host: 'desktop',
       globalState: options.globalState,
       loadProviderKeyStatuses: () =>
-        loadApiKeyStatusMap(options.secrets, API_PROVIDERS),
+        options.runtime.runPromise(
+          loadApiKeyStatusMap(options.secrets, API_PROVIDERS),
+        ),
       getConfig: (key, defaultValue) => options.config.get(key, defaultValue),
     });
     this.profileKeyController = new SettingsProfileKeyController({
@@ -431,7 +433,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       (provider, error) =>
         `${provider.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
       async (provider) => {
-        const update = await provider.setPreferSubscription(enabled);
+        const update = await this.options.runtime.runPromise(
+          provider.setPreferSubscription(enabled),
+        );
         if (update.effective !== enabled) {
           await this.options.notifications.showWarningMessage(
             `A more specific setting still keeps ${provider.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,

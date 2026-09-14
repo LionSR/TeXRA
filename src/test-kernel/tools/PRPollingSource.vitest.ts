@@ -92,7 +92,7 @@ function createDrainState(runs: GhCheckRun[]): PRSubscriptionState {
  * The annotation fetch is mocked here, so no member is called; the layer
  * satisfies the requirement the host root provides in production.
  */
-const secretsLayer = Secrets.layer(() => new FakeSecrets());
+const secretsLayer = Secrets.layer(Effect.succeed(new FakeSecrets()));
 
 /** A source whose subscription states stay active for the whole drain. */
 function createDrainSource(): PRPollingSource {

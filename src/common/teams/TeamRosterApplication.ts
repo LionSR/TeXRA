@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { hostPort } from '@common/hostPort';
 import {
   preflightTeamAvailability,
   type TeamAvailabilityChoice,
@@ -95,7 +94,7 @@ export function applyTeamRosterWithPreflight(
       };
     }
 
-    yield* hostPort(() => deps.catalog.commitPreset(preflight.value.preset));
+    yield* deps.catalog.commitPreset(preflight.value.preset);
     return {
       status: 'applied' as const,
       preset: preflight.value.preset,

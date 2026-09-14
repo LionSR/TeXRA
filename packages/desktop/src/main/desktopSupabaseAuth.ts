@@ -185,14 +185,7 @@ export function createDesktopAuthCallbackState(
     withPerKeyLane(
       persistLanes,
       AUTH_PERSIST_LANE,
-    )(
-      Effect.tryPromise({
-        try: () =>
-          store?.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state) ??
-          Promise.resolve(),
-        catch: (error) => error,
-      }),
-    );
+    )(store?.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state) ?? Effect.void);
 
   const persistPendingState = async (
     state: PendingOAuthState | null,

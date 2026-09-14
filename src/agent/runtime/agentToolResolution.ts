@@ -24,6 +24,7 @@
  * does not hold is the one reported case.
  */
 
+import { Cause, Effect } from 'effect';
 import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { createLog } from '@logger/logUtils';
@@ -80,28 +81,30 @@ interface ResolveAgentToolsInput {
  * `null` when the model options could not be loaded, and the list of available
  * model names otherwise.
  */
-async function availableDelegationModelNamesForTools(
+const availableDelegationModelNamesForTools = Effect.fn(
+  'agentToolResolution.availableDelegationModelNames',
+)(function* (
   tools: readonly ToolDefinition[],
   stores: ModelOptionStores,
-): Promise<readonly string[] | null | undefined> {
+): Generator<Effect.Effect<unknown>, readonly string[] | null | undefined> {
   if (!hasDelegationTool(tools.map((tool) => tool.name))) {
     return undefined;
   }
-
-  try {
-    const models = await computeModelOptionsData(stores);
-    return availableModelNamesFromOptions(models);
-  } catch (err) {
-    // Couldn't load model options — skip the delegation annotation rather than
-    // fail the run, but log so the missing "Available models:" line is traceable.
-    log.warn(
-      `Could not load model options for delegation annotation: ${toErrorMessage(
-        err,
-      )}`,
-    );
-    return null;
-  }
-}
+  return yield* computeModelOptionsData(stores).pipe(
+    Effect.map(availableModelNamesFromOptions),
+    // Couldn't load model options — skip the delegation annotation rather
+    // than fail the run, but log so the missing "Available models:" line is
+    // traceable.
+    Effect.catchCause((cause) => {
+      log.warn(
+        `Could not load model options for delegation annotation: ${toErrorMessage(
+          Cause.squash(cause),
+        )}`,
+      );
+      return Effect.succeed(null);
+    }),
+  );
+});
 
 /**
  * Resolve the effective tool list for a single agent run.
@@ -110,7 +113,9 @@ async function availableDelegationModelNamesForTools(
  * so callers can substitute a test registry; it defaults to the singleton
  * returned by `getDefaultToolRegistry()`.
  */
-export async function resolveAgentTools({
+export const resolveAgentTools = Effect.fn(
+  'agentToolResolution.resolveAgentTools',
+)(function* ({
   tools,
   registry,
   logger,
@@ -119,7 +124,7 @@ export async function resolveAgentTools({
   toolInjections,
   config,
   stores,
-}: ResolveAgentToolsInput): Promise<ToolDefinition[]> {
+}: ResolveAgentToolsInput) {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames(stores.globalState);
   const unavailable = getUnavailableToolNamesCached();
@@ -171,11 +176,11 @@ export async function resolveAgentTools({
     }
   }
 
-  const availableModelNames = await availableDelegationModelNamesForTools(
+  const availableModelNames = yield* availableDelegationModelNamesForTools(
     resolved,
     stores,
   );
   return resolved.map((tool) =>
     annotateDelegationAvailability(tool, availableModelNames),
   );
-}
+});

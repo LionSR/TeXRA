@@ -7,6 +7,7 @@
  * with no renderer in the loop, and the onboarding funnel the New-task
  * state renders.
  */
+import { vscodeStateStore } from '@frontend/vscode/vscodeStateStore';
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
@@ -149,7 +150,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
     this.onboardingFunnel = new OnboardingFunnelRefresher({
       hasCredential: () => hasAnyUsableSetupCredential(secrets),
-      flags: context.globalState,
+      flags: vscodeStateStore(context.globalState),
       apply: (transition) => {
         this.snapshot.setOnboarding(transition.state);
         if (!transition.selectSetupAgent) return;
@@ -179,7 +180,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const roots = workspaceRoots();
     this.snapshot = createHostSnapshotSource({
       project: projectDisplayOf(session.roots.storage, roots.workspace),
-      globalState: context.globalState,
+      globalState: vscodeStateStore(context.globalState),
       secrets,
       fileOptions: () => workspaceFileOptions(roots.workspace),
       readRecentCommits: async () => {
@@ -271,7 +272,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       session,
       runtime: this.runtime,
       extensionPath: context.extensionPath,
-      globalState: context.globalState,
+      globalState: vscodeStateStore(context.globalState),
       secrets,
       snapshot: this.snapshot,
       draftRequests: new HostDraftRequests(),
@@ -288,7 +289,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // proposal, retry, question) stay pending in the fold until the view's
     // request row decides them.
     const detachHostInteractions = session.interactions.use({
-      ...createAgentPresentationHost(this, context.globalState),
+      ...createAgentPresentationHost(
+        this,
+        vscodeStateStore(context.globalState),
+      ),
       readDiagnostics: getLinterMessages,
       addCriticism: (payload) => ({
         accepted: pushManualCriticism(payload),

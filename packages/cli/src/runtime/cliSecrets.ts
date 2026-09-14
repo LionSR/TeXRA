@@ -5,10 +5,15 @@ import path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
-import { secretsGet, type PlatformSecrets } from '@platform/secrets';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import { JsonStore } from '@platform/defaults/jsonStore';
+import {
+  SecretsFailed,
+  secretsGet,
+  type PlatformSecrets,
+  type SecretsOperation,
+} from '@platform/secrets';
+import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type PerKeyLane,
   type PerKeyLanes,
@@ -44,41 +49,37 @@ const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
  * before the open — so same-key writes preserve caller order. `JsonStore`
  * handles cross-instance and cross-process exclusion while flushing.
  *
- * `PlatformSecrets` is a Promise-shaped platform port, so this host
- * implementation is where its programs are run, on the process runtime the
- * composition root hands it; every line of logic above that boundary is an
- * `Effect`.
+ * Nothing here runs a program: `PlatformSecrets` is Effect-typed, so this
+ * store is a value the composition root can build before it installs the
+ * process runtime, and every call is a step of the caller's own fiber.
  */
 export class CliSecrets implements PlatformSecrets {
-  constructor(
-    readonly runtime: ProcessRuntime,
-    private readonly filePath = cliSecretsPath(),
-  ) {}
+  constructor(private readonly filePath = cliSecretsPath()) {}
 
-  get(key: string): Promise<string | undefined> {
+  get(key: string) {
     return secretsGet(this, key);
   }
 
-  getStored(key: string): Promise<string | undefined> {
-    return this.runtime.runPromise(
-      Effect.map(this.openStore(), (store) => {
-        const value = store.get<unknown>(key, undefined);
-        return typeof value === 'string' ? value : undefined;
-      }),
-    );
+  getStored(key: string) {
+    return Effect.map(this.openStore('getStored', key), (store) => {
+      const value = store.get<unknown>(key, undefined);
+      return typeof value === 'string' ? value : undefined;
+    });
   }
 
-  set(key: string, value: string): Promise<void> {
+  /** Uninterruptible commit region: see `PlatformSecrets` (study Q2). */
+  set(key: string, value: string) {
     return this.mutate(key, value);
   }
 
-  delete(key: string): Promise<void> {
+  /** Uninterruptible commit region: see `PlatformSecrets` (study Q2). */
+  delete(key: string) {
     return this.mutate(key, undefined);
   }
 
-  listStoredKeys(): Promise<readonly string[]> {
-    return this.runtime.runPromise(
-      Effect.map(this.openStore(), (store) => store.keys()),
+  listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
+    return Effect.map(this.openStore('listStoredKeys'), (store) =>
+      store.keys(),
     );
   }
 
@@ -86,17 +87,51 @@ export class CliSecrets implements PlatformSecrets {
     return cliEnvValue(name);
   }
 
-  private mutate(key: string, value: string | undefined): Promise<void> {
-    return this.runtime.runPromise(
-      withPerKeyLane(
-        mutationLanes,
-        this.filePath,
-      )(Effect.flatMap(this.openStore(), (store) => store.set(key, value))),
+  /**
+   * Waiting for the file's lane stays interruptible; the open-and-flush that
+   * follows does not, so a cancelled caller either never wrote or wrote
+   * completely (study Q2).
+   */
+  private mutate(
+    key: string,
+    value: string | undefined,
+  ): Effect.Effect<void, SecretsFailed> {
+    const operation: SecretsOperation = value === undefined ? 'delete' : 'set';
+    return withPerKeyLane(
+      mutationLanes,
+      this.filePath,
+    )(
+      Effect.uninterruptible(
+        Effect.flatMap(this.openStore(operation, key), (store) =>
+          store
+            .update(key, value)
+            .pipe(
+              Effect.mapError((cause) => this.failed(operation, cause, key)),
+            ),
+        ),
+      ),
     );
   }
 
-  private openStore() {
-    return JsonStore.open(this.filePath, { mode: SECRETS_FILE_MODE });
+  private openStore(operation: SecretsOperation, key?: string) {
+    return JsonStore.open(this.filePath, { mode: SECRETS_FILE_MODE }).pipe(
+      Effect.mapError((cause) => this.failed(operation, cause, key)),
+      Effect.provide(nodeFileServices),
+    );
+  }
+
+  private failed(
+    operation: SecretsOperation,
+    cause: unknown,
+    key?: string,
+  ): SecretsFailed {
+    return new SecretsFailed({
+      reason: 'io',
+      operation,
+      key,
+      message: `The CLI secret store at ${this.filePath} failed to ${operation}${key ? ` "${key}"` : ''}: ${toErrorMessage(cause)}`,
+      cause,
+    });
   }
 }
 
@@ -109,17 +144,12 @@ export function cliSecretsPath(
 let cliSecrets: CliSecrets | undefined;
 
 /**
- * The one secret store of this process, over the runtime it runs on. A
- * runtime that replaced a disposed one (an init retried after its failure
- * disposed the first) gets a store of its own rather than one bound to the
- * runtime that is gone.
+ * The one secret store of this process. Held rather than rebuilt because
+ * callers key per-store caches on its identity (the API-key lookup cache,
+ * the subscription session coordinators); the first caller's storage root
+ * fixes the file, as it did when the store followed the process runtime.
  */
-export function getCliSecrets(
-  runtime: ProcessRuntime,
-  storageRoot?: string,
-): CliSecrets {
-  if (cliSecrets?.runtime !== runtime) {
-    cliSecrets = new CliSecrets(runtime, cliSecretsPath(storageRoot));
-  }
+export function getCliSecrets(storageRoot?: string): CliSecrets {
+  cliSecrets ??= new CliSecrets(cliSecretsPath(storageRoot));
   return cliSecrets;
 }

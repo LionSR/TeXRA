@@ -1,4 +1,6 @@
 // Local imports
+import type { Effect } from 'effect';
+import type { StoreWriteFailed } from '@platform/interfaces';
 import {
   findTeamPreset,
   planTeamRun,
@@ -42,13 +44,16 @@ export interface SettingsAgentCatalogState {
   setEnabledAgentKeys(
     category: AgentCategory,
     enabledKeys: string[],
-  ): Promise<void>;
-  setTeamRoster(preset: AgentModePreset): Promise<void>;
+  ): Effect.Effect<void, StoreWriteFailed>;
+  setTeamRoster(preset: AgentModePreset): Effect.Effect<void, StoreWriteFailed>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getVisibleAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getCustomPresetsRaw(): unknown;
-  setCustomPresets(presets: unknown[]): Promise<void>;
-  removeCustomPreset(presetId: string, remaining: unknown[]): Promise<void>;
+  setCustomPresets(presets: unknown[]): Effect.Effect<void, StoreWriteFailed>;
+  removeCustomPreset(
+    presetId: string,
+    remaining: unknown[],
+  ): Effect.Effect<void, StoreWriteFailed>;
 }
 
 interface SettingsAgentCatalogControllerDeps {
@@ -148,8 +153,8 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
     };
   }
 
-  async commitPreset(preset: AgentModePreset): Promise<void> {
-    await this.deps.state.setTeamRoster(preset);
+  commitPreset(preset: AgentModePreset) {
+    return this.deps.state.setTeamRoster(preset);
   }
 
   async saveCurrentPreset(name: string): Promise<AgentModePreset> {

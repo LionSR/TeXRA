@@ -6,6 +6,7 @@
  * error; an arm the extension does not perform is `Rejected` with its
  * reason, never dropped.
  */
+import type { StateStore } from '@platform/interfaces';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -103,7 +104,7 @@ const MULTIPLE_FILE_PICKERS: Record<
 export interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
   readonly extensionPath: string;
-  readonly globalState: vscode.Memento;
+  readonly globalState: StateStore;
   /** The process secret store the extension root holds (model availability). */
   readonly secrets: PlatformSecrets;
   readonly snapshot: HostSnapshotSource;
@@ -585,7 +586,9 @@ export function createExtensionHostRequests(
         await options.refreshOnboardingFunnel();
         return;
       case 'skip':
-        await setOnboardingDeclined(options.globalState, true);
+        await options.runtime.runPromise(
+          setOnboardingDeclined(options.globalState, true),
+        );
         await options.refreshOnboardingFunnel();
         return;
       case 'runSetup':
@@ -593,7 +596,9 @@ export function createExtensionHostRequests(
         await options.refreshOnboardingFunnel();
         return;
       case 'skipSetup':
-        await setFirstRunDone(options.globalState, true);
+        await options.runtime.runPromise(
+          setFirstRunDone(options.globalState, true),
+        );
         await options.refreshOnboardingFunnel();
         return;
       case 'openGettingStarted':

@@ -47,16 +47,16 @@ export function prefersCopilotRoute(
 }
 
 /** Persist (or clear) the Copilot route preference for one base model. */
-export async function setCopilotRoutePreference(
+export function setCopilotRoutePreference(
   model: string,
   preferred: boolean,
   state: StateStore,
-): Promise<void> {
+) {
   const current = copilotRouteModels(state);
   const next = preferred
     ? [...new Set([...current, model])]
     : current.filter((entry) => entry !== model);
-  await state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, next);
+  return state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, next);
 }
 
 /**

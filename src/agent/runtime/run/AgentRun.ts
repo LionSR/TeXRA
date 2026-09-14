@@ -193,22 +193,15 @@ export const agentRunLayer = (
       const scope = yield* Effect.scope;
 
       const baseRegistry = getDefaultToolRegistry();
-      const resolvedTools = yield* Effect.tryPromise({
-        try: () =>
-          input.inScope(() =>
-            resolveAgentTools({
-              tools: input.setting.tools,
-              registry: baseRegistry,
-              logger,
-              approvalPromptsUnavailable:
-                ctx.toolPolicy.approvalPromptsUnavailable,
-              runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
-              toolInjections: input.toolInjections,
-              config: session.roots.config,
-              stores: ctx.stores,
-            }),
-          ),
-        catch: ensureError,
+      const resolvedTools = yield* resolveAgentTools({
+        tools: input.setting.tools,
+        registry: baseRegistry,
+        logger,
+        approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
+        runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
+        toolInjections: input.toolInjections,
+        config: session.roots.config,
+        stores: ctx.stores,
       });
       const overlayTools: ITool[] = [];
       const overlayNames = new Set<string>();

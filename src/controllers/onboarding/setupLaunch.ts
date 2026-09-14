@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import {
   validateRunRequest,
   type ValidatedRunRequest,
@@ -36,17 +37,19 @@ export const SETUP_INSTRUCTION =
  * Scan non-OpenRouter setup credentials in host-shared priority order:
  * ChatGPT/Codex subscription, Grok subscription, then direct provider key.
  */
-export async function selectSetupCredentialModelExcludingOpenRouter(
+export const selectSetupCredentialModelExcludingOpenRouter = Effect.fn(
+  'setupLaunch.selectSetupCredentialModelExcludingOpenRouter',
+)(function* (
   secrets: PlatformSecrets,
   useOpenRouter = false,
-): Promise<string | null> {
+): Generator<Effect.Effect<boolean>, string | null> {
   // Subscription routes follow the global OpenRouter selection.
   // When it is enabled, only managed direct credentials can bypass it.
   if (
     !useOpenRouter &&
-    (await probeSetupCredential(
+    (yield* probeSetupCredential(
       'ChatGPT subscription',
-      () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
+      Effect.promise(() => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)),
       credentialLog.warn,
     ))
   ) {
@@ -54,9 +57,9 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
   }
   if (
     !useOpenRouter &&
-    (await probeSetupCredential(
+    (yield* probeSetupCredential(
       'Grok subscription',
-      () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
+      Effect.promise(() => isXaiSubscriptionActive(XAI_SETUP_MODEL)),
       credentialLog.warn,
     ))
   ) {
@@ -71,16 +74,16 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
     if (!config || shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
       continue;
     }
-    const hasApiKey = await probeSetupCredential(
+    const hasApiKey = yield* probeSetupCredential(
       `${provider} API key`,
-      () => hasUsableApiKey(secrets, provider),
+      hasUsableApiKey(secrets, provider),
       credentialLog.warn,
     );
     if (hasApiKey) return model;
   }
 
   return null;
-}
+});
 
 interface SetupModelResolution {
   model: string;
@@ -95,14 +98,13 @@ interface SetupModelResolution {
  * extension prompts the user first (`ensureRoutingConfigured`) and can offer
  * it.
  */
-export async function resolveSetupLaunchModel(
-  secrets: PlatformSecrets,
-  includeAccessListFallback: boolean,
-): Promise<SetupModelResolution | null> {
+export const resolveSetupLaunchModel = Effect.fn(
+  'setupLaunch.resolveSetupLaunchModel',
+)(function* (secrets: PlatformSecrets, includeAccessListFallback: boolean) {
   const useOpenRouter = getUseOpenRouter();
-  const hasOpenRouterKey = await probeSetupCredential(
+  const hasOpenRouterKey = yield* probeSetupCredential(
     'OpenRouter API key',
-    () => hasUsableApiKey(secrets, 'openRouter'),
+    hasUsableApiKey(secrets, 'openRouter'),
     credentialLog.warn,
   );
   const openRouterModel = hasOpenRouterKey
@@ -111,7 +113,7 @@ export async function resolveSetupLaunchModel(
   const credentialModel =
     useOpenRouter && openRouterModel
       ? null
-      : await selectSetupCredentialModelExcludingOpenRouter(
+      : yield* selectSetupCredentialModelExcludingOpenRouter(
           secrets,
           useOpenRouter,
         );
@@ -134,28 +136,33 @@ export async function resolveSetupLaunchModel(
   }
 
   const decision = decideRunModel(candidates);
-  return decision ? { model: decision.model, reason: decision.reason } : null;
-}
+  return decision
+    ? ({
+        model: decision.model,
+        reason: decision.reason,
+      } as SetupModelResolution)
+    : null;
+});
 
 /**
  * Desktop has no routing prompt, so OpenRouter is chosen only when the flag is
  * already on and an OpenRouter key exists.
  */
-export async function selectDesktopSetupModel(
-  secrets: PlatformSecrets,
-): Promise<string | null> {
-  const resolution = await resolveSetupLaunchModel(secrets, false);
+export const selectDesktopSetupModel = Effect.fn(
+  'setupLaunch.selectDesktopSetupModel',
+)(function* (secrets: PlatformSecrets) {
+  const resolution = yield* resolveSetupLaunchModel(secrets, false);
   return resolution?.model ?? null;
-}
+});
 
 /**
  * Build the validated run request that launches the setup conversation, or
  * `null` when no credential resolves to a runnable model.
  */
-export async function buildDesktopSetupRunRequest(
-  secrets: PlatformSecrets,
-): Promise<ValidatedRunRequest | null> {
-  const model = await selectDesktopSetupModel(secrets);
+export const buildDesktopSetupRunRequest = Effect.fn(
+  'setupLaunch.buildDesktopSetupRunRequest',
+)(function* (secrets: PlatformSecrets) {
+  const model = yield* selectDesktopSetupModel(secrets);
   if (!model) return null;
   const validation = validateRunRequest({
     config: {
@@ -167,4 +174,4 @@ export async function buildDesktopSetupRunRequest(
   });
   if (!validation.valid) throw new Error(validation.message);
   return validation.request;
-}
+});

@@ -152,8 +152,8 @@ async function loadSupabaseAuth() {
       // The process services over this suite's platform mock: the auth run
       // edge reads none of them, so a member call is a test error that
       // surfaces through the mock.
-      Secrets.layer(() => mocks.platform().secrets),
-      AppState.layer(() => mocks.platform().globalState),
+      Secrets.layer(Effect.sync(() => mocks.platform().secrets)),
+      AppState.layer(Effect.sync(() => mocks.platform().globalState)),
       SetupPlatform.layer({ host: 'cli', signIn: async () => false }),
       ToolInjections.layer([]),
     ),

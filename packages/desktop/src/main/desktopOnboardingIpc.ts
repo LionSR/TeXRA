@@ -1,4 +1,5 @@
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
+import type { Effect } from 'effect';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type { OnboardingFunnelState } from '@shared/schemas';
@@ -24,7 +25,7 @@ interface DesktopOnboardingIpcOptions {
    * Host-provided check for a usable credential (a subscription or any
    * provider API key). Async because the secrets read can involve disk I/O.
    */
-  hasCredential: () => boolean | Promise<boolean>;
+  hasCredential: () => Effect.Effect<boolean>;
   /** Launch the setup conversation when the user clicks "Run Setup". */
   kickoffSetup: () => Promise<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */

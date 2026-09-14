@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { useState } from 'react';
 
 import {
@@ -36,6 +37,7 @@ export type AccountAccessFormValue =
   | { readonly kind: 'logout'; readonly target: CliLogoutTarget };
 
 interface AccountAccessFormProps {
+  readonly runtime: ProcessRuntime;
   readonly availableRows?: number;
   /**
    * The secret store the access overview reads. Ink components run no Effect,
@@ -188,7 +190,8 @@ export function AccountAccessForm(
   useCancellableEffect(
     (isCancelled) => {
       setStatus(null);
-      void loadCliModelAccessOverview(props.secrets)
+      void props.runtime
+        .runPromise(loadCliModelAccessOverview(props.secrets))
         .then((overview) => {
           if (!isCancelled()) setStatus({ state: 'loaded', overview });
         })

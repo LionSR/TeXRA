@@ -11,10 +11,12 @@ import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import type { HostOutcome } from '@shared/session/sessionFrames';
+import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import {
   killActiveRecording,
   startRecording,
   stopRecordingAndTranscribe,
+  TRANSCRIPTION_ROUTE_MODEL,
 } from '@tools/media/audio';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 
@@ -174,8 +176,15 @@ export class HostDraftRequests {
             reason: 'The recording was cancelled.',
           });
         }
+        const credential = yield* resolveRouteCredential(
+          TRANSCRIPTION_ROUTE_MODEL,
+          false,
+          secrets,
+        );
         const result = yield* hostPort(async () =>
-          runInSession(take.session, () => stopRecordingAndTranscribe(secrets)),
+          runInSession(take.session, () =>
+            stopRecordingAndTranscribe(credential),
+          ),
         );
         if (!result.success) {
           return yield* new Rejected({

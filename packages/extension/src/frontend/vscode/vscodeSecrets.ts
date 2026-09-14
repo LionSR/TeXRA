@@ -5,9 +5,16 @@
  * override persisted secrets, matching ElectronSecrets and CliSecrets so a
  * key exported in the environment behaves identically in every host.
  */
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { secretsGet, type PlatformSecrets } from '@platform/secrets';
+import {
+  SecretsFailed,
+  secretsGet,
+  type PlatformSecrets,
+  type SecretsOperation,
+} from '@platform/secrets';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export class VscodeSecrets implements PlatformSecrets {
   private readonly storage: vscode.SecretStorage;
@@ -16,34 +23,66 @@ export class VscodeSecrets implements PlatformSecrets {
     this.storage = context.secrets;
   }
 
-  async get(key: string): Promise<string | undefined> {
+  get(key: string) {
     return secretsGet(this, key);
   }
 
-  async getStored(key: string): Promise<string | undefined> {
-    return this.storage.get(key);
+  getStored(key: string) {
+    return this.call('getStored', key, () =>
+      Promise.resolve(this.storage.get(key)),
+    );
   }
 
-  async set(key: string, value: string): Promise<void> {
-    await this.storage.store(key, value);
+  /** Uninterruptible commit region: see `PlatformSecrets` (study Q2). */
+  set(key: string, value: string) {
+    return Effect.uninterruptible(
+      this.call('set', key, () =>
+        Promise.resolve(this.storage.store(key, value)),
+      ),
+    );
   }
 
-  async delete(key: string): Promise<void> {
-    await this.storage.delete(key);
+  /** Uninterruptible commit region: see `PlatformSecrets` (study Q2). */
+  delete(key: string) {
+    return Effect.uninterruptible(
+      this.call('delete', key, () => Promise.resolve(this.storage.delete(key))),
+    );
   }
 
-  async listStoredKeys(): Promise<readonly string[]> {
-    try {
-      return await this.storage.keys();
-    } catch (error) {
-      throw new Error(
-        'SecretStorage key enumeration is not supported by this host. Stored secrets may still exist, but TeXRA cannot audit their names here.',
-        { cause: error },
-      );
-    }
+  listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
+    return Effect.tryPromise({
+      try: async () => this.storage.keys(),
+      catch: (cause) =>
+        new SecretsFailed({
+          reason: 'enumeration-unsupported',
+          operation: 'listStoredKeys',
+          message:
+            'SecretStorage key enumeration is not supported by this host. Stored secrets may still exist, but TeXRA cannot audit their names here.',
+          cause,
+        }),
+    });
   }
 
   getEnv(name: string): string | undefined {
     return process.env[name];
+  }
+
+  /** Every `SecretStorage` call fails the same way: the host rejected it. */
+  private call<A>(
+    operation: SecretsOperation,
+    key: string,
+    run: () => Promise<A>,
+  ): Effect.Effect<A, SecretsFailed> {
+    return Effect.tryPromise({
+      try: run,
+      catch: (cause) =>
+        new SecretsFailed({
+          reason: 'io',
+          operation,
+          key,
+          message: `VS Code secret storage failed to ${operation} "${key}": ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    });
   }
 }

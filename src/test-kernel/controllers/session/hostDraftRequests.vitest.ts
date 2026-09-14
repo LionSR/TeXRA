@@ -29,8 +29,8 @@ vi.mock('@agent/runtime/textEnhancement', () => ({
 // records and transcribes, so no member is ever called; the layers exist to
 // satisfy the requirement the host root provides in production.
 const processStores = Layer.mergeAll(
-  Secrets.layer(() => new FakeSecrets()),
-  AppState.layer(() => new FakeStateStore()),
+  Secrets.layer(Effect.succeed(new FakeSecrets())),
+  AppState.layer(Effect.succeed(new FakeStateStore())),
 );
 
 it.effect(

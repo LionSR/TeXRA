@@ -261,7 +261,6 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
       selectAvailableDelegationModel({
         requestedModel: result.model,
         parentModel: proposal.model,
-        withScope: parent.inScope,
       }),
     );
     if (Exit.isFailure(modelExit)) {

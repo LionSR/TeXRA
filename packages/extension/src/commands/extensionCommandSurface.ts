@@ -1,4 +1,5 @@
 // Third-party imports
+import { vscodeStateStore } from '@frontend/vscode/vscodeStateStore';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -76,7 +77,11 @@ export function createExtensionCommandActions(
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
     signOut: authSignOut,
     runSetupAssistant: async () => {
-      await launchSetupAssistant(secrets, context.globalState, runtime);
+      await launchSetupAssistant(
+        secrets,
+        vscodeStateStore(context.globalState),
+        runtime,
+      );
     },
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () => sysCreateSampleProject(context.extensionPath),

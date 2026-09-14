@@ -1,10 +1,13 @@
 import { getCoreSettingDefault } from '@shared/schemas';
 import { canonicalConfigKey } from '@shared/config/configKeys';
 
+import type { Effect } from 'effect';
+
 import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
+  StoreWriteFailed,
 } from '../interfaces';
 
 /**
@@ -13,13 +16,13 @@ import type {
  * layered-resolution rule below has exactly one implementation.
  *
  * `update` is named for the `vscode.Memento` shape `ConfigProvider.update`
- * and `StateStore` both mirror: it is the write this port exposes, and
- * the reason it is a Promise rather than an `Effect`.
+ * and `StateStore` both mirror. It is the write this port exposes, as the
+ * store's own program.
  */
 export interface ConfigStore {
   get<T>(key: string): T | undefined;
   has(key: string): boolean;
-  update(key: string, value: unknown): Promise<void>;
+  update(key: string, value: unknown): Effect.Effect<void, StoreWriteFailed>;
 }
 
 export interface JsonConfigProviderOptions {
@@ -51,15 +54,14 @@ export class JsonConfigProvider implements ConfigProvider {
     return schemaDefault === undefined ? (defaultValue as T) : schemaDefault;
   }
 
-  async update<T>(
+  update<T>(
     key: string,
     value: T,
     target: ConfigTarget = 'workspace',
-  ): Promise<void> {
+  ): Effect.Effect<void, StoreWriteFailed> {
     const store = target === 'global' ? this.globalStore : this.workspaceStore;
-    const storedKey = canonicalConfigKey(key);
     // A store treats `undefined` as a delete.
-    await store.update(storedKey, value);
+    return store.update(canonicalConfigKey(key), value);
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {

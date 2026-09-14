@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { vscodeStateStore } from '@frontend/vscode/vscodeStateStore';
 import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
@@ -187,7 +188,7 @@ export function handleCreateAgentWithAI(
     const config = yield* hostPort(() => loadCreatorConfig(context));
     yield* runAgentCreator(config, category, buildVSCodeUI(runtime), {
       secrets,
-      globalState: context.globalState,
+      globalState: vscodeStateStore(context.globalState),
     });
   }).pipe(
     Effect.catchCause((cause) =>

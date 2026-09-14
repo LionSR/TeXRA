@@ -1,4 +1,5 @@
 import { type CliContext } from '@cli/runtime/cliContext';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAccess';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
@@ -11,6 +12,9 @@ import { type RunId } from '@shared/schemas';
 /** Shared context every slash-command handler receives from the chat TUI. */
 export interface SlashCommandContext {
   readonly cliContext: CliContext;
+  /** The process runtime this surface was handed; every Effect a handler
+   *  settles runs on it. */
+  readonly runtime: ProcessRuntime;
   readonly session: TuiSession;
   /**
    * The process secret store and global state the account, model-access and

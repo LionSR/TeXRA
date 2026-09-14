@@ -5,6 +5,7 @@ import {
   type ReasoningEffort,
 } from 'llm-zoo';
 
+import { Effect } from 'effect';
 import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
@@ -53,7 +54,7 @@ export interface SettingsModelSelectionControllerDeps {
   resolveModelOptions?: (
     stores: ModelOptionStores,
     models: readonly string[],
-  ) => Promise<ModelOptionData[]>;
+  ) => Effect.Effect<ModelOptionData[]>;
 }
 
 interface SettingsModelSelectionData {
@@ -69,33 +70,37 @@ const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);
 export class SettingsModelSelectionController {
   constructor(private readonly deps: SettingsModelSelectionControllerDeps) {}
 
-  async buildSelectionData(): Promise<SettingsModelSelectionData> {
+  readonly buildSelectionData = Effect.fn(
+    'SettingsModelSelectionController.buildSelectionData',
+  )(function* (this: SettingsModelSelectionController) {
     const visibleModels = getEnabledModels(this.deps.globalState);
-    const routes = await (
-      this.deps.getCopilotRoutes ?? discoveredCopilotRoutes
-    )();
+    const routes = yield* Effect.promise(
+      this.deps.getCopilotRoutes ?? discoveredCopilotRoutes,
+    );
     const preferredModels = new Set(
       this.deps.getPreferredCopilotRouteModels?.() ??
         preferredCopilotRouteModels(this.deps.globalState),
     );
     return {
-      models: await this.buildSelectionItems(routes, preferredModels),
+      models: yield* this.buildSelectionItems(routes, preferredModels),
       helperModel: this.getEffectiveHelperModel(visibleModels),
       preferShortModelNames: this.deps.globalState.get<boolean>(
         GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
         false,
       ),
       copilotModels: this.buildCopilotRouteInfos(routes, preferredModels),
-    };
-  }
+    } satisfies SettingsModelSelectionData;
+  });
 
   /** Outbound message carrying the full selection payload to the webview. */
-  async buildModelSelectionMessage(): Promise<UpdateModelSelectionMessage> {
+  readonly buildModelSelectionMessage = Effect.fn(
+    'SettingsModelSelectionController.buildModelSelectionMessage',
+  )(function* (this: SettingsModelSelectionController) {
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ...(await this.buildSelectionData()),
-    };
-  }
+      ...(yield* this.buildSelectionData()),
+    } satisfies UpdateModelSelectionMessage;
+  });
 
   /**
    * Route status for the Models tab Copilot section: every discovered route
@@ -117,28 +122,25 @@ export class SettingsModelSelectionController {
     }));
   }
 
-  async setModelEnabled(input: {
-    modelName: string;
-    enabled: boolean;
-  }): Promise<void> {
-    await setModelEnabled({
+  setModelEnabled(input: { modelName: string; enabled: boolean }) {
+    return setModelEnabled({
       model: input.modelName,
       enabled: input.enabled,
       state: this.deps.globalState,
     });
   }
 
-  async setReasoningLevel(input: {
+  setReasoningLevel(input: {
     modelName: string;
     level: ReasoningEffort | null;
-  }): Promise<void> {
+  }) {
     const overrides = { ...this.getStoredReasoningLevels() };
     if (input.level == null) {
       delete overrides[input.modelName];
     } else {
       overrides[input.modelName] = input.level;
     }
-    await this.deps.globalState.update(
+    return this.deps.globalState.update(
       GlobalStateKey.REASONING_LEVELS,
       overrides,
     );
@@ -156,10 +158,13 @@ export class SettingsModelSelectionController {
     );
   }
 
-  private async buildSelectionItems(
+  private readonly buildSelectionItems = Effect.fn(
+    'SettingsModelSelectionController.buildSelectionItems',
+  )(function* (
+    this: SettingsModelSelectionController,
     copilotRoutes: ReadonlyMap<string, CopilotModelRoute>,
     preferredCopilotModels: ReadonlySet<string>,
-  ): Promise<ModelSelectionItem[]> {
+  ) {
     const enabledSet = new Set(getEnabledModels(this.deps.globalState));
     const reasoningOverrides = reasoningEffortOverrides(this.deps.globalState);
 
@@ -184,7 +189,7 @@ export class SettingsModelSelectionController {
       .map((config) => config.name);
     const resolveModelOptions =
       this.deps.resolveModelOptions ?? computeModelOptionsData;
-    const optionsData = await resolveModelOptions(
+    const optionsData = yield* resolveModelOptions(
       { secrets: this.deps.secrets, globalState: this.deps.globalState },
       candidates,
     );
@@ -224,7 +229,7 @@ export class SettingsModelSelectionController {
     }
 
     return items.sort(byName);
-  }
+  });
 
   private getEffectiveHelperModel(visibleModels: readonly string[]): string {
     return resolveEffectiveHelperModel(

@@ -74,10 +74,7 @@ export function readPlatformSetting<T>(key: string): T {
  * schema validation and its declared `onWrite` effects apply to runtime callers
  * as well as to the settings UIs.
  */
-export function writePlatformSetting(
-  key: string,
-  value: unknown,
-): Promise<void> {
+export function writePlatformSetting(key: string, value: unknown) {
   return writeSetting(
     requireEntry(key),
     value,

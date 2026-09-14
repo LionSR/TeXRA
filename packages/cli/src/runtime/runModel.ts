@@ -1,4 +1,5 @@
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunModelCandidate } from '@model/runModelDecision';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -50,6 +51,7 @@ function cliRunModelCandidates(
  * up again here.
  */
 export async function selectCliRunModel(
+  runtime: ProcessRuntime,
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
@@ -58,7 +60,7 @@ export async function selectCliRunModel(
   try {
     const resolution = await selectCliRunnableModel(
       cliRunModelCandidates(context, modelOverride, role),
-      { stores },
+      { runtime, stores },
     );
     if (resolution.notice && context.quietLogs !== true) {
       writeTextStderr(resolution.notice);

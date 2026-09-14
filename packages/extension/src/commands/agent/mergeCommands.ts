@@ -1,4 +1,5 @@
 // Third-party imports
+import { vscodeStateStore } from '@frontend/vscode/vscodeStateStore';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -14,7 +15,11 @@ export function registerMergeCommands(context: vscode.ExtensionContext): void {
     {
       id: 'texra.merge',
       handler: (baseFile: string, editedFile: string) =>
-        handleMerge(context.globalState, baseFile, editedFile),
+        handleMerge(
+          vscodeStateStore(context.globalState),
+          baseFile,
+          editedFile,
+        ),
     },
   ]);
 }

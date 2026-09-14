@@ -1,4 +1,5 @@
 // Standard library imports
+import type { StateStore } from '@platform/interfaces';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -45,7 +46,7 @@ async function runSettledEffect<A>(
  *  one guard covers both. */
 interface AgentDirectoryHost {
   readonly directories: AgentDirectoryService;
-  readonly globalState: vscode.Memento;
+  readonly globalState: StateStore;
   /** The host entry's process runtime, handed down with the two services. */
   readonly runtime: ProcessRuntime;
 }
@@ -60,7 +61,7 @@ class AgentDirectoryManager {
   private readonly watcherRebuildLanes = new Map<string, PerKeyLane>();
 
   initialize(
-    globalState: vscode.Memento,
+    globalState: StateStore,
     resourcesPath: string,
     runtime: ProcessRuntime,
   ): void {
@@ -121,9 +122,11 @@ class AgentDirectoryManager {
 
     await AbsoluteFS.ensureDir(selectedPath);
 
-    await this.getHost().globalState.update(
-      GlobalStateKey.CUSTOM_AGENT_DIR,
-      selectedPath,
+    await this.getHost().runtime.runPromise(
+      this.getHost().globalState.update(
+        GlobalStateKey.CUSTOM_AGENT_DIR,
+        selectedPath,
+      ),
     );
 
     return selectedPath;

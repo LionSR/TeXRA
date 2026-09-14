@@ -183,9 +183,9 @@ function buildOverleafClonePorts(
   return {
     // `getStored` (not `get`): the clone token is a persisted credential the
     // user manages here, never an environment override.
-    getStoredToken: (key) => Effect.promise(() => secrets.getStored(key)),
-    deleteStoredToken: (key) => Effect.promise(() => secrets.delete(key)),
-    storeToken: (key, token) => Effect.promise(() => secrets.set(key, token)),
+    getStoredToken: (key) => secrets.getStored(key),
+    deleteStoredToken: (key) => secrets.delete(key),
+    storeToken: (key, token) => secrets.set(key, token),
     promptToken: (spec) =>
       Effect.promise(() =>
         promptInput(

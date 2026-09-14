@@ -175,7 +175,14 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         }
 
         const model = yield* Effect.tryPromise({
-          try: () => selectCliRunModel(context, init.model, 'run', services),
+          try: () =>
+            selectCliRunModel(
+              services.runtime,
+              context,
+              init.model,
+              'run',
+              services,
+            ),
           catch: ensureError,
         });
         const runContext = buildHeadlessRunContext(context);
@@ -251,7 +258,14 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   }
 
   const model = yield* Effect.tryPromise({
-    try: () => selectCliRunModel(context, init.model, 'chat', services),
+    try: () =>
+      selectCliRunModel(
+        services.runtime,
+        context,
+        init.model,
+        'chat',
+        services,
+      ),
     catch: ensureError,
   });
   const runContext = buildHeadlessRunContext(context);

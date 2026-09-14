@@ -225,6 +225,7 @@ export async function runChat(
     Effect.tryPromise({
       try: () =>
         selectCliRunnableModel(defaults.model, {
+          runtime,
           stores: services,
           fallbackReason: defaults.modelSource,
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
@@ -264,6 +265,7 @@ export async function runChat(
   // lazily so the closures it captures (resetSessionForClear,
   // chatController.resume) are all defined before the first use.
   const slashCommandContext = (): SlashCommandContext => ({
+    runtime,
     cliContext: context,
     session,
     secrets: services.secrets,
@@ -506,6 +508,7 @@ export async function runChat(
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
+      runtime={runtime}
       secrets={services.secrets}
       onSubmit={(line, mediaFiles, images) =>
         void chatController.submit(line, mediaFiles, images)

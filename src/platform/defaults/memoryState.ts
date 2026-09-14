@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 // Local imports - platform
 import type { StateStore } from '../interfaces';
 
@@ -10,11 +12,13 @@ export class MemoryStateStore implements StateStore {
     return value === undefined ? (defaultValue as T) : (value as T);
   }
 
-  async update(key: string, value: unknown): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-      return;
-    }
-    this.values.set(key, value);
+  update(key: string, value: unknown) {
+    return Effect.sync(() => {
+      if (value === undefined) {
+        this.values.delete(key);
+        return;
+      }
+      this.values.set(key, value);
+    });
   }
 }

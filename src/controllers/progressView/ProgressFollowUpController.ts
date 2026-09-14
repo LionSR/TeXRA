@@ -1,4 +1,5 @@
 // Local imports
+import { Effect } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RunRequest } from '@agent/core/state/runRequests';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
@@ -43,7 +44,7 @@ interface ProgressFollowUpWorkspace {
 }
 
 interface ProgressFollowUpControllerDeps {
-  loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
+  loadModelOptions(): Effect.Effect<readonly ProgressFollowUpModelOption[]>;
   state: ProgressFollowUpState;
   workspace: ProgressFollowUpWorkspace;
 }
@@ -80,23 +81,28 @@ interface CompileFixerInput {
 export class ProgressFollowUpController {
   constructor(private readonly deps: ProgressFollowUpControllerDeps) {}
 
-  async planCompileFixerForRun(
+  readonly planCompileFixerForRun = Effect.fn(
+    'ProgressFollowUpController.planCompileFixerForRun',
+  )(function* (
+    this: ProgressFollowUpController,
     runId: RunId,
     runConfig: AgentConfig | undefined,
-  ): Promise<ProgressFollowUpPlan> {
-    const modelOptions = await this.deps.loadModelOptions();
+  ) {
+    const modelOptions = yield* this.deps.loadModelOptions();
     const compileFailures = Object.values(
       this.deps.state.getCompileFailures(runId),
     ).flat();
 
-    return this.planCompileFixer({
-      runId,
-      runConfig,
-      compileFailures,
-      runOutputs: this.deps.state.getOutputFiles(runId),
-      modelOptions,
-    });
-  }
+    return yield* Effect.promise(() =>
+      this.planCompileFixer({
+        runId,
+        runConfig,
+        compileFailures,
+        runOutputs: this.deps.state.getOutputFiles(runId),
+        modelOptions,
+      }),
+    );
+  });
 
   async planCompileFixer(
     input: CompileFixerInput,

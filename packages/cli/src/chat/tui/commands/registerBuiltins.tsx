@@ -348,6 +348,7 @@ export function registerBuiltinSlashCommands(options: {
   function AccountAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
     return (
       <AccountAccessForm
+        runtime={runtime}
         secrets={secrets}
         availableRows={props.availableRows}
         onSelect={formSelectionHandler<AccountAccessFormValue>({
@@ -452,6 +453,7 @@ export function registerBuiltinSlashCommands(options: {
     const selectable = canSelectModel();
     return (
       <ModelListForm
+        runtime={runtime}
         currentModel={current}
         stores={modelStores}
         availableRows={props.availableRows}
@@ -563,6 +565,7 @@ export function registerBuiltinSlashCommands(options: {
     props: SlashFormProps,
   ): React.JSX.Element => (
     <EnabledModelsForm
+      runtime={runtime}
       state={state}
       availableRows={props.availableRows}
       onClose={() => props.onDone(undefined)}
@@ -608,7 +611,7 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Show signed-in accounts and active model access',
     category: 'account',
     echo: 'ifPersists',
-    handler: () => showCliAuthStatus(secrets),
+    handler: () => showCliAuthStatus(runtime, secrets),
   });
   registerSlashCommand({
     name: 'login',

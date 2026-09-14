@@ -8,6 +8,7 @@
  * `GitHubSubscriptionHandlers`, and `SubscriptionHandlers` (one instance per
  * subscription provider).
  */
+import { vscodeStateStore } from '@frontend/vscode/vscodeStateStore';
 import * as vscode from 'vscode';
 import { Cause, Effect, Exit } from 'effect';
 import { ModelError } from '@texra-ai/llm/turn';
@@ -126,7 +127,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     const ctx: SettingsHandlerContext = this.bindViewSliceHost(context);
 
-    const globalState = context.globalState;
+    const globalState = vscodeStateStore(context.globalState);
     this.memoryController = new SettingsMemoryController({
       prompt: new VscodePromptHost(),
     });
@@ -138,7 +139,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       host: 'vscode',
       globalState,
       loadProviderKeyStatuses: () =>
-        loadApiKeyStatusMap(secrets, API_PROVIDERS),
+        this.runtime.runPromise(loadApiKeyStatusMap(secrets, API_PROVIDERS)),
       getConfig,
     });
     this.subscriptionUsage = new SubscriptionUsageService({ secrets });
@@ -354,10 +355,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       recheckToolStatus: () =>
         this.runtime.runPromise(refreshToolAvailability()),
       toggleTool: async (message) => {
-        await setToolEnabled(
-          message.toolId,
-          message.enabled,
-          this.context.globalState,
+        await this.runtime.runPromise(
+          setToolEnabled(
+            message.toolId,
+            message.enabled,
+            vscodeStateStore(this.context.globalState),
+          ),
         );
         await this.withActiveWebview((w) =>
           this.sendToolDashboardData(w, { skipChecks: true }),
@@ -563,17 +566,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * Generic write path for catalog-backed settings-view rows.
    */
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
-    const result = await applyStateSettingUpdate(key, value, {
-      host: 'vscode',
-      stores: platformSettingsStores(),
-      // The shared function already gates this hook on
-      // `configTarget !== 'global'`; this checks only the workspace half.
-      requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
-      onApprovalPolicyChanged: (policy) => {
-        defaultSession().setApprovalPolicy(policy);
-        appSignals.emit('approvalPolicyChanged', undefined);
-      },
-    });
+    const result = await this.runtime.runPromise(
+      applyStateSettingUpdate(key, value, {
+        host: 'vscode',
+        stores: platformSettingsStores(),
+        // The shared function already gates this hook on
+        // `configTarget !== 'global'`; this checks only the workspace half.
+        requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
+        onApprovalPolicyChanged: (policy) => {
+          defaultSession().setApprovalPolicy(policy);
+          appSignals.emit('approvalPolicyChanged', undefined);
+        },
+      }),
+    );
     if (result.kind === 'ignored') return;
     const label = result.entry.title ?? result.entry.key;
     if (result.kind === 'rejected') {
@@ -770,10 +775,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
                     this.channel,
                     'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
                   )
-                : setCopilotRoutePreference(
-                    modelName,
-                    true,
-                    this.context.globalState,
+                : this.runtime.runPromise(
+                    setCopilotRoutePreference(
+                      modelName,
+                      true,
+                      vscodeStateStore(this.context.globalState),
+                    ),
                   ),
             catch: (error) => error,
           }),
@@ -822,7 +829,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   /** Clear the per-model Copilot route preference (#9659), returning the
    * canonical model to direct-provider routing. */
   private async handleClearCopilotRoute(modelName: string): Promise<void> {
-    await setCopilotRoutePreference(modelName, false, this.context.globalState);
+    await this.runtime.runPromise(
+      setCopilotRoutePreference(
+        modelName,
+        false,
+        vscodeStateStore(this.context.globalState),
+      ),
+    );
     await Promise.all([
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((webview) => this.sendModelSelectionData(webview)),

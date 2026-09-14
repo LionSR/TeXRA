@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 import PQueue from 'p-queue';
 
@@ -16,6 +17,7 @@ import {
 import { installAuthProgramEdge } from '@auth/authProgram';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import { setRuntimeExtensionId } from '@auth/config';
+import { vscodeStateStore } from '@frontend/vscode/vscodeStateStore';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
@@ -196,12 +198,13 @@ async function initVscodePlatform(
   // Both process stores exist before the runtime here: VS Code hands the
   // extension its SecretStorage and Memento at activation.
   const secrets = new VscodeSecrets(context);
+  const globalState = vscodeStateStore(context.globalState);
   const runtime = installProcessRuntime({
     processStart: await nodeProcesses.selfIdentity(),
     globalStorage: () => storage.getGlobalStoragePath(),
     updateCheckStorage: () => storage.getGlobalStoragePath(),
-    secrets: () => secrets,
-    appState: () => context.globalState,
+    secrets: Effect.succeed(secrets),
+    appState: Effect.succeed(globalState),
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`
     // models on this host (R2); consent was granted from the settings view.
@@ -211,7 +214,7 @@ async function initVscodePlatform(
     },
     // Lean through the Lean 4 extension, not a direct `lake` pool.
     lean: LeanLanguageServices.layer(
-      createVscodeLeanLanguageServices(context.globalState),
+      createVscodeLeanLanguageServices(globalState),
     ),
   });
   // The auth subsystem's run edge, installed here beside the runtime it
@@ -222,11 +225,8 @@ async function initVscodePlatform(
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(
     await runtime.runPromise(
-      openTexraConfigStores(
-        storage,
-        workspaceRoot,
-        (message) => log.warn(message),
-        runtime,
+      openTexraConfigStores(storage, workspaceRoot, (message) =>
+        log.warn(message),
       ),
     ),
   );
@@ -248,7 +248,7 @@ async function initVscodePlatform(
       globalStorage: storage.getGlobalStoragePath(),
       config,
       workspaceState,
-      globalState: context.globalState,
+      globalState,
     }),
   );
   return { secrets, runtime };
@@ -486,10 +486,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
       context,
       lifecycle,
       undefined,
-      context.workspaceState,
+      vscodeStateStore(context.workspaceState),
     );
     agentDirectories.initialize(
-      context.globalState,
+      vscodeStateStore(context.globalState),
       path.join(context.extensionPath, 'resources'),
       runtime,
     );
@@ -543,11 +543,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push({ dispose: () => setLogSink(null) });
   const workspaceState = gitRepoRoot
     ? new WorktreeStateStore(
-        context.workspaceState,
-        context.globalState,
+        vscodeStateStore(context.workspaceState),
+        vscodeStateStore(context.globalState),
         gitRepoRoot,
       )
-    : context.workspaceState;
+    : vscodeStateStore(context.workspaceState);
   const lifecycle = createLifecycleHost();
   lifecycleHost = lifecycle;
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearVscodeLeanServerEntries());
@@ -578,7 +578,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // After the platform above, which built the runtime the manager settles its
   // watcher rebuilds on.
   agentDirectories.initialize(
-    context.globalState,
+    vscodeStateStore(context.globalState),
     path.join(context.extensionPath, 'resources'),
     runtime,
   );
@@ -600,7 +600,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       responseTextProcessing: createTexraResponseTextProcessing(
         createAgentResponseTextConnector({
           secrets,
-          globalState: context.globalState,
+          globalState: vscodeStateStore(context.globalState),
         }),
       ),
     }),
@@ -637,7 +637,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
-  await runtime.runPromise(seedDisabledToolDefaults(context.globalState));
+  await runtime.runPromise(
+    seedDisabledToolDefaults(vscodeStateStore(context.globalState)),
+  );
 
   // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
   // directories, and loadAgents scans them.
@@ -687,7 +689,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // synchronous glob probes of TeX install directories, which would
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
-  setTimeout(() => void initializeLatexSupport(context.globalState), 0);
+  setTimeout(
+    () => void initializeLatexSupport(vscodeStateStore(context.globalState)),
+    0,
+  );
   registerCommands(context, progressViewProvider, secrets, runtime);
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context, runtime);

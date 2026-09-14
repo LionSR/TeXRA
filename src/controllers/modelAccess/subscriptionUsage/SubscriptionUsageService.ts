@@ -1,5 +1,7 @@
+import { Effect } from 'effect';
 import { LRUCache } from 'lru-cache';
 
+import { runAuthProgram } from '@auth/authProgram';
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
 import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -105,11 +107,16 @@ function defaultCredentials(
         ...(session.accountId ? { accountId: session.accountId } : {}),
       };
     },
-    async loadApiKey(
-      provider: 'kimiCode' | 'glm',
-    ): Promise<string | undefined> {
-      const key = await lookupApiKey(secrets, provider);
-      return key === undefined ? undefined : exposeApiKey(key);
+    loadApiKey(provider: 'kimiCode' | 'glm'): Promise<string | undefined> {
+      // The secret store is Effect-typed; this service's transports are
+      // Promise-shaped, so the read settles on the auth subsystem's installed
+      // run edge — the same one `loadChatGpt`'s coordinator already uses —
+      // rather than on a run site of its own.
+      return runAuthProgram(
+        Effect.map(lookupApiKey(secrets, provider), (key) =>
+          key === undefined ? undefined : exposeApiKey(key),
+        ),
+      );
     },
     useGlmChina: () => useChinaRegion('glm'),
   });

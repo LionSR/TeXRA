@@ -148,7 +148,6 @@ Optional auto-attach from the input LaTeX:
       const model = yield* selectAvailableDelegationModel({
         requestedModel: input.model,
         parentModel: call.model,
-        withScope: call.inScope,
       });
 
       yield* Effect.tryPromise({
@@ -290,7 +289,6 @@ Git worktree support: resolved from the active workspace at runtime.`,
       const model = yield* selectAvailableDelegationModel({
         requestedModel: input.model,
         parentModel: call.model,
-        withScope: call.inScope,
       });
       const rootUserInstruction = call.userInstruction;
 

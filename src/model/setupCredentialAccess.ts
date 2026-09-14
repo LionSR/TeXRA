@@ -1,3 +1,5 @@
+import { Cause, Effect } from 'effect';
+
 import { API_PROVIDERS, hasUsableApiKey } from '@model/apiProviders';
 import {
   isCodexSubscriptionActive,
@@ -12,55 +14,63 @@ import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** True when any provider has a usable API key in secret storage or the environment. */
-async function hasAnyUsableProviderApiKey(
+const hasAnyUsableProviderApiKey = Effect.fn(
+  'setupCredentialAccess.hasAnyUsableProviderApiKey',
+)(function* (
   secrets: PlatformSecrets,
   onProbeFailure: (message: string) => void,
-): Promise<boolean> {
+) {
   for (const provider of API_PROVIDERS) {
     // Keep the scan sequential so the first usable key ends the lookup.
-    const hasApiKey = await probeSetupCredential(
+    const hasApiKey = yield* probeSetupCredential(
       `${provider} API key`,
-      () => hasUsableApiKey(secrets, provider),
+      hasUsableApiKey(secrets, provider),
       onProbeFailure,
     );
     if (hasApiKey) return true;
   }
   return false;
-}
+});
 
 /**
  * A probe failure is treated as no credential of that kind. The caller owns
  * reporting so this model-layer policy stays free of logging side effects.
  */
-export async function probeSetupCredential(
+export function probeSetupCredential<E>(
   kind: string,
-  check: () => Promise<boolean>,
+  check: Effect.Effect<boolean, E>,
   onProbeFailure: (message: string) => void,
-): Promise<boolean> {
-  return check().catch((error: unknown) => {
-    onProbeFailure(
-      `${kind} check failed; treating it as no credential: ${toErrorMessage(error)}`,
-    );
-    return false;
-  });
+): Effect.Effect<boolean> {
+  return check.pipe(
+    Effect.catchCause((cause) => {
+      onProbeFailure(
+        `${kind} check failed; treating it as no credential: ${toErrorMessage(
+          Cause.squash(cause),
+        )}`,
+      );
+      return Effect.succeed(false);
+    }),
+  );
 }
 
 /** Each failed credential probe resolves to false after being reported. */
-export async function hasUsableSetupCredential(
+export const hasUsableSetupCredential = Effect.fn(
+  'setupCredentialAccess.hasUsableSetupCredential',
+)(function* (
   secrets: PlatformSecrets,
   onProbeFailure: (message: string) => void,
-): Promise<boolean> {
-  const hasChatGptSubscription = await probeSetupCredential(
+) {
+  const hasChatGptSubscription = yield* probeSetupCredential(
     'ChatGPT subscription',
-    () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
+    Effect.promise(() => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)),
     onProbeFailure,
   );
   if (hasChatGptSubscription) return true;
-  const hasGrokSubscription = await probeSetupCredential(
+  const hasGrokSubscription = yield* probeSetupCredential(
     'Grok subscription',
-    () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
+    Effect.promise(() => isXaiSubscriptionActive(XAI_SETUP_MODEL)),
     onProbeFailure,
   );
   if (hasGrokSubscription) return true;
-  return hasAnyUsableProviderApiKey(secrets, onProbeFailure);
-}
+  return yield* hasAnyUsableProviderApiKey(secrets, onProbeFailure);
+});

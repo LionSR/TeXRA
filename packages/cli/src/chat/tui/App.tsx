@@ -1,6 +1,7 @@
 // Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
 // Third-party imports
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { useInput, useStdin, useWindowSize } from 'ink';
 import {
   useCallback,
@@ -123,6 +124,8 @@ export interface AppProps {
    * the chat surface that opened it — this component runs no Effect.
    */
   readonly secrets: PlatformSecrets;
+  /** The process runtime the chat surface handed this view. */
+  readonly runtime: ProcessRuntime;
   readonly onSubmit: (
     line: string,
     mediaFiles?: readonly string[],
@@ -641,6 +644,7 @@ export function App(props: AppProps): React.JSX.Element {
               keyboardActive={!childListFocused}
             />
             <StatusBar
+              runtime={props.runtime}
               secrets={props.secrets}
               chatInputAvailable={
                 !childInputHidden && unavailableDetail === undefined

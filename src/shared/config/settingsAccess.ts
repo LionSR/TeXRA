@@ -1,9 +1,13 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import { createLog } from '@logger/logUtils';
 import type {
   ConfigProvider,
   ConfigTarget,
   StateStore,
+  StoreWriteFailed,
 } from '@platform/interfaces';
 import type {
   SettingHost,
@@ -104,17 +108,15 @@ function writeSlot(
   stores: SettingsStores,
   host: SettingHost,
   target: ConfigTarget | undefined,
-): Promise<void> {
+): Effect.Effect<void, StoreWriteFailed> {
   const slot = settingSlot(entry, host);
-  return Promise.resolve(
-    slot === 'config'
-      ? stores.config.update(
-          entry.key,
-          value,
-          target ?? entry.configTarget ?? 'workspace',
-        )
-      : stores[slot].update(entry.key, value),
-  );
+  return slot === 'config'
+    ? stores.config.update(
+        entry.key,
+        value,
+        target ?? entry.configTarget ?? 'workspace',
+      )
+    : stores[slot].update(entry.key, value);
 }
 
 /**
@@ -130,16 +132,16 @@ function writeSlot(
  * written directly — their own effects do not cascade, which is what keeps the
  * rule a single hop.
  */
-export async function writeSetting(
+export const writeSetting = Effect.fn('settingsAccess.writeSetting')(function* (
   entry: StateSettingEntry,
   value: unknown,
   stores: SettingsStores,
   host: SettingHost = 'vscode',
   target?: ConfigTarget,
-): Promise<void> {
-  // `async` so a schema-rejected value surfaces as a rejected promise rather
-  // than a synchronous throw — callers rely on the uniform promise contract.
-  await writeSlot(entry, entry.schema.parse(value), stores, host, target);
+) {
+  // The schema rejection is a defect, not a typed failure: a value that
+  // does not parse is a caller bug, and every caller relied on it throwing.
+  yield* writeSlot(entry, entry.schema.parse(value), stores, host, target);
   if (value !== true) return;
   for (const excludedKey of entry.onWrite?.disablesWhenEnabled ?? []) {
     const excluded = settingByKey(excludedKey);
@@ -148,9 +150,9 @@ export async function writeSetting(
         `Setting "${entry.key}" excludes unknown setting "${excludedKey}"`,
       );
     }
-    await writeSlot(excluded, false, stores, host, target);
+    yield* writeSlot(excluded, false, stores, host, target);
   }
-}
+});
 
 /**
  * Reset a state-backed setting to its default by **deleting** the stored key
@@ -162,6 +164,6 @@ export function resetSetting(
   stores: SettingsStores,
   host: SettingHost = 'vscode',
   target?: ConfigTarget,
-): Promise<void> {
+): Effect.Effect<void, StoreWriteFailed> {
   return writeSlot(entry, undefined, stores, host, target);
 }

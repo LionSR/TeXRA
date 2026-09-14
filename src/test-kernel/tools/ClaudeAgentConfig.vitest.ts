@@ -62,7 +62,7 @@ async function buildEnv(options?: BuildEnvOptions): Promise<NodeJS.ProcessEnv> {
   const { Secrets } = await import('@platform/secrets');
   return Effect.runPromise(
     buildClaudeAgentEnv(options).pipe(
-      Effect.provide(Secrets.layer(() => fakeSecrets)),
+      Effect.provide(Secrets.layer(Effect.succeed(fakeSecrets))),
     ),
   );
 }

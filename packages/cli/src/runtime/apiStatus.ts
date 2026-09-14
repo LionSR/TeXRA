@@ -1,6 +1,7 @@
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import { Effect } from 'effect';
 import { configuredApiKeyProviders } from '@model/apiProviders';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
@@ -58,13 +59,16 @@ export interface CliModelAccessOverview {
 }
 
 /** Read both account sessions and the effective model-access route. */
-export async function loadCliModelAccessOverview(
-  secrets: PlatformSecrets,
-): Promise<CliModelAccessOverview> {
-  const [access, profile] = await Promise.all([
-    readCliModelAccessStatus(secrets),
-    getCliAuthProfile(),
-  ]);
+export const loadCliModelAccessOverview = Effect.fn(
+  'apiStatus.loadCliModelAccessOverview',
+)(function* (secrets: PlatformSecrets) {
+  const [access, profile] = yield* Effect.all(
+    [
+      readCliModelAccessStatus(secrets),
+      Effect.promise(() => getCliAuthProfile()),
+    ],
+    { concurrency: 'unbounded' },
+  );
   const lines = [
     `ChatGPT preference: ${formatCliChatGptPreference(access)}`,
     `Grok preference: ${formatCliGrokPreference(access)}`,
@@ -84,8 +88,8 @@ export async function loadCliModelAccessOverview(
     access: mergeCliTexraAccountStatus(access, profile),
     lines,
     note: profile.note,
-  };
-}
+  } satisfies CliModelAccessOverview;
+});
 
 /** Format a neutral personal-key inventory. */
 export function formatPersonalApiKeysLine(
@@ -100,25 +104,27 @@ export function formatPersonalApiKeysLine(
 }
 
 /** Compact status lines used by the launcher. */
-export async function loadCliApiStatus(
-  secrets: PlatformSecrets,
-  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel' | 'note'>,
-): Promise<readonly string[]> {
-  const configuredPersonalKeyProviders =
-    await configuredApiKeyProviders(secrets);
-  const authLine = formatCliAuthStatusLine(profile);
+export const loadCliApiStatus = Effect.fn('apiStatus.loadCliApiStatus')(
+  function* (
+    secrets: PlatformSecrets,
+    profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel' | 'note'>,
+  ): Generator<Effect.Effect<unknown, SecretsFailed>, readonly string[]> {
+    const configuredPersonalKeyProviders =
+      yield* configuredApiKeyProviders(secrets);
+    const authLine = formatCliAuthStatusLine(profile);
 
-  const personalKeysLine = formatPersonalApiKeysLine(
-    configuredPersonalKeyProviders,
-  );
+    const personalKeysLine = formatPersonalApiKeysLine(
+      configuredPersonalKeyProviders,
+    );
 
-  return [
-    `api: ${formatCliModelAccessRouteInline('api-key')}`,
-    ...(personalKeysLine ? [personalKeysLine] : []),
-    authLine,
-    ...(profile.note ? [profile.note] : []),
-  ];
-}
+    return [
+      `api: ${formatCliModelAccessRouteInline('api-key')}`,
+      ...(personalKeysLine ? [personalKeysLine] : []),
+      authLine,
+      ...(profile.note ? [profile.note] : []),
+    ];
+  },
+);
 
 /**
  * Build one model-preference status line, or undefined when there is nothing
@@ -137,42 +143,49 @@ function formatModelPreferenceLine(
 }
 
 /** Render each detailed account/access fact on its owning route. */
-export async function loadCliDetailedAccountStatusLines(
+export const loadCliDetailedAccountStatusLines = Effect.fn(
+  'apiStatus.loadCliDetailedAccountStatusLines',
+)(function* (
   secrets: PlatformSecrets,
   options: {
     readonly subscriptionUsage?: SubscriptionUsageReader;
     readonly now?: number;
   } = {},
-): Promise<string[]> {
-  const [access, profile, providers] = await Promise.all([
-    readCliModelAccessStatus(secrets),
-    getCliAuthProfile(),
-    configuredApiKeyProviders(secrets),
-  ]);
+) {
+  const [access, profile, providers] = yield* Effect.all(
+    [
+      readCliModelAccessStatus(secrets),
+      Effect.promise(() => getCliAuthProfile()),
+      configuredApiKeyProviders(secrets),
+    ],
+    { concurrency: 'unbounded' },
+  );
   // Detailed /api status is user-invoked, so reopening it is the manual refresh
   // path. Ordinary chat startup and the status bar never call this service, and
   // every read below forces a refresh, so the service is built over the caller's
   // secret store here rather than held as a module singleton.
   const usageReader =
     options.subscriptionUsage ?? new SubscriptionUsageService({ secrets });
-  const [chatGptUsage, codingPlanUsageEntries] = await Promise.all([
-    access.chatGptSignedIn
-      ? usageReader.getUsage('chatgpt', { forceRefresh: true })
-      : undefined,
-    Promise.all(
-      CODING_PLAN_SUBSCRIPTIONS.map(async (plan) => {
-        const status = cliCodingPlanStatus(access, plan);
-        return [
-          plan.id,
-          status.keySet
-            ? await usageReader.getUsage(plan.usageProvider, {
-                forceRefresh: true,
-              })
-            : undefined,
-        ] as const;
-      }),
-    ),
-  ]);
+  const [chatGptUsage, codingPlanUsageEntries] = yield* Effect.promise(() =>
+    Promise.all([
+      access.chatGptSignedIn
+        ? usageReader.getUsage('chatgpt', { forceRefresh: true })
+        : undefined,
+      Promise.all(
+        CODING_PLAN_SUBSCRIPTIONS.map(async (plan) => {
+          const status = cliCodingPlanStatus(access, plan);
+          return [
+            plan.id,
+            status.keySet
+              ? await usageReader.getUsage(plan.usageProvider, {
+                  forceRefresh: true,
+                })
+              : undefined,
+          ] as const;
+        }),
+      ),
+    ]),
+  );
   const codingPlanUsage = new Map(codingPlanUsageEntries);
   const lines: string[] = [];
   const withUsage = (
@@ -228,4 +241,4 @@ export async function loadCliDetailedAccountStatusLines(
   if (otherPersonalKeys) lines.push(otherPersonalKeys);
   if (profile.note) lines.push(profile.note);
   return lines;
-}
+});

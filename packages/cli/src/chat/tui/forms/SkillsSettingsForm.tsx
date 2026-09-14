@@ -1,5 +1,6 @@
 import { Text } from 'ink';
 
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   ActiveSkillSourceScopeSchema,
   stateSettingByKey,
@@ -29,6 +30,8 @@ interface SkillsSettingsData {
 
 interface SkillsSettingsFormProps {
   readonly availableRows?: number;
+  /** The process runtime this surface was handed; its writes settle on it. */
+  readonly runtime: ProcessRuntime;
   readonly stores: SettingsStores;
   readonly onClose: () => void;
 }
@@ -115,10 +118,13 @@ export function SkillsSettingsForm(
           toggle.kind === 'source' ? data.disabledScopes : data.disabledNames;
         const value = toggle.kind === 'source' ? toggle.scope : toggle.name;
         const next = toggleDisabled(current, value, current.includes(value));
-        void applyStateSettingUpdate(key, next, {
-          host: 'cli',
-          stores: props.stores,
-        })
+        void props.runtime
+          .runPromise(
+            applyStateSettingUpdate(key, next, {
+              host: 'cli',
+              stores: props.stores,
+            }),
+          )
           .then((result) => {
             if (result.kind !== 'applied') {
               throw new Error(`Could not update skills (${result.kind}).`);

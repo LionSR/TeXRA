@@ -131,7 +131,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private async readPendingOAuthState(
     nonce: string,
   ): Promise<PendingOAuthState | null> {
-    const stored = await this.secrets.getStored(this.pendingStateKey(nonce));
+    const stored = await this.runtime.runPromise(
+      this.secrets.getStored(this.pendingStateKey(nonce)),
+    );
     if (!stored) return null;
     const parsed = parseJsonWith(stored, PendingOAuthStateSchema);
     if (Result.isSuccess(parsed)) return parsed.success;
@@ -141,9 +143,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   private async sweepPendingOAuthStates(): Promise<void> {
-    const listed = await this.settleAuthEffect(
-      callPort(() => this.secrets.listStoredKeys()),
-    );
+    const listed = await this.settleAuthEffect(this.secrets.listStoredKeys());
     if (Exit.isFailure(listed)) {
       log.warn('Unable to inspect stored OAuth callback state for cleanup');
       return;
@@ -158,7 +158,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             this.readPendingOAuthState(nonce),
           );
           if (!state?.flowId || !isPendingOAuthStateFresh(state)) {
-            yield* callPort(() => this.secrets.delete(key));
+            yield* this.secrets.delete(key);
           }
         }),
       );

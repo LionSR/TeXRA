@@ -222,27 +222,16 @@ export const selectAvailableDelegationModel = Effect.fn(
 )(function* (input: {
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
-  /**
-   * Context frame the availability read runs inside. Callers that reach this
-   * from outside their run's own frame — an approved proposal, a workflow
-   * script's per-call model routing — pass their `withRunContext` /
-   * `runInSession` wrapper here. Only the read needs it; the decision below
-   * is pure.
-   */
-  readonly withScope?: <T>(read: () => T) => T;
 }) {
-  const { withScope } = input;
   const stores = {
     secrets: yield* Secrets,
     globalState: yield* AppState,
   };
-  const models = yield* Effect.tryPromise({
-    try: () =>
-      withScope
-        ? withScope(() => computeModelOptionsData(stores))
-        : computeModelOptionsData(stores),
-    catch: ensureError,
-  });
+  // The availability read takes its stores as arguments and every preference
+  // it consults is process-global, so it no longer runs inside the caller's
+  // host workspace frame — a frame an Effect could not carry across a fiber
+  // resume anyway.
+  const models = yield* computeModelOptionsData(stores);
   const availableModels = unique(
     availableModelNamesFromOptions(models)
       .map((model) => model.trim())

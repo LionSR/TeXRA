@@ -91,7 +91,7 @@ export interface HostRunActionPorts {
       onRun?: () => void;
     },
   ): Promise<void>;
-  loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
+  loadModelOptions(): Effect.Effect<readonly ProgressFollowUpModelOption[]>;
   /** Ask the user for a provider key; the controller re-reads the store. */
   promptForApiKey(provider?: ApiProvider): Promise<void>;
   showInfo(message: string): Promise<void> | void;
@@ -518,10 +518,7 @@ export const createHostRunActions = (
           );
         }
         const config = yield* readConfig(runId);
-        const plan = yield* Effect.tryPromise({
-          try: () => followUp.planCompileFixerForRun(runId, config),
-          catch: ensureError,
-        });
+        const plan = yield* followUp.planCompileFixerForRun(runId, config);
         if (plan.kind === 'warning') {
           yield* Effect.tryPromise({
             try: async () => await ports.showWarning(plan.message),

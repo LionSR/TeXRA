@@ -18,6 +18,7 @@
  *    differs (`kimi-k3` → `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
  */
 
+import { Effect } from 'effect';
 import { type ModelConfig } from 'llm-zoo';
 
 import type { PlatformSecrets } from '@platform/secrets';
@@ -90,19 +91,21 @@ export function isKimiCodeRoute(
  * routes the asking run declines: a declined coding subscription reads as
  * "prefer off" for that run without touching the user's switch.
  */
-export async function resolveKimiCodeRoutingFacts(
+export const resolveKimiCodeRoutingFacts = Effect.fn(
+  'kimiCodeSubscriptionRouting.resolveKimiCodeRoutingFacts',
+)(function* (
   secrets: PlatformSecrets,
   useOpenRouter: boolean,
   declinedRoutes?: readonly DeclinableUsageRoute[],
-): Promise<KimiCodeRoutingFacts> {
+) {
   return {
     useOpenRouter,
-    keySet: await hasUsableApiKey(secrets, 'kimiCode'),
+    keySet: yield* hasUsableApiKey(secrets, 'kimiCode'),
     preferKimiCode:
       getPreferKimiCode() &&
       !declinedRoutes?.includes('kimi-code-subscription'),
-  };
-}
+  } satisfies KimiCodeRoutingFacts;
+});
 
 /**
  * Conservative context budget on the coding endpoint: the Moderato tier serves

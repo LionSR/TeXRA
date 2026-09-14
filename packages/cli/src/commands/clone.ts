@@ -44,12 +44,12 @@ function buildOverleafClonePorts(
   remote: OverleafRemote,
   workspacePath: string,
 ): OverleafCloneWorkflowPorts {
-  const secrets = getCliSecrets(runtime);
+  const secrets = getCliSecrets();
   let canonicalWorkspacePath = workspacePath;
   return {
-    getStoredToken: (key) => Effect.promise(() => secrets.get(key)),
-    deleteStoredToken: (key) => Effect.promise(() => secrets.delete(key)),
-    storeToken: (key, token) => Effect.promise(() => secrets.set(key, token)),
+    getStoredToken: (key) => secrets.get(key),
+    deleteStoredToken: (key) => secrets.delete(key),
+    storeToken: (key, token) => secrets.set(key, token),
     promptToken: (spec) =>
       Effect.gen(function* () {
         const tokenGuidance = remote.isOverleaf

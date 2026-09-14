@@ -469,7 +469,10 @@ export const setWorkspaceCliChatAgent = Effect.fn(
   const next = { ...existing };
   if (trimmed) next.agent = trimmed;
   else delete next.agent;
-  yield* store.set(sectionKey, Object.keys(next).length > 0 ? next : undefined);
+  yield* store.update(
+    sectionKey,
+    Object.keys(next).length > 0 ? next : undefined,
+  );
 });
 
 export function resolveConfiguredAgent(

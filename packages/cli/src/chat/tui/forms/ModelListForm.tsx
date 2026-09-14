@@ -3,6 +3,7 @@
 // message it chooses the root model; once a tool-use chat is waiting, it can
 // switch the live conversation to a compatible model for future turns.
 
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { Box, Text } from 'ink';
 
 import {
@@ -33,6 +34,7 @@ interface ModelListFormProps {
    * components run no Effect, so the process stores arrive as a prop from the
    * surface that opened the form.
    */
+  readonly runtime: ProcessRuntime;
   readonly stores: ModelOptionStores;
   readonly availableRows?: number;
   readonly selectable: boolean;
@@ -61,7 +63,8 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<readonly CliModelAccess[], string>({
     title: '/model',
     loadingLabel: 'Loading models...',
-    load: () => getCliModelAccessList({ stores: props.stores }),
+    load: () =>
+      props.runtime.runPromise(getCliModelAccessList({ stores: props.stores })),
     isEmpty: (models) => !models.some((model) => model.available),
     closeEmptyOnEnter: true,
     items: (models) =>

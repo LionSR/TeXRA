@@ -1,4 +1,6 @@
 import { createLog } from '@logger/logUtils';
+import { Effect } from 'effect';
+import type { StoreWriteFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type {
   AgentCategory,
@@ -25,7 +27,12 @@ import {
   setDefaultTeamId,
 } from '@shared/state/onboardingState';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { KeyedMutex, unique } from '@utils/core';
+import { unique } from '@utils/core';
+import {
+  withPerKeyLane,
+  type PerKeyLane,
+  type PerKeyLanes,
+} from '@utils/core/perKeyQueue';
 
 const log = createLog('AgentRosterController');
 
@@ -57,13 +64,17 @@ export interface AgentRosterControllerDeps<
   ) => Entry | undefined;
 }
 
-const workspaceWriteMutex = new KeyedMutex<StateStore>();
+const workspaceWriteLanes: PerKeyLanes<StateStore> = new Map<
+  StateStore,
+  PerKeyLane
+>();
 
-function serializeWorkspaceWrite(
+/** One roster write at a time per workspace store, in call order. */
+function serializeWorkspaceWrite<E>(
   store: StateStore,
-  write: () => Promise<void>,
-): Promise<void> {
-  return workspaceWriteMutex.runExclusive(store, write);
+  write: Effect.Effect<void, E>,
+): Effect.Effect<void, E> {
+  return withPerKeyLane(workspaceWriteLanes, store)(write);
 }
 
 interface AgentRosterSnapshot {
@@ -282,33 +293,38 @@ export class AgentRosterController<
       : [...selection];
   }
 
-  private async writeSelection(selection: AgentRosterSelection): Promise<void> {
+  private writeSelection(
+    selection: AgentRosterSelection,
+  ): Effect.Effect<void, StoreWriteFailed> {
     const parsed = AgentRosterSelectionSchema.parse(selection);
-    await this.deps.workspaceState.update(
+    return this.deps.workspaceState.update(
       WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       parsed,
     );
   }
 
-  private async setSelection(selection: AgentRosterSelection): Promise<void> {
-    await serializeWorkspaceWrite(this.deps.workspaceState, () =>
+  private setSelection(
+    selection: AgentRosterSelection,
+  ): Effect.Effect<void, StoreWriteFailed> {
+    return serializeWorkspaceWrite(
+      this.deps.workspaceState,
       this.writeSelection(selection),
     );
   }
 
-  async setTeam(teamId: string): Promise<void> {
+  setTeam(teamId: string): Effect.Effect<void, StoreWriteFailed> {
     const preset = allPresets(this.extraPresets()).find(
       (candidate) => candidate.id === teamId,
     );
     if (!preset)
       throw new InvalidAgentTeamError(`Unknown agent team: ${teamId}`);
-    await this.setSelection({ kind: 'team', teamId: preset.id });
+    return this.setSelection({ kind: 'team', teamId: preset.id });
   }
 
-  async setCustom(
+  setCustom(
     agentKeys: ByCategory<AgentRosterCategorySelection>,
-  ): Promise<void> {
-    await this.setSelection({
+  ): Effect.Effect<void, StoreWriteFailed> {
+    return this.setSelection({
       kind: 'custom',
       agentKeys: byCategory((category) => {
         const selection = agentKeys[category];
@@ -317,92 +333,103 @@ export class AgentRosterController<
     });
   }
 
-  async setEnabledAgentKeys(
+  setEnabledAgentKeys(
     category: AgentCategory,
     enabledKeys: readonly string[],
-  ): Promise<void> {
-    await serializeWorkspaceWrite(this.deps.workspaceState, async () => {
-      await this.writeSelection({
-        kind: 'custom',
-        agentKeys: byCategory((candidate) =>
-          candidate === category
-            ? unique(enabledKeys)
-            : this.effectiveCategorySelection(candidate),
-        ),
-      });
-    });
+  ): Effect.Effect<void, StoreWriteFailed> {
+    return serializeWorkspaceWrite(
+      this.deps.workspaceState,
+      Effect.suspend(() =>
+        this.writeSelection({
+          kind: 'custom',
+          agentKeys: byCategory((candidate) =>
+            candidate === category
+              ? unique(enabledKeys)
+              : this.effectiveCategorySelection(candidate),
+          ),
+        }),
+      ),
+    );
   }
 
-  async setAll(): Promise<void> {
-    await this.setSelection({ kind: 'all' });
+  setAll(): Effect.Effect<void, StoreWriteFailed> {
+    return this.setSelection({ kind: 'all' });
   }
 
-  async setInherited(): Promise<void> {
-    await this.setSelection(INHERITED_AGENT_ROSTER);
+  setInherited(): Effect.Effect<void, StoreWriteFailed> {
+    return this.setSelection(INHERITED_AGENT_ROSTER);
   }
 
-  async setAgentEnabled(input: {
+  setAgentEnabled(input: {
     readonly category: AgentCategory;
     readonly source: AgentSource;
     readonly name: string;
     readonly enabled: boolean;
-  }): Promise<void> {
-    await serializeWorkspaceWrite(this.deps.workspaceState, async () => {
-      const selections = byCategory((category) =>
-        this.effectiveCategorySelection(category),
-      );
-      const target = this.materializeCategorySelection(
-        selections[input.category],
-        input.category,
-      );
-      const key = agentKeyOf(input);
-      const index = target.findIndex((candidate) =>
-        agentMatchesIdentifier(input, candidate),
-      );
-      const alreadyEnabled = index >= 0;
-      if (input.enabled === alreadyEnabled) return;
-      if (input.enabled) {
-        target.push(key);
-      } else {
-        target.splice(index, 1);
-      }
-      await this.writeSelection({
-        kind: 'custom',
-        agentKeys: byCategory((category) =>
-          category === input.category ? target : selections[category],
-        ),
-      });
-    });
-  }
-
-  async removeTeamPreset(
-    teamId: string,
-    removePreset: () => PromiseLike<void>,
-  ): Promise<void> {
-    await serializeWorkspaceWrite(this.deps.workspaceState, async () => {
-      const selection = this.getSelection();
-      if (selection.kind === 'team' && selection.teamId === teamId) {
-        await this.writeSelection({
+  }): Effect.Effect<void, StoreWriteFailed> {
+    return serializeWorkspaceWrite(
+      this.deps.workspaceState,
+      Effect.suspend(() => {
+        const selections = byCategory((category) =>
+          this.effectiveCategorySelection(category),
+        );
+        const target = this.materializeCategorySelection(
+          selections[input.category],
+          input.category,
+        );
+        const key = agentKeyOf(input);
+        const index = target.findIndex((candidate) =>
+          agentMatchesIdentifier(input, candidate),
+        );
+        const alreadyEnabled = index >= 0;
+        if (input.enabled === alreadyEnabled) return Effect.void;
+        if (input.enabled) {
+          target.push(key);
+        } else {
+          target.splice(index, 1);
+        }
+        return this.writeSelection({
           kind: 'custom',
-          agentKeys: byCategory(
-            (category) => this.selectionKeys(selection, category) ?? 'all',
+          agentKeys: byCategory((category) =>
+            category === input.category ? target : selections[category],
           ),
         });
-      }
-      await removePreset();
-    });
+      }),
+    );
   }
 
-  async setDefaultTeam(teamId: string): Promise<void> {
+  removeTeamPreset(
+    teamId: string,
+    removePreset: Effect.Effect<void, StoreWriteFailed>,
+  ): Effect.Effect<void, StoreWriteFailed> {
+    return serializeWorkspaceWrite(
+      this.deps.workspaceState,
+      Effect.suspend(() => {
+        const selection = this.getSelection();
+        const rewrite =
+          selection.kind === 'team' && selection.teamId === teamId
+            ? this.writeSelection({
+                kind: 'custom',
+                agentKeys: byCategory(
+                  (category) =>
+                    this.selectionKeys(selection, category) ?? 'all',
+                ),
+              })
+            : Effect.void;
+        return Effect.flatMap(rewrite, () => removePreset);
+      }),
+    );
+  }
+
+  setDefaultTeam(teamId: string): Effect.Effect<void, StoreWriteFailed> {
     if (!allPresets().some((preset) => preset.id === teamId)) {
       throw new InvalidAgentTeamError(
         `Only a built-in team can be the user default: ${teamId}`,
       );
     }
-    await setDefaultTeamId(this.deps.globalState, teamId);
+    return setDefaultTeamId(this.deps.globalState, teamId);
   }
 
-  async clearDefaultTeam(): Promise<void> {
-    await clearDefaultTeamId(this.deps.globalState);
+  clearDefaultTeam(): Effect.Effect<void, StoreWriteFailed> {
+    return clearDefaultTeamId(this.deps.globalState);
   }
 }

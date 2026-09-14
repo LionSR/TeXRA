@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
@@ -46,6 +45,15 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
   const extendedPath = extendEnvPath();
   const pm = detectPackageManager();
   const hostInfo = nodeHostEnvironment.hostInfo();
+  // A credential probe that could not read its store reports through this
+  // sink, which is what turns the overall readiness answer from "no usable
+  // credential" into "status unavailable": the difference the summary and
+  // the setup agent act on.
+  let credentialProbeFailed = false;
+  const reportCredentialProbeFailure = (message: string): void => {
+    credentialProbeFailed = true;
+    credentialLog.warn(message);
+  };
   const [
     core,
     optionalTools,
@@ -62,23 +70,33 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
       ),
       Effect.all(
         API_PROVIDERS.map((provider) =>
-          hostPort(() => lookupApiKeyOrigin(secrets, provider)).pipe(
-            Effect.catch(() => Effect.succeed('unknown' as const)),
+          lookupApiKeyOrigin(secrets, provider).pipe(
+            Effect.catchTag('SecretsFailed', (failure) => {
+              credentialLog.warn(
+                `Could not read the ${provider} API key origin (${failure.reason}): ${failure.message}`,
+              );
+              return Effect.succeed('unknown' as const);
+            }),
             Effect.map((origin) => ({ provider, origin })),
           ),
         ),
         { concurrency: 'unbounded' },
       ),
-      hostPort(() =>
-        hasUsableSetupCredential(secrets, credentialLog.warn),
-      ).pipe(
-        Effect.map((available) => ({ available, status: 'known' as const })),
-        Effect.catch(() =>
-          Effect.succeed({ available: false, status: 'unknown' as const }),
-        ),
+      hasUsableSetupCredential(secrets, reportCredentialProbeFailure).pipe(
+        Effect.map((available) => ({
+          available,
+          status: credentialProbeFailed
+            ? ('unknown' as const)
+            : ('known' as const),
+        })),
       ),
-      hostPort(() => resolveGitHubTokenSource(secrets)).pipe(
-        Effect.catch(() => Effect.succeed('none' as const)),
+      resolveGitHubTokenSource(secrets).pipe(
+        Effect.catchTag('SecretsFailed', (failure) => {
+          credentialLog.warn(
+            `Could not read the GitHub token source (${failure.reason}): ${failure.message}`,
+          );
+          return Effect.succeed('none' as const);
+        }),
       ),
       getChatGptSubscriptionStatus().pipe(
         Effect.catch(() => Effect.succeed({ signedIn: false, enabled: false })),

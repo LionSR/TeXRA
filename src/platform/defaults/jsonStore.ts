@@ -2,34 +2,28 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import {
-  Effect,
-  FileSystem,
-  Path,
-  type ManagedRuntime,
-  type PlatformError,
-} from 'effect';
+import { Effect, FileSystem, Layer, Path, type PlatformError } from 'effect';
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import writeFileAtomic from 'write-file-atomic';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
-import type { StateStore } from '../interfaces';
+import { StoreWriteFailed, type StateStore } from '../interfaces';
 
 type JsonRecord = Record<string, unknown>;
 
 /**
- * What {@link JsonStore.update} runs its write on: a runtime over the
- * filesystem services the flush reads, which every host's process runtime
- * provides. Narrower than `ProcessRuntime` on purpose -- this store needs a
- * place to run a file write, not the process's whole service set.
+ * The filesystem services this store's own reads and writes run over. A
+ * `JsonStore` is a Node-host store by construction (Electron, the CLI), and
+ * `StateStore`/`ConfigStore` writes are requirement-free by contract, so the
+ * store provides them itself rather than making every consumer of a port
+ * carry `FileSystem | Path` in its type.
  */
-export type JsonStoreRuntime = ManagedRuntime.ManagedRuntime<
-  FileSystem.FileSystem | Path.Path,
-  never
->;
+export const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path> =
+  Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 /** Preserve the Node error identity exposed by this store's existing callers. */
 function storageError(error: PlatformError.PlatformError): Error {
@@ -49,15 +43,6 @@ export interface JsonStoreOptions {
    * `JsonStore` behavior.
    */
   mode?: number;
-  /**
-   * The runtime {@link JsonStore.update} runs its write on: the one the host
-   * that opened this store built. Only a store that backs a `ConfigStore` or
-   * `StateStore` target has that `vscode.Memento`-shaped Promise face, so a
-   * store opened for Effect-side writes alone (`set`) leaves this unset and
-   * `update` on it fails with that fact, exactly as a host with no editor
-   * fails an editor-model binding.
-   */
-  runtime?: JsonStoreRuntime;
 }
 
 /** `0o600` -> `0o700`: adds owner-execute wherever owner-read is set. */
@@ -174,12 +159,10 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * `has`, `snapshot`, `keys`) still serve this instance's view: open-time
  * contents plus its own mutations; they don't observe other writers' changes.
  *
- * `set` is the store's own write and is an `Effect`. `update` exists only
- * because {@link StateStore} and `ConfigStore` mirror `vscode.Memento`, whose
- * shape the VS Code host cannot change: it is the port's method, the single
- * place this module runs an Effect, and it disappears with those two port
- * shapes rather than with this class. It runs on the runtime the opener
- * handed over ({@link JsonStoreOptions.runtime}), never on a looked-up one.
+ * `update` is the store's one write, and it is an `Effect`: the caller's
+ * fiber flushes the file and sees a typed {@link StoreWriteFailed} if the
+ * flush fails. It provides {@link nodeFileServices} itself so a
+ * `StateStore` or `ConfigStore` write stays requirement-free.
  */
 export class JsonStore implements StateStore {
   private constructor(
@@ -215,11 +198,11 @@ export class JsonStore implements StateStore {
   /**
    * Apply the mutation in memory, then flush it on the file's lane in
    * {@link writeLanes}. Both steps happen in the effect's first synchronous
-   * step, so flushes run in `set()` order rather than racing on
+   * step, so flushes run in `update()` order rather than racing on
    * `mkdir`/read/`write-file-atomic` timing; a failed flush doesn't stop the
    * lane from running subsequent flushes.
    */
-  set(key: string, value: unknown) {
+  update(key: string, value: unknown): Effect.Effect<void, StoreWriteFailed> {
     return Effect.suspend(() => {
       if (value === undefined) {
         delete this.data[key];
@@ -230,24 +213,18 @@ export class JsonStore implements StateStore {
         writeLanes,
         this.filePath,
       )(flush(this.filePath, this.options.mode, key, value, this.snapshot()));
-    });
-  }
-
-  /**
-   * {@link StateStore} / `ConfigStore` conformance — the `vscode.Memento`
-   * shape both ports mirror. Same persistence semantics as {@link set},
-   * which is the Effect-side write every caller inside a program uses.
-   */
-  update(key: string, value: unknown): Promise<void> {
-    const { runtime } = this.options;
-    if (!runtime) {
-      return Promise.reject(
-        new Error(
-          `The JSON store at ${this.filePath} was opened without a runtime, so its Promise-shaped update() has nothing to run the write on. Open it with { runtime } where it backs a ConfigStore or StateStore target, or write through set() from inside an Effect.`,
-        ),
-      );
-    }
-    return runtime.runPromise(this.set(key, value));
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new StoreWriteFailed({
+            reason: 'io',
+            key,
+            message: `The JSON store at ${this.filePath} could not write ${key}: ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      ),
+      Effect.provide(nodeFileServices),
+    );
   }
 
   snapshot(): JsonRecord {

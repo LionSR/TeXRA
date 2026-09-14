@@ -620,7 +620,11 @@ const sessionLayer = (
   key: SessionKey,
   held: HeldSessions,
   release: (key: SessionKey) => Effect.Effect<void>,
-  identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
+  identity: Layer.Layer<
+    ProcessIdentity | InquiryRecords,
+    never,
+    FileSystem.FileSystem | Path.Path
+  >,
   runtime: ProcessRuntime,
 ) =>
   Layer.fresh(
@@ -650,7 +654,11 @@ class Sessions extends Context.Service<
   static layer(
     held: HeldSessions,
     release: (key: SessionKey) => Effect.Effect<void>,
-    identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
+    identity: Layer.Layer<
+      ProcessIdentity | InquiryRecords,
+      never,
+      FileSystem.FileSystem | Path.Path
+    >,
     runtime: ProcessRuntime,
   ) {
     return Layer.effect(
@@ -898,10 +906,9 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  *
  * The process services (injection plan §3.1, the one process provide point)
  * are merged here from what the root hands over: `Secrets` and `AppState`
- * over thunks of the root's own stores, which in the desktop and CLI roots
- * open on this very runtime after it is installed (the layer is built at the
- * runtime's first run, so a value could not be threaded there; the thunk
- * closes over the root's local, never over `platform()`); `SetupPlatform`
+ * over the root's own open programs, built with this layer, which is what
+ * lets the desktop and CLI roots — whose stores open on this very runtime —
+ * hand over a program rather than a thunk resolved per call; `SetupPlatform`
  * over the root's host-varying setup capabilities; and `ToolInjections` over
  * `AGENT_TOOL_INJECTIONS`, the same list for every host.
  */
@@ -909,8 +916,21 @@ export interface ProcessRuntimeOptions {
   readonly processStart: string | undefined | Promise<string | undefined>;
   readonly globalStorage: () => string;
   readonly updateCheckStorage: () => string;
-  readonly secrets: () => PlatformSecrets;
-  readonly appState: () => StateStore;
+  /**
+   * Opens this process's secret store and global state store. Both are built
+   * as part of this runtime's layer, so a root whose stores open on the
+   * runtime hands over the program instead of a value it cannot have yet.
+   */
+  readonly secrets: Effect.Effect<
+    PlatformSecrets,
+    never,
+    FileSystem.FileSystem | Path.Path
+  >;
+  readonly appState: Effect.Effect<
+    StateStore,
+    never,
+    FileSystem.FileSystem | Path.Path
+  >;
   readonly setup: SetupPlatformShape;
   /**
    * The editor's language models, for the one host that has an editor: the
@@ -942,7 +962,9 @@ function processServicesLayer({
   appState,
   setup,
 }: Pick<ProcessRuntimeOptions, 'secrets' | 'appState' | 'setup'>): Layer.Layer<
-  Secrets | AppState | SetupPlatform | ToolInjections
+  Secrets | AppState | SetupPlatform | ToolInjections,
+  never,
+  FileSystem.FileSystem | Path.Path
 > {
   return Layer.mergeAll(
     Secrets.layer(secrets),

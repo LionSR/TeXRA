@@ -139,10 +139,10 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
       return NO_ONBOARDING_RESULT;
     }
     const { globalState } = services;
-    const hasCredential = yield* Effect.tryPromise({
-      try: () => hasUsableSetupCredential(services.secrets, credentialLog.warn),
-      catch: ensureError,
-    });
+    const hasCredential = yield* hasUsableSetupCredential(
+      services.secrets,
+      credentialLog.warn,
+    );
     // Route through the same funnel-transition planner the extension/desktop
     // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
     // is discarded: the CLI has no launcher agent list to steer. Clearing a
@@ -159,10 +159,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
       ...flags,
     });
     if (transition.clearDeclined) {
-      yield* Effect.tryPromise({
-        try: () => setOnboardingDeclined(globalState, false),
-        catch: ensureError,
-      }).pipe(
+      yield* setOnboardingDeclined(globalState, false).pipe(
         Effect.catch((error) =>
           Effect.sync(() =>
             warnOnboardingFailure('Clearing the stale skip flag', error),
@@ -247,10 +244,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // Best-effort: persist the decline so we don't re-prompt next launch. If the
     // global-state write fails (read-only home, permissions), tell the user
     // rather than silently re-prompting later with no explanation.
-    yield* Effect.tryPromise({
-      try: () => setOnboardingDeclined(options.stores.globalState, true),
-      catch: ensureError,
-    }).pipe(
+    yield* setOnboardingDeclined(options.stores.globalState, true).pipe(
       Effect.catch(() =>
         Effect.sync(() =>
           writeTextStderr(
@@ -264,10 +258,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // skipped, then configured via `texra setup` (which bypasses the gate), then
     // signed out would have the stale flag suppress onboarding and land back on
     // the dead-end. Best-effort: a failed clear only re-surfaces that rare edge.
-    yield* Effect.tryPromise({
-      try: () => setOnboardingDeclined(options.stores.globalState, false),
-      catch: ensureError,
-    }).pipe(
+    yield* setOnboardingDeclined(options.stores.globalState, false).pipe(
       Effect.catch((error) =>
         Effect.sync(() =>
           warnOnboardingFailure('Clearing the stale skip flag', error),
@@ -510,11 +501,8 @@ function ChatGptProgressStep(
               },
             },
           );
-          const update = yield* Effect.tryPromise({
-            try: () =>
-              subscriptionProvider('chatgpt').setPreferSubscription(true),
-            catch: ensureError,
-          });
+          const update =
+            yield* subscriptionProvider('chatgpt').setPreferSubscription(true);
           if (!update.effective) {
             if (!isCancelled())
               props.onError(

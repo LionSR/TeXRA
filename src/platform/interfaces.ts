@@ -2,7 +2,7 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
-import { Context, Layer } from 'effect';
+import { Context, Data, Effect, Layer } from 'effect';
 import type { RunId } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
@@ -42,7 +42,11 @@ export interface ConfigProvider {
    * for keys the catalog does not own.
    */
   get<T>(key: string, defaultValue?: T): T;
-  update<T>(key: string, value: T, target?: ConfigTarget): Promise<void>;
+  update<T>(
+    key: string,
+    value: T,
+    target?: ConfigTarget,
+  ): Effect.Effect<void, StoreWriteFailed>;
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined;
   isExplicitlySet(key: string): boolean;
 }
@@ -52,34 +56,61 @@ export interface ConfigProvider {
 // ---------------------------------------------------------------------------
 
 /**
+ * Why a durable settings or state write failed. Both stores persist through
+ * the same two owners, so they share one vocabulary:
+ *
+ * - `not-serializable` — the value handed in is not JSON, so nothing was
+ *   written (`appStateStore`'s encode step).
+ * - `io` — the backing store rejected the write: a Node errno from the JSON
+ *   file, a corrupt store file, or a database append that failed.
+ */
+export type StoreWriteFailureReason = 'not-serializable' | 'io';
+
+/**
+ * The one failure of a {@link StateStore} or {@link ConfigProvider} write.
+ * Callers match `reason` instead of a message; nothing here is a silent
+ * default.
+ */
+export class StoreWriteFailed extends Data.TaggedError('StoreWriteFailed')<{
+  readonly reason: StoreWriteFailureReason;
+  readonly key: string;
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
  * Platform key-value state store interface.
- * Matches the vscode.Memento surface for compatibility.
+ *
+ * Reads stay synchronous over the snapshot the store opened with — the
+ * `vscode.Memento` shape every host already serves. Writes are `Effect`s:
+ * the failure is typed as {@link StoreWriteFailed} and the write is a step of
+ * the program that asked for it rather than a floating promise.
  */
 export interface StateStore {
   get<T>(key: string, defaultValue?: T): T;
-  update(key: string, value: unknown): PromiseLike<void>;
+  update(key: string, value: unknown): Effect.Effect<void, StoreWriteFailed>;
 }
 
 /**
  * The process's global state store as an Effect service
  * (`@texra/platform/AppState`, injection plan §5 row 2), provided once by the
- * composition root through `installProcessRuntime`. The shape stays the
- * synchronous `StateStore`; Effect-typing it is its own step.
+ * composition root through `installProcessRuntime`. The service is the store
+ * itself: the port is Effect-typed, so nothing stands between a
+ * `yield* AppState` and the host's own program.
  *
- * `layer` takes the store as a thunk for the same reason `Secrets.layer`
- * does: the runtime builds its layer at its first run, which in the desktop
- * and CLI roots is the program that opens this store. The service resolves
- * the thunk on each member call; the thunk closes over the root's own local.
+ * `layer` takes the store's open program rather than the store, for the same
+ * reason `Secrets.layer` does: a `ManagedRuntime` builds its layer at its
+ * first run, and in the desktop and CLI roots that first run is what opens
+ * this store. Opening it as the layer's build step gives the process exactly
+ * one instance and removes the late binding the roots used to need.
  */
 export class AppState extends Context.Service<AppState, StateStore>()(
   '@texra/platform/AppState',
 ) {
-  static layer(store: () => StateStore): Layer.Layer<AppState> {
-    return Layer.succeed(AppState)({
-      get: <T>(key: string, defaultValue?: T): T =>
-        store().get<T>(key, defaultValue),
-      update: (key, value) => store().update(key, value),
-    });
+  static layer<R>(
+    open: Effect.Effect<StateStore, never, R>,
+  ): Layer.Layer<AppState, never, R> {
+    return Layer.effect(AppState)(open);
   }
 }
 

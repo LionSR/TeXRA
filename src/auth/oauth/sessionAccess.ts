@@ -5,7 +5,11 @@
  * here (with the status probe) so a provider does not re-copy the platform
  * dance.
  */
+import { Effect } from 'effect';
+
+import { AuthPortError } from '@auth/authProgram';
 import { createLog } from '@logger/logUtils';
+import type { SecretsFailed } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type {
@@ -15,20 +19,28 @@ import type {
 
 /** Secret-store slice the session-storage adapter needs. */
 export interface SessionSecretStore {
-  get(key: string): Promise<string | undefined>;
-  set(key: string, value: string): Promise<void>;
-  delete(key: string): Promise<void>;
+  get(key: string): Effect.Effect<string | undefined, SecretsFailed>;
+  set(key: string, value: string): Effect.Effect<void, SecretsFailed>;
+  delete(key: string): Effect.Effect<void, SecretsFailed>;
 }
 
-/** Session storage over one key of a secret store. */
+/**
+ * Session storage over one key of a secret store. The store's own
+ * {@link SecretsFailed} becomes the auth subsystem's {@link AuthPortError},
+ * whose Promise edge re-throws the cause unchanged, so every host message
+ * check on a secret-store failure still holds.
+ */
 export function secretBackedSessionStorage(
   secrets: SessionSecretStore,
   key: string,
 ): SubscriptionSessionStorage {
+  const asPortError = Effect.mapError(
+    (cause: SecretsFailed) => new AuthPortError({ cause }),
+  );
   return {
-    get: () => secrets.get(key),
-    store: (value) => secrets.set(key, value),
-    delete: () => secrets.delete(key),
+    get: () => asPortError(secrets.get(key)),
+    store: (value) => asPortError(secrets.set(key, value)),
+    delete: () => asPortError(secrets.delete(key)),
   };
 }
 

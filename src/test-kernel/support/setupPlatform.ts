@@ -241,8 +241,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The run-end stop is absent, as on a host whose Lean integration owns
     // server lifetime: the mock's placeholder for it would die on every run.
     Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
-    Secrets.layer(() => installedHost().secrets),
-    AppState.layer(() => installedHost().roots.globalState),
+    Secrets.layer(Effect.sync(() => installedHost().secrets)),
+    AppState.layer(Effect.sync(() => installedHost().roots.globalState)),
     SetupPlatform.layer(fakeSetupPlatform),
     // No conditional injections on the bare fake host: a suite that
     // exercises them passes its own list to `resolveAgentTools`.

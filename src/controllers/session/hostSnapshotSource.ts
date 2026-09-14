@@ -74,7 +74,9 @@ export interface HostSnapshotSource {
    *  it was launched as: the banner's actions edit that catalog. */
   showAgentConfigBanner(agentName: string, sessionType: SessionType): void;
   /** The user dismissed one of the dismissable banners. */
-  dismissBanner(banner: 'login' | 'gettingStarted' | 'dependency'): void;
+  dismissBanner(
+    banner: 'login' | 'gettingStarted' | 'dependency',
+  ): Effect.Effect<void>;
   setOnboarding(state: HostSnapshot['onboarding']): void;
 }
 
@@ -152,11 +154,9 @@ export function createHostSnapshotSource(
   const loadModels = Effect.gen(function* () {
     catalogs = {
       ...catalogs,
-      modelOptions: yield* hostPort(() =>
-        computeModelOptionsData(
-          { secrets: options.secrets, globalState: options.globalState },
-          getEnabledModels(options.globalState),
-        ),
+      modelOptions: yield* computeModelOptionsData(
+        { secrets: options.secrets, globalState: options.globalState },
+        getEnabledModels(options.globalState),
       ),
     };
   });
@@ -238,14 +238,19 @@ export function createHostSnapshotSource(
       publish();
     },
     dismissBanner(banner) {
-      if (banner === 'login') {
-        void options.globalState
-          .update(GlobalStateKey.LOGIN_BANNER_DISMISSED, true)
-          .then(undefined, options.onError);
-      } else {
-        dismissed.add(banner);
-      }
-      publish();
+      const persisted =
+        banner === 'login'
+          ? options.globalState
+              .update(GlobalStateKey.LOGIN_BANNER_DISMISSED, true)
+              .pipe(
+                Effect.catch((error: unknown) =>
+                  Effect.sync(() => options.onError(error)),
+                ),
+              )
+          : Effect.sync(() => {
+              dismissed.add(banner);
+            });
+      return Effect.tap(persisted, () => Effect.sync(publish));
     },
     setOnboarding(state) {
       if (state === onboarding) return;

@@ -10,8 +10,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Local imports
+import { Effect } from 'effect';
+
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
+  StoreWriteFailed,
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
@@ -20,7 +23,7 @@ import {
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -170,18 +173,16 @@ export class FakeConfigProvider implements ConfigProvider {
     this.targets.set(key, 'workspace');
   }
 
-  async update<T>(
-    key: string,
-    value: T,
-    target: ConfigTarget = 'workspace',
-  ): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-      this.targets.delete(key);
-    } else {
-      this.values.set(key, value);
-      this.targets.set(key, target);
-    }
+  update<T>(key: string, value: T, target: ConfigTarget = 'workspace') {
+    return Effect.sync(() => {
+      if (value === undefined) {
+        this.values.delete(key);
+        this.targets.delete(key);
+      } else {
+        this.values.set(key, value);
+        this.targets.set(key, target);
+      }
+    });
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
@@ -254,23 +255,32 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;
   }
 
-  async update<T>(key: string, value: T, target?: ConfigTarget): Promise<void> {
-    if (target !== undefined && target === this.failUpdatesForTarget) {
-      throw new Error(`simulated ${target}-scope update failure for ${key}`);
-    }
-    this.updateCalls.push({ key, value, target });
-    if (target === undefined) {
-      this.lastTargets.delete(key);
-    } else {
-      this.lastTargets.set(key, target);
-    }
-    const store =
-      target === 'global' ? this.globalValues : this.workspaceValues;
-    if (value === undefined) {
-      store.delete(key);
-    } else {
-      store.set(key, value);
-    }
+  update<T>(key: string, value: T, target?: ConfigTarget) {
+    return Effect.suspend(() => {
+      if (target !== undefined && target === this.failUpdatesForTarget) {
+        return Effect.fail(
+          new StoreWriteFailed({
+            reason: 'io',
+            key,
+            message: `simulated ${target}-scope update failure for ${key}`,
+          }),
+        );
+      }
+      this.updateCalls.push({ key, value, target });
+      if (target === undefined) {
+        this.lastTargets.delete(key);
+      } else {
+        this.lastTargets.set(key, target);
+      }
+      const store =
+        target === 'global' ? this.globalValues : this.workspaceValues;
+      if (value === undefined) {
+        store.delete(key);
+      } else {
+        store.set(key, value);
+      }
+      return Effect.void;
+    });
   }
 
   /** The most recent explicit `target` passed to `update()` for `key`, or `undefined` if none was given. */
@@ -335,12 +345,14 @@ export class FakeStateStore implements StateStore {
     return this.values.get(key) as T;
   }
 
-  async update(key: string, value: unknown): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-      return;
-    }
-    this.values.set(key, value);
+  update(key: string, value: unknown) {
+    return Effect.sync(() => {
+      if (value === undefined) {
+        this.values.delete(key);
+        return;
+      }
+      this.values.set(key, value);
+    });
   }
 }
 
@@ -359,24 +371,28 @@ export class FakeSecrets implements PlatformSecrets {
     this.env = env;
   }
 
-  async get(key: string): Promise<string | undefined> {
-    return this.values.get(key);
+  get(key: string) {
+    return Effect.sync(() => this.values.get(key));
   }
 
-  async getStored(key: string): Promise<string | undefined> {
-    return this.values.get(key);
+  getStored(key: string) {
+    return Effect.sync(() => this.values.get(key));
   }
 
-  async set(key: string, value: string): Promise<void> {
-    this.values.set(key, value);
+  set(key: string, value: string) {
+    return Effect.sync(() => {
+      this.values.set(key, value);
+    });
   }
 
-  async delete(key: string): Promise<void> {
-    this.values.delete(key);
+  delete(key: string) {
+    return Effect.sync(() => {
+      this.values.delete(key);
+    });
   }
 
-  async listStoredKeys(): Promise<readonly string[]> {
-    return [...this.values.keys()];
+  listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
+    return Effect.sync(() => [...this.values.keys()]);
   }
 
   getEnv(name: string): string | undefined {

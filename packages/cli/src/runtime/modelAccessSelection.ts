@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { hostPort } from '@common/hostPort';
 
 import {
   subscriptionProvider,
@@ -32,28 +31,29 @@ interface CliModelAccessSelectionResult {
   readonly message: string;
 }
 
-export async function readCliModelAccessStatus(
-  secrets: PlatformSecrets,
-): Promise<CliModelAccessStatus> {
-  const [chatGpt, grok, codingPlanEntries] = await Promise.all([
-    subscriptionProvider('chatgpt').getStatus(secrets),
-    subscriptionProvider('grok').getStatus(secrets),
-    Promise.all(
-      codingPlanSubscriptionRuntimes.map(
-        async (runtime) =>
-          [
-            runtime.descriptor.id,
-            {
-              preferred: runtime.getEnabled(),
-              keySet: await hasUsableApiKey(
-                secrets,
-                runtime.descriptor.apiProvider,
-              ),
-            },
-          ] as const,
+export const readCliModelAccessStatus = Effect.fn(
+  'modelAccessSelection.readCliModelAccessStatus',
+)(function* (secrets: PlatformSecrets) {
+  const [chatGpt, grok, codingPlanEntries] = yield* Effect.all(
+    [
+      Effect.promise(() => subscriptionProvider('chatgpt').getStatus(secrets)),
+      Effect.promise(() => subscriptionProvider('grok').getStatus(secrets)),
+      Effect.all(
+        codingPlanSubscriptionRuntimes.map((runtime) =>
+          Effect.map(
+            hasUsableApiKey(secrets, runtime.descriptor.apiProvider),
+            (keySet) =>
+              [
+                runtime.descriptor.id,
+                { preferred: runtime.getEnabled(), keySet },
+              ] as const,
+          ),
+        ),
+        { concurrency: 'unbounded' },
       ),
-    ),
-  ]);
+    ],
+    { concurrency: 'unbounded' },
+  );
   const codingPlans = Object.fromEntries(
     codingPlanEntries,
   ) as CliModelAccessStatus['codingPlans'];
@@ -70,8 +70,8 @@ export async function readCliModelAccessStatus(
     grokSignedIn: grok.signedIn,
     grokAccountLabel: grok.email,
     codingPlans,
-  };
-}
+  } satisfies CliModelAccessStatus;
+});
 
 export function mergeCliTexraAccountStatus(
   access: CliModelAccessStatus,
@@ -104,7 +104,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
   const secrets = yield* Secrets;
   const { displayName, modelFamily } = provider;
   if (selection.state === 'off') {
-    const update = yield* hostPort(() => provider.setPreferSubscription(false));
+    const update = yield* provider.setPreferSubscription(false);
     return {
       message: update.effective
         ? `${displayName} subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
@@ -112,7 +112,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     } satisfies CliModelAccessSelectionResult;
   }
 
-  const status = yield* hostPort(() => provider.getStatus(secrets));
+  const status = yield* Effect.promise(() => provider.getStatus(secrets));
   let accountLabel = status.label;
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
@@ -126,9 +126,9 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     accountLabel = account.label;
   }
 
-  const update = yield* hostPort(() => provider.setPreferSubscription(true));
+  const update = yield* provider.setPreferSubscription(true);
   const appState = yield* AppState;
-  yield* hostPort(() => appState.update(GlobalStateKey.USE_OPENROUTER, false));
+  yield* appState.update(GlobalStateKey.USE_OPENROUTER, false);
   return {
     message: update.effective
       ? `Prefer ${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`
@@ -145,7 +145,7 @@ const updateKeyedCliModelAccess = Effect.fn(
 ) {
   const plan = runtime.descriptor;
   if (selection.state === 'off') {
-    yield* hostPort(() => runtime.setEnabled(false));
+    yield* runtime.setEnabled(false);
     return {
       message: `${plan.preferenceLabel} disabled for ${plan.modelFamily}.`,
     } satisfies CliModelAccessSelectionResult;
@@ -154,15 +154,13 @@ const updateKeyedCliModelAccess = Effect.fn(
   // The provider API key is the subscription credential — there is no
   // separate sign-in flow.
   const secrets = yield* Secrets;
-  const keySet = yield* hostPort(() =>
-    hasUsableApiKey(secrets, plan.apiProvider),
-  );
+  const keySet = yield* hasUsableApiKey(secrets, plan.apiProvider);
   if (!keySet) {
     return {
       message: `No ${plan.credentialName} API key configured — add one with /key or /config → API keys (get one at ${plan.credentialSetupUrl}).`,
     } satisfies CliModelAccessSelectionResult;
   }
-  yield* hostPort(() => runtime.setEnabled(true));
+  yield* runtime.setEnabled(true);
   return {
     message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${formatCliModelAccessRouteInline('api-key')}.`,
   } satisfies CliModelAccessSelectionResult;

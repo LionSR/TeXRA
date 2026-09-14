@@ -14,6 +14,7 @@
  * fenced off from `@model` (eslint `AUTH_RESTRICTED_IMPORT_PATTERNS`). This is
  * the same composition `chatGptAuthStatus.ts` / `grokAuthStatus.ts` already do.
  */
+import type { StoreWriteFailed } from '@platform/interfaces';
 import { Effect } from 'effect';
 
 import {
@@ -127,7 +128,7 @@ export interface SubscriptionProvider {
   isPreferSubscription(): boolean;
   setPreferSubscription(
     enabled: boolean,
-  ): Promise<SubscriptionPreferenceUpdate>;
+  ): Effect.Effect<SubscriptionPreferenceUpdate, StoreWriteFailed>;
 }
 
 /** Fields the flow reads off a provider session; providers carry more. */
@@ -165,7 +166,7 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   readonly isPrefer: () => boolean;
   readonly setPrefer: (
     enabled: boolean,
-  ) => Promise<SubscriptionPreferenceUpdate>;
+  ) => Effect.Effect<SubscriptionPreferenceUpdate, StoreWriteFailed>;
 }
 
 /**

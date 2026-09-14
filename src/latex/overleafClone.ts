@@ -12,6 +12,7 @@
  * instead of running them out.
  */
 
+import type { SecretsFailed } from '@platform/secrets';
 import { Effect } from 'effect';
 
 import {
@@ -28,9 +29,9 @@ import {
 const IGNORED_CLONE_FILES = new Set(['.DS_Store', 'Thumbs.db']);
 
 export interface OverleafCloneWorkflowPorts {
-  getStoredToken(key: string): Effect.Effect<string | undefined>;
-  deleteStoredToken(key: string): Effect.Effect<void>;
-  storeToken(key: string, token: string): Effect.Effect<void>;
+  getStoredToken(key: string): Effect.Effect<string | undefined, SecretsFailed>;
+  deleteStoredToken(key: string): Effect.Effect<void, SecretsFailed>;
+  storeToken(key: string, token: string): Effect.Effect<void, SecretsFailed>;
   /**
    * Prompt for a new token; null when the user cancels. Fails when the host
    * cannot prompt at all (a non-interactive CLI run, say) — that is a usage

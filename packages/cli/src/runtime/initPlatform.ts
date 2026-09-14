@@ -21,6 +21,7 @@ import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
+import { AppState } from '@platform/interfaces';
 import type {
   AgentResumePort,
   LifecycleHost,
@@ -51,11 +52,7 @@ import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import {
-  bindCliGlobalState,
-  cliGlobalState,
-  installCliProcessRuntime,
-} from './cliProcessRuntime';
+import { installCliProcessRuntime } from './cliProcessRuntime';
 import { getCliSecrets } from './cliSecrets';
 import {
   flushNdjsonStdout,
@@ -355,7 +352,6 @@ export async function initCliPlatform(
           const stores = yield* createCliStateStores({
             storageRoot: context.storageRoot,
             workspacePath: context.cwd,
-            runWrite: (write) => runtime.runPromise(write),
           });
           return {
             stateStores: stores,
@@ -363,14 +359,10 @@ export async function initCliPlatform(
               stores.storage,
               context.cwd,
               showPersistentConfigWarning,
-              runtime,
             ),
           };
         }),
       );
-      // The store the process runtime's `AppState` reads from here on: it opened
-      // on that runtime, so it could not be threaded into the install above.
-      bindCliGlobalState(stateStores.globalState);
       // Same severity and wording as the extension/desktop hosts: a shutdown
       // handler failure is an error everywhere, not a warning in one host.
       const lifecycle = createLifecycleHost({
@@ -387,7 +379,7 @@ export async function initCliPlatform(
         resourcesPath: context.resourcesPath,
         customDirectoryStore: { get: () => undefined },
       });
-      const cliSecrets = getCliSecrets(runtime, context.storageRoot);
+      const cliSecrets = getCliSecrets(context.storageRoot);
       const platform = createNodePlatform({
         lifecycle,
         agentResume: {
@@ -497,7 +489,8 @@ export async function initCliPlatform(
   // The stores this root opened, handed back rather than read off a
   // process-wide singleton: the secret store is the same stateless view over
   // this process's storage root the composition block installed, and the
-  // application state is the store `bindCliGlobalState` latched there.
+  // application state is the store the process runtime's `AppState` opened.
+  const globalState = await runtime.runPromise(AppState);
   const cliServices: CliPlatformServices = {
     runtime,
     // The pure path calculator over this process's storage root (no mkdir),
@@ -506,8 +499,8 @@ export async function initCliPlatform(
     globalStorage: resolveGlobalStoragePath(
       context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
     ),
-    globalState: cliGlobalState(),
-    secrets: getCliSecrets(runtime, context.storageRoot),
+    globalState,
+    secrets: getCliSecrets(context.storageRoot),
     session:
       sessionOpen ??
       Effect.suspend(() => {

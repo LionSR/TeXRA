@@ -1,5 +1,6 @@
 import { defineCommand } from 'citty';
 
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   getEnabledModels,
   type ModelOptionStores,
@@ -41,19 +42,28 @@ async function loadModelAccessList(
   context: CliContext,
   options: CliModelListOptions = {},
 ): Promise<
-  { models: CliModelAccess[]; stores: ModelOptionStores } | { error: string }
+  | {
+      models: CliModelAccess[];
+      stores: ModelOptionStores;
+      runtime: ProcessRuntime;
+    }
+  | { error: string }
 > {
   try {
     return await suppressCliFetchStackLogs(async () => {
       // The init call hands back the stores it just wired, so the follow-up
       // `show` lookup reads the same pair the list was computed from.
       const services = await initCliPlatform({ ...context, quietLogs: true });
-      const models = await getCliModelAccessList({
-        stores: services,
-        models:
-          options.includeUnavailable === true ? knownCliModelIds() : undefined,
-      });
-      return { models, stores: services };
+      const models = await services.runtime.runPromise(
+        getCliModelAccessList({
+          stores: services,
+          models:
+            options.includeUnavailable === true
+              ? knownCliModelIds()
+              : undefined,
+        }),
+      );
+      return { models, stores: services, runtime: services.runtime };
     });
   } catch (error) {
     return { error: formatCliModelListError(error) };
@@ -100,6 +110,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
   try {
     entry = await suppressCliFetchStackLogs(() =>
       loadCliModelAccessEntry(id, {
+        runtime: result.runtime,
         stores: result.stores,
         accessList: result.models,
       }),
@@ -197,7 +208,12 @@ async function setModelEnabled(
   const services = await initCliPlatformOrReport(context);
   if ('exitCode' in services) return services.exitCode;
   try {
-    const result = await setCliModelEnabled(services.globalState, id, enabled);
+    const result = await setCliModelEnabled(
+      services.runtime,
+      services.globalState,
+      id,
+      enabled,
+    );
     emitCliResult(context, {
       json: result,
       ndjson: {

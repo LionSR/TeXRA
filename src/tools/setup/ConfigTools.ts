@@ -13,7 +13,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { hostPort } from '@common/hostPort';
 import {
   settingByKey,
   settingSchemaWithoutPrefault,
@@ -127,12 +126,10 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
   const call = yield* ToolCall;
   const config = call.roots.config;
   const previous = config.get(input.key);
-  yield* hostPort(() =>
-    config.update(
-      input.key,
-      parsed.data,
-      input.target === 'workspace' ? 'workspace' : 'global',
-    ),
+  yield* config.update(
+    input.key,
+    parsed.data,
+    input.target === 'workspace' ? 'workspace' : 'global',
   );
 
   const before = JSON.stringify(previous);

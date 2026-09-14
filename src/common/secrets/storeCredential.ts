@@ -1,8 +1,12 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - utilities
+import type { SecretsFailed } from '@platform/secrets';
 import { looksLikeCredentialPlaceholder } from '@utils/text/credentialPlaceholder';
 
 interface CredentialStore {
-  set(secretName: string, value: string): Promise<void>;
+  set(secretName: string, value: string): Effect.Effect<void, SecretsFailed>;
 }
 
 interface StoreCredentialOptions {
@@ -20,13 +24,14 @@ interface StoreCredentialOptions {
 /**
  * Validate, normalize, and persist a credential consistently across hosts.
  * The rejection copy lives here too, so the CLI, the desktop app, and the
- * extension can't drift on what a rejected credential says. Rejections throw:
- * every caller already funnels thrown errors into its own failure reporting.
+ * extension can't drift on what a rejected credential says. A rejected
+ * credential throws, as it did: every caller already funnels thrown errors
+ * into its own failure reporting, and the store's own failure stays typed.
  */
-export async function storeCredential(
+export const storeCredential = Effect.fn('secrets.storeCredential')(function* (
   store: CredentialStore,
   options: StoreCredentialOptions,
-): Promise<void> {
+) {
   const subject =
     options.kind === 'github'
       ? 'GitHub token'
@@ -41,5 +46,5 @@ export async function storeCredential(
     );
   }
 
-  await store.set(options.secretName, normalized);
-}
+  yield* store.set(options.secretName, normalized);
+});

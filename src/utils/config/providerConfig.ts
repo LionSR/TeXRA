@@ -84,7 +84,7 @@ export function getGLMCodingPlan(): boolean {
   return readPlatformSetting<boolean>(GlobalStateKey.GLM_CODING_PLAN);
 }
 
-export function setGLMCodingPlan(enabled: boolean): Promise<void> {
+export function setGLMCodingPlan(enabled: boolean) {
   return writePlatformSetting(GlobalStateKey.GLM_CODING_PLAN, enabled);
 }
 

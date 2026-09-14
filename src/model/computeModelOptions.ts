@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
@@ -27,7 +28,11 @@ import {
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 
-import { hasUsableApiKey, type ApiProvider } from './apiProviders';
+import {
+  API_PROVIDERS,
+  hasUsableApiKey,
+  type ApiProvider,
+} from './apiProviders';
 import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
@@ -190,7 +195,12 @@ function withAvailabilityFields(
 
 interface ModelAvailabilityContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
-  hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
+  /**
+   * Whether each provider has a usable key, resolved once when the context is
+   * built. Synchronous by construction: the picker warns once per provider,
+   * not once per model, so the scan happens ahead of the per-model pass.
+   */
+  hasUsableApiKey(provider: ApiProvider): boolean;
   hasOpenRouter: boolean;
   useOpenRouter: boolean;
   /** Whether the user is signed in with ChatGPT (only resolved when the
@@ -209,11 +219,11 @@ interface ModelAvailabilityContext {
 }
 
 /** Determine how a model can be used in the current access mode. */
-async function resolveModelAvailability(
+function resolveModelAvailability(
   model: string,
   config: ModelConfig,
   ctx: ModelAvailabilityContext,
-): Promise<ModelAvailabilityStatus> {
+): ModelAvailabilityStatus {
   if (config.retired) {
     return availabilityStatus('retired');
   }
@@ -286,59 +296,68 @@ async function resolveModelAvailability(
   // key makes the model ready. The live-route branch above is the only source
   // of 'openrouter-key'.
   const provider = resolveDirectModelApiKeyProvider(config);
-  if (provider && (await ctx.hasUsableApiKey(provider))) {
+  if (provider && ctx.hasUsableApiKey(provider)) {
     return availabilityStatus('provider-key');
   }
 
   return availabilityStatus('missing-key');
 }
 
-async function buildAvailabilityContext(
-  stores: ModelOptionStores,
-): Promise<ModelAvailabilityContext> {
+const buildAvailabilityContext = Effect.fn(
+  'computeModelOptions.buildAvailabilityContext',
+)(function* (stores: ModelOptionStores) {
   const { secrets, globalState } = stores;
   const useOpenRouter = getUseOpenRouter();
   // One key check per provider per context: `apiProviders` coalesces the
-  // secret read, but a rejection reaches every awaiting model, and the picker
-  // warns once per provider, not once per model (#11508).
-  const keyChecks = new Map<ApiProvider, Promise<boolean>>();
-  const hasApiKey = (provider: ApiProvider): Promise<boolean> => {
-    let check = keyChecks.get(provider);
-    if (!check) {
-      check = hasUsableApiKey(secrets, provider).catch((error: unknown) => {
-        warnModelAvailability(
-          `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
-          error,
-        );
-        return false;
-      });
-      keyChecks.set(provider, check);
-    }
-    return check;
-  };
-  const [hasOpenRouter, codexSignedIn, xaiSignedIn, kimiCodeKeySet] =
-    await Promise.all([
-      hasApiKey('openRouter'),
-      // Only worth a secrets read when the "prefer subscription" switch is on.
-      isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
-      isPreferXaiSubscription() ? isXaiSignedIn() : Promise.resolve(false),
-      hasApiKey('kimiCode'),
-    ]);
+  // secret read, but a failure reaches every model that asks, and the picker
+  // warns once per provider, not once per model (#11508). The whole scan runs
+  // here so the per-model pass below stays synchronous.
+  const keyStates = new Map<ApiProvider, boolean>();
+  const [keyChecks, codexSignedIn, xaiSignedIn] = yield* Effect.all(
+    [
+      Effect.all(
+        API_PROVIDERS.map((provider) =>
+          hasUsableApiKey(secrets, provider).pipe(
+            Effect.catchTag('SecretsFailed', (failure) => {
+              warnModelAvailability(
+                `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
+                failure,
+              );
+              return Effect.succeed(false);
+            }),
+            Effect.map((usable) => [provider, usable] as const),
+          ),
+        ),
+        { concurrency: 'unbounded' },
+      ),
+      // Only worth a probe when the "prefer subscription" switch is on.
+      isPreferCodexSubscription()
+        ? Effect.promise(() => isCodexSignedIn())
+        : Effect.succeed(false),
+      isPreferXaiSubscription()
+        ? Effect.promise(() => isXaiSignedIn())
+        : Effect.succeed(false),
+    ],
+    { concurrency: 'unbounded' },
+  );
+  for (const [provider, usable] of keyChecks) keyStates.set(provider, usable);
+  const hasApiKey = (provider: ApiProvider): boolean =>
+    keyStates.get(provider) ?? false;
   return {
     globalState,
     reasoningLevels: reasoningEffortOverrides(globalState),
     hasUsableApiKey: hasApiKey,
-    hasOpenRouter,
+    hasOpenRouter: hasApiKey('openRouter'),
     useOpenRouter,
     codexSignedIn,
     xaiSignedIn,
     kimiRouting: {
       useOpenRouter,
-      keySet: kimiCodeKeySet,
+      keySet: hasApiKey('kimiCode'),
       preferKimiCode: getPreferKimiCode(),
     },
-  };
-}
+  } satisfies ModelAvailabilityContext;
+});
 
 /**
  * The user's picker choices as a delta over {@link DEFAULT_MODELS}, so a change
@@ -414,71 +433,74 @@ export function getEnabledModels(
  * Two invariants: at least one model stays enabled, and a retired model is
  * never enabled. Throws on either violation; callers surface the message.
  */
-export async function setModelEnabled(input: {
-  readonly model: string;
-  readonly enabled: boolean;
-  readonly state: StateStore;
-}): Promise<readonly string[]> {
-  const state = input.state;
-  if (input.enabled && isRetiredModel(input.model)) {
-    throw new Error(`Model "${input.model}" is retired and cannot be enabled.`);
-  }
+export const setModelEnabled = Effect.fn('computeModelOptions.setModelEnabled')(
+  function* (input: {
+    readonly model: string;
+    readonly enabled: boolean;
+    readonly state: StateStore;
+  }) {
+    const state = input.state;
+    if (input.enabled && isRetiredModel(input.model)) {
+      throw new Error(
+        `Model "${input.model}" is retired and cannot be enabled.`,
+      );
+    }
 
-  // Edit the list the picker shows — including the all-defaults fallback — and
-  // re-encode the delta from it, so a write never acts on a hidden state. An
-  // explicit enable is recorded in `enabledExtras` even for a default, so it
-  // survives the model later leaving the curated defaults.
-  const selection = readModelSelection(state);
-  const current = enabledOrDefaults(selection);
-  const others = current.filter((model) => model !== input.model);
-  const toggled = input.enabled ? [...others, input.model] : others;
-  const next: ModelSelection = {
-    enabledExtras: [
-      ...new Set([
-        ...selection.enabledExtras.filter((model) => toggled.includes(model)),
-        ...(input.enabled ? [input.model] : []),
-      ]),
-    ],
-    disabledDefaults: DEFAULT_MODELS.filter(
-      (model) => !toggled.includes(model),
-    ),
-  };
-  const nextEnabled = enabledModelsOf(next);
-  if (nextEnabled.length === 0) {
-    throw new Error(
-      'At least one model must stay enabled. Enable another model before disabling this one.',
-    );
-  }
-  await state.update(GlobalStateKey.MODEL_SELECTION, next);
+    // Edit the list the picker shows — including the all-defaults fallback — and
+    // re-encode the delta from it, so a write never acts on a hidden state. An
+    // explicit enable is recorded in `enabledExtras` even for a default, so it
+    // survives the model later leaving the curated defaults.
+    const selection = readModelSelection(state);
+    const current = enabledOrDefaults(selection);
+    const others = current.filter((model) => model !== input.model);
+    const toggled = input.enabled ? [...others, input.model] : others;
+    const next: ModelSelection = {
+      enabledExtras: [
+        ...new Set([
+          ...selection.enabledExtras.filter((model) => toggled.includes(model)),
+          ...(input.enabled ? [input.model] : []),
+        ]),
+      ],
+      disabledDefaults: DEFAULT_MODELS.filter(
+        (model) => !toggled.includes(model),
+      ),
+    };
+    const nextEnabled = enabledModelsOf(next);
+    if (nextEnabled.length === 0) {
+      throw new Error(
+        'At least one model must stay enabled. Enable another model before disabling this one.',
+      );
+    }
+    yield* state.update(GlobalStateKey.MODEL_SELECTION, next);
 
-  // If the helper model was just removed, pin the built-in default. Do not
-  // fall back to the first remaining picker model — that is a premium default,
-  // not the cheap auxiliary.
-  if (
-    !input.enabled &&
-    resolveEffectiveHelperModel(
-      state.get<string | undefined>(GlobalStateKey.HELPER_MODEL),
-      current,
-    ) === input.model
-  ) {
-    await state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL);
-  }
+    // If the helper model was just removed, pin the built-in default. Do not
+    // fall back to the first remaining picker model — that is a premium default,
+    // not the cheap auxiliary.
+    if (
+      !input.enabled &&
+      resolveEffectiveHelperModel(
+        state.get<string | undefined>(GlobalStateKey.HELPER_MODEL),
+        current,
+      ) === input.model
+    ) {
+      yield* state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL);
+    }
 
-  return nextEnabled;
-}
+    return nextEnabled;
+  },
+);
 
 /** Returns a human-readable reason why a model is unavailable, or `null` if available. */
-export async function getModelUnavailableReason(
-  model: string,
-  stores: ModelOptionStores,
-): Promise<string | null> {
-  await discoveredCopilotRoutes();
+export const getModelUnavailableReason = Effect.fn(
+  'computeModelOptions.getModelUnavailableReason',
+)(function* (model: string, stores: ModelOptionStores) {
+  yield* Effect.promise(() => discoveredCopilotRoutes());
   const rawConfig = getRuntimeModelConfig(model);
   if (!rawConfig) return `Model "${model}" is not recognized.`;
 
-  const ctx = await buildAvailabilityContext(stores);
+  const ctx = yield* buildAvailabilityContext(stores);
   const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
-  const availability = await resolveModelAvailability(model, config, ctx);
+  const availability = resolveModelAvailability(model, config, ctx);
   if (MODEL_AVAILABILITY_STATUS[availability.kind].available) return null;
 
   // `availability.kind` is guaranteed `available: false` here, so it's a
@@ -492,13 +514,13 @@ export async function getModelUnavailableReason(
     reason: availability.reason,
     globalState: ctx.globalState,
   });
-}
+});
 
 /** Build typed model option data for a single model. */
-async function buildModelOptionData(
+function buildModelOptionData(
   model: string,
   ctx: ModelAvailabilityContext,
-): Promise<ModelOptionData> {
+): ModelOptionData {
   const rawConfig = getRuntimeModelConfig(model);
   if (!rawConfig) {
     return withAvailabilityFields(
@@ -510,7 +532,7 @@ async function buildModelOptionData(
   // endpoint runs with the synthesized runtime config, so the row reflects it.
   const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
 
-  const availability = await resolveModelAvailability(model, config, ctx);
+  const availability = resolveModelAvailability(model, config, ctx);
   const copilotConfig =
     availability.kind === 'copilot-access'
       ? copilotRouteForModel(model)?.effectiveConfig
@@ -578,12 +600,11 @@ async function buildModelOptionData(
  * (`isCodexSignedIn`, `isXaiSignedIn`, live by design), so there is no second
  * cache to keep fresh here.
  */
-export async function computeModelOptionsData(
-  stores: ModelOptionStores,
-  models?: readonly string[],
-): Promise<ModelOptionData[]> {
-  await discoveredCopilotRoutes();
-  const availabilityCtx = await buildAvailabilityContext(stores);
+export const computeModelOptionsData = Effect.fn(
+  'computeModelOptions.computeModelOptionsData',
+)(function* (stores: ModelOptionStores, models?: readonly string[]) {
+  yield* Effect.promise(() => discoveredCopilotRoutes());
+  const availabilityCtx = yield* buildAvailabilityContext(stores);
   const visible =
     models ??
     visibleModelsForAccess(
@@ -591,10 +612,8 @@ export async function computeModelOptionsData(
       availabilityCtx,
     );
 
-  return Promise.all(
-    visible.map((model) => buildModelOptionData(model, availabilityCtx)),
-  );
-}
+  return visible.map((model) => buildModelOptionData(model, availabilityCtx));
+});
 
 function visibleModelsForAccess(
   configuredModels: readonly string[],

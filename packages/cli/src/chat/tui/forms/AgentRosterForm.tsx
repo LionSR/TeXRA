@@ -1,4 +1,7 @@
 import { Box, Text } from 'ink';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { Effect } from 'effect';
 import { useState } from 'react';
 
 import {
@@ -49,6 +52,8 @@ interface AgentRosterData {
 
 interface AgentRosterFormProps {
   readonly availableRows?: number;
+  /** The process runtime this surface was handed; its writes settle on it. */
+  readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
 }
@@ -116,8 +121,12 @@ export function AgentRosterForm(
       onError: props.onError,
     });
 
-  const write = (action: () => Promise<void>, nextMode = mode): void => {
-    void action()
+  const write = (
+    action: () => Effect.Effect<unknown, unknown, never>,
+    nextMode = mode,
+  ): void => {
+    void props.runtime
+      .runPromise(action())
       .then(() => {
         setMode(nextMode);
         reload();
@@ -268,14 +277,15 @@ export function AgentRosterForm(
       ),
       (value) => {
         const cwd = workspaceRoots().workspace;
-        write(async () => {
+        write(() => {
           if (!cwd) {
             throw new Error(
               'Default chat-agent selection requires a workspace.',
             );
           }
-          await effectRuntime().runPromise(
+          return Effect.provide(
             setWorkspaceCliChatAgent(cwd, value || undefined),
+            nodeFileServices,
           );
         }, 'overview');
       },

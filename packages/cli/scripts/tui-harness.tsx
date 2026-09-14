@@ -627,6 +627,7 @@ HARNESS_DISPOSERS.push(
   session().interactions.use(
     createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
       secrets: HARNESS_PLATFORM_SERVICES.secrets,
+      runtime: effectRuntime(),
     }),
   ),
 );
@@ -1919,6 +1920,7 @@ function handleHarnessCtrlC(): void {
 function renderHarnessApp(): React.JSX.Element {
   return (
     <App
+      runtime={effectRuntime()}
       secrets={HARNESS_PLATFORM_SERVICES.secrets}
       onSubmit={handleHarnessSubmit}
       onKillRun={markHarnessRunStopped}

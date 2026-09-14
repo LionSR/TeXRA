@@ -69,14 +69,11 @@ export function createSettingsAgentControllers(
     getVisibleAgents,
     getCustomPresetsRaw: () =>
       workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-    setCustomPresets: async (presets) => {
-      await workspaceState.update(
-        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-        presets,
-      );
-    },
+    setCustomPresets: (presets) =>
+      workspaceState.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, presets),
     removeCustomPreset: (presetId, remaining) =>
-      roster.removeTeamPreset(presetId, () =>
+      roster.removeTeamPreset(
+        presetId,
         workspaceState.update(
           WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
           remaining,
@@ -91,12 +88,11 @@ export function createSettingsAgentControllers(
     state: {
       getConfiguredCustomDir: () =>
         globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
-      setConfiguredCustomDir: async (customDir) => {
-        await globalState.update(
+      setConfiguredCustomDir: (customDir) =>
+        globalState.update(
           GlobalStateKey.CUSTOM_AGENT_DIR,
           customDir || undefined,
-        );
-      },
+        ),
       getCustomDir: options.getCustomAgentDirectory,
       getSourceDir: options.getSourceDirectory,
       getAgent: (source, name) => getAgent(agentKey(source, name)) ?? null,

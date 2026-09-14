@@ -12,6 +12,7 @@
 // The attached host answers nothing: it stages a tool edit's preview,
 // mirrors bypass state onto its wire, and presents events.
 
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { computed } from '@lit-labs/signals';
 
 import type { HostInteractions } from '@agent/runtime';
@@ -61,6 +62,8 @@ import { currentView } from './sessionView';
  */
 interface TuiApprovalStores {
   readonly secrets: PlatformSecrets;
+  /** The process runtime this surface was handed; its probes settle on it. */
+  readonly runtime: ProcessRuntime;
 }
 
 /** The pending requests this surface watches, as a level it subscribes to. */
@@ -198,9 +201,8 @@ export function createTuiHostInteractions(
         missingPersonalApiKeyMessage = missingApiKeyRetryMessage(provider);
         if (provider) {
           try {
-            personalApiKeyAvailable = await hasUsableApiKey(
-              stores.secrets,
-              provider,
+            personalApiKeyAvailable = await stores.runtime.runPromise(
+              hasUsableApiKey(stores.secrets, provider),
             );
           } catch (error) {
             // A keychain failure must not permit a credential switch nobody asked for.

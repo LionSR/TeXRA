@@ -62,7 +62,7 @@ type AnnotationFetchFn = (
  * mocked here, so no member is called; the layer satisfies the requirement
  * the host root provides in production.
  */
-const secretsLayer = Secrets.layer(() => new FakeSecrets());
+const secretsLayer = Secrets.layer(Effect.succeed(new FakeSecrets()));
 
 /** Minimal logger for driving the infrastructure `fetchAnnotations` directly. */
 function testLogger(): AgentTrace {

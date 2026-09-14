@@ -380,7 +380,6 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       // instead of mid-run on the first provider call.
       const runModel = yield* selectAvailableDelegationModel({
         parentModel: parent.model,
-        withScope: parent.inScope,
       }).pipe(
         // Same annotation `runPhase` puts on every other phase failure.
         Effect.mapError((error) => workflowScriptToolError(error, scriptPath)),

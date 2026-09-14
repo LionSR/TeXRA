@@ -1,4 +1,5 @@
 // Third-party imports
+import { Cause, Effect, Exit } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -42,8 +43,11 @@ interface LaunchModelResolution {
  */
 async function selectLaunchModel(
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ): Promise<LaunchModelResolution | null> {
-  const resolution = await resolveSetupLaunchModel(secrets, true);
+  const resolution = await runtime.runPromise(
+    resolveSetupLaunchModel(secrets, true),
+  );
   if (!resolution) return null;
   return {
     model: resolution.model,
@@ -59,23 +63,27 @@ async function selectLaunchModel(
  */
 async function withOpenRouterFlagOn<T>(
   globalState: StateStore,
+  runtime: ProcessRuntime,
   fn: () => Promise<T>,
 ): Promise<T> {
   const prior =
     globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
   if (prior) return fn();
 
-  await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+  await runtime.runPromise(
+    globalState.update(GlobalStateKey.USE_OPENROUTER, true),
+  );
   try {
     return await fn();
   } finally {
-    await globalState
-      .update(GlobalStateKey.USE_OPENROUTER, false)
-      .then(undefined, (err) => {
-        log.error('Failed to restore useOpenRouter flag.', {
-          data: err,
-        });
+    const restored = await runtime.runPromiseExit(
+      globalState.update(GlobalStateKey.USE_OPENROUTER, false),
+    );
+    if (Exit.isFailure(restored)) {
+      log.error('Failed to restore useOpenRouter flag.', {
+        data: Cause.squash(restored.cause),
       });
+    }
   }
 }
 
@@ -85,9 +93,9 @@ async function withOpenRouterFlagOn<T>(
  * and then fail later as "No model is available"). Host-specific setup launch
  * routing belongs to `resolveSetupLaunchModel`.
  */
-export async function hasAnyUsableSetupCredential(
+export function hasAnyUsableSetupCredential(
   secrets: PlatformSecrets,
-): Promise<boolean> {
+): Effect.Effect<boolean> {
   return hasUsableSetupCredential(secrets, credentialLog.warn);
 }
 
@@ -95,7 +103,8 @@ async function ensureCredentialOrPrompt(
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
 ): Promise<boolean> {
-  if (await hasAnyUsableSetupCredential(secrets)) return true;
+  if (await runtime.runPromise(hasAnyUsableSetupCredential(secrets)))
+    return true;
 
   const picks = [
     {
@@ -141,7 +150,7 @@ async function ensureCredentialOrPrompt(
       return false;
   }
 
-  return hasAnyUsableSetupCredential(secrets);
+  return runtime.runPromise(hasAnyUsableSetupCredential(secrets));
 }
 
 // Routing is fine when the current configuration resolves any setup model.
@@ -225,7 +234,7 @@ export async function launchSetupAssistant(
       return 'not-started';
     }
 
-    const resolution = await selectLaunchModel(secrets);
+    const resolution = await selectLaunchModel(secrets, runtime);
     if (!resolution) {
       // Edge case: no setup-model candidate is usable with the current
       // credentials. Refuse launch rather than pick a model that crashes at
@@ -270,7 +279,7 @@ export async function launchSetupAssistant(
       );
 
     if (resolution.requiresOpenRouter) {
-      await withOpenRouterFlagOn(globalState, launch);
+      await withOpenRouterFlagOn(globalState, runtime, launch);
     } else {
       await launch();
     }

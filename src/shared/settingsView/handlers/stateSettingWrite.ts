@@ -10,6 +10,7 @@
 //   - null explicitly resets a setting while an omitted value remains a no-op,
 //   - only catalog rows tagged for a settings-view snapshot are writable.
 
+import { Cause, Effect, Exit } from 'effect';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -113,11 +114,13 @@ export interface StateSettingUpdatePorts {
  * session being told. Callers own all UI feedback and the outbound snapshot
  * rebroadcast — this performs only the decision and the write.
  */
-export async function applyStateSettingUpdate(
+export const applyStateSettingUpdate = Effect.fn(
+  'stateSettingWrite.applyStateSettingUpdate',
+)(function* (
   key: string,
   value: unknown,
   ports: StateSettingUpdatePorts,
-): Promise<StateSettingUpdateResult> {
+): Generator<Effect.Effect<unknown>, StateSettingUpdateResult> {
   const write = resolveStateSettingWrite(key, value);
   if (!write) return { kind: 'ignored' };
   if (write.kind === 'rejected') {
@@ -130,28 +133,33 @@ export async function applyStateSettingUpdate(
   ) {
     return { kind: 'workspace-required', entry: write.entry };
   }
-  try {
-    await (write.kind === 'reset'
+  const persisted = yield* Effect.exit(
+    write.kind === 'reset'
       ? resetSetting(write.entry, ports.stores, ports.host)
-      : writeSetting(write.entry, write.value, ports.stores, ports.host));
-    if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
-      // A reset clears only the workspace layer, so a surviving global value
-      // is what the session must run (issue #9749).
-      const policy =
-        write.kind === 'reset'
-          ? (readSetting(
-              write.entry,
-              ports.stores,
-              ports.host,
-            ) as TexraApprovalPolicy)
-          : (write.value as TexraApprovalPolicy);
-      ports.onApprovalPolicyChanged?.(policy);
-    }
-    return { kind: 'applied', entry: write.entry };
-  } catch (error) {
-    return { kind: 'failed', entry: write.entry, error };
+      : writeSetting(write.entry, write.value, ports.stores, ports.host),
+  );
+  if (Exit.isFailure(persisted)) {
+    return {
+      kind: 'failed',
+      entry: write.entry,
+      error: Cause.squash(persisted.cause),
+    };
   }
-}
+  if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
+    // A reset clears only the workspace layer, so a surviving global value
+    // is what the session must run (issue #9749).
+    const policy =
+      write.kind === 'reset'
+        ? (readSetting(
+            write.entry,
+            ports.stores,
+            ports.host,
+          ) as TexraApprovalPolicy)
+        : (write.value as TexraApprovalPolicy);
+    ports.onApprovalPolicyChanged?.(policy);
+  }
+  return { kind: 'applied', entry: write.entry };
+});
 
 /**
  * Rebroadcast posters for every {@link SettingsViewSnapshot}. A `Record` (not a

@@ -4,12 +4,11 @@
  * Shared between SecretManager (VS Code), modelRoutes (agent runtime),
  * and computeModelOptions (model). Platform-agnostic.
  */
-import { Redacted } from 'effect';
-import { LRUCache } from 'lru-cache';
+import { Data, Effect, Redacted } from 'effect';
 
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
-import { coalesceAsync, isNonEmptyString } from '@utils/core';
+import { isNonEmptyString } from '@utils/core';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
 
@@ -57,15 +56,21 @@ interface ResolvedApiKey {
 // sharing credentials between independently supplied stores. Invalidation drops
 // every store's cache; already-running reads retain only the retired cache.
 const LOOKUP_CACHE_TTL_MS = 5_000;
-interface ApiKeyLookupCache {
-  readonly resolved: LRUCache<ApiProvider, ResolvedApiKey>;
-  readonly pending: Map<ApiProvider, Promise<ResolvedApiKey>>;
-}
-let lookupCaches = new WeakMap<PlatformSecrets, ApiKeyLookupCache>();
+type CachedLookup = Effect.Effect<ResolvedApiKey, SecretsFailed>;
+let lookupCaches = new WeakMap<
+  PlatformSecrets,
+  Map<ApiProvider, CachedLookup>
+>();
 
 export function invalidateApiKeyCache(): void {
   lookupCaches = new WeakMap();
 }
+
+/** No API key is configured for a provider that requires one. */
+export class ApiKeyMissing extends Data.TaggedError('ApiKeyMissing')<{
+  readonly provider: ApiProvider;
+  readonly message: string;
+}> {}
 
 /**
  * Unwrap a sealed key at the one point it is handed to a foreign runtime: a
@@ -88,48 +93,49 @@ function redactedKey(
 }
 
 /** Read the key straight from secret storage then the environment, no caching. */
-async function resolveApiKeyUncached(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-): Promise<ResolvedApiKey> {
-  const stored = await secrets.get(apiKeySecretName(provider));
-  if (isNonEmptyString(stored)) {
-    return { value: redactedKey(stored, provider), origin: 'secret' };
-  }
-  const envValue = secrets.getEnv(apiKeyEnvName(provider));
-  if (isNonEmptyString(envValue)) {
-    return { value: redactedKey(envValue, provider), origin: 'env' };
-  }
-  return { value: undefined, origin: 'none' };
-}
+const resolveApiKeyUncached = Effect.fn('apiProviders.resolveApiKeyUncached')(
+  function* (
+    secrets: PlatformSecrets,
+    provider: ApiProvider,
+  ): Generator<
+    Effect.Effect<string | undefined, SecretsFailed>,
+    ResolvedApiKey
+  > {
+    const stored = yield* secrets.get(apiKeySecretName(provider));
+    if (isNonEmptyString(stored)) {
+      return { value: redactedKey(stored, provider), origin: 'secret' };
+    }
+    const envValue = secrets.getEnv(apiKeyEnvName(provider));
+    if (isNonEmptyString(envValue)) {
+      return { value: redactedKey(envValue, provider), origin: 'env' };
+    }
+    return { value: undefined, origin: 'none' };
+  },
+);
 
 /**
- * Cached secret → env lookup, scoped to the supplied credential store.
- * Invalidation replaces the store map, so a pending read can only populate
- * its retired cache and cannot restore a deleted key in subsequent lookups.
+ * Cached secret → env lookup, scoped to the supplied credential store. One
+ * TTL-cached effect per store and provider: concurrent readers share the one
+ * in-flight lookup and a settled one is reused until the TTL expires.
+ * Invalidation replaces the store map, so a lookup already in flight can only
+ * populate its retired cache and cannot restore a deleted key.
  */
-function resolveApiKey(
+const resolveApiKey = Effect.fn('apiProviders.resolveApiKey')(function* (
   secrets: PlatformSecrets,
   provider: ApiProvider,
-): Promise<ResolvedApiKey> {
-  let cache = lookupCaches.get(secrets);
-  if (!cache) {
-    cache = {
-      resolved: new LRUCache({
-        max: API_PROVIDERS.length,
-        ttl: LOOKUP_CACHE_TTL_MS,
-      }),
-      pending: new Map(),
-    };
-    lookupCaches.set(secrets, cache);
-  }
-  return coalesceAsync<ApiProvider, ResolvedApiKey>(
-    cache.resolved,
-    cache.pending,
-    provider,
-    () => resolveApiKeyUncached(secrets, provider),
+) {
+  const cache =
+    lookupCaches.get(secrets) ?? new Map<ApiProvider, CachedLookup>();
+  lookupCaches.set(secrets, cache);
+  const cached = cache.get(provider);
+  if (cached) return yield* cached;
+  const lookup = yield* Effect.cachedWithTTL(
+    resolveApiKeyUncached(secrets, provider),
+    LOOKUP_CACHE_TTL_MS,
   );
-}
+  cache.set(provider, lookup);
+  return yield* lookup;
+});
 
 /**
  * API key lookup trio. All three share the same TTL-cached
@@ -142,20 +148,19 @@ function resolveApiKey(
  * They are kept as distinct entry points so call sites read self-evidently
  * (no `{ throwIfMissing: true }` flag at every model handler).
  */
-export async function lookupApiKey(
+export const lookupApiKey = Effect.fn('apiProviders.lookupApiKey')(function* (
   secrets: PlatformSecrets,
   provider: ApiProvider,
-): Promise<Redacted.Redacted<string> | undefined> {
-  return (await resolveApiKey(secrets, provider)).value;
-}
+) {
+  return (yield* resolveApiKey(secrets, provider)).value;
+});
 
 /** Origin of the resolved key (`secret` / `env` / `none`). See trio doc above. */
-export async function lookupApiKeyOrigin(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-): Promise<ApiKeyOrigin> {
-  return (await resolveApiKey(secrets, provider)).origin;
-}
+export const lookupApiKeyOrigin = Effect.fn('apiProviders.lookupApiKeyOrigin')(
+  function* (secrets: PlatformSecrets, provider: ApiProvider) {
+    return (yield* resolveApiKey(secrets, provider)).origin;
+  },
+);
 
 const STATUS_BY_ORIGIN: Record<ApiKeyOrigin, ApiKeyStatus> = {
   secret: 'set',
@@ -166,45 +171,55 @@ const STATUS_BY_ORIGIN: Record<ApiKeyOrigin, ApiKeyStatus> = {
 /**
  * Resolve key statuses for providers from the canonical API-key origin cache.
  */
-export async function loadApiKeyStatusMap<const Provider extends ApiProvider>(
+export function loadApiKeyStatusMap<const Provider extends ApiProvider>(
   secrets: PlatformSecrets,
   providers: readonly Provider[],
-): Promise<Record<Provider, ApiKeyStatus>> {
-  const entries = await Promise.all(
-    providers.map(async (provider) => [
-      provider,
-      STATUS_BY_ORIGIN[await lookupApiKeyOrigin(secrets, provider)],
-    ]),
+): Effect.Effect<Record<Provider, ApiKeyStatus>, SecretsFailed> {
+  return Effect.map(
+    Effect.all(
+      providers.map((provider) => lookupApiKeyOrigin(secrets, provider)),
+      { concurrency: 'unbounded' },
+    ),
+    (origins) =>
+      Object.fromEntries(
+        providers.map((provider, index) => [
+          provider,
+          STATUS_BY_ORIGIN[origins[index] ?? 'none'],
+        ]),
+      ) as Record<Provider, ApiKeyStatus>,
   );
-  return Object.fromEntries(entries) as Record<Provider, ApiKeyStatus>;
 }
 
 /**
  * Return provider IDs that have a configured API key (secret or env).
  * Shared by the CLI status surfaces so the provider-key scan lives in one place.
  */
-export async function configuredApiKeyProviders(
-  secrets: PlatformSecrets,
-): Promise<ApiProvider[]> {
-  const origins = await Promise.all(
+export const configuredApiKeyProviders = Effect.fn(
+  'apiProviders.configuredApiKeyProviders',
+)(function* (secrets: PlatformSecrets) {
+  const origins = yield* Effect.all(
     API_PROVIDERS.map((provider) => lookupApiKeyOrigin(secrets, provider)),
+    { concurrency: 'unbounded' },
   );
   return API_PROVIDERS.filter((_, index) => origins[index] !== 'none');
-}
+});
 
-/** Get an API key, throwing if not found. See trio doc above. */
-export async function getApiKey(
+/** Get an API key, failing with {@link ApiKeyMissing} if not found. */
+export const getApiKey = Effect.fn('apiProviders.getApiKey')(function* (
   secrets: PlatformSecrets,
   provider: ApiProvider,
-): Promise<Redacted.Redacted<string>> {
-  const key = await lookupApiKey(secrets, provider);
+) {
+  const key = yield* lookupApiKey(secrets, provider);
   if (!key) {
-    throw new Error(
-      `No API key found for ${provider}. Set the ${apiKeyEnvName(provider)} environment variable, or configure your ${provider} API key.`,
+    return yield* Effect.fail(
+      new ApiKeyMissing({
+        provider,
+        message: `No API key found for ${provider}. Set the ${apiKeyEnvName(provider)} environment variable, or configure your ${provider} API key.`,
+      }),
     );
   }
   return key;
-}
+});
 
 /**
  * Check whether a usable API key is resolved for a provider (secret storage,
@@ -213,29 +228,26 @@ export async function getApiKey(
  * `apiKeyExistsUncached` below is the uncached variant for call sites that
  * must bypass the process-wide provider cache.
  */
-export async function hasUsableApiKey(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-): Promise<boolean> {
-  return (await lookupApiKey(secrets, provider)) !== undefined;
-}
+export const hasUsableApiKey = Effect.fn('apiProviders.hasUsableApiKey')(
+  function* (secrets: PlatformSecrets, provider: ApiProvider) {
+    return (yield* lookupApiKey(secrets, provider)) !== undefined;
+  },
+);
 
 /**
  * Read the key without the process-wide cache. Change detection needs this:
  * the cached lookup's TTL would hand back the previous key for seconds after
  * the user set a new one.
  */
-export async function lookupApiKeyUncached(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-): Promise<Redacted.Redacted<string> | undefined> {
-  return (await resolveApiKeyUncached(secrets, provider)).value;
-}
+export const lookupApiKeyUncached = Effect.fn(
+  'apiProviders.lookupApiKeyUncached',
+)(function* (secrets: PlatformSecrets, provider: ApiProvider) {
+  return (yield* resolveApiKeyUncached(secrets, provider)).value;
+});
 
 /** Check if an API key exists without using the process-wide provider cache. */
-export async function apiKeyExistsUncached(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-): Promise<boolean> {
-  return (await resolveApiKeyUncached(secrets, provider)).value !== undefined;
-}
+export const apiKeyExistsUncached = Effect.fn(
+  'apiProviders.apiKeyExistsUncached',
+)(function* (secrets: PlatformSecrets, provider: ApiProvider) {
+  return (yield* resolveApiKeyUncached(secrets, provider)).value !== undefined;
+});

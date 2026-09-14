@@ -73,6 +73,7 @@ export async function applyCliModelSelection(
   const nextModel = model.trim();
   if (chatTuiCanStartRootRun(context.session)) {
     const selection = await selectCliRunnableModel(nextModel, {
+      runtime: context.runtime,
       stores: { secrets: context.secrets, globalState: context.state },
       fallbackReason: 'explicit-override',
       noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(

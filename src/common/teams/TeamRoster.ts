@@ -1,3 +1,6 @@
+import type { Effect } from 'effect';
+
+import type { StoreWriteFailed } from '@platform/interfaces';
 import {
   AGENT_CATEGORIES,
   agentKeyOf,
@@ -46,7 +49,7 @@ export interface TeamRosterCatalog {
    * re-resolves it against the catalog on read, so no committer freezes the
    * per-agent-key snapshot.
    */
-  commitPreset(preset: AgentModePreset): Promise<void>;
+  commitPreset(preset: AgentModePreset): Effect.Effect<void, StoreWriteFailed>;
 }
 
 /** Resolve a team against the current catalog without writing roster state. */

@@ -1293,8 +1293,8 @@ function createWindow(options: {
               }
               const { buildDesktopSetupRunRequest } =
                 await import('@controllers/onboarding/setupLaunch');
-              const request = await buildDesktopSetupRunRequest(
-                options.secrets,
+              const request = await runtime.runPromise(
+                buildDesktopSetupRunRequest(options.secrets),
               );
               if (!request) {
                 throw new Error(
@@ -1697,7 +1697,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               processRoots: platformInit.processRoots,
               globalConfigStore: platformInit.globalConfigStore,
               records: projectRecords,
-              runWrite: platformInit.runWrite,
               warn,
               stores: {
                 secrets: platformInit.secrets,

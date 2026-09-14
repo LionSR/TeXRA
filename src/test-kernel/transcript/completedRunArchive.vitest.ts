@@ -293,7 +293,11 @@ describe('completedRunArchive facade', () => {
         promptForApiKey: async () => undefined,
         showInfo: vi.fn(),
         showWarning: vi.fn(),
-      }).pipe(Effect.provide(Secrets.layer(() => installedHost().secrets))),
+      }).pipe(
+        Effect.provide(
+          Secrets.layer(Effect.sync(() => installedHost().secrets)),
+        ),
+      ),
     );
     await Effect.runPromise(actions.runNew(runId));
     expect(runAgentRequest).toHaveBeenCalledWith({ config });

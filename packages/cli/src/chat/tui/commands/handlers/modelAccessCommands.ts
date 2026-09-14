@@ -1,4 +1,5 @@
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
 import {
@@ -81,7 +82,9 @@ export function applyCliModelAccessInput(
     const normalized = routeInput.trim().toLowerCase();
 
     if (!normalized || normalized === 'status') {
-      const lines = await loadCliDetailedAccountStatusLines(context.secrets);
+      const lines = await context.runtime.runPromise(
+        loadCliDetailedAccountStatusLines(context.secrets),
+      );
       output.appendOutcome(lines.join('\n'));
       return;
     }
@@ -102,8 +105,11 @@ export function applyCliModelAccessInput(
 }
 
 export async function showCliAuthStatus(
+  runtime: ProcessRuntime,
   secrets: PlatformSecrets,
 ): Promise<void> {
-  const lines = await loadCliDetailedAccountStatusLines(secrets);
+  const lines = await runtime.runPromise(
+    loadCliDetailedAccountStatusLines(secrets),
+  );
   transcriptSlashCommandOutput.appendOutcome(lines.join('\n'));
 }

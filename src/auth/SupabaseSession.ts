@@ -90,7 +90,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   clearSession(): Effect.Effect<void, AuthPortError> {
-    return this.mutate(callPort(() => this.options.storage.delete()));
+    return this.mutate(this.options.storage.delete());
   }
 
   /**
@@ -183,7 +183,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   /** Read and parse the stored session. */
   private readonly load = Effect.fn('SupabaseSessionCoordinator.load')(
     function* (this: SupabaseSessionCoordinator) {
-      const raw = yield* callPort(() => this.options.storage.get());
+      const raw = yield* this.options.storage.get();
       return parseStoredSupabaseSession(raw, {
         logSource: 'SupabaseSession',
         warn: this.log.warn,
@@ -192,7 +192,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   );
 
   private write(session: SupabaseSession): Effect.Effect<void, AuthPortError> {
-    return callPort(() => this.options.storage.store(JSON.stringify(session)));
+    return this.options.storage.store(JSON.stringify(session));
   }
 
   /** Run one storage write behind the permit, bumping the version it ran at. */
@@ -220,7 +220,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       return false;
     }
     this.sessionMutationVersion += 1;
-    yield* callPort(() => this.options.storage.delete());
+    yield* this.options.storage.delete();
     return true;
   });
 

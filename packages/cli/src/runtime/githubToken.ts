@@ -7,17 +7,12 @@ import {
 
 export type GitHubTokenStatus = 'secret' | 'env' | 'none';
 
-export function loadGitHubTokenStatus(
-  secrets: PlatformSecrets,
-): Promise<GitHubTokenStatus> {
+export function loadGitHubTokenStatus(secrets: PlatformSecrets) {
   return resolveGitHubTokenSource(secrets);
 }
 
 /** Persist a GitHub PAT without exposing it outside the credential store. */
-export function saveGitHubToken(
-  secrets: PlatformSecrets,
-  token: string,
-): Promise<void> {
+export function saveGitHubToken(secrets: PlatformSecrets, token: string) {
   return storeCredential(secrets, {
     secretName: GITHUB_TOKEN_STORAGE_KEY,
     value: token,
@@ -25,6 +20,6 @@ export function saveGitHubToken(
   });
 }
 
-export function removeGitHubToken(secrets: PlatformSecrets): Promise<void> {
+export function removeGitHubToken(secrets: PlatformSecrets) {
   return secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
 }

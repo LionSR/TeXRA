@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { Result } from 'effect';
+import { Result, type Effect } from 'effect';
+import type { AuthPortError } from '@auth/authProgram';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -42,9 +43,9 @@ export interface SupabaseSessionParseOptions {
 
 /** Storage boundary for persisted Supabase session data. */
 export interface SupabaseSessionStorage {
-  get(): Promise<string | undefined>;
-  store(sessionData: string): Promise<void>;
-  delete(): Promise<void>;
+  get(): Effect.Effect<string | undefined, AuthPortError>;
+  store(sessionData: string): Effect.Effect<void, AuthPortError>;
+  delete(): Effect.Effect<void, AuthPortError>;
 }
 
 export interface SupabaseSessionLog {

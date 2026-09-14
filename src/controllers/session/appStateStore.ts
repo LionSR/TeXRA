@@ -18,9 +18,9 @@
  * application records do, so nothing holds a connection open across a project
  * the desktop closes.
  *
- * The `vscode.Memento`-shaped `update` returns a Promise, and R1 puts that
- * conversion at a host entry: the entry that opens the store passes
- * {@link RunStateWrite}, and this file never runs an Effect itself.
+ * `update` is the store's own write program: the caller's fiber appends the
+ * row, so a failed write fails the caller with a typed
+ * {@link StoreWriteFailed} instead of settling a floating promise.
  */
 import { Effect, Layer } from 'effect';
 
@@ -28,7 +28,7 @@ import {
   nodeProcesses,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
-import type { StateStore } from '@platform/interfaces';
+import { StoreWriteFailed, type StateStore } from '@platform/interfaces';
 import {
   JsonValueSchema,
   aggregateId,
@@ -38,20 +38,10 @@ import {
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { ensureError } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { databaseLayer } from './Database';
 import { WorkspaceRoots } from './WorkspaceRoots';
-
-/**
- * Runs one durable state write to completion. The port mirrors
- * `vscode.Memento`, whose `update` is a Promise, so the host entry that opens
- * the store supplies the run. A rejected write is the caller's failure, never
- * a logged best-effort.
- */
-export type RunStateWrite = (
-  write: Effect.Effect<void, Error>,
-) => PromiseLike<void>;
 
 /**
  * One write at a time per key and database, module-wide so two stores over
@@ -68,7 +58,10 @@ function encode(key: string, value: unknown) {
         ? { kind: 'undefined' }
         : { kind: 'json', value: JsonValueSchema.parse(value) },
     catch: (cause) =>
-      new Error(`State key ${key} was given a value that is not JSON`, {
+      new StoreWriteFailed({
+        reason: 'not-serializable',
+        key,
+        message: `State key ${key} was given a value that is not JSON`,
         cause,
       }),
   });
@@ -81,8 +74,7 @@ class SqliteStateStore implements StateStore {
     private readonly write: (
       key: string,
       value: PersistedJsonValue,
-    ) => Effect.Effect<void, Error>,
-    private readonly runWrite: RunStateWrite,
+    ) => Effect.Effect<void, StoreWriteFailed>,
   ) {}
 
   get<T>(key: string, defaultValue?: T): T {
@@ -96,7 +88,7 @@ class SqliteStateStore implements StateStore {
    * concurrent writes land in call order. A failed append fails the caller
    * and leaves the view on the last committed value.
    */
-  set(key: string, value: unknown): Effect.Effect<void, Error> {
+  update(key: string, value: unknown): Effect.Effect<void, StoreWriteFailed> {
     return Effect.flatMap(encode(key, value), (encoded) =>
       this.write(key, encoded).pipe(
         Effect.tap(() =>
@@ -112,10 +104,6 @@ class SqliteStateStore implements StateStore {
       ),
     );
   }
-
-  update(key: string, value: unknown): PromiseLike<void> {
-    return this.runWrite(this.set(key, value));
-  }
 }
 
 /**
@@ -124,7 +112,7 @@ class SqliteStateStore implements StateStore {
  * returning.
  */
 export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
-  function* (storage: string, runWrite: RunStateWrite) {
+  function* (storage: string) {
     // Memoized after the entry's own read: a cache hit on every host that
     // installed its process runtime before opening its stores.
     const ownerId = processOwnerId(
@@ -155,7 +143,18 @@ export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
             },
           ]),
         ),
-      ).pipe(Effect.asVoid, Effect.mapError(ensureError));
-    return new SqliteStateStore(storage, values, write, runWrite);
+      ).pipe(
+        Effect.asVoid,
+        Effect.mapError(
+          (cause) =>
+            new StoreWriteFailed({
+              reason: 'io',
+              key,
+              message: `State key ${key} could not be written to ${storage}: ${toErrorMessage(cause)}`,
+              cause,
+            }),
+        ),
+      );
+    return new SqliteStateStore(storage, values, write);
   },
 );

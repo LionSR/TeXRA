@@ -1,4 +1,7 @@
 // Local imports
+import { Effect } from 'effect';
+
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   computeModelOptionsData,
   type ModelOptionStores,
@@ -77,6 +80,7 @@ interface CliModelAccessListOptions {
  * ignored.
  */
 interface CliModelAccessEntryOptions {
+  readonly runtime: ProcessRuntime;
   readonly stores: ModelOptionStores;
   /** Optional preloaded list, used by commands that already fetched access. */
   readonly accessList?: readonly CliModelAccess[];
@@ -84,7 +88,7 @@ interface CliModelAccessEntryOptions {
 
 interface CliRunnableModelOptions extends Pick<
   CliModelAccessEntryOptions,
-  'stores' | 'accessList'
+  'runtime' | 'stores' | 'accessList'
 > {
   /** Decision reason that owns unavailable-model fallback behavior. */
   readonly fallbackReason?: RunModelDecisionReason;
@@ -194,12 +198,12 @@ function toCliModelAccess(model: ModelOptionData): CliModelAccess {
   };
 }
 
-export async function getCliModelAccessList(
-  options: CliModelAccessListOptions,
-): Promise<CliModelAccess[]> {
-  const models = await computeModelOptionsData(options.stores, options.models);
+export const getCliModelAccessList = Effect.fn(
+  'modelAccess.getCliModelAccessList',
+)(function* (options: CliModelAccessListOptions) {
+  const models = yield* computeModelOptionsData(options.stores, options.models);
   return models.map(toCliModelAccess);
-}
+});
 
 export function findCliModelAccessEntry(
   models: readonly CliModelAccess[],
@@ -314,7 +318,10 @@ async function loadCliModelAccessList(
   options: CliModelAccessEntryOptions,
 ): Promise<readonly CliModelAccess[]> {
   return (
-    options.accessList ?? getCliModelAccessList({ stores: options.stores })
+    options.accessList ??
+    (await options.runtime.runPromise(
+      getCliModelAccessList({ stores: options.stores }),
+    ))
   );
 }
 
@@ -331,7 +338,9 @@ export async function loadCliModelAccessEntry(
   if (hiddenModelId == null) return undefined;
 
   const hiddenModelOption = (
-    await computeModelOptionsData(options.stores, [hiddenModelId])
+    await options.runtime.runPromise(
+      computeModelOptionsData(options.stores, [hiddenModelId]),
+    )
   )[0];
   if (!hiddenModelOption) {
     throw new Error(
@@ -408,6 +417,7 @@ export async function selectCliRunnableModel(
   const hiddenEntries = await Promise.allSettled(
     requestedModels.map((model) =>
       loadCliModelAccessEntry(model, {
+        runtime: options.runtime,
         stores: options.stores,
         accessList: models,
       }),

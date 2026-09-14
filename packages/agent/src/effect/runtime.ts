@@ -172,8 +172,8 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     });
   }
   const processServices = {
-    secrets: () => platform.secrets,
-    appState: () => platform.roots.globalState,
+    secrets: Effect.succeed(platform.secrets),
+    appState: Effect.succeed(platform.roots.globalState),
     setup: PACKAGE_SETUP,
   };
   let processRuntime = tryProcessRuntime();

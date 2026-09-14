@@ -18,7 +18,6 @@
 import { Deferred, Effect } from 'effect';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
@@ -92,9 +91,7 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
     const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
       (def) => def.id,
     );
-    yield* hostPort(() =>
-      state.update(GlobalStateKey.DISABLED_TOOLS, defaults),
-    );
+    yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
     log.info(
       `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
     );

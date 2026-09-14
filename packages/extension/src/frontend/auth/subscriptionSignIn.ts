@@ -109,7 +109,7 @@ export async function signInWithSubscription(
 
   let update: { effective: boolean };
   try {
-    update = await provider.setPreferSubscription(true);
+    update = await runtime.runPromise(provider.setPreferSubscription(true));
   } catch (error) {
     await showLoggedErrorMessage(
       channel,

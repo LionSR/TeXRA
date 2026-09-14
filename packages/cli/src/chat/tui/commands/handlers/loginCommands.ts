@@ -104,7 +104,9 @@ async function loginToSubscription(
     }),
     { signal },
   );
-  const update = await setCliSubscriptionPreference(providerId, true);
+  const update = await runtime.runPromise(
+    setCliSubscriptionPreference(providerId, true),
+  );
   const auth = SUBSCRIPTION_AUTH_COPY[providerId];
   output.appendOutcome(
     update.effective
@@ -267,10 +269,7 @@ const logoutLines = (
       yield* signOutSubscription('grok', GROK_AUTH.label);
     }
 
-    const overviewLines = yield* Effect.tryPromise({
-      try: () => loadCliModelAccessOverview(secrets),
-      catch: (cause) => ensureError(cause),
-    }).pipe(
+    const overviewLines = yield* loadCliModelAccessOverview(secrets).pipe(
       Effect.match({
         onFailure: (error) => [toErrorMessage(error)],
         onSuccess: (overview) => overview.lines,

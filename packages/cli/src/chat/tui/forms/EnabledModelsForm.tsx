@@ -2,6 +2,7 @@
 // lead-model picker. Distinct from `/model`, which only chooses the active
 // model among those already enabled and runnable.
 
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { Text } from 'ink';
 
 import {
@@ -16,6 +17,7 @@ import { setTransientNotice } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 
 interface EnabledModelsFormProps {
+  readonly runtime: ProcessRuntime;
   readonly availableRows?: number;
   /**
    * The global state the enabled-model list reads and each toggle writes. Ink
@@ -63,7 +65,7 @@ export function EnabledModelsForm(
       onSelect={(id, { data: models, reload }) => {
         const row = models.find((candidate) => candidate.id === id);
         if (!row) return;
-        void setCliModelEnabled(props.state, id, !row.enabled)
+        void setCliModelEnabled(props.runtime, props.state, id, !row.enabled)
           .then(reload)
           .catch((error: unknown) => {
             // e.g. disabling the last remaining model — keep the catalog as-is.

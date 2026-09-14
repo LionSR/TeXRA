@@ -21,7 +21,6 @@
 
 import { Effect, Semaphore } from 'effect';
 
-import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import type { OnboardingFunnelState } from '@shared/schemas';
@@ -97,7 +96,7 @@ export interface OnboardingFunnelHost {
    * still paint, but never silently — that answer blanks a user who has keys
    * back down to the first-run welcome card.
    */
-  readonly hasCredential: () => boolean | PromiseLike<boolean>;
+  readonly hasCredential: () => Effect.Effect<boolean>;
   /** The user-scoped flag store; onboarding is a fact about the user. */
   readonly flags: StateStore;
   /**
@@ -144,18 +143,7 @@ export class OnboardingFunnelRefresher {
 
   private readonly refresh = Effect.fn('OnboardingFunnelRefresher.refresh')(
     function* (this: OnboardingFunnelRefresher) {
-      const hasCredential = yield* hostPort(() =>
-        this.host.hasCredential(),
-      ).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            log.warn(
-              `Credential probe failed; treating as no credential: ${toErrorMessage(error)}`,
-            );
-            return false;
-          }),
-        ),
-      );
+      const hasCredential = yield* this.host.hasCredential();
       const transition = planOnboardingFunnelTransition(this.current, {
         hasCredential,
         ...readOnboardingFlags(this.host.flags),
@@ -164,7 +152,7 @@ export class OnboardingFunnelRefresher {
       this.current = transition.state;
       this.host.apply({ ...transition, changed });
       if (transition.clearDeclined) {
-        yield* hostPort(() => setOnboardingDeclined(this.host.flags, false));
+        yield* setOnboardingDeclined(this.host.flags, false);
       }
     },
   );

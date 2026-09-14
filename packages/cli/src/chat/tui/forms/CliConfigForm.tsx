@@ -144,14 +144,14 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const [stores] = useState(() => props.stores ?? platformSettingsStores());
   const onError = useRef(props.onError);
   onError.current = props.onError;
-  const { secrets } = props;
+  const { secrets, runtime } = props;
   const loadApiKeyStatuses = useCallback(
-    () => loadProviderApiKeyStatuses(secrets),
-    [secrets],
+    () => runtime.runPromise(loadProviderApiKeyStatuses(secrets)),
+    [runtime, secrets],
   );
   const loadGitHubToken = useCallback(
-    () => loadGitHubTokenStatus(secrets),
-    [secrets],
+    () => runtime.runPromise(loadGitHubTokenStatus(secrets)),
+    [runtime, secrets],
   );
 
   const {
@@ -189,11 +189,13 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     entry: SurfacedSettingEntry,
     value: unknown,
   ): Promise<void> => {
-    const result = await applyStateSettingUpdate(entry.key, value, {
-      host: 'cli',
-      stores,
-      onApprovalPolicyChanged: props.onApprovalPolicyChanged,
-    });
+    const result = await props.runtime.runPromise(
+      applyStateSettingUpdate(entry.key, value, {
+        host: 'cli',
+        stores,
+        onApprovalPolicyChanged: props.onApprovalPolicyChanged,
+      }),
+    );
     const label = entry.title ?? entry.key;
     switch (result.kind) {
       case 'applied':
@@ -244,6 +246,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       formRenderers={{
         agents: (onBack) => (
           <AgentRosterForm
+            runtime={props.runtime}
             availableRows={props.availableRows}
             onClose={onBack}
             onError={props.onError}
@@ -291,6 +294,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         ),
         skills: (onBack) => (
           <SkillsSettingsForm
+            runtime={props.runtime}
             availableRows={props.availableRows}
             stores={stores}
             onClose={onBack}

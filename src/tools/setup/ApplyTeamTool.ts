@@ -97,13 +97,18 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
       };
     },
     commitPreset: (preset) =>
-      call.inScope(async () => {
-        await roster.setTeam(preset.id);
-        await roster.setDefaultTeam(preset.id);
-        // The setup agent runs this mid-conversation, so an open settings
-        // view is showing a roster this call just replaced.
-        appSignals.emit('agentRosterChanged', undefined);
-      }),
+      // The roster holds its own stores, so this write needs no host
+      // workspace frame around it.
+      roster.setTeam(preset.id).pipe(
+        Effect.flatMap(() => roster.setDefaultTeam(preset.id)),
+        Effect.tap(() =>
+          Effect.sync(() => {
+            // The setup agent runs this mid-conversation, so an open settings
+            // view is showing a roster this call just replaced.
+            appSignals.emit('agentRosterChanged', undefined);
+          }),
+        ),
+      ),
   };
 
   const result = yield* applyTeamRosterWithPreflight(input.teamId, {
