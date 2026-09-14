@@ -167,6 +167,24 @@ describe('projectTranscriptRow', () => {
         full: expect.stringContaining('stdout'),
       }),
     });
+
+    // Result metadata is the row's to show on its own, never a raw field.
+    const failed = projectTranscriptRow({
+      ...base,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      text: '',
+      data: {
+        toolName: 'mcp:calc/eval',
+        status: 'failed',
+        input: { expr: '6*7' },
+        output: { status: 'error', error: 'boom', diagnostics: { code: 7 } },
+      },
+    });
+    if (failed?.kind !== 'tool') throw new Error('bad');
+    expect(failed.model.sections.map((section) => section.label)).toEqual([
+      'Arguments:',
+      'Status:',
+    ]);
   });
 
   it('drops the state-only and marker message types', () => {

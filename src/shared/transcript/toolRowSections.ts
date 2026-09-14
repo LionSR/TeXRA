@@ -19,7 +19,10 @@ import {
   getProposalFileGroups,
   type ProposalFileGroup,
 } from '@shared/schemas';
-import { executionsWaitTimeoutSeconds } from '@shared/toolUse';
+import {
+  executionsWaitTimeoutSeconds,
+  TOOL_RESULT_METADATA_FIELDS,
+} from '@shared/toolUse';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOLS,
@@ -429,7 +432,8 @@ const MCP_STRUCTURED_FIELDS: ReadonlySet<string> = new Set(
  * mismatch here is the intended "not structured output" path, not a producer
  * bug: it falls through to the raw `Result:` section below. A structured
  * output's fields outside the schema, which the parse strips, are shown as
- * they came in that same section.
+ * they came in that same section, except the result metadata the row shows
+ * on its own (`TOOL_RESULT_METADATA_FIELDS`).
  */
 function buildMcpSections(ctx: SectionContext): ToolSection[] {
   const sections: ToolSection[] = [];
@@ -492,7 +496,9 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
   const unrendered = isObject(ctx.parsedOutput)
     ? Object.fromEntries(
         Object.entries(ctx.parsedOutput).filter(
-          ([field]) => !MCP_STRUCTURED_FIELDS.has(field),
+          ([field]) =>
+            !MCP_STRUCTURED_FIELDS.has(field) &&
+            !TOOL_RESULT_METADATA_FIELDS.has(field),
         ),
       )
     : {};

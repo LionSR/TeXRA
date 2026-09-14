@@ -27,17 +27,25 @@ function firstTrimmed(primary: unknown, fallback: unknown): string {
   return trimmedOrNull(primary) ?? trimmedOrNull(fallback) ?? '';
 }
 
+/** Fields of a tool result that are its metadata, not its output: each is
+ *  shown on its own (the header summary, the error, the user's instruction)
+ *  or deliberately not shown (diagnostics). */
+export const TOOL_RESULT_METADATA_FIELDS: ReadonlySet<string> = new Set([
+  'summary',
+  'error',
+  'diagnostics',
+  'userInstruction',
+]);
+
 function extractOutputContent(candidate: unknown): unknown {
   if (!isObject(candidate)) return candidate;
-  const {
-    output,
-    summary: _summary,
-    error: _error,
-    diagnostics: _diagnostics,
-    userInstruction: _userInstruction,
-    ...rest
-  } = candidate;
-  return output !== undefined ? output : rest;
+  if (candidate.output !== undefined) return candidate.output;
+  return Object.fromEntries(
+    Object.entries(candidate).filter(
+      ([field]) =>
+        field !== 'output' && !TOOL_RESULT_METADATA_FIELDS.has(field),
+    ),
+  );
 }
 
 function formatOutputText(content: unknown): string {
