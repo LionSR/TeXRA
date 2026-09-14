@@ -156,7 +156,7 @@ describe('SupabaseClient PKCE flow state', () => {
     // GoTrue JSON-encodes every stored value; the slot holds the verifier
     // alone, or `verifier/redirectType` for a recovery link.
     const stored: unknown = JSON.parse(
-      (await secrets.getStored(VERIFIER_KEY)) ?? '',
+      (await Effect.runPromise(secrets.getStored(VERIFIER_KEY))) ?? '',
     );
     const verifier = String(stored).split('/')[0];
     assert.ok(verifier);
@@ -190,7 +190,7 @@ describe('SupabaseClient PKCE flow state', () => {
     // A locked keychain answers an absent value (rather than throwing) on
     // reads and throws on writes; only the in-process mirror remains usable.
     const secrets: SessionSecretStore = {
-      get: async () => undefined,
+      get: () => Effect.succeed(undefined),
       set: () =>
         Effect.fail(
           new SecretsFailed({

@@ -2,13 +2,13 @@
 import { readFileSync } from 'node:fs';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
 import type { ElectronSecrets as ElectronSecretsInstance } from '@desktop/main/platform/electronSecrets';
 import type { JsonStore } from '@platform/defaults/jsonStore';
-import { effectRuntime } from '@platform/processRuntime';
 
 // Local imports - test support
 import { repoPath } from './desktopTestPaths.ts';
@@ -75,7 +75,7 @@ async function secretsWithWarningLog(): Promise<{
 }> {
   const { ElectronSecrets } = await loadElectronSecrets();
   const warnings: string[] = [];
-  const secrets = new ElectronSecrets(encryptedRecordStore(), effectRuntime(), {
+  const secrets = new ElectronSecrets(encryptedRecordStore(), {
     showWarningMessage: (message: string) => {
       warnings.push(message);
     },
@@ -97,42 +97,54 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
 
   afterEach(resetKeychainState);
 
-  it('returns undefined (instead of throwing) when safeStorage.decryptString throws', async () => {
-    // The keychain denial path: decryptString rejects after the user clicks
-    // "Don't Allow" or the encryption key is otherwise unavailable. The bug
-    // we are guarding against is this throw bubbling up into the renderer
-    // bootstrap and producing a blank window.
-    const decryptSpy = vi
-      .spyOn(await safeStorageStub(), 'decryptString')
-      .mockImplementation(() => {
-        throw new Error('User denied keychain access');
-      });
+  it.effect(
+    'answers "no saved secret" (instead of failing) when safeStorage.decryptString throws',
+    () =>
+      Effect.gen(function* () {
+        // The keychain denial path: decryptString rejects after the user
+        // clicks "Don't Allow" or the encryption key is otherwise
+        // unavailable. The bug we are guarding against is this failure
+        // reaching the renderer bootstrap and producing a blank window, so
+        // `decrypt-failed` is recovered inside the store rather than raised
+        // into the caller's channel.
+        const decryptSpy = vi
+          .spyOn(yield* Effect.promise(safeStorageStub), 'decryptString')
+          .mockImplementation(() => {
+            throw new Error('User denied keychain access');
+          });
 
-    const { secrets, warnings } = await secretsWithWarningLog();
+        const { secrets, warnings } = yield* Effect.promise(
+          secretsWithWarningLog,
+        );
 
-    const value = await secrets.get('texra.api.openai');
+        expect(yield* secrets.get('texra.api.openai')).toBeUndefined();
+        expect(decryptSpy).toHaveBeenCalledOnce();
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0]).toContain('keychain');
+      }),
+  );
 
-    expect(value).toBeUndefined();
-    expect(decryptSpy).toHaveBeenCalledOnce();
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('keychain');
-  });
+  it.effect(
+    'only surfaces the keychain-denied warning once per ElectronSecrets instance',
+    () =>
+      Effect.gen(function* () {
+        const decryptSpy = vi
+          .spyOn(yield* Effect.promise(safeStorageStub), 'decryptString')
+          .mockImplementation(() => {
+            throw new Error('denied');
+          });
+        const { secrets, warnings } = yield* Effect.promise(
+          secretsWithWarningLog,
+        );
 
-  it('only surfaces the keychain-denied warning once per ElectronSecrets instance', async () => {
-    const decryptSpy = vi
-      .spyOn(await safeStorageStub(), 'decryptString')
-      .mockImplementation(() => {
-        throw new Error('denied');
-      });
-    const { secrets, warnings } = await secretsWithWarningLog();
+        yield* secrets.get('a');
+        yield* secrets.get('b');
+        yield* secrets.get('c');
 
-    await secrets.get('a');
-    await secrets.get('b');
-    await secrets.get('c');
-
-    expect(warnings).toHaveLength(1);
-    expect(decryptSpy).toHaveBeenCalledOnce();
-  });
+        expect(warnings).toHaveLength(1);
+        expect(decryptSpy).toHaveBeenCalledOnce();
+      }),
+  );
 });
 
 describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
@@ -158,30 +170,38 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
     expect(isAvailableSpy).not.toHaveBeenCalled();
   });
 
-  it('ElectronSecrets.get() returns undefined without calling safeStorage', async () => {
-    process.env.TEXRA_DISABLE_KEYCHAIN = '1';
-    const decryptSpy = vi.spyOn(await safeStorageStub(), 'decryptString');
+  it.effect(
+    'ElectronSecrets.get() returns undefined without calling safeStorage',
+    () =>
+      Effect.gen(function* () {
+        process.env.TEXRA_DISABLE_KEYCHAIN = '1';
+        const decryptSpy = vi.spyOn(
+          yield* Effect.promise(safeStorageStub),
+          'decryptString',
+        );
 
-    const { ElectronSecrets } = await loadElectronSecrets();
-    const secrets = new ElectronSecrets(
-      encryptedRecordStore(),
-      effectRuntime(),
-    );
+        const { ElectronSecrets } = yield* Effect.promise(loadElectronSecrets);
+        const secrets = new ElectronSecrets(encryptedRecordStore());
 
-    expect(await secrets.get('any.key')).toBeUndefined();
-    expect(decryptSpy).not.toHaveBeenCalled();
-  });
+        expect(yield* secrets.get('any.key')).toBeUndefined();
+        expect(decryptSpy).not.toHaveBeenCalled();
+      }),
+  );
 
-  it('ElectronSecrets.get() still honors process.env overrides above the env-disabled shim', async () => {
-    process.env.TEXRA_DISABLE_KEYCHAIN = '1';
-    process.env.SOME_TEST_KEY = 'from-env';
+  it.effect(
+    'ElectronSecrets.get() still honors process.env overrides above the env-disabled shim',
+    () =>
+      Effect.gen(function* () {
+        process.env.TEXRA_DISABLE_KEYCHAIN = '1';
+        process.env.SOME_TEST_KEY = 'from-env';
 
-    const { ElectronSecrets } = await loadElectronSecrets();
-    const secrets = new ElectronSecrets(emptyRecordStore(), effectRuntime());
+        const { ElectronSecrets } = yield* Effect.promise(loadElectronSecrets);
+        const secrets = new ElectronSecrets(emptyRecordStore());
 
-    expect(await secrets.get('SOME_TEST_KEY')).toBe('from-env');
-    delete process.env.SOME_TEST_KEY;
-  });
+        expect(yield* secrets.get('SOME_TEST_KEY')).toBe('from-env');
+        delete process.env.SOME_TEST_KEY;
+      }),
+  );
 
   it('ElectronSecrets.set() silently no-ops instead of throwing', async () => {
     process.env.TEXRA_DISABLE_KEYCHAIN = '1';
@@ -200,7 +220,6 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
           });
         },
       }),
-      effectRuntime(),
     );
 
     await expect(

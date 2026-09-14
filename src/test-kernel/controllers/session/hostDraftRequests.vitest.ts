@@ -7,6 +7,7 @@ import { expect, vi } from 'vitest';
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
+import { apiKeySecretName } from '@model/apiProviders';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
@@ -22,11 +23,13 @@ vi.mock('@agent/runtime/textEnhancement', () => ({
   polishTextWithAI: vi.fn(),
 }));
 
-// The process stores `handle` resolves its polish model against. This suite
-// records and transcribes, so no member is ever called; the layers exist to
-// satisfy the requirement the host root provides in production.
+// The process stores `handle` resolves its models against: the polish model,
+// and the OpenAI credential the take binds its transcription under, which is
+// why the credential store carries a key.
 const processStores = Layer.mergeAll(
-  Secrets.layer(() => new FakeSecrets()),
+  Secrets.layer(
+    () => new FakeSecrets({ [apiKeySecretName('openai')]: 'sk-test' }),
+  ),
   AppState.layer(() => new FakeStateStore()),
 );
 

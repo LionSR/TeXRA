@@ -7,7 +7,6 @@ import {
   type PlatformSecrets,
   type SecretsOperation,
 } from '@platform/secrets';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -69,32 +68,31 @@ export class ElectronSecrets implements PlatformSecrets {
 
   constructor(
     private readonly store: JsonStore,
-    /** The process runtime the composition root built; this port's writes run
-     *  on it rather than on a looked-up one. */
-    private readonly runtime: ProcessRuntime,
     private readonly options: ElectronSecretsOptions = {},
   ) {}
 
   /** Environment variables override persisted Electron secrets. */
-  async get(key: string): Promise<string | undefined> {
+  get(key: string) {
     return secretsGet(this, key);
   }
 
-  async getStored(key: string): Promise<string | undefined> {
-    // Test-harness shim: skip safeStorage entirely when the env var is set so
-    // headless Playwright runs do not block on the macOS keychain prompt.
-    // Env-var API key overrides above already returned; here we just report
-    // "no saved secret" rather than touching safeStorage.
-    if (isKeychainDisabled()) {
-      warnKeychainDisabledOnce();
-      return undefined;
-    }
+  getStored(key: string): Effect.Effect<string | undefined, SecretsFailed> {
+    return Effect.suspend(() => {
+      // Test-harness shim: skip safeStorage entirely when the env var is set
+      // so headless Playwright runs do not block on the macOS keychain
+      // prompt. Env-var API key overrides already returned; here we just
+      // report "no saved secret" rather than touching safeStorage.
+      if (isKeychainDisabled()) {
+        warnKeychainDisabledOnce();
+        return Effect.succeed(undefined);
+      }
 
-    if (this.keychainDecryptUnavailable) return undefined;
+      if (this.keychainDecryptUnavailable) return Effect.succeed(undefined);
 
-    const stored = this.store.get<unknown>(key);
-    if (!isStoredSecret(stored)) return undefined;
-    return this.runtime.runPromise(this.decryptStored(key, stored.value));
+      const stored = this.store.get<unknown>(key);
+      if (!isStoredSecret(stored)) return Effect.succeed(undefined);
+      return this.decryptStored(key, stored.value);
+    });
   }
 
   /**
@@ -104,7 +102,10 @@ export class ElectronSecrets implements PlatformSecrets {
    * has been rotated. Without this recovery a single decrypt rejection during
    * launch surfaces as an unhandled rejection in renderer bootstrap and
    * leaves the user staring at a blank white window — so it is recovered, but
-   * loudly: the cause is logged and the user is warned once.
+   * loudly: the cause is logged and the user is warned once. This is the
+   * `decrypt-failed` rule the port documents: the reason is constructed here
+   * to be reported, and never reaches the caller's error channel, because
+   * every reader of a credential wants the same "no saved secret" answer.
    */
   private decryptStored(
     key: string,

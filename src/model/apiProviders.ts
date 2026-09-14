@@ -4,13 +4,12 @@
  * Shared between SecretManager (VS Code), modelRoutes (agent runtime),
  * and computeModelOptions (model). Platform-agnostic.
  */
-import { Effect, Redacted } from 'effect';
+import { Deferred, Effect, Redacted } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
-import { coalesceAsync, isNonEmptyString } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { isNonEmptyString } from '@utils/core';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
 
@@ -60,7 +59,10 @@ interface ResolvedApiKey {
 const LOOKUP_CACHE_TTL_MS = 5_000;
 interface ApiKeyLookupCache {
   readonly resolved: LRUCache<ApiProvider, ResolvedApiKey>;
-  readonly pending: Map<ApiProvider, Promise<ResolvedApiKey>>;
+  readonly pending: Map<
+    ApiProvider,
+    Deferred.Deferred<ResolvedApiKey, SecretsFailed>
+  >;
 }
 let lookupCaches = new WeakMap<PlatformSecrets, ApiKeyLookupCache>();
 
@@ -89,30 +91,24 @@ function redactedKey(
 }
 
 /** Read the key straight from secret storage then the environment, no caching. */
-async function resolveApiKeyUncached(
+function resolveApiKeyUncached(
   secrets: PlatformSecrets,
   provider: ApiProvider,
-): Promise<ResolvedApiKey> {
-  const stored = await secrets.get(apiKeySecretName(provider));
-  if (isNonEmptyString(stored)) {
-    return { value: redactedKey(stored, provider), origin: 'secret' };
-  }
-  const envValue = secrets.getEnv(apiKeyEnvName(provider));
-  if (isNonEmptyString(envValue)) {
-    return { value: redactedKey(envValue, provider), origin: 'env' };
-  }
-  return { value: undefined, origin: 'none' };
+): Effect.Effect<ResolvedApiKey, SecretsFailed> {
+  return Effect.map(secrets.get(apiKeySecretName(provider)), (stored) => {
+    if (isNonEmptyString(stored)) {
+      return { value: redactedKey(stored, provider), origin: 'secret' };
+    }
+    const envValue = secrets.getEnv(apiKeyEnvName(provider));
+    if (isNonEmptyString(envValue)) {
+      return { value: redactedKey(envValue, provider), origin: 'env' };
+    }
+    return { value: undefined, origin: 'none' };
+  });
 }
 
-/**
- * Cached secret → env lookup, scoped to the supplied credential store.
- * Invalidation replaces the store map, so a pending read can only populate
- * its retired cache and cannot restore a deleted key in subsequent lookups.
- */
-function resolveApiKey(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-): Promise<ResolvedApiKey> {
+/** The cache for one credential store, created on first use. */
+function lookupCacheFor(secrets: PlatformSecrets): ApiKeyLookupCache {
   let cache = lookupCaches.get(secrets);
   if (!cache) {
     cache = {
@@ -124,38 +120,56 @@ function resolveApiKey(
     };
     lookupCaches.set(secrets, cache);
   }
-  return coalesceAsync<ApiProvider, ResolvedApiKey>(
-    cache.resolved,
-    cache.pending,
-    provider,
-    () => resolveApiKeyUncached(secrets, provider),
-  );
+  return cache;
 }
 
 /**
- * The module's one bridge from the Promise-shaped `PlatformSecrets.get` to a
- * typed failure channel: a store that rejects reaches the caller as the
- * port's own {@link SecretsFailed} against the member this module called,
- * exactly as it will once `get` itself is an `Effect` (#12424, C4). The cache
- * above stays Promise-shaped for that reason — it is the shared shape of the
- * read it deduplicates, not a second system — and it keeps its two pinned
- * properties: one store read per provider per store, and a rejected read
- * memoized nowhere, so the next caller retries instead of replaying a failure.
+ * Cached secret → env lookup, scoped to the supplied credential store, with
+ * the two properties the suite pins: one store read per provider per store,
+ * and a rejected read memoized nowhere, so the next caller retries instead of
+ * replaying a failure. Invalidation replaces the store map, so a read already
+ * in flight can only populate its retired cache and cannot restore a deleted
+ * key in subsequent lookups.
+ *
+ * The read runs on a detached fiber and every caller waits on the same
+ * `Deferred`, so one caller's cancellation cancels only its own wait — what
+ * the shared promise this replaced did by construction. The deferred is
+ * registered before the fork, so the read cannot settle before the entry it
+ * clears exists.
  */
-function storeRead(
+function resolveApiKey(
+  secrets: PlatformSecrets,
   provider: ApiProvider,
-  read: () => Promise<ResolvedApiKey>,
 ): Effect.Effect<ResolvedApiKey, SecretsFailed> {
-  return Effect.tryPromise({
-    try: read,
-    catch: (cause) =>
-      new SecretsFailed({
-        reason: 'io',
-        operation: 'get',
-        key: apiKeySecretName(provider),
-        message: `Could not read the ${provider} API key from the credential store: ${toErrorMessage(cause)}`,
-        cause,
-      }),
+  return Effect.suspend(() => {
+    const cache = lookupCacheFor(secrets);
+    const cached = cache.resolved.get(provider);
+    if (cached !== undefined) return Effect.succeed(cached);
+    const inFlight = cache.pending.get(provider);
+    if (inFlight !== undefined) return Deferred.await(inFlight);
+
+    const request = Deferred.makeUnsafe<ResolvedApiKey, SecretsFailed>();
+    cache.pending.set(provider, request);
+    return Effect.flatMap(
+      Effect.forkDetach(
+        resolveApiKeyUncached(secrets, provider).pipe(
+          Effect.tap((resolved) =>
+            Effect.sync(() => {
+              cache.resolved.set(provider, resolved);
+            }),
+          ),
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              if (cache.pending.get(provider) === request) {
+                cache.pending.delete(provider);
+              }
+              Deferred.doneUnsafe(request, exit);
+            }),
+          ),
+        ),
+      ),
+      () => Deferred.await(request),
+    );
   });
 }
 
@@ -170,22 +184,17 @@ function storeRead(
  * They are kept as distinct entry points so call sites read self-evidently
  * (no `{ throwIfMissing: true }` flag at every model handler).
  *
- * {@link lookupApiKeyOrigin} is a program: a caller inside an `Effect` yields
- * it and matches {@link SecretsFailed} instead of bridging a promise and
- * catching `unknown`. The two reads of the key *value* are still promises,
- * because each one's remaining consumer is a promise pipeline this module
- * cannot move on its own — `resolveRouteCredential` for {@link getApiKey}
- * (awaited inside the model binding's own host frame) and
- * `SubscriptionUsageService`'s coalesced snapshot fetch for
- * {@link lookupApiKey} (a `coalesceAsync` over Promise-shaped provider
- * transports, in a zone where an `Effect.run*` is forbidden). Both move with
- * the port itself (#12424, C4), which is when their pipelines move too.
+ * All three are programs: a caller yields one and matches
+ * {@link SecretsFailed} instead of catching `unknown` from a rejected read.
  */
-export async function lookupApiKey(
+export function lookupApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
-): Promise<Redacted.Redacted<string> | undefined> {
-  return (await resolveApiKey(secrets, provider)).value;
+): Effect.Effect<Redacted.Redacted<string> | undefined, SecretsFailed> {
+  return Effect.map(
+    resolveApiKey(secrets, provider),
+    (resolved) => resolved.value,
+  );
 }
 
 /** Origin of the resolved key (`secret` / `env` / `none`). See trio doc above. */
@@ -194,7 +203,7 @@ export function lookupApiKeyOrigin(
   provider: ApiProvider,
 ): Effect.Effect<ApiKeyOrigin, SecretsFailed> {
   return Effect.map(
-    storeRead(provider, () => resolveApiKey(secrets, provider)),
+    resolveApiKey(secrets, provider),
     (resolved) => resolved.origin,
   );
 }
@@ -246,18 +255,20 @@ export function configuredApiKeyProviders(
   );
 }
 
-/** Get an API key, throwing if not found. See trio doc above. */
-export async function getApiKey(
+/** Get an API key, failing if none is configured. See trio doc above. */
+export function getApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
-): Promise<Redacted.Redacted<string>> {
-  const { value: key } = await resolveApiKey(secrets, provider);
-  if (!key) {
-    throw new Error(
-      `No API key found for ${provider}. Set the ${apiKeyEnvName(provider)} environment variable, or configure your ${provider} API key.`,
-    );
-  }
-  return key;
+): Effect.Effect<Redacted.Redacted<string>, SecretsFailed | Error> {
+  return Effect.flatMap(resolveApiKey(secrets, provider), ({ value: key }) =>
+    key === undefined
+      ? Effect.fail(
+          new Error(
+            `No API key found for ${provider}. Set the ${apiKeyEnvName(provider)} environment variable, or configure your ${provider} API key.`,
+          ),
+        )
+      : Effect.succeed(key),
+  );
 }
 
 /**
@@ -272,7 +283,7 @@ export function hasUsableApiKey(
   provider: ApiProvider,
 ): Effect.Effect<boolean, SecretsFailed> {
   return Effect.map(
-    storeRead(provider, () => resolveApiKey(secrets, provider)),
+    resolveApiKey(secrets, provider),
     (resolved) => resolved.value !== undefined,
   );
 }
@@ -287,7 +298,7 @@ export function lookupApiKeyUncached(
   provider: ApiProvider,
 ): Effect.Effect<Redacted.Redacted<string> | undefined, SecretsFailed> {
   return Effect.map(
-    storeRead(provider, () => resolveApiKeyUncached(secrets, provider)),
+    resolveApiKeyUncached(secrets, provider),
     (resolved) => resolved.value,
   );
 }
@@ -298,7 +309,7 @@ export function apiKeyExistsUncached(
   provider: ApiProvider,
 ): Effect.Effect<boolean, SecretsFailed> {
   return Effect.map(
-    storeRead(provider, () => resolveApiKeyUncached(secrets, provider)),
+    resolveApiKeyUncached(secrets, provider),
     (resolved) => resolved.value !== undefined,
   );
 }

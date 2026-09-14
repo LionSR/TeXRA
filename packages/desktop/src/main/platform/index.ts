@@ -187,7 +187,7 @@ export async function initializeElectronPlatform(
       get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
     },
   });
-  const secrets = new ElectronSecrets(secretsStore, runtime, {
+  const secrets = new ElectronSecrets(secretsStore, {
     showWarningMessage: showDesktopWarningDialog,
   });
   initPlatform(

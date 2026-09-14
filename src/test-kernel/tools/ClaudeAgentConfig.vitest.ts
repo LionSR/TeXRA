@@ -38,8 +38,8 @@ async function loadBuildClaudeAgentEnv(): Promise<
 
 /** The suite's secret store as the `Secrets` service the env builder reads. */
 const fakeSecrets: PlatformSecrets = {
-  get: async (key) => secretStore.get(key),
-  getStored: async (key) => secretStore.get(key),
+  get: (key) => Effect.sync(() => secretStore.get(key)),
+  getStored: (key) => Effect.sync(() => secretStore.get(key)),
   set: (key, value) =>
     Effect.sync(() => {
       secretStore.set(key, value);

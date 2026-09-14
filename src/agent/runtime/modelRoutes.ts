@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
@@ -32,6 +33,7 @@ import {
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
 import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
+import type { ModelAvailabilityScope } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
@@ -40,6 +42,7 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { ensureError } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const log = createLog('modelRoutes');
@@ -117,7 +120,7 @@ export interface ApiKeyRouteCredential {
  * xAI Chat protocol. The token is the bearer the package sends; `@auth/*`
  * owns its refresh, so a binding always carries a fresh one.
  */
-export type SubscriptionRouteCredential =
+type SubscriptionRouteCredential =
   | {
       readonly route: 'chatgpt-subscription';
       readonly accessToken: string;
@@ -151,6 +154,23 @@ export function routeBearer(credential: RouteCredential): string {
   }
 }
 
+/** The route a subscription-eligible model binds under, with its own config. */
+interface SubscriptionRoute {
+  readonly credential: SubscriptionRouteCredential;
+  readonly config: ModelConfig;
+}
+
+/**
+ * A ChatGPT session failure the user must act on, minted as the loop's own
+ * error: the "sign in again, or turn off the preference" instruction, not a
+ * raw auth error. Anything else keeps its identity through `ensureError`,
+ * which is what the caller's own promise boundary did with it.
+ */
+const codexAuthFailure = (error: unknown): Error =>
+  error instanceof CodexAuthError
+    ? new AgentError(formatCodexAuthUnavailableMessage(error), { cause: error })
+    : ensureError(error);
+
 /**
  * The subscription route a model binds under, if the user prefers one, the
  * model is eligible on it, and a session is signed in. Decided above
@@ -163,31 +183,25 @@ export function routeBearer(credential: RouteCredential): string {
  * declined this route (a retry the user answered with their own API key)
  * never reaches it, whatever the stored preference says.
  */
-export async function resolveSubscriptionCredential(
+export const resolveSubscriptionCredential = Effect.fn(
+  'resolveSubscriptionCredential',
+)(function* (
   config: ModelConfig,
   useOpenRouter: boolean,
   secrets: PlatformSecrets,
+  inScope: ModelAvailabilityScope,
   declinedRoutes: readonly DeclinableUsageRoute[] = [],
-): Promise<{
-  readonly credential: SubscriptionRouteCredential;
-  readonly config: ModelConfig;
-} | null> {
+): Effect.fn.Return<SubscriptionRoute | null, Error> {
   const provider = resolveDirectModelApiKeyProvider(config);
   if (provider === undefined) return null;
   if (config.provider === ModelProvider.OPENAI) {
     if (declinedRoutes.includes('chatgpt-subscription')) return null;
     const profile = resolveCodexSubscriptionCapabilities(config, useOpenRouter);
     if (profile === null) return null;
-    let routable: boolean;
-    try {
-      routable = await isCodexSessionRoutable(secrets);
-    } catch (error) {
-      throw error instanceof CodexAuthError
-        ? new AgentError(formatCodexAuthUnavailableMessage(error), {
-            cause: error,
-          })
-        : error;
-    }
+    const routable = yield* Effect.tryPromise({
+      try: () => inScope(() => isCodexSessionRoutable(secrets)),
+      catch: codexAuthFailure,
+    });
     if (!routable) {
       log.warn(
         `Prefer ChatGPT subscription is on but no ChatGPT session is signed in: model ${config.name} bills the OpenAI API key.`,
@@ -195,22 +209,17 @@ export async function resolveSubscriptionCredential(
       return null;
     }
     const coordinator = codexCoordinator(secrets);
-    let session: { accessToken: string; accountId: string | null };
-    try {
-      session = {
-        accessToken: await coordinator.getFreshAccessToken(),
-        accountId: (await coordinator.getAccountId()) ?? null,
-      };
-    } catch (error) {
-      // Same conversion as the routability check above: a refresh that fails
-      // must reach the user with the "sign in again, or turn off the
-      // preference" instruction, not as a raw auth error.
-      throw error instanceof CodexAuthError
-        ? new AgentError(formatCodexAuthUnavailableMessage(error), {
-            cause: error,
-          })
-        : error;
-    }
+    // Same conversion as the routability check above: a refresh that fails
+    // must reach the user with the "sign in again, or turn off the
+    // preference" instruction, not as a raw auth error.
+    const session = yield* Effect.tryPromise({
+      try: () =>
+        inScope(async () => ({
+          accessToken: await coordinator.getFreshAccessToken(),
+          accountId: (await coordinator.getAccountId()) ?? null,
+        })),
+      catch: codexAuthFailure,
+    });
     return {
       credential: {
         route: 'chatgpt-subscription',
@@ -233,22 +242,25 @@ export async function resolveSubscriptionCredential(
     if (declinedRoutes.includes('xai-subscription')) return null;
     const profile = resolveXaiSubscriptionCapabilities(config, useOpenRouter);
     if (profile === null) return null;
-    if (!(await isXaiSignedIn())) {
+    const signedIn = yield* Effect.tryPromise({
+      try: () => inScope(isXaiSignedIn),
+      catch: ensureError,
+    });
+    if (!signedIn) {
       log.warn(
         `Prefer Grok subscription is on but no Grok session is signed in: model ${config.name} bills the xAI API key.`,
       );
       return null;
     }
-    let accessToken: string;
-    try {
-      accessToken = await xaiCoordinator(secrets).getFreshAccessToken();
-    } catch (error) {
-      throw error instanceof XaiAuthError
-        ? new AgentError(formatXaiAuthUnavailableMessage(error), {
-            cause: error,
-          })
-        : error;
-    }
+    const accessToken = yield* Effect.tryPromise({
+      try: () => inScope(() => xaiCoordinator(secrets).getFreshAccessToken()),
+      catch: (error) =>
+        error instanceof XaiAuthError
+          ? new AgentError(formatXaiAuthUnavailableMessage(error), {
+              cause: error,
+            })
+          : ensureError(error),
+    });
     return {
       credential: {
         route: 'xai-subscription',
@@ -266,53 +278,71 @@ export async function resolveSubscriptionCredential(
     };
   }
   return null;
-}
+});
 
 /**
  * Resolve the credential and endpoint the run loop binds a model under: the
  * direct API key of the model's provider, or the OpenRouter key when the
  * route goes through OpenRouter. The one producer of the missing-credential
- * fact the run lifecycle classifies for the loop, so the thrown error carries
- * the typed marker rather than a message pattern. Lives beside the route
- * resolver above so route and credential are decided in one place. `secrets`
- * is the process secret store the caller already holds.
+ * fact the run lifecycle classifies for the loop, so the failure carries the
+ * typed marker rather than a message pattern. Lives beside the route resolver
+ * above so route and credential are decided in one place. `secrets` is the
+ * process secret store the caller already holds.
+ *
+ * A program, because the key read behind it is one ({@link getApiKey}). The
+ * endpoint resolution is a synchronous host read — a per-provider dashboard
+ * endpoint, the China-region switch — so it runs inside `inScope`, the
+ * caller's own workspace-roots frame: a fiber resumes outside the frame its
+ * caller entered, so the frame is passed rather than wrapped around the call
+ * (see {@link ModelAvailabilityScope}).
  */
-export async function resolveRouteCredential(
-  config: ModelConfig,
-  useOpenRouter: boolean,
-  secrets: PlatformSecrets,
-  declinedRoutes?: readonly DeclinableUsageRoute[],
-): Promise<ApiKeyRouteCredential> {
-  const provider = useOpenRouter
-    ? 'openRouter'
-    : resolveDirectModelApiKeyProvider(config);
-  if (!provider) {
-    throw new Error(`Model "${config.name}" has no direct API-key provider.`);
-  }
-  let apiKey: string;
-  try {
-    apiKey = exposeApiKey(await getApiKey(secrets, provider));
-  } catch (cause) {
-    const error = new Error(
-      useOpenRouter
-        ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
-        : `Missing API key for ${provider}. Set a provider API key in settings.`,
-      { cause },
-    );
-    attachMissingApiKeyError(error);
-    throw error;
-  }
-  const endpoint = resolveRouteEndpoint(config, useOpenRouter, declinedRoutes);
-  return {
-    apiKey,
-    endpoint: endpoint.baseUrl,
-    provider,
-    route: useOpenRouter ? 'openrouter' : 'api-key',
-    usageRoute:
-      endpoint.usageRoute ??
-      (provider === 'kimiCode' ? 'kimi-code-subscription' : 'api-key'),
-  };
-}
+export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
+  function* (
+    config: ModelConfig,
+    useOpenRouter: boolean,
+    secrets: PlatformSecrets,
+    inScope: ModelAvailabilityScope,
+    declinedRoutes?: readonly DeclinableUsageRoute[],
+  ) {
+    const provider = useOpenRouter
+      ? 'openRouter'
+      : resolveDirectModelApiKeyProvider(config);
+    if (!provider) {
+      return yield* Effect.fail(
+        new Error(`Model "${config.name}" has no direct API-key provider.`),
+      );
+    }
+    const apiKey = yield* Effect.mapBoth(getApiKey(secrets, provider), {
+      onFailure: (cause) => {
+        const error = new Error(
+          useOpenRouter
+            ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
+            : `Missing API key for ${provider}. Set a provider API key in settings.`,
+          { cause },
+        );
+        attachMissingApiKeyError(error);
+        return error;
+      },
+      onSuccess: exposeApiKey,
+    });
+    const endpoint = yield* Effect.try({
+      try: () =>
+        inScope(() =>
+          resolveRouteEndpoint(config, useOpenRouter, declinedRoutes),
+        ),
+      catch: ensureError,
+    });
+    return {
+      apiKey,
+      endpoint: endpoint.baseUrl,
+      provider,
+      route: useOpenRouter ? 'openrouter' : 'api-key',
+      usageRoute:
+        endpoint.usageRoute ??
+        (provider === 'kimiCode' ? 'kimi-code-subscription' : 'api-key'),
+    } satisfies ApiKeyRouteCredential;
+  },
+);
 
 /**
  * The config a binding sends on the wire under the user's "prefer short model

@@ -47,10 +47,10 @@ function buildOverleafClonePorts(
   const secrets = getCliSecrets(runtime);
   let canonicalWorkspacePath = workspacePath;
   return {
-    getStoredToken: (key) => Effect.promise(() => secrets.get(key)),
-    // `orDie` keeps what `Effect.promise` did with a rejected store write:
-    // a credential store that cannot write is a defect here, not a clone
+    // `orDie` keeps what `Effect.promise` did with a rejected store call: a
+    // credential store this host cannot reach is a defect here, not a clone
     // outcome the workflow reports.
+    getStoredToken: (key) => Effect.orDie(secrets.get(key)),
     deleteStoredToken: (key) => Effect.orDie(secrets.delete(key)),
     storeToken: (key, token) => Effect.orDie(secrets.set(key, token)),
     promptToken: (spec) =>

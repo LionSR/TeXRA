@@ -2,13 +2,11 @@ import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { execa, type Subprocess } from 'execa';
-import { MODEL_CONFIGS } from 'llm-zoo';
 import OpenAI from 'openai';
 
-import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
+import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { RelativeFS } from '@utils/files/relativeFS';
@@ -164,12 +162,15 @@ export function killActiveRecording(): void {
 }
 
 /**
- * Stop the current recording and transcribe it using OpenAI. `secrets` is the
- * process secret store the OpenAI key is read from; `roots` are the recording
- * session's, and own the directory the finished takes are swept from.
+ * Stop the current recording and transcribe it using OpenAI. `credential` is
+ * the OpenAI route the caller resolved: the key read is an Effect program
+ * now, and this function is a promise the host settles, so the credential
+ * arrives as data rather than as a store this function would have to read
+ * from. `roots` are the recording session's, and own the directory the
+ * finished takes are swept from.
  */
 export async function stopRecordingAndTranscribe(
-  secrets: PlatformSecrets,
+  credential: ApiKeyRouteCredential,
   roots: WorkspaceRoots,
 ): Promise<{
   success: boolean;
@@ -206,15 +207,7 @@ export async function stopRecordingAndTranscribe(
     }
 
     // The transcription endpoint is an OpenAI SDK operation the llm package
-    // does not model, so the client is built here. The direct OpenAI route is
-    // deliberate and does not follow the global OpenRouter preference the run
-    // loop applies to gpt-4o: `gpt-4o-transcribe` is an OpenAI-only endpoint
-    // model with no OpenRouter route, so a proxied client could only fail.
-    const credential = await resolveRouteCredential(
-      MODEL_CONFIGS['gpt4o'],
-      false,
-      secrets,
-    );
+    // does not model, so the client is built here.
     const client = new OpenAI({
       apiKey: credential.apiKey,
       baseURL: credential.endpoint,
