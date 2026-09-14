@@ -116,6 +116,24 @@ export function runEndFromEvents(
   return lifecycle?.type === 'run.end' ? lifecycle : null;
 }
 
+/**
+ * A run's persisted parent edge: the fold's (`run.start.parent`, severed by
+ * a later `run.detach`), read cold so a read racing the live fold's first
+ * replay still sees it.
+ *
+ * The one rule every resume family shares, and the one site that derives it:
+ * a resumed run takes its lineage from the log, never from its caller, who
+ * has no parent to name for a run that already started once. `runAgent`
+ * reads it before the run's handle enters the registry, so a stop of the
+ * parent sees the child from that moment on; the tool-use resume arm reads
+ * it for the handle its own lifecycle registers.
+ */
+export const persistedParentRunId = Effect.fn('persistedParentRunId')(
+  function* (session: SessionHandle, runId: RunId) {
+    return (yield* session.readView([])).runs.get(runId)?.parentId ?? undefined;
+  },
+);
+
 /** Native access to named run metadata, with no file-backed read arm. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
   const id = aggregateId('run', runId);
