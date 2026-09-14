@@ -505,27 +505,24 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   for (const message of turn.messages) {
     if (message.role === 'tool') {
       for (const result of message.results) {
-        const text = result.content
-          .filter((part) => part.kind === 'text')
-          .map((part) => part.text)
-          .join('');
-        const body = result.status === 'error' ? `Error: ${text}` : text;
         // A settlement that carries only text keeps the plain string output
-        // the API has always taken; an attachment turns the output into the
-        // content list that can carry it beside that same text.
-        const attachments = result.content.filter(
-          (part) => part.kind !== 'text',
-        );
+        // the API has always taken. Attachments keep `result.content` order
+        // so a label still sits next to the file it names.
+        let output: string | OpenAI.Responses.ResponseInputContent[];
+        if (result.content.every((part) => part.kind === 'text')) {
+          const text = result.content.map((part) => part.text).join('');
+          output = result.status === 'error' ? `Error: ${text}` : text;
+        } else {
+          const lowered = yield* Effect.forEach(result.content, content);
+          output =
+            result.status === 'error'
+              ? [{ type: 'input_text' as const, text: 'Error: ' }, ...lowered]
+              : lowered;
+        }
         input.push({
           type: 'function_call_output',
           call_id: callIds[result.callOrdinal],
-          output:
-            attachments.length === 0
-              ? body
-              : [
-                  { type: 'input_text' as const, text: body },
-                  ...(yield* Effect.forEach(attachments, content)),
-                ],
+          output,
         });
       }
       continue;

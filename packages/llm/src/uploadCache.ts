@@ -86,6 +86,15 @@ export function uploadCache(provider: {
     const uploaded = yield* provider
       .send(parsed.data)
       .pipe(Effect.ensuring(Effect.sync(() => inFlight.delete(digest))));
+    // `send` can outlive a concurrent release. The check and the cache
+    // writes are one synchronous stretch, so a release either already ran
+    // (delete this id, do not cache it) or still sees it in `owned`.
+    if (released) {
+      yield* provider
+        .remove(uploaded.fileId)
+        .pipe(Effect.catchTag('ModelError', () => Effect.void));
+      return;
+    }
     owned.add(uploaded.fileId);
     live.set(digest, uploaded);
   });

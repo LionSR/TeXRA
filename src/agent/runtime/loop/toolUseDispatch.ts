@@ -867,8 +867,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   });
   // Offer each delivered document to the binding's upload cache, so the
   // requests that replay this history can send a file id instead of the
-  // bytes. Concurrent, each under a short deadline: a slow or failing files
-  // endpoint delays delivery by at most one deadline and changes nothing the
+  // bytes. Concurrent under the same in-flight bound as parallel tool
+  // calls, each under a short deadline: a stalled files endpoint delays
+  // delivery by at most one deadline per wave and changes nothing the
   // model reads now. The binding deletes what it uploaded when it closes.
   // A batch that ends the turn completes the run straight after this
   // delivery (the same `endTurn` this dispatch returns), so no later request
@@ -917,7 +918,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               ),
           }),
         ),
-      { concurrency: 'unbounded', discard: true },
+      { concurrency: MAX_PARALLEL_TOOL_CALLS, discard: true },
     );
   }
   const group: Message = { role: 'tool', results };
