@@ -68,6 +68,7 @@ function installTitle(
     window as unknown as Parameters<typeof installDesktopWindowTitle>[0],
     session,
     workspacePath,
+    effectRuntime(),
   );
 }
 

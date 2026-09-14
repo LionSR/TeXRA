@@ -7,20 +7,21 @@
 import { Effect, Fiber, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { goalStateChanges, type GoalStateChange } from '@tools/goal';
 
 /** Read a session's goal-state changes from now on. */
 export function subscribeDesktopGoalChanges(
   session: Pick<SessionHandle, 'folded' | 'now'>,
   listener: (change: GoalStateChange) => void,
+  runtime: ProcessRuntime,
 ): () => void {
-  const fiber = effectRuntime().runFork(
+  const fiber = runtime.runFork(
     Stream.runForEach(goalStateChanges(session), (change) =>
       Effect.sync(() => listener(change)),
     ),
   );
   return () => {
-    effectRuntime().runFork(Fiber.interrupt(fiber));
+    runtime.runFork(Fiber.interrupt(fiber));
   };
 }

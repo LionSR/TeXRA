@@ -2,7 +2,7 @@ import { basename } from 'node:path';
 import { type BrowserWindow } from 'electron';
 import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   formatSessionTitle,
   NATIVE_WINDOW_TITLE,
@@ -46,6 +46,7 @@ export function installDesktopWindowTitle(
   window: DesktopTitleWindow,
   session: DesktopTitleSession,
   workspacePath: string | undefined,
+  runtime: ProcessRuntime,
 ): () => void {
   let currentTitle = window.getTitle();
   let disposed = false;
@@ -61,7 +62,7 @@ export function installDesktopWindowTitle(
   };
 
   window.webContents.on('page-title-updated', preventRendererTitle);
-  const views = effectRuntime().runFork(
+  const views = runtime.runFork(
     Stream.runForEach(SubscriptionRef.changes(session.view), () =>
       Effect.sync(update),
     ),
@@ -71,7 +72,7 @@ export function installDesktopWindowTitle(
   return () => {
     if (disposed) return;
     disposed = true;
-    effectRuntime().runFork(Fiber.interrupt(views));
+    runtime.runFork(Fiber.interrupt(views));
     // Check the window before touching `.webContents`: the property getter
     // itself throws "Object has been destroyed" once the window is gone, so
     // reaching for `webContents.isDestroyed()` was already too late. This

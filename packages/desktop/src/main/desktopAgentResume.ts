@@ -15,7 +15,7 @@ import {
   resumeCancellationLatch,
   resumeRunWithRefusalNotice,
 } from '@controllers/session/resumeRunPresentation';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -38,6 +38,14 @@ export class DesktopProcessResumeOwner {
     private readonly options: {
       /** The sessions open right now: every paper's and the no-workspace one. */
       readonly sessions: () => Iterable<SessionHandle>;
+      /**
+       * The process runtime the composition root builds. Read through a thunk
+       * for one reason: this owner is constructed before
+       * `initializeElectronPlatform`, which is what builds that runtime, and
+       * is handed to it as the resume port. The thunk closes over the entry's
+       * own local, not over a process-wide lookup.
+       */
+      readonly runtime: () => ProcessRuntime;
     },
   ) {}
 
@@ -83,7 +91,9 @@ export class DesktopProcessResumeOwner {
     // (a deleted run holds none) nor the run lane (in-process only)
     // sees that fact.
     if (isCancellationRequested()) return false;
-    const result = await effectRuntime().runPromise(
+    // Taken once here: the generator below has its own `this`.
+    const runtime = this.options.runtime();
+    const result = await runtime.runPromise(
       Effect.exit(
         Effect.gen(function* () {
           const { getDefaultUnavailableToolNames } = yield* Effect.tryPromise({
@@ -101,7 +111,7 @@ export class DesktopProcessResumeOwner {
             executeWorkflow: (config, id, modelCompatibilityKey) =>
               launchDesktopAgent(
                 { kind: 'resume', config, runId: id },
-                { session },
+                { session, runtime },
                 { modelCompatibilityKey },
               ),
           });

@@ -9,6 +9,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 // Local imports - platform
 import type { ElectronSecrets } from '@desktop/main/platform/electronSecrets';
 import type { JsonStore } from '@platform/defaults/jsonStore';
+import { effectRuntime } from '@platform/processRuntime';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
@@ -54,7 +55,7 @@ describe('desktop platform adapters', () => {
   const loadSecrets = (
     options?: ConstructorParameters<
       ElectronSecretsModule['ElectronSecrets']
-    >[1],
+    >[2],
   ) =>
     Effect.gen(function* () {
       const [secretsModule, JsonStore] = yield* Effect.all(
@@ -68,7 +69,11 @@ describe('desktop platform adapters', () => {
       );
       const root = yield* makeTempDir('texra-electron-secrets-');
       const store = yield* JsonStore.open(join(root, 'secrets.json'));
-      const secrets = new secretsModule.ElectronSecrets(store, options);
+      const secrets = new secretsModule.ElectronSecrets(
+        store,
+        effectRuntime(),
+        options,
+      );
       return { module: secretsModule, store, secrets };
     });
 

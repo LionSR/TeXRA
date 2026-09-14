@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -139,6 +140,7 @@ describe('desktop preview host', () => {
         showOpenFileDialog: async () => undefined,
       });
       const handler = createDesktopHostRequests({
+        runtime: effectRuntime(),
         session,
         host: createStubDesktopAgentRunHost({
           ...preview,

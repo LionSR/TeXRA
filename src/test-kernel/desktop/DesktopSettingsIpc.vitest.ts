@@ -112,6 +112,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     onTestFinished(() => Effect.runPromise(session.dispose()));
   }
   const settings = createDesktopSettingsIpc({
+    runtime: effectRuntime(),
     ...settingsOverrides,
     agentSettingsController:
       overrides.agentSettingsController ??

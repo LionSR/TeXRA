@@ -23,7 +23,7 @@ import type {
   DiffRunOutcome,
 } from '@latex/latexdiff/types';
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -57,6 +57,9 @@ interface DesktopProgressFileActionHost {
   /** The process global state the window root holds; the merge run reads the
    *  helper model from it. */
   readonly globalState: StateStore;
+  /** The process runtime the window root holds; the latexdiff programs below
+   *  settle on it. */
+  readonly runtime: ProcessRuntime;
   startRun(request: ValidatedRunRequest): void;
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
@@ -178,7 +181,7 @@ export class DesktopProgressFileActions {
 
   async runLatexdiffFile(baseFile: string, editedFile: string): Promise<void> {
     const service = new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL);
-    const result = await effectRuntime().runPromise(
+    const result = await this.host.runtime.runPromise(
       service.runDiff(
         pathToLocation(baseFile),
         pathToLocation(editedFile),
@@ -219,7 +222,7 @@ export class DesktopProgressFileActions {
     // Desktop has no per-operation progress UI.
     const progress: DiffProgressReporter = { report: () => undefined };
     try {
-      const { outcome } = await effectRuntime().runPromise(
+      const { outcome } = await this.host.runtime.runPromise(
         runLatexdiffForRun({
           filesystem: nodeFilesystem,
           agent: scan?.agent ?? '',

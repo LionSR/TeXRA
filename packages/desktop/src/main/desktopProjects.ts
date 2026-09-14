@@ -24,7 +24,7 @@ import {
   type ResponseTextProcessing,
 } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
@@ -76,6 +76,9 @@ interface DesktopProjectRegistryOptions {
    * that opened them.
    */
   readonly stores: ModelOptionStores;
+  /** The process runtime the composition root built; the registry's Promise
+   *  faces (run settlement, artifact flush) settle on it. */
+  readonly runtime: ProcessRuntime;
   warn(message: string): void;
 }
 
@@ -169,20 +172,21 @@ export function readRememberedDesktopProjects(
  * tool that ignores its kill is the same problem the process exit drain has,
  * and the project stays open, stoppable and visible in the log, until it ends.
  */
-async function stopProjectRuns(session: SessionHandle): Promise<void> {
+async function stopProjectRuns(
+  session: SessionHandle,
+  runtime: ProcessRuntime,
+): Promise<void> {
   const { runs } = session;
   await runInSession(session, async () => {
     const stops = runs.getActiveIds().flatMap((runId) => {
       if (runs.getHandle(runId)?.isChild) return [];
       return [runs.kill(runId, { detachActiveChildren: false }).settlement];
     });
-    await effectRuntime().runPromise(
-      Effect.all(stops, { concurrency: 'unbounded' }),
-    );
+    await runtime.runPromise(Effect.all(stops, { concurrency: 'unbounded' }));
     for (;;) {
       const active = runs.getActiveIds();
       if (active.length === 0) return;
-      await effectRuntime().runPromise(runs.waitForAnyChange(active));
+      await runtime.runPromise(runs.waitForAnyChange(active));
     }
   });
 }
@@ -317,7 +321,9 @@ export function openDesktopProjectRegistry(
           // persistence operation leaves that owner available to the host.
           yield* Effect.uninterruptible(
             Effect.gen(function* () {
-              yield* hostPort(() => stopProjectRuns(project.session));
+              yield* hostPort(() =>
+                stopProjectRuns(project.session, options.runtime),
+              );
               yield* Effect.gen(function* () {
                 const remembered = yield* options.records.read;
                 const next =
@@ -358,7 +364,7 @@ export function openDesktopProjectRegistry(
       async flushArtifacts() {
         const failures: string[] = [];
         for (const project of [fallback, ...projects.values()]) {
-          await effectRuntime().runPromise(
+          await options.runtime.runPromise(
             hostPort(() =>
               runInSession(project.session, () =>
                 project.session.flushArtifacts(),
