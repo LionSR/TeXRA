@@ -1796,6 +1796,45 @@ export const parseInboundToolArguments = (
   });
 
 /**
+ * A tool-result row translated to its Chat wire shape: OpenAI Chat and
+ * OpenRouter build this identically (materialize the text parts, an error
+ * status prefixes them), and diverge only in how the surrounding message is
+ * typed. `callIds` is the calling assistant turn's provider call ids, in
+ * `callOrdinal` order.
+ */
+export const chatToolResultMessages = Effect.fn('llm.chatToolResultMessages')(
+  function* (
+    results: Extract<
+      ResolvedTurn['messages'][number],
+      { role: 'tool' }
+    >['results'],
+    callIds: readonly string[],
+    unsupportedMessage: string,
+  ) {
+    const messages: { tool_call_id: string; content: string }[] = [];
+    for (const result of results) {
+      const text: string[] = [];
+      for (const part of result.content) {
+        if (part.kind !== 'text') {
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message: unsupportedMessage,
+          });
+        }
+        text.push(part.text);
+      }
+      messages.push({
+        // The canonical grammar already guarantees adjacent, complete ordinals.
+        tool_call_id: callIds[result.callOrdinal],
+        content:
+          result.status === 'error' ? `Error: ${text.join('')}` : text.join(''),
+      });
+    }
+    return messages;
+  },
+);
+
+/**
  * The request signal for a streamed body, with the body reader cancelled at
  * scope close. The cancel finalizer is registered before the signal's abort
  * finalizer, so LIFO order aborts the request before cancellation joins a
