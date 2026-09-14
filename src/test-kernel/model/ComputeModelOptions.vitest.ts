@@ -285,10 +285,16 @@ describe('model availability', () => {
     // functions of that value — no store is consulted a second time while the
     // rows are built, so a credential change mid-render cannot split one
     // computation across two views of the host.
+    //
+    // `gpt56` is preferred through Copilot with no route discovered, which is
+    // the case whose sentence used to be worded at finish time out of the live
+    // preference and catalogue: it is the arm that can leak a host read past
+    // this boundary, so it is the one the counting store watches.
     const secrets = new FakeSecrets(OPENAI_KEY_SECRETS);
     const secretReads = vi.spyOn(secrets, 'get');
     const globalState = new CountingStateStore({
       [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),
+      [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gpt56'],
     });
     await installPlatform({}, { secrets, globalState });
     invalidateApiKeyCache();
@@ -301,13 +307,17 @@ describe('model availability', () => {
     const preferenceReadsAfterInputs = globalState.copilotPreferenceReads;
 
     const rows = modelOptionsFrom(inputs);
-    const reason = modelUnavailableReasonFrom(inputs, 'gpt55');
+    const available = modelUnavailableReasonFrom(inputs, 'gpt55');
+    const copilot = modelUnavailableReasonFrom(inputs, 'gpt56');
 
     expect(rows.map((row) => row.availability)).toEqual([
       'provider-key',
-      'provider-key',
+      'copilot-unavailable',
     ]);
-    expect(reason).toBeNull();
+    expect(available).toBeNull();
+    expect(copilot).toBe(
+      'VS Code does not currently offer "gpt56" through Copilot.',
+    );
     expect(secretReads.mock.calls).toHaveLength(readsAfterInputs);
     expect(globalState.copilotPreferenceReads).toBe(preferenceReadsAfterInputs);
   });
