@@ -27,6 +27,7 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
+  queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -1307,8 +1308,12 @@ describe('headless delegation', () => {
           }),
         );
         expect(capturedHandle?.deliveryTarget).toBeUndefined();
-        expect(defaultSession().followUps.getAll(PARENT_RUN_ID)).toEqual([]);
-        expect(defaultSession().followUps.getAll(CHILD_RUN_ID)).toEqual([]);
+        expect(yield* queuedFollowUps(defaultSession(), PARENT_RUN_ID)).toEqual(
+          [],
+        );
+        expect(yield* queuedFollowUps(defaultSession(), CHILD_RUN_ID)).toEqual(
+          [],
+        );
       }),
   );
 });

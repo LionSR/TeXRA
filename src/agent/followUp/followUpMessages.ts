@@ -5,8 +5,10 @@ import {
   parseWorkflowScriptDeliverySummary,
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
-import type { WorkflowScriptDeliverySummary } from '@shared/schemas';
-import type { FollowUpQueueBatchItem } from './FollowUpQueue';
+import type {
+  FollowUpContent,
+  WorkflowScriptDeliverySummary,
+} from '@shared/schemas';
 
 interface FollowUpDisplay {
   readonly text: string;
@@ -14,10 +16,8 @@ interface FollowUpDisplay {
   readonly workflowSummary?: WorkflowScriptDeliverySummary;
 }
 
-export function followUpDisplay(
-  followUp: FollowUpQueueBatchItem,
-): FollowUpDisplay {
-  if (followUp.displayText !== undefined) {
+export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
+  if (followUp.displayText != null) {
     return { text: followUp.displayText };
   }
   if (followUp.origin !== 'subagent_result') {
@@ -43,7 +43,7 @@ export function followUpDisplay(
 }
 
 export function userFollowUpInstruction(
-  followUps: readonly FollowUpQueueBatchItem[],
+  followUps: readonly FollowUpContent[],
 ): string | undefined {
   const instruction = followUps
     .filter((followUp) => followUp.origin === 'user')

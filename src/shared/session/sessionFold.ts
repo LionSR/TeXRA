@@ -1528,7 +1528,8 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
     case 'request.decided':
     case 'approval.policy':
     case 'inquiryThreadUpdated':
-    case 'updateQueuedFollowUps':
+    case 'followup.queued':
+    case 'followup.consumed':
     case 'run.removed':
       return run;
     case 'flow.step': {
@@ -1620,10 +1621,36 @@ function applySessionSlices(
           : view.inquiries.with(at, thread);
       return;
     }
-    case 'updateQueuedFollowUps':
-      if (runId !== null)
-        writableMap(view, 'queuedFollowUps').set(runId, event.messages);
+    case 'followup.queued': {
+      // A set keyed by follow-up id, like the requests above; a replayed row
+      // is below the pair's `latest` entry and never reaches here.
+      if (runId === null) return;
+      const queued = view.queuedFollowUps.get(runId) ?? [];
+      // A replayed delivery id names a follow-up the set already holds.
+      if (queued.some((f) => f.followUpId === event.followUpId)) return;
+      writableMap(view, 'queuedFollowUps').set(runId, [
+        ...queued,
+        {
+          followUpId: event.followUpId,
+          text: event.content.displayText ?? event.content.text,
+        },
+      ]);
       return;
+    }
+    case 'followup.consumed': {
+      const queued = runId === null ? [] : view.queuedFollowUps.get(runId);
+      if (runId === null || queued === undefined) return;
+      const remaining = queued.filter(
+        (followUp) => followUp.followUpId !== event.followUpId,
+      );
+      if (remaining.length === queued.length) return;
+      if (remaining.length === 0) {
+        writableMap(view, 'queuedFollowUps').delete(runId);
+      } else {
+        writableMap(view, 'queuedFollowUps').set(runId, remaining);
+      }
+      return;
+    }
     default:
       return;
   }

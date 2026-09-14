@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Queue } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { RunInput } from '@agent/followUp/RunInput';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
@@ -757,8 +758,23 @@ describe('NativeSubagentStrategy', () => {
         });
         mocks.readConfig.mockReturnValue(Effect.succeed(config));
         mocks.retrieveSessionResumeData.mockReturnValue(Effect.succeed(resume));
+        // The resumed flow takes its batch from the queue the child loop
+        // owns, as the tool-use loop's drain does.
+        const taken: unknown[] = [];
         mocks.resumeToolUseTurn.mockImplementation(
           async (_snapshot, options) => {
+            const batch = await Effect.runPromise(
+              Effect.flatMap(
+                RunInput.make,
+                (input) =>
+                  session.followUps.attachInput(childRunId, input)!.poll,
+              ),
+            );
+            taken.push(
+              batch === null || batch.synthetic
+                ? []
+                : batch.followUps.map((followUp) => followUp.content),
+            );
             options.onRun?.(handle);
             publishFlowStep(session, childRunId, 'waiting');
             return waitingTurn(
@@ -813,29 +829,20 @@ describe('NativeSubagentStrategy', () => {
           expect(
             mocks.resumeToolUseTurn.mock.calls.map((call) => call[0]),
           ).toEqual([resume, resume]);
-          expect(
-            mocks.resumeToolUseTurn.mock.calls.map(
-              (call) => call[1].drainedFollowUps,
-            ),
-          ).toEqual([
+          expect(taken).toEqual([
             [
               {
                 text: 'Also state exactly where finiteness is used.',
-                displayText: undefined,
-                mediaFiles: undefined,
                 origin: 'user',
               },
             ],
             [
               {
                 text: 'Now give the shortest equivalent statement.',
-                displayText: undefined,
-                mediaFiles: undefined,
                 origin: 'user',
               },
             ],
           ]);
-          expect(session.followUps.getAll(childRunId)).toEqual([]);
           yield* session.settlePublications();
           expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.WAITING);
           const resumedDeliveries = mocks.submitFollowUp.mock.calls.filter(

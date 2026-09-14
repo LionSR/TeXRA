@@ -69,6 +69,7 @@ import { DatabaseNotOwner } from '@shared/session/database';
 import {
   createProcessSession,
   publishTestRunStart,
+  queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -136,6 +137,12 @@ const foldParentPhase = (active: boolean) =>
     ]);
     yield* session.settlePublications();
   });
+
+/** The text of each follow-up a run's rows still queue. */
+const queuedTexts = (runId: RunId) =>
+  Effect.map(queuedFollowUps(session, runId), (followUps) =>
+    followUps.map((followUp) => followUp.text),
+  );
 
 /** Lets a forked loop reach its budget permit wait or its queue block. */
 const settle = Effect.promise(
@@ -362,7 +369,7 @@ describe('childRunLoop E2E fixtures', () => {
           interruptHandle.mockClear();
           registry.interruptAll();
           expect(interruptHandle).not.toHaveBeenCalled();
-          expect(session.followUps.getAll(runId)).toEqual([]);
+          expect(yield* queuedFollowUps(session, runId)).toEqual([]);
         } finally {
           registerLoop.mockRestore();
           interruptHandle.mockRestore();
@@ -561,9 +568,7 @@ describe('childRunLoop E2E fixtures', () => {
               { session, resumePort },
             ),
           ).toMatchObject({ status: 'failed' });
-          expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual([
-            'active parent',
-          ]);
+          expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(['active parent']);
 
           const releaseNativeChild = session.runs.reserveChildActivation({
             runId: 'da7a01' as RunId,
@@ -583,15 +588,13 @@ describe('childRunLoop E2E fixtures', () => {
             releaseNativeChild();
           }
 
-          const terminalQueue = session.followUps.getAll(PARENT_RUN_ID);
+          const terminalQueue = yield* queuedTexts(PARENT_RUN_ID);
           notifyProgress({ kind: 'started' });
-          expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual(
-            terminalQueue,
-          );
+          expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(terminalQueue);
 
           yield* foldParentPhase(true);
           notifyProgress({ kind: 'started' });
-          const progressQueue = session.followUps.getAll(PARENT_RUN_ID);
+          const progressQueue = yield* queuedTexts(PARENT_RUN_ID);
           expect(progressQueue).toHaveLength(terminalQueue.length + 1);
 
           yield* Deferred.succeed<FakeTurn, Error>(turn, {
@@ -604,9 +607,7 @@ describe('childRunLoop E2E fixtures', () => {
           resolveFormattedDelivery('delivered:done');
           yield* Fiber.join(loop);
 
-          expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual(
-            progressQueue,
-          );
+          expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(progressQueue);
           expect(mocks.submitFollowUp).not.toHaveBeenCalled();
         } finally {
           session.followUps.terminalize(PARENT_RUN_ID);
@@ -685,14 +686,12 @@ describe('childRunLoop E2E fixtures', () => {
             ),
           ).toBeUndefined();
           expect(admissions).toEqual(['delivered_live', 'delivered_live']);
-          const delivered = session.followUps.queue(parentLease).drainItems();
+          const delivered = yield* queuedFollowUps(session, PARENT_RUN_ID);
           expect(delivered.map((item) => item.text)).toEqual([
             'delivered:done',
             'delivered:done',
           ]);
-          expect(delivered[0]?.deliveryId).toBeDefined();
-          expect(delivered[1]?.deliveryId).toBeDefined();
-          expect(delivered[1]?.deliveryId).not.toBe(delivered[0]?.deliveryId);
+          expect(delivered[1]?.followUpId).not.toBe(delivered[0]?.followUpId);
           expect(session.followUps.hasLiveOwner(retryRunId)).toBe(false);
         } finally {
           session.followUps.release(parentLease, 'recoverable');
@@ -922,10 +921,10 @@ describe('childRunLoop E2E fixtures', () => {
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
 
         yield* Deferred.await(delivered);
-        // One macrotask lets the loop enter queue.waitAndDrainAll; either way
+        // One macrotask lets the loop enter its queue wait; either way
         // the loop ends with exactly one delivery.
         yield* settle;
-        // The loop is now blocked in queue.waitAndDrainAll; the loop's handler on
+        // The loop is now blocked in its queue wait; the loop's handler on
         // the run handle is the live stop target.
         expect(handle.interrupt()).toBe(true);
 

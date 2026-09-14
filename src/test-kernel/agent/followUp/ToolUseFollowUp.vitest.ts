@@ -3,14 +3,22 @@ import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 
 import * as resumability from '@agent/storage/resumability';
+import { RunInput } from '@agent/followUp/RunInput';
 import {
   presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import {
+  ToolUseFollowUpQueue,
+  type FollowUpConsumerLease,
+} from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId } from '@shared/schemas';
+import {
+  aggregateId,
+  type RunId,
+  type SessionEventDraft,
+} from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { generateRunId } from '@utils/core';
 
@@ -23,7 +31,53 @@ function mockTryResume(): Mock<() => Promise<boolean>> {
   return vi.fn(async () => true);
 }
 
+/**
+ * The admission boundary over a recorded publisher: `queued(runId)` is the
+ * text of every `followup.queued` row it published for the run, in order,
+ * which is what the run's next consumer seeds from.
+ */
+function recordedFollowUps() {
+  const rows: SessionEventDraft[] = [];
+  const followUps = new ToolUseFollowUpQueue((events) => {
+    rows.push(...events);
+  });
+  const queuedRows = (runId: RunId) =>
+    rows.flatMap((row) =>
+      row.type === 'followup.queued' &&
+      row.aggregateId === aggregateId('run', runId)
+        ? [row]
+        : [],
+    );
+  return {
+    followUps,
+    queuedRows,
+    queued: (runId: RunId) => queuedRows(runId).map((row) => row.content.text),
+  };
+}
+
+/** What a consumer attaching its queue to `lease` takes without blocking. */
+const taken = (
+  followUps: ToolUseFollowUpQueue,
+  lease: FollowUpConsumerLease,
+  seed: Parameters<RunInput['seed']>[0] = [],
+) =>
+  Effect.gen(function* () {
+    const input = followUps.attachInput(
+      lease.runId,
+      yield* RunInput.make,
+      lease,
+    )!;
+    input.seed(seed);
+    const batch = yield* input.poll;
+    return batch === null || batch.synthetic
+      ? []
+      : batch.followUps.map((followUp) => followUp.content.text);
+  });
+
+let recorded = recordedFollowUps();
+
 function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
+  recorded = recordedFollowUps();
   return {
     runs: { getToolUseFollowUpTarget: () => target },
     readRunRecords: () => Effect.succeed([]),
@@ -32,7 +86,7 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
     // lived on disk.
     claimOwner: () => Effect.fail(new Error('claim store unavailable')),
     status: { clearHold: () => {}, markUnavailable: () => {} },
-    followUps: new ToolUseFollowUpQueue(),
+    followUps: recorded.followUps,
   } as unknown as SessionHandle;
 }
 
@@ -73,12 +127,11 @@ describe('submitFollowUp', () => {
         }
 
         expect(tryResumeRun).not.toHaveBeenCalled();
-        expect(
-          session.followUps
-            .queue(child)
-            .drainItems()
-            .map((item) => item.text),
-        ).toEqual(['while waiting', 'between turns', 'during turn']);
+        expect(yield* taken(session.followUps, child)).toEqual([
+          'while waiting',
+          'between turns',
+          'during turn',
+        ]);
       }),
   );
 
@@ -99,8 +152,8 @@ describe('submitFollowUp', () => {
       ).toEqual({ status: 'sent' });
 
       expect(tryResumeRun).not.toHaveBeenCalled();
-      expect(session.followUps.queue(flow).drainItems()).toMatchObject([
-        { text: 'during active turn' },
+      expect(yield* taken(session.followUps, flow)).toEqual([
+        'during active turn',
       ]);
       expect(sent).toEqual([runId]);
     }),
@@ -123,8 +176,8 @@ describe('submitFollowUp', () => {
           }),
         ).toEqual({ status: 'queued' });
 
-        expect(session.followUps.queue(flow).drainItems()).toMatchObject([
-          { text: 'child progress' },
+        expect(yield* taken(session.followUps, flow)).toEqual([
+          'child progress',
         ]);
         expect(sent).toEqual([]);
       }),
@@ -155,7 +208,7 @@ describe('submitFollowUp', () => {
 
         expect(result).toMatchObject({ status: 'queued' });
         expect(tryResumeRun).not.toHaveBeenCalled();
-        expect(session.followUps.getAll(runId)).toEqual(['child progress']);
+        expect(recorded.queued(runId)).toEqual(['child progress']);
       }),
   );
 
@@ -194,7 +247,7 @@ describe('submitFollowUp', () => {
       expect(claimed).toHaveLength(1);
       expect(yield* Fiber.join(second)).toEqual({ status: 'queued' });
       expect(yield* Fiber.join(third)).toEqual({ status: 'queued' });
-      expect(session.followUps.getAll(runId)).toEqual(['one', 'two', 'three']);
+      expect(recorded.queued(runId)).toEqual(['one', 'two', 'three']);
 
       barrier.resolve(true);
       expect(yield* Fiber.join(first)).toEqual({ status: 'queued' });
@@ -228,9 +281,8 @@ describe('submitFollowUp', () => {
 
         const successor = session.followUps.claimLive(runId, 'child');
         expect(successor).toBeDefined();
-        expect(session.followUps.queue(successor!).getAll()).toEqual([
-          'keep this input',
-        ]);
+        // The input is the run's row, whichever consumer takes it next.
+        expect(recorded.queued(runId)).toEqual(['keep this input']);
       }),
   );
 
@@ -275,9 +327,7 @@ describe('submitFollowUp', () => {
         ).toEqual({ status: 'queued' });
 
         expect(deriveSpy).not.toHaveBeenCalled();
-        expect(session.followUps.getAll(runId)).toEqual([
-          'retained child result',
-        ]);
+        expect(recorded.queued(runId)).toEqual(['retained child result']);
       }),
   );
 
@@ -336,7 +386,12 @@ describe('submitFollowUp', () => {
           ).toEqual({ status: 'sent' });
         }
         expect(tryResumeRun).toHaveBeenCalledTimes(1);
-        expect(session.followUps.getAll(runId)).toEqual(['child result']);
+        expect(recorded.queuedRows(runId)).toMatchObject([
+          {
+            followUpId: delivery.deliveryId,
+            content: { text: 'child result' },
+          },
+        ]);
       }),
   );
 });
@@ -344,7 +399,7 @@ describe('submitFollowUp', () => {
 describe('ToolUseFollowUpQueue claim exclusivity', () => {
   it('makes recovery-vs-child claims exclusive in either order', () => {
     const runId = generateRunId();
-    const recoveryFirst = new ToolUseFollowUpQueue();
+    const recoveryFirst = recordedFollowUps().followUps;
     const submission = recoveryFirst.submit(
       runId,
       { text: 'recover' },
@@ -354,15 +409,222 @@ describe('ToolUseFollowUpQueue claim exclusivity', () => {
     expect(submission.kind === 'queued' && submission.lease).toBeTruthy();
     expect(recoveryFirst.claimLive(runId, 'child')).toBeUndefined();
 
-    const childFirst = new ToolUseFollowUpQueue();
+    const childFirst = recordedFollowUps().followUps;
     expect(childFirst.claimLive(runId, 'child')).toBeDefined();
     expect(childFirst.claimRecovery(runId)).toBeUndefined();
   });
 });
 
+describe('ToolUseFollowUpQueue ownership', () => {
+  it('allows exactly one live or recovery owner', () => {
+    const { followUps } = recordedFollowUps();
+    const id = generateRunId();
+    const child = followUps.claimLive(id, 'child');
+    expect(child).toBeDefined();
+    expect(followUps.claimLive(id, 'flow')).toBeUndefined();
+    expect(followUps.claimRecovery(id)).toBeUndefined();
+
+    expect(followUps.release(child!, 'recoverable')).toBe(true);
+    const recovery = followUps.claimRecovery(id);
+    expect(recovery).toBeDefined();
+    expect(followUps.claimLive(id, 'child')).toBeUndefined();
+  });
+
+  it.effect(
+    'seeds a successor generation from the rows, ahead of what it admitted, and ignores a stale release',
+    () =>
+      Effect.gen(function* () {
+        const { followUps, queued, queuedRows } = recordedFollowUps();
+        const id = generateRunId();
+        const child = followUps.claimLive(id, 'child')!;
+        followUps.submit(id, { text: 'before handoff' }, 'live_owner');
+        followUps.release(child, 'recoverable');
+        const recovery = followUps.claimRecovery(id)!;
+        expect(
+          followUps.submit(id, { text: 'during recovery' }, 'recoverable'),
+        ).toEqual({ kind: 'queued' });
+
+        expect(followUps.release(child, 'terminal')).toBe(false);
+        expect(queued(id)).toEqual(['before handoff', 'during recovery']);
+        // The successor's fold holds both rows; the one it was also handed
+        // is taken once, behind the row the fold alone holds.
+        expect(yield* taken(followUps, recovery, queuedRows(id))).toEqual([
+          'before handoff',
+          'during recovery',
+        ]);
+      }),
+  );
+
+  it('queues live_owner notifications on a recoverable entry without claiming', () => {
+    const { followUps, queued } = recordedFollowUps();
+    const id = generateRunId();
+    const child = followUps.claimLive(id, 'child')!;
+    followUps.release(child, 'recoverable');
+
+    expect(followUps.submit(id, { text: 'progress' }, 'live_owner')).toEqual({
+      kind: 'queued',
+    });
+    expect(queued(id)).toEqual(['progress']);
+    // The entry stays recoverable: a later recovery claim acquires it.
+    expect(followUps.claimRecovery(id)).toBeDefined();
+  });
+
+  it('forgets a terminal run so a late live-owner submission is refused', () => {
+    const { followUps, queued } = recordedFollowUps();
+    const id = generateRunId();
+    const lease = followUps.claimLive(id, 'flow')!;
+    followUps.release(lease, 'terminal');
+
+    expect(followUps.hasLiveOwner(id)).toBe(false);
+    expect(followUps.submit(id, { text: 'late' }, 'live_owner')).toEqual({
+      kind: 'refused',
+    });
+    expect(queued(id)).toEqual([]);
+  });
+
+  it('starts a new child generation for an authorized retry', () => {
+    const { followUps } = recordedFollowUps();
+    const id = generateRunId();
+    const first = followUps.claimChildRun(id)!;
+    followUps.release(first, 'terminal');
+
+    expect(followUps.submit(id, { text: 'late' }, 'live_owner')).toEqual({
+      kind: 'refused',
+    });
+
+    const retry = followUps.claimChildRun(id);
+    expect(retry?.kind).toBe('child');
+    expect(
+      followUps.submit(id, { text: 'current generation' }, 'live_owner'),
+    ).toEqual({ kind: 'queued' });
+    expect(followUps.hasLiveOwner(id)).toBe(true);
+  });
+
+  it('deletion invalidates a live generation', () => {
+    const { followUps } = recordedFollowUps();
+    const id = generateRunId();
+    const lease = followUps.claimLive(id, 'child')!;
+
+    expect(followUps.terminalize(id)).toBe(true);
+    expect(followUps.release(lease, 'recoverable')).toBe(false);
+    expect(followUps.submit(id, { text: 'late' }, 'live_owner')).toEqual({
+      kind: 'refused',
+    });
+  });
+
+  it('refuses to rebuild entries after dispose', () => {
+    const { followUps } = recordedFollowUps();
+    const liveId = generateRunId();
+    followUps.claimLive(liveId, 'flow');
+    followUps.dispose();
+
+    expect(followUps.claimLive(liveId, 'flow')).toBeUndefined();
+    expect(followUps.claimChildRun(generateRunId())).toBeUndefined();
+    expect(followUps.claimRecovery(liveId, true)).toBeUndefined();
+    expect(followUps.submit(liveId, { text: 'late' }, 'recoverable')).toEqual({
+      kind: 'refused',
+    });
+    expect(followUps.terminalize(liveId)).toBe(false);
+  });
+
+  it.effect('never lets a maintenance wake share a batch with follow-ups', () =>
+    Effect.gen(function* () {
+      const input = yield* RunInput.make;
+      input.seed([]);
+      input.wake('compact');
+      const followUp = (text: string) => ({
+        followUpId: text,
+        content: { text, origin: 'user' as const },
+      });
+      input.offer(followUp('first'));
+      input.offer(followUp('second'));
+
+      expect(yield* input.take).toEqual({ synthetic: true, text: 'compact' });
+      expect(yield* input.take).toEqual({
+        synthetic: false,
+        followUps: [followUp('first'), followUp('second')],
+      });
+      input.end();
+      expect(yield* input.take).toBeNull();
+    }),
+  );
+});
+
+describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
+  const childResult = (deliveryId: string) => ({
+    text: 'child result',
+    origin: 'subagent_result' as const,
+    deliveryId,
+  });
+
+  it('suppresses a replayed delivery id instead of queueing it again', () => {
+    const { followUps, queued } = recordedFollowUps();
+    const id = generateRunId();
+    followUps.claimLive(id, 'flow');
+    const delivery = childResult('exec-1:turn:1:delivery');
+
+    expect(followUps.submit(id, delivery, 'live_owner')).toEqual({
+      kind: 'delivered_live',
+    });
+    for (let replay = 0; replay < 100; replay++) {
+      expect(followUps.submit(id, delivery, 'live_owner')).toEqual({
+        kind: 'duplicate',
+      });
+    }
+    expect(queued(id)).toEqual(['child result']);
+  });
+
+  it('keeps distinct delivery ids distinct even with identical text', () => {
+    const { followUps, queuedRows } = recordedFollowUps();
+    const id = generateRunId();
+    followUps.claimLive(id, 'flow');
+
+    for (const deliveryId of ['d1', 'd2']) {
+      expect(
+        followUps.submit(
+          id,
+          { text: 'same text', origin: 'subagent_result', deliveryId },
+          'live_owner',
+        ),
+      ).toEqual({ kind: 'delivered_live' });
+    }
+    expect(queuedRows(id).map((row) => row.followUpId)).toEqual(['d1', 'd2']);
+  });
+
+  it('keeps suppressing a replayed id across a recoverable release', () => {
+    const { followUps, queued } = recordedFollowUps();
+    const id = generateRunId();
+    const child = followUps.claimLive(id, 'child')!;
+    const delivery = childResult('d1');
+    followUps.submit(id, delivery, 'live_owner');
+    followUps.release(child, 'recoverable');
+
+    expect(followUps.submit(id, delivery, 'recoverable')).toEqual({
+      kind: 'duplicate',
+    });
+    expect(queued(id)).toEqual(['child result']);
+  });
+
+  it('never suppresses input that carries no delivery id', () => {
+    const { followUps, queuedRows } = recordedFollowUps();
+    const id = generateRunId();
+    followUps.claimLive(id, 'flow');
+
+    followUps.submit(id, { text: 'repeat me' }, 'live_owner');
+    followUps.submit(id, { text: 'repeat me' }, 'live_owner');
+
+    const rows = queuedRows(id);
+    expect(rows.map((row) => row.content.text)).toEqual([
+      'repeat me',
+      'repeat me',
+    ]);
+    expect(rows[0]!.followUpId).not.toBe(rows[1]!.followUpId);
+  });
+});
+
 describe('ToolUseFollowUpQueue terminal tombstones', () => {
   it('evicts the oldest tombstone at the historical cap', () => {
-    const followUps = new ToolUseFollowUpQueue();
+    const { followUps } = recordedFollowUps();
     const runIds = Array.from(
       { length: ToolUseFollowUpQueue.TERMINALIZED_CAP + 1 },
       () => generateRunId(),

@@ -1,39 +1,67 @@
+import { randomUUID } from 'node:crypto';
+
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import type { RunId } from '@shared/schemas';
-import { throwAggregated } from '@utils/core';
+import {
+  aggregateId,
+  type FollowUpContent,
+  type RunId,
+  type SessionEventDraft,
+} from '@shared/schemas';
 import {
   createBoundedIdSet,
   type BoundedIdSet,
 } from '@utils/core/boundedIdSet';
-import { FollowUpQueue, type FollowUpQueueInput } from './FollowUpQueue';
+import type { QueuedFollowUp, RunInput } from './RunInput';
 
 const logger = createLog('ToolUseFollowUpQueue');
+
+/** What a producer hands the admission boundary. */
+export interface FollowUpQueueInput {
+  readonly text: string;
+  readonly displayText?: string;
+  /** Media file paths (e.g. pasted images) attached to this user follow-up. */
+  readonly mediaFiles?: readonly string[];
+  readonly origin?: FollowUpContent['origin'];
+  /**
+   * Stable logical identity of one delivery its producer may repeat: a
+   * child-run result (#9531), an inquiry continuation re-delivered after a
+   * decision that failed before the queue saw it. It becomes the queued
+   * row's `followUpId`, and the admission boundary suppresses replays of an
+   * id it already admitted; inputs without one get a minted id and are never
+   * suppressed.
+   */
+  readonly deliveryId?: string;
+}
 
 type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
 
 interface QueueEntry {
-  readonly queue: FollowUpQueue;
   /**
    * Delivery ids already admitted for this run (#9531). In-memory,
-   * transport-level replay suppression only — NOT crash-safe exactly-once: a
-   * restart (or LRU eviction past the cap) forgets admitted ids, so a replay
-   * after that is admitted again. An outbox/idempotent parent inbox is
-   * deferred until crash/restart tests reproduce duplicate or lost insertion.
+   * transport-level replay suppression only: a restart (or LRU eviction past
+   * the cap) forgets admitted ids, so a replay after that is admitted again.
    */
   readonly admittedDeliveryIds: BoundedIdSet<string>;
-  /** At most one consumer; an unowned entry is a recoverable persisted cursor. */
+  /** At most one consumer; an unowned entry is a recoverable persisted run. */
   owner?: FollowUpConsumerLease;
+  /**
+   * The owner's input queue, once its consumer attached one. Before that,
+   * the follow-ups committed since the claim wait in `held`, so the queue
+   * the consumer seeds from the fold still receives them after the rows
+   * the fold already holds.
+   */
+  input?: RunInput;
+  held: QueuedFollowUp[];
 }
 
 /**
- * Exclusive authority to consume one run's follow-up queue.
+ * Exclusive authority to consume one run's follow-up input.
  *
  * The manager issues at most one lease per entry. Claims and releases are
  * synchronous, and a lease is valid only while it is the entry's owner, so a
  * release from an older flow/child cannot clear or terminalize a successor.
- * Only the lease may wait, drain, or dispose; producers submit through the
- * manager and cannot manufacture a consumer.
+ * Producers submit through the manager and cannot manufacture a consumer.
  */
 export interface FollowUpConsumerLease {
   readonly runId: RunId;
@@ -47,11 +75,10 @@ export interface FollowUpRecoveryLease
 
 /**
  * How one submission landed: a replayed delivery id, input a live flow
- * consumer will read this turn, input parked on the run's queue (with the
- * recovery lease when this submission claimed it), or a refusal — the
- * boundary has no entry to join and will not create one (disposed session,
- * terminalized run, or a live-owner submission to a run whose entry is
- * gone).
+ * consumer will read this turn, input queued on the run (with the recovery
+ * lease when this submission claimed it), or a refusal — the boundary has
+ * no entry to join and will not create one (disposed session, terminalized
+ * run, or a live-owner submission to a run whose entry is gone).
  */
 type FollowUpSubmission =
   | { readonly kind: 'duplicate' }
@@ -60,18 +87,23 @@ type FollowUpSubmission =
   | { readonly kind: 'refused' };
 
 /**
- * Session-owned continuation boundary indexed by run ID.
+ * Session-owned admission boundary indexed by run ID.
+ *
+ * An admitted follow-up is a `followup.queued` row on the run, published
+ * through the session's one publisher at the moment of admission, so it
+ * commits ahead of anything its consumer later appends. The row is the
+ * input: an owned entry also hands it to its consumer's queue, and an
+ * unowned run's next consumer seeds that queue from the fold.
  *
  * An owned entry has a live or recovering consumer, an unowned entry is a
- * recoverable persisted cursor, and a terminal entry is gone. A run
- * whose queue was ended by {@link terminalize} (its entry deleted, or its
- * parked run torn down) is marked so that a producer that is not an owner,
- * such as a child whose activation outlives its parent's teardown, cannot
- * recreate the queue and trigger a resume of a run that is gone; only an
- * explicit claim reopens the run. Run ids are minted once per run, so
- * the mark never collides with a later run. Tombstones are bounded; after
- * eviction, callers must revalidate persisted authority before recoverable
- * admission.
+ * recoverable persisted run, and a terminal entry is gone. A run whose
+ * entry was ended by {@link terminalize} (its run deleted, or its parked
+ * run torn down) is marked so that a producer that is not an owner, such as
+ * a child whose activation outlives its parent's teardown, cannot recreate
+ * the entry and trigger a resume of a run that is gone; only an explicit
+ * claim reopens the run. Run ids are minted once per run, so the mark never
+ * collides with a later run. Tombstones are bounded; after eviction,
+ * callers must revalidate persisted authority before recoverable admission.
  */
 export class ToolUseFollowUpQueue {
   static readonly DELIVERY_ID_CAP = 1000;
@@ -83,6 +115,11 @@ export class ToolUseFollowUpQueue {
   private readonly releaseObservers = new Set<(runId: RunId) => void>();
   private readonly sentObservers = new Set<(runId: RunId) => void>();
   private disposed = false;
+
+  constructor(
+    /** The session's ordered publisher (`SessionHandle.publish`). */
+    private readonly publish: (events: readonly SessionEventDraft[]) => void,
+  ) {}
 
   onRelease(observer: (runId: RunId) => void): () => void {
     if (this.disposed) return () => {};
@@ -126,10 +163,7 @@ export class ToolUseFollowUpQueue {
    * run lease.
    */
   claimChildRun(runId: RunId): FollowUpConsumerLease | undefined {
-    if (this.disposed) return undefined;
-    this.terminalized.delete(runId);
-    const entry = this.entries.get(runId) ?? this.createEntry(runId);
-    return this.claim(entry, runId, 'child');
+    return this.claimLive(runId, 'child');
   }
 
   /** Claim persisted recovery before any asynchronous resume preparation. */
@@ -156,11 +190,11 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Submit through the queue's ownership boundary. `live_owner` joins a live
-   * flow or child consumer, or enqueues without claiming when the entry has no
-   * live owner (so live notifications can reach a WAITING parent queue).
-   * `recoverable` admits a registry-approved persisted cursor and creates its
-   * queue when needed.
+   * Submit through the ownership boundary. `live_owner` joins a live flow or
+   * child consumer, or queues without claiming when the entry has no live
+   * owner (so live notifications can reach a WAITING parent). `recoverable`
+   * admits a registry-approved persisted run and creates its entry when
+   * needed.
    */
   submit(
     runId: RunId,
@@ -192,18 +226,22 @@ export class ToolUseFollowUpQueue {
       entry.admittedDeliveryIds.add(deliveryId);
     }
 
-    entry.queue.enqueue(followUp);
-    logger.debug(`Queued follow-up for run ${runId}.`);
     const owner = entry.owner;
-    if (owner?.kind === 'flow') return { kind: 'delivered_live' };
-    // Live notifications use the live_owner path to reach WAITING parents
-    // whose retained queue will be consumed when the run resumes.
-    if (owner !== undefined || admission === 'live_owner') {
-      return { kind: 'queued' };
+    let submission: FollowUpSubmission;
+    if (owner?.kind === 'flow') {
+      submission = { kind: 'delivered_live' };
+    } else if (owner !== undefined || admission === 'live_owner') {
+      // Live notifications use the live_owner path to reach WAITING parents,
+      // whose next consumer seeds its queue from the row.
+      submission = { kind: 'queued' };
+    } else {
+      // The recovery claim precedes the row, so the input it admits is
+      // already the recovering consumer's.
+      const lease = this.claim(entry, runId, 'recovery');
+      submission = lease ? { kind: 'queued', lease } : { kind: 'queued' };
     }
-
-    const lease = this.claim(entry, runId, 'recovery');
-    return lease ? { kind: 'queued', lease } : { kind: 'queued' };
+    this.queue(runId, entry, followUp);
+    return submission;
   }
 
   /** Read-only lifecycle probe used by diagnostics and teardown assertions. */
@@ -212,20 +250,42 @@ export class ToolUseFollowUpQueue {
     return owner?.kind === 'flow' || owner?.kind === 'child';
   }
 
-  /** Inner child/recovery flows borrow the queue their outer owner consumes. */
-  externallyOwnedQueue(runId: RunId): FollowUpQueue | undefined {
-    const entry = this.entries.get(runId);
-    const kind = entry?.owner?.kind;
-    return kind === 'child' || kind === 'recovery' ? entry?.queue : undefined;
-  }
-
-  queue(lease: FollowUpConsumerLease): FollowUpQueue {
-    return this.requireOwner(lease).queue;
+  /** Whether `lease`'s generation holds input its consumer has not taken. */
+  hasQueued(lease: FollowUpConsumerLease): boolean {
+    const entry = this.entryForLease(lease);
+    if (!entry) return false;
+    return entry.input ? entry.input.hasQueued() : entry.held.length > 0;
   }
 
   /**
-   * Release the entry `lease` owns, if it still does. `recoverable` keeps
-   * queued data for a successor claim; `terminal` disposes it permanently.
+   * Attach a consumer's input queue to the run's current owner and return the
+   * queue it consumes: `lease`'s own entry, or, without a lease, the entry a
+   * child or recovery owner holds (an inner loop reads the queue its outer
+   * owner consumes). A queue already attached for this owner wins, so every
+   * consumer of one generation reads one queue. `undefined` when there is no
+   * such owner.
+   */
+  attachInput(
+    runId: RunId,
+    input: RunInput,
+    lease?: FollowUpConsumerLease,
+  ): RunInput | undefined {
+    const entry = this.entries.get(runId);
+    const owner = entry?.owner;
+    if (!entry || !owner) return undefined;
+    if (lease ? owner !== lease : owner.kind === 'flow') return undefined;
+    if (entry.input) return entry.input;
+    for (const followUp of entry.held) input.offer(followUp);
+    entry.held = [];
+    entry.input = input;
+    return input;
+  }
+
+  /**
+   * Release the entry `lease` owns, if it still does. Its input queue ends
+   * either way: queued rows stay on the run for the next consumer to seed
+   * from. `recoverable` keeps the entry for a successor claim; `terminal`
+   * forgets it.
    */
   release(
     lease: FollowUpConsumerLease,
@@ -234,8 +294,8 @@ export class ToolUseFollowUpQueue {
     const entry = this.entryForLease(lease);
     if (!entry) return false;
     entry.owner = undefined;
+    this.endInput(entry);
     if (next === 'recoverable') return true;
-    entry.queue.dispose();
     this.entries.delete(lease.runId);
     logger.debug(`Terminalized follow-up queue for run ${lease.runId}.`);
     this.notifyReleaseObservers(lease.runId);
@@ -243,13 +303,13 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * End a run's queue: any outstanding lease becomes stale immediately, and
-   * no producer can recreate the queue until an explicit claim reopens it.
+   * End a run's entry: any outstanding lease becomes stale immediately, and
+   * no producer can recreate the entry until an explicit claim reopens it.
    */
   terminalize(runId: RunId): boolean {
     if (this.disposed) return false;
     const entry = this.entries.get(runId);
-    entry?.queue.dispose();
+    if (entry) this.endInput(entry);
     this.entries.delete(runId);
     this.terminalized.add(runId);
     this.notifyReleaseObservers(runId);
@@ -257,30 +317,58 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Dispose the session-owned boundary: every live entry queue, then the
-   * entry map and release observers. The state clears in a `finally` so one
-   * queue's disposal failure cannot leave the map or observers behind.
-   * Entry-creating paths refuse to rebuild afterwards, so a late detached
-   * producer cannot leak a queue nobody will drain.
+   * Dispose the session-owned boundary: end every attached queue, then drop
+   * the entry map and release observers. Entry-creating paths refuse to
+   * rebuild afterwards, so a late detached producer cannot leak an entry
+   * nobody will drain.
    */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    const failures: unknown[] = [];
-    try {
-      for (const entry of this.entries.values()) {
-        try {
-          entry.queue.dispose();
-        } catch (error) {
-          failures.push(error);
-        }
-      }
-    } finally {
-      this.entries.clear();
-      this.terminalized.clear();
-      this.releaseObservers.clear();
-    }
-    throwAggregated(failures, 'Multiple follow-up queues failed to dispose');
+    for (const entry of this.entries.values()) this.endInput(entry);
+    this.entries.clear();
+    this.terminalized.clear();
+    this.releaseObservers.clear();
+  }
+
+  /**
+   * Admit one follow-up as its row. Published on the session's one
+   * publisher, the row takes its commit position now, ahead of any consume
+   * batch its consumer appends later; a publication failure is logged by the
+   * publisher as itself. An owned entry also hands the follow-up to its
+   * consumer.
+   */
+  private queue(
+    runId: RunId,
+    entry: QueueEntry,
+    input: FollowUpQueueInput,
+  ): void {
+    const followUp: QueuedFollowUp = {
+      followUpId: input.deliveryId ?? randomUUID(),
+      content: {
+        text: input.text,
+        displayText: input.displayText,
+        mediaFiles: input.mediaFiles ? [...input.mediaFiles] : undefined,
+        origin: input.origin ?? 'user',
+      },
+    };
+    this.publish([
+      {
+        type: 'followup.queued',
+        aggregateId: aggregateId('run', runId),
+        ...followUp,
+      },
+    ]);
+    logger.debug(`Queued follow-up for run ${runId}.`);
+    if (!entry.owner) return;
+    if (entry.input) entry.input.offer(followUp);
+    else entry.held.push(followUp);
+  }
+
+  private endInput(entry: QueueEntry): void {
+    entry.input?.end();
+    entry.input = undefined;
+    entry.held = [];
   }
 
   private notifyReleaseObservers(runId: RunId): void {
@@ -295,17 +383,12 @@ export class ToolUseFollowUpQueue {
     }
   }
 
-  /** Presentation-only snapshot; does not grant consumption rights. */
-  getAll(runId: RunId): string[] {
-    return this.entries.get(runId)?.queue.getAll() ?? [];
-  }
-
   private createEntry(runId: RunId): QueueEntry {
     const entry: QueueEntry = {
-      queue: new FollowUpQueue(),
       admittedDeliveryIds: createBoundedIdSet(
         ToolUseFollowUpQueue.DELIVERY_ID_CAP,
       ),
+      held: [],
     };
     this.entries.set(runId, entry);
     return entry;
@@ -328,16 +411,6 @@ export class ToolUseFollowUpQueue {
     };
     entry.owner = lease;
     return lease;
-  }
-
-  private requireOwner(lease: FollowUpConsumerLease): QueueEntry {
-    const entry = this.entryForLease(lease);
-    if (!entry) {
-      throw new Error(
-        `Follow-up consumer lease is stale for run ${lease.runId}.`,
-      );
-    }
-    return entry;
   }
 
   /** The entry `lease` still owns, or `undefined` if it has gone stale. */

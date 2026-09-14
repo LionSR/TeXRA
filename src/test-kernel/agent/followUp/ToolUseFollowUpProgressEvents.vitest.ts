@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { RunInput } from '@agent/followUp/RunInput';
 import {
   notifyFollowUpSent,
   submitFollowUp,
@@ -16,7 +17,10 @@ import {
 } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  queuedFollowUps,
+} from '@test/support/sessionTestUtils';
 import { listenForFollowUp } from '@tools/executions/waitCoordination';
 
 import {
@@ -100,9 +104,15 @@ describe('tool-use follow-up progress events', () => {
     );
 
     expect(result).toEqual({ status: 'sent' });
-    expect(session.followUps.queue(lease).drainItems()).toMatchObject([
-      { text: 'please continue', origin: 'user' },
-    ]);
+    const input = session.followUps.attachInput(
+      runId,
+      await Effect.runPromise(RunInput.make),
+      lease,
+    )!;
+    input.seed([]);
+    expect(await Effect.runPromise(input.poll)).toMatchObject({
+      followUps: [{ content: { text: 'please continue', origin: 'user' } }],
+    });
     expect(sent.sent).toEqual([runId]);
     expect(run.events).toEqual([]);
   });
@@ -169,7 +179,9 @@ describe('tool-use follow-up progress events', () => {
 
     // The run's own terminal row is the refusal: it finished.
     expect(result).toEqual({ status: 'failed', reason: 'finished' });
-    expect(defaultSession().followUps.getAll(runId)).toEqual([]);
+    expect(
+      await Effect.runPromise(queuedFollowUps(defaultSession(), runId)),
+    ).toEqual([]);
   });
 
   it('queues follow-ups for resuming runs through registry admission', async () => {
@@ -188,9 +200,11 @@ describe('tool-use follow-up progress events', () => {
       // The fake platform's resume port refuses, so the input stays queued
       // behind a failed wake.
       expect(result).toEqual({ status: 'queued', wake: 'failed' });
-      expect(defaultSession().followUps.getAll(resumingRunId)).toEqual([
-        'queued while resuming',
-      ]);
+      expect(
+        await Effect.runPromise(
+          queuedFollowUps(defaultSession(), resumingRunId),
+        ),
+      ).toMatchObject([{ text: 'queued while resuming' }]);
     } finally {
       defaultSession().followUps.terminalize(resumingRunId);
     }

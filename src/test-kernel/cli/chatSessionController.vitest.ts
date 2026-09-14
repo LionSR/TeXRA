@@ -34,8 +34,7 @@ const mocks = vi.hoisted(() => ({
   clearLocalTranscript: vi.fn(),
   moveLocalTranscriptToRun: vi.fn(),
   reportRequestDefect: vi.fn(),
-  followUpEnqueue: vi.fn(),
-  followUpQueueForLease: vi.fn(),
+  followUpSubmit: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -315,9 +314,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       })),
       useRecovery: vi.fn((recovery: FollowUpRecoveryLease) => recovery),
       release: vi.fn(),
-      queue: mocks.followUpQueueForLease.mockReturnValue({
-        restore: mocks.followUpEnqueue,
-      }),
+      submit: mocks.followUpSubmit,
     },
     approvals: { registerRunParent: vi.fn() },
     runs,
@@ -1480,12 +1477,11 @@ describe('createChatSessionController', () => {
 
     await expect(launcherResume).resolves.toBe(true);
     await expect(admission.completion).resolves.toBe(true);
-    expect(mocks.followUpQueueForLease).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'recovery' }),
-    );
-    expect(mocks.followUpEnqueue).toHaveBeenCalledWith([
+    expect(mocks.followUpSubmit).toHaveBeenCalledWith(
+      'a11111',
       { text: 'Transfer this accepted message.' },
-    ]);
+      'live_owner',
+    );
   });
 
   it('holds a message submitted while interruption teardown finishes', async () => {

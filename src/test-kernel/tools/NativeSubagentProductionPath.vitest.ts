@@ -703,7 +703,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await waitForCompletedResumes(1);
 
     // Submit two follow-ups concurrently, before the child drains the queue.
-    // The loop drains the follow-up batch (waitAndDrainAll) and runs one turn
+    // The resumed child takes the whole queued batch and runs one turn
     // with the combined batch, so both instructions reach the child in one
     // ordered turn rather than sharing/overwriting one turn result.
     const [first, second] = await Promise.all([

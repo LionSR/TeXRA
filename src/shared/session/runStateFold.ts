@@ -81,7 +81,8 @@ export type RunLedgerDraft = Extract<
       | 'tool.end'
       | 'stream.end'
       | 'request.opened'
-      | 'request.decided';
+      | 'request.decided'
+      | 'followup.consumed';
   }
 >;
 
@@ -148,6 +149,12 @@ type PendingIntent = {
   readonly approvalRequestId: string | null;
 };
 
+/** A follow-up queued for the run and not yet consumed, as its row holds it. */
+type PendingFollowUp = Pick<
+  Extract<SessionEvent, { type: 'followup.queued' }>,
+  'followUpId' | 'content'
+>;
+
 type RequestState = {
   readonly payload: PermissionPayload;
   readonly resolved: boolean;
@@ -197,6 +204,20 @@ export type RunState = {
   readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
   /** By request id, with its recovery binding resolved at each snapshot. */
   readonly requests: Readonly<Record<string, RequestState>>;
+  /**
+   * Queued follow-ups without a `followup.consumed`, in commit order: what
+   * a run's input queue is seeded from on start and resume (C3). A loop's
+   * live state folds only the batches it appends, so a follow-up another
+   * writer queued while the loop ran is in its queue, not here; `load`
+   * folds every row and holds them all.
+   */
+  readonly followUps: readonly PendingFollowUp[];
+  /**
+   * Every follow-up id a queued row named, consumed or not: the unique key.
+   * A delivery its producer replays after a restart (#9531) is a second row
+   * under an id already here, and it is queued once, never twice.
+   */
+  readonly followUpIds: ReadonlySet<string>;
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
@@ -207,12 +228,13 @@ type LedgerRowType = RunLedgerDraft['type'];
 
 /**
  * Display rows ignored by name. Anything on the run aggregate that is neither
- * here nor a ledger arm is `unknown-run-row`, never a quiet `default`. The
- * record is total over the event vocabulary, so a new display arm is a
- * compile error here until it is classified.
+ * here nor a folded arm (a ledger arm, or `followup.queued`, which its
+ * producer publishes outside `appendBatch`) is `unknown-run-row`, never a
+ * quiet `default`. The record is total over the event vocabulary, so a new
+ * display arm is a compile error here until it is classified.
  */
 const IGNORED_ROW_TYPES: Readonly<
-  Record<Exclude<SessionEvent['type'], LedgerRowType>, true>
+  Record<Exclude<SessionEvent['type'], LedgerRowType | 'followup.queued'>, true>
 > = {
   'run.start': true,
   'run.activate': true,
@@ -229,7 +251,6 @@ const IGNORED_ROW_TYPES: Readonly<
   updateCompileFailures: true,
   goalStateChanged: true,
   inquiryThreadUpdated: true,
-  updateQueuedFollowUps: true,
   'approval.policy': true,
   log: true,
   'stage.start': true,
@@ -299,6 +320,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingResponse: null,
   pendingIntents: byId([]),
   requests: byId([]),
+  followUps: [],
+  followUpIds: new Set(),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
 });
@@ -1003,6 +1026,40 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
             { ...request, resolved: true, decision: row.decision },
           ],
         ]),
+      });
+    }
+    case 'followup.queued': {
+      // Queued input may precede the run's opening (a follow-up admitted
+      // before the first batch commits), so it folds onto a fresh state the
+      // way the opening message does. It is not a row the opening snapshot
+      // is checked against, so `rowsBeforeSnapshot` stays put. A replayed
+      // delivery id is the same follow-up, already queued once: not folded.
+      if (current?.followUpIds.has(row.followUpId)) return null;
+      const state = current ?? freshRunState(commit);
+      return Result.succeed({
+        ...state,
+        commit,
+        followUps: [
+          ...state.followUps,
+          { followUpId: row.followUpId, content: row.content },
+        ],
+        followUpIds: new Set([...state.followUpIds, row.followUpId]),
+      });
+    }
+    case 'followup.consumed': {
+      // The consumer commits this with the message the follow-up became. On
+      // the live path the queued row may be one this state never folded
+      // (another writer queued it while the loop ran), so an id absent here
+      // consumes nothing; on `load` every queued row precedes the
+      // consumption naming it, since a consumer only takes a follow-up whose
+      // row its producer had already enqueued on the one publisher.
+      if (current === null) return null;
+      return Result.succeed({
+        ...current,
+        commit,
+        followUps: current.followUps.filter(
+          (f) => f.followUpId !== row.followUpId,
+        ),
       });
     }
     default:

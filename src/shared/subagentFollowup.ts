@@ -1,6 +1,6 @@
 // Host-neutral parsing/formatting for the child-run delivery-envelope XML
 // blocks whose tag vocabulary @shared/deliveryTags owns (`DELIVERY_TAGS`).
-// These blocks are FollowUpQueue messages addressed to the orchestrator
+// These blocks are queued follow-up messages addressed to the orchestrator
 // *model*, injected into the conversation as user turns.
 //
 // Both hosts render them: the CLI transcript collapses each block to a terse

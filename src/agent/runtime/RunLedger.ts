@@ -337,7 +337,14 @@ export const runLedgerLayer: Layer.Layer<
         });
       }
       const state = folded.success;
-      if (state === null) return null;
+      // Queued follow-ups alone do not open a run: a launch that has not
+      // committed its first batch is still the fresh-run branch, and its
+      // input queue already holds what was queued.
+      if (
+        state === null ||
+        (state.phase === null && state.rowsBeforeSnapshot === 0)
+      )
+        return null;
       if (state.phase === null) {
         const cause = new RunLedgerInconsistent({
           reason: 'out-of-order',

@@ -18,7 +18,7 @@ import {
   runUnreadableMessage,
 } from '@shared/runs/runStatusDisplay';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { FollowUpQueueInput } from './FollowUpQueue';
+import type { FollowUpQueueInput } from './ToolUseFollowUpQueueManager';
 
 /**
  * Why a submission could not be admitted, worded for the user by

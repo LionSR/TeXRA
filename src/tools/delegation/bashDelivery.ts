@@ -2,7 +2,7 @@
  * Formatting utilities for background-bash result delivery.
  *
  * Format helpers convert a completed or failed background bash run into
- * structured XML strings for FollowUpQueue delivery to the orchestrator,
+ * structured XML strings for follow-up delivery to the orchestrator,
  * including a tail/head output excerpt for long runs.
  */
 
@@ -45,7 +45,7 @@ export interface BashDeliveryStreamExcerpt {
 
 /**
  * Format a completed background bash result as a delivery message.
- * Injected into the orchestrator's FollowUpQueue.
+ * Queued as a follow-up for the orchestrator.
  *
  * `stdout.tail`/`stderr.tail` are accumulated from `onStdout`/`onStderr`
  * chunks as the process runs, since `buffer: false` means `result.stdout` is

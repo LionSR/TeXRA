@@ -218,6 +218,14 @@ const PendingRequestSchema = z.object({
   thread: z.string().nullable(),
 });
 
+/** A queued follow-up as a composer lists it: the row's key and the text it
+ *  shows (`displayText`, else `text`). Per run a set keyed by `followUpId`
+ *  (5.2): queued without consumed, in queue order. */
+const QueuedFollowUpViewSchema = z.object({
+  followUpId: z.string(),
+  text: z.string(),
+});
+
 const SessionViewSchema = z.object({
   key: SessionKeySchema,
   runs: z.map(RunIdSchema, RunViewSchema),
@@ -241,7 +249,7 @@ const SessionViewSchema = z.object({
   /** Latest snapshot per run. */
   policy: z.map(RunIdSchema, ApprovalPolicySnapshotSchema),
   inquiries: z.array(InquiryThreadUpdatedEventSchema),
-  queuedFollowUps: z.map(RunIdSchema, z.array(z.string())),
+  queuedFollowUps: z.map(RunIdSchema, z.array(QueuedFollowUpViewSchema)),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
 

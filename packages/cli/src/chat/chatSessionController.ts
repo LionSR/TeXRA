@@ -858,9 +858,9 @@ export function createChatSessionController(
         // must see the new queue owner before it can attempt a second resume.
         if (!options.onFollowUpQueueReady) {
           const previous = supersedeInterruptedRecovery();
-          runtimeSession.followUps
-            .queue(recovery)
-            .restore(previous?.followUps ?? []);
+          for (const followUp of previous?.followUps ?? []) {
+            runtimeSession.followUps.submit(runId, followUp, 'live_owner');
+          }
           if (previous?.followUps.length)
             runtimeSession.followUps.notifySent(recovery.runId);
         }

@@ -23,12 +23,11 @@ import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import { stepRow } from '@agent/runtime/loop/rows';
 import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
+import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
 import type {
-  FollowUpQueue,
-  FollowUpQueueBatchItem,
+  FollowUpConsumerLease,
   FollowUpQueueInput,
-} from '@agent/followUp/FollowUpQueue';
-import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
+} from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   enqueueLiveFollowUp,
   submitFollowUp,
@@ -39,6 +38,7 @@ import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   RUN_OUTCOME,
   aggregateId,
+  type FollowUpContent,
   type ResultMeta,
   type RunId,
   type RunOutcome,
@@ -138,10 +138,11 @@ interface ChildRunPort {
  *
  * `launch` produces the first turn's outcome (agent-CLI: delegates to
  * `runTurn` with the seeded initial prompt; native: the `executeAgent`
- * call itself). `runTurn` produces every following turn's outcome, given the
- * follow-up items the loop drained since the previous turn (agent-CLI joins
- * their text into one prompt; native injects the already-consumed batch at
- * the resumed flow's persisted WAITING boundary without re-enqueueing it).
+ * call itself). `runTurn` produces every following turn's outcome once the
+ * child's queue has input: an agent-CLI child is handed the batch the loop
+ * took and consumed (it joins their text into one prompt); a native child is
+ * handed none, because its resumed flow takes and consumes its own batch
+ * from the same queue.
  *
  * Per-turn call order: `launch`/`runTurn` → `getUsage` (turn summary) →
  * `isTurnError` → `onTurnError` (if true) → `publishUsage` →
@@ -208,7 +209,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
    * `isTerminal` is always true on that child's first turn.
    */
   runTurn?(
-    followUps: readonly FollowUpQueueBatchItem[],
+    followUps: readonly FollowUpContent[],
     ports: ChildRunPorts,
     signal: AbortSignal,
   ): Effect.Effect<TTurn, Error, R>;
@@ -346,13 +347,13 @@ export interface ChildRunLoopParams<TTurn, R = never> {
  * path, which joins this loop's live lease instead of creating a competing
  * continuation.
  *
- * A running turn is reached through `signal` alone: every strategy binds the
- * turn it launches to it, and a native turn's flow subscribes to its own run
- * signal downstream of that binding.
+ * A running turn and the between-turn wait are reached through `signal`
+ * alone: every strategy binds the turn it launches to it, a native turn's
+ * flow subscribes to its own run signal downstream of that binding, and the
+ * loop races its queue wait against it.
  */
 class ChildRunInterruptible implements RunInterruptHandler {
   private readonly controller = new AbortController();
-  private queue: FollowUpQueue | null = null;
 
   constructor(
     /**
@@ -365,11 +366,6 @@ class ChildRunInterruptible implements RunInterruptHandler {
 
   interrupt(): void {
     this.controller.abort();
-    this.queue?.cancelWait();
-  }
-
-  setQueue(q: FollowUpQueue): void {
-    this.queue = q;
   }
 
   isInterrupted(): boolean {
@@ -524,8 +520,10 @@ function commitChildTurn(
 
 /**
  * Move an agent-CLI child's phase across its park (one run model, 3.3):
- * `waiting` before the loop blocks on its queue, `turn.begin` when the drained
- * batch starts the next turn. Written with the loops' own step-row
+ * `waiting` before the loop blocks on its queue, `turn.begin` when the taken
+ * batch starts the next turn, committed with that batch's
+ * `followup.consumed` rows (C3): the batch is this turn's prompt, and no
+ * ledger message carries it. Written with the loops' own step-row
  * constructor, so the child protocol carries no second phase vocabulary. A run
  * this loop is the only driver of has no `flow.snapshot` and no rounds: its
  * family is the interactive one its turns are, and the turn index is its one
@@ -539,9 +537,15 @@ function commitFlowStep(
   runId: RunId,
   turn: number,
   step: 'waiting' | 'turn.begin',
+  consumed: readonly QueuedFollowUp[] = [],
 ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
   return session
     .commit([
+      ...consumed.map((followUp) => ({
+        type: 'followup.consumed' as const,
+        aggregateId: aggregateId('run', runId),
+        followUpId: followUp.followUpId,
+      })),
       stepRow(
         runId,
         { family: 'toolUse', round: 0, turn, continuationIndex: 0 },
@@ -729,6 +733,20 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   }
 });
 
+/** Race a queue wait against the child loop's interrupt; null when stopped. */
+function untilInterrupted<A>(
+  wait: Effect.Effect<A>,
+  loop: ChildRunInterruptible,
+): Effect.Effect<A | null> {
+  return Effect.raceFirst(
+    wait,
+    Effect.callback<null>((resume) => {
+      const detach = onAbort(loop.signal, () => resume(Effect.succeed(null)));
+      return Effect.sync(detach);
+    }),
+  ).pipe(Effect.interruptible);
+}
+
 /**
  * Own admitted run cleanup until the child loop takes over. Failure or
  * interruption records the terminal outcome and releases the run's claim
@@ -819,7 +837,7 @@ export function startChildRunLoop<TTurn, R = never>(
       strategy.releaseSessionOwnership?.();
     };
 
-    let queue!: FollowUpQueue;
+    let input!: RunInput;
     let queueLease: FollowUpConsumerLease | undefined;
     let attachedHandle: RunHandle | undefined;
     let detachLoopInterrupt: (() => void) | undefined;
@@ -860,6 +878,7 @@ export function startChildRunLoop<TTurn, R = never>(
         );
       });
 
+    const created = yield* RunInput.make;
     const setup = yield* Effect.exit(
       Effect.sync(() => {
         strategy.onLoopStart?.(runSession);
@@ -869,8 +888,11 @@ export function startChildRunLoop<TTurn, R = never>(
             `Follow-up continuation already has an owner for child ${runId}.`,
           );
         }
-        queue = runSession.followUps.queue(queueLease);
-        loop.setQueue(queue);
+        input = runSession.followUps.attachInput(runId, created, queueLease)!;
+        // A native child's resumed flow seeds this queue from the run's rows
+        // when it loads them; an agent-CLI child has no flow to fold, so its
+        // queue starts from what is admitted from here on.
+        if (childRun) input.seed([]);
         attachLoopInterrupt();
         sessionStage = childRun
           ? logger.openStage(strategy.stageLabel)
@@ -1058,23 +1080,34 @@ export function startChildRunLoop<TTurn, R = never>(
               // being refused against a run that only looks busy.
               if (childRun)
                 yield* commitFlowStep(runSession, runId, turnIndex, 'waiting');
-              const batch = yield* Effect.tryPromise({
-                try: () => queue.waitAndDrainAll(loop.signal),
-                catch: ensureError,
-              });
+              const nextRunTurn = strategy.runTurn;
+              if (!childRun) {
+                // The native flow takes and consumes its own batch; this loop
+                // only waits for there to be one. Its first turn seeded the
+                // queue from the run's rows; one that never reached that load
+                // leaves nothing older than what this loop was handed.
+                input.seed([]);
+                const ready = yield* untilInterrupted(input.ready, loop);
+                if (!ready || loop.isInterrupted()) break;
+                runner = (signal) => nextRunTurn([], ports, signal);
+                continue;
+              }
+              const batch = yield* untilInterrupted(input.take, loop);
               if (!batch || loop.isInterrupted()) break;
               // The batch leaves the park: the next turn's index is the one
               // the top of the loop is about to accept.
-              if (childRun)
-                yield* commitFlowStep(
-                  runSession,
-                  runId,
-                  turnIndex + 1,
-                  'turn.begin',
-                );
-
-              const nextRunTurn = strategy.runTurn;
-              runner = (signal) => nextRunTurn(batch.items, ports, signal);
+              const taken = batch.synthetic ? [] : batch.followUps;
+              yield* commitFlowStep(
+                runSession,
+                runId,
+                turnIndex + 1,
+                'turn.begin',
+                taken,
+              );
+              const prompts: readonly FollowUpContent[] = batch.synthetic
+                ? [{ text: batch.text, origin: 'user' }]
+                : taken.map((followUp) => followUp.content);
+              runner = (signal) => nextRunTurn(prompts, ports, signal);
             }
           }),
         ),

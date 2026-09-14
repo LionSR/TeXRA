@@ -144,14 +144,17 @@ CREATE INDEX IF NOT EXISTS event_parent_start ON event(json_extract(data, '$.par
 `;
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
   e.seq, e.type, e.owner_id AS ownerId, e.at, e.data`;
-/** Listing arms of the present vocabulary; pending requests are a set. */
+/** Listing arms of the present vocabulary; pending requests and queued
+ *  follow-ups are sets. */
 const LISTING_TYPES = SessionEventDraftSchema.options
   .map((schema) => schema.shape.type.value)
   .filter(
     (type) =>
       listingTypeOf({ type }) !== null &&
       type !== 'request.opened' &&
-      type !== 'request.decided',
+      type !== 'request.decided' &&
+      type !== 'followup.queued' &&
+      type !== 'followup.consumed',
   )
   .map((type) => `${type}.1`);
 const READ_LISTING = `
@@ -170,6 +173,14 @@ WITH latest AS (
     WHERE decided.aggregate_id = e.aggregate_id
       AND decided.type = 'request.decided.1'
       AND json_extract(decided.data, '$.requestId') = json_extract(e.data, '$.requestId')
+  )
+  UNION ALL
+  SELECT ${EVENT_COLUMNS} FROM event e
+  WHERE e.type = 'followup.queued.1' AND NOT EXISTS (
+    SELECT 1 FROM event consumed
+    WHERE consumed.aggregate_id = e.aggregate_id
+      AND consumed.type = 'followup.consumed.1'
+      AND json_extract(consumed.data, '$.followUpId') = json_extract(e.data, '$.followUpId')
   )
 )
 SELECT * FROM selected
@@ -377,6 +388,8 @@ export const databaseLayer = (
         ...LISTING_TYPES,
         'request.opened.1',
         'request.decided.1',
+        'followup.queued.1',
+        'followup.consumed.1',
       ]);
       const inputRows = `
         SELECT ${EVENT_COLUMNS} FROM event e

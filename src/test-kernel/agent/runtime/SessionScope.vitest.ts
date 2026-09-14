@@ -92,13 +92,16 @@ describe('session-owned transcripts and follow-up queues', () => {
     const runId = generateRunId();
 
     try {
-      a.followUps.submit(runId, { text: 'from a' }, 'recoverable');
-      b.followUps.submit(runId, { text: 'from b' }, 'recoverable');
+      expect(a.followUps.claimLive(runId, 'flow')).toBeDefined();
+      expect(b.followUps.claimLive(runId, 'flow')).toBeDefined();
 
       a.followUps.terminalize(runId);
 
-      expect(a.followUps.getAll(runId)).toEqual([]);
-      expect(b.followUps.getAll(runId)).toEqual(['from b']);
+      expect(a.followUps.hasLiveOwner(runId)).toBe(false);
+      expect(a.followUps.submit(runId, { text: 'late' }, 'live_owner')).toEqual(
+        { kind: 'refused' },
+      );
+      expect(b.followUps.hasLiveOwner(runId)).toBe(true);
     } finally {
       await Effect.runPromise(a.dispose());
       await Effect.runPromise(b.dispose());

@@ -76,9 +76,9 @@ export class RunLedger extends Context.Service<
     >;
     /**
      * Fold a run's rows into its state. `null` only when the run aggregate
-     * carries no ledger row: the loop's fresh-run branch and, for a run
-     * recorded before the run ledger, the honest answer, distinct from
-     * "checkpoint corrupt". Ledger rows without an opening `flow.snapshot`
+     * carries no ledger row (queued follow-ups alone included): the loop's
+     * fresh-run branch and, for a run recorded before the run ledger, the
+     * honest answer, distinct from "checkpoint corrupt". Ledger rows without an opening `flow.snapshot`
      * are not that case: they are a malformed aggregate and fail
      * `inconsistent`, because folding an `attempt` or a `response` into a
      * fresh run is how a paid invocation gets issued twice. Reads the run

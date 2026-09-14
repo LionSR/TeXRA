@@ -31,7 +31,6 @@ import type { AppState } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { Secrets } from '@platform/secrets';
 import {
-  aggregateId as qualifyAggregateId,
   AgentCategory,
   cloneRoundIndexed,
   ExhaustionReasonSchema,
@@ -422,13 +421,6 @@ export const createHostRunActions = (
             ),
           );
           if (!result) return;
-          session.publish([
-            {
-              type: 'updateQueuedFollowUps',
-              aggregateId: qualifyAggregateId('run', runId),
-              messages: session.followUps.getAll(runId),
-            },
-          ]);
           const presentation = presentFollowUpResult(result);
           if (presentation.severity !== 'none')
             yield* present(presentation.message);

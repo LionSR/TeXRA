@@ -10,25 +10,22 @@ import { Effect, Result } from 'effect';
  * loop keeps the unlaned `resumeToolUseTurn`: it already holds the lane.
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type {
-  FollowUpQueueBatchItem,
-  FollowUpQueueInput,
-} from '@agent/followUp/FollowUpQueue';
 import {
   recordRunRefusal,
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
-import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type {
+  FollowUpQueueInput,
+  FollowUpRecoveryLease,
+} from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
-  aggregateId as qualifyAggregateId,
+  aggregateId,
   AgentCategory,
   ownerPid,
-  RUN_PHASE,
-  RUN_SUBSTATE,
   type ModelCompatibilityKey,
   type RunId,
 } from '@shared/schemas';
@@ -38,6 +35,7 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
+import { foldRunState } from '@shared/session/runStateFold';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -61,10 +59,10 @@ import type { AgentRunServices } from './toolInjection';
 /**
  * `started` once the resumed generation has settled (a tool-use turn parked
  * at WAITING or finished; a workflow run returned). `delivered` is false when
- * that generation returned but its drained follow-up batch was replayed onto
- * the stream queue instead of being consumed: the input still awaits
- * delivery, so a follow-up wake reports it as queued while an explicit resume
- * settles the turn it just ran. `outcome` carries the resumed tool-use run's
+ * that generation returned with input still in its queue: the follow-ups
+ * stay queued on the run's rows and await delivery, so a follow-up wake
+ * reports them as queued while an explicit resume settles the turn it just
+ * ran. `outcome` carries the resumed tool-use run's
  * raw result (terminal or WAITING), absent on the workflow path and when the
  * run never returned one. A refusal carries the reason a host words with
  * `describeFollowUpFailure`. Unexpected failures (storage errors, the run
@@ -90,22 +88,20 @@ export interface ResumeRunOptions extends Pick<
   /** Monotone per-attempt cancellation signal: once true it stays true. */
   readonly isCancellationRequested?: () => boolean;
   /**
-   * Follow-ups to replay ahead of any items already queued for the stream
-   * (e.g. an explicit follow-up typed alongside a manual resume). Seeded
-   * before the drain so the failure path re-enqueues them even if the drain
-   * throws before the full list is assigned.
+   * Follow-ups to queue for the run behind what its rows already queue (e.g.
+   * an explicit follow-up typed alongside a manual resume).
    *
    * The batch stays the caller's until {@link onFollowUpQueueReady} fires:
    * every refusal before that point returns it unqueued, and the caller must
-   * put it back where it came from or the user's input is lost. Once the
-   * queue owns it, a replay lands on the stream queue (`delivered: false`)
-   * rather than back with the caller.
+   * put it back where it came from or the user's input is lost. Once queued
+   * it belongs to the run: a generation that returns without taking it
+   * leaves it queued (`delivered: false`) rather than back with the caller.
    */
   readonly extraFollowUps?: readonly FollowUpQueueInput[];
   /**
-   * Fires after the shared stream queue is acquired and marked RESUMING, but
-   * before its queued items are drained into the rebuilt session. This is the
-   * one signal that the queue has taken ownership of `extraFollowUps`.
+   * Fires once the recovery lease is held and `extraFollowUps` are queued
+   * on the run, before the resumed generation launches: the one signal that
+   * the run has taken ownership of them.
    */
   readonly onFollowUpQueueReady?: (recovery: FollowUpRecoveryLease) => void;
   /**
@@ -221,25 +217,25 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   const suppliedRecovery = options.recovery
     ? session.followUps.useRecovery(options.recovery)
     : undefined;
-  const abandonSupplied = (provisional = recoveryIsProvisional): void => {
-    if (suppliedRecovery)
-      releaseUnstartedRecovery(session, suppliedRecovery, provisional);
-  };
+  const abandonSupplied = (provisional = recoveryIsProvisional) =>
+    suppliedRecovery
+      ? releaseUnstartedRecovery(session, suppliedRecovery, provisional)
+      : Effect.void;
   const store = getRunRecords(session, runId);
   const [config, exists] = yield* Effect.all([
     store.readConfig(),
     store.exists(),
-  ]).pipe(Effect.onError(() => Effect.sync(() => abandonSupplied())));
+  ]).pipe(Effect.onError(() => abandonSupplied()));
   if (!config || !exists) {
-    abandonSupplied();
+    yield* abandonSupplied();
     return REFUSED;
   }
   if (suppliedRecovery && suppliedRecovery.runId !== runId) {
-    abandonSupplied(false);
+    yield* abandonSupplied(false);
     return REFUSED;
   }
   if (cancelled() || runs.isActiveOrResuming(runId)) {
-    abandonSupplied();
+    yield* abandonSupplied();
     return REFUSED;
   }
   // Claim before retrieval so concurrent follow-ups join this attempt's queue.
@@ -251,7 +247,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   }
   if (config.agentCategory === AgentCategory.ToolUse && !queueLease)
     return REFUSED;
-  if (config.agentCategory !== AgentCategory.ToolUse) abandonSupplied();
+  if (config.agentCategory !== AgentCategory.ToolUse) yield* abandonSupplied();
   const releaseQueue = (): void => {
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
   };
@@ -332,19 +328,46 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   return REFUSED;
 });
 
-function releaseUnstartedRecovery(
-  session: SessionHandle,
-  recovery: FollowUpRecoveryLease,
-  provisional: boolean,
-): void {
-  const current = session.followUps.useRecovery(recovery);
-  if (!current) return;
-  if (provisional && session.followUps.queue(current).isEmpty()) {
-    session.followUps.terminalize(current.runId);
-    return;
-  }
-  session.followUps.release(current, 'recoverable');
-}
+/**
+ * Give back a recovery lease no generation took over. A provisional lease
+ * (one this attempt claimed for itself) over a run whose rows queue nothing
+ * ends the run's entry; a run with queued follow-ups stays recoverable, so
+ * the next wake can deliver them. The rows are read from the run-state fold,
+ * not from memory: follow-ups an earlier generation left queued are there
+ * and nowhere else. A fold that cannot be read keeps the run recoverable,
+ * and says so.
+ */
+const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
+  function* (
+    session: SessionHandle,
+    recovery: FollowUpRecoveryLease,
+    provisional: boolean,
+  ) {
+    if (!session.followUps.useRecovery(recovery)) return;
+    let queued = true;
+    if (provisional) {
+      const folded = foldRunState(
+        null,
+        yield* session.readAggregate(aggregateId('run', recovery.runId)),
+      );
+      if (Result.isSuccess(folded)) {
+        queued = (folded.success?.followUps.length ?? 0) > 0;
+      } else {
+        log.warn(
+          `Run ${recovery.runId}: its queued follow-ups could not be read; keeping it recoverable`,
+          { data: folded.failure },
+        );
+      }
+    }
+    const current = session.followUps.useRecovery(recovery);
+    if (!current) return;
+    if (!queued) {
+      session.followUps.terminalize(current.runId);
+      return;
+    }
+    session.followUps.release(current, 'recoverable');
+  },
+);
 
 /**
  * The two expected launch failures a host words; anything else rejects.
@@ -385,12 +408,11 @@ function refusalFor(
 }
 
 /**
- * The tool-use resume "queue dance": drain the queued follow-ups and notify
- * the UI, resume while handing the drained batch to the flow's WAITING
- * cursor via `drainedFollowUps`, and on failure re-enqueue the follow-ups
- * and re-notify. The phase is the fold's: the resume's `run.activate` reads
- * as resuming, and a resume that never reached the lifecycle leaves the run
- * to read as interrupted once its claim is released.
+ * Resume a tool-use run under its recovery lease: queue the caller's extra
+ * follow-ups on the run, then launch the resumed generation, which seeds its
+ * queue from the run's rows. The phase is the fold's: the resume's
+ * `run.activate` reads as resuming, and a resume that never reached the
+ * lifecycle leaves the run to read as interrupted once its claim is released.
  */
 const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   session: SessionHandle,
@@ -399,75 +421,35 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const runId = resume.runId;
-  const followUpsQueue = session.followUps;
+  const followUps = session.followUps;
 
   if ((yield* Runs).getHandle(resume.runId)?.suspendedTerminationStarted) {
-    followUpsQueue.release(queueLease, 'recoverable');
+    followUps.release(queueLease, 'recoverable');
     return REFUSED;
   }
 
-  const seed = options.extraFollowUps ?? [];
-  let followUps: readonly FollowUpQueueInput[] = seed;
   let cancelledAtFlowAttachment = false;
-  let followUpsRestored = false;
   let runResult: AgentRuntimeFlowResult | undefined;
-  const notifyQueued = (): void => {
-    session.publish([
-      {
-        type: 'updateQueuedFollowUps',
-        aggregateId: qualifyAggregateId('run', runId),
-        messages: session.followUps.getAll(runId),
-      },
-    ]);
-  };
-  const restoreFollowUps = (): void => {
-    if (followUpsRestored) return;
-    followUpsRestored = true;
-    followUpsQueue.queue(queueLease).restore(followUps);
-    if (followUps.length > 0) notifyQueued();
-  };
+  let undelivered = false;
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
       yield* Effect.try({
         try: () => {
+          for (const followUp of options.extraFollowUps ?? []) {
+            followUps.submit(runId, followUp, 'live_owner');
+          }
           options.onFollowUpQueueReady?.(queueLease);
-          followUps = [
-            ...seed,
-            ...followUpsQueue.queue(queueLease).drainItems(),
-          ];
-          notifyQueued();
         },
         catch: ensureError,
       });
-
-      // The drained batch must reach the resumed flow through the direct
-      // `drainedFollowUps` handoff, not by re-queuing: a subagent's WAITING
-      // cursor suspends again before ever reading the stream queue (see
-      // the tool-use loop's wait; only its child-run loop's queue wait consumes it),
-      // so re-queued items would sit unconsumed until the next wake. A root
-      // cursor accepts either route; the handoff works for both.
       return yield* resumeToolUseFromResumeData(resume, {
         session,
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         onApprovalPolicyDenial: options.onApprovalPolicyDenial,
         runtimeUnavailableTools: options.runtimeUnavailableTools,
-        onFollowUpConsumed: () => {
-          followUps = [];
-        },
         isCancellationRequested: options.isCancellationRequested,
         onCancellationAtFlowAttachment: () => {
           cancelledAtFlowAttachment = true;
-        },
-        drainedFollowUps: followUps.map(toFollowUpBatchItem),
-        // The first call closes the gap between the initial drain and live-flow
-        // attachment. Later calls occur after a subagent parks at WAITING. A
-        // native child loop owns that queue boundary when registered; otherwise
-        // this host resume must claim the late batch so input accepted by the
-        // live context cannot remain dormant.
-        takePendingFollowUps: () => {
-          const raced = followUpsQueue.queue(queueLease).drainItems();
-          followUps = [...followUps, ...raced];
-          return raced.map(toFollowUpBatchItem);
         },
       });
     }),
@@ -475,15 +457,14 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     Effect.tap((result) =>
       Effect.sync(() => {
         if (Result.isSuccess(result)) runResult = result.success;
-        // Replay only input the resumed flow has not acknowledged.
-        if (followUps.length > 0) restoreFollowUps();
       }),
     ),
     Effect.ensuring(
       Effect.sync(() => {
-        followUpsQueue.release(
+        undelivered = followUps.hasQueued(queueLease);
+        followUps.release(
           queueLease,
-          !runResult || isWaitingFlowResult(runResult) || followUpsRestored
+          !runResult || isWaitingFlowResult(runResult) || undelivered
             ? 'recoverable'
             : 'terminal',
         );
@@ -495,21 +476,12 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     if (refusal) return refusal;
     return yield* Effect.fail(resumed.failure);
   }
-  // Cancellation at flow attachment means the run was never reached; a replay
-  // means it ran and returned with the batch back on the stream queue.
+  // Cancellation at flow attachment means the run was never reached; input
+  // left queued means it ran and returned before taking it.
   if (cancelledAtFlowAttachment) return REFUSED;
   return {
     started: true,
-    delivered: !followUpsRestored,
+    delivered: !undelivered,
     outcome: runResult?.outcome,
   };
 });
-
-function toFollowUpBatchItem(item: FollowUpQueueInput): FollowUpQueueBatchItem {
-  return {
-    text: item.text,
-    displayText: item.displayText,
-    mediaFiles: item.mediaFiles,
-    origin: item.origin ?? 'user',
-  };
-}

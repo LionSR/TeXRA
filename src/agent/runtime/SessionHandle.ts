@@ -334,7 +334,7 @@ export class SessionHandle {
     this.inputs = graph.inputs;
     this.subscriptions = graph.subscriptions;
     this.runs = graph.runs;
-    this.followUps = new ToolUseFollowUpQueue();
+    this.followUps = new ToolUseFollowUpQueue((events) => this.publish(events));
     this.modelRetries = init.modelRetries;
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();

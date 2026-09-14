@@ -12,10 +12,7 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import type {
-  FollowUpQueueBatchItem,
-  FollowUpQueueInput,
-} from '@agent/followUp/FollowUpQueue';
+import type { FollowUpQueueInput } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { followUpsLayer } from '@agent/runtime/FollowUps';
 import {
@@ -228,14 +225,12 @@ interface LoopInit {
   /** A child run: its parent owns continuation across its turns. */
   readonly parentRunId?: RunId | null;
   readonly resume?: boolean;
-  readonly drainedFollowUps?: readonly FollowUpQueueBatchItem[];
   readonly logger?: TraceEmitter;
   readonly supportsVision?: boolean;
   readonly stopAfterCycle?: boolean;
   /** The terminal structured-output tool, when the run has one. */
   readonly finalToolName?: string;
   readonly onIdle?: () => void;
-  readonly onFollowUpConsumed?: () => void;
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
     attach(context: ToolUseFlowContext): void;
@@ -298,9 +293,6 @@ function agentRunTestLayer(init: LoopInit) {
         callbacks: {
           onModelChanged: vi.fn(),
           ...(init.onIdle ? { onIdle: init.onIdle } : {}),
-          ...(init.onFollowUpConsumed
-            ? { onFollowUpConsumed: init.onFollowUpConsumed }
-            : {}),
         },
         interrupt: vi.fn(),
       } satisfies AgentRunShape;
@@ -311,9 +303,6 @@ function agentRunTestLayer(init: LoopInit) {
 function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
   return runToolUse({
     resume: init.resume === true,
-    ...(init.drainedFollowUps
-      ? { drainedFollowUps: init.drainedFollowUps }
-      : {}),
     ...(init.attachment ? { attachment: init.attachment } : {}),
   }).pipe(
     Effect.provide(
@@ -359,8 +348,8 @@ const runUntilSpent = Effect.fn('test.runUntilSpent')(function* (
  * time' signal: `park(n)` is what those scenarios wait on. The wait resumes
  * inside that callback, before the loop enters `followUps.wait`, so input a
  * scenario enqueues after `park` lands on the queue rather than on a waiting
- * consumer; `waitAndDrainAll` drains what is queued first, so both orders
- * deliver the same batch.
+ * consumer; the wait takes what is queued first, so both orders deliver the
+ * same batch.
  */
 const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
   const requests: InvokeRequest[] = [];
@@ -447,6 +436,8 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       pendingResponse: null,
       pendingIntents: {},
       requests: {},
+      followUps: [],
+      followUpIds: new Set(),
       usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
       flow: null,
     };
@@ -536,13 +527,13 @@ describe('a parked child run', () => {
   );
 
   it.effect(
-    'consumes the batch its parent drained without reading the session queue',
+    'delivers a follow-up its rows still queue exactly once, with the message it becomes (C3)',
     () =>
       Effect.gen(function* () {
         const session = quietSession();
         const runId = startedRun(session);
         const parentRunId = generateRunId();
-        const onFollowUpConsumed = vi.fn();
+        const asked = 'state where finiteness is used';
 
         yield* runLoop({
           runId,
@@ -550,25 +541,44 @@ describe('a parked child run', () => {
           parentRunId,
           script: [textTurn('first cycle')],
         });
-        // Input the child loop did not hand over stays on the queue.
-        enqueue(session, runId, [{ text: 'from the queue', origin: 'user' }]);
+        // A crash between admission and the consuming batch leaves the row
+        // and nothing else: no process holds the follow-up in memory.
+        const queued = {
+          type: 'followup.queued' as const,
+          aggregateId: rowAggregate(runId),
+          followUpId: 'follow-up-1',
+          content: { text: asked, origin: 'user' as const },
+        };
+        session.publish([queued]);
+        yield* Effect.promise(() => session.settlePublications());
 
-        const { result, state } = yield* runLoop({
+        const resumed = yield* runLoop({
           runId,
           session,
           parentRunId,
           resume: true,
-          drainedFollowUps: [
-            { text: 'state where finiteness is used', origin: 'user' },
-          ],
-          onFollowUpConsumed,
-          script: [textTurn('second cycle')],
+          script: [textTurn('second cycle'), textTurn('never reached')],
         });
+        expect(resumed.result.outcome).toBe(RUN_PHASE.WAITING);
+        expect(userTexts(resumed.state)).toContain(asked);
+        // Consumed in the batch that carries it: the fold no longer queues it.
+        expect(resumed.state?.followUps).toEqual([]);
 
-        expect(result.outcome).toBe(RUN_PHASE.WAITING);
-        expect(userTexts(state)).toContain('state where finiteness is used');
-        expect(userTexts(state)).not.toContain('from the queue');
-        expect(onFollowUpConsumed).toHaveBeenCalledOnce();
+        // A producer that replays the delivery after a restart writes the
+        // same id again; it names a follow-up already consumed.
+        session.publish([queued]);
+        yield* Effect.promise(() => session.settlePublications());
+        const again = yield* runLoop({
+          runId,
+          session,
+          parentRunId,
+          resume: true,
+          script: [textTurn('never reached')],
+        });
+        expect(again.requests).toHaveLength(0);
+        expect(userTexts(again.state).filter((text) => text === asked)).toEqual(
+          [asked],
+        );
       }),
   );
 
@@ -892,7 +902,6 @@ describe('the batch a parked run consumes', () => {
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
-        const onFollowUpConsumed = vi.fn();
         enqueue(session, runId, [
           {
             text: 'use this diagram',
@@ -907,7 +916,6 @@ describe('the batch a parked run consumes', () => {
             session,
             logger,
             supportsVision: true,
-            onFollowUpConsumed,
             script: [textTurn('first')],
           }),
         );
@@ -917,7 +925,10 @@ describe('the batch a parked run consumes', () => {
           'use this diagram',
           expect.objectContaining({ messageType: expect.any(String) }),
         );
-        expect(onFollowUpConsumed).not.toHaveBeenCalled();
+        const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
+        expect(state?.followUps.map((f) => f.content.text)).toEqual([
+          'use this diagram',
+        ]);
       }),
   );
 });
@@ -929,7 +940,6 @@ describe('an active goal at the wait', () => {
       const runId = startedRun(session);
       const logger = new TraceEmitter();
       const info = vi.spyOn(logger, 'info');
-      const onFollowUpConsumed = vi.fn();
       yield* startGoal(session, runId, 'Finish the autonomous proof audit.');
 
       try {
@@ -937,7 +947,6 @@ describe('an active goal at the wait', () => {
           runId,
           session,
           logger,
-          onFollowUpConsumed,
           script: [textTurn('first'), textTurn('second')],
         });
 
@@ -947,10 +956,8 @@ describe('an active goal at the wait', () => {
           ),
         ).toBe(true);
         // The run ran again instead of blocking for input, and a synthetic
-        // turn is not the user's: it is neither logged nor acknowledged as
-        // consumed input.
+        // turn is not the user's: it is not logged as input.
         expect(requests.length).toBeGreaterThan(1);
-        expect(onFollowUpConsumed).not.toHaveBeenCalled();
         expect(info).not.toHaveBeenCalledWith(
           expect.stringContaining('<goal_context>'),
           expect.anything(),
@@ -1020,12 +1027,12 @@ describe('an active goal at the wait', () => {
   );
 
   it.effect(
-    'is recovered, not paused, by a batch the parent already drained',
+    'is recovered, not paused, by a batch queued for its resumed turn',
     () =>
       Effect.gen(function* () {
-        // Regression #9443: input the child-run loop already took off the queue
-        // reaches the model, so the error clears without pausing the goal or
-        // dropping its unattended approvals first.
+        // Regression #9443: input queued for the child's resumed turn reaches
+        // the model, so the error clears without pausing the goal or dropping
+        // its unattended approvals first.
         const setApprovalBypassState = vi.fn();
         const session = yield* goalSession({ setApprovalBypassState });
         const runId = startedRun(session);
@@ -1047,13 +1054,15 @@ describe('an active goal at the wait', () => {
             ],
           });
           setApprovalBypassState.mockClear();
+          enqueue(session, runId, [
+            { text: 'try the other lemma', origin: 'user' },
+          ]);
 
           const { result, state } = yield* runLoop({
             runId,
             session,
             parentRunId,
             resume: true,
-            drainedFollowUps: [{ text: 'try the other lemma', origin: 'user' }],
             script: [textTurn('recovered')],
           });
 
