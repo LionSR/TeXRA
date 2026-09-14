@@ -28,8 +28,8 @@ setupPlatform({
   workspacePath: fakePath('workspace'),
 });
 let session: SessionHandle;
-beforeEach(() => {
-  session = createProcessSession();
+beforeEach(async () => {
+  session = await Effect.runPromise(createProcessSession());
 });
 
 function workflowOutput(absolutePath: string): RunEndOutput {

@@ -277,7 +277,7 @@ const startLoop = (
   });
 
 beforeEach(async () => {
-  session = createProcessSession();
+  session = await Effect.runPromise(createProcessSession());
   publishTestRunStart(session, PARENT_RUN_ID);
   await session.settlePublications();
   vi.clearAllMocks();

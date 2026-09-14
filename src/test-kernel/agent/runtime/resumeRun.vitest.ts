@@ -81,8 +81,10 @@ function seedRecoverable(
 
 const sessions: ReturnType<typeof createTestSession>[] = [];
 
-afterEach(() => {
-  for (const session of sessions.splice(0)) session.dispose();
+afterEach(async () => {
+  for (const session of sessions.splice(0)) {
+    await Effect.runPromise(session.dispose());
+  }
 });
 
 function createSession(): ReturnType<typeof createTestSession> {

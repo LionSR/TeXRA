@@ -1,5 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ResultEvent } from '@agent/trace';
@@ -48,7 +49,7 @@ async function toastsFor(
   } finally {
     detachToast();
     detachHost();
-    session.dispose();
+    await Effect.runPromise(session.dispose());
   }
   return emitted;
 }

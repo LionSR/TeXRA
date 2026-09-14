@@ -1627,12 +1627,15 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         processResumeOwner,
       );
       const { lifecycle } = platformInit;
+      // The process runtime the platform above installed, in a local: the
+      // shutdown handlers and the startup program below run on it.
+      const runtime = effectRuntime();
       // Process root: session-lifetime resources register at creation and are
       // disposed LIFO in the ON phase (every project's process stores → result
-      // toast → session, most recently opened first).
+      // toast), then every project's session, most recently opened first.
       const processResources = new DisposableStore();
       registerRuntimeShutdownHandlers(lifecycle, {
-        runSettlement: (settlement) => effectRuntime().runPromise(settlement),
+        runSettlement: (settlement) => runtime.runPromise(settlement),
         beforeAgentShutdown: [() => processResumeOwner.disable()],
         afterAgentShutdown: [() => killActiveRecording()],
         // Agent shutdown runs first so its final events enter the
@@ -1644,6 +1647,9 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         afterFlushArtifacts: [() => removeExternalDiffPatchDirs()],
         afterRunSettlement: [
           () => processResources.dispose(),
+          // The sessions after the process stores above them, settled before
+          // the runtime they run on goes.
+          () => runtime.runPromise(projects.dispose()),
           // Last: every project's session has released its graph above.
           () => disposeProcessRuntime(),
         ],
@@ -1655,20 +1661,20 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // The original failure is re-raised, not the fold's envelope: the fatal
       // reporter below prints `error.stack`, which a wrapper would replace
       // with the runtime's own trace.
-      const startup = await effectRuntime().runPromiseExit(
+      const startup = await runtime.runPromiseExit(
         hostPort(async () => {
           const warn = (message: string) =>
             console.warn(`[desktop] ${message}`);
-          const projectRecords = await effectRuntime().runPromise(
+          const projectRecords = await runtime.runPromise(
             Scope.provide(
               openDesktopProjectRecords(
                 app.getPath('userData'),
                 platformInit.ownerId,
               ),
-              effectRuntime().scope,
+              runtime.scope,
             ),
           );
-          projects = await effectRuntime().runPromise(
+          projects = await runtime.runPromise(
             openDesktopProjectRegistry({
               dataRoot: platformInit.dataRoot,
               processRoots: platformInit.processRoots,
@@ -1682,18 +1688,17 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               },
             }),
           );
-          processResources.add(() => projects.dispose());
           // Reopen every folder left open last time and show the one shown
           // last. A folder that is gone or no longer opens is reported once the
           // window exists; the others open regardless.
-          const remembered = await effectRuntime().runPromise(
+          const remembered = await runtime.runPromise(
             readRememberedDesktopProjects(projectRecords, warn),
           );
           const unopenedProjects = remembered.missing.map(
             (root) => `${root} (no such folder; forgotten)`,
           );
           for (const root of remembered.roots) {
-            await effectRuntime().runPromise(
+            await runtime.runPromise(
               projects.open(root).pipe(
                 Effect.catch((error) =>
                   Effect.sync(() => {
@@ -1703,7 +1708,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               ),
             );
           }
-          await effectRuntime().runPromise(
+          await runtime.runPromise(
             projects.activate(projects.list().at(-1)?.root),
           );
           // Ask the renderer to close before draining process services. A dirty

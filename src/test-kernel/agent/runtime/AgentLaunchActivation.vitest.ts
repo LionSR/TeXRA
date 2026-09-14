@@ -164,7 +164,7 @@ const captureStartedLaunch = Effect.fn(function* (
           end: ends[0],
         } satisfies StartedLaunch;
       }),
-    (session) => Effect.sync(() => session.dispose()),
+    (session) => session.dispose(),
   );
 });
 

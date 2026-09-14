@@ -235,7 +235,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
         { session, mode: 'live_notification' },
       );
     } finally {
-      session.dispose();
+      await Effect.runPromise(session.dispose());
     }
   });
 
@@ -266,8 +266,8 @@ describe('GitHub subscription app signals and follow-ups', () => {
         { session: secondSession, mode: 'live_notification' },
       );
     } finally {
-      firstSession.dispose();
-      secondSession.dispose();
+      await Effect.runPromise(firstSession.dispose());
+      await Effect.runPromise(secondSession.dispose());
     }
   });
 

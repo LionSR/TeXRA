@@ -1,7 +1,8 @@
 import '@test/support/sessionGraphTestSetup';
 
+import { Effect } from 'effect';
 import type { AgentTrace } from '@agent/trace';
-import { openSession } from '@agent/runtime/sessionGraph';
+import { openSessionEffect } from '@agent/runtime/sessionGraph';
 import {
   forEachLiveSession,
   type SessionHandle,
@@ -29,43 +30,54 @@ let opened = 0;
 export function createTestSession(init: TestSessionInit = {}): SessionHandle {
   const process = processWorkspaceRoots();
   opened += 1;
-  return openSession({
-    ...init,
-    roots: init.roots ?? {
-      workspace: process.workspace,
-      storage: `${process.storage}/test-sessions/${opened}`,
-      globalStorage: process.globalStorage,
-      config: process.config,
-      workspaceState: process.workspaceState,
-      globalState: process.globalState,
-    },
-    transcriptMode: init.transcriptMode ?? {
-      kind: 'ephemeral',
-      reason: 'isolated test session',
-    },
-  });
+  // An ephemeral session's graph builds synchronously.
+  return Effect.runSync(
+    openSessionEffect({
+      ...init,
+      roots: init.roots ?? {
+        workspace: process.workspace,
+        storage: `${process.storage}/test-sessions/${opened}`,
+        globalStorage: process.globalStorage,
+        config: process.config,
+        workspaceState: process.workspaceState,
+        globalState: process.globalState,
+      },
+      transcriptMode: init.transcriptMode ?? {
+        kind: 'ephemeral',
+        reason: 'isolated test session',
+      },
+    }),
+  );
 }
 
 /**
  * Open a fresh session over the process roots, for a file that seeds or
  * reads the process storage outside the session's scope. One root holds one
  * session, so a session still open there (a previous test's) is released
- * first: the caller gets its own, over the store it supplies.
+ * first, and its release is awaited: `dispose` settles once the root's entry
+ * has unwound, and an open issued before that would race it. The caller
+ * gets its own session, over the store it supplies.
  */
 export function createProcessSession(
   init: TestSessionInit = {},
-): SessionHandle {
-  const roots = processWorkspaceRoots();
-  forEachLiveSession((live) => {
-    if (live.roots.storage === roots.storage) live.dispose();
-  });
-  return openSession({
-    ...init,
-    roots,
-    transcriptMode: init.transcriptMode ?? {
-      kind: 'ephemeral',
-      reason: 'process test session',
-    },
+): Effect.Effect<SessionHandle> {
+  return Effect.gen(function* () {
+    const roots = processWorkspaceRoots();
+    const predecessors: SessionHandle[] = [];
+    forEachLiveSession((live) => {
+      if (live.roots.storage === roots.storage) predecessors.push(live);
+    });
+    yield* Effect.forEach(predecessors, (live) => live.dispose(), {
+      discard: true,
+    });
+    return yield* openSessionEffect({
+      ...init,
+      roots,
+      transcriptMode: init.transcriptMode ?? {
+        kind: 'ephemeral',
+        reason: 'process test session',
+      },
+    });
   });
 }
 

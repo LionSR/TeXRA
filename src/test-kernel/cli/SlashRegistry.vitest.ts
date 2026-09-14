@@ -4,6 +4,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 
 import {
   findSlashCommand,
@@ -78,12 +79,13 @@ const CHATGPT_PREFERENCE_FORM_VALUE: AccountAccessFormValue = {
 function registerBuiltins(
   options: Omit<
     Parameters<typeof registerBuiltinSlashCommands>[0],
-    'secrets' | 'state'
+    'secrets' | 'state' | 'runtimeSession'
   > = {},
 ): void {
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
     state: new FakeStateStore(),
+    runtimeSession: defaultSession(),
     ...options,
   });
 }

@@ -2,7 +2,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
@@ -13,6 +13,7 @@ import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Result } from 'effect';
+import type { SessionHandle } from '@agent/runtime';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
@@ -35,6 +36,7 @@ import {
   fakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { withTempDir, withTempDirEffect } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => {
@@ -92,10 +94,6 @@ vi.mock('@cli/commands/_helpers/output', async (importOriginal) => ({
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
   resolveCliRunAgent: mocks.resolveCliRunAgent,
-}));
-
-vi.mock('@cli/runtime/transcriptSession', () => ({
-  initializeCliTranscriptSession: vi.fn(async () => ({})),
 }));
 
 vi.mock('@cli/runtime/executeCli', () => ({
@@ -371,11 +369,18 @@ function expectNoModelOrInputWork(): void {
 }
 
 describe('CLI run command, workflow agents', () => {
+  let fixtureSession: SessionHandle | undefined;
+
   beforeEach(() => {
     vi.clearAllMocks();
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
-    const { platform } = installedHost();
+    const session = createTestSession();
+    fixtureSession = session;
+    const platform = {
+      ...installedHost().platform,
+      session: Effect.succeed(session),
+    };
     cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
     cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mocks.writeResultMeta.mockResolvedValue(undefined);
@@ -409,6 +414,11 @@ describe('CLI run command, workflow agents', () => {
       ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
     );
     mockWorkflowRun(workflowRun('exec-1'));
+  });
+
+  afterEach(async () => {
+    if (fixtureSession) await Effect.runPromise(fixtureSession.dispose());
+    fixtureSession = undefined;
   });
 
   it.effect(
@@ -669,12 +679,9 @@ describe('CLI run command, workflow agents', () => {
         const mockedStorage = yield* Effect.promise(
           () => import('@agent/storage'),
         );
-        const { initializeCliTranscriptSession } = yield* Effect.promise(
-          () => import('@cli/runtime/transcriptSession'),
-        );
         const session = yield* Effect.acquireRelease(
           Effect.sync(() => createTestSession()),
-          (owned) => Effect.sync(() => owned.dispose()),
+          (owned) => owned.dispose(),
         );
         const runId = 'abc123abc123' as RunId;
         const { runInSession } = yield* Effect.promise(
@@ -688,9 +695,11 @@ describe('CLI run command, workflow agents', () => {
         );
         const run = workflowRun(runId);
         if (!run.ok) throw new Error('Expected workflow result.');
-        vi.mocked(initializeCliTranscriptSession).mockResolvedValueOnce(
-          session,
-        );
+        // The command reads the session off the services its init returns.
+        cliInitPlatformMock.initLocalCliPlatform.mockResolvedValueOnce({
+          ...installedHost().platform,
+          session: Effect.succeed(session),
+        });
         const records = storage.getRunRecords(session, runId);
         vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(records);
         yield* session.commit([
@@ -1222,6 +1231,9 @@ describe('CLI run command, workflow agents', () => {
         Effect.provide(nativeExecute(...args), fakeProcessServices()),
       );
 
+    const { createTestSession } =
+      await import('@test/support/sessionTestUtils');
+    const session = createTestSession();
     const exitCode = await executeCliWorkflowConfig(
       {
         agent: 'polish',
@@ -1230,8 +1242,8 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      {},
-    );
+      { session: Effect.succeed(session) },
+    ).finally(() => Effect.runPromise(session.dispose()));
 
     expect(exitCode).toBe(CliExitCode.Interrupted);
     expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
@@ -1261,6 +1273,9 @@ describe('CLI run command, workflow agents', () => {
         Effect.provide(nativeExecute(...args), fakeProcessServices()),
       );
 
+    const { createTestSession } =
+      await import('@test/support/sessionTestUtils');
+    const session = createTestSession();
     const result = executeCliWorkflowConfig(
       {
         agent: 'polish',
@@ -1269,8 +1284,8 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      {},
-    );
+      { session: Effect.succeed(session) },
+    ).finally(() => Effect.runPromise(session.dispose()));
     await expect(result).resolves.toBe(CliExitCode.Interrupted);
     expect(cwdSpy).toHaveBeenCalledOnce();
     cwdSpy.mockRestore();

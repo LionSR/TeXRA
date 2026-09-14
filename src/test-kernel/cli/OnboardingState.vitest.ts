@@ -57,7 +57,6 @@ describe('maybeRunCliOnboarding headless parity', () => {
             yield* maybeRunCliOnboarding(
               {
                 ...createFakePlatform(),
-                globalStorage: createFakeWorkspaceRoots().globalStorage,
                 globalState: createFakeWorkspaceRoots().globalState,
                 secrets: new FakeSecrets(),
               },

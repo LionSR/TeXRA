@@ -149,7 +149,11 @@ function seedChildRoster(
  * The process stores the built-in commands and the slash context read, the
  * pair the chat entry point threads in from its own platform services.
  */
-const stores = { secrets: new FakeSecrets(), state: new FakeStateStore() };
+const stores = {
+  secrets: new FakeSecrets(),
+  state: new FakeStateStore(),
+  runtimeSession: defaultSession(),
+};
 
 function createSession(): TuiSession {
   return new TuiSession();

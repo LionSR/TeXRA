@@ -70,10 +70,7 @@ describe('Concurrent session tool edit approval handlers', () => {
         const sessionA = createTestSession();
         const sessionB = createTestSession();
         yield* Effect.addFinalizer(() =>
-          Effect.sync(() => {
-            sessionA.dispose();
-            sessionB.dispose();
-          }),
+          sessionA.dispose().pipe(Effect.andThen(sessionB.dispose())),
         );
         const windowA = yield* attachWindow(sessionA, 'from-a');
         const windowB = yield* attachWindow(sessionB, 'from-b');

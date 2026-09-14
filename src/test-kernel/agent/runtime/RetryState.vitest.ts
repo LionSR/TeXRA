@@ -656,7 +656,7 @@ describe('ModelInvoker retry', () => {
 
       expect(outcome.kind).toBe('response');
       expect(stub.attempts()).toBe(2);
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 
@@ -679,7 +679,7 @@ describe('ModelInvoker retry', () => {
         expect(outcome.error.message).toContain('Model response was empty');
       }
       denied.detach();
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 
@@ -698,7 +698,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('cancelled');
       expect(requests.opened).toEqual([]);
       requests.detach();
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 
@@ -719,7 +719,7 @@ describe('ModelInvoker retry', () => {
 
       expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
       expect(stub.attempts()).toBe(1);
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 
@@ -766,7 +766,7 @@ describe('ModelInvoker retry', () => {
       // reports is still running.
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       requests.detach();
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 
@@ -804,7 +804,7 @@ describe('ModelInvoker retry', () => {
           ]);
         }
         requests.detach();
-        session.dispose();
+        yield* session.dispose();
       }),
   );
 
@@ -842,7 +842,7 @@ describe('ModelInvoker retry', () => {
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       expect(stub.attempts()).toBe(1);
       requests.detach();
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 
@@ -868,7 +868,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('cancelled');
       expect(stub.attempts()).toBe(1);
       requests.detach();
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 
@@ -911,7 +911,7 @@ describe('ModelInvoker retry', () => {
         ),
       ).toBe(true);
       requests.detach();
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 
@@ -943,7 +943,7 @@ describe('ModelInvoker retry', () => {
       );
       expect(requests.opened).toHaveLength(1);
       requests.detach();
-      session.dispose();
+      yield* session.dispose();
     }),
   );
 });

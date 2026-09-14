@@ -69,9 +69,11 @@ describe('default session lifecycle', () => {
       initializeDefaultSession,
       teardownDefaultSession,
     } = await importSessionRuntime();
-    const processDefault = initializeDefaultSession({
-      transcriptMode: { kind: 'ephemeral', reason: 'process default' },
-    });
+    const processDefault = await Effect.runPromise(
+      initializeDefaultSession({
+        transcriptMode: { kind: 'ephemeral', reason: 'process default' },
+      }),
+    );
 
     try {
       expect(defaultSession()).toBe(processDefault);
@@ -80,7 +82,7 @@ describe('default session lifecycle', () => {
       const disposedSession = createTestSession({
         transcriptMode: { kind: 'ephemeral', reason: 'disposed non-default' },
       });
-      disposedSession.dispose();
+      await Effect.runPromise(disposedSession.dispose());
       expect(defaultSession()).toBe(processDefault);
       expect(channelTraceMocks.warn).not.toHaveBeenCalled();
 
@@ -94,10 +96,10 @@ describe('default session lifecycle', () => {
           'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
         );
       } finally {
-        liveSession.dispose();
+        await Effect.runPromise(liveSession.dispose());
       }
     } finally {
-      teardownDefaultSession();
+      await Effect.runPromise(teardownDefaultSession());
     }
   });
 
@@ -113,15 +115,17 @@ describe('default session lifecycle', () => {
       kind: 'ephemeral',
       reason: 'default session lifecycle test',
     } as const;
-    const session = initializeDefaultSession({ transcriptMode });
+    const session = await Effect.runPromise(
+      initializeDefaultSession({ transcriptMode }),
+    );
     try {
       expect(defaultSession()).toBe(session);
       expect(defaultSession().transcripts.mode).toEqual(transcriptMode);
-      expect(() => initializeDefaultSession({ transcriptMode })).toThrow(
-        'already been initialized',
-      );
+      await expect(
+        Effect.runPromise(initializeDefaultSession({ transcriptMode })),
+      ).rejects.toThrow('already been initialized');
     } finally {
-      teardownDefaultSession();
+      await Effect.runPromise(teardownDefaultSession());
     }
   });
 
@@ -183,7 +187,7 @@ describe('default session lifecycle', () => {
         if (roots) {
           expect(Object.keys(roots)).toEqual([]);
         }
-        const session = initializeDefaultSession({
+        const session = yield* initializeDefaultSession({
           transcriptMode: { kind: 'ephemeral', reason: 'root snapshot test' },
           ...(roots && { roots }),
         });
@@ -218,23 +222,30 @@ describe('default session lifecycle', () => {
         tryDefaultSession,
       } = yield* Effect.promise(() => importSessionRuntime());
 
-      const first = initializeDefaultSession({
+      const first = yield* initializeDefaultSession({
         transcriptMode: { kind: 'ephemeral', reason: 'first activation' },
       });
-      expect(() =>
-        initializeDefaultSession({
-          transcriptMode: { kind: 'ephemeral', reason: 'replacement attempt' },
-        }),
-      ).toThrow('already been initialized');
+      yield* Effect.promise(() =>
+        expect(
+          Effect.runPromise(
+            initializeDefaultSession({
+              transcriptMode: {
+                kind: 'ephemeral',
+                reason: 'replacement attempt',
+              },
+            }),
+          ),
+        ).rejects.toThrow('already been initialized'),
+      );
 
       const disposeSpy = vi.spyOn(first, 'dispose');
 
-      teardownDefaultSession();
+      yield* teardownDefaultSession();
 
       expect(disposeSpy).toHaveBeenCalledOnce();
       expect(tryDefaultSession()).toBeUndefined();
 
-      const second = initializeDefaultSession({
+      const second = yield* initializeDefaultSession({
         transcriptMode: { kind: 'ephemeral', reason: 'second activation' },
       });
       try {
@@ -251,7 +262,7 @@ describe('default session lifecycle', () => {
         yield* closeSession(processWorkspaceRoots().storage);
         expect(tryDefaultSession()).toBeUndefined();
       } finally {
-        teardownDefaultSession();
+        yield* teardownDefaultSession();
       }
     }),
   );

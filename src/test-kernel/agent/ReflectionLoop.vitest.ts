@@ -575,7 +575,7 @@ const PROVIDER_FAILURE: RetryErrorInfo = {
 describe('the reflection round loop', () => {
   it.effect('runs its configured rounds and completes', () =>
     Effect.gen(function* () {
-      const session = createProcessSession();
+      const session = yield* createProcessSession();
       const runId = startedRun(session);
       const { result, requests, state } = yield* runLoop({
         runId,
@@ -594,7 +594,7 @@ describe('the reflection round loop', () => {
     'repairs a rejected compile in the next round and completes when that round compiles',
     () =>
       Effect.gen(function* () {
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
         scripted.compileResults.set(0, compileFailure(0));
         scripted.compileResults.set(1, { status: 'ok', round: 1 });
@@ -611,7 +611,7 @@ describe('the reflection round loop', () => {
 
   it.effect('fails a single-round run whose only compile was rejected', () =>
     Effect.gen(function* () {
-      const session = createProcessSession();
+      const session = yield* createProcessSession();
       const runId = startedRun(session);
       scripted.compileResults.set(0, compileFailure(0));
 
@@ -632,7 +632,7 @@ describe('the reflection round loop', () => {
     'keeps the rejection when the repair round reports no compile',
     () =>
       Effect.gen(function* () {
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
         scripted.compileResults.set(0, compileFailure(0));
 
@@ -646,7 +646,7 @@ describe('the reflection round loop', () => {
 
   it.effect('never adds a repair round beyond the configured count', () =>
     Effect.gen(function* () {
-      const session = createProcessSession();
+      const session = yield* createProcessSession();
       const runId = startedRun(session);
       for (const round of [0, 1, 2]) {
         scripted.compileResults.set(round, compileFailure(round));
@@ -677,7 +677,7 @@ describe('the reflection round loop', () => {
           },
         }),
       );
-      const session = createProcessSession();
+      const session = yield* createProcessSession();
       const runId = startedRun(session);
       scripted.compileResults.set(0, compileFailure(0));
 
@@ -696,7 +696,7 @@ describe('the reflection round loop', () => {
         // Disabling rejection is an explicit acceptance decision: a repair
         // round that reports no compile result is then a completed run, not
         // a retroactively failed one.
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
         scripted.compileResults.set(0, compileFailure(0));
 
@@ -720,7 +720,7 @@ describe('the reflection round loop', () => {
     'keeps the rejection durable when the repair round is interrupted, and repairs it on resume',
     () =>
       Effect.gen(function* () {
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
         scripted.compileResults.set(0, compileFailure(0));
         scripted.compileResults.set(1, { status: 'ok', round: 1 });
@@ -752,7 +752,7 @@ describe('the reflection round loop', () => {
     'warns and continues when the run workspace cannot be prepared',
     () =>
       Effect.gen(function* () {
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const warn = vi.spyOn(logger, 'warn');
@@ -793,7 +793,7 @@ describe('the reflection round loop', () => {
     },
   ])('closes each round stage with its verdict ($name)', (scenario) =>
     Effect.gen(function* () {
-      const session = createProcessSession();
+      const session = yield* createProcessSession();
       const runId = startedRun(session);
       const logger = new TraceEmitter();
       const store = new StreamLog();
@@ -822,7 +822,7 @@ describe('a resumed reflection run', () => {
     'fails the persisted rejection when the round cap was lowered',
     () =>
       Effect.gen(function* () {
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
         scripted.compileResults.set(0, compileFailure(0));
 
@@ -851,7 +851,7 @@ describe('a resumed reflection run', () => {
     'resolves the persisted rejection when a raised cap allows a repair',
     () =>
       Effect.gen(function* () {
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
         scripted.compileResults.set(0, compileFailure(0));
         scripted.compileResults.set(1, { status: 'ok', round: 1 });
@@ -885,7 +885,7 @@ describe('a resumed reflection run', () => {
     'clears a persisted rejection before the cap fails it once the policy is off',
     () =>
       Effect.gen(function* () {
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
         scripted.compileResults.set(0, compileFailure(0));
 
@@ -914,7 +914,7 @@ describe('a resumed reflection run', () => {
 describe('the output facts a reflection round publishes', () => {
   it.effect('publishes the run-wide output map, restored rounds included', () =>
     Effect.gen(function* () {
-      const session = createProcessSession();
+      const session = yield* createProcessSession();
       const runId = startedRun(session);
       const firstLogger = new TraceEmitter();
       const first = recordTraceEvents(firstLogger);
@@ -952,7 +952,7 @@ describe('the output facts a reflection round publishes', () => {
 
   it.effect('publishes the compile failures of a rejected round', () =>
     Effect.gen(function* () {
-      const session = createProcessSession();
+      const session = yield* createProcessSession();
       const runId = startedRun(session);
       const logger = new TraceEmitter();
       const recorded = recordTraceEvents(logger);
@@ -973,7 +973,7 @@ describe('the output facts a reflection round publishes', () => {
 
   it.effect('asks the host to open the files a round summary lists', () =>
     Effect.gen(function* () {
-      const session = createProcessSession();
+      const session = yield* createProcessSession();
       const { events, interactions } = createRecordingHost();
       session.interactions.use(interactions);
       const runId = startedRun(session);
@@ -997,7 +997,7 @@ describe('a token-limited reflection response', () => {
     'continues inside the same round instead of opening a new one',
     () =>
       Effect.gen(function* () {
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
 
         const { result, requests, state } = yield* runLoop({
@@ -1018,7 +1018,7 @@ describe('a token-limited reflection response', () => {
       // Reflection owns the conversation limit: a model that never finishes
       // gets a bounded number of continuations, then the round ends with what
       // it has.
-      const session = createProcessSession();
+      const session = yield* createProcessSession();
       const runId = startedRun(session);
 
       const { result, requests, state } = yield* runLoop({
@@ -1040,7 +1040,7 @@ describe('a token-limited reflection response', () => {
   it.effect('joins a continued response through the session text policy', () =>
     Effect.gen(function* () {
       const connectResponseText = vi.fn(() => Effect.succeed('\n'));
-      const session = createProcessSession({
+      const session = yield* createProcessSession({
         responseTextProcessing: {
           normalizeResponseText: (text: string) => text,
           postProcessResponse: (text: string) => text,
@@ -1082,7 +1082,7 @@ describe('a token-limited reflection response', () => {
       Effect.gen(function* () {
         // No compaction is available on the reflection path, so a retry
         // would overflow again: the round ends, loudly, with what it has.
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const warn = vi.spyOn(logger, 'warn');
@@ -1108,7 +1108,7 @@ describe('a token-limited reflection response', () => {
 describe('an interrupted reflection run', () => {
   it.effect('halts as cancelled and leaves a resumable round behind', () =>
     Effect.gen(function* () {
-      const session = createProcessSession();
+      const session = yield* createProcessSession();
       const runId = startedRun(session);
 
       const state = yield* interruptedAt({ runId, session, rounds: 2 }, 0);
@@ -1132,7 +1132,7 @@ describe('an interrupted reflection run', () => {
     'keeps a completed round when the next one is interrupted, and resumes after it',
     () =>
       Effect.gen(function* () {
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const store = new StreamLog();

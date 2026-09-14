@@ -67,9 +67,7 @@ describe('requestBashApproval queueing', () => {
       Effect.scoped(
         Effect.gen(function* () {
           const session = createTestSession();
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => session.dispose()),
-          );
+          yield* Effect.addFinalizer(() => session.dispose());
           session.setApprovalPolicy('ask');
           const keys = [
             BASH_APPROVAL_CONFIG_KEY,
@@ -122,7 +120,7 @@ describe('requestBashApproval queueing', () => {
     Effect.scoped(
       Effect.gen(function* () {
         const session = createTestSession();
-        yield* Effect.addFinalizer(() => Effect.sync(() => session.dispose()));
+        yield* Effect.addFinalizer(() => session.dispose());
         const runId = generateRunId();
         let policyDenials = 0;
         session.setApprovalPolicy('never');
@@ -158,9 +156,7 @@ describe('requestBashApproval queueing', () => {
       Effect.scoped(
         Effect.gen(function* () {
           const session = createTestSession();
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => session.dispose()),
-          );
+          yield* Effect.addFinalizer(() => session.dispose());
           const runId = generateRunId();
           publishTestRunStart(session, runId);
           yield* Effect.tryPromise(() => session.settlePublications());

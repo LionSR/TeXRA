@@ -47,8 +47,8 @@ describe('session-owned transcripts and follow-up queues', () => {
         handle.dispose();
       }
     } finally {
-      launching.dispose();
-      sibling.dispose();
+      await Effect.runPromise(launching.dispose());
+      await Effect.runPromise(sibling.dispose());
     }
   });
 
@@ -82,11 +82,11 @@ describe('session-owned transcripts and follow-up queues', () => {
     } finally {
       detach();
       handle.dispose();
-      session.dispose();
+      await Effect.runPromise(session.dispose());
     }
   });
 
-  it('keeps same-stream follow-up queues isolated by session', () => {
+  it('keeps same-stream follow-up queues isolated by session', async () => {
     const a = createTestSession();
     const b = createTestSession();
     const runId = generateRunId();
@@ -100,8 +100,8 @@ describe('session-owned transcripts and follow-up queues', () => {
       expect(a.followUps.getAll(runId)).toEqual([]);
       expect(b.followUps.getAll(runId)).toEqual(['from b']);
     } finally {
-      a.dispose();
-      b.dispose();
+      await Effect.runPromise(a.dispose());
+      await Effect.runPromise(b.dispose());
     }
   });
 });
@@ -149,7 +149,7 @@ describe('sendFollowUp host-path session routing', () => {
       });
     } finally {
       processSession.followUps.terminalize(parentRun);
-      processSession.dispose();
+      await Effect.runPromise(processSession.dispose());
     }
   });
 });

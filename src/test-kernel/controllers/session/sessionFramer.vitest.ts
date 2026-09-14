@@ -216,7 +216,7 @@ describe('session framer', () => {
       const session = createTestSession();
       // Registered first, so it runs last: the bridge's ports release their
       // transcript sets through the session before it goes.
-      yield* Effect.addFinalizer(() => Effect.sync(() => session.dispose()));
+      yield* Effect.addFinalizer(() => session.dispose());
       const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
       const bridge = yield* SessionBridge.make({
         session,
@@ -248,7 +248,7 @@ describe('session framer', () => {
   it.live('closes a superseded port before registering its replacement', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      yield* Effect.addFinalizer(() => Effect.sync(() => session.dispose()));
+      yield* Effect.addFinalizer(() => session.dispose());
       const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
       const onPortClosed = vi.fn();
       const bridge = yield* SessionBridge.make({

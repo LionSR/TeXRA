@@ -26,7 +26,7 @@ import {
 import { waitForCondition } from '../support/asyncTestUtils';
 
 /** Sessions and request watchers the cases opened, released after each. */
-const cleanups: Array<() => void> = [];
+const cleanups: Array<() => Promise<void>> = [];
 
 /**
  * Dispatch the tool on its own run and hold the command request it opens: the
@@ -41,7 +41,7 @@ function dispatchWolfram(runId: RunId, code: string) {
     const requests = autoDecideRequests(session, () => null);
     cleanups.push(() => {
       requests.detach();
-      session.dispose();
+      return Effect.runPromise(session.dispose());
     });
 
     const result = yield* Effect.forkChild(
@@ -76,8 +76,8 @@ function dispatchWolfram(runId: RunId, code: string) {
 }
 
 describe('WolframTool approval', () => {
-  afterEach(() => {
-    for (const release of cleanups.splice(0)) release();
+  afterEach(async () => {
+    for (const release of cleanups.splice(0)) await release();
     vi.restoreAllMocks();
   });
 

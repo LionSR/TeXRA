@@ -142,6 +142,29 @@ class Session extends Context.Service<Session, SessionHandle>()(
   '@texra/session/Session',
 ) {}
 
+/**
+ * The sessions the owner holds, outside the map: what the owner's
+ * synchronous `current` reads. An entry is written once its handle exists
+ * and removed as the first step of its release, so a root whose session is
+ * still building, or already unwinding, reads as having none. Keyed by the
+ * entry's `SessionKey` and matched on its captured `key.storage` at lookup,
+ * as `heldSession` matches. A session retains the roots resolved when it opens. `heldSession` below is the map's own answer, which
+ * waits for a building entry; `closeSession` needs that, a synchronous read
+ * cannot have it.
+ */
+type HeldSessions = Map<SessionKey, SessionHandle>;
+
+/** The held session whose key names `root`, if one does. */
+function heldSessionSync(
+  held: HeldSessions,
+  root: string,
+): SessionHandle | undefined {
+  for (const [key, session] of held) {
+    if (key.storage === root) return session;
+  }
+  return undefined;
+}
+
 /** The owner ids of the non-terminal runs another process wrote. */
 function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
   const owners = new Set<OwnerId>();
@@ -227,7 +250,8 @@ const ownerLiveness = Layer.effectDiscard(
  */
 const sessionHandleLayer = (
   key: SessionKey,
-  release: (key: SessionKey) => void,
+  held: HeldSessions,
+  release: (key: SessionKey) => Effect.Effect<void>,
 ) =>
   Layer.effect(
     Session,
@@ -452,6 +476,13 @@ const sessionHandleLayer = (
             ),
           ),
       );
+      // Registered after the handle, so it is the first thing unwound when
+      // the entry closes: `current` stops answering with this session before
+      // its owners unwind.
+      yield* Effect.acquireRelease(
+        Effect.sync(() => held.set(key, session)),
+        () => Effect.sync(() => held.delete(key)),
+      );
       yield* SubscriptionRef.set(delivered, anchor);
       yield* reads.all(anchor, delivered).pipe(
         Stream.runForEach((event) =>
@@ -584,11 +615,12 @@ const sessionGraphLayer = (key: SessionKey) => {
  */
 const sessionLayer = (
   key: SessionKey,
-  release: (key: SessionKey) => void,
+  held: HeldSessions,
+  release: (key: SessionKey) => Effect.Effect<void>,
   identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
 ) =>
   Layer.fresh(
-    sessionHandleLayer(key, release).pipe(
+    sessionHandleLayer(key, held, release).pipe(
       Layer.provide(sessionGraphLayer(key)),
       Layer.provide(identity),
     ),
@@ -610,14 +642,16 @@ class Sessions extends Context.Service<
   /** The map, releasing an entry the handle asked to be released through
    *  the runtime that holds the map. */
   static layer(
-    release: (key: SessionKey) => void,
+    held: HeldSessions,
+    release: (key: SessionKey) => Effect.Effect<void>,
     identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
   ) {
     return Layer.effect(
       Sessions,
-      LayerMap.make((key: SessionKey) => sessionLayer(key, release, identity), {
-        idleTimeToLive: Duration.infinity,
-      }),
+      LayerMap.make(
+        (key: SessionKey) => sessionLayer(key, held, release, identity),
+        { idleTimeToLive: Duration.infinity },
+      ),
     );
   }
 }
@@ -649,7 +683,10 @@ const listSessions = Effect.gen(function* () {
 });
 
 /** The session held for `root`, if the map holds one: an entry still
- *  building is waited for, never skipped. Builds nothing. */
+ *  building is waited for, never skipped, which is what lets a close issued
+ *  right after an open find the session (`SessionOwner.open`). Builds
+ *  nothing. The owner's `current` reads the `HeldSessions` map instead: it
+ *  answers synchronously and so cannot wait for a build. */
 const heldSession = (root: string) =>
   Effect.gen(function* () {
     const sessions = yield* Sessions;
@@ -848,13 +885,8 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * composition root is its first run (the package): the map itself never
  * waits for it, so an open registers its root with the owner before the
  * caller's first await, and only the entry's build does. The owner it
- * installs answers in Effect except for the two synchronous faces the
- * unconverted hosts still take: `openSync` builds under `runSync`, so
- * everything a root's graph does at build time (opening the database,
- * reading the startup listing, opening the transcript store) must complete
- * inside the scheduler's yield budget (`Scheduler.MaxOpsBeforeYield` steps
- * per yield) or the open reads as asynchronous and throws; an opener whose
- * identity is still pending opens through the Effect face.
+ * installs answers in Effect, on the opener's own fiber; its one
+ * synchronous face, `current`, reads the held map and runs nothing.
  *
  * The process services (injection plan §3.1, the one process provide point)
  * are merged here from what the root hands over: `Secrets` and `AppState`
@@ -943,11 +975,25 @@ export function installProcessRuntime({
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),
   ).pipe(Layer.provideMerge(identity));
-  const release = (key: SessionKey): void => {
-    runtime.runFork(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
-  };
+  // The map's services on the caller's own fiber: an Effect-native opener
+  // (the SDK) runs these where it stands, so the owner adds no run site of
+  // its own. Supply only the owned session family: the caller retains its
+  // tracer, logger, and other independently provided services. `current`,
+  // the owner's one synchronous face, reads the held map instead.
+
+  const onThisRuntime = <A, E>(
+    effect: Effect.Effect<A, E, Sessions>,
+  ): Effect.Effect<A, E> =>
+    Effect.flatMap(runtime.contextEffect, (context) =>
+      Effect.provideService(effect, Sessions, Context.get(context, Sessions)),
+    );
+  const held: HeldSessions = new Map();
+  // A handle's own `dispose` releases its entry here, on the disposing
+  // fiber: the release settles when the entry has unwound.
+  const release = (key: SessionKey): Effect.Effect<void> =>
+    onThisRuntime(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
   const runtime = ManagedRuntime.make(
-    Sessions.layer(release, services).pipe(
+    Sessions.layer(held, release, services).pipe(
       Layer.provideMerge(services),
       // The Lean port beside `services`, not among them: `services` is also
       // each session entry's identity layer, rebuilt fresh per root, and the
@@ -969,21 +1015,9 @@ export function installProcessRuntime({
     ),
   );
   initProcessRuntime(runtime);
-  // The map's services on the caller's own fiber: an Effect-native opener
-  // (the SDK) runs these where it stands, so the owner adds no run site of
-  // its own. Supply only the owned session family: the caller retains its
-  // tracer, logger, and other independently provided services. `openSync`
-  // and `current` stay synchronous for the three hosts.
-  const onThisRuntime = <A, E>(
-    effect: Effect.Effect<A, E, Sessions>,
-  ): Effect.Effect<A, E> =>
-    Effect.flatMap(runtime.contextEffect, (context) =>
-      Effect.provideService(effect, Sessions, Context.get(context, Sessions)),
-    );
   initSessionOwner({
-    openSync: (open) => runtime.runSync(openSession(open)),
     open: (open) => onThisRuntime(openSession(open)),
-    current: (root) => runtime.runSync(heldSession(root))?.session,
+    current: (root) => heldSessionSync(held, root),
     list: () => onThisRuntime(listSessions),
     close: (root, signal) => onThisRuntime(closeSession(root, signal)),
   });

@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   assertOutputFileAvailable: vi.fn(),
   executeCliWorkflowConfig: vi.fn(),
   initInteractiveCliPlatform: vi.fn(),
-  initializeCliTranscriptSession: vi.fn(),
   resolveCliLaunchAgent: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   runChat: vi.fn(),
@@ -57,10 +56,6 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
       try: () => mocks.retrieveSessionResumeData(...args),
       catch: (error) => error,
     }),
-}));
-
-vi.mock('@cli/runtime/transcriptSession', () => ({
-  initializeCliTranscriptSession: mocks.initializeCliTranscriptSession,
 }));
 
 vi.mock('@cli/commands/workflow', () => ({
@@ -118,8 +113,11 @@ async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
   readonly checkpoint?: boolean;
 }): Promise<void> {
-  const session = createProcessSession();
-  mocks.initializeCliTranscriptSession.mockResolvedValue(session);
+  const session = await Effect.runPromise(createProcessSession());
+  // `runResumeCommand` reads the session off the services the init returns.
+  mocks.initInteractiveCliPlatform.mockResolvedValue({
+    session: Effect.succeed(session),
+  });
   await Effect.runPromise(
     session.commit([
       {
@@ -180,7 +178,6 @@ async function stubWorkflowResume(config: AgentConfig): Promise<void> {
 describe('runResumeCommand', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
     await seedRunRecord({ config: TOOL_USE_CONFIG });
     mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'correct',

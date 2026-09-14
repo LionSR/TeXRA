@@ -249,7 +249,7 @@ describe('terminal result event', () => {
         });
       } finally {
         detach();
-        session.dispose();
+        yield* session.dispose();
       }
     }),
   );

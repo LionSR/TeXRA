@@ -231,9 +231,9 @@ async function writeArchiveFixture(runId: RunId): Promise<void> {
 describe('completedRunArchive facade', () => {
   setupPlatform(() => createTempDirPlatform('texra-archive-', tempDirs));
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetAllMocks();
-    taskSession = createProcessSession();
+    taskSession = await Effect.runPromise(createProcessSession());
   });
 
   afterEach(async () => {
@@ -242,9 +242,11 @@ describe('completedRunArchive facade', () => {
 
   it('keeps private metadata exact while public events and exports redact its secrets', async () => {
     await Effect.runPromise(closeTestSession(taskSession));
-    taskSession = createProcessSession({
-      transcriptMode: { kind: 'persistent' },
-    });
+    taskSession = await Effect.runPromise(
+      createProcessSession({
+        transcriptMode: { kind: 'persistent' },
+      }),
+    );
     const runId = 'abc654abc654' as RunId;
     const secret = 'sk-private-export-key-1234567890';
     const content = `  retained text ${secret}  `;
@@ -298,10 +300,8 @@ describe('completedRunArchive facade', () => {
     expect(trace.status).toBe('ok');
     if (trace.status !== 'ok') throw new Error('Expected trace export');
     const exportInput = await loadChatExportInput(runId);
-    const { secrets, roots } = installedHost();
-    const { globalState } = roots;
     const details = await readCliHistoryDetails(
-      { secrets, globalState },
+      Effect.succeed(taskSession),
       runId,
     );
     expect(details).not.toBeNull();
@@ -478,7 +478,7 @@ describe('completedRunArchive facade', () => {
 
         yield* Effect.promise(() => stampRun(runId));
         yield* closeTestSession(taskSession);
-        const session = initializeDefaultSession({});
+        const session = yield* initializeDefaultSession({});
         taskSession = session;
         publishTestRunStart(session, runId);
         yield* Effect.promise(() => session.settlePublications());

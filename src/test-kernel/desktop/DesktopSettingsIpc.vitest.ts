@@ -1,6 +1,15 @@
 import '@test/support/defaultSessionTestSetup';
 
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
+import { Effect } from 'effect';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
@@ -25,7 +34,6 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { startGoal } from '@tools/goal';
 
-import { disposeAfterTest } from './desktopAgentRunTestHarness.ts';
 import {
   commandOf,
   createStubDesktopAgentSettingsController,
@@ -90,16 +98,19 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   // session's roots, as the desktop passes them.
   const session =
     overrides.session ??
-    disposeAfterTest(
-      createTestSession({
-        roots: {
-          ...workspaceRoots(),
-          storage: '/workspace/settings-ipc/storage',
-          config,
-          workspaceState,
-        },
-      }),
-    );
+    createTestSession({
+      roots: {
+        ...workspaceRoots(),
+        storage: '/workspace/settings-ipc/storage',
+        config,
+        workspaceState,
+      },
+    });
+  // One root holds one session: released at test end, or the next fixture
+  // over this root would get this test's session and its workspace state.
+  if (overrides.session === undefined) {
+    onTestFinished(() => Effect.runPromise(session.dispose()));
+  }
   const settings = createDesktopSettingsIpc({
     ...settingsOverrides,
     agentSettingsController:

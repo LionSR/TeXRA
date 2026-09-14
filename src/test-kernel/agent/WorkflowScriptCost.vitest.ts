@@ -220,7 +220,7 @@ describe('workflow-script completed journal cost', () => {
   // so that run has to exist before a script row can name it.
   let parentRunId: RunId;
   beforeEach(async () => {
-    session = createProcessSession();
+    session = await Effect.runPromise(createProcessSession());
     parentRunId = publishTestRunStart(session);
     await session.settlePublications();
   });

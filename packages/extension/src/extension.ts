@@ -70,7 +70,7 @@ import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform } from '@platform/platform';
-import { effectRuntime } from '@platform/processRuntime';
+import { effectRuntime, tryProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -252,7 +252,9 @@ function shutdownExtension(): Promise<void> {
       await host?.runShutdown();
     } finally {
       if (lifecycleHost === host) lifecycleHost = undefined;
-      teardownDefaultSession();
+      // No runtime, no session was ever opened: an activation that failed
+      // before installing one has nothing to tear down here.
+      await tryProcessRuntime()?.runPromise(teardownDefaultSession());
       // After the session: its graph releases on the runtime it runs on.
       await disposeProcessRuntime();
     }
@@ -573,14 +575,20 @@ async function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     languageModel.onDidChange(invalidateLanguageModels),
   );
-  const runtimeSession = initializeDefaultSession({
-    responseTextProcessing: createTexraResponseTextProcessing(
-      createAgentResponseTextConnector({
-        secrets,
-        globalState: context.globalState,
-      }),
-    ),
-  });
+  // The host entry holds the process runtime in a local and threads it to the
+  // surfaces registered below, so code under `activate` settles its Effects on
+  // the runtime it was handed instead of reading the global back.
+  const runtime = effectRuntime();
+  const runtimeSession = await runtime.runPromise(
+    initializeDefaultSession({
+      responseTextProcessing: createTexraResponseTextProcessing(
+        createAgentResponseTextConnector({
+          secrets,
+          globalState: context.globalState,
+        }),
+      ),
+    }),
+  );
   if (runtimeSession.storeCleared) {
     void vscode.window.showWarningMessage(
       sessionStoreClearedMessage(runtimeSession.storeCleared),
@@ -590,10 +598,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
   registerRuntimeShutdownHandlers(lifecycle, {
-    runSettlement: (settlement) => effectRuntime().runPromise(settlement),
+    runSettlement: (settlement) => runtime.runPromise(settlement),
     afterAgentShutdown: [
       () => killActiveRecording(),
-      () => effectRuntime().runPromise(UsageLogService.dispose()),
+      () => runtime.runPromise(UsageLogService.dispose()),
     ],
     flushArtifacts: () => runtimeSession.flushArtifacts(),
     afterRunSettlement: [() => disposeDiffRefresh()],
@@ -610,11 +618,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   });
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
-
-  // The host entry holds the process runtime in a local and threads it to the
-  // surfaces registered below, so code under `activate` settles its Effects on
-  // the runtime it was handed instead of reading the global back.
-  const runtime = effectRuntime();
 
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
@@ -643,9 +646,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ? context.extension.packageJSON.version
       : undefined;
   try {
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       UsageLogService.initialize(
-        effectRuntime().scope,
+        runtime.scope,
         {},
         extensionVersion,
         vscode.env.appName || undefined,

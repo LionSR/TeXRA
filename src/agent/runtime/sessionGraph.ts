@@ -132,8 +132,9 @@ export interface SessionGraph {
    *  starts its `all` read (PRD 10.3). */
   readonly now: () => CommitOrdinal;
   /** Release the session from its owner: the owner unwinds the session and
-   *  frees the root's graph after it. */
-  readonly close: () => void;
+   *  frees the root's graph after it. Settles once the root's entry has
+   *  unwound, on the caller's own fiber. */
+  readonly close: () => Effect.Effect<void>;
 }
 
 /** What opening a session supplies, with its roots resolved. */
@@ -143,17 +144,13 @@ export type SessionOpen = SessionHandleInit & {
 
 /** The process's session owner, as `installProcessRuntime` installs it. */
 export interface SessionOwner {
-  /** The hosts' synchronous face of {@link SessionOwner.open}: the
-   *  extension, the desktop, and the CLI still open from Promise-native
-   *  code. It is scheduled for deletion when those lanes convert, and no
-   *  new caller may take it. */
-  openSync(open: SessionOpen): SessionHandle;
   /** The session of `open.roots`' storage root: the one already open there,
    *  or built now over what `open` supplies. The root's entry is registered
    *  with the owner before this Effect's first yield, so a close issued
    *  after it finds the session and waits for its build. */
   open(open: SessionOpen): Effect.Effect<SessionHandle>;
-  /** The session open on a storage root, if one is; never builds one. */
+  /** The session open on a storage root, if one is; never builds one, and
+   *  does not see an entry still building or already releasing. */
   current(root: string): SessionHandle | undefined;
   /** Every session the owner holds, in no particular order. */
   list(): Effect.Effect<readonly SessionHandle[]>;
@@ -198,25 +195,20 @@ function sessions(): SessionOwner {
 
 /**
  * Open the session of `init`'s workspace root, or return the one already
- * open there: one session per storage root in a process. Process roots
- * unless the opener names a folder: the extension, the CLI, and the SDK
- * open exactly one session over the process roots; the desktop opens one
- * session per paper and passes that paper's roots. What `init` supplies
- * beyond the roots (the transcript store, the sidecar store, the response
- * text policy) is read only when the root's session is built: a later
- * opener of the same root gets the session the first opener built.
+ * open there: one session per storage root in a process, built on the
+ * caller's own fiber. Process roots unless the opener names a folder: the
+ * extension, the CLI, and the SDK open exactly one session over the process
+ * roots; the desktop opens one session per project and passes that project's
+ * roots. What `init` supplies beyond the roots (the transcript store, the
+ * sidecar store, the response text policy) is read only when the root's
+ * session is built: a later opener of the same root gets the session the
+ * first opener built.
  *
  * The returned handle is borrowed access to an owner-held session
  * (PR #11893, agent SDK architecture proposal, section 3): holding it
  * carries no disposal obligation, and {@link closeSession} is how the
  * session ends.
  */
-export function openSession(init: SessionHandleInit): SessionHandle {
-  return sessions().openSync(resolveRoots(init));
-}
-
-/** {@link openSession} for a caller that already speaks Effect: the same
- *  one-session-per-root open, on the caller's own fiber. */
 export function openSessionEffect(
   init: SessionHandleInit,
 ): Effect.Effect<SessionHandle> {

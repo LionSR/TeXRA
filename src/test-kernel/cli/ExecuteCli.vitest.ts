@@ -57,8 +57,8 @@ async function installFreshDefaultSession(): Promise<void> {
   await import('@test/support/sessionGraphTestSetup');
   const { initializeDefaultSession, teardownDefaultSession } =
     await import('@agent/runtime/SessionHandle');
-  teardownDefaultSession();
-  initializeDefaultSession({});
+  await Effect.runPromise(teardownDefaultSession());
+  await Effect.runPromise(initializeDefaultSession({}));
 }
 
 async function installStoragePlatform(): Promise<void> {
@@ -167,21 +167,56 @@ function toolUseConfig() {
 /** Tools the CLI runtime hides by default during agent run. */
 const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = getDefaultUnavailableToolNames('cli');
 
+/** A run program's options with the session the wrapper below supplies. */
+type WithoutSession<O> = Omit<O, 'session'>;
+
 async function loadExecuteCli() {
   const runtime = await import('@cli/runtime/executeCli');
+  const { defaultSession } = await import('@agent/runtime/SessionHandle');
+  // The commands thread `initCliPlatform`'s session in; here the process
+  // default this file installs stands in for it.
   return {
     ...runtime,
     executeCliRequest: (
-      ...args: Parameters<typeof runtime.executeCliRequest>
-    ) =>
-      Effect.provide(runtime.executeCliRequest(...args), fakeProcessServices()),
-    executeCliConfig: (...args: Parameters<typeof runtime.executeCliConfig>) =>
-      Effect.provide(runtime.executeCliConfig(...args), fakeProcessServices()),
-    executeCliToolUseConfig: (
-      ...args: Parameters<typeof runtime.executeCliToolUseConfig>
+      request: Parameters<typeof runtime.executeCliRequest>[0],
+      context: Parameters<typeof runtime.executeCliRequest>[1],
+      options: WithoutSession<
+        Parameters<typeof runtime.executeCliRequest>[2]
+      > = {},
     ) =>
       Effect.provide(
-        runtime.executeCliToolUseConfig(...args),
+        runtime.executeCliRequest(request, context, {
+          session: Effect.succeed(defaultSession()),
+          ...options,
+        }),
+        fakeProcessServices(),
+      ),
+    executeCliConfig: (
+      config: Parameters<typeof runtime.executeCliConfig>[0],
+      context: Parameters<typeof runtime.executeCliConfig>[1],
+      options: WithoutSession<
+        Parameters<typeof runtime.executeCliConfig>[2]
+      > = {},
+    ) =>
+      Effect.provide(
+        runtime.executeCliConfig(config, context, {
+          session: Effect.succeed(defaultSession()),
+          ...options,
+        }),
+        fakeProcessServices(),
+      ),
+    executeCliToolUseConfig: (
+      config: Parameters<typeof runtime.executeCliToolUseConfig>[0],
+      context: Parameters<typeof runtime.executeCliToolUseConfig>[1],
+      options: WithoutSession<
+        Parameters<typeof runtime.executeCliToolUseConfig>[2]
+      > = {},
+    ) =>
+      Effect.provide(
+        runtime.executeCliToolUseConfig(config, context, {
+          session: Effect.succeed(defaultSession()),
+          ...options,
+        }),
         fakeProcessServices(),
       ),
   };

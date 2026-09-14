@@ -40,12 +40,14 @@ let session: SessionHandle;
 beforeEach(async () => {
   // `setupPlatform` supplies this suite's host first. The default session must
   // be created after that root is in place and remain rooted there.
-  session = initializeDefaultSession({
-    transcriptMode: {
-      kind: 'ephemeral',
-      reason: 'workflow script progress bridge test session',
-    },
-  });
+  session = await Effect.runPromise(
+    initializeDefaultSession({
+      transcriptMode: {
+        kind: 'ephemeral',
+        reason: 'workflow script progress bridge test session',
+      },
+    }),
+  );
   parentRunId = publishTestRunStart(session);
   await session.settlePublications();
 });

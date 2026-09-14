@@ -42,10 +42,12 @@ describe('OpenPdfTool', () => {
   let detachHostInteractions = (): void => {};
   let sessionRoot: string | undefined;
 
-  beforeEach(() => {
-    const session = initializeDefaultSession({
-      transcriptMode: { kind: 'ephemeral', reason: 'OpenPdfTool test' },
-    });
+  beforeEach(async () => {
+    const session = await Effect.runPromise(
+      initializeDefaultSession({
+        transcriptMode: { kind: 'ephemeral', reason: 'OpenPdfTool test' },
+      }),
+    );
     sessionRoot = session.roots.storage;
   });
 

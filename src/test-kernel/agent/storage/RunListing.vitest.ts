@@ -115,8 +115,8 @@ async function writeRun(
 describe('run listing normalization', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
-  beforeEach(() => {
-    session = createProcessSession();
+  beforeEach(async () => {
+    session = await Effect.runPromise(createProcessSession());
   });
 
   it('sees runs written by another host after an earlier listing', async () => {

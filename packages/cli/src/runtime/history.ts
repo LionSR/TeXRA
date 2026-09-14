@@ -17,7 +17,6 @@ import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { redactDisplayValue } from '@logger/redaction';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   RunIdSchema,
@@ -42,7 +41,6 @@ import {
 import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { initializeCliTranscriptSession } from './transcriptSession';
 import { CliUsageError } from './cliContext';
 import { isCliRunResumable, readCliResumedModel } from './toolUseResumeData';
 import {
@@ -156,36 +154,36 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
   return RunIdSchema.safeParse(raw).data;
 }
 
+/**
+ * The history readers take the process session as the open that yields it
+ * (`CliPlatformServices.session`): a listing is the first thing `history`
+ * asks of the session, so the open runs inside the reader's own program.
+ */
 export async function listCliHistoryEntries(
-  stores: ModelOptionStores,
+  session: Effect.Effect<SessionHandle>,
 ): Promise<CliHistoryEntry[]> {
-  const session = await initializeCliTranscriptSession(stores);
   // A row's resumability comes from the checkpoint `stat` the listing already
   // did; only a failed workflow row still reads its persisted state. That read
   // is bounded here so a history full of failed workflow runs cannot open one
   // file handle burst per run. `Effect.forEach` preserves input order.
   return effectRuntime().runPromise(
-    listRuns(session).pipe(
-      Effect.flatMap((entries) =>
-        Effect.forEach(
-          entries.filter(isUserVisibleRun),
-          (entry) => toCliHistoryEntry(entry, session),
-          {
-            concurrency: HISTORY_ENTRY_CONCURRENCY,
-          },
-        ),
-      ),
-    ),
+    Effect.gen(function* () {
+      const opened = yield* session;
+      const entries = yield* listRuns(opened);
+      return yield* Effect.forEach(
+        entries.filter(isUserVisibleRun),
+        (entry) => toCliHistoryEntry(entry, opened),
+        { concurrency: HISTORY_ENTRY_CONCURRENCY },
+      );
+    }),
   );
 }
 
 export async function readCliHistoryDetails(
-  stores: ModelOptionStores,
+  sessionOpen: Effect.Effect<SessionHandle>,
   id: RunId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
-  const session = await initializeCliTranscriptSession(stores);
-  const store = getRunRecords(session, id);
   const [
     run,
     config,
@@ -200,6 +198,8 @@ export async function readCliHistoryDetails(
     resumable,
   ] = await effectRuntime().runPromise(
     Effect.gen(function* () {
+      const session = yield* sessionOpen;
+      const store = getRunRecords(session, id);
       const values = yield* Effect.all(
         [
           session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
@@ -324,12 +324,13 @@ type CliHistoryExportInputResult =
  * run simply never produced a conversation.
  */
 export async function readCliHistoryExportInput(
-  stores: ModelOptionStores,
+  session: Effect.Effect<SessionHandle>,
   id: RunId,
 ): Promise<CliHistoryExportInputResult> {
-  const session = await initializeCliTranscriptSession(stores);
   const { run, config, conversation, hasTranscriptEvidence, exportInput } =
-    await effectRuntime().runPromise(loadChatExportInput(id, session));
+    await effectRuntime().runPromise(
+      Effect.flatMap(session, (opened) => loadChatExportInput(id, opened)),
+    );
   if (exportInput) return { status: 'ok', exportInput };
   if (!run && !config && !conversation && !hasTranscriptEvidence) {
     return { status: 'not_found' };

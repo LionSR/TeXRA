@@ -138,7 +138,7 @@ function attachResultPresenter(session: SessionHandle): {
 async function createResumeHarness(): Promise<{
   owner: DesktopProcessResumeOwner;
   session: SessionHandle;
-  dispose(): void;
+  dispose(): Promise<void>;
 }> {
   const session = testSession;
   session.publish([
@@ -151,11 +151,11 @@ async function createResumeHarness(): Promise<{
   await session.settlePublications();
   const owner = new DesktopProcessResumeOwner({ sessions: () => [session] });
   let disposed = false;
-  const dispose = (): void => {
+  const dispose = async (): Promise<void> => {
     if (disposed) return;
     disposed = true;
     owner.disable();
-    session.dispose();
+    await Effect.runPromise(session.dispose());
   };
   onTestFinished(dispose);
   return { owner, session, dispose };
@@ -201,7 +201,7 @@ async function gateWorkflowResume(): Promise<{
 
 describe('desktop process resume owner', () => {
   beforeEach(async () => {
-    testSession = createProcessSession();
+    testSession = await Effect.runPromise(createProcessSession());
     publishTestRunStart(testSession, runId);
     await testSession.settlePublications();
     retrieveSessionResumeData.mockReset();
@@ -350,7 +350,7 @@ describe('desktop process resume owner', () => {
   it('rejects a termination-triggered wake after shutdown disables resume', async () => {
     const harness = await createResumeHarness();
 
-    harness.dispose();
+    await harness.dispose();
     await expect(harness.owner.tryResumeRun(runId)).resolves.toBe(false);
     expect(retrieveSessionResumeData).not.toHaveBeenCalled();
   });
@@ -361,7 +361,7 @@ describe('desktop process resume owner', () => {
 
     const resume = harness.owner.tryResumeRun(runId);
     await retrieval.started;
-    harness.dispose();
+    await harness.dispose();
     retrieval.release();
 
     await expect(resume).resolves.toBe(false);

@@ -3,23 +3,25 @@
 
 import { Text } from 'ink';
 
+import { Effect } from 'effect';
+
+import type { SessionHandle } from '@agent/runtime';
 import {
   listCliHistoryEntries,
   listResumableCliHistoryEntries,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
 import { formatCliHistoryResumeSummary } from '@cli/runtime/historyLabels';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { RunId } from '@shared/schemas';
 
 import { AsyncListForm } from './_shared/ListForm';
 
 interface ResumeListFormProps {
   /**
-   * Stores the history listing reads. Ink components run no Effect, so the
-   * process stores arrive as a prop from the surface that opened the form.
+   * The session the history listing reads. Ink components run no Effect, so
+   * the process session arrives as a prop from the surface that opened the form.
    */
-  readonly stores: ModelOptionStores;
+  readonly session: SessionHandle;
   readonly availableRows?: number;
   readonly onSelect: (value: RunId) => void;
   readonly onClose: () => void;
@@ -36,7 +38,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       loadingLabel="Loading history..."
       load={async () =>
         listResumableCliHistoryEntries(
-          await listCliHistoryEntries(props.stores),
+          await listCliHistoryEntries(Effect.succeed(props.session)),
         )
       }
       items={(entries) =>
