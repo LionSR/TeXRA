@@ -21,6 +21,7 @@ import {
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   CHATGPT_AUTH,
@@ -38,10 +39,12 @@ export type AccountAccessFormValue =
 interface AccountAccessFormProps {
   readonly availableRows?: number;
   /**
-   * The secret store the access overview reads. Ink components run no Effect,
-   * so the process store arrives as a prop from the surface that opened it.
+   * The secret store the access overview reads, with the runtime that settles
+   * it: the overview is a program, and Ink components own no runtime, so both
+   * arrive as props from the surface that opened this form.
    */
   readonly secrets: PlatformSecrets;
+  readonly runtime: ProcessRuntime;
   readonly onSelect: (value: AccountAccessFormValue) => void;
   readonly onCancel: () => void;
 }
@@ -188,7 +191,8 @@ export function AccountAccessForm(
   useCancellableEffect(
     (isCancelled) => {
       setStatus(null);
-      void loadCliModelAccessOverview(props.secrets)
+      void props.runtime
+        .runPromise(loadCliModelAccessOverview(props.secrets))
         .then((overview) => {
           if (!isCancelled()) setStatus({ state: 'loaded', overview });
         })

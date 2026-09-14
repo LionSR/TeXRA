@@ -26,6 +26,7 @@ import { probeSetupCredential } from '@model/setupCredentialAccess';
 import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { ensureError } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const credentialLog = createLog('Setup Credentials');
@@ -49,7 +50,10 @@ export function selectSetupCredentialModelExcludingOpenRouter(
       !useOpenRouter &&
       (yield* probeSetupCredential(
         'ChatGPT subscription',
-        () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
+        Effect.tryPromise({
+          try: () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
+          catch: ensureError,
+        }),
         credentialLog.warn,
       ))
     ) {
@@ -59,7 +63,10 @@ export function selectSetupCredentialModelExcludingOpenRouter(
       !useOpenRouter &&
       (yield* probeSetupCredential(
         'Grok subscription',
-        () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
+        Effect.tryPromise({
+          try: () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
+          catch: ensureError,
+        }),
         credentialLog.warn,
       ))
     ) {
@@ -76,7 +83,7 @@ export function selectSetupCredentialModelExcludingOpenRouter(
       }
       const hasApiKey = yield* probeSetupCredential(
         `${provider} API key`,
-        () => hasUsableApiKey(secrets, provider),
+        hasUsableApiKey(secrets, provider),
         credentialLog.warn,
       );
       if (hasApiKey) return model;
@@ -107,7 +114,7 @@ export function resolveSetupLaunchModel(
     const useOpenRouter = getUseOpenRouter();
     const hasOpenRouterKey = yield* probeSetupCredential(
       'OpenRouter API key',
-      () => hasUsableApiKey(secrets, 'openRouter'),
+      hasUsableApiKey(secrets, 'openRouter'),
       credentialLog.warn,
     );
     const openRouterModel = hasOpenRouterKey

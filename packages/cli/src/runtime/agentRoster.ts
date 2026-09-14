@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { createWorkspaceAgentRosterController, loadAgents } from '@agent/index';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   byCategory,
   type AgentRosterCategorySelection,
@@ -21,11 +21,16 @@ export type CliAgentRosterRecord = AgentRosterSnapshot & {
   readonly agentKeys: ByCategory<AgentRosterCategorySelection>;
 };
 
-/** The workspace roster as a program, run by the surface that shows it. */
-export const readCliAgentRoster = Effect.gen(function* () {
+/**
+ * The workspace roster as a program, run by the surface that shows it over the
+ * roots that surface holds.
+ */
+export const readCliAgentRoster = Effect.fn('readCliAgentRoster')(function* (
+  roots: WorkspaceRoots,
+) {
   yield* loadAgents({ includeRemote: false });
-  const roster = createWorkspaceAgentRosterController();
-  const cwd = workspaceRoots().workspace;
+  const roster = createWorkspaceAgentRosterController(roots);
+  const cwd = roots.workspace;
   const config = cwd ? yield* loadWorkspaceCliConfig(cwd) : undefined;
   return {
     ...roster.snapshot(),

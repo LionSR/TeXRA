@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { createWorkspaceAgentRosterController, refresh } from '@agent/index';
+import { defaultSession } from '@agent/runtime';
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -18,7 +19,9 @@ export async function promptToAddAgentToConfig(
   category: 'workflow' | 'toolUse',
   runtime: ProcessRuntime,
 ): Promise<void> {
-  const roster = createWorkspaceAgentRosterController();
+  // The extension host holds one session; its roots are the workspace the
+  // agent-creator wrote into.
+  const roster = createWorkspaceAgentRosterController(defaultSession().roots);
   const alreadyVisible = roster
     .getVisibleAgents(category)
     .some((entry) => entry.name === agentName);

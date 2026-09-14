@@ -59,6 +59,7 @@ export async function importCodexClass(): Promise<CodexConstructor> {
     if (isModuleNotFoundError(err)) {
       throw new Error(
         '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
+        { cause: err },
       );
     }
     throw err;

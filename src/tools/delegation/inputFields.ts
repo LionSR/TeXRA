@@ -16,7 +16,6 @@ import { resolveChildRunOutput } from '@agent/storage';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentCallOptions } from '@agent/workflowScript/types';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runInSession } from '@agent/runtime/RunContext';
 import { formatError } from '@common/errors';
 import type { RunId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
@@ -24,10 +23,9 @@ import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/runStorageFs';
-import { StorageFS } from '@utils/files/storageFS';
+import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceAbsolutePath, WorkspaceFS } from '@utils/files/workspaceFS';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 import {
   ensureError,
@@ -229,7 +227,10 @@ export async function assertWorkflowFilesExist(
   }
 }
 
-/** Resolve workflow file dependencies within their owning session. */
+/**
+ * Resolve workflow file dependencies against their owning session's roots,
+ * read once from `session.roots` rather than from an ambient session scope.
+ */
 export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
   function* (
     session: SessionHandle,
@@ -238,53 +239,51 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
     files: readonly string[],
   ): Effect.fn.Return<{ file: string; absolutePath: string }[], Error> {
     return yield* Effect.gen(function* () {
+      const { storage, workspace } = session.roots;
       const references = yield* Effect.tryPromise({
-        try: () =>
-          runInSession(session, async () => {
-            const storageRoot = await realpath(StorageFS.fullPath(''));
-            const references = await Promise.all(
-              files.map(async (file) => {
-                const absolutePath = WorkspaceFS.toAbsolute(file);
-                const canonicalPath = await realpath(absolutePath);
-                const relative = path.relative(storageRoot, canonicalPath);
-                const storagePath =
-                  !path.isAbsolute(relative) &&
-                  relative.split(path.sep)[0] !== '..'
-                    ? StorageFS.fullPath(relative)
-                    : undefined;
-                if (
-                  storagePath !== undefined &&
-                  runStorageLocationFromAnyAbsolutePath(storagePath) ===
-                    undefined
-                ) {
-                  throw new Error(
-                    `${file}; workspace-storage files must be declared outputs of a completed child run.`,
-                  );
-                }
-                // Explicit run paths still pass the resolver's symlink rejection,
-                // even when a workspace mirror points outside storage.
-                const runStoragePath =
-                  runStorageLocationFromAnyAbsolutePath(absolutePath) !==
-                  undefined
-                    ? absolutePath
-                    : storagePath;
-                return {
-                  file,
-                  absolutePath: canonicalPath,
-                  runStoragePath,
-                };
-              }),
-            );
-            await assertWorkflowFilesExist([
-              {
-                label,
-                files: references
-                  .filter((reference) => reference.runStoragePath === undefined)
-                  .map((reference) => reference.absolutePath),
-              },
-            ]);
-            return references;
-          }),
+        try: async () => {
+          const storageRoot = await realpath(storage);
+          const references = await Promise.all(
+            files.map(async (file) => {
+              const absolutePath = workspaceAbsolutePath(workspace, file);
+              const canonicalPath = await realpath(absolutePath);
+              const relative = path.relative(storageRoot, canonicalPath);
+              const storagePath =
+                !path.isAbsolute(relative) &&
+                relative.split(path.sep)[0] !== '..'
+                  ? path.join(storage, relative)
+                  : undefined;
+              if (
+                storagePath !== undefined &&
+                runStorageLocationUnder(storage, storagePath) === undefined
+              ) {
+                throw new Error(
+                  `${file}; workspace-storage files must be declared outputs of a completed child run.`,
+                );
+              }
+              // Explicit run paths still pass the resolver's symlink rejection,
+              // even when a workspace mirror points outside storage.
+              const runStoragePath =
+                runStorageLocationUnder(storage, absolutePath) !== undefined
+                  ? absolutePath
+                  : storagePath;
+              return {
+                file,
+                absolutePath: canonicalPath,
+                runStoragePath,
+              };
+            }),
+          );
+          await assertWorkflowFilesExist([
+            {
+              label,
+              files: references
+                .filter((reference) => reference.runStoragePath === undefined)
+                .map((reference) => reference.absolutePath),
+            },
+          ]);
+          return references;
+        },
         catch: ensureError,
       });
       return yield* Effect.forEach(
@@ -358,8 +357,7 @@ export const fingerprintWorkflowAgentDependencies = Effect.fn(
     );
     for (const [index, { absolutePath }] of resolved.entries()) {
       const bytes = yield* Effect.tryPromise({
-        try: () =>
-          runInSession(session, () => AbsoluteFS.readBytes(absolutePath)),
+        try: () => AbsoluteFS.readBytes(absolutePath),
         catch: ensureError,
       });
       hash.update(`${kind}\0${index}\0${bytes.length}\0`);

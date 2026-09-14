@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -168,9 +169,11 @@ describe('coding-plan subscription runtime', () => {
       });
       expect(endpoint).toMatchObject({ baseUrl });
       expect(endpoint.usageRoute).toBe(usageRoute);
-      await expect(
-        activeSubscriptionUsageRoute('glm52', hostStores().secrets),
-      ).resolves.toBe(usageRoute);
+      expect(
+        await Effect.runPromise(
+          activeSubscriptionUsageRoute('glm52', hostStores().secrets),
+        ),
+      ).toBe(usageRoute);
     },
   );
 

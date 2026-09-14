@@ -163,11 +163,15 @@ function parseCommand(cmd: string): { cmdName: string; args: string[] } | null {
 /**
  * Probe one command, falling back to a BinaryResolver-resolved path when the
  * direct spawn neither exits 0 nor prints version-like output.
+ *
+ * `signal` is execa's `cancelSignal`, so an aborted probe kills the spawned
+ * process instead of leaving it to run out its five-second timeout.
  */
 async function executeWithFallback(
   cmd: string,
   args: string[],
   execEnv: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   log.debug(`Checking tool '${cmd}' with args [${args.join(', ')}]`);
 
@@ -175,6 +179,7 @@ async function executeWithFallback(
     env: execEnv,
     reject: false,
     timeout: 5000,
+    cancelSignal: signal,
   });
   log.debug(
     `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
@@ -202,6 +207,7 @@ async function executeWithFallback(
       env: execEnv,
       reject: false,
       timeout: 5000,
+      cancelSignal: signal,
     });
     log.debug(
       `Fallback result: exitCode=${result.exitCode}, ` +
@@ -227,11 +233,20 @@ async function executeWithFallback(
  * Generic function to check if a tool is installed
  * @param toolName Tool name (looked up in TOOL_CONFIGS)
  * @param showError Whether to show an error message if the tool is not installed
+ * @param signal Abort signal for the spawned `<tool> --version` probes.
+ *   Callers inside an Effect pass the fiber's signal so an interrupted probe
+ *   kills the processes instead of leaving several of them running out their
+ *   five-second timeout; Promise-shaped callers pass nothing and behave as
+ *   before. An aborted probe answers `false` without reporting a missing
+ *   tool: the killed `<tool> --version` looks exactly like an absent tool,
+ *   and stopping a run must not raise an install prompt or open the setup
+ *   docs. The caller's own interruption decides what that `false` means.
  * @returns Promise<boolean> True if the tool is installed
  */
 export async function checkToolInstalled(
   toolName: string,
   showError: boolean = true,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   const config = TOOL_CONFIGS[toolName];
 
@@ -262,7 +277,14 @@ export async function checkToolInstalled(
       for (const cmd of command) {
         const parsed = parseCommand(cmd);
         if (!parsed) continue;
-        if (await executeWithFallback(parsed.cmdName, parsed.args, execEnv)) {
+        if (
+          await executeWithFallback(
+            parsed.cmdName,
+            parsed.args,
+            execEnv,
+            signal,
+          )
+        ) {
           isInstalled = true;
           break;
         }
@@ -277,10 +299,14 @@ export async function checkToolInstalled(
         parsed.cmdName,
         parsed.args,
         execEnv,
+        signal,
       );
     }
 
-    if (!isInstalled && showError) {
+    // `signal.aborted` is read here, after the probes, not captured earlier:
+    // the abort arrives while they run. A cancelled probe is not a missing
+    // tool, whichever way execa surfaced the kill.
+    if (!isInstalled && showError && !signal?.aborted) {
       await reportMissingTool(config.errorMessage, config.openDocsCommand);
     }
 
@@ -289,7 +315,7 @@ export async function checkToolInstalled(
     // The user-facing message is always the tool's own install guidance, so
     // log the underlying cause instead of dropping it.
     log.warn(`Tool check for '${toolName}' failed: ${toErrorMessage(err)}`);
-    if (showError) {
+    if (showError && !signal?.aborted) {
       await reportMissingTool(config.errorMessage);
     }
     return false;
@@ -310,6 +336,10 @@ type RunToolOptions = {
  * @param args Arguments to pass to the tool (without the tool name)
  * @param options Execution options and installation check settings
  * @returns Promise<ExecResult | false> if the tool ran, or false if the tool is missing
+ *
+ * The preflight probe runs under the run's own `signal`, so interrupting the
+ * tool kills the `<tool> --version` spawns as well instead of leaving them to
+ * run out their five-second timeout.
  */
 export async function runToolWithCheck(
   toolName: string,
@@ -317,7 +347,7 @@ export async function runToolWithCheck(
   options: RunToolOptions = {},
 ): Promise<ExecResult | false> {
   const { showError = true, ...execOptions } = options;
-  if (!(await checkToolInstalled(toolName, showError))) {
+  if (!(await checkToolInstalled(toolName, showError, execOptions.signal))) {
     return false;
   }
   return executeCommand([toolName, ...args], execOptions);

@@ -18,9 +18,10 @@
  *    differs (`kimi-k3` → `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
  */
 
+import { Effect } from 'effect';
 import { type ModelConfig } from 'llm-zoo';
 
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { DeclinableUsageRoute } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import {
@@ -89,19 +90,25 @@ export function isKimiCodeRoute(
  * service, or the store a host root threaded down). `declinedRoutes` are the
  * routes the asking run declines: a declined coding subscription reads as
  * "prefer off" for that run without touching the user's switch.
+ *
+ * `inScope` is the caller's workspace-roots frame, for the same reason the
+ * availability read takes one: the switch is a workspace-scoped setting, and
+ * a fiber that resumes after the key read is no longer inside the frame its
+ * caller entered. A caller already in the frame it wants omits it.
  */
-export async function resolveKimiCodeRoutingFacts(
+export function resolveKimiCodeRoutingFacts(
   secrets: PlatformSecrets,
   useOpenRouter: boolean,
   declinedRoutes?: readonly DeclinableUsageRoute[],
-): Promise<KimiCodeRoutingFacts> {
-  return {
+  inScope: <A>(read: () => A) => A = (read) => read(),
+): Effect.Effect<KimiCodeRoutingFacts, SecretsFailed> {
+  return Effect.map(hasUsableApiKey(secrets, 'kimiCode'), (keySet) => ({
     useOpenRouter,
-    keySet: await hasUsableApiKey(secrets, 'kimiCode'),
+    keySet,
     preferKimiCode:
-      getPreferKimiCode() &&
+      inScope(getPreferKimiCode) &&
       !declinedRoutes?.includes('kimi-code-subscription'),
-  };
+  }));
 }
 
 /**

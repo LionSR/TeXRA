@@ -84,6 +84,7 @@ function createTestHost() {
       },
       revealApprovalSurface: async () => {},
       openBuildDisplay: async () => {},
+      runPreview: async () => {},
       reportError: vi.fn(),
       decide: vi.fn(async () => {}),
     },

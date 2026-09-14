@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -37,16 +38,19 @@ vi.mock('@cli/runtime/modelAccessSelection', () => ({
 vi.mock('@model/apiProviders', () => ({
   API_PROVIDERS: ['deepseek', 'glm', 'kimiCode'],
   lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
-  configuredApiKeyProviders: async () => {
-    const origins = await Promise.all(
-      ['deepseek', 'glm', 'kimiCode'].map((provider) =>
-        mocks.lookupApiKeyOrigin({}, provider),
+  configuredApiKeyProviders: () =>
+    Effect.map(
+      Effect.forEach(
+        ['deepseek', 'glm', 'kimiCode'],
+        (provider: string) =>
+          mocks.lookupApiKeyOrigin({}, provider) as Effect.Effect<string>,
+        { concurrency: 'unbounded' },
       ),
-    );
-    return ['deepseek', 'glm', 'kimiCode'].filter(
-      (_, index) => origins[index] !== 'none',
-    );
-  },
+      (origins: readonly string[]) =>
+        ['deepseek', 'glm', 'kimiCode'].filter(
+          (_, index) => origins[index] !== 'none',
+        ),
+    ),
 }));
 
 const {
@@ -66,7 +70,7 @@ function lineFor(lines: readonly string[], route: string): string {
 function setPersonalKeys(...providers: string[]): void {
   mocks.lookupApiKeyOrigin.mockImplementation(
     (_secrets: unknown, provider: string) =>
-      Promise.resolve(providers.includes(provider) ? 'env' : 'none'),
+      Effect.succeed(providers.includes(provider) ? 'env' : 'none'),
   );
 }
 
@@ -83,7 +87,7 @@ function codingPlans(
 }
 
 function accountStatusLines(): Promise<string[]> {
-  return loadCliDetailedAccountStatusLines(secrets);
+  return Effect.runPromise(loadCliDetailedAccountStatusLines(secrets));
 }
 
 function launcherStatus(
@@ -93,7 +97,7 @@ function launcherStatus(
     note?: string;
   } = { authenticated: false },
 ): Promise<readonly string[]> {
-  return loadCliApiStatus(secrets, profile);
+  return Effect.runPromise(loadCliApiStatus(secrets, profile));
 }
 
 function renderPreferenceRoute(
@@ -101,22 +105,24 @@ function renderPreferenceRoute(
   preference: 'on' | 'off',
   enabled: boolean,
 ): Promise<string[]> {
-  mocks.readCliModelAccessStatus.mockResolvedValue({
-    preferences: {
-      chatGpt: route === 'chatGpt' ? preference : 'off',
-      grok: 'off',
-    },
-    codingPlans: codingPlans(
-      route === 'kimiCode' && preference === 'on',
-      route === 'kimiCode' && enabled,
-      route === 'glmCode' && preference === 'on',
-      route === 'glmCode' && enabled,
-    ),
-    chatGptSignedIn: route === 'chatGpt' && enabled,
-    grokSignedIn: false,
-    chatGptAccountLabel:
-      route === 'chatGpt' && enabled ? 'chatgpt@example.com' : undefined,
-  });
+  mocks.readCliModelAccessStatus.mockReturnValue(
+    Effect.succeed({
+      preferences: {
+        chatGpt: route === 'chatGpt' ? preference : 'off',
+        grok: 'off',
+      },
+      codingPlans: codingPlans(
+        route === 'kimiCode' && preference === 'on',
+        route === 'kimiCode' && enabled,
+        route === 'glmCode' && preference === 'on',
+        route === 'glmCode' && enabled,
+      ),
+      chatGptSignedIn: route === 'chatGpt' && enabled,
+      grokSignedIn: false,
+      chatGptAccountLabel:
+        route === 'chatGpt' && enabled ? 'chatgpt@example.com' : undefined,
+    }),
+  );
   return accountStatusLines();
 }
 
@@ -125,16 +131,20 @@ describe('loadCliApiStatus', () => {
     mocks.getCliAuthProfile.mockReset().mockResolvedValue({
       authenticated: false,
     });
-    mocks.readCliModelAccessStatus.mockReset().mockResolvedValue({
-      preferences: {
-        chatGpt: 'off',
-        grok: 'off',
-      },
-      codingPlans: codingPlans(),
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-    });
-    mocks.lookupApiKeyOrigin.mockReset().mockResolvedValue('none');
+    mocks.readCliModelAccessStatus.mockReset().mockReturnValue(
+      Effect.succeed({
+        preferences: {
+          chatGpt: 'off',
+          grok: 'off',
+        },
+        codingPlans: codingPlans(),
+        chatGptSignedIn: false,
+        grokSignedIn: false,
+      }),
+    );
+    mocks.lookupApiKeyOrigin
+      .mockReset()
+      .mockReturnValue(Effect.succeed('none'));
     mocks.getSubscriptionUsage
       .mockReset()
       .mockImplementation(async (provider: string) => ({
@@ -165,8 +175,8 @@ describe('loadCliApiStatus', () => {
   });
 
   it('does not couple compact launcher status to model-access reads', async () => {
-    mocks.readCliModelAccessStatus.mockRejectedValue(
-      new Error('preference store offline'),
+    mocks.readCliModelAccessStatus.mockReturnValue(
+      Effect.fail(new Error('preference store offline')),
     );
 
     await expect(launcherStatus()).resolves.toEqual([
@@ -179,16 +189,18 @@ describe('loadCliApiStatus', () => {
   });
 
   it('renders preferred Kimi and ChatGPT routes with their owned credentials', async () => {
-    mocks.readCliModelAccessStatus.mockResolvedValue({
-      preferences: {
-        chatGpt: 'on',
-        grok: 'off',
-      },
-      codingPlans: codingPlans(true, true),
-      chatGptSignedIn: true,
-      grokSignedIn: false,
-      chatGptAccountLabel: 'chatgpt@example.com',
-    });
+    mocks.readCliModelAccessStatus.mockReturnValue(
+      Effect.succeed({
+        preferences: {
+          chatGpt: 'on',
+          grok: 'off',
+        },
+        codingPlans: codingPlans(true, true),
+        chatGptSignedIn: true,
+        grokSignedIn: false,
+        chatGptAccountLabel: 'chatgpt@example.com',
+      }),
+    );
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
       accountLabel: 'texra@example.com',
@@ -216,15 +228,17 @@ describe('loadCliApiStatus', () => {
   });
 
   it('appends normalized usage to configured routes and force-refreshes on open', async () => {
-    mocks.readCliModelAccessStatus.mockResolvedValue({
-      preferences: {
-        chatGpt: 'off',
-        grok: 'off',
-      },
-      codingPlans: codingPlans(true, true, true, true),
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-    });
+    mocks.readCliModelAccessStatus.mockReturnValue(
+      Effect.succeed({
+        preferences: {
+          chatGpt: 'off',
+          grok: 'off',
+        },
+        codingPlans: codingPlans(true, true, true, true),
+        chatGptSignedIn: false,
+        grokSignedIn: false,
+      }),
+    );
     mocks.getSubscriptionUsage.mockImplementation(async (provider: string) => {
       if (provider === 'glmCodingPlan') {
         return {
@@ -260,9 +274,11 @@ describe('loadCliApiStatus', () => {
       };
     });
 
-    const lines = await loadCliDetailedAccountStatusLines(secrets, {
-      now: 1_800_000_000_000,
-    });
+    const lines = await Effect.runPromise(
+      loadCliDetailedAccountStatusLines(secrets, {
+        now: 1_800_000_000_000,
+      }),
+    );
 
     expect(lineFor(lines, 'Kimi Code')).toBe(
       'Kimi Code: preferred · key configured · 5-hour: 0% · resets in 2h · 7-day: 100% · resets in 1d 21h',
@@ -320,15 +336,17 @@ describe('loadCliApiStatus', () => {
   );
 
   it('keeps a shared GLM key in the personal-key inventory', async () => {
-    mocks.readCliModelAccessStatus.mockResolvedValue({
-      preferences: {
-        chatGpt: 'off',
-        grok: 'off',
-      },
-      codingPlans: codingPlans(false, false, false, true),
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-    });
+    mocks.readCliModelAccessStatus.mockReturnValue(
+      Effect.succeed({
+        preferences: {
+          chatGpt: 'off',
+          grok: 'off',
+        },
+        codingPlans: codingPlans(false, false, false, true),
+        chatGptSignedIn: false,
+        grokSignedIn: false,
+      }),
+    );
     setPersonalKeys('glm');
 
     const lines = await accountStatusLines();
@@ -367,23 +385,29 @@ describe('loadCliApiStatus', () => {
   });
 
   it('reports the legacy model-access overview without reading key storage', async () => {
-    mocks.readCliModelAccessStatus.mockResolvedValue({
-      preferences: {
-        chatGpt: 'on',
-        grok: 'off',
-      },
-      codingPlans: codingPlans(),
-      chatGptSignedIn: true,
-      grokSignedIn: false,
-      chatGptAccountLabel: 'chatgpt@example.com',
-    });
+    mocks.readCliModelAccessStatus.mockReturnValue(
+      Effect.succeed({
+        preferences: {
+          chatGpt: 'on',
+          grok: 'off',
+        },
+        codingPlans: codingPlans(),
+        chatGptSignedIn: true,
+        grokSignedIn: false,
+        chatGptAccountLabel: 'chatgpt@example.com',
+      }),
+    );
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
       accountLabel: 'texra@example.com',
     });
-    mocks.lookupApiKeyOrigin.mockRejectedValue(new Error('keychain offline'));
+    mocks.lookupApiKeyOrigin.mockReturnValue(
+      Effect.fail(new Error('keychain offline')),
+    );
 
-    await expect(loadCliModelAccessOverview(secrets)).resolves.toEqual({
+    await expect(
+      Effect.runPromise(loadCliModelAccessOverview(secrets)),
+    ).resolves.toEqual({
       access: {
         preferences: {
           chatGpt: 'on',

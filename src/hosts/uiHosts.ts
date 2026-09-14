@@ -1,3 +1,6 @@
+// Third-party imports
+import { Data, type Effect } from 'effect';
+
 export interface DiffSource {
   filePath: string;
 }
@@ -99,6 +102,31 @@ export interface TerminalRunResult {
 }
 
 /**
+ * Why an integrated-terminal run never produced a result.
+ *
+ * Read off what the one implementation
+ * (`packages/extension/src/frontend/setupTerminalRunner.ts`) can raise:
+ * the host refusing to open or reveal a terminal, and the shell execution
+ * itself faulting once a terminal exists. Neither a non-zero exit code nor
+ * a timeout is a failure — both are reported in {@link TerminalRunResult},
+ * as they were before this port was typed.
+ */
+type TerminalRunFailureReason = 'terminal-unavailable' | 'execution-failed';
+
+/**
+ * The one failure of {@link TerminalRunner.runCommand}. Callers match the
+ * tag and read `reason` instead of a message, so "this host would not give
+ * us a terminal" and "the command's shell execution faulted" stay
+ * distinguishable at the call site.
+ */
+export class TerminalRunFailed extends Data.TaggedError('TerminalRunFailed')<{
+  readonly reason: TerminalRunFailureReason;
+  readonly message: string;
+  readonly command: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
  * Integrated-terminal surface. The setup agent uses this for commands
  * the captured-stdio `bash` tool cannot handle: `sudo` password prompts,
  * other interactive TTY prompts, and any flow where the user must type
@@ -110,7 +138,13 @@ export interface TerminalRunResult {
  * `undefined` exit code with empty output — the caller treats that the
  * same as "user interrupted", since neither path tells us anything
  * actionable.
+ *
+ * The member is an `Effect`: a host fault reaches the caller as
+ * {@link TerminalRunFailed} rather than as `unknown`, and interrupting the
+ * fiber that runs it abandons the wait instead of leaving it uninterruptible.
  */
 export interface TerminalRunner {
-  runCommand(request: TerminalRunRequest): Promise<TerminalRunResult>;
+  runCommand(
+    request: TerminalRunRequest,
+  ): Effect.Effect<TerminalRunResult, TerminalRunFailed>;
 }

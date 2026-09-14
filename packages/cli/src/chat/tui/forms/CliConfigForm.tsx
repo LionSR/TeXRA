@@ -145,11 +145,11 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const onError = useRef(props.onError);
   onError.current = props.onError;
   const { secrets } = props;
-  const loadApiKeyStatuses = useCallback(
-    () => loadProviderApiKeyStatuses(secrets),
-    [secrets],
-  );
   const { runtime } = props;
+  const loadApiKeyStatuses = useCallback(
+    () => runtime.runPromise(loadProviderApiKeyStatuses(secrets)),
+    [runtime, secrets],
+  );
   // The status read is a program like the save and remove rows below it, so
   // this surface settles all three on the runtime it was handed.
   const loadGitHubToken = useCallback(

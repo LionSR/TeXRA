@@ -9,10 +9,11 @@ import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { StorageFS } from '@utils/files/storageFS';
+import { RelativeFS } from '@utils/files/relativeFS';
 import { THREE_DAYS_MS } from '@utils/config/constants';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 import {
   BinaryResolver,
   type ResolvedBinaryCommand,
@@ -22,6 +23,16 @@ import { extendEnvPath } from '@utils/system/platformPaths';
 const log = createLog('AudioUtils');
 
 const RECORDINGS_DIR = 'recordings';
+
+/**
+ * Where this session's recordings live. The roots arrive as data from the
+ * caller that owns the session, so a recording writes under that session's
+ * storage root without the module entering (or reading) an ambient roots
+ * scope — the desktop holds one session per open paper.
+ */
+function recordingsDir(roots: WorkspaceRoots): string {
+  return path.join(roots.storage, RECORDINGS_DIR);
+}
 
 /**
  * Upper bound on how long a SIGTERM'd sox may take to flush and exit before
@@ -40,8 +51,13 @@ function resetRecordingState(): void {
 }
 
 /** Resolve the sox executable command from config or auto-detection. */
-function resolveSoxCommand(): ResolvedBinaryCommand | null {
-  const configuredPath = getConfig<string>('texra.audio.soxPath');
+function resolveSoxCommand(
+  roots: WorkspaceRoots,
+): ResolvedBinaryCommand | null {
+  const configuredPath = readConfig<string>(
+    roots.config,
+    'texra.audio.soxPath',
+  );
   if (configuredPath && AbsoluteFS.existsSync(configuredPath)) {
     return BinaryResolver.resolveOptionalCommand('sox', [], {
       resolvedPath: configuredPath,
@@ -50,8 +66,8 @@ function resolveSoxCommand(): ResolvedBinaryCommand | null {
   return BinaryResolver.resolveOptionalCommand('sox');
 }
 
-/** Start recording audio from the microphone. */
-export async function startRecording(): Promise<{
+/** Start recording audio from the microphone under `roots`' storage. */
+export async function startRecording(roots: WorkspaceRoots): Promise<{
   success: boolean;
   recordingPath?: string;
   error?: string;
@@ -61,7 +77,7 @@ export async function startRecording(): Promise<{
       return { success: false, error: 'Recording already in progress' };
     }
 
-    const soxCommand = resolveSoxCommand();
+    const soxCommand = resolveSoxCommand(roots);
     if (!soxCommand) {
       return {
         success: false,
@@ -69,9 +85,9 @@ export async function startRecording(): Promise<{
       };
     }
 
-    await StorageFS.ensureDir(RECORDINGS_DIR);
-    const relativePath = path.join(RECORDINGS_DIR, `record_${Date.now()}.wav`);
-    const absPath = StorageFS.fullPath(relativePath);
+    const directory = recordingsDir(roots);
+    await AbsoluteFS.ensureDir(directory);
+    const absPath = path.join(directory, `record_${Date.now()}.wav`);
 
     const soxArgs = [
       '--default-device',
@@ -149,10 +165,12 @@ export function killActiveRecording(): void {
 
 /**
  * Stop the current recording and transcribe it using OpenAI. `secrets` is the
- * process secret store the OpenAI key is read from.
+ * process secret store the OpenAI key is read from; `roots` are the recording
+ * session's, and own the directory the finished takes are swept from.
  */
 export async function stopRecordingAndTranscribe(
   secrets: PlatformSecrets,
+  roots: WorkspaceRoots,
 ): Promise<{
   success: boolean;
   text: string;
@@ -207,7 +225,9 @@ export async function stopRecordingAndTranscribe(
       response_format: 'json',
     });
 
-    await StorageFS.cleanupOldFiles(RECORDINGS_DIR, THREE_DAYS_MS);
+    // `RelativeFS` passes an absolute target through untouched, so the sweep
+    // is rooted by the caller's storage root rather than by an ambient read.
+    await RelativeFS.cleanupOldFiles(recordingsDir(roots), THREE_DAYS_MS);
 
     return { success: true, text: result.text };
   } catch (err) {

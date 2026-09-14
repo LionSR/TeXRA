@@ -21,7 +21,6 @@ import type { DelegationParent } from '@tools/delegation/proposalFlow';
 import { SubagentDurabilityError } from '@tools/delegation/inBandSubagentRun';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
-import { StorageFS } from '@utils/files/storageFS';
 
 const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
 const STORAGE_PATH = path.resolve(path.sep, 'storage');
@@ -69,11 +68,10 @@ const mocks = vi.hoisted(() => ({
   requireVisibleAgent: vi.fn(),
   selectAvailableDelegationModel: vi.fn(),
   resolveChildRunOutput: vi.fn(),
-  runStorageLocationFromAnyAbsolutePath: vi.fn(),
+  runStorageLocation: vi.fn(),
   workspaceExists: vi.fn(),
   rejectOversizedBibAttachments: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
-  workspaceToAbsolute: vi.fn(),
   realpath: vi.fn(),
   absoluteReadBytes: vi.fn(),
 }));
@@ -125,8 +123,8 @@ vi.mock('@agent/storage/runRecords', async (importOriginal) => ({
 }));
 
 vi.mock('@utils/files/runStorageFs', () => ({
-  runStorageLocationFromAnyAbsolutePath:
-    mocks.runStorageLocationFromAnyAbsolutePath,
+  runStorageLocationUnder: (_storageRoot: string, file: string) =>
+    mocks.runStorageLocation(file),
 }));
 
 vi.mock('@tools/delegation/inputFields', async (importOriginal) => ({
@@ -134,9 +132,9 @@ vi.mock('@tools/delegation/inputFields', async (importOriginal) => ({
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
-vi.mock('@utils/files/workspaceFS', () => ({
+vi.mock('@utils/files/workspaceFS', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/files/workspaceFS')>()),
   WorkspaceFS: {
-    toAbsolute: mocks.workspaceToAbsolute,
     exists: mocks.workspaceExists,
   },
 }));
@@ -208,6 +206,9 @@ let lanes = new RunLanes();
 const runs = {
   holdInactiveRun: (runId: RunId) => lanes.holdInactive(runId, () => false),
 };
+// The roots the stub session resolves workflow files against; a case may
+// point them at a real temporary tree.
+let sessionRoots = { workspace: WORKSPACE_PATH, storage: STORAGE_PATH };
 
 function parentContext(): DelegationParent {
   // The probe fences an interrupted attempt on its run lane and its run claim
@@ -216,6 +217,7 @@ function parentContext(): DelegationParent {
     id: 'session',
     acquireClaims: mocks.acquireClaims,
     runs,
+    roots: sessionRoots,
   } as never;
   return {
     roots: createFakeWorkspaceRoots(),
@@ -390,10 +392,8 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     mocks.workspaceExists.mockResolvedValue(true);
     mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
-    mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
-    mocks.workspaceToAbsolute.mockImplementation((file: string) =>
-      path.resolve(WORKSPACE_PATH, file),
-    );
+    mocks.runStorageLocation.mockReturnValue(undefined);
+    sessionRoots = { workspace: WORKSPACE_PATH, storage: STORAGE_PATH };
     mocks.realpath.mockImplementation(async (file: string) => file);
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
     mocks.executeSubagentInBand.mockImplementation(inBandRunReturning(result));
@@ -437,14 +437,9 @@ describe('createWorkflowScriptAgentRunner', () => {
           const storage = path.join(root, 'storage');
           const privateFile = path.join(storage, 'streamLogs/private.json');
           const link = path.join(workspace, 'input.json');
-          const storagePath = vi
-            .spyOn(StorageFS, 'fullPath')
-            .mockImplementation((file: string) => path.join(storage, file));
+          sessionRoots = { workspace, storage };
           yield* Effect.addFinalizer(() =>
-            Effect.promise(async () => {
-              storagePath.mockRestore();
-              await fs.rm(root, { recursive: true, force: true });
-            }),
+            Effect.promise(() => fs.rm(root, { recursive: true, force: true })),
           );
           yield* Effect.tryPromise({
             try: () => fs.mkdir(workspace),
@@ -464,9 +459,6 @@ describe('createWorkflowScriptAgentRunner', () => {
           });
           mocks.realpath.mockImplementation((file: string) =>
             fs.realpath(file),
-          );
-          mocks.workspaceToAbsolute.mockImplementation((file: string) =>
-            path.resolve(workspace, file),
           );
           const spellings = {
             absolute: privateFile,
@@ -503,14 +495,9 @@ describe('createWorkflowScriptAgentRunner', () => {
           const storage = path.join(root, 'storage');
           const target = path.join(workspace, 'versions/v1.tex');
           const requested = path.join(workspace, 'chapters/current.tex');
-          const storagePath = vi
-            .spyOn(StorageFS, 'fullPath')
-            .mockImplementation((file: string) => path.join(storage, file));
+          sessionRoots = { workspace, storage };
           yield* Effect.addFinalizer(() =>
-            Effect.promise(async () => {
-              storagePath.mockRestore();
-              await fs.rm(root, { recursive: true, force: true });
-            }),
+            Effect.promise(() => fs.rm(root, { recursive: true, force: true })),
           );
           yield* Effect.tryPromise({
             try: () => fs.mkdir(storage),
@@ -534,9 +521,6 @@ describe('createWorkflowScriptAgentRunner', () => {
           });
           mocks.realpath.mockImplementation((file: string) =>
             fs.realpath(file),
-          );
-          mocks.workspaceToAbsolute.mockImplementation((file: string) =>
-            path.resolve(workspace, file),
           );
 
           yield* defaultRunner()(
@@ -720,7 +704,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         'r1',
         'conclusion.tex',
       );
-      mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation((file) =>
+      mocks.runStorageLocation.mockImplementation((file) =>
         file === firstRequested || file === secondRequested
           ? { kind: 'runStorage' }
           : undefined,
@@ -793,7 +777,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         'r1',
         'unchanged.tex',
       );
-      mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
+      mocks.runStorageLocation.mockReturnValue({
         kind: 'runStorage',
       });
       mocks.resolveChildRunOutput.mockReturnValue(Effect.succeed(undefined));
@@ -856,7 +840,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       const storageError = new Error(
         'Declared output r1/deleted.tex is missing from run bbbbbb222222.',
       );
-      mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
+      mocks.runStorageLocation.mockReturnValue({
         kind: 'runStorage',
       });
       mocks.resolveChildRunOutput.mockReturnValue(Effect.fail(storageError));
@@ -890,11 +874,10 @@ describe('createWorkflowScriptAgentRunner', () => {
           'r1',
           'review.tex',
         );
-        mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation(
-          (file) =>
-            file === resolved || file === stale
-              ? { kind: 'runStorage' }
-              : undefined,
+        mocks.runStorageLocation.mockImplementation((file) =>
+          file === resolved || file === stale
+            ? { kind: 'runStorage' }
+            : undefined,
         );
         mocks.resolveChildRunOutput.mockImplementation((_parent, file) =>
           Effect.succeed(
