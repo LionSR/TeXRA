@@ -16,8 +16,9 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import {
-  parseWorkingDirectory,
   resolveWorkspaceRelativePath,
+  workspacePathPorts,
+  type WorkspacePathPorts,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -42,15 +43,8 @@ export type OpenPdfInput = z.infer<typeof OpenPdfInputSchema>;
  * The host viewer and the run coordinates path resolution needs, read from
  * the session in the caller's run context before the program runs.
  */
-interface OpenPdfPorts {
+interface OpenPdfPorts extends WorkspacePathPorts {
   readonly openPdf: HostInteractions['openPdf'];
-  /**
-   * Reads the active working directory, bound to the calling turn. It stays a
-   * thunk because parsing rejects a relative working directory, and an
-   * absolute run-storage path must resolve without ever asking for one.
-   */
-  readonly toolRoot: () => string | undefined;
-  readonly inScope: <A>(operation: () => A) => A;
   /**
    * The requested path's run-storage identity, resolved in the caller's turn:
    * the run-storage root is `workspaceRoots().storage`, which is per-session
@@ -109,9 +103,8 @@ export const OpenPdfTool = defineTool({
     const runId = call.run?.runId;
     const trimmedPath = input.path.trim();
     const ports: OpenPdfPorts = {
+      ...workspacePathPorts(call),
       openPdf: call.run?.session.interactions.openPdf,
-      toolRoot: () => parseWorkingDirectory(call.workingDirectory),
-      inScope: call.inScope,
       runStorageLocation:
         runId && trimmedPath
           ? call.inScope(() =>

@@ -11,8 +11,9 @@ import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import {
-  parseWorkingDirectory,
   resolveWorkspaceRelativePath,
+  workspacePathPorts,
+  type WorkspacePathPorts,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import {
@@ -31,15 +32,7 @@ const log = createLog('DiagnosticsTool');
  * The host capabilities and working directory this tool reads from the
  * session, resolved in the caller's run context before the program runs.
  */
-interface DiagnosticsPorts {
-  /**
-   * Reads the active working directory, bound to the calling turn. It stays a
-   * thunk so each command asks for it exactly where it did before: parsing
-   * rejects a relative working directory, and "add" reports that failure as
-   * its own.
-   */
-  readonly toolRoot: () => string | undefined;
-  readonly inScope: <A>(operation: () => A) => A;
+interface DiagnosticsPorts extends WorkspacePathPorts {
   readonly readDiagnostics: HostInteractions['readDiagnostics'];
   readonly addCriticism: HostInteractions['addCriticism'];
 }
@@ -130,8 +123,7 @@ export class DiagnosticsTool extends defineTool({
         new ToolError('Diagnostics requires an active session.'),
       );
     const ports: DiagnosticsPorts = {
-      toolRoot: () => parseWorkingDirectory(call.workingDirectory),
-      inScope: call.inScope,
+      ...workspacePathPorts(call),
       readDiagnostics: interactions.readDiagnostics,
       addCriticism: interactions.addCriticism,
     };
