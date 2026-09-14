@@ -29,8 +29,8 @@ export async function listAgents(
   context: CliContext,
   options: CliAgentListOptions = {},
 ): Promise<number> {
-  await initLocalCliPlatform(context);
-  const result = await loadCliAgentList(options);
+  const { runtime } = await initLocalCliPlatform(context);
+  const result = await loadCliAgentList(runtime, options);
 
   if (!context.quietLogs) {
     const hiddenNotice = formatCliHiddenAgentsNotice(
@@ -65,8 +65,8 @@ export async function showAgent(
   context: CliContext,
   name: string,
 ): Promise<number> {
-  await initLocalCliPlatform(context);
-  const entry = await resolveCliAgent(name);
+  const { runtime } = await initLocalCliPlatform(context);
+  const entry = await resolveCliAgent(runtime, name);
   if (!entry) {
     writeTextStderr(missingAgentMessage(name));
     return CliExitCode.Usage;

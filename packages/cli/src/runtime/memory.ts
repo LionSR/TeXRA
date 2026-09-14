@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import type { MemoryViewItem } from '@shared/schemas';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
@@ -102,14 +102,15 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
 /**
  * The CLI's run edge for a memory program (PRD run-edge category a): the
  * command action, the slash-command handler, and the list form each call
- * this once. An unreadable memory ends the command with the error the
- * filesystem raised, not with the tagged wrapper — the CLI's error reporter
- * prints that message.
+ * this once, on the runtime their surface already holds. An unreadable
+ * memory ends the command with the error the filesystem raised, not with the
+ * tagged wrapper — the CLI's error reporter prints that message.
  */
 export function runCliMemory<A>(
+  runtime: ProcessRuntime,
   program: Effect.Effect<A, MemoryEntryUnreadable>,
 ): Promise<A> {
-  return effectRuntime().runPromise(
+  return runtime.runPromise(
     Effect.catch(program, (error) => Effect.die(error.cause)),
   );
 }

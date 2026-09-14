@@ -303,7 +303,7 @@ export function registerBuiltinSlashCommands(options: {
   const onModelAccessSelect: FormActionHandler<CliModelAccessSelection> =
     options.onModelAccessSelect ??
     ((selection, output) =>
-      applyCliModelAccessSelection(selection, undefined, output));
+      applyCliModelAccessSelection(runtime, selection, undefined, output));
   const onApiKeySave: ApiKeySaveHandler =
     options.onApiKeySave ??
     ((provider, key) => applyCliProviderApiKey(secrets, provider, key));
@@ -321,6 +321,7 @@ export function registerBuiltinSlashCommands(options: {
     const selectable = canSelectAgent();
     return (
       <AgentListForm
+        runtime={runtime}
         currentAgent={current}
         availableRows={props.availableRows}
         selectable={selectable}
@@ -507,8 +508,8 @@ export function registerBuiltinSlashCommands(options: {
     );
   }
 
-  const MemoryListFormAdapter = makeSelectFormAdapter(
-    MemoryListForm,
+  const MemoryListFormAdapter = makeSelectFormAdapter<string>(
+    (formProps) => <MemoryListForm runtime={runtime} {...formProps} />,
     (value: string) => options.onMemorySelect?.(value),
   );
   // `/resume` reads history from the process session; bind it here so the
@@ -580,7 +581,8 @@ export function registerBuiltinSlashCommands(options: {
     description: `Sign in, choose ChatGPT, Grok, Kimi Code, GLM, or ${OWN_API_KEYS.inline}`,
     category: 'account',
     echo: 'ifPersists',
-    handler: applyCliModelAccessInput,
+    handler: (remainder, context) =>
+      applyCliModelAccessInput(runtime, remainder, context),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
@@ -691,8 +693,8 @@ export function registerBuiltinSlashCommands(options: {
     category: 'configuration',
     echo: 'never',
     handler: async (remainder) => {
-      if (remainder.toLowerCase() === 'list') await showCliMemoryList();
-      else await showCliMemoryPreview(remainder);
+      if (remainder.toLowerCase() === 'list') await showCliMemoryList(runtime);
+      else await showCliMemoryPreview(runtime, remainder);
     },
     formComponent: MemoryListFormAdapter,
   });
@@ -752,7 +754,7 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Request context compaction',
     category: 'session',
     echo: 'ifPersists',
-    handler: requestCliSessionCompaction,
+    handler: () => requestCliSessionCompaction(runtime),
   });
   registerSlashCommand({
     name: 'exit',

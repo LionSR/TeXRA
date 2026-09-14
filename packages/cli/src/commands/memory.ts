@@ -17,11 +17,11 @@ import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 async function runMemoryList(context: CliContext): Promise<number> {
-  await initLocalCliPlatform(context);
+  const { runtime } = await initLocalCliPlatform(context);
   // Pass the full list to `formatCliMemoryList`; it owns truncation (the
   // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
   // consumers should see every memory, not a capped slice.
-  const items = await runCliMemory(loadMemoryItems());
+  const items = await runCliMemory(runtime, loadMemoryItems());
 
   emitCliResult(context, {
     json: items,
@@ -35,9 +35,9 @@ async function runMemoryShow(
   context: CliContext,
   inputPath: string,
 ): Promise<number> {
-  await initLocalCliPlatform(context);
+  const { runtime } = await initLocalCliPlatform(context);
 
-  const record = await runCliMemory(loadCliMemoryDetail(inputPath));
+  const record = await runCliMemory(runtime, loadCliMemoryDetail(inputPath));
   emitCliResult(context, {
     json: record,
     ndjson: { kind: 'memory-detail', ...record },

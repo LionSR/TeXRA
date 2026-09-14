@@ -34,6 +34,7 @@ import {
   invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RetryPermission } from '@shared/schemas';
 import { isCodingPlanQuotaRoute } from '@shared/quotaFallbackRoutes';
@@ -55,12 +56,15 @@ import {
 import { currentView } from './sessionView';
 
 /**
- * The process store a retry's credential work reads: the secret store its
- * key checks go through. It comes from the chat session's caller, which
- * holds it already.
+ * The process services this host holds for its lifetime: the secret store a
+ * retry's key checks go through, and the runtime its decisions are issued
+ * on. Both come from the chat session's caller, which holds them already.
  */
 interface TuiApprovalStores {
   readonly secrets: PlatformSecrets;
+  /** The process runtime this attachment's decisions are issued on, held for
+   *  the host's lifetime rather than looked up per decision. */
+  readonly runtime: ProcessRuntime;
 }
 
 /** The pending requests this surface watches, as a level it subscribes to. */
@@ -133,6 +137,7 @@ export function createTuiHostInteractions(
         // capability, so re-deciding it here would call back into this
         // function and the request would never be answered.
         landRequestDecision(
+          stores.runtime,
           permission.runId,
           requestId,
           { action: 'retry', credentials: 'personal' },
@@ -144,6 +149,7 @@ export function createTuiHostInteractions(
           `The retry could not switch to your own API key: ${toErrorMessage(error)}`,
         );
         landRequestDecision(
+          stores.runtime,
           permission.runId,
           requestId,
           { action: 'deny', reason: toErrorMessage(error) },
@@ -273,6 +279,7 @@ export function createTuiHostInteractions(
           const settled = settleExecutable(context, request.runId);
           if (settled) {
             decidePendingRequest(
+              stores.runtime,
               request.requestId,
               settled,
               actAgainOnRefusal(request.requestId),
@@ -284,6 +291,7 @@ export function createTuiHostInteractions(
           const denial = settleHumanInputDenial(context, request.runId);
           if (denial) {
             decidePendingRequest(
+              stores.runtime,
               request.requestId,
               { action: 'deny', reason: denial.reason },
               actAgainOnRefusal(request.requestId),
@@ -295,6 +303,7 @@ export function createTuiHostInteractions(
           const settled = settleRetry(payload.data, context);
           if (settled) {
             decidePendingRequest(
+              stores.runtime,
               request.requestId,
               settled,
               actAgainOnRefusal(request.requestId),

@@ -14,23 +14,6 @@
       "src/utils/system/toolUtils.ts": 1
     },
     "effectRuntime()": {
-      "packages/cli/src/chat/chatSessionController.ts": 13,
-      "packages/cli/src/chat/tui/commands/handlers/modelAccessCommands.ts": 1,
-      "packages/cli/src/chat/tui/commands/handlers/sessionCommands.ts": 1,
-      "packages/cli/src/chat/tui/forms/AgentListForm.tsx": 1,
-      "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx": 2,
-      "packages/cli/src/chat/tui/input/BaseTextInput.tsx": 1,
-      "packages/cli/src/chat/tui/panes/InputBar.tsx": 1,
-      "packages/cli/src/chat/tui/state/approvalQueue.ts": 1,
-      "packages/cli/src/chat/tui/state/sessionView.ts": 1,
-      "packages/cli/src/commands/workflow.ts": 1,
-      "packages/cli/src/onboarding/runOnboarding.tsx": 2,
-      "packages/cli/src/runtime/agents.ts": 3,
-      "packages/cli/src/runtime/approvalAdapter.ts": 2,
-      "packages/cli/src/runtime/executeCli.ts": 7,
-      "packages/cli/src/runtime/memory.ts": 1,
-      "packages/cli/src/runtime/runProgressRenderer.ts": 4,
-      "packages/cli/src/runtime/sessionProgressSubscription.ts": 5,
       "src/tools/approval/latexPreview.ts": 1
     },
     "ambient:asyncLocalStorage": {

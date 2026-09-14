@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -13,7 +14,7 @@ import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { textInputCappedRowCount } from '../input/textInputDisplay';
@@ -55,6 +56,10 @@ import type { InputHistory } from '../history/inputHistory';
 const CSI_SEQUENCE_TAIL_RE = /^\[[0-?]*[ -/]*[@-~]$/u;
 
 interface InputBarProps {
+  /** The process runtime the history write and the Ctrl-V image probe run
+   *  on, threaded from the chat root that holds it — this bar runs no
+   *  Effect of its own. */
+  readonly runtime: ProcessRuntime;
   /** Forwarded to BaseTextInput; called only on real (non-paste) Enter.
    *  `mediaFiles` carries absolute paths of any pasted-image attachments. */
   readonly onSubmit: (
@@ -109,7 +114,7 @@ const INPUT_BAR_MAX_CONTENT_ROWS = 5;
 const INPUT_BAR_DECORATION_COLUMNS = 6;
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
-  const { disabled, history, onSubmit } = props;
+  const { disabled, history, onSubmit, runtime } = props;
   const keyboardActive = props.keyboardActive ?? true;
   const [value, setValueState] = useState('');
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
@@ -245,21 +250,28 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     if (!shouldCollapsePaste(text)) return text;
     return attachmentsRef.current.addPastedText(text);
   }, []);
-  const onImagePaste = useCallback(
-    async (attempt: ImagePasteAttempt): Promise<string | null> => {
-      const result = await attachClipboardImage();
-      if (!attempt.isCurrent()) return null;
-      if (!result.ok) {
-        setTransientNotice(result.reason);
-        return null;
-      }
-      return attachmentsRef.current.addPastedImage({
-        path: result.path,
-        mediaType: result.mediaType,
-        displayName: result.displayName,
-      });
-    },
-    [],
+  const onImagePaste = useMemo(
+    () => ({
+      runtime,
+      probe: async (attempt: ImagePasteAttempt): Promise<string | null> => {
+        const result = await attachClipboardImage();
+        if (!attempt.isCurrent()) return null;
+        if (!result.ok) {
+          setTransientNotice(result.reason);
+          return null;
+        }
+        return attachmentsRef.current.addPastedImage({
+          path: result.path,
+          mediaType: result.mediaType,
+          displayName: result.displayName,
+        });
+      },
+      onError: (error: unknown) =>
+        setTransientNotice(`Image paste failed: ${toErrorMessage(error)}`, {
+          ttlMs: Number.POSITIVE_INFINITY,
+        }),
+    }),
+    [runtime],
   );
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke
@@ -296,7 +308,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       const historyPersist =
         historyText.length > 0 && !shouldRedactSlashInput(historyText)
           ? historyRef.current &&
-            effectRuntime().runPromise(historyRef.current.push(historyText))
+            runtime.runPromise(historyRef.current.push(historyText))
           : null;
       historyPersist?.catch((err: unknown) => {
         writeTextStderr(
@@ -506,12 +518,6 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
               escapeEdit={showPalette ? clearDraftEdit : undefined}
               transformPaste={transformPaste}
               onImagePaste={onImagePaste}
-              onImagePasteError={(error) =>
-                setTransientNotice(
-                  `Image paste failed: ${toErrorMessage(error)}`,
-                  { ttlMs: Number.POSITIVE_INFINITY },
-                )
-              }
               onInputChunkSubmit={handleInputChunkSubmit}
               onSubmit={showPalette ? () => undefined : handleSubmit}
             />

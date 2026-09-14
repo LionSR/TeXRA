@@ -52,7 +52,7 @@ import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetada
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
 import type { RecoveryContinuation, StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   RUN_OUTCOME,
@@ -243,6 +243,10 @@ export interface ChatSessionControllerInit {
    */
   readonly secrets: PlatformSecrets;
   readonly state: StateStore;
+  /** The process runtime this controller runs its programs on, captured once
+   *  here: the controller lives for the length of the chat session, and its
+   *  Promise-facing methods are that session's run edge. */
+  readonly runtime: ProcessRuntime;
 }
 
 interface PreparedChatInstruction {
@@ -304,6 +308,7 @@ export function createChatSessionController(
     getSlashCommandContext,
     secrets,
     state,
+    runtime,
   } = init;
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
@@ -316,7 +321,7 @@ export function createChatSessionController(
   ): Promise<RunId | undefined> =>
     runId === undefined
       ? Promise.resolve(undefined)
-      : effectRuntime().runPromise(
+      : runtime.runPromise(
           Stream.concat(
             Stream.make(SubscriptionRef.getUnsafe(runtimeSession.view)),
             SubscriptionRef.changes(runtimeSession.view),
@@ -330,7 +335,7 @@ export function createChatSessionController(
   /** Issue one request to the session's runtime and read its Effect result
    *  as the response (PRD 7.6): the refusal text, or undefined on success. */
   const request = (req: RuntimeRequest): Promise<string | undefined> =>
-    effectRuntime().runPromise(
+    runtime.runPromise(
       runtimeSession.requests.request(req).pipe(
         Effect.match({
           onFailure: describeRequestError,
@@ -486,12 +491,13 @@ export function createChatSessionController(
   // attachment, so a detached child of an earlier turn keeps an answerable
   // approval path after its root finalizes, with no per-turn generation.
   const sessionContext = getSessionContext();
-  const presentationHost = createCliRuntimeHost(sessionContext);
+  const presentationHost = createCliRuntimeHost(runtime, sessionContext);
   disposables.add(() => void presentationHost.close());
   disposables.add(
     runtimeSession.interactions.use(
       createTuiHostInteractions(presentationHost, sessionContext, {
         secrets,
+        runtime,
       }),
     ),
   );
@@ -563,11 +569,9 @@ export function createChatSessionController(
     const claimedRun = Deferred.makeUnsafe<void, unknown>();
     // Native launch may resolve its stream on this turn. Claim first so
     // marking the run pending cannot erase that run or a reentrant stop.
-    session.markRunPending(
-      effectRuntime().runPromise(Deferred.await(claimedRun)),
-    );
+    session.markRunPending(runtime.runPromise(Deferred.await(claimedRun)));
     session.runId = runId;
-    void effectRuntime()
+    void runtime
       .runPromise(
         recoverRun(
           Effect.try(() => AgentConfigSchema.parse(config)).pipe(
@@ -641,7 +645,7 @@ export function createChatSessionController(
     const claimedRun = Deferred.makeUnsafe<void, unknown>();
     if (
       !session.tryClaimRootRunSlot(
-        effectRuntime().runPromise(Deferred.await(claimedRun)),
+        runtime.runPromise(Deferred.await(claimedRun)),
       )
     ) {
       // The slot is taken, so nothing downstream will ever complete the
@@ -721,9 +725,7 @@ export function createChatSessionController(
         // marks recoverable.
         if (session.stopRequested) interruptActiveRun();
 
-        await effectRuntime().runPromise(
-          runtimeSession.transcripts.ensureLoaded(id),
-        );
+        await runtime.runPromise(runtimeSession.transcripts.ensureLoaded(id));
         // The transcript and the work plan are the fold's: the TUI
         // subscribes the run's aggregate and renders `transcript.rows`, and
         // an open `/plan` reader reads the same `RunView`.
@@ -737,7 +739,7 @@ export function createChatSessionController(
       // cleared the interrupted stream, so the follow-ups typed during the
       // interruption are lost unless both go back where they came from.
       let followUpQueueReady = false;
-      const runChain = effectRuntime()
+      const runChain = runtime
         .runPromise(
           Effect.gen(function* () {
             recoveryHandedOff = true;
@@ -784,7 +786,7 @@ export function createChatSessionController(
         (error: unknown) => Deferred.doneUnsafe(claimedRun, Effect.fail(error)),
       );
     });
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       recoverRun(attemptResume, (error) => {
         handBackUnusedRecovery(recovery, recoveryHandedOff);
         restoreInterruptedRecovery(supersededRecovery);
@@ -820,9 +822,7 @@ export function createChatSessionController(
       return Promise.resolve(false);
     }
     const autoResumeRun = Deferred.makeUnsafe<boolean, unknown>();
-    const runPromise = effectRuntime().runPromise(
-      Deferred.await(autoResumeRun),
-    );
+    const runPromise = runtime.runPromise(Deferred.await(autoResumeRun));
     // Claim the root-run slot as the FIRST statement, synchronously, before
     // any `await` below, see tryClaimRootRunSlot and the matching comment
     // in resume().
@@ -901,7 +901,7 @@ export function createChatSessionController(
         }
         return false;
       });
-      return effectRuntime().runPromise(
+      return runtime.runPromise(
         recoverRun(attempt, (error) => {
           reportRunFailure(error);
           return false;
@@ -954,7 +954,7 @@ export function createChatSessionController(
     batch.completion = (async () => {
       // Best-effort settle-wait on the interrupted run: its outcome (including
       // any failure) is already reported by the run's own recovery.
-      await effectRuntime().runPromise(
+      await runtime.runPromise(
         Effect.ignoreCause(
           hostPort(() => session.runPromise ?? Promise.resolve()),
         ),
@@ -1015,7 +1015,7 @@ export function createChatSessionController(
   ): Promise<boolean> => {
     followUpQueue.clear();
     let started = false;
-    const pendingStart = effectRuntime().runPromise(
+    const pendingStart = runtime.runPromise(
       recoverRun(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
@@ -1163,7 +1163,7 @@ export function createChatSessionController(
           );
           return;
         }
-        const outcome = await effectRuntime().runPromise(
+        const outcome = await runtime.runPromise(
           runtimeSession.requests
             .request({
               kind: 'followUp.send',

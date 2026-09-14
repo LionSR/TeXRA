@@ -146,6 +146,7 @@ import {
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import { DisposableStore } from '@platform/disposable';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId,
   RUN_OUTCOME,
@@ -260,6 +261,7 @@ function makeInit(
     },
     secrets: new FakeSecrets(),
     state: new FakeStateStore(),
+    runtime: effectRuntime(),
     ...overrides,
   };
 }

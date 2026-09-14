@@ -19,6 +19,7 @@ import {
   metaChordInput,
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { type RunId, type WorkflowControlAction } from '@shared/schemas';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
@@ -123,6 +124,11 @@ export interface AppProps {
    * the chat surface that opened it — this component runs no Effect.
    */
   readonly secrets: PlatformSecrets;
+  /**
+   * The process runtime the input bar's history write and image paste run
+   * on, threaded from the same chat surface — this component runs no Effect.
+   */
+  readonly runtime: ProcessRuntime;
   readonly onSubmit: (
     line: string,
     mediaFiles?: readonly string[],
@@ -342,6 +348,7 @@ export function App(props: AppProps): React.JSX.Element {
       case 'approval':
         return activeApprovalVisible && pending ? (
           <ApprovalModal
+            runtime={props.runtime}
             availableRows={availableRows}
             goalAutoApproveAll={goalAutoApproveAll}
             pending={pending}
@@ -632,6 +639,7 @@ export function App(props: AppProps): React.JSX.Element {
         renderFooterChrome={() => (
           <>
             <InputBar
+              runtime={props.runtime}
               controlRef={inputBarRef}
               onSubmit={props.onSubmit}
               collapseWhenDisabled={!inputBarVisible}

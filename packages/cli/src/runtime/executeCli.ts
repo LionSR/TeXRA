@@ -21,7 +21,7 @@ import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   RUN_OUTCOME,
   type RunEndOutput,
@@ -72,6 +72,10 @@ interface CliExecuteOptions {
   /** The process session the run executes under: `initCliPlatform`'s one
    *  memoized open, threaded from the command that holds its services. */
   readonly session: Effect.Effect<SessionHandle>;
+  /** The process runtime, from the same services: the shutdown handler, the
+   *  lease drain and the workflow-output handler below are Promise-shaped
+   *  callbacks the agent runtime calls, so each runs its program on this. */
+  readonly runtime: ProcessRuntime;
   /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
    *  `expectedCategory`, never set by a command handler. */
   readonly enforceCategory?: boolean;
@@ -264,7 +268,7 @@ export function executeCliRequest(
   return Effect.gen(function* () {
     const session = yield* options.session;
     session.setApprovalPolicy(runContext.approvalPolicy);
-    const presentationHost = createCliRuntimeHost(runContext);
+    const presentationHost = createCliRuntimeHost(options.runtime, runContext);
     let failurePresented = false;
     const renderWorkflowPlainProgress =
       runContext.outputFormat === 'text' &&
@@ -274,7 +278,7 @@ export function executeCliRequest(
         runId: request.runId,
       });
     const detachHostInteractions = session.interactions.use(
-      createHeadlessCliHostInteractions(runContext, {
+      createHeadlessCliHostInteractions(options.runtime, runContext, {
         beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
         emit: (event, payload) => {
           if (event === 'requestShowError') failurePresented = true;
@@ -297,10 +301,10 @@ export function executeCliRequest(
     );
     const detachSessionProgressProjection =
       runContext.outputFormat === 'ndjson'
-        ? attachCliSessionProgressProjection(session)
+        ? attachCliSessionProgressProjection(options.runtime, session)
         : async () => undefined;
     const detachWorkflowPlainOutput = renderWorkflowPlainProgress
-      ? attachWorkflowPlainOutput(session, {
+      ? attachWorkflowPlainOutput(options.runtime, session, {
           runId: request.runId,
           beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
           writeLine: writeTextStderr,
@@ -357,7 +361,7 @@ export function executeCliRequest(
     };
     const finalizeShutdownStatus = (): Promise<boolean> => {
       if (launchVerdict.kind !== 'interrupted') return Promise.resolve(false);
-      shutdownStatusFinalized ??= effectRuntime().runPromise(
+      shutdownStatusFinalized ??= options.runtime.runPromise(
         Effect.gen(function* () {
           // Both call sites run after runAgent has already published (or failed to
           // publish) the lease, so the plain variable is the settled answer.
@@ -444,12 +448,12 @@ export function executeCliRequest(
         }
         const interruptedRunId =
           launchVerdict.kind === 'interrupted' ? ownedRunId : undefined;
-        if (stop) await effectRuntime().runPromise(stop.settlement);
+        if (stop) await options.runtime.runPromise(stop.settlement);
         let resumableCheckpoint:
           Extract<ResumabilityDecision, { kind: 'checkpoint' }> | undefined;
         if (interruptedRunId) {
           const runId = interruptedRunId;
-          const inspection = await effectRuntime().runPromise(
+          const inspection = await options.runtime.runPromise(
             Effect.result(deriveResumability(runId, session)),
           );
           // The ordinary bounded shutdown path below remains authoritative when
@@ -475,12 +479,12 @@ export function executeCliRequest(
           (options.canAdvertiseInterruptedRun?.(resumableCheckpoint) ?? true) &&
           options.onInterruptedRunFinalized
         ) {
-          await effectRuntime().runPromise(
+          await options.runtime.runPromise(
             Deferred.await(shutdownFinalizationDone),
           );
           return;
         }
-        const first = await effectRuntime().runPromise(
+        const first = await options.runtime.runPromise(
           Effect.raceAll([
             Deferred.await(shutdownFinalizationDone).pipe(
               Effect.as('finalized' as const),
@@ -501,7 +505,7 @@ export function executeCliRequest(
           ]),
         );
         if (first === 'recovery-started') {
-          await effectRuntime().runPromise(
+          await options.runtime.runPromise(
             Deferred.await(shutdownFinalizationDone),
           );
         }
@@ -516,7 +520,7 @@ export function executeCliRequest(
           openWorkflowOutput === undefined
             ? undefined
             : (result, agentDefaultOutputFiles) =>
-                effectRuntime().runPromise(
+                options.runtime.runPromise(
                   openWorkflowOutput(
                     result,
                     agentDefaultOutputFiles,

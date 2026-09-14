@@ -21,6 +21,7 @@ vi.mock('@platform/processRuntime', () => ({
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import { effectRuntime, type ProcessRuntime } from '@platform/processRuntime';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
@@ -44,7 +45,7 @@ describe('maybeRunCliOnboarding gate', () => {
   let originalIsTty: unknown;
   // The services bag `initInteractiveCliPlatform` hands its callers, which the
   // gate now reads instead of the ambient platform singleton.
-  let services: ModelOptionStores;
+  let services: ModelOptionStores & { readonly runtime: ProcessRuntime };
 
   beforeEach(() => {
     mocks.hasUsableSetupCredential.mockReset().mockResolvedValue(false);
@@ -52,6 +53,7 @@ describe('maybeRunCliOnboarding gate', () => {
       ...createFakePlatform(),
       globalState: createFakeWorkspaceRoots().globalState,
       secrets: new FakeSecrets(),
+      runtime: effectRuntime(),
     };
     originalIsTty = process.stdout.isTTY;
     Object.defineProperty(process.stdout, 'isTTY', {

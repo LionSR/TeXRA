@@ -7,6 +7,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { RunId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
@@ -44,12 +45,17 @@ const ApprovalBypassNdjsonEvent = {
   superYolo: 'updateSuperYoloBypassState',
 } as const satisfies Record<ApprovalBypassKind, string>;
 
-export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
+/** `runtime` is the process runtime the caller holds: the progress renderer
+ *  this host owns forks its view subscription on it for the host's lifetime. */
+export function createCliRuntimeHost(
+  runtime: ProcessRuntime,
+  context: CliContext,
+): CliRuntimeHost {
   let sink: LogSink | undefined;
   let logger: Logger | undefined;
   let closed = false;
   const ndjson = context.outputFormat === 'ndjson';
-  const runProgress = createRunProgressRenderer(context);
+  const runProgress = createRunProgressRenderer(runtime, context);
   function ensureLogger(): Logger {
     if (logger) return logger;
     sink = createCliLogSink(context.outputFormat);

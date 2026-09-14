@@ -17,7 +17,7 @@ import {
   type HostInteractions,
 } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
   PermissionPayload,
@@ -142,7 +142,10 @@ const askHeadlessUserQuestion = Effect.fn(
   return { action: 'submit', answers } satisfies RequestDecision;
 });
 
+/** `runtime` is the process runtime the headless run holds: the view
+ *  subscription below is a fiber of it, interrupted on dispose. */
 export function createHeadlessCliHostInteractions(
+  runtime: ProcessRuntime,
   context: CliContext,
   hooks: HeadlessCliHostInteractionHooks = {},
 ): HostInteractions {
@@ -321,7 +324,7 @@ export function createHeadlessCliHostInteractions(
       ),
     );
 
-  const fiber = effectRuntime().runFork(
+  const fiber = runtime.runFork(
     Stream.runForEach(SubscriptionRef.changes(session.view), take),
   );
 
@@ -338,7 +341,7 @@ export function createHeadlessCliHostInteractions(
       previews.delete(requestId);
     },
     dispose() {
-      effectRuntime().runFork(Fiber.interrupt(fiber));
+      runtime.runFork(Fiber.interrupt(fiber));
     },
   };
 }
