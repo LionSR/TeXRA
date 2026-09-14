@@ -1,13 +1,13 @@
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { Effect, FileSystem, PlatformError } from 'effect';
+import { beforeEach, describe, expect } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { platform } from '@platform/platform';
 import type { RunId } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { listRunGeneratedFiles } from '@tools/executions/runGeneratedFiles';
@@ -16,18 +16,50 @@ const EXECUTION_ID = 'generated-history-test' as RunId;
 const STORAGE_PATH = fakePath('storage');
 const RUN_PATH = path.join(STORAGE_PATH, 'executions', EXECUTION_ID);
 
-function fsError(code: string, message: string): Error {
-  return Object.assign(new Error(message), { code });
-}
-
-function failStatFor(targetPath: string, error: Error): void {
-  const fs = platform().fs;
-  const stat = fs.stat.bind(fs);
-  vi.spyOn(fs, 'stat').mockImplementation(async (candidate) => {
-    if (candidate === targetPath) throw error;
-    return stat(candidate);
+function statFailure(
+  tag: PlatformError.SystemErrorTag,
+  target: string,
+): PlatformError.PlatformError {
+  return PlatformError.systemError({
+    _tag: tag,
+    module: 'FileSystem',
+    method: 'stat',
+    pathOrDescriptor: target,
   });
 }
+
+/**
+ * The process filesystem with one path's `stat` failing: the walk's own
+ * failure policy is what these cases exercise, and a real race between the
+ * listing and the stat cannot be staged on disk.
+ */
+function withFailingStat(
+  fs: FileSystem.FileSystem,
+  target: string,
+  failure: PlatformError.PlatformError,
+): FileSystem.FileSystem {
+  return {
+    ...fs,
+    stat: (candidate: string) =>
+      candidate === target ? Effect.fail(failure) : fs.stat(candidate),
+  };
+}
+
+/** The listing, with `target`'s `stat` failing as `tag`. */
+const listWithFailedStat = (
+  session: SessionHandle,
+  target: string,
+  failure: PlatformError.PlatformError,
+) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* listRunGeneratedFiles(EXECUTION_ID, session).pipe(
+      Effect.provideService(
+        FileSystem.FileSystem,
+        withFailingStat(fs, target, failure),
+      ),
+    );
+  }).pipe(Effect.provide(nodePlatformLayer));
 
 describe('listRunGeneratedFiles', () => {
   setupPlatform({
@@ -44,18 +76,20 @@ describe('listRunGeneratedFiles', () => {
   beforeEach(async () => {
     session = await Effect.runPromise(createProcessSession());
   });
-  afterEach(() => vi.restoreAllMocks());
 
   it.effect(
     'lists in path order, skipping entries that disappear concurrently',
     () =>
       Effect.gen(function* () {
-        failStatFor(
-          path.join(RUN_PATH, 'vanished.tex'),
-          fsError('ENOENT', 'entry disappeared after readDir'),
-        );
+        const vanished = path.join(RUN_PATH, 'vanished.tex');
 
-        expect(yield* listRunGeneratedFiles(EXECUTION_ID, session)).toEqual([
+        expect(
+          yield* listWithFailedStat(
+            session,
+            vanished,
+            statFailure('NotFound', vanished),
+          ),
+        ).toEqual([
           { path: 'blocked.tex', size: 7, isDirectory: false },
           // A real directory's size is the filesystem's own bookkeeping.
           { path: 'sub', size: expect.any(Number), isDirectory: true },
@@ -70,12 +104,13 @@ describe('listRunGeneratedFiles', () => {
     'omits an entry whose intermediate component is no longer a directory',
     () =>
       Effect.gen(function* () {
-        failStatFor(
-          path.join(RUN_PATH, 'blocked.tex'),
-          fsError('ENOTDIR', 'parent path is no longer a directory'),
-        );
+        const blocked = path.join(RUN_PATH, 'blocked.tex');
 
-        const files = yield* listRunGeneratedFiles(EXECUTION_ID, session);
+        const files = yield* listWithFailedStat(
+          session,
+          blocked,
+          statFailure('BadResource', blocked),
+        );
 
         expect(files.map((file) => file.path)).not.toContain('blocked.tex');
       }),
@@ -83,12 +118,12 @@ describe('listRunGeneratedFiles', () => {
 
   it.effect('propagates operational stat failures', () =>
     Effect.gen(function* () {
-      const error = fsError('EACCES', 'generated file is unreadable');
-      failStatFor(path.join(RUN_PATH, 'unreadable.tex'), error);
+      const unreadable = path.join(RUN_PATH, 'unreadable.tex');
+      const failure = statFailure('PermissionDenied', unreadable);
 
       expect(
-        yield* Effect.flip(listRunGeneratedFiles(EXECUTION_ID, session)),
-      ).toBe(error);
+        yield* Effect.flip(listWithFailedStat(session, unreadable, failure)),
+      ).toBe(failure);
     }),
   );
 });

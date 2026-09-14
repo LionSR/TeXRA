@@ -7,7 +7,7 @@
 
 // Node imports
 // Third-party imports
-import { Data, Deferred, Duration, Effect } from 'effect';
+import { Data, Deferred, Duration, Effect, FileSystem } from 'effect';
 
 // Local imports
 import {
@@ -283,7 +283,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     this: ExecutionsTool,
     context: RunToolContext,
     input: ExecutionsToolInput,
-  ): Effect.fn.Return<ToolResult, Error | ExecutionsReadFailed, Runs> {
+  ): Effect.fn.Return<
+    ToolResult,
+    Error | ExecutionsReadFailed,
+    Runs | FileSystem.FileSystem
+  > {
     const segments = getPathSegments(input.path);
     const [namespace, id, resource, ...rest] = segments;
 

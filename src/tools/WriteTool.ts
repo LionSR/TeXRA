@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
@@ -27,7 +27,7 @@ type WriteInput = z.infer<typeof WriteInputSchema>;
 
 const write = Effect.fn('WriteFileTool.execute')(function* (
   input: WriteInput,
-): Effect.fn.Return<ToolResult, unknown, ToolCall> {
+): Effect.fn.Return<ToolResult, unknown, ToolCall | FileSystem.FileSystem> {
   const prepared = yield* resolveWritableTarget(input.path, {
     missing: 'allow',
   });

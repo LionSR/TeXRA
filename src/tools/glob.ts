@@ -2,14 +2,12 @@
 import * as nodePath from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem, Option } from 'effect';
 import { glob } from 'glob';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { hostPort } from '@common/hostPort';
 import { ToolError, ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
@@ -58,7 +56,7 @@ interface GlobPorts extends WorkspacePathPorts {
 const runGlob = Effect.fn('GlobTool.execute')(function* (
   ports: GlobPorts,
   input: GlobInput,
-): Effect.fn.Return<ToolResult, unknown> {
+): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
   const root = ports.toolRoot();
   const { path, display } = ports.inScope(() =>
     resolveAndFormat(input.path ?? undefined, root),
@@ -95,6 +93,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
     );
   }
 
+  const fs = yield* FileSystem.FileSystem;
   const statMatch = Effect.fn('GlobTool.statMatch')(function* (
     match: string,
   ): Effect.fn.Return<GlobMatchInfo | null, unknown> {
@@ -117,19 +116,25 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
       return null;
     }
 
-    return yield* hostPort(() =>
-      ports.inScope(() => WorkspaceFS.stat(resolved.fsPath)),
-    ).pipe(
+    // The match was resolved inside the call's workspace frame, so its
+    // absolute form is what the process filesystem stats — a match under a
+    // registered external root included, as through the workspace facade.
+    return yield* fs.stat(resolved.absolute).pipe(
       Effect.map((stat): GlobMatchInfo | null => ({
         relativePath,
-        mtime: stat.mtime,
+        mtime: Option.match(stat.mtime, {
+          onNone: () => 0,
+          onSome: (modified) => modified.getTime(),
+        }),
       })),
-      // A match that vanished (or turned out not to be a directory) between
-      // the walk and the stat is dropped; any other stat failure is real.
-      Effect.catch((error) =>
-        isFileNotFoundError(error) || isNotADirectoryError(error)
-          ? Effect.succeed(null)
-          : Effect.fail(error),
+      // A match that vanished, or whose path stopped naming something a stat
+      // can follow, between the walk and the stat is dropped; any other stat
+      // failure is real.
+      Effect.catchIf(
+        (error) =>
+          error.reason._tag === 'NotFound' ||
+          error.reason._tag === 'BadResource',
+        () => Effect.succeed(null),
       ),
     );
   });

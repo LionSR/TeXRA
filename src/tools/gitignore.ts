@@ -2,18 +2,14 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import ignore from 'ignore';
-
-// Local imports - common
-import { isFileNotFoundError } from '@common/errors';
-import { hostPort } from '@common/hostPort';
 
 // Local imports - utils
 import { filterNotNull } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toPosixPath } from '@utils/core/pathCore';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 type GitignoreSource = {
@@ -31,46 +27,38 @@ const EMPTY_GITIGNORE_MATCHER: GitignoreMatcher = {
   ignoreFiles: [],
 };
 
-const readGitignoreFile = (
+/**
+ * Read one policy file by its absolute path, through the process filesystem:
+ * the two policies live in two different roots (the workspace and the user's
+ * home), and each path here is already absolute.
+ */
+const readGitignoreFile = Effect.fn('readGitignoreFile')(function* (
   absolutePath: string,
-  readContent: Effect.Effect<string, unknown>,
-): Effect.Effect<GitignoreSource | null, unknown> =>
-  readContent.pipe(
+) {
+  const fs = yield* FileSystem.FileSystem;
+  return yield* fs.readFileString(absolutePath).pipe(
     Effect.map((content): GitignoreSource | null => ({
       absolutePath,
-      content,
+      content: normalizeLineEndings(content),
     })),
     // An absent policy file is the normal case; any other read failure is the
     // caller's to see.
-    Effect.catch((error) =>
-      isFileNotFoundError(error) ? Effect.succeed(null) : Effect.fail(error),
+    Effect.catchIf(
+      (error) => error.reason._tag === 'NotFound',
+      () => Effect.succeed(null),
     ),
   );
+});
 
-const readWorkspaceGitignore = (
-  relativePath: string,
-  workspacePath: string,
-): Effect.Effect<GitignoreSource | null, unknown> => {
-  const normalized = relativePath.replace(/^\/+/, '');
-  return readGitignoreFile(
-    path.join(workspacePath, normalized),
-    hostPort(() => AbsoluteFS.read(path.join(workspacePath, normalized))),
-  );
-};
+const readWorkspaceGitignore = (relativePath: string, workspacePath: string) =>
+  readGitignoreFile(path.join(workspacePath, relativePath.replace(/^\/+/, '')));
 
-const readGlobalGitignore = (): Effect.Effect<
-  GitignoreSource | null,
-  unknown
-> => {
+const readGlobalGitignore = () => {
   const homeDirectory = safeHomedir();
   if (!homeDirectory) {
-    return Effect.succeed(null);
+    return Effect.succeed<GitignoreSource | null>(null);
   }
-  const absolutePath = path.join(homeDirectory, '.gitignore_global');
-  return readGitignoreFile(
-    absolutePath,
-    hostPort(() => AbsoluteFS.read(absolutePath)),
-  );
+  return readGitignoreFile(path.join(homeDirectory, '.gitignore_global'));
 };
 
 /**
