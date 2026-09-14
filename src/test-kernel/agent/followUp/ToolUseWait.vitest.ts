@@ -486,7 +486,7 @@ const enqueue = Effect.fn('test.enqueue')(function* (
   runId: RunId,
   items: readonly FollowUpQueueInput[],
 ) {
-  yield* Effect.promise(() => session.settlePublications());
+  yield* session.settlePublications();
   for (const item of items) {
     yield* session.followUps.submit(runId, item, 'recoverable');
   }
@@ -552,7 +552,7 @@ describe('a parked child run', () => {
           content: { text: asked, origin: 'user' as const },
         };
         session.publish([queued]);
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
 
         const resumed = yield* runLoop({
           runId,
@@ -569,7 +569,7 @@ describe('a parked child run', () => {
         // A producer that replays the delivery after a restart writes the
         // same id again; it names a follow-up already consumed.
         session.publish([queued]);
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
         const again = yield* runLoop({
           runId,
           session,

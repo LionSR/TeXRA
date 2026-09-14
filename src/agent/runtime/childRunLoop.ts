@@ -27,9 +27,11 @@ import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
 import type {
   FollowUpConsumerLease,
   FollowUpQueueInput,
+  FollowUpRecoveryLease,
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   enqueueLiveFollowUp,
+  startFollowUpWake,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
@@ -503,8 +505,9 @@ function emitTurnDiagnostic(
  * An agent-CLI turn's settlement also consumes the follow-ups that were its
  * prompt (C3): no ledger message carries that prompt, and its provider's
  * thread holds it only once the turn has run, so the rows stay queued until
- * then. A crash before the settled row re-delivers them to the next loop,
- * which seeds from the rows; after it, nothing re-delivers them.
+ * then. The parent delivery is admitted before this commit, so a crash after
+ * settlement still leaves the result on the parent; a crash before it
+ * re-delivers the prompt to the next loop.
  */
 function commitChildTurn(
   session: SessionHandle,
@@ -587,6 +590,11 @@ function resolveDeliveryTarget<TTurn, R>(
 interface PendingChildDelivery {
   readonly resolveTargetRunId: () => RunId | undefined;
   readonly followUp: FollowUpQueueInput;
+  /**
+   * The parent follow-up row is already durable. A recovery lease means this
+   * process still has to wake the parent after this child's finalize.
+   */
+  readonly recovery?: FollowUpRecoveryLease;
 }
 
 /**
@@ -666,6 +674,49 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   const persisted = yield* Effect.exit(
     persistChildRunDelivery(params.session, runId, msg, resultMeta),
   );
+  const resolveTargetRunId = (): RunId | undefined =>
+    resolveDeliveryTarget(strategy, resolveDefaultDeliveryTarget);
+  const followUp: FollowUpQueueInput = {
+    text: msg,
+    origin: 'subagent_result',
+    deliveryId: turnDeliveryId(runId, turnKey),
+  };
+  let pending: PendingChildDelivery | undefined;
+  if (Exit.isSuccess(persisted) && strategy.deliveryMode !== 'persistOnly') {
+    const targetRunId = resolveTargetRunId();
+    if (!targetRunId) {
+      warnDetachedChildDelivery(logger, runId);
+    } else if (prepareParentDelivery?.() !== false) {
+      // Admit the parent row before consuming the prompt: a crash after
+      // settlement then still leaves the result on the parent. The wake
+      // stays deferred for terminal turns (#8093).
+      const submitted = yield* params.session.followUps.submit(
+        targetRunId,
+        followUp,
+        'recoverable',
+      );
+      if (submitted.kind === 'refused') {
+        logger.warn(
+          `Turn result not delivered: parent run is unavailable (${submitted.reason ?? 'not_resumable'}). The result remains in the run report.`,
+          {
+            data: {
+              runId,
+              parentRunId: targetRunId,
+              reason: submitted.reason,
+            },
+          },
+        );
+      } else {
+        pending = {
+          resolveTargetRunId,
+          followUp,
+          ...(submitted.kind === 'queued' && submitted.lease
+            ? { recovery: submitted.lease }
+            : {}),
+        };
+      }
+    }
+  }
   // The turn settled whatever the delivery persistence did: its settle path
   // ran, which is the fact a recovering caller's re-execution gate reads (a
   // settled `child.turn` under a run with no outcome refuses repetition,
@@ -688,24 +739,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   });
   if (Exit.isFailure(persisted))
     return yield* Effect.failCause(persisted.cause);
-
-  if (strategy.deliveryMode === 'persistOnly') return undefined;
-
-  const resolveTargetRunId = (): RunId | undefined =>
-    resolveDeliveryTarget(strategy, resolveDefaultDeliveryTarget);
-  if (!resolveTargetRunId()) {
-    warnDetachedChildDelivery(logger, runId);
-    return undefined;
-  }
-  if (prepareParentDelivery?.() === false) return undefined;
-  return {
-    resolveTargetRunId,
-    followUp: {
-      text: msg,
-      origin: 'subagent_result',
-      deliveryId: turnDeliveryId(runId, turnKey),
-    },
-  };
+  return pending;
 });
 
 /**
@@ -724,6 +758,23 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
     warnDetachedChildDelivery(logger, runId);
     return;
   }
+  const recovery = pending.recovery;
+  if (recovery) {
+    const resumed = yield* Effect.tryPromise({
+      try: () => startFollowUpWake(targetRunId, recovery, session),
+      catch: ensureError,
+    });
+    if (!resumed) {
+      logger.warn(
+        'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+        { data: { runId, parentRunId: targetRunId } },
+      );
+    }
+  }
+  // Duplicate-safe: the parent row was admitted before the child prompt
+  // was consumed. This wake still goes through submitFollowUp so a mocked
+  // delivery site (and a live parent that needs no recovery lease) still
+  // sees it at the original post-finalize point.
   const delivery = yield* submitFollowUp(targetRunId, pending.followUp, {
     session,
   });

@@ -693,7 +693,7 @@ describe('childRunLoop E2E fixtures', () => {
               ),
             ),
           ).toBeUndefined();
-          expect(admissions).toEqual(['delivered_live', 'delivered_live']);
+          expect(admissions).toEqual(['duplicate', 'duplicate']);
           const delivered = yield* queuedFollowUps(session, PARENT_RUN_ID);
           expect(delivered.map((item) => item.text)).toEqual([
             'delivered:done',

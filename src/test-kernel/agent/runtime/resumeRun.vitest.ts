@@ -120,7 +120,7 @@ const createSession = Effect.fn('test.createSession')(function* () {
   const session = createTestSession();
   publishTestRunStart(session, RUN);
   sessions.push(session);
-  yield* Effect.promise(() => session.settlePublications());
+  yield* session.settlePublications();
   return session;
 });
 

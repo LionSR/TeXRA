@@ -14,6 +14,7 @@ import {
 import {
   DatabaseClaimRefused,
   DatabaseNotOwner,
+  DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { Append } from '@shared/session/sessionEvents';
@@ -114,7 +115,9 @@ export interface FollowUpRowPort {
   /** Enqueue a job on that publisher and return (`SessionGraph.detach`). */
   readonly detach: (job: Effect.Effect<void>) => void;
   /** Every committed row of the run's aggregate. */
-  readonly rows: (runId: RunId) => Effect.Effect<readonly SessionEvent[]>;
+  readonly rows: (
+    runId: RunId,
+  ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
   /**
    * The run aggregate's claim, acquired the way a resume acquires it (prior
    * owners proven dead first): returns the release of what this call took,

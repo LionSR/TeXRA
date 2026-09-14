@@ -18,7 +18,10 @@ import {
   runUnreadableMessage,
 } from '@shared/runs/runStatusDisplay';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { FollowUpQueueInput } from './ToolUseFollowUpQueueManager';
+import type {
+  FollowUpQueueInput,
+  FollowUpRecoveryLease,
+} from './ToolUseFollowUpQueueManager';
 
 /**
  * Why a submission could not be admitted, worded for the user by
@@ -114,6 +117,31 @@ export function notifyFollowUpSent(
 }
 
 /**
+ * Wake a recovery lease whose follow-up row is already durable. The Promise
+ * owns its settlement even if the submitting fiber stops waiting: a declined
+ * or rejected wake releases the lease so the next attempt can claim it.
+ */
+export function startFollowUpWake(
+  runId: RunId,
+  recovery: FollowUpRecoveryLease,
+  session: SessionHandle,
+  resumePort?: Pick<AgentResumePort, 'tryResumeRun'>,
+): Promise<boolean> {
+  return Promise.resolve(
+    (resumePort ?? platform().agentResume).tryResumeRun(runId, recovery),
+  ).then(
+    (resumed) => {
+      if (!resumed) session.followUps.release(recovery, 'recoverable');
+      return resumed;
+    },
+    () => {
+      session.followUps.release(recovery, 'recoverable');
+      return false;
+    },
+  );
+}
+
+/**
  * Queue transient progress using the current run and live queue owners. The
  * target and the admission are decided when this is called; the returned
  * effect writes the row (nothing when no session holds the run).
@@ -200,24 +228,14 @@ function admitFollowUp(
         if (submission.kind !== 'queued' || !submission.lease) {
           return { status: 'queued' };
         }
-        const recovery = submission.lease;
-        // The Promise resume port owns its settlement even if the submitting
-        // fiber stops waiting. A declined wake must release its claim for the
-        // next attempt.
-        const resume = (options.resumePort ?? platform().agentResume)
-          .tryResumeRun(runId, recovery)
-          .then(
-            (resumed) => {
-              if (!resumed)
-                ownerSession.followUps.release(recovery, 'recoverable');
-              return resumed;
-            },
-            () => {
-              ownerSession.followUps.release(recovery, 'recoverable');
-              return false;
-            },
-          );
-        return { resume };
+        return {
+          resume: startFollowUpWake(
+            runId,
+            submission.lease,
+            ownerSession,
+            options.resumePort,
+          ),
+        };
       },
     );
   });
