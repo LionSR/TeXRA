@@ -17,6 +17,10 @@ import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
+import {
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
+} from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -172,6 +176,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     this.modelSelectionController = new SettingsModelSelectionController({
       globalState: options.globalState,
       secrets: options.secrets,
+      // The availability read is an Effect; this is the boundary that holds a
+      // runtime to run it on, so the controller takes its rows as data.
+      resolveModelOptions: async (stores, models) =>
+        modelOptionsFrom(
+          await options.runtime.runPromise(
+            readModelAvailabilityInputs(stores, models),
+          ),
+        ),
     });
     this.profileController = new SettingsProfileController({
       host: 'desktop',

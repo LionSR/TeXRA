@@ -201,6 +201,7 @@ function createContext(
     session,
     secrets: stores.secrets,
     state: stores.state,
+    runtime: effectRuntime(),
     processCwd: '/tmp/launcher',
     initialAgent: 'chat',
     initialModel: 'deepseekT',

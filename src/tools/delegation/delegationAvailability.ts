@@ -36,6 +36,7 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
+  type ModelAvailabilityScope,
 } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import { AppState } from '@platform/interfaces';
@@ -49,7 +50,6 @@ import type {
 import { isModelOptionAvailable } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { unique } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 
 /**
@@ -230,22 +230,22 @@ export const selectAvailableDelegationModel = Effect.fn(
    * from outside their run's own frame — an approved proposal, a workflow
    * script's per-call model routing — pass their `withRunContext` /
    * `runInSession` wrapper here. Only the read needs it; the decision below
-   * is pure.
+   * is pure. It is handed to the read rather than wrapped around it: the read
+   * is an Effect, so wrapping the call would enter the frame around building
+   * the program instead of around running it.
    */
-  readonly withScope?: <T>(read: () => T) => T;
+  readonly withScope?: ModelAvailabilityScope;
 }) {
   const { withScope } = input;
   const stores = {
     secrets: yield* Secrets,
     globalState: yield* AppState,
   };
-  const inputs = yield* Effect.tryPromise({
-    try: () =>
-      withScope
-        ? withScope(() => readModelAvailabilityInputs(stores))
-        : readModelAvailabilityInputs(stores),
-    catch: ensureError,
-  });
+  const inputs = yield* readModelAvailabilityInputs(
+    stores,
+    undefined,
+    withScope,
+  );
   const models = modelOptionsFrom(inputs);
   const availableModels = unique(
     availableModelNamesFromOptions(models)

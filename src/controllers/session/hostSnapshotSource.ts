@@ -151,11 +151,9 @@ export function createHostSnapshotSource(
   });
 
   const loadModels = Effect.gen(function* () {
-    const inputs = yield* hostPort(() =>
-      readModelAvailabilityInputs(
-        { secrets: options.secrets, globalState: options.globalState },
-        getEnabledModels(options.globalState),
-      ),
+    const inputs = yield* readModelAvailabilityInputs(
+      { secrets: options.secrets, globalState: options.globalState },
+      getEnabledModels(options.globalState),
     );
     catalogs = { ...catalogs, modelOptions: modelOptionsFrom(inputs) };
   });

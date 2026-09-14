@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 
 import {
   modelOptionsFrom,
@@ -279,7 +280,9 @@ describe('Copilot route in model pickers', () => {
     );
 
     const options = modelOptionsFrom(
-      await readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+      await Effect.runPromise(
+        readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+      ),
     );
 
     expect(options).toHaveLength(1);
@@ -310,7 +313,9 @@ describe('Copilot route in model pickers', () => {
     );
 
     const options = modelOptionsFrom(
-      await readModelAvailabilityInputs(hostStores(), undefined),
+      await Effect.runPromise(
+        readModelAvailabilityInputs(hostStores(), undefined),
+      ),
     );
 
     expect(options.map((option) => option.value)).toEqual(['gpt55']);
@@ -336,7 +341,9 @@ describe('Copilot route in model pickers', () => {
     );
 
     const options = modelOptionsFrom(
-      await readModelAvailabilityInputs(hostStores(), undefined),
+      await Effect.runPromise(
+        readModelAvailabilityInputs(hostStores(), undefined),
+      ),
     );
 
     expect(options).toHaveLength(1);
@@ -361,7 +368,9 @@ describe('Copilot route in model pickers', () => {
     );
 
     const options = modelOptionsFrom(
-      await readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+      await Effect.runPromise(
+        readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+      ),
     );
 
     expect(options).toHaveLength(1);
@@ -381,7 +390,9 @@ describe('Copilot route in model pickers', () => {
     );
 
     const options = modelOptionsFrom(
-      await readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+      await Effect.runPromise(
+        readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+      ),
     );
 
     expect(options[0]).toEqual(

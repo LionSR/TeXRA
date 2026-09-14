@@ -521,13 +521,15 @@ describe('headless delegation', () => {
         tools: [],
       },
     ]);
-    mocks.readModelAvailabilityInputs.mockResolvedValue([
-      {
-        value: 'deepseekT',
-        label: 'DeepSeek',
-        availability: 'provider-key',
-      },
-    ]);
+    mocks.readModelAvailabilityInputs.mockReturnValue(
+      Effect.succeed([
+        {
+          value: 'deepseekT',
+          label: 'DeepSeek',
+          availability: 'provider-key',
+        },
+      ]),
+    );
     mocks.isProposalBypassed.mockReturnValue(true);
     mocks.isApprovalBypassedForRun.mockReturnValue(false);
     mocks.inspectRunLease.mockResolvedValue({ status: 'free' });
@@ -1198,18 +1200,20 @@ describe('headless delegation', () => {
 
   it.effect('launches with an approved model override that is available', () =>
     Effect.gen(function* () {
-      mocks.readModelAvailabilityInputs.mockResolvedValue([
-        {
-          value: 'deepseekT',
-          label: 'DeepSeek',
-          availability: 'provider-key',
-        },
-        {
-          value: 'gpt5',
-          label: 'GPT-5',
-          availability: 'provider-key',
-        },
-      ]);
+      mocks.readModelAvailabilityInputs.mockReturnValue(
+        Effect.succeed([
+          {
+            value: 'deepseekT',
+            label: 'DeepSeek',
+            availability: 'provider-key',
+          },
+          {
+            value: 'gpt5',
+            label: 'GPT-5',
+            availability: 'provider-key',
+          },
+        ]),
+      );
 
       const result = yield* delegateWithProposalDecision(
         { action: 'approve', model: 'gpt5' },

@@ -130,14 +130,16 @@ function delegationRegistry(tools: readonly ToolInput[]) {
 
 async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
   const { secrets, globalState } = hostStores();
-  return resolveAgentTools({
-    tools,
-    registry: delegationRegistry(tools),
-    logger: { warn: () => {} },
-    toolInjections: new ToolInjectionRegistry(),
-    config: new FakeConfigProvider(),
-    stores: { secrets, globalState },
-  });
+  return Effect.runPromise(
+    resolveAgentTools({
+      tools,
+      registry: delegationRegistry(tools),
+      logger: { warn: () => {} },
+      toolInjections: new ToolInjectionRegistry(),
+      config: new FakeConfigProvider(),
+      stores: { secrets, globalState },
+    }),
+  );
 }
 
 async function resolveDelegateAgent(extraTools: ToolInput[] = []) {
@@ -227,10 +229,9 @@ describe('delegation model availability', () => {
     'rejects an explicitly requested model that is not currently available',
     () =>
       Effect.gen(function* () {
-        mocks.readModelAvailabilityInputs.mockResolvedValue([
-          model('sonnet46T'),
-          model('deepseekT'),
-        ]);
+        mocks.readModelAvailabilityInputs.mockReturnValue(
+          Effect.succeed([model('sonnet46T'), model('deepseekT')]),
+        );
 
         const failure = yield* Effect.flip(
           selectAvailableDelegationModel({
@@ -247,10 +248,9 @@ describe('delegation model availability', () => {
 
   it.effect('uses the parent model only when it is available', () =>
     Effect.gen(function* () {
-      mocks.readModelAvailabilityInputs.mockResolvedValue([
-        model('deepseekT'),
-        model('sonnet46T'),
-      ]);
+      mocks.readModelAvailabilityInputs.mockReturnValue(
+        Effect.succeed([model('deepseekT'), model('sonnet46T')]),
+      );
 
       expect(
         yield* selectAvailableDelegationModel({ parentModel: 'sonnet46T' }),
@@ -264,7 +264,7 @@ describe('delegation model availability', () => {
 
   it.effect('rejects delegation when no models are currently available', () =>
     Effect.gen(function* () {
-      mocks.readModelAvailabilityInputs.mockResolvedValue([]);
+      mocks.readModelAvailabilityInputs.mockReturnValue(Effect.succeed([]));
 
       const failure = yield* Effect.flip(
         selectAvailableDelegationModel({ parentModel: 'opus48T' }),
@@ -313,13 +313,15 @@ describe('delegation worktree availability', () => {
 describe('resolveAgentTools delegation annotation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.readModelAvailabilityInputs.mockResolvedValue([
-      {
-        value: 'deepseekT',
-        label: 'DeepSeek',
-        availability: 'provider-key',
-      },
-    ]);
+    mocks.readModelAvailabilityInputs.mockReturnValue(
+      Effect.succeed([
+        {
+          value: 'deepseekT',
+          label: 'DeepSeek',
+          availability: 'provider-key',
+        },
+      ]),
+    );
   });
 
   it('reflects the current roster on each call, not a frozen snapshot', async () => {

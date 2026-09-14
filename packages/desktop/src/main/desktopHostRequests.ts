@@ -166,10 +166,12 @@ export function createDesktopHostRequests(
       runAgentRequest: run.runAgentRequest,
       loadModelOptions: async () =>
         modelOptionsFrom(
-          await readModelAvailabilityInputs({
-            secrets: options.secrets,
-            globalState: options.globalState,
-          }),
+          await runtime.runPromise(
+            readModelAvailabilityInputs({
+              secrets: options.secrets,
+              globalState: options.globalState,
+            }),
+          ),
         ),
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.

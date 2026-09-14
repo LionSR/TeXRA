@@ -196,7 +196,9 @@ export function createExtensionHostRequests(
       runAgentRequest,
       loadModelOptions: async () =>
         modelOptionsFrom(
-          await readModelAvailabilityInputs({ secrets, globalState }),
+          await runtime.runPromise(
+            readModelAvailabilityInputs({ secrets, globalState }),
+          ),
         ),
       promptForApiKey: async (provider) => {
         await runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider);

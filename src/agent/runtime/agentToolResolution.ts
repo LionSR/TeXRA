@@ -24,12 +24,15 @@
  * does not hold is the one reported case.
  */
 
+import { Effect } from 'effect';
+
 import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { createLog } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
+  type ModelAvailabilityScope,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
@@ -71,6 +74,12 @@ interface ResolveAgentToolsInput {
    * roster's model availability.
    */
   stores: ModelOptionStores;
+  /**
+   * The run's session frame. Handed to the availability read rather than
+   * wrapped around this call: the read is an Effect, so a wrapper would enter
+   * the frame around building the program instead of around running it.
+   */
+  inScope?: ModelAvailabilityScope;
 }
 
 /**
@@ -81,27 +90,32 @@ interface ResolveAgentToolsInput {
  * `null` when the model options could not be loaded, and the list of available
  * model names otherwise.
  */
-async function availableDelegationModelNamesForTools(
+function availableDelegationModelNamesForTools(
   tools: readonly ToolDefinition[],
   stores: ModelOptionStores,
-): Promise<readonly string[] | null | undefined> {
+  inScope: ModelAvailabilityScope | undefined,
+): Effect.Effect<readonly string[] | null | undefined> {
   if (!hasDelegationTool(tools.map((tool) => tool.name))) {
-    return undefined;
+    return Effect.succeed(undefined);
   }
 
-  try {
-    const models = modelOptionsFrom(await readModelAvailabilityInputs(stores));
-    return availableModelNamesFromOptions(models);
-  } catch (err) {
+  return readModelAvailabilityInputs(stores, undefined, inScope).pipe(
+    Effect.map((inputs) =>
+      availableModelNamesFromOptions(modelOptionsFrom(inputs)),
+    ),
     // Couldn't load model options — skip the delegation annotation rather than
     // fail the run, but log so the missing "Available models:" line is traceable.
-    log.warn(
-      `Could not load model options for delegation annotation: ${toErrorMessage(
-        err,
-      )}`,
-    );
-    return null;
-  }
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        log.warn(
+          `Could not load model options for delegation annotation: ${toErrorMessage(
+            error,
+          )}`,
+        );
+        return null;
+      }),
+    ),
+  );
 }
 
 /**
@@ -111,7 +125,7 @@ async function availableDelegationModelNamesForTools(
  * so callers can substitute a test registry; it defaults to the singleton
  * returned by `getDefaultToolRegistry()`.
  */
-export async function resolveAgentTools({
+export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   tools,
   registry,
   logger,
@@ -120,7 +134,8 @@ export async function resolveAgentTools({
   toolInjections,
   config,
   stores,
-}: ResolveAgentToolsInput): Promise<ToolDefinition[]> {
+  inScope,
+}: ResolveAgentToolsInput) {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames(stores.globalState);
   const unavailable = getUnavailableToolNamesCached();
@@ -172,11 +187,12 @@ export async function resolveAgentTools({
     }
   }
 
-  const availableModelNames = await availableDelegationModelNamesForTools(
+  const availableModelNames = yield* availableDelegationModelNamesForTools(
     resolved,
     stores,
+    inScope,
   );
   return resolved.map((tool) =>
     annotateDelegationAvailability(tool, availableModelNames),
   );
-}
+});

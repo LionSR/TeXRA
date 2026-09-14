@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resetCodexCoordinator } from '@auth/codex';
@@ -42,13 +43,13 @@ async function modelOptions(
   models?: readonly string[],
 ): Promise<ModelOptionData[]> {
   return modelOptionsFrom(
-    await readModelAvailabilityInputs(hostStores(), models),
+    await Effect.runPromise(readModelAvailabilityInputs(hostStores(), models)),
   );
 }
 
 async function unavailableReason(model: string): Promise<string | null> {
   return modelUnavailableReasonFrom(
-    await readModelAvailabilityInputs(hostStores(), [model]),
+    await Effect.runPromise(readModelAvailabilityInputs(hostStores(), [model])),
     model,
   );
 }
@@ -299,10 +300,9 @@ describe('model availability', () => {
     await installPlatform({}, { secrets, globalState });
     invalidateApiKeyCache();
 
-    const inputs = await readModelAvailabilityInputs(hostStores(), [
-      'gpt55',
-      'gpt56',
-    ]);
+    const inputs = await Effect.runPromise(
+      readModelAvailabilityInputs(hostStores(), ['gpt55', 'gpt56']),
+    );
     const readsAfterInputs = secretReads.mock.calls.length;
     const preferenceReadsAfterInputs = globalState.copilotPreferenceReads;
 

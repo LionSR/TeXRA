@@ -10,6 +10,7 @@ import {
 } from '@cli/runtime/cliConfig';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
+import { effectRuntime } from '@platform/processRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { fakeStores } from '@test/support/FakePlatform';
 
@@ -46,7 +47,7 @@ function makeContext(partial: Partial<CliContext> = {}): CliContext {
 const runConfig = (model: string): CliConfigValues => ({ run: { model } });
 
 /** The stores each command hands to `selectCliRunModel`; model access is mocked. */
-const STORES = fakeStores();
+const STORES = { ...fakeStores(), runtime: effectRuntime() };
 
 describe('selectCliRunModel precedence', () => {
   beforeEach(() => {

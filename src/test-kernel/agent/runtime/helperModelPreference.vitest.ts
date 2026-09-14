@@ -1,12 +1,15 @@
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { fakeStores } from '@test/support/FakePlatform';
 
 const getHelperModelName = vi.hoisted(() => vi.fn());
-const readModelAvailabilityInputs = vi.hoisted(() => vi.fn(async () => ({})));
+const readModelAvailabilityInputs = vi.hoisted(() =>
+  vi.fn(() => Effect.succeed({})),
+);
 const modelUnavailableReasonFrom = vi.hoisted(() => vi.fn());
 const resolveRuntimeModelConfig = vi.hoisted(() => vi.fn());
 
@@ -56,7 +59,7 @@ describe('applyHelperModelPreference', () => {
   async function resolve(config: AgentConfig): Promise<AgentConfig> {
     const { applyHelperModelPreference } =
       await import('@agent/runtime/helperModelPreference');
-    return applyHelperModelPreference(config, STORES);
+    return Effect.runPromise(applyHelperModelPreference(config, STORES));
   }
 
   it.each([
@@ -93,9 +96,13 @@ describe('applyHelperModelPreference', () => {
     const result = await resolve(configFor('opus', 'workflow'));
 
     expect(result.model).toBe('chatonly');
-    expect(readModelAvailabilityInputs).toHaveBeenCalledWith(STORES, [
-      'chatonly',
-    ]);
+    expect(readModelAvailabilityInputs).toHaveBeenCalledWith(
+      STORES,
+      ['chatonly'],
+      // The launching run hands its session frame down; this suite calls the
+      // preference directly, so it is the default "already in the frame" one.
+      expect.any(Function),
+    );
   });
 
   it('falls back to the selected model when the helper model is unavailable', async () => {

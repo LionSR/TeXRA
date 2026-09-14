@@ -8,16 +8,20 @@
  * orchestrator delegation) leaves the flag off and keeps the chosen model.
  */
 
+import { Effect } from 'effect';
+
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createLog } from '@logger/logUtils';
 import {
   modelUnavailableReasonFrom,
   readModelAvailabilityInputs,
+  type ModelAvailabilityScope,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
 import { AgentCategory } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 import { getHelperModelName } from './helperModelName';
 
 const log = createLog('helperModelPreference');
@@ -30,15 +34,24 @@ const log = createLog('helperModelPreference');
  * `stores` are the process secret store and global state the launching run
  * already holds (the `Secrets` / `AppState` services), so the preference and
  * the availability answer are read from the same stores as the run itself.
+ * `inScope` is the launching run's session frame, handed to the reads rather
+ * than wrapped around this call: the reads are Effects, so a wrapper would
+ * enter the frame around building the program instead of around running it.
  */
-export async function applyHelperModelPreference(
+export const applyHelperModelPreference = Effect.fn(
+  'applyHelperModelPreference',
+)(function* (
   config: AgentConfig,
   stores: ModelOptionStores,
-): Promise<AgentConfig> {
+  inScope: ModelAvailabilityScope = (read) => read(),
+) {
   const helperModel = getHelperModelName(stores.globalState);
   if (helperModel === config.model) return config;
 
-  const helperModelConfig = await resolveRuntimeModelConfig(helperModel);
+  const helperModelConfig = yield* Effect.tryPromise({
+    try: () => inScope(() => resolveRuntimeModelConfig(helperModel)),
+    catch: ensureError,
+  });
 
   // A tool-use agent (e.g. latexFixer) needs its tools, so do not assign a
   // helper model that does not declare function calling — not only one that
@@ -54,7 +67,7 @@ export async function applyHelperModelPreference(
   }
 
   const unavailable = modelUnavailableReasonFrom(
-    await readModelAvailabilityInputs(stores, [helperModel]),
+    yield* readModelAvailabilityInputs(stores, [helperModel], inScope),
     helperModel,
   );
   if (unavailable) {
@@ -65,4 +78,4 @@ export async function applyHelperModelPreference(
   }
 
   return { ...config, model: helperModel };
-}
+});

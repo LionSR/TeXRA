@@ -295,7 +295,7 @@ export function registerBuiltinSlashCommands(options: {
   onError?: ErrorHandler;
 }): void {
   const { secrets, state, runtime } = options;
-  const modelStores = { secrets, globalState: state };
+  const modelStores = { secrets, globalState: state, runtime };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ?? ((agent) => patchSessionMeta({ agent }));
   const onModelSelect: SelectHandler<string> =
