@@ -362,6 +362,10 @@ describe('NativeSubagentStrategy', () => {
         // The loop commits the child's `child.turn` rows, which its aggregate
         // refuses until the run has begun.
         publishTestRunStart(params.session, params.runId);
+        // The parent delivery is admitted under a database claim, which a
+        // run without rows cannot grant.
+        publishTestRunStart(params.session, params.parentRunId);
+        yield* params.session.settlePublications();
         const recordCost = vi.fn();
         mocks.executeAgent.mockResolvedValueOnce(
           toolUseTurnResult('failed', params.runId, {
@@ -399,6 +403,8 @@ describe('NativeSubagentStrategy', () => {
       Effect.gen(function* () {
         const params = { ...baseParams(), resultOnly: true };
         publishTestRunStart(params.session, params.runId);
+        publishTestRunStart(params.session, params.parentRunId);
+        yield* params.session.settlePublications();
         const failure = new Error('provider failed');
         mocks.throwErrorFormatting = true;
         mocks.executeAgent.mockImplementationOnce(
@@ -712,6 +718,7 @@ describe('NativeSubagentStrategy', () => {
         const parentRunId = RunIdSchema.parse('fa110002');
         const childRunId = RunIdSchema.parse('fa110001');
         publishTestRunStart(session, childRunId);
+        publishTestRunStart(session, parentRunId);
         yield* session.settlePublications();
         const deliveries = yield* Queue.unbounded<string>();
         mocks.submitFollowUp.mockImplementation((_runId, followUp) =>
@@ -906,6 +913,8 @@ describe('NativeSubagentStrategy', () => {
           interactions,
         };
         publishTestRunStart(session, childRunId);
+        publishTestRunStart(session, parentRunId);
+        yield* session.settlePublications();
 
         mocks.executeAgent.mockResolvedValueOnce({
           outcome: 'completed',
