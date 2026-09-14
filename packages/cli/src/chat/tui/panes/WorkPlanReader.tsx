@@ -16,21 +16,14 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import {
   AgentCategory,
-  TODO_STATUS,
+  STATUS_DISPLAY,
   type Plan,
   type RunId,
   type TodoItem,
-  type TodoStatus,
 } from '@shared/schemas';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
-
-const TODO_STATUS_LABELS: Record<TodoStatus, string> = {
-  [TODO_STATUS.PENDING]: 'pending',
-  [TODO_STATUS.IN_PROGRESS]: 'in progress',
-  [TODO_STATUS.COMPLETED]: 'completed',
-};
 
 const WORK_PLAN_LOADING_HINTS: readonly KeyHint[] = [
   { key: 'Esc', action: 'close' },
@@ -96,7 +89,7 @@ function formatWorkPlanReaderText(
       ? ['(no todos)']
       : todos.map(
           (todo, index) =>
-            `${index + 1}. [${TODO_STATUS_LABELS[todo.status]}] ${todo.content}`,
+            `${index + 1}. [${STATUS_DISPLAY[todo.status].label}] ${todo.content}`,
         );
   return [
     'Objective',
