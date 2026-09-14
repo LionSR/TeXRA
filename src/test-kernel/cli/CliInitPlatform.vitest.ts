@@ -79,6 +79,7 @@ const mocks = vi.hoisted(() => ({
   openTexraConfigStores: vi.fn(),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
   tryPlatform: vi.fn(),
+  publishPlatform: vi.fn(),
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
   shutdownHandlers: [] as Array<() => unknown>,
@@ -113,7 +114,7 @@ vi.mock('@logger/logUtils', () => ({
 }));
 
 vi.mock('@platform/platform', () => ({
-  initPlatform: vi.fn(),
+  initPlatform: mocks.publishPlatform,
   tryPlatform: mocks.tryPlatform,
   platform: () => ({
     config: { get: (_key: string, def: unknown) => def },
@@ -269,6 +270,38 @@ describe('CLI platform init', () => {
     expect(vi.mocked(UsageLogService.dispose)).not.toHaveBeenCalled();
     for (const handler of mocks.shutdownHandlers) await handler();
     expect(vi.mocked(UsageLogService.dispose)).toHaveBeenCalled();
+  });
+
+  it('retries after seed failure without publishing platform, session, or signals', async () => {
+    await withFreshSignalCapture(async ({ registered, initPlatform }) => {
+      mocks.tryPlatform.mockReset();
+      mocks.tryPlatform
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValue({ globalState: stubGlobalState() });
+      mocks.cliGlobalState.update.mockRejectedValueOnce(
+        new Error('disabled-tool defaults could not be seeded'),
+      );
+
+      await expect(initPlatform.initCliPlatform(cliContext())).rejects.toThrow(
+        'disabled-tool defaults could not be seeded',
+      );
+
+      const { tryDefaultSession } = await import('@agent/runtime');
+      expect(mocks.publishPlatform).not.toHaveBeenCalled();
+      expect(tryDefaultSession()).toBeUndefined();
+      expect(registered).toEqual([]);
+
+      await expect(initPlatform.initCliPlatform(cliContext())).resolves.toEqual(
+        expect.objectContaining({ roots: expect.anything() }),
+      );
+      expect(mocks.publishPlatform).toHaveBeenCalledOnce();
+      expect(tryDefaultSession()).toBeUndefined();
+      expect(registered).toEqual([
+        { event: 'SIGINT', kind: 'once' },
+        { event: 'SIGTERM', kind: 'once' },
+      ]);
+    });
   });
 
   it('registers the agent shutdown drain on first platform init', async () => {

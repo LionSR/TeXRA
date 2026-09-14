@@ -14,7 +14,11 @@ import {
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
+import {
+  createFakeHost,
+  installedHost,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -108,6 +112,7 @@ vi.mock('@cli/runtime/initPlatform', () => ({
 // Imported after vi.mock so the mocked dependencies are in place.
 import { parseHistoryListLimit, runHistoryExport } from '@cli/commands/history';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { initLocalCliPlatform } from '@cli/runtime/initPlatform';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import type { TraceDocument } from '@transcript';
@@ -278,6 +283,15 @@ describe('CLI history runtime', () => {
     await Effect.runPromise(teardownDefaultSession());
     await Effect.runPromise(initializeDefaultSession({}));
     vi.clearAllMocks();
+    const host = installedHost();
+    vi.mocked(initLocalCliPlatform).mockResolvedValue({
+      ...host.platform,
+      globalStorage: host.roots.globalStorage,
+      globalState: host.roots.globalState,
+      secrets: host.secrets,
+      session: Effect.succeed(defaultSession()),
+      roots: host.roots,
+    });
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);

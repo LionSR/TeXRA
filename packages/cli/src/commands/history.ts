@@ -1,7 +1,6 @@
 import { defineCommand } from 'citty';
 
 import { formatChatAsMarkdown } from '@agent/export';
-import { openSessionEffect } from '@agent/runtime';
 import { listRuns } from '@agent/storage';
 import { effectRuntime } from '@platform/processRuntime';
 import { type RunId } from '@shared/schemas';
@@ -128,7 +127,7 @@ export async function runHistoryExport(
     return CliExitCode.Success;
   }
 
-  const session = await effectRuntime().runPromise(openSessionEffect({}));
+  const session = await effectRuntime().runPromise(stores.session);
   const traceResult = await effectRuntime().runPromise(
     assembleTrace(id, session),
   );

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import {
@@ -42,6 +42,7 @@ import {
 } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
+import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
@@ -342,8 +343,8 @@ export async function initCliPlatform(
     // seed that will not write) must not leave the runtime installed with
     // nothing registered to dispose it: the failure disposes it and is
     // re-raised, so the caller reports the cause rather than a half-built
-    // platform. `initPlatform` itself has no inverse, which is the documented
-    // shape of that port.
+    // platform. Keep the platform, roots, and lazy session private until the
+    // fallible setup has succeeded: their ports have no reset operation.
     const install = async () => {
       const { stateStores, configStores } = await runtime.runPromise(
         Effect.gen(function* () {
@@ -390,8 +391,7 @@ export async function initCliPlatform(
         },
         agentDirectories,
       });
-      initPlatform(platform);
-      // One process, one paper: the process roots are the `--cwd` workspace.
+      // One process, one project: the process roots are the `--cwd` workspace.
       const roots = createNodeWorkspaceRoots({
         workspacePath: context.cwd,
         storage: stateStores.storage.getStoragePath(),
@@ -400,19 +400,13 @@ export async function initCliPlatform(
         workspaceState: stateStores.workspaceState,
         globalState: stateStores.globalState,
       });
-      initProcessWorkspaceRoots(roots);
-      installedRoots = roots;
-      initProcessSettingHost('cli');
-      // TeXRA's account plane (ChatGPT / Grok sign-in). Without
-      // this the model layer is bring-your-own-key. See installTexraAccountProbes.
-      installTexraAccountProbes(cliSecrets);
-      // The one open of the process session, over the roots just installed,
+      // The one open of the process session, over the roots published below,
       // memoized so the first entry point that needs a session opens it and
       // every later one gets the same handle; an entry that needs none never
       // opens one. The latex text connector asks a helper model how to join
       // two strings; that model is resolved against the stores this root
       // opened.
-      sessionOpen = runtime.runSync(
+      const openSession = runtime.runSync(
         Effect.cached(
           initializeDefaultSession({
             responseTextProcessing: createTexraResponseTextProcessing(
@@ -421,7 +415,16 @@ export async function initCliPlatform(
                 globalState: stateStores.globalState,
               }),
             ),
-          }),
+          }).pipe(
+            Effect.tap((session) =>
+              Effect.sync(() => {
+                const cleared = session.storeCleared;
+                if (cleared) {
+                  writeTextStderr(sessionStoreClearedMessage(cleared));
+                }
+              }),
+            ),
+          ),
         ),
       );
 
@@ -432,9 +435,6 @@ export async function initCliPlatform(
         seedDisabledToolDefaults(stateStores.globalState),
       );
 
-      if (context.installSignalHandlers !== false) {
-        installCliShutdownSignalHandlers(lifecycle);
-      }
       // Kill agent-spawned OS children before the process dies, exactly as the
       // extension and desktop hosts do. Background `bash` runs are spawned
       // `detached` (their own process group, see execUtils) so they survive
@@ -465,13 +465,28 @@ export async function initCliPlatform(
       await runtime.runPromise(
         UsageLogService.initialize(runtime.scope, {}, context.version, 'cli'),
       );
+      initPlatform(platform);
+      initProcessWorkspaceRoots(roots);
+      installedRoots = roots;
+      sessionOpen = openSession;
+      initProcessSettingHost('cli');
+      // TeXRA's account plane (ChatGPT / Grok sign-in). Without
+      // this the model layer is bring-your-own-key. See installTexraAccountProbes.
+      installTexraAccountProbes(cliSecrets);
+      if (context.installSignalHandlers !== false) {
+        installCliShutdownSignalHandlers(lifecycle);
+      }
       return platform;
     };
-    services = await runtime.runPromise(
-      Effect.tryPromise({ try: install, catch: ensureError }).pipe(
-        Effect.onError(() => Effect.promise(() => disposeProcessRuntime())),
-      ),
+    const initialized = await runtime.runPromiseExit(
+      Effect.tryPromise({ try: install, catch: ensureError }),
     );
+    if (Exit.isFailure(initialized)) {
+      // The initialization fiber must exit before its owning runtime closes.
+      await disposeProcessRuntime();
+      throw Cause.squash(initialized.cause);
+    }
+    services = initialized.value;
   }
 
   // The stores this root opened, handed back rather than read off a

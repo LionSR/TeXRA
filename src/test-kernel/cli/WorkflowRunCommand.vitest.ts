@@ -2,7 +2,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
@@ -13,6 +13,7 @@ import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Result } from 'effect';
+import type { SessionHandle } from '@agent/runtime';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
@@ -35,6 +36,7 @@ import {
   fakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { withTempDir, withTempDirEffect } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => {
@@ -367,11 +369,18 @@ function expectNoModelOrInputWork(): void {
 }
 
 describe('CLI run command, workflow agents', () => {
+  let fixtureSession: SessionHandle | undefined;
+
   beforeEach(() => {
     vi.clearAllMocks();
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
-    const { platform } = installedHost();
+    const session = createTestSession();
+    fixtureSession = session;
+    const platform = {
+      ...installedHost().platform,
+      session: Effect.succeed(session),
+    };
     cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
     cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mocks.writeResultMeta.mockResolvedValue(undefined);
@@ -405,6 +414,11 @@ describe('CLI run command, workflow agents', () => {
       ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
     );
     mockWorkflowRun(workflowRun('exec-1'));
+  });
+
+  afterEach(async () => {
+    if (fixtureSession) await Effect.runPromise(fixtureSession.dispose());
+    fixtureSession = undefined;
   });
 
   it.effect(

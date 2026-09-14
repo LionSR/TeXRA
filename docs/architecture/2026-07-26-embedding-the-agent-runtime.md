@@ -132,29 +132,19 @@ is the part the plan of record describes incorrectly.
 
 ### Prerequisite A — a default or explicit session
 
-Not part of the process bootstrap, and not in
-`packages/cli/src/runtime/initPlatform.ts` at all, but a session is still
-required.
+A session is required by `RunAgentOptions.session`. The CLI bootstrap in
+`packages/cli/src/runtime/initPlatform.ts` prepares one memoized session-opening
+Effect; commands run `services.session` when they need a session. Utility commands
+that need no session leave the store unopened.
 
-`RunAgentOptions.session` is required (`src/agent/runtime/runAgent.ts:46`);
-`runAgent` has no default-session fallback. Host code that reads the process
-default through `defaultSession()` gets
-`'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.'`
-until one exists (`src/agent/runtime/SessionHandle.ts:921-927`).
-
-Two ways out:
-
-- `initializeDefaultSession({})` — the process-default session, which builds
-  its own transcript store over the session's event database and returns the
-  handle to pass as `options.session`
-  (`src/agent/runtime/SessionHandle.ts:889-896`, called once; a second call
-  throws). This is what the CLI
-  (`packages/cli/src/runtime/transcriptSession.ts:29`) and the extension
-  (`packages/extension/src/extension.ts:529`) do, each also passing its
-  `responseTextProcessing`.
-- Construct your own `SessionHandle` and pass it as `options.session`
-  (`runAgent` forwards it to `executeAgent`). Then the process default is
-  never initialized or consulted.
+- `initializeDefaultSession({})` returns an Effect that opens the process-default
+  session over the process roots. Run it at the host boundary and pass its handle
+  as `options.session`. A second initialization while the session is open fails.
+  The CLI and extension supply their `responseTextProcessing` policy here.
+- `openSessionEffect({ roots, ... })` opens an owner-held session for explicit
+  roots, returning the existing handle when that storage root is already open.
+  Pass the handle to `runAgent`; close it through the session owner when its
+  lifetime ends.
 
 ### Prerequisite B — `await loadAgents(...)`
 

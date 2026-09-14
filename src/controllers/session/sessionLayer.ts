@@ -147,10 +147,8 @@ class Session extends Context.Service<Session, SessionHandle>()(
  * synchronous `current` reads. An entry is written once its handle exists
  * and removed as the first step of its release, so a root whose session is
  * still building, or already unwinding, reads as having none. Keyed by the
- * entry's `SessionKey` and matched on `key.storage` at lookup, as
- * `heldSession` matches, never on a string taken at registration: a key's
- * roots may be the process roots' live view, whose storage follows the roots
- * installed at read time. `heldSession` below is the map's own answer, which
+ * entry's `SessionKey` and matched on its captured `key.storage` at lookup,
+ * as `heldSession` matches. A session retains the roots resolved when it opens. `heldSession` below is the map's own answer, which
  * waits for a building entry; `closeSession` needs that, a synchronous read
  * cannot have it.
  */

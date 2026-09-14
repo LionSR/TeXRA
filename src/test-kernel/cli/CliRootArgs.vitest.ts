@@ -9,6 +9,7 @@ import { hasMagic } from 'glob';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
+import { initializeDefaultSession } from '@agent/runtime';
 import { rootCommand, runCli } from '@cli/commands/root';
 import {
   normalizeRootShortcuts,
@@ -92,6 +93,7 @@ async function initNodeBackedPlatform(options: {
     { fs: nodeFilesystem },
   );
   await bindFakeCliGlobalState();
+  await Effect.runPromise(initializeDefaultSession({}));
 }
 
 async function initDefaultFakePlatform(): Promise<void> {

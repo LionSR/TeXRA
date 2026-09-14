@@ -380,14 +380,17 @@ export function openDesktopProjectRegistry(
           );
       },
       dispose: () =>
-        Effect.forEach(
-          [...projects.values()].toReversed(),
-          (project) => project.dispose(),
-          { discard: true },
-        ).pipe(
-          Effect.ensuring(fallback.dispose()),
-          Effect.ensuring(Effect.sync(() => projects.clear())),
-        ),
+        [...projects.values()]
+          .toReversed()
+          .reduce(
+            (cleanup, project) =>
+              cleanup.pipe(Effect.ensuring(project.dispose())),
+            Effect.void,
+          )
+          .pipe(
+            Effect.ensuring(fallback.dispose()),
+            Effect.ensuring(Effect.sync(() => projects.clear())),
+          ),
     } satisfies DesktopProjectRegistry;
   }).pipe(Effect.uninterruptible, Effect.mapError(ensureError));
 }

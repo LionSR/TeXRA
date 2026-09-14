@@ -13,7 +13,7 @@
  * A session is one per workspace storage root, built and held by the
  * process's session owner (the `Sessions` map behind `openSessionEffect`): the
  * extension and the CLI open one over the process roots, the desktop one
- * per paper, the SDK one per platform. The default instance is installed
+ * per project, the SDK one per platform. The default instance is installed
  * explicitly through {@link initializeDefaultSession}; {@link defaultSession}
  * only retrieves that process-wide owner. There is no other way to reach
  * these owners: the invariant is "no session-scoped mutable module export"

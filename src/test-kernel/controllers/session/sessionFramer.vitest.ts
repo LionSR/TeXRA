@@ -248,7 +248,7 @@ describe('session framer', () => {
   it.live('closes a superseded port before registering its replacement', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      yield* Effect.addFinalizer(() => Effect.sync(() => session.dispose()));
+      yield* Effect.addFinalizer(() => session.dispose());
       const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
       const onPortClosed = vi.fn();
       const bridge = yield* SessionBridge.make({

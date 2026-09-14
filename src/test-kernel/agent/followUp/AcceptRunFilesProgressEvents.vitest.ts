@@ -74,13 +74,15 @@ function installTestPlatform(): Promise<void> {
     workspacePath,
     storagePath,
     globalStoragePath: '/global/.texra/storage',
-  }).then(() => {
-    session = initializeDefaultSession({
-      transcriptMode: {
-        kind: 'ephemeral',
-        reason: 'accept files test session',
-      },
-    });
+  }).then(async () => {
+    session = await Effect.runPromise(
+      initializeDefaultSession({
+        transcriptMode: {
+          kind: 'ephemeral',
+          reason: 'accept files test session',
+        },
+      }),
+    );
     detachHostInteractions();
     detachHostInteractions = session.interactions.use({
       presentToolEdit: (request) => {

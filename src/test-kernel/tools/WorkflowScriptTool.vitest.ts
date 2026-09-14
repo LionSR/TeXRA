@@ -298,12 +298,14 @@ beforeEach(async () => {
   // `setupPlatform` installs this suite's host first. Open the default session
   // only after that final root exists, rather than retaining the setup file's
   // host through the per-test platform swap.
-  session = initializeDefaultSession({
-    transcriptMode: {
-      kind: 'ephemeral',
-      reason: 'workflow script tool test session',
-    },
-  });
+  session = await Effect.runPromise(
+    initializeDefaultSession({
+      transcriptMode: {
+        kind: 'ephemeral',
+        reason: 'workflow script tool test session',
+      },
+    }),
+  );
   publishTestRunStart(session, parentRunId);
   await session.settlePublications();
   vi.clearAllMocks();

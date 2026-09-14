@@ -124,12 +124,14 @@ function launchStrategy(
 beforeEach(async () => {
   // The suite host is installed by `setupPlatform` before this hook. Keep its
   // roots on this test's session instead of borrowing the setup file host.
-  session = initializeDefaultSession({
-    transcriptMode: {
-      kind: 'ephemeral',
-      reason: 'workflow script strategy test session',
-    },
-  });
+  session = await Effect.runPromise(
+    initializeDefaultSession({
+      transcriptMode: {
+        kind: 'ephemeral',
+        reason: 'workflow script strategy test session',
+      },
+    }),
+  );
   publishTestRunStart(session, runId);
   await session.settlePublications();
   workflowControls = new WorkflowControlRegistry();

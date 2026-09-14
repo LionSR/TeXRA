@@ -187,7 +187,7 @@ describe('default session lifecycle', () => {
         if (roots) {
           expect(Object.keys(roots)).toEqual([]);
         }
-        const session = initializeDefaultSession({
+        const session = yield* initializeDefaultSession({
           transcriptMode: { kind: 'ephemeral', reason: 'root snapshot test' },
           ...(roots && { roots }),
         });

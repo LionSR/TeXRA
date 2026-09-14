@@ -185,7 +185,7 @@ function withTempStorage(
             { fs: nodeFilesystem },
           ),
         );
-        const session = createProcessSession();
+        const session = yield* createProcessSession();
         yield* run().pipe(
           Effect.provide(
             nativeToolTestLayer({
@@ -202,10 +202,12 @@ function withTempStorage(
 describe('ExecutionsTool', () => {
   setupPlatform(() => createTempDirPlatform('texra-executions-', tempDirs));
 
-  beforeEach(() => {
-    initializeDefaultSession({
-      transcriptMode: { kind: 'ephemeral', reason: 'executions tool test' },
-    });
+  beforeEach(async () => {
+    await Effect.runPromise(
+      initializeDefaultSession({
+        transcriptMode: { kind: 'ephemeral', reason: 'executions tool test' },
+      }),
+    );
     vi.clearAllMocks();
     mocks.listRuns.mockResolvedValue([]);
     mocks.readChildren.mockResolvedValue([]);
