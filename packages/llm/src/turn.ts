@@ -728,6 +728,7 @@ const AnthropicControlsSchema = z.strictObject({
 const ChatReasoningControlsSchema = z.strictObject({
   maxOutputTokens: z.int().positive(),
   temperature: z.number().min(0).max(2).nullable(),
+  parallelToolCalls: z.boolean(),
   thinking: z
     .strictObject({ mode: z.enum(['enabled', 'disabled']) })
     .readonly(),

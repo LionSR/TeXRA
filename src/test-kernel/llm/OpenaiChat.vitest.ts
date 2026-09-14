@@ -49,6 +49,7 @@ const REASONING_CONFIGS = [
     defaults: {
       maxOutputTokens: 100,
       temperature: null,
+      parallelToolCalls: false,
       thinking: { mode: 'enabled' },
       effort: 'high',
     },
@@ -64,6 +65,7 @@ const REASONING_CONFIGS = [
     temperatureByThinking: { enabled: null, disabled: null },
     defaults: {
       maxOutputTokens: 100,
+      parallelToolCalls: false,
       thinking: { mode: 'enabled' },
       effort: null,
       preserveThinking: true,
@@ -78,6 +80,7 @@ const REASONING_CONFIGS = [
     defaults: {
       maxOutputTokens: 100,
       temperature: 0.5,
+      parallelToolCalls: false,
       thinking: { mode: 'enabled' },
       effort: 'high',
       clearThinking: false,
@@ -1270,11 +1273,6 @@ describe('native OpenAI Chat protocol', () => {
       request: { temperature: 1.5 },
     },
     {
-      name: 'Chat reasoning parallel control',
-      config: REASONING_CONFIGS[0],
-      request: { parallelToolCalls: false },
-    },
-    {
       name: 'Chat reasoning token budget',
       config: REASONING_CONFIGS[0],
       request: { thinking: { mode: 'enabled', budgetTokens: 1024 } },
@@ -1858,7 +1856,8 @@ describe('native OpenAI Chat protocol', () => {
           n: 1,
         });
         expect(firstBody).not.toHaveProperty('max_completion_tokens');
-        expect(firstBody).not.toHaveProperty('parallel_tool_calls');
+        // The user's parallel-tool-calls choice reaches the reasoning arms too.
+        expect(firstBody.parallel_tool_calls).toBe(false);
         if (config.protocol === 'glm-chat') {
           expect(firstBody).toMatchObject({
             thinking: { type: 'enabled', clear_thinking: false },
