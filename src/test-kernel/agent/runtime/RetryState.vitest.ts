@@ -14,6 +14,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import {
+  Deferred,
   Effect,
   Exit,
   Fiber,
@@ -22,6 +23,7 @@ import {
   Stream,
   SynchronizedRef,
 } from 'effect';
+import { TestClock } from 'effect/testing';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
@@ -86,6 +88,18 @@ import { testModelInfo } from './launchContextTestUtils';
 
 /** Mirrors RETRY_BACKOFF_MS in ModelInvoker.ts. */
 const RETRY_BACKOFF_MS = 1000;
+
+/** One macrotask: lets the fiber under test reach its park. */
+const settle = Effect.promise(
+  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+);
+
+/** Advance the test clock past every park the invocation makes. */
+const pumpClock = Effect.forkChild(
+  Effect.forever(
+    settle.pipe(Effect.andThen(TestClock.adjust(RETRY_BACKOFF_MS * 10))),
+  ),
+);
 
 const ORIGIN = {
   protocol: 'openai-chat',
@@ -641,12 +655,13 @@ describe('ModelInvoker retry', () => {
     await installPlatform();
   });
 
-  // The backoff is a real delay, so these three scenarios run on the live
-  // clock: the gate's own waiting is Promise-tier and a test clock cannot
-  // move it.
-  it.live('repeats an automatic attempt and returns the response', () =>
+  // The invoker's backoff and the session gate's probe both sleep on the
+  // Effect clock, so a forked pump walks the test clock past each park and
+  // the scenario costs no wall time.
+  it.effect('repeats an automatic attempt and returns the response', () =>
     Effect.gen(function* () {
       const session = sessionWithInteractions(undefined);
+      const pump = yield* pumpClock;
       const stub = stubModel([
         { fail: httpError('temporary provider failure', 503) },
         { ok: completedTurn('recovered') },
@@ -656,6 +671,7 @@ describe('ModelInvoker retry', () => {
 
       expect(outcome.kind).toBe('response');
       expect(stub.attempts()).toBe(2);
+      yield* Fiber.interrupt(pump);
       yield* session.dispose();
     }),
   );
@@ -702,35 +718,49 @@ describe('ModelInvoker retry', () => {
     }),
   );
 
-  it.live('abandons the pending retry when the run is interrupted', () =>
+  it.effect('abandons the pending retry when the run is interrupted', () =>
     Effect.gen(function* () {
       const session = sessionWithInteractions(undefined);
+      const backoffStarted = yield* Deferred.make<void>();
+      const logger = new TraceEmitter();
+      logger.subscribe((event) => {
+        if (event.type === 'log' && event.message.includes('automatic retry')) {
+          Deferred.doneUnsafe(backoffStarted, Effect.void);
+        }
+      });
       const stub = stubModel([
         { fail: httpError('temporary provider failure', 503) },
         { ok: completedTurn('too late') },
       ]);
 
-      const kit = yield* openRun(session, stub.model);
+      const kit = yield* openRun(session, stub.model, {}, logger);
       const fiber = yield* Effect.forkChild(invokeOn(kit));
-      // The backoff is live, so an interrupt during it must abandon the retry
-      // instead of waking up to another billed attempt.
-      yield* Effect.sleep(RETRY_BACKOFF_MS / 2);
+      // The interrupt lands while the fiber is parked in the backoff, so it
+      // must abandon the retry instead of waking to another billed attempt.
+      yield* Deferred.await(backoffStarted);
+      yield* settle;
       yield* Fiber.interrupt(fiber);
+      const exit = yield* Fiber.await(fiber);
+      // Nothing is left parked in the backoff: moving the clock past it bills
+      // no further attempt.
+      yield* TestClock.adjust(RETRY_BACKOFF_MS * 10);
+      yield* settle;
 
-      expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
+      expect(Exit.hasInterrupts(exit)).toBe(true);
       expect(stub.attempts()).toBe(1);
       yield* session.dispose();
     }),
   );
 
-  // Live clock: the authorized attempt waits out the session gate's cooldown
-  // the failed attempt opened, which sleeps on the runtime clock.
-  it.live('admits a manual retry through a durable approval', () =>
+  // The authorized attempt waits out the session gate's cooldown the failed
+  // attempt opened; the pump advances the test clock past it.
+  it.effect('admits a manual retry through a durable approval', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
       const session = sessionWithInteractions(undefined);
+      const pump = yield* pumpClock;
       const requests = autoDecideRequests(session, () => ({
         action: 'retry',
       }));
@@ -766,12 +796,13 @@ describe('ModelInvoker retry', () => {
       // reports is still running.
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       requests.detach();
+      yield* Fiber.interrupt(pump);
       yield* session.dispose();
     }),
   );
 
-  // Live clock, as above: the authorized attempt waits out the gate cooldown.
-  it.live(
+  // As above: the authorized attempt waits out the gate cooldown, pumped.
+  it.effect(
     'declines the exhausted subscription route for the run, not in settings',
     () =>
       Effect.gen(function* () {
@@ -779,6 +810,7 @@ describe('ModelInvoker retry', () => {
           installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
         );
         const session = sessionWithInteractions(undefined);
+        const pump = yield* pumpClock;
         const requests = autoDecideRequests(session, () => ({
           action: 'retry',
           credentials: 'personal',
@@ -804,6 +836,7 @@ describe('ModelInvoker retry', () => {
           ]);
         }
         requests.detach();
+        yield* Fiber.interrupt(pump);
         yield* session.dispose();
       }),
   );
@@ -872,13 +905,14 @@ describe('ModelInvoker retry', () => {
     }),
   );
 
-  it.live('records one operation of attempt and decision diagnostics', () =>
+  it.effect('records one operation of attempt and decision diagnostics', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
       const logger = new TraceEmitter();
       const events = collectRetryLifecycleEvents(logger);
+      const pump = yield* pumpClock;
       const session = sessionWithInteractions(undefined);
       const requests = autoDecideRequests(session, () => ({
         action: 'retry',
@@ -911,13 +945,14 @@ describe('ModelInvoker retry', () => {
         ),
       ).toBe(true);
       requests.detach();
+      yield* Fiber.interrupt(pump);
       yield* session.dispose();
     }),
   );
 
   // The setting bounds the automatic batch; the human gate opens only once it
   // is spent.
-  it.live('stops automatic attempts at the configured limit', () =>
+  it.effect('stops automatic attempts at the configured limit', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         installPlatform({
@@ -928,6 +963,7 @@ describe('ModelInvoker retry', () => {
         }),
       );
       const session = sessionWithInteractions(undefined);
+      const pump = yield* pumpClock;
       const requests = autoDecideRequests(session, () => ({
         action: 'deny',
         reason: 'Denied by TeXRA approval policy.',
@@ -943,6 +979,7 @@ describe('ModelInvoker retry', () => {
       );
       expect(requests.opened).toHaveLength(1);
       requests.detach();
+      yield* Fiber.interrupt(pump);
       yield* session.dispose();
     }),
   );
