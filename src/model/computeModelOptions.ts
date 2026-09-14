@@ -169,7 +169,7 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
   // case that helper never answers `undefined` for.
   'copilot-consent-required': copilotUnavailableReason,
   'copilot-unavailable': copilotUnavailableReason,
-  // Unreachable from `getModelUnavailableReason` today (it returns its own
+  // Unreachable from `modelUnavailableReasonFrom` today (it returns its own
   // "not recognized" message before a config resolves far enough to compute
   // availability at all), but the table must still cover it: `unknown-model`
   // is `available: false`, so leaving it out would defeat the whole point of
@@ -612,35 +612,6 @@ export async function setModelEnabled(input: {
   return nextEnabled;
 }
 
-/** Returns a human-readable reason why a model is unavailable, or `null` if available. */
-export async function getModelUnavailableReason(
-  model: string,
-  stores: ModelOptionStores,
-): Promise<string | null> {
-  await discoveredCopilotRoutes();
-  const routeCtx = await buildAvailabilityContext(stores);
-  const routed = routeModels([model], routeCtx);
-  const decision = routed.get(model);
-  if (!decision) return `Model "${model}" is not recognized.`;
-
-  const ctx = await withConsultedKeyStatuses(stores.secrets, routed, routeCtx);
-  const { config, route } = decision;
-  const availability = resolveModelAvailability(model, route, ctx.keyStatuses);
-  if (MODEL_AVAILABILITY_STATUS[availability.kind].available) return null;
-
-  // `availability.kind` is guaranteed `available: false` here, so it's a
-  // valid `UnavailableAvailabilityKind` and every case is covered by
-  // `UNAVAILABLE_REASON_BUILDERS` — the compiler, not this call site, is what
-  // enforces that a newly added unavailable kind gets a reason.
-  const kind = availability.kind as UnavailableAvailabilityKind;
-  return UNAVAILABLE_REASON_BUILDERS[kind]({
-    model,
-    config,
-    reason: availability.reason,
-    globalState: ctx.globalState,
-  });
-}
-
 /**
  * Build typed model option data for a single model from stage 1's decision for
  * it. No decision means the registry does not describe the model.
@@ -719,40 +690,100 @@ function buildModelOptionData(
 }
 
 /**
- * Compute typed model options data for Lit-native rendering.
+ * One computation's resolved inputs: the host facts and key statuses, read
+ * once, and the route each visible model was decided to take over them.
  *
- * When `models` is provided, the caller's view of the visible-models list is
- * honored verbatim. The host reads happen in two awaits — the facts every
- * model shares, then one key-status read per provider the visible models
- * actually consult — with each model routed once, before that second await,
- * and the rows finished purely from those decisions. Every call
- * recomputes from the live inputs: the secret reads behind `hasUsableApiKey`
- * are cached and invalidated in `apiProviders` (`invalidateApiKeyCache`), the
- * Copilot route catalogue in `runtimeModelRegistry`
- * (`invalidateRuntimeModelRegistry`), and the rest are synchronous config and
- * state reads plus the probe-backed sign-in status (`isCodexSignedIn`,
- * `isXaiSignedIn`, live by design), so there is no second cache to keep fresh
- * here.
+ * This is the whole of the boundary between reading a host and computing
+ * availability. {@link readModelAvailabilityInputs} is the only thing in this
+ * module that touches a host; {@link modelOptionsFrom} and
+ * {@link modelUnavailableReasonFrom} are pure functions of this value, so a
+ * caller awaits once and then finishes synchronously.
  */
-export async function computeModelOptionsData(
+export interface ModelAvailabilityInputs {
+  /** The host facts plus the key status of every provider the routes consult. */
+  readonly context: ModelAvailabilityContext;
+  /** Stage 1's decision per model, keyed by model. */
+  readonly routed: RoutedModels;
+  /** The models the rows are built for, in the order they are shown. */
+  readonly visible: readonly string[];
+}
+
+/**
+ * Read everything one availability computation runs over, in two awaits: the
+ * facts every model shares, then one key-status read per provider the visible
+ * models actually consult, with each model routed once in between so that
+ * batch consults exactly the providers the ladder reached.
+ *
+ * When `models` is provided the caller's view of the visible-models list is
+ * honored verbatim. Nothing here is cached beyond the caches its reads already
+ * own: the secret reads behind `hasUsableApiKey` in `apiProviders`
+ * (`invalidateApiKeyCache`), the Copilot route catalogue in
+ * `runtimeModelRegistry` (`invalidateRuntimeModelRegistry`), and the rest are
+ * synchronous config and state reads plus the probe-backed sign-in status
+ * (`isCodexSignedIn`, `isXaiSignedIn`, live by design), so there is no second
+ * cache to keep fresh here.
+ */
+export async function readModelAvailabilityInputs(
   stores: ModelOptionStores,
   models?: readonly string[],
-): Promise<ModelOptionData[]> {
+): Promise<ModelAvailabilityInputs> {
   await discoveredCopilotRoutes();
   const routeCtx = await buildAvailabilityContext(stores);
   const visible =
     models ??
     visibleModelsForAccess(getEnabledModels(stores.globalState), routeCtx);
   const routed = routeModels(visible, routeCtx);
-  const availabilityCtx = await withConsultedKeyStatuses(
+  const context = await withConsultedKeyStatuses(
     stores.secrets,
     routed,
     routeCtx,
   );
+  return { context, routed, visible };
+}
 
-  return visible.map((model) =>
-    buildModelOptionData(model, routed.get(model), availabilityCtx),
+/**
+ * Typed model option data for Lit-native rendering — pure, and the whole of
+ * the per-model work, so the ~157-model settings pass costs no awaits.
+ */
+export function modelOptionsFrom(
+  inputs: ModelAvailabilityInputs,
+): ModelOptionData[] {
+  return inputs.visible.map((model) =>
+    buildModelOptionData(model, inputs.routed.get(model), inputs.context),
   );
+}
+
+/**
+ * A human-readable reason why a model is unavailable, or `null` if available.
+ * Pure: `inputs` must have been read for a list containing `model` (a single
+ * `[model]` list is the usual one).
+ */
+export function modelUnavailableReasonFrom(
+  inputs: ModelAvailabilityInputs,
+  model: string,
+): string | null {
+  const decision = inputs.routed.get(model);
+  if (!decision) return `Model "${model}" is not recognized.`;
+
+  const { config, route } = decision;
+  const availability = resolveModelAvailability(
+    model,
+    route,
+    inputs.context.keyStatuses,
+  );
+  if (MODEL_AVAILABILITY_STATUS[availability.kind].available) return null;
+
+  // `availability.kind` is guaranteed `available: false` here, so it's a
+  // valid `UnavailableAvailabilityKind` and every case is covered by
+  // `UNAVAILABLE_REASON_BUILDERS` — the compiler, not this call site, is what
+  // enforces that a newly added unavailable kind gets a reason.
+  const kind = availability.kind as UnavailableAvailabilityKind;
+  return UNAVAILABLE_REASON_BUILDERS[kind]({
+    model,
+    config,
+    reason: availability.reason,
+    globalState: inputs.context.globalState,
+  });
 }
 
 function visibleModelsForAccess(

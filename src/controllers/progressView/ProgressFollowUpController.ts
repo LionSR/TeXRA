@@ -19,7 +19,7 @@ import type { RunOutputsSource } from './runOutputs';
 
 export interface ProgressFollowUpModelOption {
   value: string;
-  /** The access verdict `computeModelOptionsData` resolved, if it ran. */
+  /** The access verdict `modelOptionsFrom` resolved, if it ran. */
   availability?: ModelAvailabilityKind;
 }
 

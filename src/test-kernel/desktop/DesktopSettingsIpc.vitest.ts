@@ -19,7 +19,11 @@ import {
   BASH_APPROVAL_CONFIG_KEY,
   AGENT_SKILLS_CONFIG_KEY,
 } from '@shared/schemas';
-import type { DerivedSettingsSnapshot, RunId } from '@shared/schemas';
+import type {
+  DerivedSettingsSnapshot,
+  ModelOptionData,
+  RunId,
+} from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -43,7 +47,7 @@ import {
 } from './desktopSettingsTestSupport';
 import { loadSourceModule } from './loadSourceModule.ts';
 
-const computeModelOptionsData = vi.hoisted(() =>
+const readModelAvailabilityInputs = vi.hoisted(() =>
   vi.fn(async (_stores: ModelOptionStores, models: readonly string[] = []) =>
     models.map((model) => ({ value: model, label: model })),
   ),
@@ -51,7 +55,10 @@ const computeModelOptionsData = vi.hoisted(() =>
 
 vi.mock('@model/computeModelOptions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@model/computeModelOptions')>()),
-  computeModelOptionsData,
+  readModelAvailabilityInputs,
+  // The mocked read resolves the rows this fixture wants; the pure finisher
+  // hands them back.
+  modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
 }));
 
 type DesktopSettingsIpcModule =

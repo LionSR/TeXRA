@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
+} from '@model/computeModelOptions';
 import {
   copilotRouteUnavailableReason,
   setCopilotRoutePreference,
@@ -275,7 +278,9 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(hostStores(), ['gemini31p']);
+    const options = modelOptionsFrom(
+      await readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+    );
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -304,7 +309,9 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(hostStores(), undefined);
+    const options = modelOptionsFrom(
+      await readModelAvailabilityInputs(hostStores(), undefined),
+    );
 
     expect(options.map((option) => option.value)).toEqual(['gpt55']);
   });
@@ -328,7 +335,9 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(hostStores(), undefined);
+    const options = modelOptionsFrom(
+      await readModelAvailabilityInputs(hostStores(), undefined),
+    );
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -351,7 +360,9 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(hostStores(), ['gemini31p']);
+    const options = modelOptionsFrom(
+      await readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+    );
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -369,7 +380,9 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(hostStores(), ['gemini31p']);
+    const options = modelOptionsFrom(
+      await readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+    );
 
     expect(options[0]).toEqual(
       expect.objectContaining({

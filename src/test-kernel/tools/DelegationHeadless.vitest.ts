@@ -15,7 +15,7 @@ import {
   AgentCategory,
   agentMatchesIdentifier,
 } from '@shared/schemas';
-import type { RequestDecision, RunId } from '@shared/schemas';
+import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
@@ -45,7 +45,7 @@ const mocks = vi.hoisted(() => ({
   releaseOwnedRunLease: vi.fn(),
   writeReport: vi.fn(),
   writeResultMeta: vi.fn(),
-  computeModelOptionsData: vi.fn(),
+  readModelAvailabilityInputs: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({
@@ -125,7 +125,10 @@ vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
-  computeModelOptionsData: mocks.computeModelOptionsData,
+  readModelAvailabilityInputs: mocks.readModelAvailabilityInputs,
+  // Availability is read once and finished purely, so a case seeds the option
+  // rows on the read and the pure finisher hands them straight back.
+  modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -518,7 +521,7 @@ describe('headless delegation', () => {
         tools: [],
       },
     ]);
-    mocks.computeModelOptionsData.mockResolvedValue([
+    mocks.readModelAvailabilityInputs.mockResolvedValue([
       {
         value: 'deepseekT',
         label: 'DeepSeek',
@@ -1195,7 +1198,7 @@ describe('headless delegation', () => {
 
   it.effect('launches with an approved model override that is available', () =>
     Effect.gen(function* () {
-      mocks.computeModelOptionsData.mockResolvedValue([
+      mocks.readModelAvailabilityInputs.mockResolvedValue([
         {
           value: 'deepseekT',
           label: 'DeepSeek',

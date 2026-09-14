@@ -144,7 +144,7 @@ for (const status of Object.values(MODEL_AVAILABILITY_STATUS))
 Object.freeze(MODEL_AVAILABILITY_STATUS);
 
 /**
- * Resolved per-model access. Computed once by `computeModelOptionsData` and
+ * Resolved per-model access. Computed once by `modelOptionsFrom` and
  * shared verbatim across hosts (CLI picker, extension Models tab) so
  * availability and routing are never re-derived at render time: the kind is
  * the whole verdict, and {@link MODEL_AVAILABILITY_STATUS} words it.
@@ -166,7 +166,7 @@ export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
 export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
 
 /**
- * Whether an option row can be run as shipped: `computeModelOptionsData`
+ * Whether an option row can be run as shipped: `modelOptionsFrom`
  * already resolved the access question, so a caller only has to read its
  * verdict. Lives with the type so delegation's model list and the CLI's
  * picker can never drift apart on what "available" means.

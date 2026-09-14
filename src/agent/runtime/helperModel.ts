@@ -9,7 +9,8 @@
 import { Data, Effect, Schedule, type Scope } from 'effect';
 
 import {
-  getModelUnavailableReason,
+  modelUnavailableReasonFrom,
+  readModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -41,10 +42,11 @@ export const helperModel = Effect.fn('helperModel')(function* (
   stores: ModelOptionStores,
 ): Effect.fn.Return<BoundModel, HelperModelUnavailable | Error, Scope.Scope> {
   const modelName = getHelperModelName(stores.globalState);
-  const reason = yield* Effect.tryPromise({
-    try: () => getModelUnavailableReason(modelName, stores),
+  const inputs = yield* Effect.tryPromise({
+    try: () => readModelAvailabilityInputs(stores, [modelName]),
     catch: ensureError,
   });
+  const reason = modelUnavailableReasonFrom(inputs, modelName);
   if (reason) return yield* new HelperModelUnavailable({ message: reason });
   const config = yield* Effect.tryPromise({
     try: () => resolveRuntimeModelConfig(modelName),

@@ -54,7 +54,10 @@ import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
+} from '@model/computeModelOptions';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import latexPreamble from '@resources/templates/chatExport.tex';
@@ -191,7 +194,10 @@ export function createExtensionHostRequests(
     createHostRunActions({
       session,
       runAgentRequest,
-      loadModelOptions: () => computeModelOptionsData({ secrets, globalState }),
+      loadModelOptions: async () =>
+        modelOptionsFrom(
+          await readModelAvailabilityInputs({ secrets, globalState }),
+        ),
       promptForApiKey: async (provider) => {
         await runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider);
       },

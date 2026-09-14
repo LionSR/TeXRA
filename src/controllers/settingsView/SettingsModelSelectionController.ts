@@ -17,8 +17,9 @@ import {
 } from '@model/runtimeModelRegistry';
 import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import {
-  computeModelOptionsData,
   getEnabledModels,
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
   setModelEnabled,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
@@ -47,8 +48,9 @@ export interface SettingsModelSelectionControllerDeps {
   getPreferredCopilotRouteModels?: () => readonly string[];
   /**
    * Resolve availability-decorated options for the given models. Injected as a
-   * port so the controller stays unit-testable; production wiring uses the
-   * shared `computeModelOptionsData` — the same source the CLI picker uses.
+   * port so the controller stays unit-testable; production wiring reads the
+   * shared availability inputs and finishes them — the same source the CLI
+   * picker uses.
    */
   resolveModelOptions?: (
     stores: ModelOptionStores,
@@ -182,12 +184,13 @@ export class SettingsModelSelectionController {
         ),
       )
       .map((config) => config.name);
-    const resolveModelOptions =
-      this.deps.resolveModelOptions ?? computeModelOptionsData;
-    const optionsData = await resolveModelOptions(
-      { secrets: this.deps.secrets, globalState: this.deps.globalState },
-      candidates,
-    );
+    const stores = {
+      secrets: this.deps.secrets,
+      globalState: this.deps.globalState,
+    };
+    const optionsData = this.deps.resolveModelOptions
+      ? await this.deps.resolveModelOptions(stores, candidates)
+      : modelOptionsFrom(await readModelAvailabilityInputs(stores, candidates));
 
     const items: ModelSelectionItem[] = [];
     for (const option of optionsData) {

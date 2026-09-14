@@ -11,6 +11,7 @@ import { apiKeySecretName } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { effectRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { ModelOptionData } from '@shared/schemas';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
@@ -46,7 +47,7 @@ const codexMocks = vi.hoisted(() => ({
 }));
 
 const modelMocks = vi.hoisted(() => ({
-  compute: vi.fn(
+  readInputs: vi.fn(
     async (_stores: ModelOptionStores, models: readonly string[] = []) =>
       models.map((model) => ({ value: model, label: model })),
   ),
@@ -71,7 +72,10 @@ vi.mock('@model/codex/codexPreference', () => ({
 
 vi.mock('@model/computeModelOptions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@model/computeModelOptions')>()),
-  computeModelOptionsData: modelMocks.compute,
+  readModelAvailabilityInputs: modelMocks.readInputs,
+  // The mocked read resolves the rows this fixture wants; the pure finisher
+  // hands them back.
+  modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
 }));
 
 type ControllerOptions = ConstructorParameters<

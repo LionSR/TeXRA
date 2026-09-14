@@ -15,8 +15,9 @@ import { hostPort } from '@common/hostPort';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import {
-  computeModelOptionsData,
   getEnabledModels,
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -150,15 +151,13 @@ export function createHostSnapshotSource(
   });
 
   const loadModels = Effect.gen(function* () {
-    catalogs = {
-      ...catalogs,
-      modelOptions: yield* hostPort(() =>
-        computeModelOptionsData(
-          { secrets: options.secrets, globalState: options.globalState },
-          getEnabledModels(options.globalState),
-        ),
+    const inputs = yield* hostPort(() =>
+      readModelAvailabilityInputs(
+        { secrets: options.secrets, globalState: options.globalState },
+        getEnabledModels(options.globalState),
       ),
-    };
+    );
+    catalogs = { ...catalogs, modelOptions: modelOptionsFrom(inputs) };
   });
 
   const loadFiles = Effect.gen(function* () {

@@ -6,16 +6,20 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { fakeStores } from '@test/support/FakePlatform';
 
 const getHelperModelName = vi.hoisted(() => vi.fn());
-const getModelUnavailableReason = vi.hoisted(() => vi.fn());
+const readModelAvailabilityInputs = vi.hoisted(() => vi.fn(async () => ({})));
+const modelUnavailableReasonFrom = vi.hoisted(() => vi.fn());
 const resolveRuntimeModelConfig = vi.hoisted(() => vi.fn());
 
 vi.mock('@agent/runtime/helperModelName', () => ({ getHelperModelName }));
-vi.mock('@model/computeModelOptions', () => ({ getModelUnavailableReason }));
+vi.mock('@model/computeModelOptions', () => ({
+  readModelAvailabilityInputs,
+  modelUnavailableReasonFrom,
+}));
 vi.mock('@model/runtimeModelRegistry', () => ({ resolveRuntimeModelConfig }));
 
 /**
  * The launching run's stores. Both readers that would touch them
- * (`getHelperModelName`, `getModelUnavailableReason`) are mocked here, so the
+ * (`getHelperModelName`, the availability read) are mocked here, so the
  * bag only has to be the one the preference forwards.
  */
 const STORES = fakeStores();
@@ -40,7 +44,8 @@ describe('applyHelperModelPreference', () => {
   beforeEach(() => {
     vi.resetModules();
     getHelperModelName.mockReset();
-    getModelUnavailableReason.mockReset();
+    readModelAvailabilityInputs.mockClear();
+    modelUnavailableReasonFrom.mockReset();
     resolveRuntimeModelConfig.mockImplementation(async (model: string) =>
       Object.hasOwn(MODEL_CONFIGS, model)
         ? MODEL_CONFIGS[model as keyof typeof MODEL_CONFIGS]
@@ -76,24 +81,26 @@ describe('applyHelperModelPreference', () => {
     const result = await resolve(configFor('opus', 'toolUse'));
 
     expect(result.model).toBe('opus');
-    expect(getModelUnavailableReason).not.toHaveBeenCalled();
+    expect(readModelAvailabilityInputs).not.toHaveBeenCalled();
   });
 
   it('swaps a workflow agent without applying the tool-capability guard', async () => {
     // A workflow agent doesn't use the tool-use flow, so a non-function-calling
     // helper is fine.
     getHelperModelName.mockReturnValue('chatonly');
-    getModelUnavailableReason.mockResolvedValue(undefined);
+    modelUnavailableReasonFrom.mockReturnValue(undefined);
 
     const result = await resolve(configFor('opus', 'workflow'));
 
     expect(result.model).toBe('chatonly');
-    expect(getModelUnavailableReason).toHaveBeenCalledWith('chatonly', STORES);
+    expect(readModelAvailabilityInputs).toHaveBeenCalledWith(STORES, [
+      'chatonly',
+    ]);
   });
 
   it('falls back to the selected model when the helper model is unavailable', async () => {
     getHelperModelName.mockReturnValue('deepseek');
-    getModelUnavailableReason.mockResolvedValue('No API key configured.');
+    modelUnavailableReasonFrom.mockReturnValue('No API key configured.');
 
     const result = await resolve(configFor('opus'));
 
