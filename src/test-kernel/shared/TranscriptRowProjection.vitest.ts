@@ -142,6 +142,31 @@ describe('projectTranscriptRow', () => {
       text: expect.objectContaining({ full: expect.stringContaining('42') }),
     });
     expect(partial.model.outputSuppression).toBe('rendered-by-sections');
+
+    // The normalized output text is the `output` field alone when one exists,
+    // so the section must render the dropped fields, not that text.
+    const withOutput = projectTranscriptRow({
+      ...base,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      text: '',
+      data: {
+        toolName: 'mcp:calc/eval',
+        status: 'completed',
+        input: { expr: '6*7' },
+        output: { status: 'completed', output: 'stdout', result: '42' },
+      },
+    });
+    if (withOutput?.kind !== 'tool') throw new Error('bad');
+    const result = withOutput.model.sections.at(-1);
+    expect(result).toMatchObject({ label: 'Result:' });
+    expect(result).toMatchObject({
+      text: expect.objectContaining({ full: expect.stringContaining('42') }),
+    });
+    expect(result).toMatchObject({
+      text: expect.objectContaining({
+        full: expect.stringContaining('stdout'),
+      }),
+    });
   });
 
   it('drops the state-only and marker message types', () => {

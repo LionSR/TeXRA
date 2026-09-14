@@ -418,17 +418,19 @@ function isMcpTextBlock(block: unknown): block is { text: string } {
   );
 }
 
-/**
- * MCP output is shown, structured when it can be and raw when it cannot.
- * Ad-hoc MCP servers are not obliged to emit Codex-shaped output, so a schema
- * mismatch here is the intended "not structured output" path, not a producer
- * bug: it falls through to the raw `Result:` section below.
- */
 /** The output fields the structured MCP sections render. */
 const MCP_STRUCTURED_FIELDS: ReadonlySet<string> = new Set(
   Object.keys(CodexMcpToolOutputSchema.shape),
 );
 
+/**
+ * MCP output is shown, structured when it can be and raw when it cannot.
+ * Ad-hoc MCP servers are not obliged to emit Codex-shaped output, so a schema
+ * mismatch here is the intended "not structured output" path, not a producer
+ * bug: it falls through to the raw `Result:` section below. A structured
+ * output's fields outside the schema, which the parse strips, are shown as
+ * they came in that same section.
+ */
 function buildMcpSections(ctx: SectionContext): ToolSection[] {
   const sections: ToolSection[] = [];
   const args = stringifyPayload(ctx.input);
@@ -483,17 +485,25 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
       structured = true;
     }
   }
-  // The structured sections show only the fields the schema knows, and the
-  // parse strips the rest. An output carrying any other field (a provider's
-  // own `result`) keeps its raw form too, so the sections still show the
-  // whole output and the row may say they carry it.
-  const fieldsUnrendered =
-    isObject(ctx.parsedOutput) &&
-    Object.keys(ctx.parsedOutput).some(
-      (field) => !MCP_STRUCTURED_FIELDS.has(field),
-    );
-  if ((!structured || fieldsUnrendered) && ctx.outputText) {
-    sections.push(textSection('Result:', ctx.outputText));
+  if (!structured) {
+    if (ctx.outputText) sections.push(textSection('Result:', ctx.outputText));
+    return sections;
+  }
+  const unrendered = isObject(ctx.parsedOutput)
+    ? Object.fromEntries(
+        Object.entries(ctx.parsedOutput).filter(
+          ([field]) => !MCP_STRUCTURED_FIELDS.has(field),
+        ),
+      )
+    : {};
+  if (Object.keys(unrendered).length > 0) {
+    const payload = stringifyPayload(unrendered);
+    sections.push({
+      kind: 'code',
+      label: 'Result:',
+      text: payload.text,
+      language: payload.language,
+    });
   }
   return sections;
 }
