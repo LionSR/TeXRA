@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   ArxivProcessor,
@@ -11,7 +12,6 @@ import {
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'arXivCommands';
 const log = createLog(CHANNEL);
@@ -79,7 +79,7 @@ export async function downloadArXivSource(
           ArxivProcessor.downloadSource(arxivId, {
             progressCallback: (message, increment) =>
               progress.report({ message, increment }),
-            workspaceRoot: WorkspaceFS.getPath() ?? '',
+            workspaceRoot: defaultSession().roots.workspace ?? '',
             formatter: autoIndent ? resolveLatexFormatter() : null,
             autoIndent,
             destination,

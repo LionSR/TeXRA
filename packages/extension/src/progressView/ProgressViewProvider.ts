@@ -144,6 +144,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.session = session;
     this.contentProvider = new BundledViewContentProvider(
       context,
+      runtime,
       'ProgressView',
       'progressView',
     );
@@ -480,10 +481,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     id: 'sidebar' | 'editor',
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Port {
-    view.webview.html = this.contentProvider.getHtmlContent(view.webview, {
-      sessionKey: this.bridge.key,
-      placement: id,
-    });
     const send = (message: DownMessage): void => {
       void Promise.resolve(view.webview.postMessage(message)).then(
         (delivered) => {
@@ -499,11 +496,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       );
     };
     const attached = this.runtime.runSync(this.bridge.attach({ id, send }));
+    // The template is read off this tick (it never rejects: a failed render
+    // is a logged error page); a port closed before it lands paints nothing.
+    let open = true;
     const disposables: vscode.Disposable[] = [
       view.webview.onDidReceiveMessage((message) => {
         this.runtime.runFork(attached.receive(message));
       }),
+      {
+        dispose: () => {
+          open = false;
+        },
+      },
     ];
+    void this.contentProvider
+      .getHtmlContent(view.webview, {
+        sessionKey: this.bridge.key,
+        placement: id,
+      })
+      .then((html) => {
+        if (open) view.webview.html = html;
+      });
     return { attached, disposables, send };
   }
 

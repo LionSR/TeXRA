@@ -39,7 +39,6 @@ import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -170,7 +169,8 @@ class AgentReviewServiceImpl {
       }
       return;
     }
-    const cwd = WorkspaceFS.getPath();
+    const session = currentSession();
+    const cwd = session.roots.workspace;
     if (!cwd) {
       if (trigger === 'manual') {
         void showLoggedMessage(
@@ -181,7 +181,7 @@ class AgentReviewServiceImpl {
       return;
     }
 
-    const run = this.reviewRuns.start(currentSession());
+    const run = this.reviewRuns.start(session);
     this.summary = 'Reviewing changes…';
     await this.syncContextKeys();
     this.emitter.fire();

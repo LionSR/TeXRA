@@ -2,11 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'fileSelectionCommands';
 const log = createLog(CHANNEL);
@@ -47,6 +48,7 @@ function createMultiPicker(
     announceSelection(() =>
       selectFiles({
         currentFile,
+        workspacePath: defaultSession().roots.workspace,
         openLabel: options.openLabel,
         filters: options.filters(),
         allowMany: true,
@@ -81,10 +83,11 @@ export const selectOutputFiles = createMultiPicker({
 });
 
 export async function getCurrentFile(): Promise<string | null> {
+  const workspaceRoot = defaultSession().roots.workspace;
   // Try activeTextEditor first (for text files)
   const doc = vscode.window.activeTextEditor?.document;
   if (doc?.uri.scheme === 'file') {
-    return WorkspaceFS.relativePath(doc.uri.fsPath);
+    return workspaceRelativePath(workspaceRoot, doc.uri.fsPath);
   }
 
   // Fallback to active tab (for media files like images, PDFs)
@@ -94,5 +97,7 @@ export async function getCurrentFile(): Promise<string | null> {
       input instanceof vscode.TabInputCustom) &&
     input.uri.scheme === 'file';
 
-  return isFileInput ? WorkspaceFS.relativePath(input.uri.fsPath) : null;
+  return isFileInput
+    ? workspaceRelativePath(workspaceRoot, input.uri.fsPath)
+    : null;
 }

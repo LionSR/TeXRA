@@ -11,6 +11,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import {
   AGENT_REVIEW_VIEW_ID,
@@ -29,7 +30,6 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'AgentReview';
@@ -71,7 +71,7 @@ async function handleOpenIssue(node: AgentReviewNode): Promise<void> {
 
 /** "Find Issues" split-button options: gather per-run choices, then run. */
 async function handleRunWithOptions(): Promise<void> {
-  const cwd = WorkspaceFS.getPath();
+  const cwd = defaultSession().roots.workspace;
   if (!cwd) {
     void showLoggedMessage(
       CHANNEL,

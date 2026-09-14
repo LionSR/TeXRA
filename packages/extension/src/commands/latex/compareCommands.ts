@@ -2,9 +2,11 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { hostPort } from '@common/hostPort';
 import { appSignals } from '@eventBus/AppSignals';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
@@ -17,48 +19,72 @@ import {
   commitAcceptedFile,
   getAcceptedFileTarget,
   siblingLocation,
+  type AcceptEditedFileReplacePorts,
   type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
 import { createLog } from '@logger/logUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latexTiming';
 import { workflowOutputCopyStem } from '@shared/constants/workflowOutput';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'CompareCommands';
 const log = createLog(CHANNEL);
 
-/** Delete a workspace file, swallowing errors (already gone, locked) since
- *  diff-file cleanup is a best-effort side effect of accepting a file. */
-async function deleteDiffFileNonFatal(location: FileLocation): Promise<void> {
-  try {
-    await AbsoluteFS.delete(location.absolutePath);
-  } catch {
-    // Non-fatal: diff file may not exist or may be locked.
-  }
+/**
+ * VS Code bindings for the host-neutral accept-edited sequence, shared by
+ * the replace and save-as-copy paths. A location's absolute path is where its
+ * file is, so every read and write goes through the process filesystem the
+ * command runs with, at that path, settled on the host entry's runtime.
+ */
+function acceptPorts(
+  fs: FileSystem.FileSystem,
+  runtime: ProcessRuntime,
+): CommitAcceptedFilePorts & Pick<AcceptEditedFileReplacePorts, 'exists'> {
+  return {
+    readFile: (location) =>
+      runtime.runPromise(
+        fs
+          .readFileString(location.absolutePath)
+          .pipe(Effect.map(normalizeLineEndings)),
+      ),
+    writeFile: (location, content) =>
+      runtime.runPromise(fs.writeFileString(location.absolutePath, content)),
+    exists: (location) => runtime.runPromise(fs.exists(location.absolutePath)),
+    emitWritten: (absolutePath) =>
+      appSignals.emit('workspaceFilesWritten', {
+        absolutePaths: [absolutePath],
+      }),
+    showInfo: (message) => {
+      vscode.window.showInformationMessage(message);
+      log.info(message);
+    },
+    // Diff-file cleanup is a best-effort side effect of accepting a file: a
+    // file already gone is the post-condition, and any other failure (a
+    // locked file) is reported without failing the accept.
+    deleteFile: (location) =>
+      runtime.runPromise(
+        fs.remove(location.absolutePath, { force: true }).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              log.warn(
+                `Could not remove the stale diff file ${location.absolutePath}: ${error.message}`,
+              );
+            }),
+          ),
+        ),
+      ),
+  };
 }
 
-/** VS Code bindings for the host-neutral accept-edited commit sequence,
- *  shared by the replace and save-as-copy paths. */
-const COMMIT_PORTS: CommitAcceptedFilePorts = {
-  readFile: (location) => AbsoluteFS.read(location.absolutePath),
-  writeFile: (location, content) =>
-    AbsoluteFS.write(location.absolutePath, content),
-  emitWritten: (absolutePath) =>
-    appSignals.emit('workspaceFilesWritten', { absolutePaths: [absolutePath] }),
-  showInfo: (message) => {
-    vscode.window.showInformationMessage(message);
-    log.info(message);
-  },
-  deleteFile: deleteDiffFileNonFatal,
-};
-
-async function validateFilesExist(
+const validateFilesExist = Effect.fnUntraced(function* (
   baseLocation: FileLocation,
   editedLocation: FileLocation,
-): Promise<boolean> {
-  if (!(await AbsoluteFS.exists(baseLocation.absolutePath))) {
+) {
+  const fs = yield* FileSystem.FileSystem;
+  if (!(yield* fs.exists(baseLocation.absolutePath))) {
     void showLoggedMessage(
       CHANNEL,
       `Base file not found: ${baseLocation.absolutePath}`,
@@ -66,7 +92,7 @@ async function validateFilesExist(
     return false;
   }
 
-  if (!(await AbsoluteFS.exists(editedLocation.absolutePath))) {
+  if (!(yield* fs.exists(editedLocation.absolutePath))) {
     void showLoggedMessage(
       CHANNEL,
       `Edited file not found: ${editedLocation.absolutePath}`,
@@ -75,14 +101,11 @@ async function validateFilesExist(
   }
 
   return true;
-}
+});
 
-export async function handleCompare(
-  baseLocation: FileLocation,
-  editedLocation: FileLocation,
-): Promise<void> {
-  try {
-    if (!(await validateFilesExist(baseLocation, editedLocation))) {
+export const handleCompare = Effect.fn('compareCommands.handleCompare')(
+  function* (baseLocation: FileLocation, editedLocation: FileLocation) {
+    if (!(yield* validateFilesExist(baseLocation, editedLocation))) {
       return;
     }
 
@@ -93,7 +116,7 @@ export async function handleCompare(
     const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
 
     const contextKeyCommandId = 'vscode.getContextKeyValue';
-    try {
+    yield* hostPort(async () => {
       const location: string | undefined = await vscode.commands.executeCommand(
         contextKeyCommandId,
         'viewContainerLocation:texra',
@@ -102,22 +125,25 @@ export async function handleCompare(
       if (location === 'secondarySideBar') {
         await vscode.commands.executeCommand('workbench.action.closePanel');
       }
-    } catch (err) {
-      const message = toErrorMessage(err);
-      if (message.includes(`command '${contextKeyCommandId}' not found`)) {
-        log.warn(
-          `Could not check Progress view location: command '${contextKeyCommandId}' not found`,
-        );
-      } else {
-        throw err;
-      }
-    }
+    }).pipe(
+      // A host without the context-key command cannot report where the view
+      // lives; the diff still opens. Every other failure fails the compare.
+      Effect.catchIf(
+        (error) =>
+          toErrorMessage(error).includes(
+            `command '${contextKeyCommandId}' not found`,
+          ),
+        () =>
+          Effect.sync(() => {
+            log.warn(
+              `Could not check Progress view location: command '${contextKeyCommandId}' not found`,
+            );
+          }),
+      ),
+    );
 
-    await vscode.commands.executeCommand(
-      'vscode.diff',
-      editedUri,
-      baseUri,
-      title,
+    yield* hostPort(() =>
+      vscode.commands.executeCommand('vscode.diff', editedUri, baseUri, title),
     );
 
     setTimeout(() => {
@@ -127,10 +153,17 @@ export async function handleCompare(
     log.info(
       `Opened diff comparison between ${baseFileName} and ${editedFileName}`,
     );
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error comparing files', err);
-  }
-}
+  },
+  Effect.catchCause((cause) =>
+    Effect.promise(async () => {
+      await showLoggedErrorMessage(
+        CHANNEL,
+        'Error comparing files',
+        Cause.squash(cause),
+      );
+    }),
+  ),
+);
 
 type ReplaceOrCopyTarget = {
   targetLocation: FileLocation;
@@ -192,48 +225,65 @@ async function pickReplaceOrCopyTarget(
   return pick?.target;
 }
 
-export async function handleAcceptEdited(
-  baseLocation: FileLocation,
-  editedLocation: FileLocation,
-  copyMeta?: AcceptCopyMeta,
-): Promise<boolean> {
-  try {
-    if (!(await validateFilesExist(baseLocation, editedLocation))) {
+export const handleAcceptEdited = Effect.fn(
+  'compareCommands.handleAcceptEdited',
+)(
+  function* (
+    baseLocation: FileLocation,
+    editedLocation: FileLocation,
+    runtime: ProcessRuntime,
+    copyMeta?: AcceptCopyMeta,
+  ) {
+    if (!(yield* validateFilesExist(baseLocation, editedLocation))) {
       return false;
     }
+    const fs = yield* FileSystem.FileSystem;
+    const ports = acceptPorts(fs, runtime);
 
     // No run metadata: single-confirm replace flow shared with the desktop host.
     if (!copyMeta) {
-      return await acceptEditedFileReplace(baseLocation, editedLocation, {
-        ...COMMIT_PORTS,
-        exists: (location) => AbsoluteFS.exists(location.absolutePath),
-        confirm: (message) => confirmModal(message, 'Replace file', 'Cancel'),
-      });
+      return yield* hostPort(() =>
+        acceptEditedFileReplace(baseLocation, editedLocation, {
+          ...ports,
+          confirm: (message) => confirmModal(message, 'Replace file', 'Cancel'),
+        }),
+      );
     }
 
     // Run metadata present: let the user replace the original or save a
     // postfixed copy, then commit the chosen target.
-    const resolved = await pickReplaceOrCopyTarget(
-      baseLocation,
-      editedLocation.absolutePath,
-      copyMeta,
+    const resolved = yield* hostPort(() =>
+      pickReplaceOrCopyTarget(
+        baseLocation,
+        editedLocation.absolutePath,
+        copyMeta,
+      ),
     );
     if (!resolved) return false;
 
-    const targetExisted = await AbsoluteFS.exists(
+    const targetExisted = yield* fs.exists(
       resolved.targetLocation.absolutePath,
     );
 
-    await commitAcceptedFile(
-      baseLocation,
-      editedLocation,
-      resolved,
-      targetExisted,
-      COMMIT_PORTS,
+    yield* hostPort(() =>
+      commitAcceptedFile(
+        baseLocation,
+        editedLocation,
+        resolved,
+        targetExisted,
+        ports,
+      ),
     );
     return true;
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error accepting changes', err);
-    return false;
-  }
-}
+  },
+  Effect.catchCause((cause) =>
+    Effect.promise(async () => {
+      await showLoggedErrorMessage(
+        CHANNEL,
+        'Error accepting changes',
+        Cause.squash(cause),
+      );
+      return false;
+    }),
+  ),
+);

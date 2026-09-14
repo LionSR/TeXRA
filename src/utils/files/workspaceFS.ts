@@ -42,7 +42,7 @@ export class WorkspaceFS extends RelativeFS {
 
   /** Absolute path from relative. Already-absolute paths pass through. */
   public static toAbsolute(filePath: string): string {
-    return path.isAbsolute(filePath) ? filePath : this.fullPath(filePath);
+    return workspaceAbsolutePath(this.getPath(), filePath);
   }
 
   /**
@@ -55,7 +55,7 @@ export class WorkspaceFS extends RelativeFS {
 }
 
 /** {@link WorkspaceFS.relativePath} against an explicit workspace root. */
-function workspaceRelativePath(
+export function workspaceRelativePath(
   root: string | undefined,
   filePath: string,
 ): string {
@@ -63,6 +63,22 @@ function workspaceRelativePath(
     return filePath;
   }
   return normalizeFilePath(relativeToRoot(root, filePath) ?? filePath);
+}
+
+/**
+ * {@link WorkspaceFS.toAbsolute} against an explicit workspace root: a
+ * relative path joins the root, and with no folder open it throws exactly as
+ * the static did.
+ */
+export function workspaceAbsolutePath(
+  root: string | undefined,
+  filePath: string,
+): string {
+  if (path.isAbsolute(filePath)) return filePath;
+  if (!root) {
+    throw new Error('Workspace path is not available.');
+  }
+  return path.join(root, filePath);
 }
 
 /**

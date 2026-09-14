@@ -12,11 +12,11 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { createFlushableDebounce } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -33,7 +33,7 @@ function watchRepository(
   runtime: ProcessRuntime,
 ): void {
   // Only watch the repository containing the workspace root.
-  const workspacePath = WorkspaceFS.getPath();
+  const workspacePath = defaultSession().roots.workspace;
   if (
     !workspacePath ||
     !isPathWithin(repository.rootUri.fsPath, workspacePath)

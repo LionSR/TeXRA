@@ -35,6 +35,7 @@ export class SettingsViewProvider {
   ) {
     this.contentProvider = new BundledViewContentProvider(
       context,
+      runtime,
       'SettingsView',
       'settingsView',
     );
@@ -122,7 +123,11 @@ export class SettingsViewProvider {
    * listener; the caller keeps it in the view disposable store.
    */
   private setupWebviewContent(panel: vscode.WebviewPanel): vscode.Disposable {
-    panel.webview.html = this.contentProvider.getHtmlContent(panel.webview);
+    // The template is read off this tick (it never rejects: a failed render
+    // is a logged error page); a panel closed before it lands is not painted.
+    void this.contentProvider.getHtmlContent(panel.webview).then((html) => {
+      if (this._view === panel) panel.webview.html = html;
+    });
     return panel.webview.onDidReceiveMessage((message) =>
       this.messageHandler.handleMessage(message, panel),
     );

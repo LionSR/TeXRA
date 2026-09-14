@@ -1,10 +1,21 @@
+import { Cause, Data, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
 import { createLog } from '@logger/logUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
+
+/** A view's HTML template has no `<body>` to install the host bridge into. */
+class WebviewTemplateMissingBody extends Data.TaggedError(
+  'WebviewTemplateMissingBody',
+)<{ readonly htmlPath: string }> {
+  override get message(): string {
+    return `Webview template is missing a <body> tag: ${this.htmlPath}`;
+  }
+}
 
 /**
  * Build HTML content for a webview by replacing placeholder tokens.
@@ -27,13 +38,16 @@ function buildHostBridgeBootstrapScript(nonce: string): string {
   return `<script nonce="${nonce}">window.${HOST_BRIDGE_API_KEY} = acquireVsCodeApi();</script>`;
 }
 
-function buildWebviewHtml(
+const buildWebviewHtml = Effect.fnUntraced(function* (
   webview: vscode.Webview,
   htmlPath: vscode.Uri,
   replacements: Record<string, vscode.Uri>,
   attributes: Record<string, string>,
-): string {
-  const htmlContent = AbsoluteFS.readSync(htmlPath.fsPath);
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const htmlContent = normalizeLineEndings(
+    yield* fs.readFileString(htmlPath.fsPath),
+  );
   const nonce = nanoid(32);
 
   let result = htmlContent
@@ -52,13 +66,13 @@ function buildWebviewHtml(
 
   const bodyTag = /<body\b[^>]*>/i;
   if (!bodyTag.test(result)) {
-    throw new Error('Webview template is missing a <body> tag.');
+    return yield* new WebviewTemplateMissingBody({ htmlPath: htmlPath.fsPath });
   }
   return result.replace(
     bodyTag,
     (tag) => `${tag}\n    ${buildHostBridgeBootstrapScript(nonce)}`,
   );
-}
+});
 
 /**
  * Content provider for views whose view-specific assets are a Vite bundle and
@@ -69,6 +83,8 @@ export class BundledViewContentProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
+    /** The host entry's runtime, whose filesystem reads the template. */
+    private readonly runtime: ProcessRuntime,
     private readonly viewName: string,
     /**
      * The one folder name a view owns: `src/<viewFolder>/index.html` holds its
@@ -89,18 +105,15 @@ export class BundledViewContentProvider {
   public getHtmlContent(
     webview: vscode.Webview,
     attributes: Record<string, string> = {},
-  ): string {
-    try {
-      const htmlPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        this.viewFolder,
-        'index.html',
-      );
-
-      this.log.debug(`Generated HTML content for ${this.viewName}`);
-
-      return buildWebviewHtml(
+  ): Promise<string> {
+    const htmlPath = vscode.Uri.joinPath(
+      this.context.extensionUri,
+      'src',
+      this.viewFolder,
+      'index.html',
+    );
+    return this.runtime.runPromise(
+      buildWebviewHtml(
         webview,
         htmlPath,
         {
@@ -109,11 +122,24 @@ export class BundledViewContentProvider {
           styleUri: this.buildUri(['dist', this.viewFolder, 'index.css']),
         },
         attributes,
-      );
-    } catch (err) {
-      this.log.error(`Error generating HTML content: ${toErrorMessage(err)}`);
-      return '<html><body>Error loading content</body></html>';
-    }
+      ).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            this.log.debug(`Generated HTML content for ${this.viewName}`);
+          }),
+        ),
+        // A view that cannot render its template still gets a page: the
+        // failure is logged here, once, with its cause.
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            this.log.error(
+              `Error generating HTML content: ${toErrorMessage(Cause.squash(cause))}`,
+            );
+            return '<html><body>Error loading content</body></html>';
+          }),
+        ),
+      ),
+    );
   }
 
   private buildUri(pathSegments: string[]): vscode.Uri {
