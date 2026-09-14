@@ -39,13 +39,14 @@ import {
 import { FetchHttpClient } from 'effect/unstable/http';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import { runInSession } from '@agent/runtime/RunContext';
 import {
   AGENT_TOOL_INJECTIONS,
   ToolInjections,
 } from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
-import type { RunRegistry } from '@agent/runtime/runRegistry';
+import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -243,11 +244,25 @@ const ownerLiveness = Layer.effectDiscard(
 );
 
 /**
- * The handle of one root, over the root's graph: the last layer of the
- * entry, so it is the first thing unwound when the entry closes and the
- * graph outlives every publisher above it. Every release goes through the
- * entry: `close` and the runtime's disposal invalidate it, and the handle's
- * own `dispose` asks for the same through `graph.close`.
+ * The one teardown of a session's owners, in order: its runs first, so no run
+ * is admitted over a session that is unwinding (a lane step still waiting is
+ * refused and every waiter wakes), then the handle's own owners. One
+ * synchronous step, so nothing interleaves between the two. Idempotent: the
+ * entry's release runs it, and so does the handle's `dispose` before it asks
+ * for that release (`graph.close`).
+ */
+function unwindSession(session: SessionHandle): void {
+  session.runs.dispose();
+  session.unwind();
+}
+
+/**
+ * The handle of one root and the session's `Runs`, over the root's graph:
+ * the last layer of the entry, so it is the first thing unwound when the
+ * entry closes and the graph outlives every publisher above it. Every
+ * release goes through the entry: `close` and the runtime's disposal
+ * invalidate it, and the handle's own `dispose` asks for the same through
+ * `graph.close`.
  */
 const sessionHandleLayer = (
   key: SessionKey,
@@ -255,8 +270,7 @@ const sessionHandleLayer = (
   release: (key: SessionKey) => Effect.Effect<void>,
   runtime: ProcessRuntime,
 ) =>
-  Layer.effect(
-    Session,
+  Layer.effectContext(
     Effect.gen(function* () {
       const { publish, exclusive, detach, settle, ...reads } =
         yield* SessionEvents;
@@ -421,10 +435,28 @@ const sessionHandleLayer = (
         local: local.ref,
         inputs: inputs.read,
         subscriptions,
+        // The session's runs, over the session's own doors: each is called
+        // only once the handle it names is built.
+        runs: new RunRegistry({
+          runView: (runId) => session.runView(runId),
+          commit: (events) => session.commit(events).pipe(Effect.asVoid),
+          approvals: session.approvals,
+          finalizeRun: (input) => finalizeRun(session, input),
+          acquireRunClaim: (runId) =>
+            session.acquireClaims(qualifyAggregateId('run', runId)),
+          releaseRootRunLease: (runId) => session.releaseRunLease(runId),
+        }),
         // The request handler admits on the root graph's log.
         requests: sessionRequests(session, eventLog, local.ref, inquiryRecords),
         now,
-        close: () => release(key),
+        // The teardown runs at once, before the release: an entry another
+        // open or close is still borrowing is released only when that borrow
+        // ends, and the session refuses new runs from the moment it is asked
+        // to close. A teardown failure still releases the entry.
+        close: () =>
+          Effect.sync(() => unwindSession(session)).pipe(
+            Effect.ensuring(release(key)),
+          ),
       });
       // Capture before constructing the handle: constructor publications and
       // commits preceding subscription are covered by the tail's first read.
@@ -457,7 +489,7 @@ const sessionHandleLayer = (
             }),
         ),
         (session) =>
-          Effect.sync(() => session.unwind()).pipe(
+          Effect.sync(() => unwindSession(session)).pipe(
             // Settlement reports what the session's own publications left
             // behind. The release still has to finish, so that report is
             // logged here rather than escaping `Scope.close` and failing the
@@ -479,6 +511,7 @@ const sessionHandleLayer = (
             ),
           ),
       );
+      const { runs } = session;
       // Registered after the handle, so it is the first thing unwound when
       // the entry closes: `current` stops answering with this session before
       // its owners unwind.
@@ -497,7 +530,7 @@ const sessionHandleLayer = (
               // `goalStateChanged` row goes with it.
               return event.type === 'run.removed' && target.kind === 'run'
                 ? Effect.sync(() => {
-                    session.runs.detachChildren(target.id);
+                    runs.detachChildren(target.id);
                     releaseRunResources(target.id, session);
                   })
                 : Effect.void;
@@ -552,6 +585,7 @@ const sessionHandleLayer = (
         Effect.sync(() => session.receiveFoldedEvent(event)),
       ).pipe(Effect.forkIn(consumerScope));
       yield* sweepLeftoverRuns(session, initialListing).pipe(
+        Effect.provideService(Runs, runs),
         Effect.catch((error) =>
           Effect.sync(() =>
             log.warn('Background-shell cleanup failed.', {
@@ -574,7 +608,7 @@ const sessionHandleLayer = (
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
       );
-      return session;
+      return Context.make(Session, session).pipe(Context.add(Runs, runs));
     }),
   );
 
@@ -641,7 +675,7 @@ const sessionLayer = (
  */
 class Sessions extends Context.Service<
   Sessions,
-  LayerMap.LayerMap<SessionKey, Session>
+  LayerMap.LayerMap<SessionKey, Session | Runs>
 >()('@texra/session/Sessions') {
   /** The map, releasing an entry the handle asked to be released through
    *  the runtime that holds the map. `runtime` is that same runtime: each
@@ -704,7 +738,11 @@ const heldSession = (root: string) =>
     const held = yield* sessions.contextEffectOption(key).pipe(Effect.scoped);
     return Option.isNone(held)
       ? undefined
-      : { key, session: Context.get(held.value, Session) };
+      : {
+          key,
+          session: Context.get(held.value, Session),
+          runs: Context.get(held.value, Runs),
+        };
   });
 
 /**
@@ -777,8 +815,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     const sessions = yield* Sessions;
     const held = yield* heldSession(root);
     if (held === undefined) return NOTHING_TO_CLOSE;
-    const { key, session } = held;
-    const { runs } = session;
+    const { key, session, runs } = held;
     const flushArtifacts = Effect.promise(
       () =>
         runInSession(session, () => session.flushArtifacts()) as Promise<void>,

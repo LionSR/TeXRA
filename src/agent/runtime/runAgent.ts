@@ -9,6 +9,7 @@ import { persistedParentRunId } from '@agent/storage/runRecords';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AppState } from '@platform/interfaces';
+import type { ProcessServices } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import {
   AgentCategory,
@@ -25,7 +26,6 @@ import { RunHandle } from './RunHandle';
 import { runInSession } from './RunContext';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
-import type { AgentRunServices } from './toolInjection';
 
 /**
  * Options for `runAgent`. Fields shared with the lower-level `executeAgent`
@@ -94,11 +94,14 @@ export type RunAgentRequest =
  * Use this unless you need per-chunk streaming/lifecycle callbacks or subagent
  * lineage; for those, drop to the lower-level engine `executeAgent`, where the
  * caller owns runId generation and `registerRun`.
+ *
+ * The launch admits on `options.session`'s runs (`session.runs`), the same
+ * `Runs` `executeAgent` provides to the run below it.
  */
 export const runAgent = Effect.fn('runAgent')(function* (
   request: RunAgentRequest,
   options: RunAgentOptions,
-): Effect.fn.Return<AgentFlowResult, Error, AgentRunServices> {
+): Effect.fn.Return<AgentFlowResult, Error, ProcessServices> {
   const {
     beforeLeaseRelease,
     onRunLeaseAcquired,

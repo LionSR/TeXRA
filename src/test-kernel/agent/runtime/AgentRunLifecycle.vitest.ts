@@ -12,6 +12,7 @@ import {
   releaseOwnedRunLease,
 } from '@agent/storage/runLease';
 import { RunHandle } from '@agent/runtime/RunHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 import {
   defaultSession,
   type SessionHandle,
@@ -214,7 +215,10 @@ function seedOpenRunGroup(ctx: AgentLaunchContext, runId: RunId): string {
  * requires are provided here.
  */
 function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
-  return Effect.provide(runFlowWithLifecycle(...args), fakeProcessServices());
+  return runFlowWithLifecycle(...args).pipe(
+    Effect.provide(fakeProcessServices()),
+    Effect.provideService(Runs, args[0].runScope.session.runs),
+  );
 }
 
 describe('runFlowWithLifecycle', () => {
@@ -933,6 +937,13 @@ function finalizeFixture(): {
 
 let finalizeFixtureCounter = 0;
 
+/** The terminal finalizer on the fixture session's runs. */
+function finalize(params: Parameters<typeof finalizeRunTerminal>[0]) {
+  return finalizeRunTerminal(params).pipe(
+    Effect.provideService(Runs, params.session.runs),
+  );
+}
+
 describe('finalizeRunTerminal', () => {
   // The exactly-once guard must be an atomic, synchronous claim — not a
   // check-then-await on the settled flag. Two finalizers racing across the
@@ -954,10 +965,10 @@ describe('finalizeRunTerminal', () => {
           outcome: RUN_OUTCOME.COMPLETED,
         } as const;
 
-        const first = yield* Effect.forkChild(finalizeRunTerminal(params), {
+        const first = yield* Effect.forkChild(finalize(params), {
           startImmediately: true,
         });
-        const second = yield* Effect.forkChild(finalizeRunTerminal(params), {
+        const second = yield* Effect.forkChild(finalize(params), {
           startImmediately: true,
         });
 
@@ -1000,7 +1011,7 @@ describe('finalizeRunTerminal', () => {
         return flushing;
       });
       const finalization = yield* Effect.forkChild(
-        finalizeRunTerminal({
+        finalize({
           session,
           handle,
           outcome: RUN_OUTCOME.COMPLETED,
@@ -1025,7 +1036,7 @@ describe('finalizeRunTerminal', () => {
     const stage = { end: vi.fn() };
 
     await Effect.runPromise(
-      finalizeRunTerminal({
+      finalize({
         session,
         handle,
         outcome: RUN_OUTCOME.COMPLETED,
@@ -1045,7 +1056,7 @@ describe('finalizeRunTerminal', () => {
     const { runId, session, handle, flushArtifacts } = finalizeFixture();
 
     await Effect.runPromise(
-      finalizeRunTerminal({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
+      finalize({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
     );
 
     // Another run's rolled-back fact is that run's terminal outcome, so the
@@ -1059,7 +1070,7 @@ describe('finalizeRunTerminal', () => {
     flushArtifacts.mockRejectedValueOnce(new Error('artifact flush failed'));
 
     const finalization = await Effect.runPromise(
-      finalizeRunTerminal({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
+      finalize({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
     );
 
     // The row is the post-drain fact: the facts this run queued rolled back,
@@ -1095,7 +1106,7 @@ describe('finalizeRunTerminal', () => {
     );
 
     const event = await Effect.runPromise(
-      finalizeRunTerminal({
+      finalize({
         session,
         handle,
         outcome: RUN_OUTCOME.FAILED,
@@ -1134,7 +1145,7 @@ describe('finalizeRunTerminal', () => {
     handle.interrupt();
 
     const finalized = await Effect.runPromise(
-      finalizeRunTerminal({
+      finalize({
         session,
         handle,
         outcome: RUN_OUTCOME.FAILED,
@@ -1168,7 +1179,7 @@ describe('finalizeRunTerminal', () => {
     handle.interrupt();
 
     const finalized = await Effect.runPromise(
-      finalizeRunTerminal({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
+      finalize({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
     );
 
     // The stop still owns the outcome, but a lost drain is not a fact about

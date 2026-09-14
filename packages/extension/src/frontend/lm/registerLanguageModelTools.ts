@@ -12,9 +12,13 @@
 import * as vscode from 'vscode';
 import { Effect, Fiber } from 'effect';
 
-import { FileInteractionState, ToolCall } from '@agent/runtime';
+import {
+  FileInteractionState,
+  Runs,
+  ToolCall,
+  type SessionHandle,
+} from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ProcessRuntime } from '@platform/processRuntime';
 
 import type { ToolResult } from '@shared/schemas';
@@ -44,12 +48,13 @@ function toResultText(result: ToolResult): string {
 }
 
 /**
- * Register the curated TeXRA tools with the VS Code Language Model Tool API.
+ * Register the curated TeXRA tools with the VS Code Language Model Tool API,
+ * invoked on `session`: its roots and its runs.
  */
 export function registerLanguageModelTools(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
-  roots: WorkspaceRoots,
+  session: SessionHandle,
 ): void {
   const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
   if (typeof lm?.registerTool !== 'function') return;
@@ -103,11 +108,12 @@ export function registerLanguageModelTools(
               if (token.isCancellationRequested) return yield* Effect.interrupt;
               return yield* tool.call(input).pipe(
                 Effect.provideService(ToolCall, {
-                  roots,
+                  roots: session.roots,
                   tracker: new FileInteractionState(),
                   run: undefined,
                   inScope: (operation) => operation(),
                 }),
+                Effect.provideService(Runs, session.runs),
               );
             }),
           ),

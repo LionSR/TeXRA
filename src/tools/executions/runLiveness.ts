@@ -32,6 +32,7 @@ import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { RunStatusInfo } from '@agent/runtime/RunHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { inspectRunLease } from '@agent/storage/runLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
@@ -87,8 +88,8 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
   runId: RunId,
   session: SessionHandle,
   knownOutcome?: KnownRunOutcome,
-): Effect.fn.Return<RunLiveness> {
-  const { runs } = session;
+): Effect.fn.Return<RunLiveness, never, Runs> {
+  const runs = yield* Runs;
   const handle = runs.getHandle(runId);
   if (handle) return { kind: 'live', info: runs.getStatus(handle) };
 

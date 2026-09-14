@@ -34,6 +34,7 @@ import {
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { RunHandle, type AgentRunHandle } from './RunHandle';
+import { Runs } from './runRegistry';
 import {
   buildTerminalFlowResult,
   isWaitingFlowResult,
@@ -144,9 +145,10 @@ interface FinalizeRunTerminalResult {
  */
 export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   params: FinalizeRunTerminalParams,
-): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error> {
+): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error, Runs> {
   const { session, handle } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
+  const runs = yield* Runs;
   // The handle's stop latch, read once: a stop that landed before the run's
   // exit outranks a child whose process then exits non-zero, on the stage
   // here as on the row below, so no caller cross-checks the latch itself.
@@ -275,7 +277,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   // escape past an already-settled result.
   yield* Effect.try({
     try: () => {
-      session.runs.untrack(handle.runId);
+      runs.untrack(handle.runId);
     },
     catch: ensureError,
   }).pipe(
@@ -387,6 +389,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     R | AppState | AgentRunServices
   > {
     const { runId, session } = ctx.runScope;
+    const runs = yield* Runs;
     const agentIdentifier = ctx.config.agent;
     const handle = new RunHandle(
       {
@@ -414,7 +417,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     };
     const detachRunInterrupt =
       handle.attachInterruptHandler(runInterruptHandler);
-    session.runs.track(handle);
+    runs.track(handle);
     // A lease record removed out from under this run is not watched: the next
     // fenced write throws `RunLeaseLostError` and the run aborts dirty.
     let suspended = false;

@@ -10,6 +10,7 @@ import { type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
+import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
 import {
   startChildRunLoop,
   runWithOwnedRunLeaseLaunchGuard,
@@ -53,10 +54,11 @@ import type {
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
 
-/** Session-keyed registry accessor (`codexThreadsFor`/`claudeAgentSessionsFor`);
- * dispatch and loop resolve it once against the ambient session. */
+/** Registry accessor keyed by the session's runs
+ * (`codexThreadsFor`/`claudeAgentSessionsFor`); dispatch and loop resolve it
+ * once against the `Runs` they take from context. */
 type AgentCliSessionStoreAccessor = (
-  session: SessionHandle,
+  runs: RunRegistry,
 ) => AgentCliSessionRegistry;
 
 /**
@@ -245,7 +247,7 @@ interface AgentCliLaunchParams {
   startLoop: (ctx: {
     childRun: ChildRun;
     runId: RunId;
-  }) => Effect.Effect<void, Error>;
+  }) => Effect.Effect<void, Error, Runs>;
   summary: string;
   launchedLine: string;
   followUpLine: string;
@@ -259,7 +261,7 @@ export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
 )(function* (
   params: AgentCliLaunchParams,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure, Runs> {
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const runId = generateRunId();
@@ -433,7 +435,7 @@ export function dispatchAgentCliTool<R = never>(params: {
   launch: (
     context: AgentCliLaunchContext,
   ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
-}): Effect.Effect<ToolResult, AgentCliToolFailure, R | ToolCall> {
+}): Effect.Effect<ToolResult, AgentCliToolFailure, R | ToolCall | Runs> {
   const {
     agentName,
     approvalLabel,
@@ -451,7 +453,7 @@ export function dispatchAgentCliTool<R = never>(params: {
     params.requestApproval,
     (run) =>
       Effect.gen(function* () {
-        const registry = store(params.session);
+        const registry = store(yield* Runs);
         const callerRunId = run?.runId;
         if (sourceId) {
           yield* requireCallerOwnership(
@@ -554,7 +556,7 @@ interface AgentCliLoopParams<TTurn> {
  */
 export function startAgentCliLoop<TTurn>(
   params: AgentCliLoopParams<TTurn>,
-): Effect.Effect<void, Error> {
+): Effect.Effect<void, Error, Runs> {
   return Effect.gen(function* () {
     const {
       childRun,
@@ -576,7 +578,7 @@ export function startAgentCliLoop<TTurn>(
       loopFailedMessage,
     } = params;
     const { logger } = childRun;
-    const registry = store(params.session);
+    const registry = store(yield* Runs);
 
     // The one entry this loop registers and tracks: the child run's identity
     // and follow-up address. Live handles are resolved by the registry itself.

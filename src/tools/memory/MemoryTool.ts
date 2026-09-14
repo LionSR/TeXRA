@@ -6,6 +6,7 @@ import { Effect, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import type { FileStat } from '@platform/interfaces';
@@ -198,15 +199,14 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   ): Effect.Effect<ToolResult, unknown, ToolServices> {
     return Effect.gen({ self: this }, function* () {
       const call = yield* ToolCall;
+      const runs = yield* Runs;
       const invocation = call.inScope(() => {
         const runId = call.run?.runId;
         return {
           storageRoot: workspaceRoots().storage,
           runId,
           agentName:
-            runId === undefined
-              ? undefined
-              : call.run?.session.runs.getHandle(runId)?.agentName,
+            runId === undefined ? undefined : runs.getHandle(runId)?.agentName,
         } satisfies MemoryInvocation;
       });
       return yield* this.run(input, invocation);

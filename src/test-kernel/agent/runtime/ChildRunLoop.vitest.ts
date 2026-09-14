@@ -58,6 +58,7 @@ import {
 } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -274,7 +275,7 @@ const startLoop = (
     agentName: 'fake',
     strategy,
     ...extras,
-  });
+  }).pipe(Effect.provideService(Runs, session.runs));
 
 beforeEach(async () => {
   session = await Effect.runPromise(createProcessSession());
@@ -389,17 +390,18 @@ describe('childRunLoop E2E fixtures', () => {
     {
       name: 'CodexThreads',
       track: (runId: RunId, runSession: SessionHandle) =>
-        codexThreadsFor(runSession).trackInFlight({ runId }),
-      interruptAll: () => codexThreadsFor(session).interruptAll(),
-      release: (runId: RunId) => codexThreadsFor(session).releaseByRunId(runId),
+        codexThreadsFor(runSession.runs).trackInFlight({ runId }),
+      interruptAll: () => codexThreadsFor(session.runs).interruptAll(),
+      release: (runId: RunId) =>
+        codexThreadsFor(session.runs).releaseByRunId(runId),
     },
     {
       name: 'ClaudeAgentSessions',
       track: (runId: RunId, runSession: SessionHandle) =>
-        claudeAgentSessionsFor(runSession).trackInFlight({ runId }),
-      interruptAll: () => claudeAgentSessionsFor(session).interruptAll(),
+        claudeAgentSessionsFor(runSession.runs).trackInFlight({ runId }),
+      interruptAll: () => claudeAgentSessionsFor(session.runs).interruptAll(),
       release: (runId: RunId) =>
-        claudeAgentSessionsFor(session).releaseByRunId(runId),
+        claudeAgentSessionsFor(session.runs).releaseByRunId(runId),
     },
   ])(
     '$name interrupts a real initial-turn loop and releases ownership once',
@@ -539,7 +541,7 @@ describe('childRunLoop E2E fixtures', () => {
           userFollowUpSupport: 'terminalBacked',
           description: 'Keep a background child running',
           config: childRunConfig,
-        });
+        }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const loop = yield* startLoop(runId, strategy, {
           childRun,
@@ -854,7 +856,7 @@ describe('childRunLoop E2E fixtures', () => {
           userFollowUpSupport: 'terminalBacked',
           description: 'Keep an agent-CLI child running',
           config: childRunConfig,
-        });
+        }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const loop = yield* startLoop(runId, strategy, { childRun });
 
@@ -1204,7 +1206,7 @@ describe('childRunLoop E2E fixtures', () => {
           userFollowUpSupport: 'terminalBacked',
           description: 'Fail a turn, then take an interrupt',
           config: childRunConfig,
-        });
+        }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const { strategy, rejectTurn } = createFakeStrategy();
         // Fires between the turn failure and the loop's finalize, which is the

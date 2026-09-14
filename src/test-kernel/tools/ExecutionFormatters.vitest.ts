@@ -2,6 +2,7 @@
 import * as assert from 'node:assert';
 import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 import { Effect } from 'effect';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
@@ -41,6 +42,13 @@ let session: SessionHandle;
 beforeEach(() => {
   session = createTestSession();
 });
+
+/** Run a status read on the suite session's runs. */
+function onSessionRuns<A, E>(effect: Effect.Effect<A, E, Runs>): Promise<A> {
+  return Effect.runPromise(
+    effect.pipe(Effect.provideService(Runs, session.runs)),
+  );
+}
 afterEach(async () => {
   await Effect.runPromise(session.dispose());
 });
@@ -83,7 +91,7 @@ describe('getRunStatusInfo', () => {
   it('reports the recorded outcome when the live handle is gone', async () => {
     persisted('cancelled');
 
-    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
+    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'cancelled');
   });
@@ -93,7 +101,7 @@ describe('getRunStatusInfo', () => {
     // and nothing else for a run that already said how it ended.
     persisted(null);
 
-    const info = await Effect.runPromise(
+    const info = await onSessionRuns(
       getRunStatusInfo(RUN_ID, session, 'completed'),
     );
 
@@ -111,9 +119,7 @@ describe('getRunStatusInfo', () => {
       owner: { pid: 5150, hostname: 'other-host' },
     });
 
-    const info = await Effect.runPromise(
-      getRunStatusInfo(RUN_ID, session, null),
-    );
+    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session, null));
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /pid 5150 on other-host/);
@@ -123,7 +129,7 @@ describe('getRunStatusInfo', () => {
     persisted(null);
     mocks.inspectRunLease.mockResolvedValue({ status: 'free' });
 
-    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
+    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'cancelled');
     // The two facts the arm was decided from, and nothing about whether
@@ -141,7 +147,7 @@ describe('getRunStatusInfo', () => {
       owner: { pid: 4242, hostname: 'other-host' },
     });
 
-    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
+    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /pid 4242 on other-host/);
@@ -152,7 +158,7 @@ describe('getRunStatusInfo', () => {
     persisted(null);
     mocks.inspectRunLease.mockResolvedValue({ status: 'owned' });
 
-    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
+    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /no live run/);
@@ -165,7 +171,7 @@ describe('getRunStatusInfo', () => {
     persisted('completed');
     mocks.inspectRunLease.mockResolvedValue({ status: 'owned' });
 
-    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
+    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'completed');
   });
@@ -174,7 +180,7 @@ describe('getRunStatusInfo', () => {
     persisted(null);
     mocks.inspectRunLease.mockRejectedValue(new Error('lease corrupt'));
 
-    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
+    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /cannot read \(lease corrupt\)/);
@@ -212,7 +218,7 @@ describe('turnAttributionNote', () => {
       ]),
     );
 
-    const note = await Effect.runPromise(turnAttributionNote(RUN_ID, session));
+    const note = await onSessionRuns(turnAttributionNote(RUN_ID, session));
 
     assert.match(
       note ?? '',

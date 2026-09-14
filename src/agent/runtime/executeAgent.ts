@@ -13,6 +13,7 @@ import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
+import type { ProcessServices } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   type ModelCompatibilityKey,
@@ -68,6 +69,7 @@ import {
   ToolInjections,
   type AgentRunServices,
 } from './toolInjection';
+import { Runs } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
 
@@ -497,7 +499,7 @@ export function executeAgent(
 ): Effect.Effect<
   AgentFlowResult | WaitingToolUseFlowResult,
   Error,
-  AgentRunServices
+  ProcessServices
 >;
 export function executeAgent(
   definition: PreparedAgentDefinition,
@@ -506,19 +508,20 @@ export function executeAgent(
     parentRunId?: undefined;
     session: SessionHandle;
   },
-): Effect.Effect<AgentFlowResult, Error, AgentRunServices>;
+): Effect.Effect<AgentFlowResult, Error, ProcessServices>;
 
 /**
  * Low-level run runner for an already-registered run. Fresh
  * launches should use `runAgent()` or call `registerRun()` first so the
  * canonical configuration is committed with the run's creation.
  * Its prepared definition must be the one registration used. Resume paths reuse the existing run record.
+ * The run is on `options.session`, and so are its `Runs`, provided here.
  */
 export function executeAgent(
   definition: PreparedAgentDefinition,
   runId: RunId,
   options: ExecuteAgentOptions & { session: SessionHandle },
-): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
+): Effect.Effect<AgentRuntimeFlowResult, Error, ProcessServices> {
   return Effect.gen(function* () {
     yield* Effect.tryPromise({
       try: async () =>
@@ -681,7 +684,10 @@ export function executeAgent(
         },
       ),
     );
-  }).pipe(Effect.uninterruptible);
+  }).pipe(
+    Effect.uninterruptible,
+    Effect.provideService(Runs, options.session.runs),
+  );
 }
 
 export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
@@ -856,15 +862,16 @@ const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
   return yield* resumeToolUseWithOwnedLease(retrieval.value, options);
 }, Effect.uninterruptible);
 
-/** Resume after the previous generation and its teardown have settled. */
+/** Resume after the previous generation and its teardown have settled, on
+ *  the `Runs` of `options.session`. */
 export function resumeToolUseFromResumeData(
   resume: ToolUseResumeData,
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
-): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
-  return options.session.runs.launchRun(
-    resume.runId,
-    resumeToolUseTurn(resume, options),
-  );
+): Effect.Effect<AgentRuntimeFlowResult, Error, ProcessServices> {
+  const { runs } = options.session;
+  return runs
+    .launchRun(resume.runId, resumeToolUseTurn(resume, options))
+    .pipe(Effect.provideService(Runs, runs));
 }
 
 // Close the delegation recursion: the delegation tools drive child runs

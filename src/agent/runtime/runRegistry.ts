@@ -5,7 +5,7 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import { Deferred, Effect, type Scope } from 'effect';
+import { Context, Deferred, Effect, Semaphore, type Scope } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
@@ -145,8 +145,9 @@ interface RunRegistryInit {
 /**
  * Session-owned registry of active runs and their change listeners.
  *
- * One instance belongs to each {@link SessionHandle}, which binds it to that
- * session's event hub, approvals, and lease-release boundary.
+ * One instance belongs to each session, built by the session layer in the
+ * session's scope over that session's event hub, approvals, and lease-release
+ * boundary, and provided as {@link Runs}.
  */
 export class RunRegistry {
   private readonly handles = new Map<RunId, RunHandle>();
@@ -182,6 +183,9 @@ export class RunRegistry {
     Set<(handle: RunHandle | undefined) => void>
   >();
   private readonly childActivations = new Map<RunId, ChildRunActivation>();
+  /** The session's child-run concurrency budget, made on first use
+   *  ({@link childRunBudget}). */
+  private budget: Semaphore.Semaphore | undefined;
   private readonly lanes = new RunLanes();
   private readonly waitingTermination: WaitingTermination;
 
@@ -315,6 +319,24 @@ export class RunRegistry {
       // a window the stop is still closing.
       this.stopping.delete(runId);
       return this.lanes.launch(runId, operation);
+    });
+  }
+
+  /**
+   * The session's one child-run concurrency budget: the cap on concurrently
+   * live native child model conversations (`childRunBudget.ts` holds the
+   * design and the configured value). Made at `permits` on first call and
+   * re-pinned to `permits` on every later call, so a settings change takes
+   * effect at the next child launch while loops already sharing the
+   * semaphore pick up the new limit on their next turn.
+   */
+  childRunBudget(permits: number): Effect.Effect<Semaphore.Semaphore> {
+    return Effect.suspend(() => {
+      const existing = this.budget;
+      if (existing) return existing.resize(permits).pipe(Effect.as(existing));
+      const budget = Semaphore.makeUnsafe(permits);
+      this.budget = budget;
+      return Effect.succeed(budget);
     });
   }
 
@@ -1096,3 +1118,19 @@ export class RunRegistry {
     this.notifyWaiters(runId);
   }
 }
+
+/**
+ * The session's runs (system design §2.1, §7.11): run admission and lanes,
+ * the live handles, waiting termination, and the child roster of one
+ * session. Built by the session layer in the session's scope and disposed
+ * when that scope closes (`sessionLayer.ts`); the session record carries the
+ * same value (`SessionHandle.runs`) for a host that holds the session.
+ * Effect code below a launch takes it from context. It is provided where a
+ * session is resolved into work: the launch and resume entries (`runAgent`,
+ * `executeAgent`, `resumeRun`) from the session they are handed, and the
+ * session's own programs (its request handler, its close, its sweep) where
+ * the layer built it.
+ */
+export class Runs extends Context.Service<Runs, RunRegistry>()(
+  '@texra/session/Runs',
+) {}

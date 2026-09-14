@@ -14,6 +14,7 @@ import {
 } from '@agent/runtime/childRunLoop';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 import {
   aggregateId,
   RUN_PHASE,
@@ -102,21 +103,27 @@ import {
 } from '@tools/delegation/nativeSubagentStrategy';
 import { ensureError } from '@utils/errors/errorMessage';
 
-/** Drive and join the native child at the test entry point. */
+/** Drive and join the native child at the test entry point, on its session's
+ *  runs. */
 function startChildRunLoop<TTurn>(
-  input: ChildRunLoopParams<TTurn, FakeProcessServices>,
+  input: ChildRunLoopParams<TTurn, FakeProcessServices | Runs>,
 ) {
   return startNativeChildRunLoop(input).pipe(
     Effect.flatMap(Fiber.join),
     Effect.provide(fakeProcessServices()),
+    Effect.provideService(Runs, input.session.runs),
   );
 }
 
 /** Run one strategy turn on the fake host's process services. */
 function runOnFakeHost<A, E>(
-  turn: Effect.Effect<A, E, FakeProcessServices>,
+  turn: Effect.Effect<A, E, FakeProcessServices | Runs>,
 ): Effect.Effect<A, E> {
-  return Effect.provide(turn, fakeProcessServices());
+  // The engine is mocked, so a turn admits nothing on these runs.
+  return turn.pipe(
+    Effect.provide(fakeProcessServices()),
+    Effect.provideService(Runs, defaultSession().runs),
+  );
 }
 
 const ownedSessions = new Set<SessionHandle>();

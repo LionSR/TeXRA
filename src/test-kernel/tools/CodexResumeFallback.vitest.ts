@@ -44,7 +44,7 @@ const testSession = {
     getHandle: () => undefined,
   },
 } as unknown as SessionHandle;
-const CodexThreads = codexThreadsFor(testSession);
+const CodexThreads = codexThreadsFor(testSession.runs);
 
 vi.mock('@agent/storage', () => ({
   registerRun: mocks.registerRun,

@@ -7,8 +7,10 @@ import { Deferred, Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { RunId } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
 
@@ -104,7 +106,7 @@ describe('executeSubagent child run launch', () => {
         defaultPayload,
         'proof-checker',
         orchestratorRunId,
-      ),
+      ).pipe(Effect.provideService(Runs, testRunRegistry())),
       fakeProcessServices(),
     );
   }

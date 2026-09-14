@@ -8,6 +8,7 @@ import type { RegisteredToolName } from '@tools/registry';
 // session graph must not sit behind tool resolution (see the barrel's note).
 import { isGoalEnabled } from '@tools/goal/goalFeatureFlag';
 import { readPlatformSetting } from '@utils/config/platformSettings';
+import type { Runs } from './runRegistry';
 
 /**
  * A tool that should be auto-injected into every tool-use agent's resolved
@@ -91,9 +92,10 @@ export class ToolInjections extends Context.Service<
 }
 
 /**
- * The process services every step of an agent run reads on the way down: the
- * conditional tool injections, the global state store and the secret store.
+ * The services every step of an agent run reads on the way down: the process
+ * services (the conditional tool injections, the global state store, the
+ * secret store, ...) and the `Runs` of the session the run is launched on.
  * Named once here because the launch, resume and delegation signatures all
- * carry exactly these three tags in their `R` channel.
+ * carry exactly these tags in their `R` channel.
  */
-export type AgentRunServices = ProcessServices;
+export type AgentRunServices = ProcessServices | Runs;

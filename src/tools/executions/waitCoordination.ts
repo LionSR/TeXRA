@@ -4,6 +4,7 @@
  * break a blocking wait early.
  */
 
+import type { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
@@ -21,11 +22,11 @@ import { isInFlightPhase } from '@shared/runs/runStatus';
  *
  * One getHandle + one getStatus per call — no redundant lookups.
  */
-export function shouldSkipWait(session: SessionHandle, runId: RunId): boolean {
-  const handle = session.runs.getHandle(runId);
+export function shouldSkipWait(runs: RunRegistry, runId: RunId): boolean {
+  const handle = runs.getHandle(runId);
   if (!handle) return true;
 
-  const { status } = session.runs.getStatus(handle);
+  const { status } = runs.getStatus(handle);
   if (!isInFlightPhase(status)) return true;
 
   // Tool-use subagent in WAITING = job delivered by the child-run loop, don't block.

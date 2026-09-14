@@ -57,6 +57,7 @@ import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
+import { Runs } from '../runRegistry';
 import {
   appendRow,
   haltedStepRow,
@@ -118,10 +119,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 ): Effect.fn.Return<
   ToolUseResult,
   Error,
-  AgentRun | RunLedger | ProcessServices | ModelInvoker | FollowUps
+  AgentRun | RunLedger | ProcessServices | Runs | ModelInvoker | FollowUps
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
+  const runs = yield* Runs;
   const invoker = yield* ModelInvoker;
   const followUps = yield* FollowUps;
   const { runId, session, logger } = run;
@@ -443,7 +445,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   const runTurn = Effect.fn('toolUse.turn')(function* (
     initial: RunState,
-  ): Effect.fn.Return<TurnExit, Error, AgentRun | RunLedger | ProcessServices> {
+  ): Effect.fn.Return<
+    TurnExit,
+    Error,
+    AgentRun | RunLedger | ProcessServices | Runs
+  > {
     let state = initial;
     const turnContext: TurnContext = {
       workspace,
@@ -501,7 +507,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         ): Effect.fn.Return<
           { readonly state: RunState; readonly done: boolean },
           Error,
-          AgentRun | RunLedger | ProcessServices
+          AgentRun | RunLedger | ProcessServices | Runs
         > {
           let next = at;
           const previous = next.messages.at(-2);
@@ -906,7 +912,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           Effect.sync(() => {
             detach();
             followUps.release(
-              next === 'recoverable' || session.runs.hasActiveChildren(runId)
+              next === 'recoverable' || runs.hasActiveChildren(runId)
                 ? 'recoverable'
                 : 'terminal',
             );

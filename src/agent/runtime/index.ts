@@ -48,6 +48,10 @@ export type {
   ManualCriticismEntry,
 } from './HostInteractions';
 
+// runRegistry: the session's `Runs`. A launch provides it from the session it
+// is on; a host invoking a tool outside any run provides `session.runs`.
+export { Runs } from './runRegistry';
+
 // runAgent
 export { runAgent } from './runAgent';
 export type { RunAgentOptions, RunAgentRequest } from './runAgent';

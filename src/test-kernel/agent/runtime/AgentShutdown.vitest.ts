@@ -32,10 +32,10 @@ describe('agent shutdown', () => {
     );
     // Session-keyed registries: only sessions whose registry exists are swept.
     const interruptCodex = vi
-      .spyOn(codexThreadsFor(firstSession), 'interruptAll')
+      .spyOn(codexThreadsFor(firstSession.runs), 'interruptAll')
       .mockImplementation(() => {});
     const interruptClaude = vi
-      .spyOn(claudeAgentSessionsFor(secondSession), 'interruptAll')
+      .spyOn(claudeAgentSessionsFor(secondSession.runs), 'interruptAll')
       .mockImplementation(() => {});
 
     try {

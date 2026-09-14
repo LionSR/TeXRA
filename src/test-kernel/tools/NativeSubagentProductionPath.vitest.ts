@@ -42,6 +42,7 @@ import type { Message } from '@agent/runtime/loop/rows';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import { Runs } from '@agent/runtime/runRegistry';
 import {
   initializeDefaultSession,
   teardownDefaultSession,
@@ -534,7 +535,7 @@ async function launchWaitingChild(options: {
         },
         CHILD_AGENT,
         PARENT_RUN_ID,
-      ),
+      ).pipe(Effect.provideService(Runs, session.runs)),
     ),
   );
   expect(launch.status).toBe('executed');

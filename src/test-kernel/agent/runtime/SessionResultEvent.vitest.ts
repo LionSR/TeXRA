@@ -6,6 +6,7 @@ import { describe, expect, vi } from 'vitest';
 
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -43,7 +44,10 @@ const settle = Effect.promise(
  * requires are provided here.
  */
 function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
-  return Effect.provide(runFlowWithLifecycle(...args), fakeProcessServices());
+  return runFlowWithLifecycle(...args).pipe(
+    Effect.provide(fakeProcessServices()),
+    Effect.provideService(Runs, args[0].runScope.session.runs),
+  );
 }
 
 /**
