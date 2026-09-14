@@ -44,6 +44,7 @@ function createHandler(): SettingsViewMessageHandler {
       globalState,
     } as unknown as vscode.ExtensionContext,
     secrets,
+    effectRuntime(),
   );
 }
 

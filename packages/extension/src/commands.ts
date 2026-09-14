@@ -25,11 +25,15 @@ export function registerCommands(
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
 ): void {
-  registerLatexdiffCommands(context);
+  registerLatexdiffCommands(context, runtime);
   registerGitCommands(context);
-  registerAgentReviewCommands(context);
+  registerAgentReviewCommands(context, runtime);
   registerMergeCommands(context);
-  const settingsViewProvider = new SettingsViewProvider(context, secrets);
+  const settingsViewProvider = new SettingsViewProvider(
+    context,
+    secrets,
+    runtime,
+  );
   registerOpenFileCommands(context);
   registerMainViewCommands(context, progressViewProvider);
 

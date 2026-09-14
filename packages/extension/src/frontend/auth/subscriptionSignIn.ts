@@ -10,7 +10,7 @@ import {
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
@@ -73,6 +73,7 @@ function vscodePresenter(
 export async function signInWithSubscription(
   channel: string,
   providerId: SubscriptionProviderId,
+  runtime: ProcessRuntime,
 ): Promise<boolean> {
   const provider = subscriptionProvider(providerId);
   const { displayName, modelFamily } = provider;
@@ -85,7 +86,7 @@ export async function signInWithSubscription(
         cancellable: false,
       },
       () =>
-        effectRuntime().runPromise(
+        runtime.runPromise(
           provider.signIn({
             // Remote windows cannot reach the extension host's loopback port
             // from the user's local browser.

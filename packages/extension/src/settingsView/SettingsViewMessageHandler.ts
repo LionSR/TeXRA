@@ -53,7 +53,7 @@ import {
   refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { revealProgressRun } from '@progressView/progressNavigation';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -120,6 +120,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   constructor(
     private readonly context: vscode.ExtensionContext,
     secrets: PlatformSecrets,
+    private readonly runtime: ProcessRuntime,
   ) {
     super('SettingsView');
 
@@ -166,12 +167,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           agentCatalogAlreadyFresh,
         ),
       globalState,
+      this.runtime,
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.memoryHandlers = new MemoryHandlers(
       ctx,
       this.memoryController,
       this.viewName,
+      this.runtime,
     );
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx, secrets);
     this.chatgptHandlers = new SubscriptionHandlers(
@@ -183,6 +186,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       ctx,
       secrets,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
+      this.runtime,
     );
     this.grokHandlers = new SubscriptionHandlers(
       'grok',
@@ -193,6 +197,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       ctx,
       secrets,
       () => this.refreshAfterSubscriptionAuthChange(),
+      this.runtime,
     );
     this.handlerRegistry = this.createHandlerRegistry(context);
 
@@ -230,9 +235,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         }),
       },
     );
-    const unsubscribeGoals = subscribeGoalStateChanges(defaultSession(), () => {
-      void this.withActiveWebview((w) => this.sendGoalList(w));
-    });
+    const unsubscribeGoals = subscribeGoalStateChanges(
+      defaultSession(),
+      () => {
+        void this.withActiveWebview((w) => this.sendGoalList(w));
+      },
+      this.runtime,
+    );
     context.subscriptions.push({ dispose: unsubscribeGoals });
   }
 
@@ -343,7 +352,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       installToolExtension: (message) =>
         this.latexHandlers.installExtension(message.extensionId),
       recheckToolStatus: () =>
-        effectRuntime().runPromise(refreshToolAvailability()),
+        this.runtime.runPromise(refreshToolAvailability()),
       toggleTool: async (message) => {
         await setToolEnabled(
           message.toolId,
@@ -373,7 +382,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendGoalList(webview: vscode.Webview): Promise<void> {
-    const result = await effectRuntime().runPromiseExit(
+    const result = await this.runtime.runPromiseExit(
       Effect.tryPromise({
         try: () =>
           webview.postMessage({
@@ -691,7 +700,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     context: vscode.ExtensionContext,
   ): Promise<void> {
     try {
-      const discovery = await effectRuntime().runPromiseExit(
+      const discovery = await this.runtime.runPromiseExit(
         Effect.gen(function* () {
           // Retry one superseded discovery, then fail closed rather than
           // authorize from the retained presentation catalogue.
@@ -708,7 +717,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       const route = Exit.isSuccess(discovery) ? discovery.value : undefined;
       let result: Exit.Exit<unknown, unknown> = discovery;
       if (route?.access === 'consent-required') {
-        result = await effectRuntime().runPromiseExit(
+        result = await this.runtime.runPromiseExit(
           Effect.gen(function* () {
             const model = yield* acquireVscodeLanguageModel(
               context,
@@ -753,7 +762,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         );
       }
       if (Exit.isSuccess(result)) {
-        result = await effectRuntime().runPromiseExit(
+        result = await this.runtime.runPromiseExit(
           Effect.tryPromise({
             try: (): Promise<unknown> =>
               !route || route.access === 'unavailable'
@@ -856,7 +865,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const cachedResults = options?.skipChecks
       ? (getLastCheckResults() ?? undefined)
       : undefined;
-    const items = await effectRuntime().runPromise(
+    const items = await this.runtime.runPromise(
       buildToolDashboardItems('extension', cachedResults),
     );
     await webview.postMessage({
