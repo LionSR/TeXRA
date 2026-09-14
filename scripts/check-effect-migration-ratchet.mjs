@@ -152,22 +152,33 @@ const BOUNDARY_HOST_EXCLUSIONS = [
  * composition root, and its runs are that root's, the way `extension.ts` runs
  * on the host runtime. The list is closed: every other file under the
  * exclusions above stays fenced, and adding a file here is a ruling, not a
- * refactor. Only a run whose receiver the entry binds itself -- a variable or
- * a parameter, never an import -- is admitted (`localRuntimeRuns` in
- * surveySource); `Effect.runFork(...)` or a run on an imported runtime in the
- * same file stays on the row, and a local bound to the process-global
- * `effectRuntime()` is caught by that row instead. An entry whose file no
+ * refactor. Each entry declares its one approved runtime binding, and only a
+ * run whose receiver is that binding is admitted (`localRuntimeRuns` in
+ * surveySource): a variable initialized by the named runtime factory, or a
+ * parameter typed as a ManagedRuntime. Any other declaration of that name in
+ * the file fails closed, and `Effect.runFork(...)`, a run on an imported
+ * value, or a run on any other local stays on the row. An entry whose file no
  * longer exists fails the check (see main), so a dormant exemption cannot
  * apply to unrelated code created later at the same path.
  */
 const BOUNDARY_RUNTIME_ENTRIES = new Map([
   [
     'packages/extension/src/progressView/frontend/sessionTransport.ts',
-    "the progress webview's composition root: it installs the webview runtime (installWebviewRuntime) and disposes it, and every run in it is on that local",
+    {
+      reason:
+        "the progress webview's composition root: it installs the webview runtime (installWebviewRuntime) and disposes it, and every run in it is on that local",
+      // The one approved binding: `const runtime = installWebviewRuntime()`.
+      runtime: { name: 'runtime', initializer: 'installWebviewRuntime' },
+    },
   ],
   [
     'src/shared/signals.ts',
-    'toSignal, the one meeting point between Effect and the components (PRD one-fold-three-renderers 7.5): it runs on the runtime its caller passes and reads no global',
+    {
+      reason:
+        'toSignal, the one meeting point between Effect and the components (PRD one-fold-three-renderers 7.5): it runs on the runtime its caller passes and reads no global',
+      // The one approved binding: toSignal's `runtime: ManagedRuntime` parameter.
+      runtime: { name: 'runtime', parameterType: 'ManagedRuntime' },
+    },
   ],
 ]);
 
@@ -196,27 +207,48 @@ function belowBoundaryRuns(file, runs, localRuntimeRuns) {
   return isBoundaryPath(file) ? 0 : runs;
 }
 
-/** Names a file binds itself as a variable or a parameter; an imported name
- *  never counts, so a run on an imported runtime is not a local one. */
-function localValueBindings(sourceFile) {
-  const locals = new Set();
-  const imported = new Set();
+/**
+ * Whether a named runtime entry binds its approved runtime name only in the
+ * approved shape: a variable initialized by a call to `spec.initializer`, or a
+ * parameter whose type names `spec.parameterType`. An import of the name, or
+ * any other declaration of it anywhere in the file, fails closed.
+ */
+function bindsApprovedRuntime(sourceFile, spec) {
+  let approved = 0;
+  let other = 0;
   const visit = (node) => {
-    if (
+    const named =
       (ts.isVariableDeclaration(node) || ts.isParameter(node)) &&
-      ts.isIdentifier(node.name)
-    ) {
-      locals.add(node.name.text);
+      ts.isIdentifier(node.name) &&
+      node.name.text === spec.name;
+    if (named) {
+      const byFactory =
+        ts.isVariableDeclaration(node) &&
+        spec.initializer != null &&
+        node.initializer != null &&
+        ts.isCallExpression(node.initializer) &&
+        ts.isIdentifier(node.initializer.expression) &&
+        node.initializer.expression.text === spec.initializer;
+      const byType =
+        ts.isParameter(node) &&
+        spec.parameterType != null &&
+        node.type != null &&
+        node.type.getText(sourceFile).includes(spec.parameterType);
+      if (byFactory || byType) approved += 1;
+      else other += 1;
     }
-    if (ts.isImportClause(node) && node.name) imported.add(node.name.text);
-    if (ts.isImportSpecifier(node) || ts.isNamespaceImport(node)) {
-      imported.add(node.name.text);
+    if (
+      ((ts.isImportClause(node) && node.name) ||
+        ts.isImportSpecifier(node) ||
+        ts.isNamespaceImport(node)) &&
+      node.name?.text === spec.name
+    ) {
+      other += 1;
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  for (const name of imported) locals.delete(name);
-  return locals;
+  return approved > 0 && other === 0;
 }
 
 const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them`;
@@ -569,7 +601,11 @@ function surveySource(text, fileName) {
         callee.expression.name.text === 'Effect'));
   let effectImporter = false;
   let catches = 0;
-  const locals = localValueBindings(sourceFile);
+  const entry = BOUNDARY_RUNTIME_ENTRIES.get(fileName);
+  const approvedRuntime =
+    entry != null && bindsApprovedRuntime(sourceFile, entry.runtime)
+      ? entry.runtime.name
+      : null;
   let localRuntimeRuns = 0;
 
   const visit = (node) => {
@@ -589,7 +625,7 @@ function surveySource(text, fileName) {
         if (
           ts.isPropertyAccessExpression(callee) &&
           ts.isIdentifier(callee.expression) &&
-          locals.has(callee.expression.text)
+          callee.expression.text === approvedRuntime
         ) {
           localRuntimeRuns += 1;
         }
@@ -786,15 +822,42 @@ function selfTestBoundary() {
   // `Effect.run*` or a run on an imported runtime in the same file stays on
   // the row, and a sibling in the same frontend keeps every run.
   const probe = surveySource(
-    "import { Effect } from 'effect';\nimport { shared } from './runtime';\nconst runtime = make();\nruntime.runFork(a);\nfunction f(rt) { return rt.runSync(b); }\nEffect.runFork(c);\nshared.runPromise(d);\n",
+    "import { Effect, type ManagedRuntime } from 'effect';\nimport { shared } from './runtime';\nexport function toSignal(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\nfunction g(client) { return client.runPromise(b); }\nconst other = importedApi;\nother.runSync(c);\nEffect.runFork(d);\nshared.runPromise(e);\n",
     'src/shared/signals.ts',
   );
+  const transportProbe = surveySource(
+    'const runtime = installWebviewRuntime();\nruntime.runSync(a);\nconst runtime2 = makeRuntime();\nruntime2.runFork(b);\n',
+    'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  );
+  const shadowProbe = surveySource(
+    'const runtime = installWebviewRuntime();\nfunction h(runtime) { return runtime.runFork(x); }\nruntime.runSync(y);\n',
+    'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  );
+  const siblingProbe = surveySource(
+    'const runtime = installWebviewRuntime();\nruntime.runSync(a);\n',
+    'packages/extension/src/progressView/frontend/ProgressApp.ts',
+  );
   const runCases = [
-    [(probe.counts.get(ROW_RUN_BOUNDARY) ?? 0) === 4, 'probe run count'],
-    [probe.localRuntimeRuns === 2, 'probe local runtime runs'],
+    [(probe.counts.get(ROW_RUN_BOUNDARY) ?? 0) === 5, 'probe run count'],
     [
-      belowBoundaryRuns('src/shared/signals.ts', 4, 2) === 2,
-      'entry keeps non-local runs',
+      probe.localRuntimeRuns === 1,
+      'only the typed runtime parameter is approved',
+    ],
+    [
+      transportProbe.localRuntimeRuns === 1,
+      'only the factory-initialized local is approved',
+    ],
+    [
+      shadowProbe.localRuntimeRuns === 0,
+      'a second declaration of the name fails closed',
+    ],
+    [
+      siblingProbe.localRuntimeRuns === 0,
+      'a file outside the map has no approved runtime',
+    ],
+    [
+      belowBoundaryRuns('src/shared/signals.ts', 5, 1) === 4,
+      'entry keeps unapproved runs',
     ],
     [
       belowBoundaryRuns(
@@ -802,7 +865,7 @@ function selfTestBoundary() {
         4,
         4,
       ) === 0,
-      'entry admits local runs',
+      'entry admits approved runs',
     ],
     [
       belowBoundaryRuns(
@@ -810,7 +873,11 @@ function selfTestBoundary() {
         3,
         3,
       ) === 3,
-      'sibling stays fenced',
+      'sibling ProgressApp stays fenced',
+    ],
+    [
+      belowBoundaryRuns('src/shared/session/sessionFold.ts', 2, 2) === 2,
+      'sibling sessionFold stays fenced',
     ],
     [
       belowBoundaryRuns('packages/cli/src/chat/tui/App.tsx', 2, 0) === 0,
