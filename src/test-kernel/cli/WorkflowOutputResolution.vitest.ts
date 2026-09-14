@@ -4,8 +4,8 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
-  expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
+  inputDerivedOutputFiles,
   resolveWorkflowOutput,
   type CliWorkflowRunResult,
 } from '@cli/runtime/workflowOutput';
@@ -180,8 +180,7 @@ describe('CLI workflow output resolution', () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runOutput = await writeRunFile(cwd, 'r1/stdin.tex', 'from stdin');
 
-    const expectedOutputFiles = expectedOutputFilesForOutputDir(
-      undefined,
+    const expectedOutputFiles = inputDerivedOutputFiles(
       ['texra-stdin-123-abc123/stdin.tex'],
       'texra-stdin-123-abc123/stdin.tex',
     );
@@ -343,13 +342,10 @@ describe('CLI workflow output resolution', () => {
     const external = await makeTempDir('texra-workflow-output-', tempDirs);
 
     expect(
-      expectedOutputFilesForOutputDir(undefined, [
-        'paper/main.tex',
-        'paper/chapters/series.tex',
-      ]),
+      inputDerivedOutputFiles(['paper/main.tex', 'paper/chapters/series.tex']),
     ).toEqual(['paper/main.tex', 'paper/chapters/series.tex']);
     expect(
-      expectedOutputFilesForOutputDir(undefined, [
+      inputDerivedOutputFiles([
         join(external, 'paper', 'main.tex'),
         join(external, 'paper', 'chapters', 'series.tex'),
       ]),

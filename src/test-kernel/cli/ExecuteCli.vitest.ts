@@ -1006,7 +1006,11 @@ describe('executeCliRequest', () => {
         let publicationCommitted: boolean | undefined;
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {
-            openWorkflowOutput: (_result, tryCommitPublication) =>
+            openWorkflowOutput: (
+              _result,
+              _agentDefaultOutputFiles,
+              tryCommitPublication,
+            ) =>
               Effect.sync(() => {
                 publicationCommitted = tryCommitPublication();
               }),
@@ -1021,7 +1025,7 @@ describe('executeCliRequest', () => {
         leaseOptions.onRun?.();
         yield* settle;
         yield* Effect.promise(async () =>
-          leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN),
+          leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []),
         );
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
@@ -1057,7 +1061,11 @@ describe('executeCliRequest', () => {
         let publicationCommitted: boolean | undefined;
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {
-            openWorkflowOutput: (_result, tryCommitPublication) =>
+            openWorkflowOutput: (
+              _result,
+              _agentDefaultOutputFiles,
+              tryCommitPublication,
+            ) =>
               Effect.sync(() => {
                 publicationCommitted = tryCommitPublication();
               }),
@@ -1070,7 +1078,7 @@ describe('executeCliRequest', () => {
         leaseOptions.onRun?.();
         yield* settle;
         yield* Effect.promise(async () =>
-          leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN),
+          leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []),
         );
 
         const shutdown = platform.lifecycle.runShutdown();
@@ -1119,7 +1127,7 @@ describe('executeCliRequest', () => {
             options.onRunLeaseAcquired?.('exec-1' as RunId);
             options.onRun?.();
             try {
-              await options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
+              await options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []);
             } catch {
               outputResolutionFailed = true;
               Deferred.doneUnsafe(outputFailed, Effect.void);
@@ -1137,7 +1145,11 @@ describe('executeCliRequest', () => {
 
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {
-            openWorkflowOutput: (_result, tryCommitPublication) =>
+            openWorkflowOutput: (
+              _result,
+              _agentDefaultOutputFiles,
+              tryCommitPublication,
+            ) =>
               Effect.sync(() => {
                 publicationCommitted = tryCommitPublication();
               }).pipe(Effect.andThen(Effect.fail(outputFailure))),

@@ -63,6 +63,8 @@ type RunAgentWorkflowOutput = NonNullable<
 export type CliRunServices = Effect.Services<ReturnType<typeof runAgent>>;
 type CliWorkflowOutputHandler = (
   result: Parameters<RunAgentWorkflowOutput>[0],
+  /** The declared defaults the run hands over; see `RunAgentOptions`. */
+  agentDefaultOutputFiles: Parameters<RunAgentWorkflowOutput>[1],
   tryCommitPublication: () => boolean,
 ) => Effect.Effect<Awaited<ReturnType<RunAgentWorkflowOutput>>, Error>;
 
@@ -513,10 +515,11 @@ export function executeCliRequest(
         openWorkflowOutput:
           openWorkflowOutput === undefined
             ? undefined
-            : (result) =>
+            : (result, agentDefaultOutputFiles) =>
                 effectRuntime().runPromise(
                   openWorkflowOutput(
                     result,
+                    agentDefaultOutputFiles,
                     tryCommitWorkflowOutputPublication,
                   ),
                 ),

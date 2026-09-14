@@ -1,6 +1,8 @@
 import { defineCommand } from 'citty';
 
 import { getCustomAgentScanIssues } from '@agent/index';
+import { loadAgentSettingAndPrompts } from '@agent/runtime';
+import { AgentCategory } from '@shared/schemas';
 
 import {
   AGENT_NAME_DESCRIPTION,
@@ -70,10 +72,24 @@ export async function showAgent(
     return CliExitCode.Usage;
   }
 
+  // Everything a listed entry carries is shown as listed. The one exception
+  // is a remote workflow agent's `defaultOutputFiles`: the catalog listing
+  // carries none, so only loading the definition (as its launch does) shows
+  // what a run would write. A tool-use agent declares none at all, so it is
+  // never worth a fetch here.
+  let shown = entry;
+  if (entry.source === 'remote' && entry.category === AgentCategory.Workflow) {
+    const [setting] = await loadAgentSettingAndPrompts(entry);
+    // A scanned entry omits the field rather than carrying an empty list;
+    // a loaded definition with nothing declared reads the same way.
+    if (setting.defaultOutputFiles.length > 0)
+      shown = { ...entry, defaultOutputFiles: setting.defaultOutputFiles };
+  }
+
   emitCliResult(context, {
-    json: entry,
-    ndjson: { kind: 'agent', agent: entry },
-    text: formatCliAgentDetails(entry),
+    json: shown,
+    ndjson: { kind: 'agent', agent: shown },
+    text: formatCliAgentDetails(shown),
   });
   return CliExitCode.Success;
 }
@@ -111,6 +127,9 @@ const agentsShowCommand = defineCliCommand({
       description: `${AGENT_NAME_DESCRIPTION} (use \`source:name\` to disambiguate when the same name exists in multiple sources)`,
     },
   },
+  // Showing a remote workflow agent fetches its definition; report a failed
+  // fetch as an error line and a non-zero exit, not as a CLI crash.
+  catchExitCode: CliExitCode.AgentError,
   run: (context, ctx) => showAgent(context, ctx.args.name),
 });
 

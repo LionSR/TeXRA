@@ -68,8 +68,8 @@ import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
   type CliWorkflowRunResult,
-  expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
+  inputDerivedOutputFiles,
   resolveWorkflowOutput,
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
@@ -179,8 +179,12 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           catch: ensureError,
         });
         const runContext = buildHeadlessRunContext(context);
+        // Only the input-derived names are knowable here: the agent's declared
+        // defaults live in a definition the launch below loads, and loading it
+        // twice would pay a second remote fetch and could observe a different
+        // revision than the run executes. They are applied at finalization.
         const expectedOutputFiles = init.outputDir
-          ? expectedOutputFilesForOutputDir(agent, inputFiles, stdinInputPath)
+          ? inputDerivedOutputFiles(inputFiles, stdinInputPath)
           : undefined;
         // Persist CLI destinations absolutely so resumption has one path
         // representation and never reconstructs output locations.
@@ -325,7 +329,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     // writes; never take the destinations a second time as call options.
     const output = resumeWorkflowOutputFile(config);
     const outputDir = resumeWorkflowOutputDirectory(config);
-    const expectedOutputFiles = config.cli?.expectedOutputFiles ?? undefined;
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
     const canAdvertiseInterruptedRun = (
@@ -378,8 +381,22 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         : undefined,
       canAdvertiseInterruptedRun,
       expectedCategory: AgentCategory.Workflow,
-      openWorkflowOutput: (result, tryCommitPublication) =>
+      openWorkflowOutput: (
+        result,
+        agentDefaultOutputFiles,
+        tryCommitPublication,
+      ) =>
         Effect.gen(function* () {
+          // Handed over by the launch, which is the only load of this run's
+          // definition: the defaults this run actually executed, not a reread
+          // of a catalog entry a nested refresh may have replaced with a
+          // remote listing that carries none. `cli.expectedOutputFiles` holds
+          // the input-derived names the launch computed, which stand in when
+          // the agent declares none.
+          const declaredOutputFiles = agentDefaultOutputFiles.filter(Boolean);
+          const expectedOutputFiles = declaredOutputFiles.length
+            ? declaredOutputFiles
+            : (config.cli?.expectedOutputFiles ?? undefined);
           const outputResult = yield* Effect.result(
             Effect.tryPromise({
               try: () =>
