@@ -276,7 +276,7 @@ function agentRunTestLayer(init: HarnessInit) {
 function loopLayer(init: HarnessInit) {
   return Layer.mergeAll(
     invokerLayer(init.turns),
-    followUpsLayer,
+    followUpsLayer(),
     nativeToolTestLayer(),
   ).pipe(
     Layer.provideMerge(agentRunTestLayer(init)),
