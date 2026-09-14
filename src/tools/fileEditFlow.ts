@@ -1,9 +1,8 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - common
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { hostPort } from '@common/hostPort';
 
 // Local imports - shared schemas
 import { ToolError, type ToolResult } from '@shared/schemas';
@@ -18,7 +17,7 @@ import {
   writeApprovedContent,
   type AcceptedToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 /**
  * Count non-overlapping occurrences of `needle` in `haystack`.
@@ -113,12 +112,16 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
   function* (
     inputPath: string,
     options: ResolveWritableTargetOptions = {},
-  ): Effect.fn.Return<WritableTargetPreparation, unknown, ToolCall> {
+  ): Effect.fn.Return<
+    WritableTargetPreparation,
+    unknown,
+    ToolCall | FileSystem.FileSystem
+  > {
     // Resolution, the read-only-root check and the caller's own validation all
     // reject with a ToolError the tool runner reports to the model, so they
     // stay a failure rather than becoming a defect.
     const call = yield* ToolCall;
-    const { path, displayPath } = yield* Effect.try({
+    const { path, absolutePath, displayPath } = yield* Effect.try({
       try: () =>
         call.inScope(() => {
           const { path: resolved, display } = resolveAndFormat(
@@ -129,15 +132,22 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
 
           const fsPath = resolved.fsPath;
           options.validate?.({ path: fsPath, displayPath: display });
-          return { path: fsPath, displayPath: display };
+          return {
+            path: fsPath,
+            // The resolution ran inside the call's workspace frame, so its
+            // absolute form is the one the process filesystem reads —
+            // including a path under a registered external root, which the
+            // workspace facade reached the same way.
+            absolutePath: resolved.absolute,
+            displayPath: display,
+          };
         }),
       catch: (error) => error,
     });
 
     // Shared read-before-edit gate, then the current content.
-    const exists = yield* hostPort(() =>
-      call.inScope(() => WorkspaceFS.exists(path)),
-    );
+    const fs = yield* FileSystem.FileSystem;
+    const exists = yield* fs.exists(absolutePath);
     const blocked = yield* requireFileReadForEdit(path, exists);
     if (blocked) {
       return { blocked };
@@ -145,7 +155,9 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
 
     const originalContent =
       exists || (options.missing ?? 'require') === 'require'
-        ? yield* hostPort(() => call.inScope(() => WorkspaceFS.read(path)))
+        ? yield* fs
+            .readFileString(absolutePath)
+            .pipe(Effect.map(normalizeLineEndings))
         : '';
 
     return {

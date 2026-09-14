@@ -2,7 +2,7 @@
 import * as nodePath from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
@@ -123,7 +123,7 @@ interface GrepPorts extends WorkspacePathPorts {
 const runGrep = Effect.fn('GrepTool.execute')(function* (
   ports: GrepPorts,
   input: GrepInput,
-): Effect.fn.Return<ToolResult, unknown> {
+): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
   const { output_mode: outputMode } = input;
   const root = ports.toolRoot();
   const { path, display } = ports.inScope(() =>

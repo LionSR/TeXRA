@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
@@ -37,7 +37,7 @@ type EditInput = z.infer<typeof EditInputSchema>;
 
 const edit = Effect.fn('EditFileTool.execute')(function* (
   input: EditInput,
-): Effect.fn.Return<ToolResult, unknown, ToolCall> {
+): Effect.fn.Return<ToolResult, unknown, ToolCall | FileSystem.FileSystem> {
   const { old_str, new_str, replace_all } = input;
   const prepared = yield* resolveWritableTarget(input.path, {
     validate: ({ displayPath }) => {

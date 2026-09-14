@@ -1,34 +1,47 @@
 import { mkdir, utimes, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, FileSystem, Fiber, PlatformError } from 'effect';
 
 import { describe, expect, vi } from 'vitest';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 
-import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
-import { errnoError } from '@test/support/fsTestUtils';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { GlobTool } from '@tools/glob';
 
-function failStatFor(
-  workspacePath: string,
-  fileName: string,
-  error: Error,
-): void {
-  const fs = platform().fs;
-  const stat = fs.stat.bind(fs);
-  const targetPath = path.join(workspacePath, fileName);
-  vi.spyOn(fs, 'stat').mockImplementation(async (candidate) => {
-    if (candidate === targetPath) throw error;
-    return stat(candidate);
+/**
+ * A glob run in which one match's `stat` fails: the tool's own failure policy
+ * is what these cases exercise, and a match that stops being stat-able
+ * between the walk and the stat cannot be staged on disk.
+ */
+const globWithFailedStat = (
+  targetPath: string,
+  tag: PlatformError.SystemErrorTag,
+  description: string,
+  input: { readonly pattern: string },
+) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const failure = PlatformError.systemError({
+      _tag: tag,
+      module: 'FileSystem',
+      method: 'stat',
+      pathOrDescriptor: targetPath,
+      description,
+    });
+    return yield* new GlobTool().call(input).pipe(
+      Effect.provideService(FileSystem.FileSystem, {
+        ...fs,
+        stat: (candidate: string) =>
+          candidate === targetPath ? Effect.fail(failure) : fs.stat(candidate),
+      }),
+    );
   });
-}
 
 function withGlobWorkspace(
   run: (workspacePath: string) => Effect.Effect<void, unknown, ToolServices>,
@@ -92,23 +105,20 @@ describe('GlobTool match metadata', () => {
   );
 
   it.live.each([
-    {
-      fileName: 'vanished.tex',
-      error: errnoError('ENOENT', 'match disappeared'),
-    },
-    {
-      fileName: 'blocked.tex',
-      error: errnoError('ENOTDIR', 'parent changed'),
-    },
+    { fileName: 'vanished.tex', tag: 'NotFound' as const },
+    { fileName: 'blocked.tex', tag: 'BadResource' as const },
   ])(
-    'omits a match whose metadata lookup fails with $error.code',
-    ({ fileName, error }) =>
+    'omits a match whose metadata lookup fails with $tag',
+    ({ fileName, tag }) =>
       Effect.gen(function* () {
         yield* withGlobWorkspace((workspacePath) =>
           Effect.gen(function* () {
-            failStatFor(workspacePath, fileName, error);
-
-            const result = yield* new GlobTool().call({ pattern: fileName });
+            const result = yield* globWithFailedStat(
+              path.join(workspacePath, fileName),
+              tag,
+              'match is gone',
+              { pattern: fileName },
+            );
 
             expect(result).toMatchObject({ status: 'executed' });
             expect(result.output).toContain('(no matches)');
@@ -121,18 +131,15 @@ describe('GlobTool match metadata', () => {
     Effect.gen(function* () {
       yield* withGlobWorkspace((workspacePath) =>
         Effect.gen(function* () {
-          failStatFor(
-            workspacePath,
-            'unreadable.tex',
-            errnoError('EACCES', 'match is unreadable'),
+          const result = yield* globWithFailedStat(
+            path.join(workspacePath, 'unreadable.tex'),
+            'PermissionDenied',
+            'match is unreadable',
+            { pattern: 'unreadable.tex' },
           );
 
-          expect(
-            yield* new GlobTool().call({ pattern: 'unreadable.tex' }),
-          ).toMatchObject({
-            status: 'error',
-            error: 'match is unreadable',
-          });
+          expect(result.status).toBe('error');
+          expect(result.error).toContain('match is unreadable');
         }),
       );
     }).pipe(Effect.provide(nativeToolTestLayer())),

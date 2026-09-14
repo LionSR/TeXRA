@@ -1,10 +1,9 @@
 // Third-party imports
-import { Effect, Scope } from 'effect';
+import { Effect, FileSystem, Scope } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { hostPort } from '@common/hostPort';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
@@ -14,9 +13,12 @@ import {
 } from '@tools/pathResolution';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
-import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
+import {
+  formatBytes,
+  normalizeLineEndings,
+  splitContentLines,
+} from '@utils/text/stringUtils';
 import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   getMimeType,
   isImageMimeType,
@@ -123,7 +125,6 @@ const ATTACHMENT_COPY: Record<
  */
 interface ReadPorts {
   readonly signal: AbortSignal;
-  readonly inScope: <A>(operation: () => A) => A;
   readonly resolve: (targetPath: string) => {
     path: WorkspacePathResolution;
     display: string;
@@ -145,7 +146,6 @@ export class ReadFileTool extends defineTool({
         const signal = yield* Effect.abortSignal;
         const ports: ReadPorts = {
           signal,
-          inScope: call.inScope,
           resolve: (targetPath) =>
             call.inScope(() =>
               resolveAndFormat(targetPath, call.workingDirectory),
@@ -161,7 +161,11 @@ export class ReadFileTool extends defineTool({
     this: ReadFileTool,
     ports: ReadPorts,
     input: ReadInput,
-  ): Effect.fn.Return<ToolResult, unknown, ToolCall | Scope.Scope> {
+  ): Effect.fn.Return<
+    ToolResult,
+    unknown,
+    ToolCall | Scope.Scope | FileSystem.FileSystem
+  > {
     // Local reads finish in milliseconds, so no mid-read cancellation is
     // needed — but a queued call must not start after the batch aborted.
     if (ports.signal.aborted) {
@@ -186,26 +190,32 @@ export class ReadFileTool extends defineTool({
     let emlImages: EmlImageAttachment[] = [];
     let lines: string[];
 
+    // The resolution already entered the call's workspace frame, so the
+    // absolute path it produced is what the process filesystem reads: a
+    // workspace file and one under a registered external root are the same
+    // read here, as they were through the `WorkspaceFS` facade.
+    const fs = yield* FileSystem.FileSystem;
+
     if (hasExtension(input.path, '.eml')) {
-      const stats = yield* hostPort(() =>
-        ports.inScope(() => WorkspaceFS.stat(filePath)),
-      );
-      if (stats.size > MAX_EML_BYTES) {
+      const stats = yield* fs.stat(resolved.absolute);
+      if (Number(stats.size) > MAX_EML_BYTES) {
         return yield* Effect.fail(
           new ToolError(
             `EML file exceeds maximum size of ${formatBytes(MAX_EML_BYTES)}.`,
           ),
         );
       }
-      const raw = yield* hostPort(() =>
-        ports.inScope(() => WorkspaceFS.read(filePath)),
-      );
+      const raw = yield* fs
+        .readFileString(resolved.absolute)
+        .pipe(Effect.map(normalizeLineEndings));
       const { text, images } = yield* parseEml(raw);
       lines = splitContentLines(text);
       emlImages = images;
     } else {
       lines = splitContentLines(
-        yield* hostPort(() => ports.inScope(() => WorkspaceFS.read(filePath))),
+        yield* fs
+          .readFileString(resolved.absolute)
+          .pipe(Effect.map(normalizeLineEndings)),
       );
     }
 

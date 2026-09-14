@@ -3,6 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Node imports
 import * as assert from 'node:assert';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -19,6 +20,7 @@ import type { RequestDecision, RunId } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { waitForCondition } from '@test/support/asyncTestUtils';
+import { fakePath } from '@test/support/FakePlatform';
 import {
   createFakeHost,
   installPlatform as installFakePlatform,
@@ -35,7 +37,10 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 // Local file imports
 import { autoDecideRequests, decideRequest } from '../agent/progressTestUtils';
 
-const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
+// A real directory: the edit flow reads the current content through the
+// process filesystem, so the file a case stubs has to exist where the
+// workspace says it does.
+const WORKSPACE_PATH = fakePath('workspace');
 
 // A tool edit opens its request on a run, so every case owns a freshly
 // started one; the file's default session outlives the individual tests.
@@ -77,13 +82,19 @@ async function installPlatform(
   });
 }
 
-// Spies the workspace reads a tool performs before proposing an edit and
-// returns the write spy so a test can inspect what was applied.
+// Seeds the file a tool reads before proposing an edit — on disk for the
+// edit flow's own read, and on the facade the approval step still re-reads
+// through — and returns the write spy so a test can inspect what was applied.
 function stubWorkspaceFile(
   filePath: string,
   options: { exists: boolean; content: string },
 ) {
-  if (options.exists) tracker.recordRead(path.join(WORKSPACE_PATH, filePath));
+  const absolutePath = path.join(WORKSPACE_PATH, filePath);
+  if (options.exists) {
+    mkdirSync(path.dirname(absolutePath), { recursive: true });
+    writeFileSync(absolutePath, options.content);
+    tracker.recordRead(absolutePath);
+  }
   vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(options.exists);
   vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(options.content);
   return vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);

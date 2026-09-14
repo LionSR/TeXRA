@@ -1,12 +1,11 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, FileSystem, Path } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { hostPort } from '@common/hostPort';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { ToolError } from '@shared/schemas';
@@ -15,18 +14,17 @@ import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { isDirectory, isFile } from '@utils/files/fsEntryType';
+import { readDirectoryTyped } from '@utils/files/fsDurability';
 import { toPosixPath } from '@utils/core/pathCore';
 
 const NO_ENTRIES_MESSAGE = '(no entries)';
 const DEFAULT_HIDDEN_NAMES = new Set(['.git', '.gitignore']);
 
-function formatDirEntry(name: string, type: number): string {
-  if (isDirectory(type)) return `dir  ${name}/`;
-  if (isFile(type)) return `file ${name}`;
+function formatDirEntry(name: string, type: FileSystem.File.Type): string {
+  if (type === 'Directory') return `dir  ${name}/`;
+  if (type === 'File') return `file ${name}`;
   return `other ${name}`;
 }
 
@@ -34,8 +32,11 @@ function formatDirEntry(name: string, type: number): string {
 const listExtractedEntries = Effect.fn('listExtractedEntries')(function* (
   dirFsPath: string,
   workspaceRoot: string,
-): Effect.fn.Return<string, unknown> {
-  const entries = yield* hostPort(() => AbsoluteFS.readDir(dirFsPath));
+): Effect.fn.Return<string, unknown, FileSystem.FileSystem | Path.Path> {
+  // The extraction directory is already absolute, so it is listed through the
+  // process filesystem; each entry carries its own type, a symlink reported
+  // as a symlink rather than as what it points at.
+  const entries = yield* readDirectoryTyped(dirFsPath);
   const dirRelative = toPosixPath(
     path.relative(workspaceRoot, dirFsPath) || '.',
   );
