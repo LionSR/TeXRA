@@ -109,6 +109,12 @@ export const runAgent = Effect.fn('runAgent')(function* (
   const runId = request.runId ?? generateRunId();
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session;
+  // A resume of a run this session already runs is a duplicate, refused here
+  // before any snapshot is taken: queued behind the live generation it would
+  // wake without a handle of its own and restore a prior terminal fact over
+  // the one that generation is about to write.
+  if (!shouldRegister && runSession.runs.isActiveOrResuming(runId))
+    return yield* Effect.fail(new Error(`Run is already running: ${runId}`));
   // A resumed run's prior terminal fact: what a launch that fails before its
   // lifecycle starts restores, so the run does not read as still running.
   const priorEnd = shouldRegister
