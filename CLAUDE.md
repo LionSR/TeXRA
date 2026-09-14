@@ -56,8 +56,9 @@ Things the tree won't tell you:
   shrink-only counts: `platform()`, `new AbortController(`,
   superseded package imports, `Effect.run*` boundary calls, raw catches in
   `effect`-importing files; it admits a new `Effect.run*`
-  file only under `packages/{extension,desktop,cli,agent}/src/` or
-  `src/tools/**/*Tool.ts`, R1's three boundary kinds, and ESLint's
+  file only under `packages/{extension,desktop,cli,agent}/src/` (webview
+  frontends excluded) or a named webview runtime entry in the script's
+  `BOUNDARY_RUNTIME_ENTRIES`, and ESLint's
   `no-warning-comments` fails on any `@adapter-until` marker, since the owner
   ruled there are no temporary adapters), and `pure-tier-kernel-suites` (suites a source
   scan classes as host-free but which read the host through the module under

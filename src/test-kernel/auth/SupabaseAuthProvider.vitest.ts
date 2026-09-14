@@ -24,7 +24,9 @@ const providerMocks = vi.hoisted(() => ({
       testDoubles.secrets.delete(key);
     }),
   ),
-  secretGetStored: vi.fn(async (key: string) => testDoubles.secrets.get(key)),
+  secretGetStored: vi.fn((key: string) =>
+    Effect.sync(() => testDoubles.secrets.get(key)),
+  ),
   secretListStoredKeys: vi.fn(() =>
     Effect.sync(() => [...testDoubles.secrets.keys()]),
   ),
@@ -43,7 +45,7 @@ const testDoubles = vi.hoisted(() => ({
   // The secrets port the host composition root now hands the provider at
   // construction, in place of the ambient `platform().secrets` it read.
   secretsPort: {
-    get: async (key: string) => testDoubles.secrets.get(key),
+    get: (key: string) => Effect.sync(() => testDoubles.secrets.get(key)),
     getStored: providerMocks.secretGetStored,
     set: (key: string, value: string) =>
       Effect.sync(() => {
@@ -883,7 +885,9 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
         );
         const failure = new Error('secret backend unavailable: private detail');
         if (operation === 'read') {
-          providerMocks.secretGetStored.mockRejectedValueOnce(failure);
+          providerMocks.secretGetStored.mockReturnValueOnce(
+            Effect.fail(failure) as never,
+          );
         } else {
           providerMocks.secretDelete.mockRejectedValueOnce(failure);
         }

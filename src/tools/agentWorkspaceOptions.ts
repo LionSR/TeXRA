@@ -1,9 +1,6 @@
 // Standard library imports
 import * as path from 'node:path';
 
-// Local imports - files
-import { WorkspaceFS } from '@utils/files/workspaceFS';
-
 export interface AgentWorkspaceOptions {
   workingDirectory?: string;
   additionalDirectories?: string[];
@@ -11,7 +8,8 @@ export interface AgentWorkspaceOptions {
 
 /**
  * Resolve the working directory and any extra workspace roots for external
- * agent SDKs that need access to the current project.
+ * agent SDKs that need access to the project at `workspacePath` (the calling
+ * session's `roots.workspace`, passed as data).
  *
  * When no directory is provided, the agent runs from the workspace root.
  * When a subdirectory inside the workspace is provided, we still add the
@@ -21,9 +19,9 @@ export interface AgentWorkspaceOptions {
  * additional root.
  */
 export function buildAgentWorkspaceOptions(
+  workspacePath: string | undefined,
   workingDirectoryInput?: string | null,
 ): AgentWorkspaceOptions {
-  const workspacePath = WorkspaceFS.getPath();
   const trimmed = workingDirectoryInput?.trim();
 
   if (!workspacePath) {

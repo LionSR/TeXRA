@@ -146,6 +146,7 @@ async function loadFileActions(options: {
       // only has to settle them.
       runtime: {
         runPromise: Effect.runPromise,
+        runPromiseExit: Effect.runPromiseExit,
       } as unknown as ProcessRuntime,
     },
   );

@@ -2,17 +2,16 @@ import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { execa, type Subprocess } from 'execa';
-import { MODEL_CONFIGS } from 'llm-zoo';
 import OpenAI from 'openai';
 
-import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
+import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { StorageFS } from '@utils/files/storageFS';
+import { RelativeFS } from '@utils/files/relativeFS';
 import { THREE_DAYS_MS } from '@utils/config/constants';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 import {
   BinaryResolver,
   type ResolvedBinaryCommand,
@@ -24,8 +23,18 @@ const log = createLog('AudioUtils');
 const RECORDINGS_DIR = 'recordings';
 
 /**
+ * Where this session's recordings live. The roots arrive as data from the
+ * caller that owns the session, so a recording writes under that session's
+ * storage root without the module entering (or reading) an ambient roots
+ * scope — the desktop holds one session per open paper.
+ */
+function recordingsDir(roots: WorkspaceRoots): string {
+  return path.join(roots.storage, RECORDINGS_DIR);
+}
+
+/**
  * Upper bound on how long a SIGTERM'd sox may take to flush and exit before
- * `stopRecordingAndTranscribe` gives up waiting and reads the file anyway.
+ * `stopRecording` gives up waiting and reads the file anyway.
  */
 const SOX_SHUTDOWN_TIMEOUT_MS = 5000;
 
@@ -40,8 +49,13 @@ function resetRecordingState(): void {
 }
 
 /** Resolve the sox executable command from config or auto-detection. */
-function resolveSoxCommand(): ResolvedBinaryCommand | null {
-  const configuredPath = getConfig<string>('texra.audio.soxPath');
+function resolveSoxCommand(
+  roots: WorkspaceRoots,
+): ResolvedBinaryCommand | null {
+  const configuredPath = readConfig<string>(
+    roots.config,
+    'texra.audio.soxPath',
+  );
   if (configuredPath && AbsoluteFS.existsSync(configuredPath)) {
     return BinaryResolver.resolveOptionalCommand('sox', [], {
       resolvedPath: configuredPath,
@@ -50,8 +64,8 @@ function resolveSoxCommand(): ResolvedBinaryCommand | null {
   return BinaryResolver.resolveOptionalCommand('sox');
 }
 
-/** Start recording audio from the microphone. */
-export async function startRecording(): Promise<{
+/** Start recording audio from the microphone under `roots`' storage. */
+export async function startRecording(roots: WorkspaceRoots): Promise<{
   success: boolean;
   recordingPath?: string;
   error?: string;
@@ -61,7 +75,7 @@ export async function startRecording(): Promise<{
       return { success: false, error: 'Recording already in progress' };
     }
 
-    const soxCommand = resolveSoxCommand();
+    const soxCommand = resolveSoxCommand(roots);
     if (!soxCommand) {
       return {
         success: false,
@@ -69,9 +83,9 @@ export async function startRecording(): Promise<{
       };
     }
 
-    await StorageFS.ensureDir(RECORDINGS_DIR);
-    const relativePath = path.join(RECORDINGS_DIR, `record_${Date.now()}.wav`);
-    const absPath = StorageFS.fullPath(relativePath);
+    const directory = recordingsDir(roots);
+    await AbsoluteFS.ensureDir(directory);
+    const absPath = path.join(directory, `record_${Date.now()}.wav`);
 
     const soxArgs = [
       '--default-device',
@@ -148,19 +162,23 @@ export function killActiveRecording(): void {
 }
 
 /**
- * Stop the current recording and transcribe it using OpenAI. `secrets` is the
- * process secret store the OpenAI key is read from.
+ * Stop the current recording and hand back the file it captured.
+ *
+ * This is the termination step and it waits on nothing else: sox gets
+ * SIGTERM and this module's recording state resets before the caller resolves
+ * the transcription credential, so a slow, denied or failing keychain read
+ * can never leave the microphone running. The captured file is validated
+ * here too, because "what the take captured" is the answer this step owes its
+ * caller.
  */
-export async function stopRecordingAndTranscribe(
-  secrets: PlatformSecrets,
-): Promise<{
+export async function stopRecording(): Promise<{
   success: boolean;
-  text: string;
+  recordingPath?: string;
   error?: string;
 }> {
   try {
     if (!activeRecordingProcess || !activeRecordingPath) {
-      return { success: false, text: '', error: 'No active recording to stop' };
+      return { success: false, error: 'No active recording to stop' };
     }
 
     const recordingPath = activeRecordingPath;
@@ -179,24 +197,44 @@ export async function stopRecordingAndTranscribe(
     ]);
 
     if (!AbsoluteFS.existsSync(recordingPath)) {
-      return { success: false, text: '', error: 'Recording file not found' };
+      return { success: false, error: 'Recording file not found' };
     }
 
     const stats = AbsoluteFS.statSync(recordingPath);
     if (stats.size === 0) {
-      return { success: false, text: '', error: 'Recording file is empty' };
+      return { success: false, error: 'Recording file is empty' };
     }
 
+    return { success: true, recordingPath };
+  } catch (err) {
+    const message = getSdkErrorMessage(err);
+    log.error(`Error in stopRecording: ${message}`);
+    resetRecordingState();
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Transcribe a stopped recording with OpenAI. `credential` is the OpenAI
+ * route the caller resolved: the key read is an Effect program now, and this
+ * function is a promise the host settles, so the credential arrives as data
+ * rather than as a store this function would have to read from. `roots` are
+ * the recording session's, and own the directory the finished takes are swept
+ * from. The recorder is already terminated by the time this runs — it is
+ * {@link stopRecording} that owns the microphone.
+ */
+export async function transcribeRecording(
+  recordingPath: string,
+  credential: ApiKeyRouteCredential,
+  roots: WorkspaceRoots,
+): Promise<{
+  success: boolean;
+  text: string;
+  error?: string;
+}> {
+  try {
     // The transcription endpoint is an OpenAI SDK operation the llm package
-    // does not model, so the client is built here. The direct OpenAI route is
-    // deliberate and does not follow the global OpenRouter preference the run
-    // loop applies to gpt-4o: `gpt-4o-transcribe` is an OpenAI-only endpoint
-    // model with no OpenRouter route, so a proxied client could only fail.
-    const credential = await resolveRouteCredential(
-      MODEL_CONFIGS['gpt4o'],
-      false,
-      secrets,
-    );
+    // does not model, so the client is built here.
     const client = new OpenAI({
       apiKey: credential.apiKey,
       baseURL: credential.endpoint,
@@ -207,13 +245,14 @@ export async function stopRecordingAndTranscribe(
       response_format: 'json',
     });
 
-    await StorageFS.cleanupOldFiles(RECORDINGS_DIR, THREE_DAYS_MS);
+    // `RelativeFS` passes an absolute target through untouched, so the sweep
+    // is rooted by the caller's storage root rather than by an ambient read.
+    await RelativeFS.cleanupOldFiles(recordingsDir(roots), THREE_DAYS_MS);
 
     return { success: true, text: result.text };
   } catch (err) {
     const message = getSdkErrorMessage(err);
-    log.error(`Error in stopRecordingAndTranscribe: ${message}`);
-    resetRecordingState();
+    log.error(`Error in transcribeRecording: ${message}`);
     return { success: false, text: '', error: message };
   }
 }

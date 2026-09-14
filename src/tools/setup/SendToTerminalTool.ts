@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
 import { ToolError } from '@shared/schemas';
 import {
@@ -69,13 +68,26 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
   const name = TERMINAL_NAME_PREFIX + input.label.trim();
   const timeoutMs = input.timeout ?? DEFAULT_TIMEOUT_MS;
 
-  const { exitCode, output, timedOut } = yield* hostPort(() =>
-    terminal.runCommand({
+  const { exitCode, output, timedOut } = yield* terminal
+    .runCommand({
       name,
       command,
       timeoutMs,
-    }),
-  );
+    })
+    .pipe(
+      // The host's own fault, reported as the tool's error rather than as an
+      // `unknown` the run loop has to guess at. `terminal-unavailable` means
+      // no command ran; `execution-failed` means one may have.
+      Effect.catchTag('TerminalRunFailed', (failure) =>
+        Effect.fail(
+          new ToolError(
+            failure.reason === 'terminal-unavailable'
+              ? `${failure.message} The command was not run; retry, or run it yourself in a terminal.`
+              : `${failure.message} Re-probe with \`verify_setup\` to see whether it took effect.`,
+          ),
+        ),
+      ),
+    );
 
   const exitLabel = exitCode === undefined ? 'unknown' : String(exitCode);
   const summary = timedOut

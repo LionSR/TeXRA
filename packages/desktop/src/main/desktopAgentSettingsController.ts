@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+import { Cause, Effect, FileSystem } from 'effect';
+
 import {
   type AgentEntry,
   type AgentRosterController,
@@ -9,6 +11,7 @@ import {
   type loadAgents,
   type refresh,
 } from '@agent/index';
+import { hostPort } from '@common/hostPort';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { type TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
@@ -37,7 +40,6 @@ import {
   buildCustomAgentDirMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createTexraTempDir } from '@utils/files/tempDir';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -189,12 +191,16 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       // The desktop has no editor of its own and hands the path to the OS,
       // so a packaged definition is shown through a temporary copy that the
       // external editor may save without touching the installed bundle.
+      // Both paths are outside every root, so the copy goes through the
+      // process filesystem.
       openReadOnlyDocument: async (filePath) => {
         const target = path.join(
           await createTexraTempDir('texra-agent-yaml-'),
           path.basename(filePath),
         );
-        await AbsoluteFS.copy(filePath, target, { overwrite: true });
+        await this.runtime.runPromise(
+          FileSystem.FileSystem.use((fs) => fs.copyFile(filePath, target)),
+        );
         await directory.openPath(target);
       },
       revealFile: directory.revealPath,
@@ -209,15 +215,18 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       showInfoMessage: notifications.showInfoMessage,
       showErrorMessage: notifications.showErrorMessage,
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
-      run: async (failureMessage, action) => {
-        try {
-          await action();
-        } catch (error) {
-          await notifications.showErrorMessage(
-            `${failureMessage}: ${toErrorMessage(error)}`,
-          );
-        }
-      },
+      run: (failureMessage, action) =>
+        this.runtime.runPromise(
+          hostPort(action).pipe(
+            Effect.catchCause((cause) =>
+              hostPort(() =>
+                notifications.showErrorMessage(
+                  `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
+                ),
+              ),
+            ),
+          ),
+        ),
     });
     this.handlers = {
       setAgentEnabled: (message) => this.updateAgentEnabled(message),
@@ -378,32 +387,49 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       return;
     }
 
-    try {
-      const customDir = await this.directory.getCustomAgentDirectory();
-      await AbsoluteFS.ensureDir(customDir);
+    // The custom agent directory is the user's choice, outside every root,
+    // so it is created through the process filesystem.
+    await this.runtime.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const customDir = yield* hostPort(() =>
+          this.directory.getCustomAgentDirectory(),
+        );
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.makeDirectory(customDir, { recursive: true });
 
-      const plan = this.directoryController.planTemplateAgent({
-        category: data.category,
-        name,
-        customDir,
-      });
+        const plan = this.directoryController.planTemplateAgent({
+          category: data.category,
+          name,
+          customDir,
+        });
 
-      const written = await writeTemplateAgentFile(plan, this.resourcesPath);
-      if (!written.ok) {
-        await this.notifications.showErrorMessage(written.message);
-        return;
-      }
+        const written = yield* hostPort(() =>
+          writeTemplateAgentFile(plan, this.resourcesPath),
+        );
+        if (!written.ok) {
+          yield* hostPort(() =>
+            this.notifications.showErrorMessage(written.message),
+          );
+          return;
+        }
 
-      await this.directory.openPath(plan.filePath);
-      await this.notifications.showInfoMessage(
-        `Created custom agent: ${plan.fileName}`,
-      );
-      await this.refreshAfterAgentMutation();
-    } catch (error) {
-      await this.notifications.showErrorMessage(
-        `Failed to create custom agent: ${toErrorMessage(error)}`,
-      );
-    }
+        yield* hostPort(() => this.directory.openPath(plan.filePath));
+        yield* hostPort(() =>
+          this.notifications.showInfoMessage(
+            `Created custom agent: ${plan.fileName}`,
+          ),
+        );
+        yield* hostPort(() => this.refreshAfterAgentMutation());
+      }).pipe(
+        Effect.catchCause((cause) =>
+          hostPort(() =>
+            this.notifications.showErrorMessage(
+              `Failed to create custom agent: ${toErrorMessage(Cause.squash(cause))}`,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /**
@@ -414,24 +440,35 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private async viewRemoteAgentPrompt(
     data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT>,
   ): Promise<void> {
-    try {
-      const result = await getRemoteAgentPromptConfig(data.agentName);
-      if (!result.ok) {
-        await this.notifications.showErrorMessage(result.message);
-        return;
-      }
+    await this.runtime.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const result = yield* hostPort(() =>
+          getRemoteAgentPromptConfig(data.agentName),
+        );
+        if (!result.ok) {
+          yield* hostPort(() =>
+            this.notifications.showErrorMessage(result.message),
+          );
+          return;
+        }
 
-      const target = path.join(
-        await createTexraTempDir('texra-agent-prompt-'),
-        `${data.agentName}.yaml`,
-      );
-      await AbsoluteFS.write(target, result.config);
-      await this.directory.openPath(target);
-    } catch (error) {
-      await this.notifications.showErrorMessage(
-        `Failed to view remote agent prompt: ${toErrorMessage(error)}`,
-      );
-    }
+        const target = path.join(
+          yield* hostPort(() => createTexraTempDir('texra-agent-prompt-')),
+          `${data.agentName}.yaml`,
+        );
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.writeFileString(target, result.config);
+        yield* hostPort(() => this.directory.openPath(target));
+      }).pipe(
+        Effect.catchCause((cause) =>
+          hostPort(() =>
+            this.notifications.showErrorMessage(
+              `Failed to view remote agent prompt: ${toErrorMessage(Cause.squash(cause))}`,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   private async applyAgentModePreset(

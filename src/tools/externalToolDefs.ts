@@ -12,10 +12,13 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
+import {
+  causeChain,
+  isModuleNotFoundError,
+} from '@common/errors/errorPredicates';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
 import type { ToolCategory } from '@shared/schemas';
@@ -68,6 +71,35 @@ import { getProcessSettingHost } from '@utils/config/platformSettings';
 export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '^22.19.0 || >=24.0.0';
 
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
+
+/**
+ * Why an availability probe in this module could not answer.
+ *
+ * Read off what the probed surfaces raise: a dynamic `import()` of a CLI's
+ * SDK (the package is absent, or it failed for another reason), the native
+ * binary lookup that follows it, and the localhost request the Zotero probe
+ * makes (refused, or still unanswered at {@link ZOTERO_PROBE_TIMEOUT_MS}).
+ * A tool that is simply not installed is not a failure — it is `check`
+ * answering `false`.
+ */
+type ToolProbeFailureReason =
+  | 'module-not-found'
+  | 'sdk-import-failed'
+  | 'binary-lookup-failed'
+  | 'probe-request-failed'
+  | 'probe-timed-out';
+
+/**
+ * The one failure of this module's probes. `reason` is what a caller reads:
+ * the dashboard's "install this package" line is owed to `module-not-found`
+ * specifically, which is why that used to be reconstructed from the error's
+ * text and is now the probe's own classification.
+ */
+class ToolProbeFailed extends Data.TaggedError('ToolProbeFailed')<{
+  readonly reason: ToolProbeFailureReason;
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 // ============================================================
 // Type
@@ -128,13 +160,44 @@ export interface ExternalToolDef {
 function fetchLocalhost(
   url: string,
   timeoutMs = ZOTERO_PROBE_TIMEOUT_MS,
-): Effect.Effect<Pick<Response, 'ok' | 'status'>, unknown> {
-  return Effect.acquireUseRelease(
-    hostPort(() => fetch(url, { signal: AbortSignal.timeout(timeoutMs) })),
-    (response) => Effect.succeed({ ok: response.ok, status: response.status }),
-    // The probe never reads the body; releasing it frees the socket, and a
-    // cancel that itself fails says nothing about availability.
-    (response) => Effect.ignore(hostPort(() => response.body?.cancel())),
+): Effect.Effect<Pick<Response, 'ok' | 'status'>, ToolProbeFailed> {
+  // The deadline sits on the request itself, which stays interruptible. A
+  // bracket would not do: its acquire phase is uninterruptible, so a timeout
+  // around one cannot cut a connection that never returns headers — exactly
+  // the case this deadline exists for. The fiber's signal is the request's,
+  // so both the deadline and a caller interrupting the probe abort the socket
+  // rather than abandon it.
+  return Effect.tryPromise({
+    try: (signal) => fetch(url, { signal }),
+    catch: (cause) =>
+      new ToolProbeFailed({
+        reason: 'probe-request-failed',
+        message: `Probe request to ${url} failed: ${toErrorMessage(cause)}`,
+        cause,
+      }),
+  }).pipe(
+    Effect.timeout(timeoutMs),
+    Effect.catchTag('TimeoutError', () =>
+      Effect.fail(
+        new ToolProbeFailed({
+          reason: 'probe-timed-out',
+          message: `Probe request to ${url} did not answer within ${timeoutMs}ms.`,
+        }),
+      ),
+    ),
+    // Status is read off the response before anything can suspend; cancelling
+    // the body then frees the socket, since the probe never reads it, and a
+    // cancel that itself fails says nothing about availability. An interrupt
+    // arriving instead of this step aborts the request's signal, which tears
+    // the same socket down.
+    Effect.flatMap((response) =>
+      Effect.ignore(
+        Effect.tryPromise({
+          try: () => response.body?.cancel() ?? Promise.resolve(),
+          catch: (cause) => cause,
+        }),
+      ).pipe(Effect.as({ ok: response.ok, status: response.status })),
+    ),
   );
 }
 
@@ -163,7 +226,12 @@ const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
   function* () {
     const secrets = yield* Secrets;
     const tokenPresent = (yield* getGitHubToken(secrets)) !== undefined;
-    const inGitRepo = yield* hostPort(isGitRepository);
+    // The probe reports "not a repository" as `false` and never rejects; the
+    // fiber's signal reaches its `git` spawn, so an interrupted dashboard
+    // refresh kills the process instead of abandoning it.
+    const inGitRepo = yield* Effect.promise((signal) =>
+      isGitRepository(undefined, signal),
+    );
     return { tokenPresent, inGitRepo };
   },
 );
@@ -205,13 +273,41 @@ function leanReady(prerequisites: Lean4Prerequisites): boolean {
     : prerequisites.lakeAvailable;
 }
 
-/** True when an SDK import failure means the package simply isn't installed. */
-function isMissingPackageError(message: string): boolean {
-  return (
-    message.includes('not found') ||
-    message.includes('MODULE_NOT_FOUND') ||
-    message.includes('Cannot find package')
-  );
+/**
+ * Import a CLI's SDK as a classified probe. The importers re-raise a missing
+ * package as their own install-guidance error with the original attached as
+ * `cause`, so "the package isn't installed" is read off the cause chain's
+ * error code rather than off the message text.
+ */
+function importProbedSdk(
+  importSdk: () => Promise<unknown>,
+): Effect.Effect<unknown, ToolProbeFailed> {
+  return Effect.tryPromise({
+    try: importSdk,
+    catch: (cause) =>
+      new ToolProbeFailed({
+        reason: causeChain(cause).some(isModuleNotFoundError)
+          ? 'module-not-found'
+          : 'sdk-import-failed',
+        message: toErrorMessage(cause),
+        cause,
+      }),
+  });
+}
+
+/** Resolve a CLI's native binary as a classified probe. */
+function findProbedBinary(
+  findBinary: () => Promise<string | undefined>,
+): Effect.Effect<string | undefined, ToolProbeFailed> {
+  return Effect.tryPromise({
+    try: findBinary,
+    catch: (cause) =>
+      new ToolProbeFailed({
+        reason: 'binary-lookup-failed',
+        message: toErrorMessage(cause),
+        cause,
+      }),
+  });
 }
 
 /** Appended to install hints when running under WSL, where side matters. */
@@ -229,8 +325,8 @@ function probeSdkBinaryAvailable(
   findBinary: () => Promise<string | undefined>,
 ): Effect.Effect<boolean> {
   return Effect.gen(function* () {
-    yield* hostPort(importSdk);
-    return (yield* hostPort(findBinary)) != null;
+    yield* importProbedSdk(importSdk);
+    return (yield* findProbedBinary(findBinary)) != null;
   }).pipe(Effect.catch(() => Effect.succeed(false)));
 }
 
@@ -252,28 +348,29 @@ function probeSdkBinaryStatus(config: {
   importFailedLabel: string;
   binaryNotFoundMessage: string;
   classifyImportError?: (msg: string) => string | undefined;
-}): Effect.Effect<SdkBinaryStatus, unknown> {
+}): Effect.Effect<SdkBinaryStatus, ToolProbeFailed> {
   return Effect.gen(function* () {
     // Only the import is classified into a message; a binary-resolution
     // failure stays on the error channel, as it did when it threw past the
     // import's try/catch.
-    const importFailure = yield* hostPort(config.importSdk).pipe(
+    const importFailure = yield* importProbedSdk(config.importSdk).pipe(
       Effect.as(undefined),
-      Effect.catch((err: unknown) => {
-        const msg = toErrorMessage(err);
-        if (isMissingPackageError(msg)) {
+      Effect.catchTag('ToolProbeFailed', (failure) => {
+        if (failure.reason === 'module-not-found') {
           return Effect.succeed(config.missingPackageMessage);
         }
-        const classified = config.classifyImportError?.(msg);
+        const classified = config.classifyImportError?.(failure.message);
         if (classified != null) return Effect.succeed(classified);
-        return Effect.succeed(`${config.importFailedLabel}: ${msg}`);
+        return Effect.succeed(
+          `${config.importFailedLabel}: ${failure.message}`,
+        );
       }),
     );
     if (importFailure !== undefined) {
       return { ok: false as const, message: importFailure };
     }
 
-    const binaryPath = yield* hostPort(config.findBinary);
+    const binaryPath = yield* findProbedBinary(config.findBinary);
     if (!binaryPath) {
       return {
         ok: false as const,
@@ -365,7 +462,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     installUrl: 'https://app.uio.no/ifi/texcount/',
     configNotes: 'Part of most TeX Live distributions.',
     hideFromDashboard: true, // Shown in LaTeX settings tab instead
-    check: () => hostPort(() => checkToolInstalled('texcount', false)),
+    // The fiber's signal reaches the spawned `texcount --version`, so an
+    // interrupted dashboard refresh kills the probe instead of abandoning it.
+    check: () =>
+      Effect.promise((signal) => checkToolInstalled('texcount', false, signal)),
   },
   {
     id: 'wolfram',
@@ -385,7 +485,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'it automatically. Free licenses are available for development use.',
     installUrl: 'https://www.wolfram.com/engine/',
     configNotes: 'Requires the free Wolfram Engine (provides wolframscript).',
-    check: () => hostPort(() => checkToolInstalled('wolframscript', false)),
+    check: () =>
+      Effect.promise((signal) =>
+        checkToolInstalled('wolframscript', false, signal),
+      ),
   },
   {
     id: 'zotero',

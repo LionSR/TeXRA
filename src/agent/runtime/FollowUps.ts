@@ -17,7 +17,14 @@
  * A native child loop owns continuation across all of its turns; its inner
  * one-cycle loop reads that owner's queue without becoming a second consumer.
  */
-import { Cause, Context, Effect, Layer, SynchronizedRef } from 'effect';
+import {
+  Cause,
+  Context,
+  Effect,
+  type FileSystem,
+  Layer,
+  SynchronizedRef,
+} from 'effect';
 
 import {
   followUpDisplay,
@@ -77,7 +84,7 @@ export class FollowUps extends Context.Service<
     readonly consume: (
       state: RunState,
       batch: FollowUpBatch,
-    ) => Effect.Effect<ConsumedFollowUps, Error>;
+    ) => Effect.Effect<ConsumedFollowUps, Error, FileSystem.FileSystem>;
   }
 >()('@texra/agent/FollowUps') {}
 
@@ -117,7 +124,8 @@ export const followUpsLayer: Layer.Layer<
       followUps: readonly QueuedFollowUp[],
     ): Effect.fn.Return<
       { message: Message; kinds: readonly MediaAttachmentKind[] },
-      Error
+      Error,
+      FileSystem.FileSystem
     > {
       const bound = yield* SynchronizedRef.get(run.model);
       const parts: InputPart[] = [];
@@ -159,7 +167,7 @@ export const followUpsLayer: Layer.Layer<
     const consume = Effect.fn('FollowUps.consume')(function* (
       state: RunState,
       batch: FollowUpBatch,
-    ): Effect.fn.Return<ConsumedFollowUps, Error> {
+    ): Effect.fn.Return<ConsumedFollowUps, Error, FileSystem.FileSystem> {
       const followUps = batch.synthetic ? [] : batch.followUps;
       const built = yield* Effect.exit(
         batch.synthetic

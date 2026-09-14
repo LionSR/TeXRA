@@ -526,7 +526,7 @@ export class SessionHandle {
    * claim, read from SQLite rather than from the fold, which lags it by a
    * drain. The one ownership question a caller outside this class asks.
    */
-  ownsRun(runId: RunId): Effect.Effect<boolean> {
+  ownsRun(runId: RunId): Effect.Effect<boolean, DatabaseReadFailed> {
     return this.graph.ownsRun(runId);
   }
 

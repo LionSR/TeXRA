@@ -21,7 +21,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { hostPort } from '@common/hostPort';
 import { Secrets } from '@platform/secrets';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -372,13 +371,17 @@ function execList(runId: RunId): ToolResult {
 const gitInDir = (
   args: string[],
   cwd: string,
-): Effect.Effect<string, unknown> =>
+): Effect.Effect<string, ToolError> =>
   Effect.flatMap(
-    hostPort(() =>
+    // `executeCommand` never rejects — a failed `git` is a result with
+    // `success: false`, which the flatMap below turns into the tool's own
+    // error. Taking the fiber's signal makes the spawn interruptible.
+    Effect.promise((signal) =>
       executeCommand(['git', ...args], {
         cwd,
         timeout: 10_000,
         channel: 'github_subscription',
+        signal,
       }),
     ),
     (result) =>

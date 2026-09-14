@@ -40,7 +40,7 @@ vi.mock('@agent/index', async (importOriginal) => ({
 
 vi.mock('@cli/runtime/agentRoster', () => ({
   formatCliAgentRoster: () => 'Agent roster',
-  readCliAgentRoster: Effect.promise(() => mocks.readCliAgentRoster()),
+  readCliAgentRoster: () => Effect.promise(() => mocks.readCliAgentRoster()),
 }));
 
 vi.mock('@cli/runtime/cliConfig', async (importOriginal) => ({
@@ -56,7 +56,12 @@ describe('CLI config command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.initLocalCliPlatform.mockResolvedValue({ runtime: effectRuntime() });
+    // The roster controller and the roster read are mocked above, so the
+    // roots only have to be present.
+    mocks.initLocalCliPlatform.mockResolvedValue({
+      runtime: effectRuntime(),
+      roots: {},
+    });
     mocks.getVisibleAgents.mockReturnValue([
       {
         category: 'toolUse',

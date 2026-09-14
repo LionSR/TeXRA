@@ -2,7 +2,6 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import {
   CORE_LATEX_TOOLS,
   IMAGE_TOOLS,
@@ -37,8 +36,15 @@ const IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(IMAGE_TOOLS);
  */
 export const locateTool = Effect.fn('locateTool')(function* (
   name: string,
-): Effect.fn.Return<ToolStatus, unknown> {
-  const knownInstalled = yield* hostPort(() => checkToolInstalled(name, false));
+): Effect.fn.Return<ToolStatus> {
+  // With `showError` false the probe reports a missing tool as `false` and
+  // has no rejection path of its own, so the read carries no error channel.
+  // The fiber's signal reaches the spawned `<tool> --version`, so interrupting
+  // a probe kills the processes — several at once, since the core tools are
+  // probed concurrently — instead of leaving them to run out their timeout.
+  const knownInstalled = yield* Effect.promise((signal) =>
+    checkToolInstalled(name, false, signal),
+  );
   const resolvedPath = BinaryResolver.findPath(name);
   return {
     name,

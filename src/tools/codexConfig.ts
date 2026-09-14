@@ -1,5 +1,6 @@
 // Local imports - agent config
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { StateStore } from '@platform/interfaces';
 import type { CodexReasoningEffort } from '@shared/schemas';
 import {
   CODEX_APPROVAL_POLICY_DEFAULT,
@@ -56,9 +57,13 @@ export function toCodexCliReasoningEffort(
 }
 
 export function getCodexCliReasoningEffort(
+  workspaceState: StateStore,
   supportsXhigh = false,
 ): CodexCliReasoningEffort {
-  return toCodexCliReasoningEffort(getCodexReasoningEffort(), supportsXhigh);
+  return toCodexCliReasoningEffort(
+    getCodexReasoningEffort(workspaceState),
+    supportsXhigh,
+  );
 }
 
 // ============================================================================
@@ -68,7 +73,9 @@ export function getCodexCliReasoningEffort(
 // The schema in `@shared` is the single source of truth for the persisted
 // values; the SDK-typed return annotation is what keeps those values aligned
 // with the Codex union — a schema value the SDK doesn't accept fails here.
-export const getCodexApprovalPolicy: () => ApprovalMode = createEnumStateGetter(
+export const getCodexApprovalPolicy: (
+  workspaceState: StateStore,
+) => ApprovalMode = createEnumStateGetter(
   WorkspaceStateKey.CODEX_APPROVAL_POLICY,
   CODEX_APPROVAL_POLICY_DEFAULT,
   parseCodexApprovalPolicy,
@@ -80,11 +87,12 @@ export const getCodexApprovalPolicy: () => ApprovalMode = createEnumStateGetter(
 
 // As above: the SDK-typed return annotation is the alignment guard between the
 // persisted schema values and the Codex sandbox union.
-export const getCodexSandboxMode: () => SandboxMode = createEnumStateGetter(
-  WorkspaceStateKey.CODEX_SANDBOX_MODE,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  parseCodexSandboxMode,
-);
+export const getCodexSandboxMode: (workspaceState: StateStore) => SandboxMode =
+  createEnumStateGetter(
+    WorkspaceStateKey.CODEX_SANDBOX_MODE,
+    CODEX_SANDBOX_MODE_DEFAULT,
+    parseCodexSandboxMode,
+  );
 
 /**
  * Build synthetic run metadata for Codex child runs.

@@ -20,7 +20,10 @@ import {
   readCliAgentRoster,
 } from '../runtime/agentRoster';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initLocalCliPlatform } from '../runtime/initPlatform';
+import {
+  initLocalCliPlatform,
+  type CliPlatformServices,
+} from '../runtime/initPlatform';
 import { writeErrorStderr } from '../runtime/logSinks';
 
 import { setWorkspaceCliChatAgent } from '../runtime/cliConfig';
@@ -56,9 +59,27 @@ async function runAgentRosterTeamAction(
   }
 }
 
+/**
+ * The process roots this command's init installed. Absent only when another
+ * root installed the platform first, which leaves no workspace to configure.
+ */
+function installedRoots(
+  services: CliPlatformServices,
+): NonNullable<CliPlatformServices['roots']> {
+  if (!services.roots) {
+    throw new Error(
+      'texra config needs the workspace roots its platform init installs.',
+    );
+  }
+  return services.roots;
+}
+
 async function showConfig(context: CliContext): Promise<number> {
-  const { runtime } = await initLocalCliPlatform(context);
-  const agents = await runtime.runPromise(readCliAgentRoster);
+  const services = await initLocalCliPlatform(context);
+  const { runtime } = services;
+  const agents = await runtime.runPromise(
+    readCliAgentRoster(installedRoots(services)),
+  );
   const stores = platformSettingsStores();
   const settings = Object.fromEntries(
     CLI_STATE_SETTINGS.map((entry) => [
@@ -95,11 +116,13 @@ async function configureAgentRoster(
     readonly clearDefaultAgent: boolean;
   },
 ): Promise<number> {
-  const { runtime } = await initLocalCliPlatform(context);
+  const services = await initLocalCliPlatform(context);
+  const { runtime } = services;
+  const roots = installedRoots(services);
   // The controller below resolves agent keys, so the registry must be loaded
   // first; the honest roster read happens once, later, where it is emitted.
   await runtime.runPromise(loadAgents({ includeRemote: false }));
-  const roster = createWorkspaceAgentRosterController();
+  const roster = createWorkspaceAgentRosterController(roots);
   const customRequested =
     input.workflow !== undefined || input.toolUse !== undefined;
   const workspaceChoices = [
@@ -169,7 +192,7 @@ async function configureAgentRoster(
     await runtime.runPromise(setWorkspaceCliChatAgent(context.cwd, undefined));
   }
 
-  const record = await runtime.runPromise(readCliAgentRoster);
+  const record = await runtime.runPromise(readCliAgentRoster(roots));
   emitCliResult(context, {
     json: record,
     ndjson: { kind: 'agent-roster', roster: record },

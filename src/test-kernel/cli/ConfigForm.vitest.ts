@@ -447,7 +447,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
       await submitGitHubToken(rendered.stdin, rendered.stdout);
       await waitFor(() => rendered.stdout.output.includes('Token set'));
       await expect(
-        formSecrets.getStored(GITHUB_TOKEN_STORAGE_KEY),
+        Effect.runPromise(formSecrets.getStored(GITHUB_TOKEN_STORAGE_KEY)),
       ).resolves.toBe('ghp_private-test-token');
       expect(rendered.stdout.output).not.toContain('ghp_private-test-token');
     } finally {
