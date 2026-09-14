@@ -46,6 +46,7 @@ import {
 import {
   annotateDelegationAvailability,
   availableModelNamesFromOptions,
+  readDelegationAnnotationState,
 } from '@tools/delegation/delegationAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ToolInjections } from './toolInjection';
@@ -75,9 +76,12 @@ interface ResolveAgentToolsInput {
    */
   stores: ModelOptionStores;
   /**
-   * The run's session frame. Handed to the availability read rather than
-   * wrapped around this call: the read is an Effect, so a wrapper would enter
-   * the frame around building the program instead of around running it.
+   * The run's session frame, applied around every frame-sensitive read this
+   * resolver makes: the model availability read, and the delegation
+   * annotation's scope and worktree reads. It is handed in rather than
+   * wrapped around the call because this resolver is an Effect, so a wrapper
+   * would enter the frame around building the program instead of around
+   * running it.
    */
   inScope?: ModelAvailabilityScope;
 }
@@ -103,8 +107,13 @@ function availableDelegationModelNamesForTools(
     Effect.map((inputs) =>
       availableModelNamesFromOptions(modelOptionsFrom(inputs)),
     ),
-    // Couldn't load model options — skip the delegation annotation rather than
-    // fail the run, but log so the missing "Available models:" line is traceable.
+    // A failed read (an unreadable store, a host call that rejected) degrades:
+    // skip the delegation annotation rather than fail the run, and log so the
+    // missing "Available models:" line is traceable. `Effect.catch` recovers
+    // typed failures only, which is the whole distinction — the pure finisher's
+    // "provider key status was never read" invariant is a programming error, so
+    // it surfaces as a defect and fails the run rather than being logged as a
+    // degraded annotation.
     Effect.catch((error) =>
       Effect.sync(() => {
         log.warn(
@@ -192,7 +201,15 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     stores,
     inScope,
   );
+  // The annotation's two frame-sensitive reads — the run's pinned delegation
+  // scope and this session's worktree opt-in — resolve inside the caller's
+  // frame and travel into the mapping as data. This fiber is outside the run's
+  // session frame, so reading them from the mapping would lose the pinned
+  // scope and read the process's roots instead of the session's.
+  const annotationState = inScope
+    ? inScope(readDelegationAnnotationState)
+    : readDelegationAnnotationState();
   return resolved.map((tool) =>
-    annotateDelegationAvailability(tool, availableModelNames),
+    annotateDelegationAvailability(tool, availableModelNames, annotationState),
   );
 });

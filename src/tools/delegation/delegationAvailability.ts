@@ -148,8 +148,11 @@ export function formatAgentList(
  * registry, so an empty result means the user genuinely has no visible agents
  * in this category — not a not-yet-loaded cache.
  */
-function visibleDelegationAgentsBlock(category: AgentCategory): string {
-  const agents = getDelegationAgents(category);
+function visibleDelegationAgentsBlock(
+  category: AgentCategory,
+  scope: AgentDelegationScope | undefined,
+): string {
+  const agents = getDelegationAgents(category, scope);
   if (agents.length === 0) return NO_AGENTS_LINE;
   return `Available agents:\n${formatAgentList(agents)}`;
 }
@@ -159,6 +162,34 @@ function activeDelegationScope(): AgentDelegationScope | undefined {
   return context?.kind === 'launch'
     ? (context.runScope.delegationAgentScope ?? undefined)
     : undefined;
+}
+
+/**
+ * The two annotation facts that depend on where the reader is standing: the
+ * run's pinned delegation scope (ambient, from the run context) and the
+ * worktree opt-in (read from the calling session's workspace state). Resolved
+ * as data so the annotation itself is pure over them.
+ */
+export interface DelegationAnnotationState {
+  /** The run's pinned delegation scope, or undefined for the durable roster. */
+  readonly delegationScope: AgentDelegationScope | undefined;
+  /** This session's `texra.git.worktreeSupport` opt-in. */
+  readonly worktreeEnabled: boolean;
+}
+
+/**
+ * Read those two facts here and now. The caller resolves them inside the run's
+ * session frame and hands the result to {@link annotateDelegationAvailability}:
+ * annotation is reached from an Effect program, and a fiber runs outside the
+ * frame its caller entered, so reading them from the annotation itself would
+ * lose the pinned scope and resolve the worktree switch against the process's
+ * roots rather than the session's.
+ */
+export function readDelegationAnnotationState(): DelegationAnnotationState {
+  return {
+    delegationScope: activeDelegationScope(),
+    worktreeEnabled: isWorktreeSupportEnabled(),
+  };
 }
 
 /**
@@ -309,6 +340,10 @@ const WORKTREE_DISABLED_LINE =
  * are independent (one keys off the tool name, the other off the whole list),
  * not causally linked.
  *
+ * The roster scope and the worktree switch arrive as `state` rather than being
+ * read here — see {@link readDelegationAnnotationState} for why the caller
+ * resolves them — so everything below is pure over its arguments.
+ *
  * The roster block is appended when its anchor is missing; the worktree line is
  * replace-only, because a tool without that line (e.g. delegate_workflow, which
  * has no `working_directory`) takes no working directory and must never be told
@@ -319,6 +354,7 @@ const WORKTREE_DISABLED_LINE =
 export function annotateDelegationAvailability(
   tool: ToolDefinition,
   availableModelNames: readonly string[] | null | undefined,
+  state: DelegationAnnotationState,
 ): ToolDefinition {
   const category = tool.availabilityCategory;
   if (!category) return tool;
@@ -338,16 +374,14 @@ export function annotateDelegationAvailability(
   const withAgents = replaceDelegationDescriptionBlock(
     withModels,
     AVAILABLE_AGENTS_BLOCK,
-    () => visibleDelegationAgentsBlock(category),
+    () => visibleDelegationAgentsBlock(category, state.delegationScope),
     { appendIfMissing: true },
   );
   return replaceDelegationDescriptionBlock(
     withAgents,
     WORKTREE_LINE,
     () =>
-      isWorktreeSupportEnabled()
-        ? WORKTREE_ENABLED_LINE
-        : WORKTREE_DISABLED_LINE,
+      state.worktreeEnabled ? WORKTREE_ENABLED_LINE : WORKTREE_DISABLED_LINE,
     { appendIfMissing: false },
   );
 }
