@@ -23,7 +23,7 @@ import {
 } from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { FakeSecrets } from '@test/support/FakePlatform';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import {
   hostStores,
   installPlatform,
@@ -31,6 +31,21 @@ import {
 } from '@test/support/setupPlatform';
 
 const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
+
+/**
+ * Global state that counts the Copilot-preference reads, the one live state
+ * read the route ladder makes per model.
+ */
+class CountingStateStore extends FakeStateStore {
+  copilotPreferenceReads = 0;
+
+  override get<T>(key: string, defaultValue?: T): T {
+    if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
+      this.copilotPreferenceReads += 1;
+    }
+    return super.get(key, defaultValue);
+  }
+}
 
 /** A persisted selection with exactly `models` enabled. */
 function onlyEnabled(models: readonly string[]) {
@@ -216,28 +231,39 @@ describe('computeModelOptionsData availability', () => {
     warn.mockRestore();
   });
 
-  it('reads no provider key for a model the route ladder settles without one', async () => {
+  it('reads no provider key for a model the route ladder settles without one, and routes each model once', async () => {
     // The key statuses are read once per provider the ladder actually
     // consults, so a row settled before the key step (retired, here) never
-    // turns into an Anthropic read — and never into its warning.
+    // turns into an Anthropic read — and never into its warning. Each row is
+    // also routed exactly once: the Copilot preference is a live state read
+    // inside the ladder, and the verdict finishes the decision it produced
+    // instead of running the ladder again over inputs that may have moved.
     const secrets = new FakeSecrets();
     vi.spyOn(secrets, 'get').mockRejectedValue(new Error('unreadable store'));
-    await installPlatform(
-      {
-        globalState: {
-          [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),
-        },
-      },
-      { secrets },
-    );
+    const globalState = new CountingStateStore({
+      [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),
+    });
+    await installPlatform({}, { secrets, globalState });
     invalidateApiKeyCache();
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
-    const [model] = await computeModelOptionsData(hostStores(), ['haiku3']);
+    const rows = await computeModelOptionsData(hostStores(), [
+      'haiku3',
+      'haiku35',
+    ]);
 
-    expect(model.availability).toBe('retired');
+    expect(rows.map((row) => row.availability)).toEqual(['retired', 'retired']);
     // Only the two routing keys every call resolves up front.
     expect(warn).toHaveBeenCalledTimes(2);
+
+    // Two models that do reach the Copilot branch: one preference read each.
+    const keyed = await computeModelOptionsData(hostStores(), [
+      'gpt55',
+      'gpt56',
+    ]);
+
+    expect(keyed).toHaveLength(2);
+    expect(globalState.copilotPreferenceReads).toBe(2);
     warn.mockRestore();
   });
 

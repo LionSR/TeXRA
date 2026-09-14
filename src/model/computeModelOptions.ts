@@ -192,8 +192,8 @@ function withAvailabilityFields(
  * Which providers have a usable API key, as plain data — the only provider-key
  * fact the per-model pass reads. Stage 0 fills the two routing providers
  * (`openRouter`, `kimiCode`); stage 2 fills the providers the route ladder
- * said it would consult. A provider absent from the map was never consulted,
- * and is never read on a model's behalf afterwards.
+ * said it would consult. A provider absent from the map was never read, which
+ * the verdict treats as a defect rather than as an absent key.
  */
 type ProviderKeyStatuses = Partial<Record<ApiProvider, boolean>>;
 
@@ -233,6 +233,29 @@ interface ProviderKeyGate {
   needsProviderKey: ApiProvider;
 }
 
+/** The ladder's answer for one model: a verdict, or the provider still to consult. */
+type ModelRoute = ModelAvailabilityStatus | ProviderKeyGate;
+
+/**
+ * What stage 1 decided for one model, and the only thing stage 3 reads about
+ * it. Both configs are kept because the row needs both: the route and the
+ * option are built from the effective config, while the route label asks the
+ * registry config whether the model is Kimi-subscription eligible.
+ */
+interface RoutedModel {
+  /** The registry config as published. */
+  readonly rawConfig: ModelConfig;
+  /** The config the model routes and runs with (Kimi Code synthesis applied). */
+  readonly config: ModelConfig;
+  readonly route: ModelRoute;
+}
+
+/**
+ * Stage 1's decisions, keyed by model. A visible model absent from the map is
+ * one the registry does not describe; nothing else is missing from it.
+ */
+type RoutedModels = ReadonlyMap<string, RoutedModel>;
+
 /**
  * Stage 1 — the route ladder, pure and free of any key status. Every branch
  * that can decide availability from the stage-0 facts answers with its kind;
@@ -244,7 +267,7 @@ function resolveModelRoute(
   model: string,
   config: ModelConfig,
   ctx: ModelRouteContext,
-): ModelAvailabilityStatus | ProviderKeyGate {
+): ModelRoute {
   if (config.retired) {
     return availabilityStatus('retired');
   }
@@ -322,19 +345,28 @@ function resolveModelRoute(
 }
 
 /**
- * Stage 3 — the per-model verdict, pure: the ladder's own answer, or the one
- * the consulted provider's key status decides.
+ * Stage 3 — the per-model verdict, pure: stage 1's own answer, or the one the
+ * consulted provider's key status decides.
+ *
+ * A provider the map has no entry for was never read, which is a different
+ * fact from "read, and no key is set". Reporting it as `missing-key` would
+ * tell a user with a working key that they have none, so it throws: the only
+ * way to reach it is a stage-1 decision the stage-2 batch did not see.
  */
 function resolveModelAvailability(
   model: string,
-  config: ModelConfig,
-  ctx: ModelAvailabilityContext,
+  route: ModelRoute,
+  keyStatuses: ProviderKeyStatuses,
 ): ModelAvailabilityStatus {
-  const route = resolveModelRoute(model, config, ctx);
   if (!('needsProviderKey' in route)) return route;
-  return availabilityStatus(
-    ctx.keyStatuses[route.needsProviderKey] ? 'provider-key' : 'missing-key',
-  );
+  const provider = route.needsProviderKey;
+  const usable = keyStatuses[provider];
+  if (usable === undefined) {
+    throw new Error(
+      `Model "${model}" routes to the "${provider}" API key, but that provider's key status was never read. A route decision reached the verdict without passing through the batch read.`,
+    );
+  }
+  return availabilityStatus(usable ? 'provider-key' : 'missing-key');
 }
 
 /**
@@ -397,25 +429,45 @@ async function buildAvailabilityContext(
 }
 
 /**
- * Stages 1 and 2 — run the pure ladder over `models` to learn which providers
- * they would consult, then read those key statuses in one batch. A provider
- * stage 0 already resolved is not read again, so no model is charged a second
- * read (or a second warning) for it.
+ * Stage 1 — route every model once, and keep the decision. Each of the
+ * ladder's live inputs (the runtime registry, the Copilot preference in global
+ * state, the stage-0 facts) is therefore read once per computation: stage 3
+ * finishes these decisions rather than re-running the ladder over inputs that
+ * may have moved while the key read was in flight.
+ */
+function routeModels(
+  models: readonly string[],
+  ctx: ModelRouteContext,
+): RoutedModels {
+  const routed = new Map<string, RoutedModel>();
+  for (const model of models) {
+    if (routed.has(model)) continue;
+    const rawConfig = getRuntimeModelConfig(model);
+    if (!rawConfig) continue;
+    // Mirror modelRoutes: a dual-backend Kimi model routed to the coding
+    // endpoint runs with the synthesized runtime config, so the row reflects it.
+    const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
+    routed.set(model, {
+      rawConfig,
+      config,
+      route: resolveModelRoute(model, config, ctx),
+    });
+  }
+  return routed;
+}
+
+/**
+ * Stage 2 — read one key status for each distinct provider stage 1 said it
+ * would consult, in one batch. A provider stage 0 already resolved is not read
+ * again, so no model is charged a second read (or a second warning) for it.
  */
 async function withConsultedKeyStatuses(
   secrets: PlatformSecrets,
-  models: readonly string[],
+  routed: RoutedModels,
   ctx: ModelAvailabilityContext,
 ): Promise<ModelAvailabilityContext> {
   const consulted = new Set<ApiProvider>();
-  for (const model of models) {
-    const rawConfig = getRuntimeModelConfig(model);
-    if (!rawConfig) continue;
-    const route = resolveModelRoute(
-      model,
-      kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting),
-      ctx,
-    );
+  for (const { route } of routed.values()) {
     if (
       'needsProviderKey' in route &&
       ctx.keyStatuses[route.needsProviderKey] === undefined
@@ -566,13 +618,14 @@ export async function getModelUnavailableReason(
   stores: ModelOptionStores,
 ): Promise<string | null> {
   await discoveredCopilotRoutes();
-  const rawConfig = getRuntimeModelConfig(model);
-  if (!rawConfig) return `Model "${model}" is not recognized.`;
-
   const routeCtx = await buildAvailabilityContext(stores);
-  const ctx = await withConsultedKeyStatuses(stores.secrets, [model], routeCtx);
-  const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
-  const availability = resolveModelAvailability(model, config, ctx);
+  const routed = routeModels([model], routeCtx);
+  const decision = routed.get(model);
+  if (!decision) return `Model "${model}" is not recognized.`;
+
+  const ctx = await withConsultedKeyStatuses(stores.secrets, routed, routeCtx);
+  const { config, route } = decision;
+  const availability = resolveModelAvailability(model, route, ctx.keyStatuses);
   if (MODEL_AVAILABILITY_STATUS[availability.kind].available) return null;
 
   // `availability.kind` is guaranteed `available: false` here, so it's a
@@ -588,23 +641,28 @@ export async function getModelUnavailableReason(
   });
 }
 
-/** Build typed model option data for a single model. */
+/**
+ * Build typed model option data for a single model from stage 1's decision for
+ * it. No decision means the registry does not describe the model.
+ */
 function buildModelOptionData(
   model: string,
+  decision: RoutedModel | undefined,
   ctx: ModelAvailabilityContext,
 ): ModelOptionData {
-  const rawConfig = getRuntimeModelConfig(model);
-  if (!rawConfig) {
+  if (!decision) {
     return withAvailabilityFields(
       { value: model, label: model },
       availabilityStatus('unknown-model'),
     );
   }
-  // Mirror modelRoutes: a dual-backend Kimi model routed to the coding
-  // endpoint runs with the synthesized runtime config, so the row reflects it.
-  const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
+  const { rawConfig, config } = decision;
 
-  const availability = resolveModelAvailability(model, config, ctx);
+  const availability = resolveModelAvailability(
+    model,
+    decision.route,
+    ctx.keyStatuses,
+  );
   const copilotConfig =
     availability.kind === 'copilot-access'
       ? copilotRouteForModel(model)?.effectiveConfig
@@ -666,7 +724,8 @@ function buildModelOptionData(
  * When `models` is provided, the caller's view of the visible-models list is
  * honored verbatim. The host reads happen in two awaits — the facts every
  * model shares, then one key-status read per provider the visible models
- * actually consult — and the per-model pass over them is pure. Every call
+ * actually consult — with each model routed once, before that second await,
+ * and the rows finished purely from those decisions. Every call
  * recomputes from the live inputs: the secret reads behind `hasUsableApiKey`
  * are cached and invalidated in `apiProviders` (`invalidateApiKeyCache`), the
  * Copilot route catalogue in `runtimeModelRegistry`
@@ -684,13 +743,16 @@ export async function computeModelOptionsData(
   const visible =
     models ??
     visibleModelsForAccess(getEnabledModels(stores.globalState), routeCtx);
+  const routed = routeModels(visible, routeCtx);
   const availabilityCtx = await withConsultedKeyStatuses(
     stores.secrets,
-    visible,
+    routed,
     routeCtx,
   );
 
-  return visible.map((model) => buildModelOptionData(model, availabilityCtx));
+  return visible.map((model) =>
+    buildModelOptionData(model, routed.get(model), availabilityCtx),
+  );
 }
 
 function visibleModelsForAccess(
