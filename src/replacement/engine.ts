@@ -60,12 +60,12 @@ const log = createLog('ReplacementEngine');
  */
 export type ReplacementConfigRead = <T>(path: string) => T;
 
-function applyNonRegexPolicy(text: string): string {
-  const processed = applyReplacements(
-    text,
-    getAllReplacements(getConfig),
-  ).trim();
-  return shouldWrapCritiqueInAlign(getConfig)
+function applyNonRegexPolicy(
+  text: string,
+  read: ReplacementConfigRead,
+): string {
+  const processed = applyReplacements(text, getAllReplacements(read)).trim();
+  return shouldWrapCritiqueInAlign(read)
     ? wrapCritiqueInAlign(processed)
     : processed;
 }
@@ -109,9 +109,13 @@ const replacementEngine = {
    * exact ordered profile they need instead of composing lower-level rules at
    * the call site. Both special-purpose profiles have production consumers:
    * `xml-content` backs XML output normalization and `tex-write` backs
-   * `.tex` file writes.
+   * `.tex` file writes. Pass `read` as for {@link applyAll}.
    */
-  applyFor(text: string, purpose: 'xml-content' | 'tex-write'): string {
+  applyFor(
+    text: string,
+    purpose: 'xml-content' | 'tex-write',
+    read: ReplacementConfigRead = getConfig,
+  ): string {
     switch (purpose) {
       case 'xml-content':
         // XML output normalization runs the full non-regex pipeline (which
@@ -120,13 +124,13 @@ const replacementEngine = {
         // part of this purpose's contract, independent of the
         // `enabledReplacementsRegex` config that gates applyAll's regex pass.
         return applyReplacements(
-          applyNonRegexPolicy(text),
+          applyNonRegexPolicy(text, read),
           FENCED_LATEX_BLOCK_REPLACEMENTS,
         );
       case 'tex-write':
         // Writing a .tex file runs the full pipeline and then restores the
         // LaTeX built-in section sign from the KaTeX-only destination.
-        return restoreLatexSectionSign(applyAllPolicy(text));
+        return restoreLatexSectionSign(applyAllPolicy(text, read));
       default:
         return assertNever(purpose, 'Unknown replacement purpose');
     }

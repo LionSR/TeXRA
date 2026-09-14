@@ -19,6 +19,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
   INSTRUCTION_ACTION,
@@ -35,9 +36,10 @@ const CHANNEL = 'agentEventListeners';
 const log = createLog(CHANNEL);
 
 function handleRequestOpenFile(
+  runtime: ProcessRuntime,
   payload: RequestOpenFilePayload,
 ): Promise<boolean> {
-  return openBuildDisplayIfTex(payload.location, {
+  return openBuildDisplayIfTex(payload.location, runtime, {
     preserveFocus: payload.preserveFocus,
   }).catch((err) => {
     log.warn(
@@ -200,10 +202,11 @@ async function handleRequestEnsureProgressView(
 export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
   globalState: StateStore,
+  runtime: ProcessRuntime,
 ): Pick<SessionHostInteractions, 'emit'> {
   const handlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
     {
-      requestOpenFile: handleRequestOpenFile,
+      requestOpenFile: (payload) => handleRequestOpenFile(runtime, payload),
       requestShowInstruction: (payload) =>
         handleRequestShowInstruction(globalState, payload),
       showAgentConfigBanner: (payload) =>

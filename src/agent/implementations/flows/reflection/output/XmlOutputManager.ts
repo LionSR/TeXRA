@@ -6,6 +6,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { debugInternal, logInternal, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
+import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import {
@@ -20,6 +21,7 @@ import {
   getFileDirectory,
 } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { readConfig } from '@utils/config/configUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { addCdataToTagsMultiple } from '@utils/text/xmlCdata';
@@ -81,8 +83,8 @@ export class XmlOutputManager {
     /** The run's round map: a missing-output report records the round and
      *  publishes the whole map, since the fact is a latest-only listing row. */
     private readonly outputState: OutputState,
-    /** The run's `inScope`: binds a call to the session's roots scope. */
-    private readonly inScope: <A>(operation: () => A) => A,
+    /** The run's session configuration: the replacement rules it applies. */
+    private readonly config: ConfigProvider,
   ) {}
 
   private extractMultipleDocumentsByRegex(
@@ -501,9 +503,10 @@ export class XmlOutputManager {
       const originalContent = yield* fsCall(() =>
         AbsoluteFS.read(fileLocation.absolutePath),
       );
-      // Session-scoped until #12421 roots src/latex; see #12433.
-      let content = this.inScope(() =>
-        replacementEngine.applyFor(originalContent, 'xml-content'),
+      let content = replacementEngine.applyFor(
+        originalContent,
+        'xml-content',
+        (key) => readConfig(this.config, key),
       );
 
       const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;

@@ -5,15 +5,16 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
+import type { ConfigProvider } from '@platform/interfaces';
+import type { WorkspaceFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { isFile } from '@utils/files/fsEntryType';
 import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports
 import { extractLatexFileDependencies } from './extractFileDependencies';
@@ -76,6 +77,8 @@ const fsCall = <A>(thunk: () => Promise<A>): Effect.Effect<A, Error> =>
 export class LatexMediaManager {
   constructor(
     private readonly logger: LatexTrace,
+    /** The session's configuration: the settings a PDF or TikZ compile reads. */
+    private readonly config: ConfigProvider,
     private readonly fileService?: TaskRunFileService,
   ) {}
 
@@ -160,13 +163,18 @@ export class LatexMediaManager {
    */
   private compileOnePdf(
     file: FileLocation,
-  ): Effect.Effect<FileLocation | undefined, Error> {
+  ): Effect.Effect<
+    FileLocation | undefined,
+    Error,
+    FileSystem.FileSystem | WorkspaceFs
+  > {
     return Effect.gen({ self: this }, function* () {
+      const fs = yield* FileSystem.FileSystem;
       const buildDir = path.join(path.dirname(file.absolutePath), 'build');
-      yield* fsCall(() => AbsoluteFS.ensureDir(buildDir));
-      const compiled = yield* fsCall(() =>
-        compileLatex2Pdf(file, { outputDirectory: buildDir }),
-      );
+      yield* fs.makeDirectory(buildDir, { recursive: true });
+      const compiled = yield* compileLatex2Pdf(file, this.config, {
+        outputDirectory: buildDir,
+      });
       if (!compiled.ok) {
         this.logger.warn(
           `Failed to compile LaTeX to PDF:\n${compiled.logTail}`,
@@ -178,9 +186,7 @@ export class LatexMediaManager {
       }
 
       const pdfLocation = pathToLocation(compiled.pdfPath);
-      const written = yield* fsCall(() =>
-        AbsoluteFS.exists(pdfLocation.absolutePath),
-      );
+      const written = yield* fs.exists(pdfLocation.absolutePath);
       if (!written) {
         this.logger.warn(
           'LaTeX reported success but no PDF was written; skipping',
@@ -196,9 +202,7 @@ export class LatexMediaManager {
 
       // Stat failures are noisier than other compile failures because an
       // existing-but-unreadable PDF likely indicates a permissions/IO bug.
-      const stats = yield* fsCall(() =>
-        AbsoluteFS.stat(pdfLocation.absolutePath),
-      ).pipe(
+      const stats = yield* fs.stat(pdfLocation.absolutePath).pipe(
         Effect.catch((err) =>
           Effect.sync(() => {
             this.logger.error(
@@ -210,7 +214,7 @@ export class LatexMediaManager {
         ),
       );
       if (!stats) return undefined;
-      if (stats.size === 0) {
+      if (Number(stats.size) === 0) {
         this.logger.warn('Compiled PDF is empty', {
           data: {
             sourceFile: file.absolutePath,
@@ -236,7 +240,7 @@ export class LatexMediaManager {
   private compilePdfs(
     files: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
-  ): Effect.Effect<void> {
+  ): Effect.Effect<void, never, FileSystem.FileSystem | WorkspaceFs> {
     return Effect.gen({ self: this }, function* () {
       const texFiles = files.filter((file) =>
         hasExtension(file.absolutePath, '.tex'),
@@ -372,9 +376,10 @@ export class LatexMediaManager {
         // `resolveLatexDir` follows the symlink and falls back to the literal
         // dirname, so a file whose real path can't be resolved still gets its
         // sibling `.sty` files probed instead of skipping the probe entirely.
+        const fs = yield* FileSystem.FileSystem;
         const baseDir = yield* resolveLatexDir(latexFile.absolutePath);
-        const content = yield* fsCall(() =>
-          AbsoluteFS.read(latexFile.absolutePath),
+        const content = normalizeLineEndings(
+          yield* fs.readFileString(latexFile.absolutePath),
         );
         const uncommented = stripLatexComments(content);
 
@@ -386,9 +391,9 @@ export class LatexMediaManager {
         const probed = yield* Effect.forEach(
           candidates,
           (candidate) =>
-            fsCall(() => AbsoluteFS.exists(candidate)).pipe(
-              Effect.map((exists) => (exists ? candidate : undefined)),
-            ),
+            fs
+              .exists(candidate)
+              .pipe(Effect.map((exists) => (exists ? candidate : undefined))),
           { concurrency: LATEX_CONCURRENCY },
         );
         return probed.filter(filterNotNullish);
@@ -415,15 +420,17 @@ export class LatexMediaManager {
    * (*.cls, *.sty, *.bst, latexmkrc, .latexindentrc) and mirror them into
    * run storage so the compiled document can find its project-local style.
    */
-  private mirrorProjectSiblings(projectDir: string): Effect.Effect<void> {
+  private mirrorProjectSiblings(
+    projectDir: string,
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const fileService = this.fileService;
       if (!fileService) return;
 
-      const entries = yield* fsCall(() => AbsoluteFS.readDir(projectDir)).pipe(
-        Effect.map((read) => read.map(([name]) => name)),
+      const fs = yield* FileSystem.FileSystem;
+      const entries = yield* fs.readDirectory(projectDir).pipe(
         Effect.catch((error) =>
-          Effect.sync((): string[] | undefined => {
+          Effect.sync((): readonly string[] | undefined => {
             this.logger.debug('Unable to scan project siblings', {
               data: { path: projectDir, error },
             });
@@ -452,8 +459,8 @@ export class LatexMediaManager {
         'Unable to mirror project sibling',
         (absolutePath) =>
           Effect.gen(function* () {
-            const stats = yield* fsCall(() => AbsoluteFS.stat(absolutePath));
-            if (!isFile(stats.type)) return;
+            const stats = yield* fs.stat(absolutePath);
+            if (stats.type !== 'File') return;
             yield* fsCall(() =>
               fileService.mirrorWorkspaceFile(pathToLocation(absolutePath)),
             );
@@ -538,12 +545,13 @@ export class LatexMediaManager {
         // extractFigurePathsFromLatex, whose paths were checked against the
         // original latexDir), so this filter is a real gate, not a re-check of
         // already-known data.
+        const fs = yield* FileSystem.FileSystem;
         const probed = yield* Effect.forEach(
           fileLocations,
           (loc) =>
-            fsCall(() => AbsoluteFS.exists(loc.absolutePath)).pipe(
-              Effect.map((exists) => ({ loc, exists })),
-            ),
+            fs
+              .exists(loc.absolutePath)
+              .pipe(Effect.map((exists) => ({ loc, exists }))),
           { concurrency: LATEX_CONCURRENCY },
         );
         const existingLocations: FileLocation[] = [];
@@ -572,12 +580,12 @@ export class LatexMediaManager {
     files: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
     logSummary: boolean,
-  ): Effect.Effect<void> {
+  ): Effect.Effect<void, never, FileSystem.FileSystem | WorkspaceFs> {
     return Effect.gen({ self: this }, function* () {
       const tikzResults = yield* Effect.forEach(
         files,
         (file) =>
-          fsCall(() => TikzPictureManager.compile(file)).pipe(
+          TikzPictureManager.compile(file, this.config).pipe(
             // Silent skip: TikZ compilation failures are reported by the
             // TikzPictureManager itself; the fan-out must continue past
             // individual failures.
@@ -618,18 +626,19 @@ export class LatexMediaManager {
       extraMediaFiles?: readonly FileLocation[];
       logTikzSummary?: boolean;
     },
-  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
+  ): Effect.Effect<void, Error, FileSystem.FileSystem | WorkspaceFs> {
     return Effect.gen({ self: this }, function* () {
       if (files.length === 0) {
         return;
       }
 
+      const fs = yield* FileSystem.FileSystem;
       const probed = yield* Effect.forEach(
         files,
         (file) =>
-          fsCall(() => AbsoluteFS.exists(file.absolutePath)).pipe(
-            Effect.map((exists) => ({ file, exists })),
-          ),
+          fs
+            .exists(file.absolutePath)
+            .pipe(Effect.map((exists) => ({ file, exists }))),
         { concurrency: LATEX_CONCURRENCY },
       );
       const existingFiles = probed
@@ -678,7 +687,7 @@ export class LatexMediaManager {
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
     extraMediaFiles: readonly FileLocation[] = [],
-  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
+  ): Effect.Effect<void, Error, FileSystem.FileSystem | WorkspaceFs> {
     return this.processFiles(inputFiles, workspaceState, cfg, {
       figureMode: 'extract',
       extraMediaFiles,
@@ -697,7 +706,7 @@ export class LatexMediaManager {
     outputFiles: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
-  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
+  ): Effect.Effect<void, Error, FileSystem.FileSystem | WorkspaceFs> {
     return this.processFiles(outputFiles, workspaceState, cfg, {
       figureMode: 'mirror',
     });

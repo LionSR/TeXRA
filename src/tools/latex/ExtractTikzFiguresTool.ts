@@ -1,14 +1,14 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, type FileSystem, type Path } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
 import { TikzPictureManager } from '@latex/TikzPictureManager';
+import { sessionFsLayer } from '@platform/rootedFs';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
-import { ensureError } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -34,15 +34,16 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   function* ({
     texPath,
     compile = true,
-  }: ExtractTikzInput): Effect.fn.Return<ToolResult, Error, ToolCall> {
+  }: ExtractTikzInput): Effect.fn.Return<
+    ToolResult,
+    Error,
+    ToolCall | FileSystem.FileSystem | Path.Path
+  > {
     const call = yield* ToolCall;
     const { path, display } = yield* resolveLatexFile(texPath);
     const location = pathToLocation(path.absolute);
 
-    const tikzFigures = yield* Effect.tryPromise({
-      try: () => call.inScope(() => TikzPictureManager.extract(location)),
-      catch: ensureError,
-    });
+    const tikzFigures = yield* TikzPictureManager.extract(location);
     if (tikzFigures.length === 0) {
       return emptyExtractionResult(
         'TikZ figures',
@@ -64,10 +65,12 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
 
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
-      const compiledPaths = yield* Effect.tryPromise({
-        try: () => call.inScope(() => TikzPictureManager.compile(location)),
-        catch: ensureError,
-      });
+      // A tool's services do not carry the run's rooted filesystems yet, so
+      // the compile is given the ones of the roots this call was handed.
+      const compiledPaths = yield* TikzPictureManager.compile(
+        location,
+        call.roots.config,
+      ).pipe(Effect.provide(sessionFsLayer(call.roots)));
       if (compiledPaths.length > 0) {
         // Convert FileLocation[] to string[] for legacy attachment API
         const compiledPathStrings = compiledPaths.map(

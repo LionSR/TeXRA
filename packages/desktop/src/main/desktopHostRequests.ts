@@ -419,17 +419,20 @@ export function createDesktopHostRequests(
   async function exportTranscript(runId: RunId): Promise<void> {
     requireOpenRun(runId);
     await runtime.runPromise(
-      exportRunTranscript(runId, {
-        pickFormat: () => host.pickTranscriptExportFormat(),
-        openPath: (filePath) => host.openPath(filePath),
-        showInfo: (message) => host.showInfoMessage(message),
-        showWarning: (message) => host.showWarningMessage(message),
-        showError: rejectRequest,
-        reportDetail: (message) => logger.error(message),
-        getController: getChatExportController,
-        getTraceViewerTemplate: () =>
-          path.join(options.resourcesPath, 'traceViewer', 'index.html'),
-      }),
+      Effect.provide(
+        exportRunTranscript(runId, {
+          pickFormat: () => host.pickTranscriptExportFormat(),
+          openPath: (filePath) => host.openPath(filePath),
+          showInfo: (message) => host.showInfoMessage(message),
+          showWarning: (message) => host.showWarningMessage(message),
+          showError: rejectRequest,
+          reportDetail: (message) => logger.error(message),
+          getController: getChatExportController,
+          getTraceViewerTemplate: () =>
+            path.join(options.resourcesPath, 'traceViewer', 'index.html'),
+        }),
+        sessionFiles,
+      ),
     );
   }
 

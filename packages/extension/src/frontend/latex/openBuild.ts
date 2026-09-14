@@ -4,10 +4,13 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import * as vscode from 'vscode';
 
+import { defaultSession } from '@agent/runtime';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { createLog } from '@logger/logUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
@@ -107,11 +110,13 @@ export async function invokeLatexWorkshopBuild(
  */
 export async function openBuildDisplayIfTex(
   fileLocation: FileLocation,
+  runtime: ProcessRuntime,
   options: { preserveFocus?: boolean } = {},
 ): Promise<boolean> {
   const prepared = await prepareFileForDisplay(
     fileLocation,
     options.preserveFocus ?? false,
+    runtime,
   );
   if (prepared.kind !== 'latex-ready') return prepared.delivered;
   return scheduleViewerDisplay();
@@ -130,11 +135,13 @@ export async function openBuildDisplayIfTex(
  */
 export async function prepareBuildDisplay(
   fileLocation: FileLocation,
+  runtime: ProcessRuntime,
   options: { preserveFocus?: boolean; scheduleViewer?: boolean } = {},
 ): Promise<boolean> {
   const prepared = await prepareFileForDisplay(
     fileLocation,
     options.preserveFocus ?? false,
+    runtime,
   );
   if (prepared.kind !== 'latex-ready') return prepared.delivered;
 
@@ -152,6 +159,7 @@ type PrepareFileForDisplayResult =
 async function prepareFileForDisplay(
   fileLocation: FileLocation,
   preserveFocus: boolean,
+  runtime: ProcessRuntime,
 ): Promise<PrepareFileForDisplayResult> {
   const absolutePath = fileLocation.absolutePath;
 
@@ -170,7 +178,12 @@ async function prepareFileForDisplay(
     return { kind: 'done', delivered: true };
   }
 
-  const prepared = await prepareLatexBuild(uri, fileLocation, preserveFocus);
+  const prepared = await prepareLatexBuild(
+    uri,
+    fileLocation,
+    preserveFocus,
+    runtime,
+  );
   return prepared
     ? { kind: 'latex-ready' }
     : { kind: 'done', delivered: false };
@@ -191,6 +204,7 @@ async function prepareLatexBuild(
   uri: vscode.Uri,
   fileLocation: FileLocation,
   preserveFocus: boolean,
+  runtime: ProcessRuntime,
 ): Promise<boolean> {
   const doc = await vscode.workspace.openTextDocument(uri);
   await vscode.window.showTextDocument(doc, { preview: true, preserveFocus });
@@ -204,9 +218,15 @@ async function prepareLatexBuild(
   // packages, so compile internally with TEXINPUTS set.
   // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
   const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
-  const compiled = await compileLatex2Pdf(pathToLocation(uri.fsPath), {
-    outputDirectory: outDir,
-  });
+  const { roots } = defaultSession();
+  const compiled = await runtime.runPromise(
+    withSessionFs(
+      roots,
+      compileLatex2Pdf(pathToLocation(uri.fsPath), roots.config, {
+        outputDirectory: outDir,
+      }),
+    ),
+  );
   if (!compiled.ok) {
     // Include the tail in the visible message itself, not just `data` —
     // writeLine only shows `data` when texra.logger.debugMode is on

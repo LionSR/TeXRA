@@ -17,7 +17,7 @@
  * constructor instead of the controller importing `@resources`.
  */
 
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import {
@@ -29,6 +29,7 @@ import type { ChatExportInput } from '@agent/export/schemas';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
+import type { WorkspaceFs } from '@platform/rootedFs';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import {
@@ -135,26 +136,39 @@ export class ChatExportController {
    * Returns the compiled PDF path when compilation succeeds so the caller
    * can decide whether to open the PDF or fall back to the `.tex` source.
    */
-  async exportAsLatex(
-    runId: RunId,
-    exportInput: ChatExportInput,
-  ): Promise<LatexExportResult> {
-    const { storagePath, absolutePath } = await this.writeExport(
-      runId,
-      generateExportFilename(exportInput, 'tex'),
-      formatChatAsLatex(exportInput, this.deps.latexPreamble),
-    );
+  readonly exportAsLatex = Effect.fn('ChatExportController.exportAsLatex')(
+    function* (
+      this: ChatExportController,
+      runId: RunId,
+      exportInput: ChatExportInput,
+    ): Effect.fn.Return<
+      LatexExportResult,
+      Error,
+      FileSystem.FileSystem | WorkspaceFs
+    > {
+      const { storagePath, absolutePath } = yield* Effect.tryPromise({
+        try: () =>
+          this.writeExport(
+            runId,
+            generateExportFilename(exportInput, 'tex'),
+            formatChatAsLatex(exportInput, this.deps.latexPreamble),
+          ),
+        catch: ensureError,
+      });
 
-    const location = pathToLocation(absolutePath);
-    const compiled = await compileLatex2Pdf(location);
+      const compiled = yield* compileLatex2Pdf(
+        pathToLocation(absolutePath),
+        this.deps.session.roots.config,
+      );
 
-    return {
-      storagePath,
-      absolutePath,
-      pdfPath: compiled.ok ? compiled.pdfPath : undefined,
-      logTail: compiled.ok ? undefined : compiled.logTail,
-    };
-  }
+      return {
+        storagePath,
+        absolutePath,
+        pdfPath: compiled.ok ? compiled.pdfPath : undefined,
+        logTail: compiled.ok ? undefined : compiled.logTail,
+      };
+    },
+  );
 
   /**
    * Assemble the run's trace and embed it into the trace-viewer's

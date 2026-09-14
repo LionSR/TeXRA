@@ -18,12 +18,12 @@ import {
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
 import {
   compileContext,
+  compileFsLayer,
   initLatexPlatform,
   outputFile,
   runDir,
@@ -39,10 +39,12 @@ const COMPILED_PDF = fakePath('build/main.pdf');
 
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(
-    async (
+    (
       _location: FileLocation,
+      _config?: unknown,
       _options?: FakeCompileOptions,
-    ): Promise<CompileLatex2PdfResult> => ({ ok: true, pdfPath: COMPILED_PDF }),
+    ): Effect.Effect<CompileLatex2PdfResult> =>
+      Effect.succeed({ ok: true, pdfPath: COMPILED_PDF }),
   ),
   hasLatexCompiler: vi.fn(async () => true),
 }));
@@ -88,7 +90,7 @@ describe('runCompileCheck', () => {
   beforeEach(() => {
     mocks.compileLatex2Pdf
       .mockReset()
-      .mockResolvedValue({ ok: true, pdfPath: COMPILED_PDF });
+      .mockReturnValue(Effect.succeed({ ok: true, pdfPath: COMPILED_PDF }));
     mocks.hasLatexCompiler.mockReset().mockResolvedValue(true);
   });
 
@@ -121,7 +123,7 @@ describe('runCompileCheck', () => {
         AbsoluteFS.read(failures[0].log.absolutePath),
       );
       expect(persisted).toContain('Compile check errored for main.tex');
-    }).pipe(Effect.provide(nodePlatformLayer)),
+    }).pipe(Effect.provide(compileFsLayer)),
   );
 
   it.live(
@@ -149,7 +151,7 @@ describe('runCompileCheck', () => {
         expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
         expect(compileFailuresOf(result.compileResult)).toHaveLength(0);
         expect(result.compileResult?.status).toBe('ok');
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(Effect.provide(compileFsLayer)),
   );
 
   // The 200-line raw-tail extraction itself now lives in compileLatex2Pdf
@@ -171,7 +173,9 @@ describe('runCompileCheck', () => {
           { length: 200 },
           (_, i) => `L${String(i + 51).padStart(4, '0')}`,
         ).join('\n');
-        mocks.compileLatex2Pdf.mockResolvedValue({ ok: false, logTail });
+        mocks.compileLatex2Pdf.mockReturnValue(
+          Effect.succeed({ ok: false, logTail }),
+        );
 
         const result = yield* runCompileCheck(
           compileContext(runId, seedMainTexOutput(runId)),
@@ -182,7 +186,7 @@ describe('runCompileCheck', () => {
         expect(excerpt).toContain('L0051');
         expect(excerpt).toContain('L0250');
         expect(excerpt).not.toContain('L0050');
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(Effect.provide(compileFsLayer)),
   );
 
   it.live('truncates the combined excerpt to the last 12000 characters', () =>
@@ -199,10 +203,9 @@ describe('runCompileCheck', () => {
         { length: 150 },
         (_, i) => `${longLine}-END${String(i + 1).padStart(4, '0')}`,
       );
-      mocks.compileLatex2Pdf.mockResolvedValue({
-        ok: false,
-        logTail: lines.join('\n'),
-      });
+      mocks.compileLatex2Pdf.mockReturnValue(
+        Effect.succeed({ ok: false, logTail: lines.join('\n') }),
+      );
 
       const result = yield* runCompileCheck(
         compileContext(runId, seedMainTexOutput(runId)),
@@ -215,7 +218,7 @@ describe('runCompileCheck', () => {
       );
       expect(excerpt).toContain('END0150');
       expect(excerpt).not.toContain('END0001');
-    }).pipe(Effect.provide(nodePlatformLayer)),
+    }).pipe(Effect.provide(compileFsLayer)),
   );
 
   it.live(
@@ -225,10 +228,9 @@ describe('runCompileCheck', () => {
         const runId = 'compile-stale-log' as RunId;
         yield* Effect.promise(() => seedCompilableMainTex(runId));
 
-        mocks.compileLatex2Pdf.mockResolvedValueOnce({
-          ok: false,
-          logTail: 'stale failure log',
-        });
+        mocks.compileLatex2Pdf.mockReturnValueOnce(
+          Effect.succeed({ ok: false, logTail: 'stale failure log' }),
+        );
 
         const outputState = seedMainTexOutput(runId);
         const ctx = compileContext(runId, outputState);
@@ -244,10 +246,9 @@ describe('runCompileCheck', () => {
 
         // Re-run the same round (e.g. after a repaired retry); this time the
         // compile succeeds.
-        mocks.compileLatex2Pdf.mockResolvedValueOnce({
-          ok: true,
-          pdfPath: COMPILED_PDF,
-        });
+        mocks.compileLatex2Pdf.mockReturnValueOnce(
+          Effect.succeed({ ok: true, pdfPath: COMPILED_PDF }),
+        );
         const secondResult = yield* runCompileCheck(ctx, 0);
         expect(secondResult.compileResult?.status).toBe('ok');
 
@@ -258,7 +259,7 @@ describe('runCompileCheck', () => {
           Effect.tryPromise(() => AbsoluteFS.read(logLocation.absolutePath)),
         );
         expect(reread._tag).toBe('Failure');
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(Effect.provide(compileFsLayer)),
   );
 
   it.live(
@@ -283,10 +284,12 @@ describe('runCompileCheck', () => {
           }),
         );
 
-        mocks.compileLatex2Pdf.mockImplementation(async (location) => ({
-          ok: false,
-          logTail: `LOG MARKER FOR ${location.absolutePath}`,
-        }));
+        mocks.compileLatex2Pdf.mockImplementation((location) =>
+          Effect.succeed({
+            ok: false,
+            logTail: `LOG MARKER FOR ${location.absolutePath}`,
+          }),
+        );
 
         const outputState = createOutputState();
         ensureRoundData(outputState, 0).outputs = [
@@ -315,6 +318,6 @@ describe('runCompileCheck', () => {
         expect(persistedA).not.toContain(texPathB);
         expect(persistedB).toContain(`LOG MARKER FOR ${texPathB}`);
         expect(persistedB).not.toContain(texPathA);
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(Effect.provide(compileFsLayer)),
   );
 });

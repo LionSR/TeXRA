@@ -9,12 +9,19 @@ import type { RunId, FileLocation, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
+import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 export const storagePath = fakePath('storage');
 export const workspacePath = fakePath('workspace');
+
+/** The rooted filesystems of the seeded roots, over the Node filesystem. */
+export const compileFsLayer = rootedFsLayer({
+  workspace: workspacePath,
+  storage: storagePath,
+});
 
 export function runDir(runId: RunId): string {
   return path.join(storagePath, 'executions', runId);
@@ -53,7 +60,6 @@ export function compileContext(
   return {
     // The installed fake host's roots: these suites seed and read one host.
     roots: processWorkspaceRoots(),
-    inScope: (operation) => operation(),
     fileService: new TaskRunFileService(runId, processWorkspaceRoots()),
     outputState,
     logger: spiedTrace(),

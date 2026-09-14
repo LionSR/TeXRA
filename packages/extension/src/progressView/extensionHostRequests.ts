@@ -59,6 +59,7 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
@@ -268,38 +269,41 @@ export function createExtensionHostRequests(
 
   async function exportTranscript(runId: RunId): Promise<void> {
     await runtime.runPromise(
-      exportRunTranscript(runId, {
-        pickFormat: async () =>
-          (
-            await vscode.window.showQuickPick(
-              TRANSCRIPT_EXPORT_FORMAT_CHOICES,
-              {
-                title: 'Export transcript',
-                placeHolder: 'Choose a format',
-                ignoreFocusOut: true,
-              },
-            )
-          )?.format,
-        openPath: openExportPath,
-        showInfo,
-        showWarning,
-        showError,
-        reportDetail: (message, data) => log.error(message, { data }),
-        getController: () =>
-          Promise.resolve(
-            (chatExportController ??= new ChatExportController({
-              session,
-              latexPreamble,
-            })),
-          ),
-        getTraceViewerTemplate: () =>
-          path.join(
-            options.extensionPath,
-            'resources',
-            'traceViewer',
-            'index.html',
-          ),
-      }),
+      withSessionFs(
+        session.roots,
+        exportRunTranscript(runId, {
+          pickFormat: async () =>
+            (
+              await vscode.window.showQuickPick(
+                TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+                {
+                  title: 'Export transcript',
+                  placeHolder: 'Choose a format',
+                  ignoreFocusOut: true,
+                },
+              )
+            )?.format,
+          openPath: openExportPath,
+          showInfo,
+          showWarning,
+          showError,
+          reportDetail: (message, data) => log.error(message, { data }),
+          getController: () =>
+            Promise.resolve(
+              (chatExportController ??= new ChatExportController({
+                session,
+                latexPreamble,
+              })),
+            ),
+          getTraceViewerTemplate: () =>
+            path.join(
+              options.extensionPath,
+              'resources',
+              'traceViewer',
+              'index.html',
+            ),
+        }),
+      ),
     );
   }
 

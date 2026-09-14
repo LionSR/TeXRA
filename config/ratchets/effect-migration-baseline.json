@@ -21,7 +21,6 @@
       "packages/cli/src/runtime/agentRoster.ts": 1,
       "packages/cli/src/runtime/multiAgentPresets.ts": 1,
       "packages/desktop/src/main/desktopDiffHost.ts": 1,
-      "packages/desktop/src/main/desktopPreviewHost.ts": 1,
       "packages/extension/src/commands/latex/latexdiffCommands.ts": 2,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
       "packages/extension/src/settingsView/handlers/agentHandlers.ts": 1,

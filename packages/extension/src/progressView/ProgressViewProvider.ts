@@ -288,7 +288,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // proposal, retry, question) stay pending in the fold until the view's
     // request row decides them.
     const detachHostInteractions = session.interactions.use({
-      ...createAgentPresentationHost(this, context.globalState),
+      ...createAgentPresentationHost(this, context.globalState, this.runtime),
       readDiagnostics: getLinterMessages,
       addCriticism: (payload) => ({
         accepted: pushManualCriticism(payload),

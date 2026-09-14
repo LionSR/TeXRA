@@ -136,6 +136,7 @@ interface OpenedLatexdiffResult {
  */
 async function openLatexdiffResult(
   diffFilePath: string,
+  runtime: ProcessRuntime,
   options: { scheduleViewer?: boolean } = {},
 ): Promise<OpenedLatexdiffResult | undefined> {
   const diffLocation = pathToLocation(diffFilePath);
@@ -153,7 +154,7 @@ async function openLatexdiffResult(
   // command's error handler. The caller decides whether to schedule a viewer
   // from `viewerReady`; a generated path alone is not enough when external
   // compilation failed (#10553).
-  const viewerReady = await prepareBuildDisplay(diffLocation, {
+  const viewerReady = await prepareBuildDisplay(diffLocation, runtime, {
     preserveFocus: true,
     scheduleViewer: options.scheduleViewer,
   });
@@ -200,6 +201,7 @@ async function restorePreparedViewerTarget(
  */
 async function prepareLatexdiffResultsAndScheduleViewer(
   results: readonly DiffRunResult[],
+  runtime: ProcessRuntime,
 ): Promise<void> {
   let lastViewerLocation: FileLocation | undefined;
   let lastProcessedLocation: FileLocation | undefined;
@@ -210,7 +212,7 @@ async function prepareLatexdiffResultsAndScheduleViewer(
       const suffix = result.description ? ` (${result.description})` : '';
 
       if (result.success) {
-        const opened = await openLatexdiffResult(result.diffPath, {
+        const opened = await openLatexdiffResult(result.diffPath, runtime, {
           scheduleViewer: false,
         });
         if (opened) {
@@ -260,7 +262,7 @@ async function runDiffAndOpen(
   if (!result.success) {
     throw new Error(result.message);
   }
-  await openLatexdiffResult(result.diffPath);
+  await openLatexdiffResult(result.diffPath, runtime);
 }
 
 /** Settle a housekeeping program on the host entry's runtime over the
@@ -528,7 +530,7 @@ async function handleRunLatexdiff(
         );
       }
 
-      await prepareLatexdiffResultsAndScheduleViewer(results);
+      await prepareLatexdiffResultsAndScheduleViewer(results, runtime);
     },
   );
 }

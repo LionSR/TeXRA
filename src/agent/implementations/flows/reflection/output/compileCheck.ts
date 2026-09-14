@@ -5,6 +5,7 @@ import { Cause, Effect, FileSystem } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
+import type { WorkspaceFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   fileLocationDisplayPath,
@@ -37,8 +38,6 @@ import { getOutputFilesByRound, type OutputState } from './outputState';
 interface CompileCheckContext {
   /** The run's session roots: its workspace, storage, and setting stores. */
   roots: WorkspaceRoots;
-  /** The run's `inScope`: binds a call to the session's roots scope. */
-  inScope: <A>(operation: () => A) => A;
   fileService: TaskRunFileService;
   outputState: OutputState;
   logger: AgentTrace;
@@ -340,7 +339,7 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
   );
 
   const attempt = Effect.gen(function* (): Generator<
-    Effect.Effect<unknown, Error>,
+    Effect.Effect<unknown, Error, FileSystem.FileSystem | WorkspaceFs>,
     CompileAttempt
   > {
     const content = yield* fsCall(() =>
@@ -369,16 +368,15 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
 
     // execa's timeout option kills the child process on expiry, so we don't
     // orphan hanging latexmk/pdflatex runs.
-    const result = yield* fsCall(() =>
-      // Session-scoped until #12421 roots src/latex; see #12433.
-      ctx.inScope(() =>
-        compileLatex2Pdf(outputFile.location, {
-          channel: ctx.runId,
-          outputDirectory: buildDir,
-          timeout: opts.timeoutMs,
-          extraInputDirs,
-        }),
-      ),
+    const result = yield* compileLatex2Pdf(
+      outputFile.location,
+      ctx.roots.config,
+      {
+        channel: ctx.runId,
+        outputDirectory: buildDir,
+        timeout: opts.timeoutMs,
+        extraInputDirs,
+      },
     );
     return { kind: 'compiled', result };
   }).pipe(

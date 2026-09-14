@@ -83,7 +83,7 @@ function createXmlManager(
     logger,
     new TaskRunFileService(RUN_ID, workspaceRoots()),
     options.outputState ?? createOutputState(),
-    (operation) => operation(),
+    workspaceRoots().config,
   );
 }
 

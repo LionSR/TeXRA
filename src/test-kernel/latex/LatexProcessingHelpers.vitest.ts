@@ -12,6 +12,7 @@ import {
   type MediaWorkspaceState,
 } from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
+import { sessionFsLayer } from '@platform/rootedFs';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -134,24 +135,32 @@ describe('LatexMediaManager PDF compilation', () => {
       );
 
       mocks.compileLatex2Pdf.mockImplementation(
-        async (file: FileLocation, options: { outputDirectory?: string }) => {
-          if (path.basename(file.absolutePath) === 'missing-result.tex') {
-            return { ok: false, logTail: 'simulated compile failure' };
-          }
-          const outputDirectory = options.outputDirectory!;
-          await mkdir(outputDirectory, { recursive: true });
-          await writeFile(compiledPdfPath, 'compiled pdf');
-          return { ok: true, pdfPath: compiledPdfPath };
-        },
+        (
+          file: FileLocation,
+          _config: unknown,
+          options: { outputDirectory?: string },
+        ) =>
+          Effect.promise(async () => {
+            if (path.basename(file.absolutePath) === 'missing-result.tex') {
+              return { ok: false, logTail: 'simulated compile failure' };
+            }
+            const outputDirectory = options.outputDirectory!;
+            await mkdir(outputDirectory, { recursive: true });
+            await writeFile(compiledPdfPath, 'compiled pdf');
+            return { ok: true, pdfPath: compiledPdfPath };
+          }),
       );
 
       const workspaceState = AgentWorkspaceState.create();
-      const manager = new LatexMediaManager(logger);
-      yield* manager.processInputFiles(
-        inputPaths.map(createExternalLocation),
-        workspaceState,
-        compilePdfConfig,
-      );
+      const roots = workspaceRoots();
+      const manager = new LatexMediaManager(logger, roots.config);
+      yield* manager
+        .processInputFiles(
+          inputPaths.map(createExternalLocation),
+          workspaceState,
+          compilePdfConfig,
+        )
+        .pipe(Effect.provide(sessionFsLayer(roots)));
 
       expect(mocks.compileLatex2Pdf).toHaveBeenCalledTimes(2);
       expect(
@@ -233,6 +242,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
         const workspaceState = AgentWorkspaceState.create();
         const manager = new LatexMediaManager(
           logger,
+          workspaceRoots().config,
           new TaskRunFileService(runId, workspaceRoots()),
         ) as unknown as LatexMediaManagerFigureInternals;
         yield* manager.extractFiguresFromFiles(

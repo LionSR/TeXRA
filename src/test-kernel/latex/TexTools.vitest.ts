@@ -1,17 +1,24 @@
+import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+
 import { LATEX_COMMANDS_CHANNEL } from '@latex/latexLogging';
 import {
   buildKpathseaSearchPath,
   buildLatexInputEnv,
   buildLatexSearchParts,
   compileLatex2Pdf,
+  type CompileLatex2PdfResult,
 } from '@latex/texTools';
 import * as logger from '@logger/logUtils';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import type { ExecResult } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
+import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 
 const mocks = vi.hoisted(() => ({
@@ -36,21 +43,28 @@ function execResult(success: boolean): ExecResult {
   };
 }
 
+/** Compile over the installed host's roots, as a session would hand them. */
 function compile(
   sourceFile = 'main.tex',
   outputDirectory = path.join(workspacePath, 'build'),
-): ReturnType<typeof compileLatex2Pdf> {
+): Effect.Effect<CompileLatex2PdfResult> {
+  const roots = workspaceRoots();
   return compileLatex2Pdf(
     pathToLocation(path.join(workspacePath, sourceFile)),
-    {
-      outputDirectory,
-    },
-  );
+    roots.config,
+    { outputDirectory },
+  ).pipe(Effect.provide(rootedFsLayer(roots)));
 }
 
-function failedLogTail(
-  result: Awaited<ReturnType<typeof compileLatex2Pdf>>,
-): string {
+/** Seed an engine log on the real filesystem. */
+function writeLog(outputDirectory: string, content: string) {
+  return Effect.promise(async () => {
+    await mkdir(outputDirectory, { recursive: true });
+    await writeFile(path.join(outputDirectory, 'main.log'), content);
+  });
+}
+
+function failedLogTail(result: CompileLatex2PdfResult): string {
   if (result.ok) throw new Error('expected a failed compile');
   return result.logTail;
 }
@@ -66,79 +80,100 @@ describe('compileLatex2Pdf structured return', () => {
     await installPlatform({ workspacePath });
   });
 
-  it('returns { ok: true } with the engine PDF path and no logTail on success', async () => {
-    mocks.runToolWithCheck.mockResolvedValue(execResult(true));
+  it.live(
+    'returns { ok: true } with the engine PDF path and no logTail on success',
+    () =>
+      Effect.gen(function* () {
+        mocks.runToolWithCheck.mockResolvedValue(execResult(true));
 
-    const result = await compile();
+        const result = yield* compile();
 
-    expect(result).toEqual({
-      ok: true,
-      pdfPath: path.join(workspacePath, 'build', 'main.pdf'),
-    });
-  });
+        expect(result).toEqual({
+          ok: true,
+          pdfPath: path.join(workspacePath, 'build', 'main.pdf'),
+        });
+        // The engine runs in the session's workspace root.
+        expect(mocks.runToolWithCheck).toHaveBeenCalledWith(
+          'latexmk',
+          expect.any(Array),
+          expect.objectContaining({ cwd: workspacePath }),
+        );
+      }),
+  );
 
-  it('surfaces the last 200 lines of the engine log as logTail on a failed compile', async () => {
-    mocks.runToolWithCheck.mockResolvedValue(execResult(false));
+  it.live(
+    'surfaces the last 200 lines of the engine log as logTail on a failed compile',
+    () =>
+      Effect.gen(function* () {
+        mocks.runToolWithCheck.mockResolvedValue(execResult(false));
 
-    const outputDirectory = path.join(workspacePath, 'build');
-    // Zero-padded so containment checks below can't be fooled by numeric
-    // substrings (e.g. "L0001" would otherwise match inside "L00010").
-    const lines = Array.from(
-      { length: 250 },
-      (_, i) => `L${String(i + 1).padStart(4, '0')}`,
-    );
-    await AbsoluteFS.ensureDir(outputDirectory);
-    await AbsoluteFS.write(
-      path.join(outputDirectory, 'main.log'),
-      lines.join('\n'),
-    );
+        const outputDirectory = path.join(workspacePath, 'build');
+        // Zero-padded so containment checks below can't be fooled by numeric
+        // substrings (e.g. "L0001" would otherwise match inside "L00010").
+        const lines = Array.from(
+          { length: 250 },
+          (_, i) => `L${String(i + 1).padStart(4, '0')}`,
+        );
+        yield* writeLog(outputDirectory, lines.join('\n'));
 
-    const logTail = failedLogTail(await compile());
+        const logTail = failedLogTail(yield* compile());
 
-    // Last 200 of 250 lines survive: L0051 .. L0250.
-    expect(logTail).toContain('L0051');
-    expect(logTail).toContain('L0250');
-    expect(logTail).not.toContain('L0050');
-    expect(logTail).not.toContain('L0001');
-  });
+        // Last 200 of 250 lines survive: L0051 .. L0250.
+        expect(logTail).toContain('L0051');
+        expect(logTail).toContain('L0250');
+        expect(logTail).not.toContain('L0050');
+        expect(logTail).not.toContain('L0001');
+      }),
+  );
 
-  it('finds the engine log for a .ltx source, not just .tex', async () => {
-    mocks.runToolWithCheck.mockResolvedValue(execResult(false));
+  it.live('finds the engine log for a .ltx source, not just .tex', () =>
+    Effect.gen(function* () {
+      mocks.runToolWithCheck.mockResolvedValue(execResult(false));
 
-    const outputDirectory = path.join(workspacePath, 'build.ltx');
-    await AbsoluteFS.ensureDir(outputDirectory);
-    // The engine always names the log after the source with ITS OWN
-    // extension stripped, regardless of which LaTeX extension was used.
-    await AbsoluteFS.write(
-      path.join(outputDirectory, 'main.log'),
-      'engine log content',
-    );
+      const outputDirectory = path.join(workspacePath, 'build.ltx');
+      // The engine always names the log after the source with ITS OWN
+      // extension stripped, regardless of which LaTeX extension was used.
+      yield* writeLog(outputDirectory, 'engine log content');
 
-    const logTail = failedLogTail(await compile('main.ltx', outputDirectory));
+      const logTail = failedLogTail(
+        yield* compile('main.ltx', outputDirectory),
+      );
 
-    expect(logTail).toContain('engine log content');
-    expect(logTail).not.toContain('no LaTeX log at');
-  });
+      expect(logTail).toContain('engine log content');
+      expect(logTail).not.toContain('no LaTeX log at');
+    }),
+  );
 
-  it('falls back to a discoverable placeholder when no engine log exists on disk', async () => {
-    mocks.runToolWithCheck.mockResolvedValue(execResult(false));
+  it.live(
+    'falls back to a discoverable placeholder when no engine log exists on disk',
+    () =>
+      Effect.gen(function* () {
+        mocks.runToolWithCheck.mockResolvedValue(execResult(false));
 
-    const logTail = failedLogTail(
-      await compile('missing.tex', path.join(workspacePath, 'build-missing')),
-    );
+        const logTail = failedLogTail(
+          yield* compile(
+            'missing.tex',
+            path.join(workspacePath, 'build-missing'),
+          ),
+        );
 
-    expect(logTail).toContain('no LaTeX log at');
-  });
+        expect(logTail).toContain('no LaTeX log at');
+      }),
+  );
 
-  it('surfaces the exception message as logTail when the compiler invocation throws', async () => {
-    mocks.runToolWithCheck.mockRejectedValue(
-      new Error('boom: pdflatex crashed'),
-    );
+  it.live(
+    'surfaces the exception message as logTail when the compiler invocation throws',
+    () =>
+      Effect.gen(function* () {
+        mocks.runToolWithCheck.mockRejectedValue(
+          new Error('boom: pdflatex crashed'),
+        );
 
-    const logTail = failedLogTail(await compile());
+        const logTail = failedLogTail(yield* compile());
 
-    expect(logTail).toContain('boom: pdflatex crashed');
-  });
+        expect(logTail).toContain('boom: pdflatex crashed');
+      }),
+  );
 });
 
 // #10635: compileLatex2Pdf resolves its logger per call from the threaded
@@ -154,20 +189,24 @@ describe('compileLatex2Pdf logger seam', () => {
     vi.restoreAllMocks();
   });
 
-  it('warns on the module channel when latexmk is missing and pdflatex takes over', async () => {
-    mocks.runToolWithCheck
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(execResult(true));
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+  it.live(
+    'warns on the module channel when latexmk is missing and pdflatex takes over',
+    () =>
+      Effect.gen(function* () {
+        mocks.runToolWithCheck
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(execResult(true));
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
-    const result = await compile();
+        const result = yield* compile();
 
-    expect(result.ok).toBe(true);
-    expect(warn).toHaveBeenCalledWith(
-      LATEX_COMMANDS_CHANNEL,
-      expect.stringContaining('latexmk not found'),
-    );
-  });
+        expect(result.ok).toBe(true);
+        expect(warn).toHaveBeenCalledWith(
+          LATEX_COMMANDS_CHANNEL,
+          expect.stringContaining('latexmk not found'),
+        );
+      }),
+  );
 });
 
 const D = path.delimiter;

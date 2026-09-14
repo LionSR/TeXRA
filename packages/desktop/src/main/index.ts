@@ -496,6 +496,7 @@ function createWindow(options: {
   );
   const previewOptions = {
     shell,
+    runtime,
     // The in-app PDF overlay is preferred when the renderer is available.
     postToRenderer: postToRendererIfAlive,
   };
@@ -724,9 +725,8 @@ function createWindow(options: {
     },
     postToRenderer: postToRendererIfAlive,
   });
-  const agentRunHost: DesktopAgentRunHost = {
+  const agentRunHost: Omit<DesktopAgentRunHost, 'openBuildDisplay'> = {
     openPath: previewHost.openPath,
-    openBuildDisplay: previewHost.openBuildDisplay,
     openDiff: desktopDiffHost.openDiff,
     confirmAcceptFile: (message) =>
       confirmDialog({ message, confirmLabel: 'Replace file' }),
@@ -829,10 +829,15 @@ function createWindow(options: {
     if (funnel) snapshot.setOnboarding(funnel);
     const run = createDesktopAgentRun({
       runtime,
-      host: agentRunHost,
+      host: {
+        ...agentRunHost,
+        openBuildDisplay: previewHost.openBuildDisplayIn(project.session.roots),
+      },
       toolEditPreview: {
         openPath: requestPreviewHost.openPath,
-        openBuildDisplay: requestPreviewHost.openBuildDisplay,
+        openBuildDisplay: requestPreviewHost.openBuildDisplayIn(
+          project.session.roots,
+        ),
         openDiff: requestDiffHost.openDiff,
         closeDiff: requestDiffHost.closeDiff,
       },
@@ -850,7 +855,9 @@ function createWindow(options: {
       host: {
         ...agentRunHost,
         openPath: requestPreviewHost.openPath,
-        openBuildDisplay: requestPreviewHost.openBuildDisplay,
+        openBuildDisplay: requestPreviewHost.openBuildDisplayIn(
+          project.session.roots,
+        ),
         openDiff: requestDiffHost.openDiff,
       },
       run,

@@ -5,6 +5,7 @@ import { Effect, FileSystem } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
+import type { WorkspaceFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   fileLocationDisplayPath,
@@ -54,8 +55,6 @@ export class LatexDiffManager {
     private readonly fileService: TaskRunFileService,
     /** The run's session roots: the workspace and setting stores it reads. */
     private readonly roots: WorkspaceRoots,
-    /** The run's `inScope`: binds a call to the session's roots scope. */
-    private readonly inScope: <A>(operation: () => A) => A,
   ) {
     this.latexdiffService = new LaTeXdiffService(runId, roots);
   }
@@ -138,7 +137,11 @@ export class LatexDiffManager {
   handleLatexdiffOfOutput(
     currRound: number,
     mapping: RoundFileMapping,
-  ): Effect.Effect<RunStorageFileLocation[], never, FileSystem.FileSystem> {
+  ): Effect.Effect<
+    RunStorageFileLocation[],
+    never,
+    FileSystem.FileSystem | WorkspaceFs
+  > {
     const execute = Effect.gen({ self: this }, function* () {
       if (!(yield* fsCall(() => checkToolInstalled('latexdiff')))) {
         this.logger.warn(
@@ -344,7 +347,11 @@ export class LatexDiffManager {
     label: string;
     pdfStemSuffix: string;
     diffDirectory: DiffOutputDirectory;
-  }): Effect.Effect<SingleDiffOutcome | null, Error, FileSystem.FileSystem> {
+  }): Effect.Effect<
+    SingleDiffOutcome | null,
+    Error,
+    FileSystem.FileSystem | WorkspaceFs
+  > {
     return Effect.gen({ self: this }, function* () {
       const revisedFile = outputByPath.get(outputPath);
       if (!revisedFile) {
@@ -406,7 +413,7 @@ export class LatexDiffManager {
       artifact: RunStorageFileLocation | null;
     } | null,
     Error,
-    FileSystem.FileSystem
+    FileSystem.FileSystem | WorkspaceFs
   > {
     return Effect.gen({ self: this }, function* () {
       if (!result.success) {
@@ -441,16 +448,15 @@ export class LatexDiffManager {
         resolveWorkspaceSourceDir(this.roots, referenceLocation) ??
           path.dirname(referenceLocation.absolutePath),
       ].filter((dir): dir is string => dir !== null);
-      const compiled = yield* fsCall(() =>
-        // Session-scoped until #12421 roots src/latex; see #12433.
-        this.inScope(() =>
-          compileLatex2Pdf(diffLocation, {
-            channel: this.runId,
-            outputDirectory: buildDir,
-            timeout: timeoutMs,
-            extraInputDirs,
-          }),
-        ),
+      const compiled = yield* compileLatex2Pdf(
+        diffLocation,
+        this.roots.config,
+        {
+          channel: this.runId,
+          outputDirectory: buildDir,
+          timeout: timeoutMs,
+          extraInputDirs,
+        },
       );
 
       if (!compiled.ok) {
