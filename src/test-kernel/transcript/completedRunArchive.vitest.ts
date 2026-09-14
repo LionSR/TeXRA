@@ -48,6 +48,7 @@ import {
   cliHistoryDetailNdjsonRecord,
 } from '@cli/runtime/history';
 import { createHostRunActions } from '@controllers/session/hostRunActions';
+import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -301,6 +302,7 @@ describe('completedRunArchive facade', () => {
     if (trace.status !== 'ok') throw new Error('Expected trace export');
     const exportInput = await loadChatExportInput(runId);
     const details = await readCliHistoryDetails(
+      effectRuntime(),
       Effect.succeed(taskSession),
       runId,
     );

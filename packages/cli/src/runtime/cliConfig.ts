@@ -373,7 +373,7 @@ function readJsonConfigFile(
  * The workspace `.texra/config.json` layer, as a program: its one caller that
  * runs before the process runtime exists (`buildCliContext`) settles it on a
  * bare run, and every caller after that (`resolveChatDefaults`,
- * `readCliAgentRoster`) settles it on `effectRuntime()` like any other
+ * `readCliAgentRoster`) settles it on the process runtime like any other
  * program. The reader itself is service-free and says nothing about which.
  */
 export function loadWorkspaceCliConfig(
@@ -434,7 +434,7 @@ function loadUserApprovalPolicy(
  * with it `installCliProcessRuntime`), so there is no process runtime to
  * borrow yet; the two readers are service-free. Pinned in
  * `BARE_EFFECT_RUN_SITES`. Every other caller of these readers runs after the
- * platform is up and settles them on `effectRuntime()`.
+ * platform is up and settles them on the process runtime.
  */
 export function loadCliStartupConfig(
   cwd: string,

@@ -12,6 +12,7 @@ import {
   type CliHistoryEntry,
 } from '@cli/runtime/history';
 import { formatCliHistoryResumeSummary } from '@cli/runtime/historyLabels';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 
 import { AsyncListForm } from './_shared/ListForm';
@@ -22,6 +23,8 @@ interface ResumeListFormProps {
    * the process session arrives as a prop from the surface that opened the form.
    */
   readonly session: SessionHandle;
+  /** The process runtime the listing runs on, from the same surface. */
+  readonly runtime: ProcessRuntime;
   readonly availableRows?: number;
   readonly onSelect: (value: RunId) => void;
   readonly onClose: () => void;
@@ -38,7 +41,10 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       loadingLabel="Loading history..."
       load={async () =>
         listResumableCliHistoryEntries(
-          await listCliHistoryEntries(Effect.succeed(props.session)),
+          await listCliHistoryEntries(
+            props.runtime,
+            Effect.succeed(props.session),
+          ),
         )
       }
       items={(entries) =>

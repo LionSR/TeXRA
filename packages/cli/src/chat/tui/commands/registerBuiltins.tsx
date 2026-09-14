@@ -11,6 +11,7 @@ import {
 } from '@cli/runtime/loginOptions';
 import type { ApiProvider } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
@@ -271,6 +272,9 @@ export function registerBuiltinSlashCommands(options: {
    */
   secrets: PlatformSecrets;
   state: StateStore;
+  /** The process runtime the account commands and the `/resume` listing run
+   *  their programs on, from the same surface. */
+  runtime: ProcessRuntime;
   /** The process-default session `/resume` lists history from. */
   runtimeSession: SessionHandle;
   onAgentSelect?: SelectHandler<string>;
@@ -290,7 +294,7 @@ export function registerBuiltinSlashCommands(options: {
   getConfigStores?: () => SettingsStores;
   onError?: ErrorHandler;
 }): void {
-  const { secrets, state } = options;
+  const { secrets, state, runtime } = options;
   const modelStores = { secrets, globalState: state };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ?? ((agent) => patchSessionMeta({ agent }));
@@ -305,10 +309,10 @@ export function registerBuiltinSlashCommands(options: {
     ((provider, key) => applyCliProviderApiKey(secrets, provider, key));
   const onLoginSelect: FormActionHandler<LoginFormValue> =
     options.onLoginSelect ??
-    ((value, output) => loginFromChat(value, undefined, output));
+    ((value, output) => loginFromChat(value, runtime, undefined, output));
   const onLogoutSelect: FormActionHandler<CliLogoutTarget> =
     options.onLogoutSelect ??
-    ((value, output) => logoutFromChat(value, secrets, output));
+    ((value, output) => logoutFromChat(value, runtime, secrets, output));
   const canSelectAgent = options.canSelectAgent ?? (() => true);
   const canSelectModel = options.canSelectModel ?? (() => true);
 
@@ -469,6 +473,7 @@ export function registerBuiltinSlashCommands(options: {
     return (
       <ToolsListForm
         state={state}
+        runtime={runtime}
         availableRows={props.availableRows}
         onClose={() => props.onDone(undefined)}
       />
@@ -510,7 +515,11 @@ export function registerBuiltinSlashCommands(options: {
   // command still uses the one plain-picker adapter.
   const ResumeListFormAdapter = makeSelectFormAdapter<RunId>(
     (formProps) => (
-      <ResumeListForm session={options.runtimeSession} {...formProps} />
+      <ResumeListForm
+        runtime={runtime}
+        session={options.runtimeSession}
+        {...formProps}
+      />
     ),
     (id: RunId) => options.onResumeSelect?.(id),
   );
@@ -610,7 +619,7 @@ export function registerBuiltinSlashCommands(options: {
     // by loginFromChat itself.
     echo: 'never',
     handler: (remainder, context) =>
-      loginFromChat(remainder, context.cliContext),
+      loginFromChat(remainder, runtime, context.cliContext),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
@@ -620,7 +629,7 @@ export function registerBuiltinSlashCommands(options: {
     // Same merged-form mismatch as /login: the typed command does not
     // describe what the form actually did.
     echo: 'never',
-    handler: (remainder) => logoutFromChat(remainder, secrets),
+    handler: (remainder) => logoutFromChat(remainder, runtime, secrets),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
@@ -712,6 +721,7 @@ export function registerBuiltinSlashCommands(options: {
         <CliConfigForm
           stores={stores}
           secrets={secrets}
+          runtime={runtime}
           availableRows={props.availableRows}
           // Same hook `/approval` drives, so the approval-policy row updates the
           // live session and the status bar from whichever surface set it —

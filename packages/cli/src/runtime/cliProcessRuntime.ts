@@ -35,40 +35,53 @@
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import type { StateStore } from '@platform/interfaces';
-import { tryProcessRuntime } from '@platform/processRuntime';
+import {
+  tryProcessRuntime,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
-import type { SetupPlatformShape } from '@tools/setup/platform';
 
 import { getCliSecrets } from './cliSecrets';
 import { signInCliSupabase } from './supabaseAuth';
 
-let pending: Promise<void> | null = null;
+let pending: Promise<ProcessRuntime> | null = null;
 let globalState: StateStore | undefined;
 
-const cliSetupPlatform: SetupPlatformShape = {
-  host: 'cli',
-  signIn: async () => {
-    await signInCliSupabase({ openBrowser: true });
-    return SupabaseClient.isAuthenticated();
-  },
-};
-
-export function installCliProcessRuntime(storageRoot?: string): Promise<void> {
-  if (tryProcessRuntime()) return Promise.resolve();
+/**
+ * Install the process runtime, or join the one already installed, and hand
+ * it back: every entry that awaits this holds the runtime it runs on in a
+ * local and threads it on, so nothing below the entry looks it up again.
+ */
+export function installCliProcessRuntime(
+  storageRoot?: string,
+): Promise<ProcessRuntime> {
+  const installed = tryProcessRuntime();
+  if (installed) return Promise.resolve(installed);
   if (pending) return pending;
   const storage = createNodeStorageProvider({ storageRoot });
   pending = (async () => {
-    installProcessRuntime({
-      processStart: await nodeProcesses.selfIdentity(),
+    const processStart = await nodeProcesses.selfIdentity();
+    // The services below close over the runtime they are provided by: the
+    // secret store and the setup sign-in run their programs on it, and none
+    // of these thunks runs before the layer builds, after the install.
+    const runtime: ProcessRuntime = installProcessRuntime({
+      processStart,
       globalStorage: () => storage.getGlobalStoragePath(),
       updateCheckStorage: () => storage.getGlobalStoragePath(),
-      secrets: () => getCliSecrets(storageRoot),
+      secrets: () => getCliSecrets(runtime, storageRoot),
       appState: () => cliGlobalState(),
-      setup: cliSetupPlatform,
+      setup: {
+        host: 'cli',
+        signIn: async () => {
+          await signInCliSupabase(runtime, { openBrowser: true });
+          return SupabaseClient.isAuthenticated();
+        },
+      },
       lean: directLeanLanguageServices(),
     });
+    return runtime;
   })().finally(() => {
     pending = null;
   });

@@ -4,7 +4,6 @@ import { useState } from 'react';
 import {
   createWorkspaceAgentRosterController,
   getAgentsByCategory,
-  loadAgents,
   type AgentEntry,
 } from '@agent/index';
 import {
@@ -97,9 +96,10 @@ function selectionSizeLabel(selection: AgentRosterCategorySelection): string {
 const AGENT_ROSTER_SELECT_CHROME_ROWS = 5;
 
 async function loadRosterData(): Promise<AgentRosterData> {
-  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
+  // The roster read loads the local agent catalog the lists below read.
+  const record = await effectRuntime().runPromise(readCliAgentRoster);
   return {
-    record: await readCliAgentRoster(),
+    record,
     presets: createWorkspaceAgentRosterController().allPresets(),
     agents: byCategory((category) => getAgentsByCategory(category)),
   };

@@ -9,7 +9,6 @@ import {
   resumeRun,
 } from '@agent/runtime';
 import { runLeaseHeldMessage, getRunRecords } from '@agent/storage';
-import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -68,7 +67,7 @@ export async function runResumeCommand(
     quietLogs: true,
   });
 
-  return effectRuntime().runPromise(
+  return stores.runtime.runPromise(
     Effect.gen(function* () {
       const session = yield* stores.session;
       const store = getRunRecords(session, id);
@@ -179,7 +178,7 @@ export async function runResumeCommand(
               resumeWorkflowOutputDirectory(workflowConfig),
               context.cwd,
             );
-            exitCode = await effectRuntime().runPromise(
+            exitCode = await stores.runtime.runPromise(
               executeCliWorkflowConfig(
                 workflowConfig,
                 buildHeadlessRunContext(context),

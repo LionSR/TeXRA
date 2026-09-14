@@ -10,7 +10,6 @@ import {
 } from '@common/teams/TeamPlan';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, byCategory } from '@shared/schemas';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { getFirstRunDone } from '@shared/state/onboardingState';
@@ -149,7 +148,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // in-process — the key paths invalidate the relevant caches — so no
   // relaunch is needed.
   const { maybeRunCliOnboarding } = await import('../onboarding/runOnboarding');
-  const onboarding = await effectRuntime().runPromise(
+  const { runtime } = services;
+  const onboarding = await runtime.runPromise(
     maybeRunCliOnboarding(services, context),
   );
   if (onboarding.declined) {
@@ -184,9 +184,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // launcher, which is the same outcome the navigation kinds used to spell
   // out.
   launcher: while (true) {
-    const history = await listCliHistoryEntries(services.session);
+    const history = await listCliHistoryEntries(runtime, services.session);
     const presets = readCliMultiAgentPresets();
-    const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
+    const presetPlanSet = await loadCliMultiAgentPresetPlanSet(
+      runtime,
+      presets,
+    );
     const presetLaunchBlockReason =
       context.approvalPolicy === 'never' ? 'delegation-denied' : undefined;
     const [modelAccess, authProfile] = await Promise.all([
@@ -212,7 +215,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // after an agent/team choice. Best-effort: an unavailable registry just
     // launches with the default model instead of blocking the launcher.
     const [models, statusLines] = await Promise.all([
-      effectRuntime().runPromise(
+      runtime.runPromise(
         Effect.tryPromise({
           try: () => getCliModelAccessList({ stores: services }),
           catch: ensureError,
@@ -222,7 +225,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       ),
       loadCliApiStatus(services.secrets, authProfile),
     ]);
-    const allowDefaultModelLaunch = await effectRuntime().runPromise(
+    const allowDefaultModelLaunch = await runtime.runPromise(
       canLaunchWithDefaultModel(context, models, services),
     );
     const { runOrchestrationTui } =
@@ -259,11 +262,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
           ) ??
           (
             await loadCliMultiAgentRunPlan(
+              runtime,
               { preset: action.preset },
               { reloadRemoteAgents: false },
             )
           ).plan;
-        const preflight = await effectRuntime().runPromise(
+        const preflight = await runtime.runPromise(
           preflightTeamAvailability({
             initial: initialPlan,
             unresolvedNames: teamTexraHostedMissingNames,
@@ -341,13 +345,14 @@ async function runOrchestration(context: CliContext): Promise<number> {
         const { runConfigTui } = await import('../config/runConfigTui');
         await runConfigTui({
           secrets: services.secrets,
+          runtime,
           colorEnabled: context.stdoutColorEnabled,
           onError: writeErrorStderr,
         });
         continue launcher;
       }
       case 'account': {
-        await effectRuntime().runPromise(
+        await runtime.runPromise(
           Effect.gen(function* () {
             if (action.provider === 'chatgpt' || action.provider === 'grok') {
               if (action.operation === 'sign-out') {
@@ -388,7 +393,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         continue launcher;
       }
       case 'set-model-access': {
-        await effectRuntime().runPromise(
+        await runtime.runPromise(
           updateCliModelAccess(context, action.access, {
             writeProgress: writeTextStdout,
           }).pipe(

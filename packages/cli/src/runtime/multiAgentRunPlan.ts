@@ -8,7 +8,7 @@ import {
   teamPlanHasGaps,
   type TeamPreset,
 } from '@common/teams/TeamPlan';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { byCategory } from '@shared/schemas';
 
 import { missingMultiAgentPresetMessage } from './agents';
@@ -64,10 +64,11 @@ function planLoadedCliMultiAgentPresets(
  * entrypoints cannot drift.
  */
 export async function loadCliMultiAgentRunPlan(
+  runtime: ProcessRuntime,
   init: MultiAgentRunPlanInit,
   options: { readonly reloadRemoteAgents?: boolean } = {},
 ): Promise<MultiAgentRunPlanLoadResult> {
-  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
+  await runtime.runPromise(loadAgents({ includeRemote: false }));
   const localPlan = planCurrentMultiAgentRun(init);
   if (options.reloadRemoteAgents === false) {
     return {
@@ -76,6 +77,7 @@ export async function loadCliMultiAgentRunPlan(
     };
   }
   const result = await reloadRemoteAgentsForGaps(
+    runtime,
     localPlan,
     teamPlanHasGaps,
     () => planCurrentMultiAgentRun(init),
@@ -87,10 +89,12 @@ export async function loadCliMultiAgentRunPlan(
 }
 
 export async function loadCliMultiAgentPresetPlanSet(
+  runtime: ProcessRuntime,
   presets: readonly TeamPreset[],
 ): Promise<MultiAgentPresetPlansLoadResult> {
-  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
+  await runtime.runPromise(loadAgents({ includeRemote: false }));
   const result = await reloadRemoteAgentsForGaps(
+    runtime,
     planLoadedCliMultiAgentPresets(presets),
     (plans) => plans.some(teamPlanHasGaps),
     () => planLoadedCliMultiAgentPresets(presets),
@@ -102,6 +106,7 @@ export async function loadCliMultiAgentPresetPlanSet(
 }
 
 function reloadRemoteAgentsForGaps<T>(
+  runtime: ProcessRuntime,
   value: T,
   hasGaps: (value: T) => boolean,
   replan: () => T,
@@ -109,7 +114,7 @@ function reloadRemoteAgentsForGaps<T>(
   readonly value: T;
   readonly remoteCatalogRefreshAttempted: boolean;
 }> {
-  return effectRuntime().runPromise(
+  return runtime.runPromise(
     refreshRemoteCatalogForGaps(value, hasGaps, replan, {
       canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
       refreshRemote: () => refresh({ includeRemote: true }),

@@ -51,7 +51,10 @@ async function listTools(context: CliContext): Promise<number> {
   // The init call hands back the state store it just wired, so the status read
   // and any follow-up toggle hit the same store.
   const services = await initCliPlatform({ ...context, quietLogs: true });
-  const records = await readCliToolStatuses(services.globalState);
+  const records = await readCliToolStatuses(
+    services.runtime,
+    services.globalState,
+  );
 
   emitCliResult(context, {
     json: records,
@@ -63,7 +66,11 @@ async function listTools(context: CliContext): Promise<number> {
 
 async function showTool(context: CliContext, id: string): Promise<number> {
   const services = await initCliPlatform({ ...context, quietLogs: true });
-  const record = await readCliToolStatus(services.globalState, id);
+  const record = await readCliToolStatus(
+    services.runtime,
+    services.globalState,
+    id,
+  );
   if (!record) {
     writeTextStderr(formatCliToolNotFoundMessage(id));
     return CliExitCode.Usage;

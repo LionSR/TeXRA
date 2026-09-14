@@ -123,7 +123,7 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // `installCliProcessRuntime`), so no process runtime exists to borrow; the
   // programs are service-free. The readers themselves are Effects, and their
   // post-init callers (`resolveChatDefaults`, `readCliAgentRoster`) settle
-  // them on `effectRuntime()` instead of coming through here.
+  // them on the process runtime instead of coming through here.
   'packages/cli/src/runtime/cliConfig.ts': 1,
 };
 

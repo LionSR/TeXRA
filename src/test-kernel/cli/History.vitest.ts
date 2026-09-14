@@ -14,6 +14,8 @@ import {
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { effectRuntime } from '@platform/processRuntime';
+
 import {
   createFakeHost,
   installedHost,
@@ -148,7 +150,12 @@ function historyDetails(
   id: RunId,
   options?: { includeFullConversation?: boolean },
 ) {
-  return readCliHistoryDetails(Effect.succeed(defaultSession()), id, options);
+  return readCliHistoryDetails(
+    effectRuntime(),
+    Effect.succeed(defaultSession()),
+    id,
+    options,
+  );
 }
 
 // An internal tool-use agent config with no input/output files, built from
@@ -291,6 +298,7 @@ describe('CLI history runtime', () => {
       secrets: host.secrets,
       session: Effect.succeed(defaultSession()),
       roots: host.roots,
+      runtime: effectRuntime(),
     });
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
@@ -306,6 +314,7 @@ describe('CLI history runtime', () => {
     mocks.listRuns.mockReturnValue(Effect.succeed([runListEntry('a1a1a1')]));
 
     const entries = await listCliHistoryEntries(
+      effectRuntime(),
       Effect.succeed(defaultSession()),
     );
 
@@ -351,6 +360,7 @@ describe('CLI history runtime', () => {
     );
 
     const entries = await listCliHistoryEntries(
+      effectRuntime(),
       Effect.succeed(defaultSession()),
     );
     expect(entries.map((entry) => entry.status)).toEqual([
@@ -402,6 +412,7 @@ describe('CLI history runtime', () => {
     );
 
     const entries = await listCliHistoryEntries(
+      effectRuntime(),
       Effect.succeed(defaultSession()),
     );
 
@@ -420,6 +431,7 @@ describe('CLI history runtime', () => {
     );
 
     const entries = await listCliHistoryEntries(
+      effectRuntime(),
       Effect.succeed(defaultSession()),
     );
 
@@ -444,6 +456,7 @@ describe('CLI history runtime', () => {
     );
 
     const entries = await listCliHistoryEntries(
+      effectRuntime(),
       Effect.succeed(defaultSession()),
     );
 
@@ -470,6 +483,7 @@ describe('CLI history runtime', () => {
     );
 
     const entries = await listCliHistoryEntries(
+      effectRuntime(),
       Effect.succeed(defaultSession()),
     );
 
@@ -971,6 +985,7 @@ describe('CLI history runtime', () => {
       ).runs.get(runId)?.launchedAt;
 
       const result = await readCliHistoryExportInput(
+        effectRuntime(),
         Effect.succeed(defaultSession()),
         runId,
       );
@@ -1005,6 +1020,7 @@ describe('CLI history runtime', () => {
 
       await expect(
         readCliHistoryExportInput(
+          effectRuntime(),
           Effect.succeed(defaultSession()),
           'facade' as RunId,
         ),
@@ -1018,6 +1034,7 @@ describe('CLI history runtime', () => {
       // baseline: stored config, no conversation, no meta.
       await expect(
         readCliHistoryExportInput(
+          effectRuntime(),
           Effect.succeed(defaultSession()),
           'a1a1a1' as RunId,
         ),
@@ -1032,6 +1049,7 @@ describe('CLI history runtime', () => {
 
       await expect(
         readCliHistoryExportInput(
+          effectRuntime(),
           Effect.succeed(defaultSession()),
           'a1a1a1' as RunId,
         ),
@@ -1049,6 +1067,7 @@ describe('CLI history runtime', () => {
 
       await expect(
         readCliHistoryExportInput(
+          effectRuntime(),
           Effect.succeed(defaultSession()),
           'facade' as RunId,
         ),
@@ -1069,7 +1088,7 @@ describe('CLI history runtime', () => {
       );
 
       await expect(
-        readCliHistoryStandaloneTemplate(resourcesPath),
+        readCliHistoryStandaloneTemplate(effectRuntime(), resourcesPath),
       ).resolves.toBe('<html>standalone</html>');
     });
 
@@ -1080,7 +1099,7 @@ describe('CLI history runtime', () => {
       );
 
       await expect(
-        readCliHistoryStandaloneTemplate(resourcesPath),
+        readCliHistoryStandaloneTemplate(effectRuntime(), resourcesPath),
       ).resolves.toBeNull();
     });
 
