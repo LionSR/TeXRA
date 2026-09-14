@@ -53,6 +53,7 @@ import {
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
+import type { SessionOpenError } from '@shared/session/database';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -398,7 +399,7 @@ const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
  */
 function goalSession(
   overrides: Record<string, unknown> = {},
-): Effect.Effect<SessionHandle> {
+): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.map(createProcessSession(), (session) => {
     session.interactions.use({ emit: () => {}, ...overrides });
     return session;

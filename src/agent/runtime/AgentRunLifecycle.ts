@@ -673,7 +673,15 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
             }
           },
           catch: ensureError,
-        }).pipe(Effect.ignore);
+        }).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() =>
+              logger.warn('Failed to record the first completed run', {
+                data: error,
+              }),
+            ),
+          ),
+        );
       }
 
       logger.debug(`Task completed with outcome: ${resolvedOutcome}`);

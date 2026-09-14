@@ -10,6 +10,7 @@ import type {
   SessionCloseReport,
   TranscriptSubscription,
 } from '@shared/schemas';
+import type { SessionOpenError } from '@shared/session/database';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type {
@@ -121,7 +122,9 @@ export class Sessions extends Context.Service<
   {
     /** The session of these roots, or the runtime's, through the process's
      *  one owner. */
-    readonly open: (roots?: WorkspaceRoots) => Effect.Effect<Session>;
+    readonly open: (
+      roots?: WorkspaceRoots,
+    ) => Effect.Effect<Session, SessionOpenError>;
     /**
      * Refuse new runs, settle the ones it owns inside `signal`'s budget or
      * the runtime's shutdown-phase budget, flush, release.

@@ -85,7 +85,11 @@ import type { SessionView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { SessionInputs } from '@shared/session/sessionInputs';
 
-import { Database } from '@shared/session/database';
+import {
+  Database,
+  type DatabaseReadFailed,
+  type SessionOpenError,
+} from '@shared/session/database';
 import { releaseRunResources } from '@tools/approval';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
@@ -281,7 +285,7 @@ const sessionHandleLayer = (
       const chunks = yield* TextChunkSource;
       const subscriptions = yield* TranscriptSubscriptions;
       const delivered = yield* SubscriptionRef.make(0);
-      const tailEnded = yield* Deferred.make<void>();
+      const tailEnded = yield* Deferred.make<void, DatabaseReadFailed>();
       const settledCursor = () =>
         Math.min(
           SubscriptionRef.getUnsafe(view.ref).cursor,
@@ -297,6 +301,10 @@ const sessionHandleLayer = (
             Stream.runHead,
             Effect.raceFirst(
               Deferred.await(tailEnded).pipe(
+                // Invariant: the tail outlives every publication it settles.
+                // A wait on a tail that ended can never be answered, so it
+                // dies, with the read failure that ended the tail, if any.
+                Effect.orDie,
                 Effect.andThen(
                   Effect.die(
                     new Error('Session committed-event consumer stopped'),
@@ -354,15 +362,12 @@ const sessionHandleLayer = (
           return pieces.reverse().join('');
         },
         acquireClaims: (id) =>
-          eventLog.acquireClaims([id]).pipe(
-            Effect.map((ids) => eventLog.releaseClaims(ids).pipe(Effect.orDie)),
-            Effect.orDie,
-          ),
-        releaseClaims: (id) => eventLog.releaseClaims([id]).pipe(Effect.orDie),
-        runRecords: (id) =>
           eventLog
-            .readRunRecords(qualifyAggregateId('run', id))
-            .pipe(Effect.orDie),
+            .acquireClaims([id])
+            .pipe(Effect.map((ids) => eventLog.releaseClaims(ids))),
+        releaseClaims: (id) => eventLog.releaseClaims([id]),
+        runRecords: (id) =>
+          eventLog.readRunRecords(qualifyAggregateId('run', id)),
         ownsRun: (id) =>
           eventLog.aggregateState([qualifyAggregateId('run', id)]).pipe(
             Effect.map((states) =>
@@ -377,11 +382,9 @@ const sessionHandleLayer = (
           ),
         claimOwner: (id) => eventLog.claimOwner(qualifyAggregateId('run', id)),
         runChildren: (id) =>
-          eventLog
-            .readRunChildren(qualifyAggregateId('run', id))
-            .pipe(Effect.orDie),
-        recordListing: () => eventLog.readListing().pipe(Effect.orDie),
-        aggregateRows: (id) => eventLog.readAggregate(id, 1).pipe(Effect.orDie),
+          eventLog.readRunChildren(qualifyAggregateId('run', id)),
+        recordListing: () => eventLog.readListing(),
+        aggregateRows: (id) => eventLog.readAggregate(id, 1),
         publish: (events) =>
           publish(events).pipe(Effect.flatMap(settlePublication)),
         // A job settles against the last commit it appended, never against
@@ -419,7 +422,19 @@ const sessionHandleLayer = (
             );
             return yield* settlePublication(rows).pipe(
               Effect.onError(() =>
-                eventLog.releaseClaims(born).pipe(Effect.orDie),
+                eventLog.releaseClaims(born).pipe(
+                  // The settle's failure is what the caller hears; a release
+                  // that also failed leaves the claims to the next process's
+                  // liveness proof, and says so.
+                  Effect.catch((error) =>
+                    Effect.sync(() =>
+                      log.warn(
+                        'Registration claims were not released after its settle failed.',
+                        { data: error },
+                      ),
+                    ),
+                  ),
+                ),
               ),
             );
           }),
@@ -431,9 +446,9 @@ const sessionHandleLayer = (
         folded: (fromCommit) =>
           tailFrom(
             (from) =>
-              Stream.fromIterableEffect(
-                eventLog.readAll(from).pipe(Effect.orDie),
-              ).pipe(Stream.filter(isDisplaySessionEvent)),
+              Stream.fromIterableEffect(eventLog.readAll(from)).pipe(
+                Stream.filter(isDisplaySessionEvent),
+              ),
             {
               get: Effect.sync(settledCursor),
               changes: Stream.merge(
@@ -471,7 +486,7 @@ const sessionHandleLayer = (
       });
       // Capture before constructing the handle: constructor publications and
       // commits preceding subscription are covered by the tail's first read.
-      const anchor = yield* eventLog.currentCommit.pipe(Effect.orDie);
+      const anchor = yield* eventLog.currentCommit;
       // Register the consumer's scope first so handle teardown can publish and
       // drain while both this tail and the underlying view are still alive.
       const consumerScope = yield* Effect.acquireRelease(
@@ -479,12 +494,12 @@ const sessionHandleLayer = (
         (scope, exit) => Scope.close(scope, exit),
       );
       // Capture the startup cohort before callers can publish new launches.
-      const initialListing = yield* eventLog.readListing().pipe(Effect.orDie);
+      const initialListing = yield* eventLog.readListing();
       const transcripts = yield* StreamLogStore.open(
         eventLog,
         initialListing,
         key.open.transcriptMode,
-      ).pipe(Effect.orDie);
+      );
       // The gate's probe fibers and waiting calls end with this scope, after
       // the handle below has unwound its runs.
       const modelRetries = yield* ModelRetryGate.make;
@@ -581,6 +596,14 @@ const sessionHandleLayer = (
             Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
           ),
         ),
+        Effect.tapError((error) =>
+          Effect.sync(() =>
+            log.error(
+              `Session ${key.storage} stopped delivering committed rows: the log could not be read.`,
+              { data: error },
+            ),
+          ),
+        ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
       );
@@ -590,7 +613,17 @@ const sessionHandleLayer = (
       // state that row produced.
       yield* Stream.runForEach(session.folded(anchor), (event) =>
         session.receiveFoldedEvent(event),
-      ).pipe(Effect.forkIn(consumerScope));
+      ).pipe(
+        Effect.tapError((error) =>
+          Effect.sync(() =>
+            log.error(
+              `Session ${key.storage} stopped delivering folded rows: the log could not be read.`,
+              { data: error },
+            ),
+          ),
+        ),
+        Effect.forkIn(consumerScope),
+      );
       yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.provideService(Runs, runs),
         Effect.catch((error) =>
@@ -629,9 +662,7 @@ const sessionGraphLayer = (key: SessionKey) => {
     Layer.provideMerge(
       sessionEventsLayer.pipe(
         Layer.provideMerge(
-          databaseLayer(key.open.transcriptMode?.kind ?? 'persistent').pipe(
-            Layer.orDie,
-          ),
+          databaseLayer(key.open.transcriptMode?.kind ?? 'persistent'),
         ),
       ),
     ),
@@ -681,7 +712,7 @@ const sessionLayer = (
  */
 class Sessions extends Context.Service<
   Sessions,
-  LayerMap.LayerMap<SessionKey, Session | Runs>
+  LayerMap.LayerMap<SessionKey, Session | Runs, SessionOpenError>
 >()('@texra/session/Sessions') {
   /** The map, releasing an entry the handle asked to be released through
    *  the runtime that holds the map. */
@@ -720,11 +751,26 @@ const listSessions = Effect.gen(function* () {
   const keys = yield* RcMap.keys(sessions.rcMap);
   const held: SessionHandle[] = [];
   for (const key of keys) {
-    const entry = yield* sessions.contextEffectOption(key).pipe(Effect.scoped);
+    const entry = yield* sessions
+      .contextEffectOption(key)
+      .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
     if (Option.isSome(entry)) held.push(Context.get(entry.value, Session));
   }
   return held;
 });
+
+/** An entry whose build failed holds no session: its opener fails with the
+ *  cause, and a reader that only waited on the entry reads it as absent,
+ *  with the cause logged. */
+const unopenedEntry =
+  (key: SessionKey) =>
+  (error: SessionOpenError): Effect.Effect<Option.Option<never>> =>
+    Effect.sync(() => {
+      log.warn(`Session ${key.storage} failed to open; it holds no session.`, {
+        data: error,
+      });
+      return Option.none();
+    });
 
 /** The session held for `root`, if the map holds one: an entry still
  *  building is waited for, never skipped, which is what lets a close issued
@@ -737,7 +783,9 @@ const heldSession = (root: string) =>
     const keys = yield* RcMap.keys(sessions.rcMap);
     const key = [...keys].find((candidate) => candidate.storage === root);
     if (key === undefined) return undefined;
-    const held = yield* sessions.contextEffectOption(key).pipe(Effect.scoped);
+    const held = yield* sessions
+      .contextEffectOption(key)
+      .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
     return Option.isNone(held)
       ? undefined
       : {

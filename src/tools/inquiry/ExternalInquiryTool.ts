@@ -337,13 +337,11 @@ export class ExternalInquiryTool extends defineTool({
                       }),
                     ),
               ),
-              // `catchCause`, not `catch`: the aggregate read is exposed as
-              // a defect-only effect (`sessionLayer` reads it through
-              // `Effect.orDie`), so a database failure here arrives as a
-              // defect and a typed catch would let it replace the commit
-              // failure this compensation runs under. Either way the thread
-              // stays open, which the warning says, and the original failure
-              // is what the tool reports.
+              // `catchCause`, not `catch`: neither the aggregate read's
+              // `DatabaseReadFailed` nor a defect from the drop may replace
+              // the commit failure this compensation runs under. Either way
+              // the thread stays open, which the warning says, and the
+              // original failure is what the tool reports.
               Effect.catchCause((cause) =>
                 Effect.sync(() => {
                   logger.warn(

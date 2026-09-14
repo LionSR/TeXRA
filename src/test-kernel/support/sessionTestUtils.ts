@@ -12,6 +12,7 @@ import { isDebugModeEnabled } from '@logger/logUtils';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { aggregateId, type RunId, type RunPhase } from '@shared/schemas';
 import { isTranscriptEvent } from '@shared/schemas';
+import type { SessionOpenError } from '@shared/session/database';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createRunTrace } from '@transcript';
@@ -60,7 +61,7 @@ export function createTestSession(init: TestSessionInit = {}): SessionHandle {
  */
 export function createProcessSession(
   init: TestSessionInit = {},
-): Effect.Effect<SessionHandle> {
+): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.gen(function* () {
     const roots = processWorkspaceRoots();
     const predecessors: SessionHandle[] = [];

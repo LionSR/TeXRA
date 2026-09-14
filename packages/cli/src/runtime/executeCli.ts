@@ -27,7 +27,10 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
-import { DatabaseNotOwner } from '@shared/session/database';
+import {
+  DatabaseNotOwner,
+  type SessionOpenError,
+} from '@shared/session/database';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { aggregateError, generateRunId, onAbort } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -71,7 +74,7 @@ type CliWorkflowOutputHandler = (
 interface CliExecuteOptions {
   /** The process session the run executes under: `initCliPlatform`'s one
    *  memoized open, threaded from the command that holds its services. */
-  readonly session: Effect.Effect<SessionHandle>;
+  readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
   /** The process runtime, from the same services: the shutdown handler, the
    *  lease drain and the workflow-output handler below are Promise-shaped
    *  callbacks the agent runtime calls, so each runs its program on this. */

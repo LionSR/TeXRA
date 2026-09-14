@@ -75,7 +75,9 @@ import {
 import {
   DatabaseNotOwner,
   type AggregateClaim,
+  type DatabaseReadFailed,
   type DatabaseWriteFailed,
+  type SessionOpenError,
 } from '@shared/session/database';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -152,7 +154,7 @@ interface TrackedPublication {
   /** Completed with the job's own Exit once the publisher has run it. */
   readonly settled: Deferred.Deferred<
     unknown,
-    DatabaseNotOwner | DatabaseWriteFailed
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   >;
 }
 
@@ -802,7 +804,10 @@ export class SessionHandle {
     runId: RunId,
     requestId: string,
     decision: RequestDecision,
-  ): Effect.Effect<boolean, DatabaseNotOwner | DatabaseWriteFailed> {
+  ): Effect.Effect<
+    boolean,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  > {
     return this.graph.exclusive((append) =>
       this.decisionRow(runId, requestId, decision, append),
     );
@@ -816,7 +821,10 @@ export class SessionHandle {
     requestId: string,
     decision: RequestDecision,
     append: Append,
-  ): Effect.Effect<boolean, DatabaseNotOwner | DatabaseWriteFailed> {
+  ): Effect.Effect<
+    boolean,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  > {
     const aggregateId = qualifyAggregateId('run', runId);
     return Effect.gen({ self: this }, function* () {
       let open = false;
@@ -886,7 +894,10 @@ export class SessionHandle {
       readonly events: readonly SessionEventDraft[];
       readonly value: A;
     },
-  ): Effect.Effect<A, DatabaseNotOwner | DatabaseWriteFailed> {
+  ): Effect.Effect<
+    A,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  > {
     const graph = this.graph;
     return graph.exclusive((append) =>
       Effect.gen(function* () {
@@ -941,21 +952,30 @@ export class SessionHandle {
   }
 
   /** Private record reads (`run.record`, `run.report`, ...) read the database's latest row of each type, never the display fold. */
-  readRunRecords(runId: RunId): Effect.Effect<readonly SessionEvent[]> {
+  readRunRecords(
+    runId: RunId,
+  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
     return this.graph.runRecords(runId);
   }
 
-  readRunChildren(runId: RunId): Effect.Effect<readonly SessionEvent[]> {
+  readRunChildren(
+    runId: RunId,
+  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
     return this.graph.runChildren(runId);
   }
 
   /** Every committed row of one aggregate, private rows included, for the
    *  readers that fold a keyed record or a journal over the whole aggregate. */
-  readAggregate(id: AggregateId): Effect.Effect<readonly SessionEvent[]> {
+  readAggregate(
+    id: AggregateId,
+  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
     return this.graph.aggregateRows(id);
   }
 
-  readRecordListing(): Effect.Effect<readonly SessionEvent[]> {
+  readRecordListing(): Effect.Effect<
+    readonly SessionEvent[],
+    DatabaseReadFailed
+  > {
     return this.graph.recordListing();
   }
 
@@ -973,7 +993,10 @@ export class SessionHandle {
     runId: RunId | null,
     job: (
       append: Append,
-    ) => Effect.Effect<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
+    ) => Effect.Effect<
+      unknown,
+      DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+    >,
   ): void {
     const publication: TrackedPublication = {
       runId,
@@ -1408,7 +1431,7 @@ let defaultSessionFallbackWarned = false;
  */
 export function initializeDefaultSession(
   init: SessionHandleInit,
-): Effect.Effect<SessionHandle> {
+): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.suspend(() => {
     if (defaultRootSession()) {
       throw new Error('The default session has already been initialized.');

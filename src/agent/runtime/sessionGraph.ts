@@ -35,7 +35,9 @@ import type {
 import type {
   AggregateClaim,
   DatabaseReadFailed,
+  DatabaseWriteFailed,
   DeletionMode,
+  SessionOpenError,
   SessionStoreCleared,
 } from '@shared/session/database';
 import type { RequestError } from '@shared/session/requestErrors';
@@ -76,11 +78,18 @@ export interface SessionGraph {
    *  reads never enter display transport. */
   readonly acquireClaims: (
     id: AggregateId,
-  ) => Effect.Effect<Effect.Effect<void>>;
+  ) => Effect.Effect<
+    Effect.Effect<void, DatabaseWriteFailed>,
+    DatabaseReadFailed | DatabaseWriteFailed
+  >;
   /** Drop this process's claim on one aggregate: a run's when its lease
    *  ends, a workflow checkpoint's when its invocation does. */
-  readonly releaseClaims: (id: AggregateId) => Effect.Effect<void>;
-  readonly runRecords: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
+  readonly releaseClaims: (
+    id: AggregateId,
+  ) => Effect.Effect<void, DatabaseWriteFailed>;
+  readonly runRecords: (
+    id: RunId,
+  ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
   /** Whether this process holds an existing, open run in the database. */
   readonly ownsRun: (id: RunId) => Effect.Effect<boolean>;
   /** Who holds one run right now, with its owner's liveness proved in the
@@ -94,9 +103,14 @@ export interface SessionGraph {
    *  which fold over the whole aggregate rather than the latest of a type. */
   readonly aggregateRows: (
     id: AggregateId,
-  ) => Effect.Effect<readonly SessionEvent[]>;
-  readonly runChildren: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
-  readonly recordListing: () => Effect.Effect<readonly SessionEvent[]>;
+  ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+  readonly runChildren: (
+    id: RunId,
+  ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+  readonly recordListing: () => Effect.Effect<
+    readonly SessionEvent[],
+    DatabaseReadFailed
+  >;
   /** Transient text shares the existing session-input source, never the event table. */
   readonly publishText: (
     runId: RunId,
@@ -116,7 +130,9 @@ export interface SessionGraph {
    *  `fromCommit`, released once the view holds the state that folded it,
    *  and local reconciliation has completed, for a reader that queries the
    *  resulting state beside each row. */
-  readonly folded: (fromCommit: CommitOrdinal) => Stream.Stream<SessionEvent>;
+  readonly folded: (
+    fromCommit: CommitOrdinal,
+  ) => Stream.Stream<SessionEvent, DatabaseReadFailed>;
   /** This process's local truth; the status machine writes `unreadable`. */
   readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
   /** Ordered fold inputs: complete replay, then events before live text. */
@@ -166,7 +182,7 @@ export interface SessionOwner {
    *  or built now over what `open` supplies. The root's entry is registered
    *  with the owner before this Effect's first yield, so a close issued
    *  after it finds the session and waits for its build. */
-  open(open: SessionOpen): Effect.Effect<SessionHandle>;
+  open(open: SessionOpen): Effect.Effect<SessionHandle, SessionOpenError>;
   /** The session open on a storage root, if one is; never builds one, and
    *  does not see an entry still building or already releasing. */
   current(root: string): SessionHandle | undefined;
@@ -229,7 +245,7 @@ function sessions(): SessionOwner {
  */
 export function openSessionEffect(
   init: SessionHandleInit,
-): Effect.Effect<SessionHandle> {
+): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.suspend(() => sessions().open(resolveRoots(init)));
 }
 

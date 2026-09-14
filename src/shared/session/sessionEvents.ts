@@ -19,7 +19,11 @@ import type {
   DisplaySessionEvent,
   SessionEventDraft,
 } from '@shared/schemas';
-import type { DatabaseNotOwner, DatabaseWriteFailed } from './database';
+import type {
+  DatabaseNotOwner,
+  DatabaseReadFailed,
+  DatabaseWriteFailed,
+} from './database';
 
 /** One ordered append to the log, as the publisher hands it to a job. */
 export type Append = (
@@ -88,7 +92,10 @@ export class SessionEvents extends Context.Service<
     readonly detach: (
       job: (
         append: Append,
-      ) => Effect.Effect<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
+      ) => Effect.Effect<
+        unknown,
+        DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+      >,
     ) => void;
     /** Wait for every detached job enqueued before this call to run, then
      *  fail with their aggregated refusals, if any; on success, the highest
@@ -97,7 +104,10 @@ export class SessionEvents extends Context.Service<
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */
-    readonly listing: () => Stream.Stream<DisplaySessionEvent>;
+    readonly listing: () => Stream.Stream<
+      DisplaySessionEvent,
+      DatabaseReadFailed
+    >;
     /** Every event with commit above `fromCommit`, in commit order across
      *  aggregates, then the tail. Transcript rows of unsubscribed aggregates
      *  included: the live tail and the frozen NDJSON projection read it.
@@ -108,13 +118,13 @@ export class SessionEvents extends Context.Service<
     readonly all: (
       fromCommit: SessionCursor,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ) => Stream.Stream<DisplaySessionEvent>;
+    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
     /** One aggregate's rows from `fromSeq`, in seq order; completes. A
      *  history read, never a tail. */
     readonly aggregate: (
       aggregateId: AggregateId,
       fromSeq: number,
-    ) => Stream.Stream<DisplaySessionEvent>;
+    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
   }
 >()('@texra/session/SessionEvents') {}
 

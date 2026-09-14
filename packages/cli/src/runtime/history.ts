@@ -27,6 +27,7 @@ import {
   type RunId,
   type HistoryRunStatus,
 } from '@shared/schemas';
+import type { SessionOpenError } from '@shared/session/database';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { RunView } from '@shared/session/sessionView';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
@@ -162,7 +163,7 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
  */
 export async function listCliHistoryEntries(
   runtime: ProcessRuntime,
-  session: Effect.Effect<SessionHandle>,
+  session: Effect.Effect<SessionHandle, SessionOpenError>,
 ): Promise<CliHistoryEntry[]> {
   // A row's resumability comes from the checkpoint `stat` the listing already
   // did; only a failed workflow row still reads its persisted state. That read
@@ -183,7 +184,7 @@ export async function listCliHistoryEntries(
 
 export async function readCliHistoryDetails(
   runtime: ProcessRuntime,
-  sessionOpen: Effect.Effect<SessionHandle>,
+  sessionOpen: Effect.Effect<SessionHandle, SessionOpenError>,
   id: RunId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
@@ -328,7 +329,7 @@ type CliHistoryExportInputResult =
  */
 export async function readCliHistoryExportInput(
   runtime: ProcessRuntime,
-  session: Effect.Effect<SessionHandle>,
+  session: Effect.Effect<SessionHandle, SessionOpenError>,
   id: RunId,
 ): Promise<CliHistoryExportInputResult> {
   const { run, config, conversation, hasTranscriptEvidence, exportInput } =
