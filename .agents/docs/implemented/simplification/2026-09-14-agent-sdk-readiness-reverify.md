@@ -1,15 +1,15 @@
 # Agent-SDK readiness — re-verification pass (2026-09-14)
 
-Status: proposed
+Status: implemented
 
 > **Written 2026-09-14.** The scheduled audit routine re-ran the standing
 > question — "review the agent core, model handler, logger, and surface for
 > unnecessary abstraction and unready surface; design subagent boundaries" —
 > against the immediately prior pass
-> ([`-09-13`](../../implemented/simplification/2026-09-13-agent-sdk-readiness-reverify.md),
+> ([`-09-13`](./2026-09-13-agent-sdk-readiness-reverify.md),
 > "eleventh consecutive green", inspected at `a7cd2ab`) and the Tier-1 manifest
 > of record
-> ([`2026-09-10-agent-sdk-tier-1-manifest.md`](../architecture/2026-09-10-agent-sdk-tier-1-manifest.md)).
+> ([`2026-09-10-agent-sdk-tier-1-manifest.md`](../../proposed/architecture/2026-09-10-agent-sdk-tier-1-manifest.md)).
 > This is the **twelfth consecutive green pass** (`-08-19` through `-09-14`).
 > Facts below are re-derived by direct inspection and carry a `file:line`,
 > config path, or count. The branch was **updated onto the current `main` tip
@@ -19,7 +19,7 @@ Status: proposed
 > **Correction note.** An earlier draft of this doc mis-numbered the pass as the
 > "ninth" and cited `-09-04` as the most recent prior pass — it had consulted
 > only `archived/simplification/` and missed the three newer records under
-> [`implemented/simplification/`](../../implemented/simplification/) (`-09-09`
+> [`implemented/simplification/`](./) (`-09-09`
 > ninth, `-09-11` tenth, `-09-13` eleventh). That draft's `file:line` anchors
 > were also transcribed from a branch base (`8f0b294`) that trailed `main`, so
 > several were off by a few lines. Both are fixed here: the lineage is corrected
@@ -60,9 +60,12 @@ At this pass's HEAD the retirement is **complete**, verified directly:
   `grep -n "class ModelHandler\|IModelHandler" src/ packages/` returns **zero**
   production hits (only `.agents/docs/*` history). The responsibilities now split
   across `runtime/ModelInvoker.ts` (1,297 LoC, cohesive — "call the Model, own
-  retry") and the injected `runtime/run/` services (`modelBinding.ts`,
-  `pricing.ts`, `routeEndpoint.ts`, `modelFailure.ts`, `validationModel.ts`, …).
-  **No re-export shim was left behind.** The `IModelHandler` provider-type-leak
+  retry") and the `runtime/run/*` modules (`modelBinding.ts`, `pricing.ts`,
+  `routeEndpoint.ts`, `modelFailure.ts`, `validationModel.ts`, …). Those are
+  ordinary helper modules imported directly (e.g. `ModelInvoker.ts:78-86` imports
+  `bindModel`, `classifyModelFailure`, `priceTurnUsage`, `dispatchFactsFor`); the
+  injected Context services are `AgentRun` and `ModelInvoker` itself, not the
+  helper split. **No re-export shim was left behind.** The `IModelHandler` provider-type-leak
   concern the prior passes carried as a manifest-design note is now moot — the
   port is gone.
 - **Host→`@agent` deep-import width at its narrowest recorded.** Current
@@ -72,10 +75,13 @@ At this pass's HEAD the retirement is **complete**, verified directly:
   SDK package's own row stays at its provider-type-leak floor of 7.
 
 Consistent with the routine's standing default — a scheduled firing carries **no
-maintainer request** — this pass is **recorded, not acted on** for the codebase.
-The one PR this run did open (#12452) is the record itself; the fixes above
-correct that record, not production code. The four minor items in §5 are logged
-for a maintainer; none is a defect.
+maintainer request** — this pass is **recorded, not acted on** for the codebase,
+with one exception mirroring the `-09-13` precedent: the audit surfaced a
+concrete SDK-surface documentation defect (§5.5, the `@texra-ai/agent` README
+telling consumers to install an `effect` version the package does not pin), and
+because that is a clearly-correct, on-theme one-line fix flagged in review, **it
+is fixed in this PR** alongside this record. The remaining four minor items in §5
+are logged for a maintainer; none is a defect.
 
 ## 1. Method and scope
 
@@ -119,12 +125,17 @@ multiple callers. The state the loop continues from is exactly what `appendBatch
 returns (`foldRunState` over committed rows), so live and resume are the same
 function — no cursor, no graph, no intermediate writer service.
 
-Single writer of run-state rows holds literally: the durable rows
-(`flow.snapshot`, `model.message`, `model.compaction`, `tool.intent`,
-`tool.result`, `flow.step`, `stream.end`, loop-owned `request.opened`) have one
-writer, `RunLedger.appendBatch`. The two `session.publish` sites in `loop/`
-(`toolUse.ts` `run.workspaceFiles`, `run.record`) are display-plane events, not
-ledger rows. Two documented, intentional second-plane exceptions exist and are
+Single writer holds for the rows that actually fold run state: the durable rows
+`foldRunState` mutates state from (`flow.snapshot`, `model.message`,
+`model.compaction`, `tool.intent`, `tool.result`, `flow.step`, loop-owned
+`request.opened`) have one writer, `RunLedger.appendBatch`. **`stream.end` is
+not one of them** — it is a trace/display-plane event emitted through
+`TraceEmitter` (`src/agent/trace/TraceEmitter.ts:379`) and explicitly folds to
+no state mutation (`runStateFold.ts:961` returns `null`, "the ledger row beside
+it is the fact"); an earlier draft mislisted it here. Likewise the two
+`session.publish` sites in `loop/` (`toolUse.ts` `run.workspaceFiles`,
+`run.record`) are display-plane events, not run-state rows. Two documented,
+intentional second-plane exceptions exist for the run-state rows and are
 not migration accidents: `RunLedger.acquire` publishing `request.decided`
 cancellation rows for a dead owner's unbound requests (in-service,
 file-header-documented), and the host request plane writing
@@ -161,7 +172,7 @@ enclosing command "never itself becomes a trackable session"). It stays open
 `AgentCreatorUI`/`HostInteractions` approval channel the public surface
 deliberately lacks), not a mechanical move (manifest §7.3).
 
-## 5. Findings — all minor, none a defect
+## 5. Findings
 
 1. **`createRunScope` (`src/agent/runtime/RunScope.ts`) — single-caller factory,
    carried-forward survivor.** One production caller
@@ -191,6 +202,17 @@ deliberately lacks), not a mechanical move (manifest §7.3).
    `RunView` and `RunId`/`RunIdSchema`. The surface is internally consistent
    (README documents `RunView`); the manifest's own §7.5 already flags it for
    re-enumeration.
+5. **`@texra-ai/agent` README `effect` peer-version drift — a real defect, fixed
+   in this PR.** `packages/agent/package.json` pins the `effect` peer at
+   `4.0.0-rc.115` (peer and dev), but the README install guidance told consumers
+   to install `4.0.0-rc.112`. Because the README itself warns that two copies of
+   `effect` in one process "do not work at all", a consumer following the
+   documented setup would hit exactly that duplicate-runtime failure. This is the
+   one place the surface did **not** re-verify clean, so the earlier "no
+   degradation found" conclusion is corrected here. The README is updated to
+   `4.0.0-rc.115` to match the pin (the acted item noted in §0). Better still,
+   the install line should read the pinned version from `package.json` rather
+   than restate it, to stop this drift recurring — left as a follow-up.
 
 ## 6. Carried-forward design notes (unchanged, none a defect)
 
@@ -214,11 +236,14 @@ the ratified Effect-4 cutover has **landed**: relative to `-09-11` (which still
 recorded the Node flow engine at 158 LoC and `ModelHandler.ts` as a live 1,922-LoC
 abstract base), the node engine, the `ModelHandler` god-base, and the
 `IModelHandler` port are now deleted with no shim, the model stack is
-`ModelInvoker.ts` + injected `runtime/run/*` over the run ledger, extension's
-deep-import width shrank 9→8, and all eight named doors are fronted. The run loop,
-the loop↔ledger single-writer boundary, the logger, and the public surface all
-re-verify clean, with no silent degradation. The subagent SPI is a real
+`ModelInvoker.ts` + the `runtime/run/*` helper modules over the run ledger,
+extension's deep-import width shrank 9→8, and all eight named doors are fronted.
+The run loop, the loop↔ledger single-writer boundary (for the rows that fold run
+state), and the logger re-verify clean with no silent degradation. The public
+surface is clean but for one documentation defect — the README `effect`
+peer-version drift (§5.5), fixed in this PR. The subagent SPI is a real
 four-implementor contract; `agentCreator` is the single, correctly-open boundary.
-The four items in §5 are minor cleanups and one doc re-enumeration, not defects,
-and none warrants a speculative edit into the green tree absent a maintainer
-request, which this scheduled firing does not carry.
+Of the five §5 items, four are minor cleanups and one doc re-enumeration (none a
+defect, none warranting a speculative edit into the green tree absent a maintainer
+request this scheduled firing does not carry); the fifth was a real defect and is
+fixed here.
