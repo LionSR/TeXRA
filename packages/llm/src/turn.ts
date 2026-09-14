@@ -1758,9 +1758,7 @@ export const chatToolResultMessages = Effect.fn('llm.chatToolResultMessages')(
         // The canonical grammar already guarantees adjacent, complete ordinals.
         tool_call_id: callIds[result.callOrdinal],
         content:
-          result.status === 'error'
-            ? `Error: ${text.join('')}`
-            : text.join(''),
+          result.status === 'error' ? `Error: ${text.join('')}` : text.join(''),
       });
     }
     return messages;
