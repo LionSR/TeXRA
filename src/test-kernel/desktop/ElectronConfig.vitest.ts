@@ -5,7 +5,7 @@ import { join } from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Exit, ManagedRuntime } from 'effect';
-import { describe, expect } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 
 // Local imports - platform
 import type { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
@@ -18,6 +18,12 @@ import { loadSourceModule } from './loadSourceModule.ts';
 
 describe('desktop JsonConfigProvider (dual-store)', () => {
   const tempDirs = useTempDirs();
+  // Each provider's stores run their `update` on a runtime of their own;
+  // the runtime ends with the test that made it.
+  const runtimes: { dispose(): Promise<void> }[] = [];
+  afterEach(async () => {
+    for (const runtime of runtimes.splice(0)) await runtime.dispose();
+  });
 
   function createProvider(): Effect.Effect<
     {
@@ -44,6 +50,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
       // The provider's `update` is a Promise, so each store is handed the
       // runtime its write runs on, exactly as a host hands over its own.
       const runtime = ManagedRuntime.make(nodePlatformLayer);
+      runtimes.push(runtime);
       const [globalStore, workspaceStore] = yield* Effect.all([
         JsonStore.open(globalPath, { runtime }),
         JsonStore.open(workspacePath, { runtime }),
