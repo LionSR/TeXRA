@@ -177,7 +177,6 @@
     },
     "catch:effect-importer": {
       "packages/desktop/src/main/index.ts": 1,
-      "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
       "src/agent/remote/RemoteAgentLoader.ts": 1,
       "src/agent/runtime/SessionHandle.ts": 2,
       "src/tools/github/PollingSourceBase.ts": 1,

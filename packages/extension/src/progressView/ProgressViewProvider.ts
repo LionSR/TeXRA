@@ -39,8 +39,7 @@ import {
   type ToolEditApprovalHost,
 } from '@controllers/approval/ToolEditApprovalController';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
-import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
+import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
 import {
   SessionBridge,
   type AttachedPort,
@@ -69,7 +68,6 @@ import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKeyOf,
   AgentCategory,
-  type OnboardingFunnelState,
   type SessionType,
   type RunId,
 } from '@shared/schemas';
@@ -78,10 +76,6 @@ import type {
   DownMessage,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
-import {
-  readOnboardingFlags,
-  setOnboardingDeclined,
-} from '@shared/state/onboardingState';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -128,15 +122,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** The popped-out tab and its port, attached and released together. */
   private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
 
-  /** Last computed funnel state, so credential hooks can detect the
-   *  in-session State 0 to 1 transition. Session-scoped by design. */
-  private onboardingFunnelState: OnboardingFunnelState | undefined;
-  /** Funnel refresh derives an edge-triggered transition after awaiting the
-   *  credential probe; callers serialize so a later completion cannot
-   *  commit a transition from a stale previous state. */
-  private readonly onboardingFunnelRefreshQueue = new OnboardingRefreshQueue(
-    () => this.refreshOnboardingFunnelSerially(),
-  );
+  /**
+   * This host's half of the shared funnel loop (PRD: agent-native
+   * onboarding): its credential sources, its user-scoped flag store, and the
+   * two things it does with a recomputed funnel — paint it into the host
+   * snapshot, and on entering State 1 select the setup agent on the launcher.
+   * It never auto-starts setup; the user launches it from the setup card.
+   */
+  private readonly onboardingFunnel: OnboardingFunnelRefresher;
   private readonly debouncedRefreshCatalogs = debounce(
     () => void this.refreshCatalogs(),
     DEBOUNCE_OPTIONS_MS,
@@ -154,6 +147,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       'ProgressView',
       'progressView',
     );
+    this.onboardingFunnel = new OnboardingFunnelRefresher({
+      hasCredential: () => hasAnyUsableSetupCredential(secrets),
+      flags: context.globalState,
+      apply: (transition) => {
+        this.snapshot.setOnboarding(transition.state);
+        if (!transition.selectSetupAgent) return;
+        // Resolve the qualified registry key so the dropdown matches by
+        // value; the plain name still resolves by label if the registry
+        // isn't loaded.
+        const entry = getAgent('setup', AgentCategory.ToolUse);
+        this.surfaceAction({
+          kind: 'launch',
+          patch: {
+            sessionType: 'toolUse',
+            agent: { toolUse: entry ? agentKeyOf(entry) : 'setup' },
+          },
+        });
+      },
+    });
 
     // Install the recipient before host requests publish the recorder's state.
     this.bridge = this.runtime.runSync(
@@ -434,51 +446,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.snapshot.showAgentConfigBanner(agentName, sessionType);
   }
 
-  /**
-   * Single derivation point for the onboarding funnel on this host (PRD:
-   * agent-native onboarding): recomputes the user-scoped funnel state into
-   * the host snapshot and acts on the State 0 to 1 transition by clearing a
-   * stale skip and selecting the setup agent on the launcher. It never
-   * auto-starts setup; the user launches it from the setup card.
-   */
+  /** Recompute the user-scoped funnel; the shared refresher owns the loop. */
   public refreshOnboardingFunnel(): Promise<void> {
-    return this.runtime.runPromise(this.onboardingFunnelRefreshQueue.run());
-  }
-
-  private async refreshOnboardingFunnelSerially(): Promise<void> {
-    // Same usable-credential check the setup command uses. A probe failure
-    // still resolves to `false` so the funnel renders something, but not
-    // silently: that answer blanks the launcher down to the first-run
-    // welcome card for a user who has keys.
-    let hasCredential = false;
-    try {
-      hasCredential = await hasAnyUsableSetupCredential(this.secrets);
-    } catch (error) {
-      log.warn(
-        `Credential probe failed; treating as no credential: ${toErrorMessage(error)}`,
-      );
-    }
-    const transition = planOnboardingFunnelTransition(
-      this.onboardingFunnelState,
-      { hasCredential, ...readOnboardingFlags(this.context.globalState) },
-    );
-    this.onboardingFunnelState = transition.state;
-    this.snapshot.setOnboarding(transition.state);
-    if (transition.clearDeclined) {
-      await setOnboardingDeclined(this.context.globalState, false);
-    }
-    if (transition.selectSetupAgent) {
-      // Resolve the qualified registry key so the dropdown matches by value;
-      // the plain name still resolves by label if the registry isn't loaded.
-      const entry = getAgent('setup', AgentCategory.ToolUse);
-      this.surfaceAction({
-        kind: 'launch',
-        patch: {
-          sessionType: 'toolUse',
-          agent: { toolUse: entry ? agentKeyOf(entry) : 'setup' },
-        },
-      });
-    }
+    return this.runtime.runPromise(this.onboardingFunnel.run());
   }
 
   // --- Ports ---

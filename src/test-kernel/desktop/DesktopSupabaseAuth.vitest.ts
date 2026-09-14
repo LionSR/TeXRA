@@ -526,7 +526,7 @@ describe('desktop Supabase auth', () => {
         createLog(),
         stateStore,
       );
-      await initialState.beginAuthAttempt('expired-nonce');
+      await initialState.beginAuthAttempt('11111111111111111111111111111111');
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
 
       const cleanup = createDeferred<void>();
@@ -542,7 +542,9 @@ describe('desktop Supabase auth', () => {
         createLog(),
         stateStore,
       );
-      const beginNewAttempt = recreatedState.beginAuthAttempt('new-nonce');
+      const beginNewAttempt = recreatedState.beginAuthAttempt(
+        '22222222222222222222222222222222',
+      );
       await vi.waitFor(() => {
         expect(stateStore.update).toHaveBeenCalledOnce();
       });
@@ -554,7 +556,9 @@ describe('desktop Supabase auth', () => {
         createLog(),
         stateStore,
       );
-      expect(persistedState.matchesPendingNonce('new-nonce')).toBe(true);
+      expect(
+        persistedState.matchesPendingNonce('22222222222222222222222222222222'),
+      ).toBe(true);
     } finally {
       vi.useRealTimers();
     }
