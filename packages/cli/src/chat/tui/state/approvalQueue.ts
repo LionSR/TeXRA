@@ -32,7 +32,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever, groupBy } from '@utils/core';
 
-import { registerCliStateResetHook } from './cliState';
+import { currentSessionRunIds, registerCliStateResetHook } from './cliState';
 import { sessionView } from './sessionView';
 import { appendLocalRequestRefusal } from './transcript';
 
@@ -102,9 +102,10 @@ type PendingApprovalFact = SessionView['requests'][number] & {
 function pendingApprovalFacts(
   view: SessionView,
 ): readonly PendingApprovalFact[] {
+  const included = currentSessionRunIds(view);
   return view.requests.filter(
     (request): request is PendingApprovalFact =>
-      request.payload.kind !== 'externalInquiry',
+      included.has(request.runId) && request.payload.kind !== 'externalInquiry',
   );
 }
 

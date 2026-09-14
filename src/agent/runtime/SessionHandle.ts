@@ -377,12 +377,10 @@ export class SessionHandle {
   setApprovalPolicy(policy: TexraApprovalPolicy): void {
     if (policy === this.texraApprovalPolicy) return;
     this.texraApprovalPolicy = policy;
-    // The policy is session-wide; the snapshot is per run, so every stream
-    // the view holds (the ones whose `run.start` has folded: the existence
-    // rule, PRD 5.2) gets its own `approval.policy`. A reservation still
-    // short of its `run.start` is not in the view: its launcher stamps the
-    // initial snapshot, read from this new value, on that event instead.
-    for (const runId of SubscriptionRef.getUnsafe(this.view).runs.keys()) {
+    // The view includes other processes' runs from the project database.
+    // Publish only for runs this session owns; a future launch stamps its
+    // initial snapshot from the current policy on `run.start`.
+    for (const runId of this.runs.getActiveIds()) {
       this.publishApprovalPolicy(runId);
     }
   }
