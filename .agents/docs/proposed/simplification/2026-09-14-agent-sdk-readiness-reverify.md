@@ -4,7 +4,7 @@ Status: proposed
 
 > **Written 2026-09-14 against branch HEAD `8f0b294`**
 > (`fix(cli): resolve a remote workflow agent's default outputs from its loaded
-> definition`, #12434). The scheduled audit routine re-ran the standing
+definition`, #12434). The scheduled audit routine re-ran the standing
 > question — "review the agent core, model handler, logger, and surface for
 > unnecessary abstraction and unready surface; design subagent boundaries" —
 > against the most recent prior pass
@@ -69,23 +69,23 @@ construction, or captured context; single-caller trivial extractions are banned)
 per-commit "net −N lines / N refactor / zero new exported class" interval
 accounting the prior passes provided is **absent here**. The structural
 conclusions below rest on end-state inspection, which is sufficient for the
-standing question (is there unnecessary abstraction *now*), but the interval
+standing question (is there unnecessary abstraction _now_), but the interval
 trend line should be re-established from a full clone on the next pass.
 
 ## 2. Tracked structural facts — re-verified at `8f0b294`
 
-| Item | Expected (`-09-04` @ `4579625`) | `8f0b294` state |
-| --- | --- | --- |
-| **Node flow engine** | 158 LoC, `BaseNode` + `Flow` | **Deleted.** `src/agent/node/` absent. Replaced by the run-ledger Effect program (`runtime/loop/{toolUse,reflection,toolUseDispatch,rows}.ts` over `runLedger.ts`). |
-| **M-3** `ModelHandler.ts` god-base | 2,026 LoC | **Deleted.** Zero production refs; decomposed into `ModelInvoker.ts` (1,297) + `runtime/run/*`. No shim. |
-| **`IModelHandler`** | `Pick<ModelHandler>` internal | **Deleted.** Zero refs. Prior open item (1) closed. |
-| **§8b / PT-2** `SessionHandle.useHostInteractions` | gone | **still gone** (`grep` → 0). |
-| **§8a** dead logger export `OutputChannelFactoryOptions` | de-exported, internal use | **Deleted entirely** — symbol absent from `src/`/`packages/`; the output-channel-factory mechanism was removed in favor of the `logSink` model (`src/logger/logSink.ts`). Tracker can drop this line. |
-| **L-3** `redactSecrets` | single-arg, no dead branch | **still clean.** `redactSecrets(text: string): string` (`src/logger/redaction.ts:81`), straight-line body; the file's growth to 118 LoC is the real `PROVIDER_KEY_REDACTION_RULES` table + `redactDisplayValue`, not a dead branch. |
-| **SDK version** | 0.40.9 | **0.41.0** (`packages/agent/package.json`). |
-| **`createRunScope`** survivor | 1 production caller | **1 production caller** (`AgentLaunchContext.ts:555`); all other `createRunScope(` sites under `src/test-kernel/`. Unchanged survivor (see §5.1). |
-| **Deep-import width** (cli/desktop/ext/agent) | 7 / 5 / 9 / 7 | **5 / 4 / 8 / 7** — shrank on three hosts, agent held. |
-| **Tier-1 named doors** | (manifest target) | **8/8 fronted** — `src/agent/{export,followUp,index,review,runtime,storage,templates,trace}/index.ts` all present. |
+| Item                                                     | Expected (`-09-04` @ `4579625`) | `8f0b294` state                                                                                                                                                                                                                     |
+| -------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Node flow engine**                                     | 158 LoC, `BaseNode` + `Flow`    | **Deleted.** `src/agent/node/` absent. Replaced by the run-ledger Effect program (`runtime/loop/{toolUse,reflection,toolUseDispatch,rows}.ts` over `runLedger.ts`).                                                                 |
+| **M-3** `ModelHandler.ts` god-base                       | 2,026 LoC                       | **Deleted.** Zero production refs; decomposed into `ModelInvoker.ts` (1,297) + `runtime/run/*`. No shim.                                                                                                                            |
+| **`IModelHandler`**                                      | `Pick<ModelHandler>` internal   | **Deleted.** Zero refs. Prior open item (1) closed.                                                                                                                                                                                 |
+| **§8b / PT-2** `SessionHandle.useHostInteractions`       | gone                            | **still gone** (`grep` → 0).                                                                                                                                                                                                        |
+| **§8a** dead logger export `OutputChannelFactoryOptions` | de-exported, internal use       | **Deleted entirely** — symbol absent from `src/`/`packages/`; the output-channel-factory mechanism was removed in favor of the `logSink` model (`src/logger/logSink.ts`). Tracker can drop this line.                               |
+| **L-3** `redactSecrets`                                  | single-arg, no dead branch      | **still clean.** `redactSecrets(text: string): string` (`src/logger/redaction.ts:81`), straight-line body; the file's growth to 118 LoC is the real `PROVIDER_KEY_REDACTION_RULES` table + `redactDisplayValue`, not a dead branch. |
+| **SDK version**                                          | 0.40.9                          | **0.41.0** (`packages/agent/package.json`).                                                                                                                                                                                         |
+| **`createRunScope`** survivor                            | 1 production caller             | **1 production caller** (`AgentLaunchContext.ts:555`); all other `createRunScope(` sites under `src/test-kernel/`. Unchanged survivor (see §5.1).                                                                                   |
+| **Deep-import width** (cli/desktop/ext/agent)            | 7 / 5 / 9 / 7                   | **5 / 4 / 8 / 7** — shrank on three hosts, agent held.                                                                                                                                                                              |
+| **Tier-1 named doors**                                   | (manifest target)               | **8/8 fronted** — `src/agent/{export,followUp,index,review,runtime,storage,templates,trace}/index.ts` all present.                                                                                                                  |
 
 ## 3. Loop ↔ ledger boundary and single-writer invariant — hold
 
@@ -118,12 +118,12 @@ not a defect.
 `startChildRunLoop` (`:783`), remain a **shipped, multi-implementor SPI, not a
 design task.** Four distinct production construction sites:
 
-| Site | Constructor |
-| --- | --- |
-| `src/tools/delegation/nativeSubagentStrategy.ts:195` | `createNativeSubagentStrategy` (native subagent, both output categories) |
-| `src/tools/delegation/workflowScriptStrategy.ts:153` | `createWorkflowScriptStrategy` (workflow-script child) |
-| `src/tools/bash.ts:239` | `createBackgroundBashStrategy` (background shell) |
-| `src/tools/agentCliShared.ts:614` | inline `const strategy: ChildRunStrategy<TTurn>` (codex/claude CLI sessions) |
+| Site                                                 | Constructor                                                                  |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `src/tools/delegation/nativeSubagentStrategy.ts:195` | `createNativeSubagentStrategy` (native subagent, both output categories)     |
+| `src/tools/delegation/workflowScriptStrategy.ts:153` | `createWorkflowScriptStrategy` (workflow-script child)                       |
+| `src/tools/bash.ts:239`                              | `createBackgroundBashStrategy` (background shell)                            |
+| `src/tools/agentCliShared.ts:614`                    | inline `const strategy: ChildRunStrategy<TTurn>` (codex/claude CLI sessions) |
 
 `detachedChildRun.ts:64` is a **consumer** of the SPI (shared launcher for the
 first two), not a fifth implementor. The SPI now carries an Effect context type
@@ -146,9 +146,9 @@ deliberately lacks), not a mechanical move (manifest §7.3).
    factory, carried-forward survivor.** One production caller
    (`AgentLaunchContext.ts:555`); the body is `Object.freeze({ ...scope })` with
    an identity `RunScope → RunScope` signature. By the letter of the
-   single-caller ban it is inlineable; its defensible retention is *documented
+   single-caller ban it is inlineable; its defensible retention is _documented
    immutability invariant (run identity must not mutate mid-run) + shared
-   test-kernel constructor seam*. Same disposition as the prior eight passes:
+   test-kernel constructor seam_. Same disposition as the prior eight passes:
    inline it **or** re-document the invariant at the definition; either way not a
    defect.
 2. **`turnText` ~5-line copy — the one genuine duplication in the model
@@ -160,7 +160,7 @@ deliberately lacks), not a mechanical move (manifest §7.3).
    this pure `TurnResult → string` function to a leaf module (e.g. beside
    `packages/llm/src/turn.ts`) that both import. Actionable, low value, low risk.
 3. **`PROVIDER_KEY_REDACTION_RULES` (`src/logger/redaction.ts:28`) — test-only
-   export, already baselined.** Zero production consumers of the *export* (the
+   export, already baselined.** Zero production consumers of the _export_ (the
    file's own use at `:75` needs the value, not the `export`; the sole external
    reader is `DesktopLogRedaction.vitest.ts`). Already recorded
    `"production-dead"` in `config/ratchets/knip-baseline.json`. The internal
