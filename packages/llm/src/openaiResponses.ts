@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 // Local imports - canonical model contract
 import { openaiFailure } from './openaiError.js';
-import { prefixFingerprint } from './prefixFingerprint.js';
+import { issuerFingerprint, prefixFingerprint } from './prefixFingerprint.js';
 import {
   BackgroundSubmissionSchema,
   CancellationEvidenceSchema,
@@ -31,6 +31,7 @@ import {
   TurnRequestSchema,
   TurnResultSchema,
   sameModelOrigin,
+  usableReceipt,
   type Model,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
@@ -40,7 +41,7 @@ import {
   type BackgroundEvent,
   type BackgroundSubmission,
   type Continuation,
-  type FileReference,
+  type FileReceipt,
   type RemoteOperation,
   completedTurn,
 } from './turn.js';
@@ -331,17 +332,63 @@ const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
   },
 );
 
+/** Canonical image detail as the Responses vocabulary names it. */
+const RESPONSES_IMAGE_DETAIL = {
+  low: 'low',
+  medium: 'auto',
+  high: 'high',
+  'ultra-high': 'high',
+} as const satisfies Record<
+  NonNullable<
+    Extract<
+      Extract<
+        ResolvedTurn['messages'][number],
+        { role: 'user' }
+      >['content'][number],
+      { kind: 'image' }
+    >['detail']
+  >,
+  OpenAI.Responses.ResponseInputImage['detail']
+>;
+
+/** What lowering needs to decide whether a receipt may stand in for bytes. */
+interface ReceiptLowering {
+  /** This binding's issuer, or `null` when it has none to honour. */
+  readonly issuer: string | null;
+  readonly nowMs: number;
+}
+
+/**
+ * The issuer a Responses binding honours receipts from. An API key names the
+ * account its files live in; a subscription token rotates on refresh and its
+ * backend serves no files endpoint, so that binding has none and always sends
+ * bytes.
+ */
+function responsesIssuer(
+  config: OpenAIResponsesConfiguration,
+  authentication: z.infer<typeof ResponseAuthenticationSchema>,
+): string | null {
+  return authentication.kind === 'api-key'
+    ? issuerFingerprint(
+        'openai-responses',
+        config.deployment.endpoint,
+        authentication.apiKey,
+      )
+    : null;
+}
+
 /**
  * One canonical input part as Responses content. Inline bytes travel as a
- * data URL; a file receipt this surface issued travels as its id, and a
- * receipt from another API is refused rather than sent as an id OpenAI
- * would resolve to someone else's file.
+ * data URL. A document's receipt travels as its id only where this binding
+ * issued it and it is still live; any other receipt is never sent, and the
+ * document lowers from the bytes it always keeps.
  */
 const responsesContent = Effect.fn('llm.responses.content')(function* (
   part: Extract<
     ResolvedTurn['messages'][number],
     { role: 'user' }
   >['content'][number],
+  lowering: ReceiptLowering,
 ): Effect.fn.Return<OpenAI.Responses.ResponseInputContent, ModelError> {
   switch (part.kind) {
     case 'text':
@@ -349,10 +396,22 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
     case 'image':
       return {
         type: 'input_image',
-        detail: part.detail === 'low' ? 'low' : 'high',
+        // No stated detail keeps the provider's own choice rather than
+        // forcing high-detail cost; `medium` has no Responses counterpart.
+        detail:
+          part.detail === undefined
+            ? 'auto'
+            : RESPONSES_IMAGE_DETAIL[part.detail],
         image_url: `data:${part.mimeType};base64,${part.base64}`,
       };
-    case 'document':
+    case 'document': {
+      const fileId = usableReceipt(
+        part.receipt,
+        'openai-responses',
+        lowering.issuer,
+        lowering.nowMs,
+      );
+      if (fileId !== null) return { type: 'input_file', file_id: fileId };
       return {
         type: 'input_file',
         // OpenAI reads the type off the name when the bytes are inline, and
@@ -360,17 +419,7 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
         filename: `document.${part.mimeType.split('/').pop() ?? 'bin'}`,
         file_data: `data:${part.mimeType};base64,${part.base64}`,
       };
-    case 'file':
-      if (part.protocol !== 'openai-responses') {
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message:
-            'Responses cannot read a file receipt issued by another API.',
-        });
-      }
-      return part.mimeType.startsWith('image/')
-        ? { type: 'input_image', detail: 'high', file_id: part.fileId }
-        : { type: 'input_file', file_id: part.fileId };
+    }
     case 'audio':
     case 'video':
       return yield* new ModelError({
@@ -383,7 +432,14 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
 
 const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  issuer: string | null,
 ) {
+  const lowering: ReceiptLowering = {
+    issuer,
+    nowMs: yield* Clock.currentTimeMillis,
+  };
+  const content = (part: Parameters<typeof responsesContent>[0]) =>
+    responsesContent(part, lowering);
   const input: OpenAI.Responses.ResponseInput = [];
   let callIds: string[] = [];
   for (const message of turn.messages) {
@@ -408,7 +464,7 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
               ? body
               : [
                   { type: 'input_text' as const, text: body },
-                  ...(yield* Effect.forEach(attachments, responsesContent)),
+                  ...(yield* Effect.forEach(attachments, content)),
                 ],
         });
       }
@@ -418,7 +474,7 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
     if (message.role === 'user') {
       input.push({
         role: 'user',
-        content: yield* Effect.forEach(message.content, responsesContent),
+        content: yield* Effect.forEach(message.content, content),
       });
       continue;
     }
@@ -620,7 +676,7 @@ export const openaiResponsesContinuation = Effect.fn(
       content: result.content,
     },
   ];
-  const encoded = yield* lowerInput({ ...turn, messages: prefix });
+  const encoded = yield* lowerInput({ ...turn, messages: prefix }, null);
   return ContinuationSchema.parse({
     origin: result.requestedOrigin,
     coveredMessages: prefix.length,
@@ -640,12 +696,14 @@ export const openaiResponsesContinuation = Effect.fn(
 
 const responseInput = Effect.fn('llm.responses.input')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  issuer: string | null,
 ) {
-  const input = yield* lowerInput(turn);
+  const input = yield* lowerInput(turn, issuer);
   const continuation = turn.continuation;
   if (!continuation) return { input };
   const prefix = turn.messages.slice(0, continuation.coveredMessages);
-  const encodedPrefix = yield* lowerInput({ ...turn, messages: prefix });
+  // Counted only: a receipt and its bytes lower to the same one item.
+  const encodedPrefix = yield* lowerInput({ ...turn, messages: prefix }, null);
   if (
     !sameModelOrigin(turn, continuation.origin) ||
     continuation.coveredMessages > turn.messages.length ||
@@ -1020,6 +1078,7 @@ const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
   origin: ResponseOrigin,
   transport: ResponsesTransport,
   request: TurnRequest,
+  issuer: string | null,
 ) {
   const parsed = TurnRequestSchema.safeParse(request);
   if (!parsed.success)
@@ -1085,7 +1144,7 @@ const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
       kind: 'unsupported',
       message: 'The prepared protocol changed.',
     });
-  yield* responseParameters(config, origin, transport, turn, turn.mode);
+  yield* responseParameters(config, origin, transport, turn, turn.mode, issuer);
   return turn;
 });
 
@@ -1096,6 +1155,7 @@ const responseParameters = Effect.fn('llm.responses.parameters')(function* (
   transport: ResponsesTransport,
   input: ResolvedTurn,
   mode: 'foreground' | 'background',
+  issuer: string | null,
 ) {
   const parsed = ResolvedTurnSchema.safeParse(input);
   if (
@@ -1129,7 +1189,7 @@ const responseParameters = Effect.fn('llm.responses.parameters')(function* (
       kind: 'unsupported',
       message: 'The prepared controls are unsupported by the selected route.',
     });
-  const wireInput = yield* responseInput(turn);
+  const wireInput = yield* responseInput(turn, issuer);
   const reasoning = turn.controls.reasoning;
   const parameters: ResponseCreateParamsBase = {
     model: turn.requestedModel,
@@ -1233,12 +1293,14 @@ const estimateResponseInput = Effect.fn('llm.responses.estimateInputTokens')(
     client: OpenAI,
     input: Extract<ResolvedTurn, { mode: 'foreground' }>,
   ) {
+    // Estimation admits a single text message, so no receipt can apply.
     const { turn, parameters } = yield* responseParameters(
       config,
       origin,
       transport,
       input,
       'foreground',
+      null,
     );
     if (
       turn.continuation !== undefined ||
@@ -1393,6 +1455,7 @@ export function openaiResponsesModel(
     codecVersion: 1,
   } satisfies ResponseOrigin);
   const authentication = responseAuthentication(transport.authentication);
+  const issuer = responsesIssuer(config, transport.authentication);
   const client = new OpenAI({
     apiKey: authentication.token,
     defaultHeaders: authentication.headers,
@@ -1404,7 +1467,7 @@ export function openaiResponsesModel(
     logLevel: 'off',
   });
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, { kind: 'http' }, request);
+    prepareResponsesTurn(config, origin, { kind: 'http' }, request, issuer);
 
   const createResponse = Effect.fn('llm.responses.create')(function* (
     input: ResolvedTurn,
@@ -1416,6 +1479,7 @@ export function openaiResponsesModel(
       { kind: 'http' },
       input,
       mode,
+      issuer,
     );
     const signal = yield* Effect.abortSignal;
     const opened = yield* Effect.tryPromise({
@@ -2055,54 +2119,71 @@ export function openaiResponsesModel(
 
   /**
    * One file into OpenAI's Files API, in exchange for the id an `input_file`
-   * or `input_image` content part names. The receipt carries this surface's
-   * protocol, so a later turn on another provider refuses it instead of
-   * sending an id that API cannot resolve. The WebSocket transport keeps no
-   * files endpoint of its own and sends its attachments inline.
+   * part names. The receipt records this binding's issuer and the stated
+   * expiry, so lowering sends the id only while both still hold. Offered only
+   * to an API-key binding: a subscription binding has no issuer to honour.
+   * The WebSocket transport uploads nothing itself but honours a receipt
+   * issued to the same key and endpoint.
    */
-  const uploadFile: NonNullable<Model['uploadFile']> = Effect.fn(
-    'llm.responses.uploadFile',
-  )(function* (file): Effect.fn.Return<FileReference, ModelError> {
-    const parsed = FileUploadSchema.safeParse(file);
-    if (!parsed.success)
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'The file to upload is invalid.',
-        cause: parsed.error,
-      });
-    const upload = parsed.data;
-    const uploaded = yield* Effect.tryPromise({
-      try: async (signal) =>
-        client.files.create(
-          {
-            file: await OpenAI.toFile(
-              Buffer.from(upload.base64, 'base64'),
-              upload.filename,
-              { type: upload.mimeType },
-            ),
-            purpose: 'user_data',
+  const uploadFile: Model['uploadFile'] =
+    issuer === null
+      ? undefined
+      : Effect.fn('llm.responses.uploadFile')(
+          function* (file): Effect.fn.Return<FileReceipt, ModelError> {
+            const parsed = FileUploadSchema.safeParse(file);
+            if (!parsed.success)
+              return yield* new ModelError({
+                kind: 'invalid-request',
+                message: 'The file to upload is invalid.',
+                cause: parsed.error,
+              });
+            const upload = parsed.data;
+            const uploaded = yield* Effect.tryPromise({
+              try: async (signal) =>
+                client.files.create(
+                  {
+                    file: await OpenAI.toFile(
+                      Buffer.from(upload.base64, 'base64'),
+                      upload.filename,
+                      { type: upload.mimeType },
+                    ),
+                    purpose: 'user_data',
+                  },
+                  { signal },
+                ),
+              catch: (cause) =>
+                enrichModelError(openaiFailure(cause), {
+                  model: origin.requestedModel,
+                }),
+            });
+            // `expires_at` is Unix seconds and absent when the file does not expire.
+            // An expiry that is not a whole, non-negative second is refused rather
+            // than read as "never".
+            const expiresAt = uploaded.expires_at;
+            if (
+              expiresAt !== undefined &&
+              !(Number.isSafeInteger(expiresAt) && expiresAt >= 0)
+            )
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message:
+                  'OpenAI returned a file expiry that is not a timestamp.',
+                model: origin.requestedModel,
+              });
+            return {
+              protocol: 'openai-responses',
+              issuer,
+              fileId: uploaded.id,
+              expiresAtMs: expiresAt === undefined ? null : expiresAt * 1000,
+            };
           },
-          { signal },
-        ),
-      catch: (cause) =>
-        enrichModelError(openaiFailure(cause), {
-          model: origin.requestedModel,
-        }),
-    });
-    return {
-      kind: 'file',
-      protocol: 'openai-responses',
-      fileId: uploaded.id,
-      mimeType: upload.mimeType,
-      filename: upload.filename,
-    };
-  });
+        );
 
   return Object.freeze({
     prepareTurn,
     streamTurn,
     generateTurn,
-    uploadFile,
+    ...(uploadFile !== undefined ? { uploadFile } : {}),
     ...(config.supportsInputTokenEstimation
       ? {
           estimateInputTokens: (
@@ -2169,6 +2250,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
     deployment: config.deployment,
     codecVersion: 1,
   } satisfies ResponseOrigin);
+  const issuer = responsesIssuer(config, authentication);
   const selected = yield* Effect.try({
     try: () => responseAuthentication(authentication),
     catch: (cause) => cause,
@@ -2352,7 +2434,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   }).pipe(Effect.forkScoped);
 
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, transport, request);
+    prepareResponsesTurn(config, origin, transport, request, issuer);
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.suspend(() => {
       let responseId: string | undefined;
@@ -2371,6 +2453,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
             transport,
             input,
             'foreground',
+            issuer,
           );
           const now = yield* Clock.currentTimeMillis;
           yield* Effect.acquireRelease(

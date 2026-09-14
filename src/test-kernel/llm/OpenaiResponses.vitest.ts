@@ -356,11 +356,9 @@ describe('native OpenAI Responses protocol', () => {
                     role: 'user' as const,
                     content: [
                       {
-                        kind: 'file' as const,
-                        protocol: 'anthropic-messages' as const,
-                        fileId: 'file_issued_elsewhere',
-                        mimeType: 'application/pdf',
-                        filename: 'paper.pdf',
+                        kind: 'audio' as const,
+                        mimeType: 'audio/wav',
+                        base64: '',
                       },
                     ],
                   },
@@ -1166,7 +1164,7 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.effect(
-    'uploads a settlement document and sends its receipt beside the result text',
+    'sends a settlement document by its receipt beside the result text, and by bytes once it expires',
     () =>
       Effect.gen(function* () {
         const fetch = vi
@@ -1175,9 +1173,10 @@ describe('native OpenAI Responses protocol', () => {
             const target = String(url);
             if (target.startsWith('data:')) return new Response('%PDF-1.7');
             if (target.endsWith('/files'))
-              return new Response(JSON.stringify({ id: 'file_uploaded' }), {
-                headers: { 'content-type': 'application/json' },
-              });
+              return new Response(
+                JSON.stringify({ id: 'file_uploaded', expires_at: 3600 }),
+                { headers: { 'content-type': 'application/json' } },
+              );
             return response(events([MESSAGE]));
           });
         const model = modelWith(fetch);
@@ -1188,12 +1187,12 @@ describe('native OpenAI Responses protocol', () => {
           base64: Buffer.from('%PDF-1.7').toString('base64'),
         });
         expect(receipt).toStrictEqual({
-          kind: 'file',
           protocol: 'openai-responses',
+          issuer: expect.stringMatching(/^[0-9a-f]{64}$/),
           fileId: 'file_uploaded',
-          mimeType: 'application/pdf',
-          filename: 'paper.pdf',
+          expiresAtMs: 3_600_000,
         });
+        const pdf = Buffer.from('%PDF-1.7').toString('base64');
         const turn = yield* model.prepareTurn({
           ...REQUEST,
           messages: [
@@ -1218,7 +1217,12 @@ describe('native OpenAI Responses protocol', () => {
                   status: 'success',
                   content: [
                     { kind: 'text', text: 'Downloaded paper.pdf' },
-                    receipt,
+                    {
+                      kind: 'document',
+                      mimeType: 'application/pdf',
+                      base64: pdf,
+                      receipt,
+                    },
                   ],
                 },
               ],
@@ -1226,20 +1230,27 @@ describe('native OpenAI Responses protocol', () => {
           ],
         });
         assert(turn.mode === 'foreground');
-        yield* model.generateTurn(turn);
-        const request = fetch.mock.calls.find(([url]) =>
-          String(url).endsWith('/responses'),
-        );
-        assert(request);
-        const body = JSON.parse(String(request[1]?.body));
-        expect(body.input.at(-1)).toStrictEqual({
-          type: 'function_call_output',
-          call_id: 'call_1',
-          output: [
-            { type: 'input_text', text: 'Downloaded paper.pdf' },
-            { type: 'input_file', file_id: 'file_uploaded' },
-          ],
+        const sentOutput = Effect.gen(function* () {
+          yield* model.generateTurn(turn);
+          const request = fetch.mock.calls.findLast(([url]) =>
+            String(url).endsWith('/responses'),
+          );
+          assert(request);
+          return JSON.parse(String(request[1]?.body)).input.at(-1).output;
         });
+        expect(yield* sentOutput).toStrictEqual([
+          { type: 'input_text', text: 'Downloaded paper.pdf' },
+          { type: 'input_file', file_id: 'file_uploaded' },
+        ]);
+        yield* TestClock.adjust('1 hour');
+        expect(yield* sentOutput).toStrictEqual([
+          { type: 'input_text', text: 'Downloaded paper.pdf' },
+          {
+            type: 'input_file',
+            filename: 'document.pdf',
+            file_data: `data:application/pdf;base64,${pdf}`,
+          },
+        ]);
       }),
   );
 

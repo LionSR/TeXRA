@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
+import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { anthropicMessagesModel } from '@llm/anthropicMessages';
 import type { AnthropicMessagesConfiguration, TurnRequest } from '@llm/turn';
@@ -200,12 +201,15 @@ describe('canonical Anthropic Messages protocol', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it.effect(
-    'uploads a document and sends the receipt as a file source, refusing a foreign one',
+    'sends a document by receipt only while its issuer and expiry hold, and by bytes otherwise',
     () =>
       Effect.gen(function* () {
         fetchModel.mockImplementation(async (url) =>
           String(url).endsWith('/v1/files')
-            ? Response.json({ id: 'file_uploaded' })
+            ? Response.json({
+                id: 'file_uploaded',
+                expires_at: '1970-01-01T01:00:00Z',
+              })
             : response(signedEvents()),
         );
         const configured = model();
@@ -216,46 +220,60 @@ describe('canonical Anthropic Messages protocol', () => {
           base64: 'AA==',
         });
         expect(receipt).toStrictEqual({
-          kind: 'file',
           protocol: 'anthropic-messages',
+          issuer: expect.stringMatching(/^[0-9a-f]{64}$/),
           fileId: 'file_uploaded',
+          expiresAtMs: 3_600_000,
+        });
+        expect(receipt.issuer).not.toContain('selected-key');
+        const document = {
+          kind: 'document' as const,
           mimeType: 'application/pdf',
-          filename: 'paper.pdf',
+          base64: 'AA==',
+          receipt,
+        };
+        const sentSource = (
+          bound: ReturnType<typeof model>,
+          part: typeof document,
+        ) =>
+          Effect.gen(function* () {
+            const turn = yield* bound.prepareTurn({
+              messages: [{ role: 'user', content: [part] }],
+            });
+            assert(turn.mode === 'foreground');
+            yield* bound.generateTurn(turn);
+            return JSON.parse(fetchModel.mock.calls.at(-1)![1]!.body as string)
+              .messages[0].content[0].source;
+          });
+        const bytes = {
+          type: 'base64',
+          media_type: 'application/pdf',
+          data: 'AA==',
+        };
+        expect(yield* sentSource(configured, document)).toStrictEqual({
+          type: 'file',
+          file_id: 'file_uploaded',
         });
-        const turn = yield* configured.prepareTurn({
-          messages: [{ role: 'user', content: [receipt] }],
-        });
-        assert(turn.mode === 'foreground');
-        yield* configured.generateTurn(turn);
-        const sent = JSON.parse(
-          fetchModel.mock.calls.at(-1)![1]!.body as string,
-        );
-        expect(sent.messages).toStrictEqual([
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'document',
-                title: 'paper.pdf',
-                source: { type: 'file', file_id: 'file_uploaded' },
-              },
-            ],
-          },
-        ]);
-        // A receipt from another API is refused at admission, before a
-        // request that would resolve the id to someone else's file.
+        // Another API, another key on the same endpoint, and an expired
+        // receipt all name a file this binding cannot resolve: the document
+        // goes by the bytes it kept.
         expect(
-          yield* Effect.flip(
-            configured.prepareTurn({
-              messages: [
-                {
-                  role: 'user',
-                  content: [{ ...receipt, protocol: 'openai-responses' }],
-                },
-              ],
+          yield* sentSource(configured, {
+            ...document,
+            receipt: { ...receipt, protocol: 'openai-responses' },
+          }),
+        ).toStrictEqual(bytes);
+        expect(
+          yield* sentSource(
+            anthropicMessagesModel(CONFIG, {
+              apiKey: 'another-key',
+              fetch: fetchModel,
             }),
+            document,
           ),
-        ).toMatchObject({ kind: 'unsupported' });
+        ).toStrictEqual(bytes);
+        yield* TestClock.adjust('1 hour');
+        expect(yield* sentSource(configured, document)).toStrictEqual(bytes);
       }),
   );
 

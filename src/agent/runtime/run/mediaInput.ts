@@ -158,10 +158,12 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
 
 /**
  * A base64 payload already in hand, as the part the package lowers, or null
- * when the binding carries no such attachment inline. Null is a degradation
- * the model can't see, so the caller names it in the transcript: the package
- * takes inline bytes only (`InputPartSchema`), so there is no by-reference
- * lowering to fall back to.
+ * when the binding carries no such attachment. Null is a degradation the
+ * model can't see, so the caller names it in the transcript. A document the
+ * binding does take may additionally carry a provider receipt, which the
+ * package sends in place of these bytes while it holds; a receipt never
+ * makes a type the binding refuses deliverable, so it is no fallback for
+ * null.
  */
 export function inlineMediaPart(
   mimeType: string,

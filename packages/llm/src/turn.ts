@@ -29,24 +29,27 @@ export const TurnProtocolSchema = z.enum([
   'openrouter-chat',
   'vscode-lm',
 ]);
+type TurnProtocol = z.infer<typeof TurnProtocolSchema>;
 
 /**
- * A file the provider already holds, named by the receipt its own upload
- * returned. A receipt is scoped to the surface that issued it — an
- * `anthropic-messages` file id means nothing to the Responses API — so the
- * protocol travels with the id and every arm refuses a foreign one rather
- * than sending an id the provider cannot resolve.
+ * Where a provider already holds a document's bytes: the id its own upload
+ * returned, and the facts that bound where that id still resolves. A file id
+ * lives only inside the account that uploaded it, and only until the
+ * provider expires it, so the receipt names the issuing protocol, a
+ * non-secret fingerprint of the issuing endpoint and credential, and the
+ * expiry the provider stated. It rides beside the bytes, never instead of
+ * them: a binding that cannot honour it sends the bytes.
  */
-const FileReferenceSchema = z
+const FileReceiptSchema = z
   .strictObject({
-    kind: z.literal('file'),
     protocol: TurnProtocolSchema,
+    issuer: z.string().min(1),
     fileId: z.string().min(1),
-    mimeType: z.string().min(1),
-    filename: z.string().min(1),
+    /** Epoch milliseconds; `null` when the provider stated no expiry. */
+    expiresAtMs: z.int().nonnegative().nullable(),
   })
   .readonly();
-export type FileReference = z.infer<typeof FileReferenceSchema>;
+export type FileReceipt = z.infer<typeof FileReceiptSchema>;
 
 /** The bytes an upload takes, before the provider issues a receipt. */
 export const FileUploadSchema = z
@@ -58,6 +61,36 @@ export const FileUploadSchema = z
   .readonly();
 export type FileUpload = z.infer<typeof FileUploadSchema>;
 
+/**
+ * Time allowed between lowering a turn and the provider resolving its file
+ * ids, so a receipt that would expire while the request is in flight lowers
+ * from bytes instead. A TeXRA margin, not a provider figure.
+ */
+const RECEIPT_EXPIRY_MARGIN_MS = 60_000;
+
+/**
+ * The file id a document may be sent as on this binding, or `null` to send
+ * its bytes: only a receipt issued by this protocol, to this binding's
+ * issuer, and still unexpired at `nowMs`. Every other case is the ordinary
+ * byte path, so a credential, account or endpoint change, a model switch, or
+ * a provider-side expiry costs request size and never the document.
+ */
+export function usableReceipt(
+  receipt: FileReceipt | undefined,
+  protocol: TurnProtocol,
+  issuer: string | null,
+  nowMs: number,
+): string | null {
+  if (receipt === undefined || issuer === null) return null;
+  if (receipt.protocol !== protocol || receipt.issuer !== issuer) return null;
+  if (
+    receipt.expiresAtMs !== null &&
+    receipt.expiresAtMs - RECEIPT_EXPIRY_MARGIN_MS <= nowMs
+  )
+    return null;
+  return receipt.fileId;
+}
+
 const InputPartSchema = z.discriminatedUnion('kind', [
   TextPartSchema,
   MediaFieldsSchema.extend({
@@ -65,9 +98,12 @@ const InputPartSchema = z.discriminatedUnion('kind', [
     detail: z.enum(['low', 'medium', 'high', 'ultra-high']).optional(),
   }).readonly(),
   MediaFieldsSchema.extend({
-    kind: z.enum(['audio', 'video', 'document']),
+    kind: z.enum(['audio', 'video']),
   }).readonly(),
-  FileReferenceSchema,
+  MediaFieldsSchema.extend({
+    kind: z.literal('document'),
+    receipt: FileReceiptSchema.optional(),
+  }).readonly(),
 ]);
 /**
  * Scheme, host and path only. The origin is written into durable rows that
@@ -1886,11 +1922,13 @@ export interface Model {
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
   ): Effect.Effect<TurnResult, ModelError>;
   /**
-   * Hand the provider one file and take back the receipt that names it, so a
-   * document reaches the model by reference instead of as base64 on every
-   * round. Present only on the surfaces that serve a files endpoint.
+   * Hand the provider one file and take back the receipt that names it. The
+   * caller keeps the bytes and attaches the receipt beside them, so while the
+   * receipt is valid a round sends the id instead of the base64. Present
+   * only where the binding serves a files endpoint to a credential it can
+   * fingerprint.
    */
-  uploadFile?(file: FileUpload): Effect.Effect<FileReference, ModelError>;
+  uploadFile?(file: FileUpload): Effect.Effect<FileReceipt, ModelError>;
   /** Estimate supported prepared input and report the counted scope. */
   estimateInputTokens?(
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,

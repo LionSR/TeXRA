@@ -180,14 +180,15 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
 /**
  * The model-visible content of one settlement: text, then its attachments.
  *
- * A document goes by reference where the bound model serves a files
- * endpoint (`Model.uploadFile`): the upload happens here, before the
- * delivering append, so the receipt — not the bytes — is what the ledger row
- * holds and what every later round replays. An upload that fails keeps the
- * inline bytes and says so; the bytes are already in hand, so only the
- * request size is lost. Bindings with no upload (the OpenAI Responses
- * WebSocket transport, every Chat protocol, Google Interactions) carry the
- * bytes inline as before.
+ * A document is uploaded where the bound model serves a files endpoint
+ * (`Model.uploadFile`), here, before the delivering append. The ledger row
+ * keeps the document's bytes and carries the receipt beside them, so a later
+ * round sends the file id while that binding's receipt still holds and the
+ * bytes otherwise: a credential, account or endpoint change, a model switch,
+ * or a provider-side expiry costs request size, never the document. A failed
+ * upload attaches no receipt and says so. Bindings with no upload (a
+ * subscription route, every Chat protocol, Google Interactions) send the
+ * bytes as before.
  *
  * An attachment the binding cannot carry at all — a PDF on a route without
  * native PDF support, an image on a text-only route, any other type — still
@@ -239,22 +240,21 @@ const settlementContent = Effect.fn('toolUse.settlementContent')(function* (
       media.push(inline);
       continue;
     }
-    media.push(
-      yield* upload({
-        mimeType: inline.mimeType,
-        filename: getBasename(attachment.path) || 'attachment',
-        base64: inline.base64,
-      }).pipe(
-        Effect.catchTag('ModelError', (error) =>
-          Effect.sync(() => {
-            logger.warn(
-              `Sending "${attachment.path}" inline: the provider did not accept it as an upload (${error.message}).`,
-            );
-            return inline;
-          }),
-        ),
+    const receipt = yield* upload({
+      mimeType: inline.mimeType,
+      filename: getBasename(attachment.path) || 'attachment',
+      base64: inline.base64,
+    }).pipe(
+      Effect.catchTag('ModelError', (error) =>
+        Effect.sync(() => {
+          logger.warn(
+            `Sending "${attachment.path}" inline every round: the provider did not accept it as an upload (${error.message}).`,
+          );
+          return undefined;
+        }),
       ),
     );
+    media.push(receipt === undefined ? inline : { ...inline, receipt });
   }
   return [{ kind: 'text', text }, ...media];
 });
