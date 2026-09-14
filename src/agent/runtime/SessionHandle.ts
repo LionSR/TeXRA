@@ -403,13 +403,22 @@ export class SessionHandle {
    * section 6, item 2), for a change after the run's `run.start`.
    */
   private publishApprovalPolicy(runId: RunId): void {
-    this.publish([
-      {
-        type: 'approval.policy',
-        aggregateId: qualifyAggregateId('run', runId),
-        snapshot: this.approvalPolicySnapshotFor(runId),
-      },
-    ]);
+    if (this.disposed) return;
+    const snapshot = this.approvalPolicySnapshotFor(runId);
+    this.detachPublication(runId, (append) =>
+      Effect.gen({ self: this }, function* () {
+        // Check the claim in publication order: a provisional handle does
+        // not yet own a run, while a registration queued before this does.
+        if (!(yield* this.graph.ownsRun(runId))) return;
+        yield* append([
+          {
+            type: 'approval.policy',
+            aggregateId: qualifyAggregateId('run', runId),
+            snapshot,
+          },
+        ]);
+      }),
+    );
   }
 
   /**

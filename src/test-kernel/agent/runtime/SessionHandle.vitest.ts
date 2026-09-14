@@ -38,6 +38,8 @@ describe('SessionHandle', () => {
         );
         const isolated = generateRunId();
         const runB = generateRunId();
+        const provisional = generateRunId();
+        trackAgent(a, provisional);
         const handle = trackAgent(a, isolated);
         expect(a.runs.getHandle(isolated)).toBe(handle);
         expect(b.runs.getHandle(isolated)).toBeUndefined();
@@ -60,6 +62,21 @@ describe('SessionHandle', () => {
           foreignPolicy,
         );
         expect(b.approvalPolicy).toBe('ask');
+        expect(SubscriptionRef.getUnsafe(a.view).runs.has(provisional)).toBe(
+          false,
+        );
+        yield* Effect.promise(() => a.settlePublications(provisional));
+        // A birth queued before the next policy change must receive that
+        // change even though the display has not folded the birth yet.
+        publishTestRunStart(a, provisional);
+        a.setApprovalPolicy('never');
+        yield* Effect.promise(() => a.settlePublications());
+        expect(
+          SubscriptionRef.getUnsafe(a.view).policy.get(provisional)?.policy,
+        ).toBe('never');
+        expect(SubscriptionRef.getUnsafe(a.view).policy.get(runB)).toEqual(
+          foreignPolicy,
+        );
         yield* a.dispose();
         expect(a.runs.getHandle(isolated)).toBeUndefined();
         expect(b.runs.getHandle(runB)).toBe(handleB);

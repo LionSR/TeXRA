@@ -77,6 +77,8 @@ export interface SessionGraph {
    *  ends, a workflow checkpoint's when its invocation does. */
   readonly releaseClaims: (id: AggregateId) => Effect.Effect<void>;
   readonly runRecords: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
+  /** Whether this process holds an existing, open run in the database. */
+  readonly ownsRun: (id: RunId) => Effect.Effect<boolean>;
   /** Every committed row of one aggregate, ledger-private rows included:
    *  the read behind the keyed private records and the checkpoint journal,
    *  which fold over the whole aggregate rather than the latest of a type. */

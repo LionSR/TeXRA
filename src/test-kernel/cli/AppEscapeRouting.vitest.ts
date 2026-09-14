@@ -249,6 +249,8 @@ function seedRootRun(): void {
 function seedChildHierarchy(): void {
   seedRootRun();
   setRunning(CHILD, GRANDCHILD);
+  seedRun(CHILD, { ownedHere: true });
+  seedRun(GRANDCHILD, { ownedHere: true });
   markToolUseAgent(CHILD, GRANDCHILD);
   seedChildRoster(ROOT, [runningChild(CHILD, 'child')]);
   seedChildRoster(CHILD, [runningChild(GRANDCHILD, 'grandchild')]);
@@ -618,8 +620,8 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => onInterruptRun.mock.calls.length === 1);
 
       expect(activeRunId.get()).toBe(CHILD);
-      expect(selectedRunId.get()).toBe(ROOT);
-      expect(onInterruptRun).toHaveBeenCalledWith(ROOT);
+      expect(selectedRunId.get()).toBe(CHILD);
+      expect(onInterruptRun).toHaveBeenCalledWith(CHILD);
     } finally {
       instance.unmount();
     }
@@ -982,7 +984,7 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
-  it('keeps a detached run outside the current chat control target', async () => {
+  it('keeps a locally owned detached run reachable as a control target', async () => {
     seedChildHierarchy();
     seedParentEdge(CHILD, null);
     focusRun(CHILD);
@@ -992,8 +994,8 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await waitFor(() => onInterruptRun.mock.calls.length === 1);
 
-      expect(onInterruptRun).toHaveBeenCalledWith(ROOT);
-      expect(selectedRunId.get()).toBe(ROOT);
+      expect(onInterruptRun).toHaveBeenCalledWith(CHILD);
+      expect(selectedRunId.get()).toBe(CHILD);
       expect(activeRunId.get()).toBe(CHILD);
     } finally {
       instance.unmount();

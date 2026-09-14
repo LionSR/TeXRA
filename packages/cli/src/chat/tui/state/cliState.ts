@@ -20,6 +20,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import { RUN_GROUP_LABELS } from '@shared/runs/runStatusDisplay';
+import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import type { WorkflowRowGroup } from '@shared/runs/workflowRunModel';
 import { sessionView } from './sessionView';
 import type { PastedImageEntry } from '../input/draftAttachments';
@@ -103,8 +104,9 @@ export const CLI_LOCAL_RUN_ID = RunIdSchema.parse('c1110ca1');
 export const activeRunId = signal<RunId | undefined>(undefined);
 
 /**
- * Keep transcript focus within this chat's run tree. Before launch, the
- * local conversation remains visible without adopting an older project run.
+ * Keep transcript focus on this conversation and runs this terminal owns.
+ * Before launch, the local conversation remains visible without adopting
+ * an older project run.
  */
 export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
   () => {
@@ -151,13 +153,22 @@ export type SessionListRow =
 /** The visible tree, including section headings, shared by the list and its shortcuts. */
 export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   const view = sessionView().get();
-  const root = rootRunId.get();
-  const rootRun = root === undefined ? undefined : view.runs.get(root);
-  if (rootRun === undefined) return [];
+  const included = currentSessionRunIds(view);
   const expanded = expandedRuns.get();
-  const rows: SessionListRow[] = [
-    { kind: 'group', label: RUN_GROUP_LABELS[rootRun.group] },
-  ];
+  const rows: SessionListRow[] = [];
+  const groups: Record<RunView['group'], RunView[]> = {
+    running: [],
+    waiting: [],
+    interrupted: [],
+    recent: [],
+  };
+  for (const run of view.runs.values()) {
+    if (
+      included.has(run.id) &&
+      (run.parentId === null || !included.has(run.parentId))
+    )
+      groups[run.group].push(run);
+  }
   const append = (run: RunView, depth: number): void => {
     const open =
       run.category !== AgentCategory.Workflow &&
@@ -165,10 +176,23 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     rows.push({ kind: 'run', run, depth, expanded: open });
     // A workflow's calls belong to its existing popup.
     if (open) {
-      for (const id of run.childIds) append(view.runs.get(id)!, depth + 1);
+      for (const id of run.childIds) {
+        if (included.has(id)) append(view.runs.get(id)!, depth + 1);
+      }
     }
   };
-  append(rootRun, 0);
+  for (const runs of Object.values(groups)) {
+    runs.sort((a, b) =>
+      compareByNewestCreationTime(
+        { name: a.id, creationTimestamp: a.createdAt },
+        { name: b.id, creationTimestamp: b.createdAt },
+      ),
+    );
+    const first = runs.at(0);
+    if (!first) continue;
+    rows.push({ kind: 'group', label: RUN_GROUP_LABELS[first.group] });
+    for (const run of runs) append(run, 0);
+  }
   return rows;
 });
 
@@ -182,9 +206,16 @@ export const sessionListRunIds = computed(() =>
 /** The top-level run the current session rooted at. */
 export const rootRunId = signal<RunId | undefined>(undefined);
 
-/** Runs belonging to this chat, including delegated descendants. */
+/** The current conversation and all runs this terminal still owns,
+ *  including children detached from an earlier turn. */
 export function currentSessionRunIds(view: SessionView): ReadonlySet<RunId> {
-  return new Set(descendantRuns(view, rootRunId.get(), { includeRoot: true }));
+  const included = new Set(
+    descendantRuns(view, rootRunId.get(), { includeRoot: true }),
+  );
+  for (const run of view.runs.values()) {
+    if (run.ownedHere) included.add(run.id);
+  }
+  return included;
 }
 /** Whether the root session holds an unfinished run claim (run promise
  *  pending). Published only by `TuiSession`, so renders read the session

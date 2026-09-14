@@ -84,6 +84,7 @@ import type { ApiProvider } from '@model/apiProviders';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
+  aggregateId,
   RUN_OUTCOME,
   type AgentProposalPermission,
   type PermissionPayload,
@@ -430,10 +431,11 @@ afterEach(async () => {
 
 describe('TUI request decisions', () => {
   it.effect(
-    'reconsiders a waiting delegation when the live policy changes to yolo',
+    'reconsiders a detached child delegation when live policy changes to yolo',
     () =>
       Effect.gen(function* () {
         tui();
+        yield* ensureRun(runIdFor('waiting-proposal-parent'));
         const runId = runIdFor('waiting-proposal-policy-change');
         yield* ensureRun(runId);
         const session = defaultSession();
@@ -444,6 +446,14 @@ describe('TUI request decisions', () => {
             data: proposalPayload('waiting-proposal-policy-change', runId),
           }),
         );
+        yield* waitForApproval('proposal', { runId });
+        session.publish([
+          { type: 'run.detach', aggregateId: aggregateId('run', runId) },
+        ]);
+        yield* Effect.promise(() => session.settlePublications());
+        expect(
+          SubscriptionRef.getUnsafe(session.view).runs.get(runId)?.ownedHere,
+        ).toBe(true);
         yield* waitForApproval('proposal', { runId });
         session.setApprovalPolicy('yolo');
         expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });

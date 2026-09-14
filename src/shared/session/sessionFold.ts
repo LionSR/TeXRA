@@ -517,6 +517,7 @@ function createRun(
     childIds: [],
     rollup: { total: 0, running: 0, finished: 0 },
     approval: 'none' as const,
+    ownedHere: false,
     readOnly: false,
     forceExpanded: false,
     group: 'recent' as const,
@@ -769,6 +770,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     run.group === group &&
     run.approval === approval &&
     run.readOnly === readOnly &&
+    run.ownedHere === own &&
     run.forceExpanded === forceExpanded &&
     run.durableOutcome === durableOutcome &&
     run.rollup.total === rollup.total &&
@@ -785,6 +787,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     group,
     approval,
     readOnly,
+    ownedHere: own,
     forceExpanded,
     durableOutcome,
     rollup,

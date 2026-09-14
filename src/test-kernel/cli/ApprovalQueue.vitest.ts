@@ -107,6 +107,19 @@ describe('CLI approval surface', () => {
     expect(currentApproval.get()).toBeUndefined();
     expect(attentionRequests(view)).toEqual([]);
     expect(sessionListRunIds.get()).toEqual([]);
+
+    // A detached child still owned by this terminal keeps its approval
+    // path even after the root conversation has been cleared.
+    const detachedView = viewWith(
+      [makeRunView({ id: RUN_A, ownedHere: true }), makeRunView({ id: RUN_B })],
+      { requests: view.requests },
+    );
+    seedView(detachedView);
+    expect(currentApproval.get()?.payload).toEqual(local);
+    expect(
+      attentionRequests(detachedView).map((request) => request.runId),
+    ).toEqual([RUN_A]);
+    expect(sessionListRunIds.get()).toEqual([RUN_A]);
   });
 
   it("shows the fold's first outstanding approval and reads the rest as attention", () => {
