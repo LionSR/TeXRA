@@ -132,7 +132,10 @@ function tui(
   const { secrets } = installedHost();
   detachHost();
   detachHost = defaultSession().interactions.use(
-    createTuiHostInteractions(presentationHost, cliContext, { secrets }),
+    createTuiHostInteractions(presentationHost, cliContext, {
+      secrets,
+      runtime: effectRuntime(),
+    }),
   );
   return {
     presentationHost,
@@ -296,7 +299,7 @@ function glmCodingPlanRetry(label: string): RetryPermission {
 function decideCurrent(decision: SurfaceDecision): void {
   const pending = currentApproval.get();
   expect(pending).toBeDefined();
-  pending?.decide(decision);
+  pending?.decide(effectRuntime(), decision);
 }
 
 function decideRetry(decision: SurfaceDecision): void {
@@ -362,7 +365,7 @@ function waitForNoApproval(): Effect.Effect<void> {
 }
 
 beforeAll(() => {
-  bindSessionView(defaultSession().view);
+  bindSessionView(defaultSession().view, { runtime: effectRuntime() });
 });
 
 beforeEach(() => {

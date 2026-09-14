@@ -17,7 +17,7 @@ import {
   type HostInteractions,
 } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
   PermissionPayload,
@@ -55,6 +55,9 @@ import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 
 interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
+  /** The runtime this host's view-following fiber runs on, from the command
+   *  that owns it. */
+  readonly runtime: ProcessRuntime;
   readonly emit?: HostInteractions['emit'];
   readonly setApprovalBypassState?: (
     update: HostApprovalBypassStateUpdate,
@@ -144,7 +147,7 @@ const askHeadlessUserQuestion = Effect.fn(
 
 export function createHeadlessCliHostInteractions(
   context: CliContext,
-  hooks: HeadlessCliHostInteractionHooks = {},
+  hooks: HeadlessCliHostInteractionHooks,
 ): HostInteractions {
   // Headless composition seeds the session before attaching; tests often attach
   // without that step, so mirror the seed here. TUI uses a different adapter
@@ -321,7 +324,7 @@ export function createHeadlessCliHostInteractions(
       ),
     );
 
-  const fiber = effectRuntime().runFork(
+  const fiber = hooks.runtime.runFork(
     Stream.runForEach(SubscriptionRef.changes(session.view), take),
   );
 
@@ -338,7 +341,7 @@ export function createHeadlessCliHostInteractions(
       previews.delete(requestId);
     },
     dispose() {
-      effectRuntime().runFork(Fiber.interrupt(fiber));
+      hooks.runtime.runFork(Fiber.interrupt(fiber));
     },
   };
 }

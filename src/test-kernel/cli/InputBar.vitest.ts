@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 // Test composition imports
+import { effectRuntime } from '@platform/processRuntime';
 import '@test/support/defaultSessionTestSetup';
 
 import stripAnsi from 'strip-ansi';
@@ -74,7 +75,10 @@ describe('InputBar history arrow boundaries', () => {
     const { ink, React } = await loadInk();
     const { instance, stdin, stdout } = renderInteractive(
       ink,
-      React.createElement(InputBar, { onSubmit: vi.fn() }),
+      React.createElement(InputBar, {
+        runtime: effectRuntime(),
+        onSubmit: vi.fn(),
+      }),
       { debug: true },
     );
 
@@ -102,7 +106,11 @@ describe('InputBar history arrow boundaries', () => {
     };
     const { instance, stdin, stdout } = renderInteractive(
       ink,
-      React.createElement(InputBar, { onSubmit: vi.fn(), history }),
+      React.createElement(InputBar, {
+        runtime: effectRuntime(),
+        onSubmit: vi.fn(),
+        history,
+      }),
       { debug: true },
     );
 
@@ -153,7 +161,10 @@ describe('InputBar slash submit', () => {
     });
     const { instance, stdin, stdout } = renderInteractive(
       ink,
-      React.createElement(InputBar, { onSubmit: vi.fn() }),
+      React.createElement(InputBar, {
+        runtime: effectRuntime(),
+        onSubmit: vi.fn(),
+      }),
     );
 
     try {
@@ -358,6 +369,7 @@ describe('InputBar draft discard', () => {
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, {
+        runtime: effectRuntime(),
         onSubmit: (...args: unknown[]) => {
           const [text, mediaFiles, images] = args as [
             string,
@@ -464,6 +476,7 @@ describe('InputBar draft discard', () => {
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, {
+        runtime: effectRuntime(),
         controlRef,
         onSubmit: (value: string, mediaFiles?: readonly string[]) =>
           submitted.push([value, mediaFiles]),

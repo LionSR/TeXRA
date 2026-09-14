@@ -2,6 +2,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { effectRuntime } from '@platform/processRuntime';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
@@ -259,8 +260,9 @@ describe('CLI multi-agent run command', () => {
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
     const { platform } = installedHost();
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
+    const services = { ...platform, runtime: effectRuntime() };
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(services);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(services);
     mockExpandedRunInputs({
       inputFiles: ['problem.tex'],
       contextFiles: [],
@@ -382,7 +384,7 @@ describe('CLI multi-agent run command', () => {
     mocks.teamPlanHasGaps.mockReturnValueOnce(true);
     isAuthenticatedSpy.mockResolvedValueOnce(true);
 
-    const result = await loadCliMultiAgentRunPlan({
+    const result = await loadCliMultiAgentRunPlan(effectRuntime(), {
       preset: 'mathematician',
     });
 

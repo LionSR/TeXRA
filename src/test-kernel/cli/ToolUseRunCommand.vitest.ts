@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
 // import (enforced by architecture/supportMockImportOrder.vitest.ts).
+import { effectRuntime } from '@platform/processRuntime';
 import '@test/support/agentCatalogMock';
 import '@test/support/agentStorageFinalizationMock';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
@@ -109,8 +110,9 @@ describe('CLI run command, tool-use agents', () => {
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
     const { platform } = installedHost();
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
+    const services = { ...platform, runtime: effectRuntime() };
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(services);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(services);
     mocks.withExpandedRunInputs.mockResolvedValue({
       inputFiles: ['problem.md'],
       contextFiles: ['notes.md'],
@@ -161,7 +163,10 @@ describe('CLI run command, tool-use agents', () => {
         expect(
           cliInitPlatformMock.initLocalCliPlatform.mock.invocationCallOrder[0],
         ).toBeLessThan(mocks.resolveCliRunAgent.mock.invocationCallOrder[0]);
-        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('chat');
+        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith(
+          expect.anything(),
+          'chat',
+        );
         expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
           ['problem.md'],
           ['notes.md'],

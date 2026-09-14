@@ -23,7 +23,7 @@ import {
 } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { completeDeviceSession } from '@auth/oauth/deviceAuthorization';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -54,6 +54,12 @@ export interface CliAuthProfile {
 }
 
 interface CliLoginOptions {
+  /**
+   * The process runtime this sign-in's programs settle on, from the caller
+   * that holds it: the CLI root when the setup service asks, a command's own
+   * services bag otherwise.
+   */
+  runtime: ProcessRuntime;
   provider?: OAuthProvider;
   openBrowser?: boolean;
   selectAccount?: boolean;
@@ -86,13 +92,14 @@ const deferredAuthLog: SupabaseSessionLog = {
 };
 
 export function initializeCliSupabaseAuth(
+  runtime: ProcessRuntime,
   secrets: PlatformSecrets,
   log?: SupabaseSessionLog,
 ): SupabaseSessionCoordinator {
   // The auth subsystem's run edge lives at this host entry (PRD R1), installed
-  // on every init so every later Promise-facing auth surface settles on the
-  // process runtime.
-  installAuthProgramEdge((program) => effectRuntime().runPromiseExit(program));
+  // on every init from the runtime the root holds, so every later
+  // Promise-facing auth surface settles on that runtime.
+  installAuthProgramEdge((program) => runtime.runPromiseExit(program));
   activeAuthLog = log ?? activeAuthLog;
   if (!coordinator || coordinatorSecrets !== secrets) {
     coordinator = createHostAuthCoordinator({
@@ -120,14 +127,15 @@ function cliAuthCoordinator(): SupabaseSessionCoordinator {
 }
 
 export async function signInCliSupabase(
-  options: CliLoginOptions = {},
+  options: CliLoginOptions,
 ): Promise<SupabaseSession> {
+  const { runtime } = options;
   const authCoordinator = cliAuthCoordinator();
-  const callbackServer = await effectRuntime().runPromise(
-    startLoopbackCallbackServer(authCoordinator),
+  const callbackServer = await runtime.runPromise(
+    startLoopbackCallbackServer(runtime, authCoordinator),
   );
   try {
-    const exit = await effectRuntime().runPromiseExit(
+    const exit = await runtime.runPromiseExit(
       loopbackSignIn(authCoordinator, callbackServer, options),
       { signal: options.signal },
     );
@@ -139,11 +147,11 @@ export async function signInCliSupabase(
     // is the historical abort contract (`commitStarted`), now settled at the
     // boundary (R7: a product edge may represent cancellation as data).
     if (Cause.hasInterrupts(exit.cause) && callbackServer.commitStarted) {
-      return await effectRuntime().runPromise(callbackServer.waitForSession);
+      return await runtime.runPromise(callbackServer.waitForSession);
     }
     throw Cause.squash(exit.cause);
   } finally {
-    await effectRuntime().runPromise(callbackServer.close);
+    await runtime.runPromise(callbackServer.close);
   }
 }
 
@@ -247,11 +255,13 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
   return session;
 });
 
-export async function signOutCliSupabase(): Promise<void> {
+export async function signOutCliSupabase(
+  runtime: ProcessRuntime,
+): Promise<void> {
   const authCoordinator = cliAuthCoordinator();
   await runAuthProgram(authCoordinator.clearSession());
   await refreshRemoteAgentCatalogAfterSignOut(
-    () => effectRuntime().runPromise(invalidateRemoteAgentsAfterSignOut()),
+    () => runtime.runPromise(invalidateRemoteAgentsAfterSignOut()),
     (message) => activeAuthLog?.warn?.('cli-auth', message),
   );
 }

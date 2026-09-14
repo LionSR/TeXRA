@@ -18,7 +18,7 @@ import {
   type SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { escapeHtml } from '@shared/utils/xmlEscape';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -67,7 +67,10 @@ export interface LoopbackCallbackServer {
 
 export const startLoopbackCallbackServer = Effect.fn(
   'supabaseAuthCallbackServer.startLoopbackCallbackServer',
-)(function* (authCoordinator: SupabaseSessionCoordinator) {
+)(function* (
+  runtime: ProcessRuntime,
+  authCoordinator: SupabaseSessionCoordinator,
+) {
   const nonce = randomBytes(CALLBACK_NONCE_BYTES).toString('base64url');
   const sessionDeferred = yield* Deferred.make<SupabaseSession, Error>();
   const attemptState: CallbackAttemptState = {
@@ -83,7 +86,7 @@ export const startLoopbackCallbackServer = Effect.fn(
     // forked on the process runtime, and every outcome — success, typed
     // failure, or defect — is folded into the response and the deferred by
     // the program itself.
-    effectRuntime().runFork(
+    runtime.runFork(
       handleCallbackRequest(
         request,
         response,

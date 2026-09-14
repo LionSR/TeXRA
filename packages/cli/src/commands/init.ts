@@ -1,6 +1,5 @@
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { effectRuntime } from '@platform/processRuntime';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
@@ -18,7 +17,10 @@ import {
   type InitAnswers,
   type InitConfigShape,
 } from '../runtime/initConfig';
-import { initCliPlatform } from '../runtime/initPlatform';
+import {
+  initCliPlatform,
+  type CliPlatformServices,
+} from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliNoAvailableModelsRecovery,
@@ -34,15 +36,17 @@ interface InitAgentOption {
   readonly name: string;
 }
 
-async function gatherOptions(stores: ModelOptionStores): Promise<{
+async function gatherOptions(
+  services: CliPlatformServices & ModelOptionStores,
+): Promise<{
   agents: readonly InitAgentOption[];
   models: CliModelAccess[];
 }> {
-  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
+  await services.runtime.runPromise(loadAgents({ includeRemote: false }));
   const agents = implicitDefaultToolUseAgents(
     getVisibleAgents(AgentCategory.ToolUse),
   );
-  const models = await getCliModelAccessList({ stores });
+  const models = await getCliModelAccessList({ stores: services });
   return { agents, models };
 }
 

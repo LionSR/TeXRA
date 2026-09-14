@@ -4,6 +4,8 @@
 // `useSignal(currentApproval)` subscription — avoids a second store read
 // every render.
 
+import type { ProcessRuntime } from '@platform/processRuntime';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { assertNever } from '@utils/core';
 import { AgentProposal } from './AgentProposal';
 import { BashApproval } from './BashApproval';
@@ -11,19 +13,25 @@ import { EditApproval } from './EditApproval';
 import { PlanApproval } from './PlanApproval';
 import { RetryRequest } from './RetryRequest';
 import { UserQuestion } from './UserQuestion';
+
 import type { PendingApproval } from '../state/approvalQueue';
 
 export interface ApprovalModalProps {
   readonly availableRows?: number;
   readonly goalAutoApproveAll: boolean;
   readonly pending: PendingApproval | undefined;
+  /** The chat entry point's runtime: the decision this modal answers with is
+   *  issued on it. */
+  readonly runtime: ProcessRuntime;
 }
 
 export function ApprovalModal(
   props: ApprovalModalProps,
 ): React.JSX.Element | null {
   if (!props.pending) return null;
-  const { payload, decide } = props.pending;
+  const { payload } = props.pending;
+  const decide = (decision: SurfaceDecision): void =>
+    props.pending?.decide(props.runtime, decision);
   const availableRows = props.availableRows;
   switch (payload.kind) {
     case 'bash':

@@ -379,7 +379,10 @@ describe('CLI platform init', () => {
     expect(setup.host).toBe('cli');
     await expect(setup.signIn()).resolves.toBe(true);
     expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
-    expect(mocks.signInCliSupabase).toHaveBeenCalledWith({ openBrowser: true });
+    expect(mocks.signInCliSupabase).toHaveBeenCalledWith({
+      runtime: expect.anything(),
+      openBrowser: true,
+    });
   });
 });
 

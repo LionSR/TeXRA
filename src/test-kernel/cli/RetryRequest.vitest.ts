@@ -25,7 +25,10 @@ function pendingFor(payload: ApprovalPayload): {
   const decision = new Promise<SurfaceDecision>((resolve) => {
     decide = resolve;
   });
-  return { pending: { payload, decide }, decision };
+  return {
+    pending: { payload, decide: (_runtime, answer) => decide(answer) },
+    decision,
+  };
 }
 
 describe('CLI retry request', () => {

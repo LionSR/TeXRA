@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
 // import (enforced by architecture/supportMockImportOrder.vitest.ts).
+import { effectRuntime } from '@platform/processRuntime';
 import { agentCatalogMock } from '@test/support/agentCatalogMock';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
@@ -388,8 +389,9 @@ describe('CLI run command, workflow agents', () => {
       ...installedHost().platform,
       session: Effect.succeed(session),
     };
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
+    const services = { ...platform, runtime: effectRuntime() };
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(services);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(services);
     mocks.writeResultMeta.mockResolvedValue(undefined);
     mocks.finalizeRun.mockResolvedValue(durableFinalizationResult());
     mocks.resolveCliRunAgent.mockResolvedValue({
@@ -473,7 +475,10 @@ describe('CLI run command, workflow agents', () => {
         );
 
         expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalled();
-        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('polish');
+        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith(
+          expect.anything(),
+          'polish',
+        );
         expectNoModelOrInputWork();
       }),
   );
@@ -747,6 +752,7 @@ describe('CLI run command, workflow agents', () => {
         cliInitPlatformMock.initLocalCliPlatform.mockResolvedValueOnce({
           ...installedHost().platform,
           session: Effect.succeed(session),
+          runtime: effectRuntime(),
         });
         const records = storage.getRunRecords(session, runId);
         vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(records);
@@ -1290,7 +1296,7 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      { session: Effect.succeed(session) },
+      { session: Effect.succeed(session), runtime: effectRuntime() },
     ).finally(() => Effect.runPromise(session.dispose()));
 
     expect(exitCode).toBe(CliExitCode.Interrupted);
@@ -1332,7 +1338,7 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      { session: Effect.succeed(session) },
+      { session: Effect.succeed(session), runtime: effectRuntime() },
     ).finally(() => Effect.runPromise(session.dispose()));
     await expect(result).resolves.toBe(CliExitCode.Interrupted);
     expect(cwdSpy).toHaveBeenCalledOnce();

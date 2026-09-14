@@ -12,7 +12,7 @@ import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import { getAgent } from '@agent/index';
 import type { SessionHandle } from '@agent/runtime';
 import { redactSecrets } from '@logger/redaction';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   RUN_PHASE,
@@ -53,12 +53,21 @@ export type WorkflowPlainSession = Pick<
   'view' | 'setTranscriptSubscriptions'
 >;
 
+/** What a view-following attachment needs: the runtime its fiber runs on,
+ *  from the command that owns it, and the run it describes. */
+export interface RunProgressAttachOptions {
+  readonly runtime: ProcessRuntime;
+  /** The launched run when the caller names it, else the first top-level run
+   *  created after attach: the output describes the runs under it. */
+  readonly runId?: RunId;
+}
+
 export interface RunProgressRenderer {
   /** Follow the session's view; `runId` names the run to describe
    *  (the first root run the view gains after attach, when omitted). */
   attach(
     session: RunProgressSession,
-    options?: { readonly runId?: RunId },
+    options: RunProgressAttachOptions,
   ): () => void;
   clear(): void;
   preserve(): void;
@@ -122,16 +131,17 @@ function claimRootRun(
 
 /** Follow a view level with a callback; returns the detach. */
 function followView(
+  runtime: ProcessRuntime,
   session: RunProgressSession,
   onView: (view: SessionView) => void,
 ): () => void {
-  const fiber = effectRuntime().runFork(
+  const fiber = runtime.runFork(
     Stream.runForEach(SubscriptionRef.changes(session.view), (view) =>
       Effect.sync(() => onView(view)),
     ),
   );
   return () => {
-    effectRuntime().runFork(Fiber.interrupt(fiber));
+    runtime.runFork(Fiber.interrupt(fiber));
   };
 }
 
@@ -174,11 +184,13 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
   attach(
     session: RunProgressSession,
-    options: { readonly runId?: RunId } = {},
+    options: RunProgressAttachOptions,
   ): () => void {
     this.wantedRunId = options.runId;
     this.attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
-    const detach = followView(session, (view) => this.applyView(view));
+    const detach = followView(options.runtime, session, (view) =>
+      this.applyView(view),
+    );
     return () => {
       detach();
       this.view = undefined;
@@ -402,11 +414,7 @@ function isMultiRound(rounds: number | undefined): rounds is number {
 // Plain-text workflow progress
 // ---------------------------------------------------------------------------
 
-interface WorkflowPlainOutputOptions {
-  /** The launched run when the request names it, else the first top-level
-   *  run created after attach: the output prints the workflow runs
-   *  under it. */
-  readonly runId?: RunId;
+interface WorkflowPlainOutputOptions extends RunProgressAttachOptions {
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
 }
@@ -476,7 +484,7 @@ export function attachWorkflowPlainOutput(
       if (before?.get(id) !== line) write(line);
     }
   };
-  const detach = followView(session, (view) => {
+  const detach = followView(options.runtime, session, (view) => {
     for (const runId of [...previous.keys()]) {
       if (!view.runs.has(runId)) previous.delete(runId);
     }
@@ -499,7 +507,7 @@ export function attachWorkflowPlainOutput(
     const key = workflows.map((run) => run.id).join('\0');
     if (key !== subscribed) {
       subscribed = key;
-      effectRuntime().runFork(
+      options.runtime.runFork(
         session.setTranscriptSubscriptions(
           'workflow-plain-output',
           workflows.map((run) => ({ id: run.id, fromSeq: 0 })),
@@ -511,7 +519,7 @@ export function attachWorkflowPlainOutput(
   return () => {
     detach();
     previous.clear();
-    effectRuntime().runFork(
+    options.runtime.runFork(
       session.setTranscriptSubscriptions('workflow-plain-output', []),
     );
   };

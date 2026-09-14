@@ -274,7 +274,7 @@ describe('CLI agents command', () => {
     expect(exitCode).toBe(0);
     expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledTimes(1);
     expect(agentCatalogMock.getAgent).not.toHaveBeenCalled();
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(args);
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(expect.anything(), args);
     expect(cliOutputMock.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
       {

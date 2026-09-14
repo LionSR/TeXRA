@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CliSecrets, cliSecretsPath } from '@cli/runtime/cliSecrets';
+import { effectRuntime } from '@platform/processRuntime';
 import { withTempDir } from '@test/support/tempDirPlatform';
 
 async function withSecretsRoot(
@@ -26,7 +27,7 @@ describe('CLI secrets', () => {
 
   it('stores secrets under the configured storage root', async () => {
     await withSecretsRoot(async ({ storageRoot, secretsPath }) => {
-      const secrets = new CliSecrets(secretsPath);
+      const secrets = new CliSecrets(effectRuntime(), secretsPath);
       await secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
 
       expect(await secrets.get('TEXRA_CLI_SECRETS_TEST_KEY')).toBe('test-key');
@@ -39,7 +40,7 @@ describe('CLI secrets', () => {
 
   it('aborts a write instead of wiping the file when the read fails for a reason other than a missing file', async () => {
     await withSecretsRoot(async ({ secretsPath }) => {
-      const secrets = new CliSecrets(secretsPath);
+      const secrets = new CliSecrets(effectRuntime(), secretsPath);
       await secrets.set('EXISTING_KEY', 'existing-value');
 
       // Corrupt the on-disk file to simulate a non-ENOENT read failure
@@ -67,7 +68,7 @@ describe('CLI secrets', () => {
 
   it('merges overlapping set() calls instead of one silently dropping the other', async () => {
     await withSecretsRoot(async ({ secretsPath }) => {
-      const secrets = new CliSecrets(secretsPath);
+      const secrets = new CliSecrets(effectRuntime(), secretsPath);
 
       // Two overlapping mutations on the same instance, started before
       // either resolves. Without intra-process serialization, each opens
@@ -88,7 +89,7 @@ describe('CLI secrets', () => {
 
   it('ignores a non-string stored value instead of returning it as a key', async () => {
     await withSecretsRoot(async ({ secretsPath }) => {
-      const secrets = new CliSecrets(secretsPath);
+      const secrets = new CliSecrets(effectRuntime(), secretsPath);
       await secrets.set('GOOD_KEY', 'good-value');
       await fs.writeFile(
         secretsPath,
@@ -112,7 +113,7 @@ describe('CLI secrets', () => {
         vi.stubEnv('TEXRA_CLI_SECRETS_ENV_ONLY_KEY', 'env-value');
 
         try {
-          const secrets = new CliSecrets(secretsPath);
+          const secrets = new CliSecrets(effectRuntime(), secretsPath);
 
           await expect(
             secrets.get('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
@@ -136,7 +137,7 @@ describe('CLI secrets', () => {
     'restricts the secrets file and its directory to the owner',
     async () => {
       await withSecretsRoot(async ({ secretsPath }) => {
-        const secrets = new CliSecrets(secretsPath);
+        const secrets = new CliSecrets(effectRuntime(), secretsPath);
         await secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
 
         const fileStat = await fs.stat(secretsPath);
@@ -152,9 +153,12 @@ describe('CLI secrets', () => {
     const { getCliSecrets } = await import('@cli/runtime/cliSecrets');
 
     await withSecretsRoot(async ({ root, storageRoot }) => {
-      const first = getCliSecrets(storageRoot);
-      const second = getCliSecrets();
-      const third = getCliSecrets(path.join(root, 'other-storage'));
+      const first = getCliSecrets(effectRuntime(), storageRoot);
+      const second = getCliSecrets(effectRuntime());
+      const third = getCliSecrets(
+        effectRuntime(),
+        path.join(root, 'other-storage'),
+      );
 
       expect(second).toBe(first);
       expect(third).toBe(first);

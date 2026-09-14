@@ -2,6 +2,7 @@
 import { it } from '@effect/vitest';
 import { Effect, Exit, Fiber } from 'effect';
 import { beforeEach, describe, expect, type Mock, vi } from 'vitest';
+import { effectRuntime } from '@platform/processRuntime';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 
 // Local imports
@@ -163,7 +164,7 @@ async function loadSupabaseAuth() {
   const supabaseAuth = await import('@cli/runtime/supabaseAuth');
   // The root's init is what builds the coordinator and installs the auth run
   // edge; nothing below it builds one on demand.
-  supabaseAuth.initializeCliSupabaseAuth(cliSecrets);
+  supabaseAuth.initializeCliSupabaseAuth(effectRuntime(), cliSecrets);
   return supabaseAuth;
 }
 
@@ -250,8 +251,8 @@ describe('CLI Supabase auth', () => {
   it('builds one coordinator for the root secret store', async () => {
     const { initializeCliSupabaseAuth } = await loadSupabaseAuth();
 
-    initializeCliSupabaseAuth(cliSecrets);
-    initializeCliSupabaseAuth(cliSecrets);
+    initializeCliSupabaseAuth(effectRuntime(), cliSecrets);
+    initializeCliSupabaseAuth(effectRuntime(), cliSecrets);
 
     expect(mocks.createHostAuthCoordinator).toHaveBeenCalledTimes(1);
     expect(mocks.createHostAuthCoordinator).toHaveBeenCalledWith(
@@ -322,6 +323,7 @@ describe('CLI Supabase auth', () => {
         yield* Effect.promise(() => loadSupabaseAuth());
       yield* Effect.promise(() =>
         signInCliSupabase({
+          runtime: effectRuntime(),
           openBrowser: false,
           signal: controller.signal,
         }),
@@ -355,7 +357,10 @@ describe('CLI Supabase auth', () => {
     });
     mocks.openBrowser.mockReturnValue(new Promise(() => {}));
     const { signInCliSupabase } = await loadSupabaseAuth();
-    const completion = signInCliSupabase({ signal: controller.signal });
+    const completion = signInCliSupabase({
+      runtime: effectRuntime(),
+      signal: controller.signal,
+    });
     const rejection = expect(completion).rejects.toThrow(/interrupted/);
 
     controller.abort();
@@ -377,7 +382,10 @@ describe('CLI Supabase auth', () => {
     });
     mocks.openBrowser.mockReturnValue(new Promise(() => {}));
     const { signInCliSupabase } = await loadSupabaseAuth();
-    const completion = signInCliSupabase({ signal: controller.signal });
+    const completion = signInCliSupabase({
+      runtime: effectRuntime(),
+      signal: controller.signal,
+    });
 
     controller.abort();
     // The commit grace re-awaits the session on a fresh fiber; arm the
@@ -401,7 +409,9 @@ describe('CLI Supabase auth', () => {
     );
     const { signInCliSupabase } = await loadSupabaseAuth();
 
-    await expect(signInCliSupabase()).resolves.toBe(session);
+    await expect(signInCliSupabase({ runtime: effectRuntime() })).resolves.toBe(
+      session,
+    );
     failBrowserLaunch(new Error('launcher exited late'));
     await Promise.resolve();
 
@@ -411,7 +421,7 @@ describe('CLI Supabase auth', () => {
   it('removes cached remote agents after sign-out', async () => {
     const { signOutCliSupabase } = await loadSupabaseAuth();
 
-    await signOutCliSupabase();
+    await signOutCliSupabase(effectRuntime());
 
     expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
     expect(mocks.invalidateRemoteAgentsAfterSignOut).toHaveBeenCalledOnce();
@@ -443,14 +453,14 @@ describe('CLI Supabase auth', () => {
     const warn = vi.fn();
     const { initializeCliSupabaseAuth, signOutCliSupabase } =
       await loadSupabaseAuth();
-    initializeCliSupabaseAuth(cliSecrets, {
+    initializeCliSupabaseAuth(effectRuntime(), cliSecrets, {
       debug: vi.fn(),
       info: vi.fn(),
       warn,
       error: vi.fn(),
     });
 
-    await expect(signOutCliSupabase()).resolves.toBeUndefined();
+    await expect(signOutCliSupabase(effectRuntime())).resolves.toBeUndefined();
 
     expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
     expect(warn).toHaveBeenCalledWith(

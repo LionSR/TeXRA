@@ -8,7 +8,7 @@ import {
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
 import type { ApiProvider } from '@model/apiProviders';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
 import { collapseWhitespace } from '@utils/text/stringUtils';
@@ -46,12 +46,13 @@ export async function applyCliProviderApiKey(
 }
 
 async function applyCliModelAccessSelectionWithSignal(
+  runtime: ProcessRuntime,
   selection: CliModelAccessSelection,
   context: SlashCommandContext | undefined,
   output: SlashCommandOutput,
   signal: AbortSignal,
 ): Promise<void> {
-  const access = await effectRuntime().runPromise(
+  const access = await runtime.runPromise(
     updateCliModelAccess(context?.cliContext, selection, {
       writeProgress: (message) =>
         output.writeProgress(message, { copyable: true }),
@@ -63,12 +64,19 @@ async function applyCliModelAccessSelectionWithSignal(
 }
 
 export function applyCliModelAccessSelection(
+  runtime: ProcessRuntime,
   selection: CliModelAccessSelection,
   context: SlashCommandContext | undefined,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ): Promise<void> & { readonly abort: () => void } {
   return abortableSlashCommand((signal) =>
-    applyCliModelAccessSelectionWithSignal(selection, context, output, signal),
+    applyCliModelAccessSelectionWithSignal(
+      runtime,
+      selection,
+      context,
+      output,
+      signal,
+    ),
   );
 }
 
@@ -93,6 +101,7 @@ export function applyCliModelAccessInput(
     }
 
     await applyCliModelAccessSelectionWithSignal(
+      context.runtime,
       selection,
       context,
       output,

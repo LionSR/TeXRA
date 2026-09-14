@@ -4,6 +4,7 @@ import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import type { StateStore } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
@@ -12,6 +13,11 @@ import { type RunId } from '@shared/schemas';
 export interface SlashCommandContext {
   readonly cliContext: CliContext;
   readonly session: TuiSession;
+  /**
+   * The process runtime the chat entry point holds: a handler that runs a
+   * program runs it here rather than looking the runtime up.
+   */
+  readonly runtime: ProcessRuntime;
   /**
    * The process secret store and global state the account, model-access and
    * model-selection commands read, filled from the `CliPlatformServices` the

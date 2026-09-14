@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import type { MemoryViewItem } from '@shared/schemas';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
@@ -107,9 +107,10 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
  * prints that message.
  */
 export function runCliMemory<A>(
+  runtime: ProcessRuntime,
   program: Effect.Effect<A, MemoryEntryUnreadable>,
 ): Promise<A> {
-  return effectRuntime().runPromise(
+  return runtime.runPromise(
     Effect.catch(program, (error) => Effect.die(error.cause)),
   );
 }

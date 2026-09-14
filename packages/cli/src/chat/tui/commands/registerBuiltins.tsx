@@ -11,6 +11,7 @@ import {
 } from '@cli/runtime/loginOptions';
 import type { ApiProvider } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
@@ -271,6 +272,9 @@ export function registerBuiltinSlashCommands(options: {
    */
   secrets: PlatformSecrets;
   state: StateStore;
+  /** The process runtime of the surface registering these commands: every
+   *  form and handler below that runs a program runs it here. */
+  runtime: ProcessRuntime;
   /** The process-default session `/resume` lists history from. */
   runtimeSession: SessionHandle;
   onAgentSelect?: SelectHandler<string>;
@@ -290,7 +294,7 @@ export function registerBuiltinSlashCommands(options: {
   getConfigStores?: () => SettingsStores;
   onError?: ErrorHandler;
 }): void {
-  const { secrets, state } = options;
+  const { secrets, state, runtime } = options;
   const modelStores = { secrets, globalState: state };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ?? ((agent) => patchSessionMeta({ agent }));
@@ -299,16 +303,16 @@ export function registerBuiltinSlashCommands(options: {
   const onModelAccessSelect: FormActionHandler<CliModelAccessSelection> =
     options.onModelAccessSelect ??
     ((selection, output) =>
-      applyCliModelAccessSelection(selection, undefined, output));
+      applyCliModelAccessSelection(runtime, selection, undefined, output));
   const onApiKeySave: ApiKeySaveHandler =
     options.onApiKeySave ??
     ((provider, key) => applyCliProviderApiKey(secrets, provider, key));
   const onLoginSelect: FormActionHandler<LoginFormValue> =
     options.onLoginSelect ??
-    ((value, output) => loginFromChat(value, undefined, output));
+    ((value, output) => loginFromChat(runtime, value, undefined, output));
   const onLogoutSelect: FormActionHandler<CliLogoutTarget> =
     options.onLogoutSelect ??
-    ((value, output) => logoutFromChat(value, secrets, output));
+    ((value, output) => logoutFromChat(runtime, value, secrets, output));
   const canSelectAgent = options.canSelectAgent ?? (() => true);
   const canSelectModel = options.canSelectModel ?? (() => true);
 
@@ -317,6 +321,7 @@ export function registerBuiltinSlashCommands(options: {
     const selectable = canSelectAgent();
     return (
       <AgentListForm
+        runtime={runtime}
         currentAgent={current}
         availableRows={props.availableRows}
         selectable={selectable}
@@ -468,6 +473,7 @@ export function registerBuiltinSlashCommands(options: {
   function ToolsListFormAdapter(props: SlashFormProps): React.JSX.Element {
     return (
       <ToolsListForm
+        runtime={runtime}
         state={state}
         availableRows={props.availableRows}
         onClose={() => props.onDone(undefined)}
@@ -503,14 +509,18 @@ export function registerBuiltinSlashCommands(options: {
   }
 
   const MemoryListFormAdapter = makeSelectFormAdapter(
-    MemoryListForm,
+    (formProps) => <MemoryListForm runtime={runtime} {...formProps} />,
     (value: string) => options.onMemorySelect?.(value),
   );
   // `/resume` reads history from the process session; bind it here so the
   // command still uses the one plain-picker adapter.
   const ResumeListFormAdapter = makeSelectFormAdapter<RunId>(
     (formProps) => (
-      <ResumeListForm session={options.runtimeSession} {...formProps} />
+      <ResumeListForm
+        runtime={runtime}
+        session={options.runtimeSession}
+        {...formProps}
+      />
     ),
     (id: RunId) => options.onResumeSelect?.(id),
   );
@@ -610,7 +620,7 @@ export function registerBuiltinSlashCommands(options: {
     // by loginFromChat itself.
     echo: 'never',
     handler: (remainder, context) =>
-      loginFromChat(remainder, context.cliContext),
+      loginFromChat(context.runtime, remainder, context.cliContext),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
@@ -620,7 +630,8 @@ export function registerBuiltinSlashCommands(options: {
     // Same merged-form mismatch as /login: the typed command does not
     // describe what the form actually did.
     echo: 'never',
-    handler: (remainder) => logoutFromChat(remainder, secrets),
+    handler: (remainder, context) =>
+      logoutFromChat(context.runtime, remainder, secrets),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
@@ -682,8 +693,8 @@ export function registerBuiltinSlashCommands(options: {
     category: 'configuration',
     echo: 'never',
     handler: async (remainder) => {
-      if (remainder.toLowerCase() === 'list') await showCliMemoryList();
-      else await showCliMemoryPreview(remainder);
+      if (remainder.toLowerCase() === 'list') await showCliMemoryList(runtime);
+      else await showCliMemoryPreview(runtime, remainder);
     },
     formComponent: MemoryListFormAdapter,
   });
@@ -711,6 +722,7 @@ export function registerBuiltinSlashCommands(options: {
       return (
         <CliConfigForm
           stores={stores}
+          runtime={runtime}
           secrets={secrets}
           availableRows={props.availableRows}
           // Same hook `/approval` drives, so the approval-policy row updates the
@@ -742,7 +754,8 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Request context compaction',
     category: 'session',
     echo: 'ifPersists',
-    handler: requestCliSessionCompaction,
+    handler: (_remainder, context) =>
+      requestCliSessionCompaction(context.runtime),
   });
   registerSlashCommand({
     name: 'exit',

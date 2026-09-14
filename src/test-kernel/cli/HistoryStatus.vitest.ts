@@ -20,6 +20,7 @@ import {
   listResumableCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId,
   CLI_RUN_STATUS,
@@ -202,6 +203,7 @@ describe('CLI history status formatting', () => {
     await seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator', 'toolUse');
 
     const details = await readCliHistoryDetails(
+      effectRuntime(),
       Effect.succeed(defaultSession()),
       id,
     );
@@ -219,6 +221,7 @@ describe('CLI history status formatting', () => {
     await seedSnapshot(id, WORKFLOW_CONFIG, 'correct', 'reflection');
 
     const details = await readCliHistoryDetails(
+      effectRuntime(),
       Effect.succeed(defaultSession()),
       id,
     );
@@ -258,6 +261,7 @@ describe('CLI history status formatting', () => {
     );
 
     const details = await readCliHistoryDetails(
+      effectRuntime(),
       Effect.succeed(defaultSession()),
       id,
     );

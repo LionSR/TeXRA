@@ -33,6 +33,7 @@ vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
   };
 });
 
+import { effectRuntime } from '@platform/processRuntime';
 import { runCli } from '@cli/commands/root';
 import { defaultInitAnswers, initCommand } from '@cli/commands/init';
 import {
@@ -96,6 +97,7 @@ describe('CLI init command', () => {
     mocks.initCliPlatform.mockReset().mockResolvedValue({
       secrets: new FakeSecrets(),
       globalState: new FakeStateStore(),
+      runtime: effectRuntime(),
     });
     mocks.loadAgents.mockReset().mockReturnValue(Effect.void);
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {

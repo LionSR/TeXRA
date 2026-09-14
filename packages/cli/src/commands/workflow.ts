@@ -8,7 +8,6 @@ import {
   type ResumabilityDecision,
 } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
-import { effectRuntime } from '@platform/processRuntime';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { snapshotHoldsTerminalCompileRejection } from '../runtime/toolUseResumeData';
@@ -133,7 +132,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
   const agent = yield* Effect.tryPromise({
-    try: () => resolveCliRunAgent(init.agent),
+    try: () => resolveCliRunAgent(services.runtime, init.agent),
     catch: ensureError,
   });
   if (agent.category === AgentCategory.ToolUse) {
@@ -220,6 +219,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
 
         return yield* executeCliWorkflowConfig(config, runContext, {
           session: services.session,
+          runtime: services.runtime,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
       }),
@@ -284,6 +284,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
 
         const run = yield* executeCliToolUseConfig(config, runContext, {
           session: services.session,
+          runtime: services.runtime,
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
@@ -316,6 +317,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       /** The process session the run executes under: `initCliPlatform`'s one
        *  memoized open. */
       readonly session: Effect.Effect<SessionHandle>;
+      /** The process runtime that session was opened on, threaded on to the
+       *  shared run skeleton. */
+      readonly runtime: CliConfigExecuteOptions['runtime'];
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
       readonly modelCompatibilityKey?: CliConfigExecuteOptions['modelCompatibilityKey'];
@@ -374,6 +378,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       });
     const run = yield* executeCliConfig(config, runContext, {
       session: options.session,
+      runtime: options.runtime,
       runId: options.runId,
       modelCompatibilityKey: options.modelCompatibilityKey,
       onInterruptedRunFinalized: recoveryInputIsDurable
@@ -519,7 +524,7 @@ export const headlessRunCommand = defineCliCommand({
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
     };
-    await installCliProcessRuntime(context.storageRoot);
-    return effectRuntime().runPromise(runHeadlessAgent(context, init));
+    const runtime = await installCliProcessRuntime(context.storageRoot);
+    return runtime.runPromise(runHeadlessAgent(context, init));
   },
 });

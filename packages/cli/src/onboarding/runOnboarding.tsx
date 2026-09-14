@@ -37,7 +37,7 @@ import {
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { PlatformSecrets } from '@platform/secrets';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
@@ -121,6 +121,15 @@ interface OnboardingResolution extends CliOnboardingResult {
 }
 
 /**
+ * What the picker needs from the CLI composition root: the stores a chosen
+ * credential is written through, and the root's own Effect runtime, on which
+ * the forms below run the fibers their key presses start.
+ */
+type CliOnboardingServices = ModelOptionStores & {
+  readonly runtime: ProcessRuntime;
+};
+
+/**
  * Gate for the two interactive entry points (orchestrate, chat). Renders the
  * first-run picker only when interactive, with no usable credentials, and not
  * previously declined. Otherwise returns immediately without rendering or
@@ -128,7 +137,7 @@ interface OnboardingResolution extends CliOnboardingResult {
  */
 export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
   function* (
-    services: ModelOptionStores,
+    services: CliOnboardingServices,
     context: OnboardingGateContext,
   ): Effect.fn.Return<CliOnboardingResult, Error> {
     // context.* carries the parsed intent (headless / non-TTY / dumb); the final
@@ -193,7 +202,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
  * rejects headless before calling this.
  */
 export const runCliOnboarding = Effect.fn('runCliOnboarding')(function* (
-  services: ModelOptionStores,
+  services: CliOnboardingServices,
   colorEnabled = true,
 ): Effect.fn.Return<CliOnboardingResult, Error> {
   if (!process.stdout.isTTY) return NO_ONBOARDING_RESULT;
@@ -209,7 +218,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
    * The root's own stores: a picked provider key is written to the secret
    * store, and the skip flag to the global state.
    */
-  readonly stores: ModelOptionStores;
+  readonly stores: CliOnboardingServices;
   readonly firstRun: boolean;
   readonly colorEnabled?: boolean;
 }): Effect.fn.Return<CliOnboardingResult, Error> {
@@ -223,6 +232,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
       renderCliPrompt<OnboardingResolution>(
         (resolve) => (
           <OnboardingApp
+            runtime={options.stores.runtime}
             secrets={options.stores.secrets}
             pickerSubtitle={
               options.firstRun
@@ -285,6 +295,8 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
 type Screen = 'picker' | 'chatgpt-progress' | 'key-provider' | 'key-entry';
 
 interface OnboardingAppProps {
+  /** The root's runtime: every fiber this picker starts runs on it. */
+  readonly runtime: ProcessRuntime;
   readonly secrets: PlatformSecrets;
   readonly pickerSubtitle: string;
   readonly onResolve: (resolution: OnboardingResolution) => void;
@@ -337,6 +349,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
     };
     return (
       <ChatGptProgressStep
+        runtime={props.runtime}
         device={isLikelyRemoteSession()}
         onSuccess={onSuccess}
         onError={onError}
@@ -370,7 +383,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
         }}
         onSubmit={(key) => {
           setSaving(true);
-          void effectRuntime().runPromise(
+          void props.runtime.runPromise(
             Effect.tryPromise({
               try: () => saveProviderApiKey(props.secrets, keyProvider, key),
               catch: ensureError,
@@ -487,10 +500,11 @@ interface ChatGptProgressCallbacks {
 
 function ChatGptProgressStep(
   props: ChatGptProgressCallbacks & {
+    readonly runtime: ProcessRuntime;
     readonly device: boolean;
   },
 ): React.JSX.Element {
-  const { device } = props;
+  const { device, runtime } = props;
   const [message, setMessage] = useState(
     device
       ? 'Requesting a ChatGPT device code...'
@@ -499,7 +513,7 @@ function ChatGptProgressStep(
 
   useCancellableEffect(
     (isCancelled) =>
-      effectRuntime().runPromise(
+      runtime.runPromise(
         Effect.gen(function* () {
           const account = yield* signInCliSubscription(
             'chatgpt',

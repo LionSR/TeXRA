@@ -145,6 +145,7 @@ import {
   chatTuiSigintAction,
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
+import { effectRuntime } from '@platform/processRuntime';
 import { DisposableStore } from '@platform/disposable';
 import {
   aggregateId,
@@ -248,6 +249,7 @@ function makeInit(
   return {
     session: makeSession(),
     runtimeSession: mocks.defaultSession(),
+    runtime: effectRuntime(),
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
     followUpQueue: new PQueue({ concurrency: 1 }),

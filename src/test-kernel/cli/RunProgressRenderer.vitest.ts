@@ -18,6 +18,7 @@ import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   RUN_PHASE,
@@ -147,7 +148,7 @@ async function settle(): Promise<void> {
 function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
   const runs = new Map<RunId, RunView>();
   const ref = Effect.runSync(SubscriptionRef.make<SessionView>(viewWith([])));
-  const detach = renderer.attach({ view: ref });
+  const detach = renderer.attach({ view: ref }, { runtime: effectRuntime() });
   const setMany = async (
     entries: ReadonlyArray<readonly [string, Partial<RunView>]>,
   ): Promise<void> => {
@@ -948,7 +949,9 @@ describe('CLI run progress renderer', () => {
           stderrColorEnabled: false,
         }),
       );
-      const detach = host.attachRunProgressRenderer(session);
+      const detach = host.attachRunProgressRenderer(session, {
+        runtime: effectRuntime(),
+      });
       // The session's graph is fresh: let its fold subscribe before the
       // facts land, so each fact paints as its own level.
       await settle();
@@ -971,7 +974,9 @@ describe('CLI run progress renderer', () => {
           renderRunProgress: true,
         }),
       );
-      const detach = host.attachRunProgressRenderer(session);
+      const detach = host.attachRunProgressRenderer(session, {
+        runtime: effectRuntime(),
+      });
       await publishRun(session, { runId: 'b2b2b2' });
       await session.settlePublications();
       // The terminal phase is the `run.end` row's fact and nothing else, so
@@ -1005,7 +1010,9 @@ describe('CLI run progress renderer', () => {
         }),
       );
 
-      const detach = host.attachRunProgressRenderer(session);
+      const detach = host.attachRunProgressRenderer(session, {
+        runtime: effectRuntime(),
+      });
       await publishRun(session, { runId: 'c3c3c3' });
       host.prepareInteractivePrompt?.();
       await Promise.resolve();
@@ -1028,7 +1035,9 @@ describe('CLI run progress renderer', () => {
             renderRunProgress: true,
           }),
         );
-        const detach = host.attachRunProgressRenderer(session);
+        const detach = host.attachRunProgressRenderer(session, {
+          runtime: effectRuntime(),
+        });
         await publishRun(session, { runId: 'd4d4d4' });
         detach();
         await host.close();
@@ -1124,7 +1133,7 @@ describe('CLI run progress renderer', () => {
       // it through `onChildActivity`, so the case plays the listener.
       let roster:
         ((parentRunId: RunId, items: ActiveChildInfo[]) => void) | undefined;
-      const detach = attachCliSessionProgressProjection({
+      const detach = attachCliSessionProgressProjection(effectRuntime(), {
         events: session.events,
         now: () => session.now(),
         runs: {

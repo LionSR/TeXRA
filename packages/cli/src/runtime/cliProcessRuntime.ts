@@ -35,40 +35,68 @@
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import type { StateStore } from '@platform/interfaces';
-import { tryProcessRuntime } from '@platform/processRuntime';
+import {
+  tryProcessRuntime,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
-import type { SetupPlatformShape } from '@tools/setup/platform';
 
 import { getCliSecrets } from './cliSecrets';
 import { signInCliSupabase } from './supabaseAuth';
 
-let pending: Promise<void> | null = null;
+let pending: Promise<ProcessRuntime> | null = null;
 let globalState: StateStore | undefined;
 
-const cliSetupPlatform: SetupPlatformShape = {
-  host: 'cli',
-  signIn: async () => {
-    await signInCliSupabase({ openBrowser: true });
-    return SupabaseClient.isAuthenticated();
-  },
-};
-
-export function installCliProcessRuntime(storageRoot?: string): Promise<void> {
-  if (tryProcessRuntime()) return Promise.resolve();
+/**
+ * Install the runtime if this entry is the first to arrive, and hand the
+ * installed one back either way. Every CLI entry point takes its runtime from
+ * this return value and keeps it in a local (or in the services bag
+ * `initCliPlatform` returns); nothing below reads it back out of the process.
+ */
+export function installCliProcessRuntime(
+  storageRoot?: string,
+): Promise<ProcessRuntime> {
+  const installed = tryProcessRuntime();
+  if (installed) return Promise.resolve(installed);
   if (pending) return pending;
   const storage = createNodeStorageProvider({ storageRoot });
   pending = (async () => {
-    installProcessRuntime({
-      processStart: await nodeProcesses.selfIdentity(),
+    // The runtime this install builds, in this root's own local. The three
+    // thunks below run per operation, and the layer they belong to is built
+    // at the runtime's first run, so none of them can be reached before the
+    // assignment two statements down -- which is the same reason
+    // `installProcessRuntime` takes `secrets` and `appState` as thunks at
+    // all. `built` names that local, so the secret store and the setup
+    // sign-in run their programs on the runtime this root holds rather than
+    // reading one back off the process.
+    const root: { current?: ProcessRuntime } = {};
+    const built = (): ProcessRuntime => {
+      if (!root.current) {
+        throw new Error(
+          'The CLI process runtime is still being installed: its services are reachable only once installCliProcessRuntime has resolved.',
+        );
+      }
+      return root.current;
+    };
+    const processStart = await nodeProcesses.selfIdentity();
+    root.current = installProcessRuntime({
+      processStart,
       globalStorage: () => storage.getGlobalStoragePath(),
       updateCheckStorage: () => storage.getGlobalStoragePath(),
-      secrets: () => getCliSecrets(storageRoot),
+      secrets: () => getCliSecrets(built(), storageRoot),
       appState: () => cliGlobalState(),
-      setup: cliSetupPlatform,
+      setup: {
+        host: 'cli',
+        signIn: async () => {
+          await signInCliSupabase({ runtime: built(), openBrowser: true });
+          return SupabaseClient.isAuthenticated();
+        },
+      },
       lean: directLeanLanguageServices(),
     });
+    return root.current;
   })().finally(() => {
     pending = null;
   });

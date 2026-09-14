@@ -2,7 +2,6 @@ import { defineCommand } from 'citty';
 
 import { DEFAULT_OAUTH_PROVIDER, isOAuthProvider } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
-import { effectRuntime } from '@platform/processRuntime';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -87,12 +86,12 @@ export function shouldPromptForLoginProvider(
 }
 
 async function runDeviceLogin(context: CliContext): Promise<number> {
-  await initCliPlatform({ ...context, quietLogs: true });
+  const { runtime } = await initCliPlatform({ ...context, quietLogs: true });
   // Human-facing progress goes to stdout only in text mode so the JSON/NDJSON
   // result stream stays machine-readable (same convention as --no-browser).
   const writeProgress = cliProgressWriter(context);
   const deviceResult = await withCliAuthError(() =>
-    effectRuntime().runPromise(
+    runtime.runPromise(
       signInCliSupabaseDeviceCode({
         onDeviceCode: (authorization) => {
           writeProgress(formatCliDeviceAuthMessage(authorization));
@@ -132,7 +131,7 @@ async function runLogin(
     writeTextStderr(unsupportedLoginProviderMessage(provider));
     return CliExitCode.Usage;
   }
-  await initCliPlatform({ ...context, quietLogs: true });
+  const { runtime } = await initCliPlatform({ ...context, quietLogs: true });
   const accountWarning = githubSelectAccountWarning(init);
   if (accountWarning) writeTextStderr(accountWarning);
   if (context.outputFormat === 'text' && !init.noBrowser) {
@@ -140,6 +139,7 @@ async function runLogin(
   }
   const loginResult = await withCliAuthError(() =>
     signInCliSupabase({
+      runtime,
       provider,
       openBrowser: !init.noBrowser,
       selectAccount: init.selectAccount,
@@ -244,8 +244,13 @@ export const logoutCommand = defineCliCommand({
     ...GLOBAL_ARGS,
   },
   async run(context) {
-    await initCliPlatform({ ...context, quietLogs: true });
-    const signOutResult = await withCliAuthError(() => signOutCliSupabase());
+    const { runtime } = await initCliPlatform({
+      ...context,
+      quietLogs: true,
+    });
+    const signOutResult = await withCliAuthError(() =>
+      signOutCliSupabase(runtime),
+    );
     if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
 
     const payload = { authenticated: false };

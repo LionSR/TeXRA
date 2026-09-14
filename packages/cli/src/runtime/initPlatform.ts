@@ -28,7 +28,7 @@ import type {
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { DisposableStore } from '@platform/disposable';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
@@ -99,6 +99,13 @@ type CliPlatformInitOptions = Pick<
  * value the composition root was holding all along.
  */
 export type CliPlatformServices = Pick<Platform, 'lifecycle'> & {
+  /**
+   * The one Effect runtime of this process, in the local this root holds
+   * (PRD R1, injection plan step 2). Commands run their programs on it and
+   * pass it to the helpers that run fibers of their own, so nothing below
+   * this root reads the runtime back out of the process.
+   */
+  readonly runtime: ProcessRuntime;
   /** The process's cross-workspace storage root, from the roots built below. */
   readonly globalStorage: string;
   /** The stores this root opened, handed over rather than read back. */
@@ -315,19 +322,20 @@ export async function initCliPlatform(
     trusted: true,
   });
 
+  // The one Effect runtime of this process (PRD 7.7), in this root's local:
+  // the stores below open as Effect programs on it, the session graph and
+  // every Promise-facing fiber run on it, and it is what the services bag
+  // hands to every command. An entry that ran before any platform existed --
+  // the update check, `clone` -- may already have installed it; this then
+  // adopts that one rather than building a second and leaving the first
+  // undisposed. Disposed after the default session has released its graph.
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+
   // Double init is the normal path (every command calls one of these), so the
   // already-installed platform is the value returned on the second and later
   // calls; the first call keeps the one it builds below.
   let services = tryPlatform();
   if (!services) {
-    // The one Effect runtime of this process (PRD 7.7) comes first: the
-    // stores below open as Effect programs, and the session graph and every
-    // Promise-facing fiber run on it. Disposed after the default session has
-    // released its graph. An entry that ran before any platform existed --
-    // the update check, `clone` -- may already have installed it; this then
-    // adopts that one rather than building a second and leaving the first
-    // undisposed.
-    await installCliProcessRuntime(context.storageRoot);
     installLongRunningModelDispatcher();
     // The project `.texra/config.json` backs the workspace target and
     // user-level config (`~/.texra/v1/global-storage/config.json`, the same file
@@ -335,9 +343,6 @@ export async function initCliPlatform(
     // the extension and desktop hosts open, including the fallback to the
     // internal workspace store when the project file cannot be read or its
     // directory cannot be written.
-    // This entry's runtime, in a local: the state stores' Promise-facing
-    // `update` runs on it, and the store itself never runs an Effect.
-    const runtime = effectRuntime();
     // Everything below is the first init's own work on that runtime. A step
     // that fails after the runtime exists (a store that will not open, a
     // seed that will not write) must not leave the runtime installed with
@@ -382,7 +387,7 @@ export async function initCliPlatform(
         resourcesPath: context.resourcesPath,
         customDirectoryStore: { get: () => undefined },
       });
-      const cliSecrets = getCliSecrets(context.storageRoot);
+      const cliSecrets = getCliSecrets(runtime, context.storageRoot);
       const platform = createNodePlatform({
         lifecycle,
         agentResume: {
@@ -494,6 +499,7 @@ export async function initCliPlatform(
   // this process's storage root the composition block installed, and the
   // application state is the store `bindCliGlobalState` latched there.
   const cliServices: CliPlatformServices = {
+    runtime,
     // The pure path calculator over this process's storage root (no mkdir),
     // so every CLI entry, including the ones that find the platform already
     // installed, names one root without touching the filesystem again.
@@ -501,7 +507,7 @@ export async function initCliPlatform(
       context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
     ),
     globalState: cliGlobalState(),
-    secrets: getCliSecrets(context.storageRoot),
+    secrets: getCliSecrets(runtime, context.storageRoot),
     session:
       sessionOpen ??
       Effect.suspend(() => {
@@ -519,7 +525,7 @@ export async function initCliPlatform(
   };
 
   if (!supabaseAuthInitialized) {
-    initializeCliSupabaseAuth(cliServices.secrets, cliPlatformLog);
+    initializeCliSupabaseAuth(runtime, cliServices.secrets, cliPlatformLog);
     supabaseAuthInitialized = true;
   }
 

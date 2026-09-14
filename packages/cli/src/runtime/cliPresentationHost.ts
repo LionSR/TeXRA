@@ -8,7 +8,6 @@ import {
 } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { RunId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
 
 // Local imports - CLI runtime
@@ -20,7 +19,10 @@ import {
   type Logger,
   type LogSink,
 } from './logSinks';
-import { createRunProgressRenderer } from './runProgressRenderer';
+import {
+  createRunProgressRenderer,
+  type RunProgressAttachOptions,
+} from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
 import type { CliContext } from './cliContext';
 
@@ -31,7 +33,7 @@ export interface CliRuntimeHost {
   ): boolean;
   attachRunProgressRenderer(
     session: SessionHandle,
-    options?: { readonly runId?: RunId },
+    options: RunProgressAttachOptions,
   ): () => void;
   prepareInteractivePrompt?: () => void;
   emitApprovalBypassState(update: HostApprovalBypassStateUpdate): void;

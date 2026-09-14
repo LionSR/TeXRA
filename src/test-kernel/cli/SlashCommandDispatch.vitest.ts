@@ -59,6 +59,7 @@ import * as providerApiKey from '@cli/runtime/providerApiKey';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import * as codexPreference from '@model/codex/codexPreference';
+import { effectRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -152,6 +153,7 @@ function seedChildRoster(
 const stores = {
   secrets: new FakeSecrets(),
   state: new FakeStateStore(),
+  runtime: effectRuntime(),
   runtimeSession: defaultSession(),
 };
 
@@ -197,6 +199,7 @@ function createContext(
   return {
     cliContext: createCliContext(),
     session,
+    runtime: stores.runtime,
     secrets: stores.secrets,
     state: stores.state,
     processCwd: '/tmp/launcher',
@@ -356,13 +359,13 @@ describe('handleTuiSlashCommand', () => {
       }),
     );
 
-    await showCliMemoryList();
+    await showCliMemoryList(stores.runtime);
     expect(infoPane.get()).toEqual({
       title: '/memory list',
       lines: ['No memory files found.'],
     });
 
-    await showCliMemoryPreview('note.md');
+    await showCliMemoryPreview(stores.runtime, 'note.md');
     expect(infoPane.get()?.title).toBe('/memory list');
     closeInfoPane();
     expect(infoPane.get()).toMatchObject({ title: '/memory preview' });
@@ -557,6 +560,7 @@ describe('handleTuiSlashCommand', () => {
     );
 
     const completion = loginFromChat(
+      stores.runtime,
       'chatgpt --no-browser',
       createCliContext(),
       silentOutput(),
@@ -614,6 +618,7 @@ describe('handleTuiSlashCommand', () => {
       update.program,
     );
     const completion = applyCliModelAccessSelection(
+      stores.runtime,
       {
         kind: 'subscription-preference',
         provider: 'chatgpt',

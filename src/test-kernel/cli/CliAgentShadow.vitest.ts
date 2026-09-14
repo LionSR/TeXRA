@@ -16,6 +16,7 @@ import {
   resolveCliAgentInCategory,
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
+import { effectRuntime } from '@platform/processRuntime';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { AgentCategory } from '@shared/schemas';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -104,14 +105,17 @@ describe('CLI agent validation with a shadowed name', () => {
   // does without saying so; the qualified spellings the error offers are
   // unambiguous because the registry is keyed by `source:name`.
   it('refuses a shadowed name for `texra run` and names both candidates', async () => {
-    await expect(resolveCliRunAgent('assistant')).rejects.toThrow(
+    await expect(
+      resolveCliRunAgent(effectRuntime(), 'assistant'),
+    ).rejects.toThrow(
       'Agent name "assistant" is ambiguous: it matches the workflow agent custom:assistant and the toolUse agent builtInToolUse:assistant. Re-run with the source-qualified name to pick one: `texra run custom:assistant` or `texra run builtInToolUse:assistant`.',
     );
-    expect((await resolveCliRunAgent('custom:assistant')).category).toBe(
-      AgentCategory.Workflow,
-    );
     expect(
-      (await resolveCliRunAgent('builtInToolUse:assistant')).category,
+      (await resolveCliRunAgent(effectRuntime(), 'custom:assistant')).category,
+    ).toBe(AgentCategory.Workflow);
+    expect(
+      (await resolveCliRunAgent(effectRuntime(), 'builtInToolUse:assistant'))
+        .category,
     ).toBe(AgentCategory.ToolUse);
   });
 

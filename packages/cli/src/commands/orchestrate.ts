@@ -10,7 +10,6 @@ import {
 } from '@common/teams/TeamPlan';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, byCategory } from '@shared/schemas';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { getFirstRunDone } from '@shared/state/onboardingState';
@@ -149,7 +148,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // in-process — the key paths invalidate the relevant caches — so no
   // relaunch is needed.
   const { maybeRunCliOnboarding } = await import('../onboarding/runOnboarding');
-  const onboarding = await effectRuntime().runPromise(
+  const onboarding = await services.runtime.runPromise(
     maybeRunCliOnboarding(services, context),
   );
   if (onboarding.declined) {
@@ -184,9 +183,15 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // launcher, which is the same outcome the navigation kinds used to spell
   // out.
   launcher: while (true) {
-    const history = await listCliHistoryEntries(services.session);
+    const history = await listCliHistoryEntries(
+      services.runtime,
+      services.session,
+    );
     const presets = readCliMultiAgentPresets();
-    const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
+    const presetPlanSet = await loadCliMultiAgentPresetPlanSet(
+      services.runtime,
+      presets,
+    );
     const presetLaunchBlockReason =
       context.approvalPolicy === 'never' ? 'delegation-denied' : undefined;
     const [modelAccess, authProfile] = await Promise.all([
@@ -212,7 +217,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // after an agent/team choice. Best-effort: an unavailable registry just
     // launches with the default model instead of blocking the launcher.
     const [models, statusLines] = await Promise.all([
-      effectRuntime().runPromise(
+      services.runtime.runPromise(
         Effect.tryPromise({
           try: () => getCliModelAccessList({ stores: services }),
           catch: ensureError,
@@ -222,7 +227,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       ),
       loadCliApiStatus(services.secrets, authProfile),
     ]);
-    const allowDefaultModelLaunch = await effectRuntime().runPromise(
+    const allowDefaultModelLaunch = await services.runtime.runPromise(
       canLaunchWithDefaultModel(context, models, services),
     );
     const { runOrchestrationTui } =
@@ -259,11 +264,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
           ) ??
           (
             await loadCliMultiAgentRunPlan(
+              services.runtime,
               { preset: action.preset },
               { reloadRemoteAgents: false },
             )
           ).plan;
-        const preflight = await effectRuntime().runPromise(
+        const preflight = await services.runtime.runPromise(
           preflightTeamAvailability({
             initial: initialPlan,
             unresolvedNames: teamTexraHostedMissingNames,
@@ -341,13 +347,14 @@ async function runOrchestration(context: CliContext): Promise<number> {
         const { runConfigTui } = await import('../config/runConfigTui');
         await runConfigTui({
           secrets: services.secrets,
+          runtime: services.runtime,
           colorEnabled: context.stdoutColorEnabled,
           onError: writeErrorStderr,
         });
         continue launcher;
       }
       case 'account': {
-        await effectRuntime().runPromise(
+        await services.runtime.runPromise(
           Effect.gen(function* () {
             if (action.provider === 'chatgpt' || action.provider === 'grok') {
               if (action.operation === 'sign-out') {
@@ -371,7 +378,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
               }
             } else if (action.operation === 'sign-out') {
               yield* Effect.tryPromise({
-                try: signOutCliSupabase,
+                try: () => signOutCliSupabase(services.runtime),
                 catch: ensureError,
               });
               writeTextStdout(RESEARCHER_ACCESS_AUTH.signedOut);
@@ -388,7 +395,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         continue launcher;
       }
       case 'set-model-access': {
-        await effectRuntime().runPromise(
+        await services.runtime.runPromise(
           updateCliModelAccess(context, action.access, {
             writeProgress: writeTextStdout,
           }).pipe(

@@ -27,7 +27,7 @@ import {
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { AgentCategory, MESSAGE_TYPES, type RunId } from '@shared/schemas';
 
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
@@ -131,7 +131,7 @@ export async function showCliSessionStatus(
 }
 
 /** `/compact`: one runtime request; the outcome or refusal becomes a notice. */
-export function requestCliSessionCompaction(): void {
+export function requestCliSessionCompaction(runtime: ProcessRuntime): void {
   const runId = activeRunIdSignal.get();
   if (runId === undefined) {
     appendLocalAssistantTranscript(
@@ -140,7 +140,7 @@ export function requestCliSessionCompaction(): void {
     return;
   }
   const session = defaultSession();
-  void effectRuntime().runPromise(
+  void runtime.runPromise(
     session.requests.request({ kind: 'run.compact', runId }).pipe(
       Effect.match({
         onFailure: (error) => appendLocalRequestRefusal(error, runId),

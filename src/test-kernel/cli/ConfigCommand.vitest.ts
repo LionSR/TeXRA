@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { effectRuntime } from '@platform/processRuntime';
 import { InvalidAgentTeamError } from '@agent/index';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
@@ -55,7 +56,9 @@ describe('CLI config command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.initLocalCliPlatform.mockResolvedValue(undefined);
+    mocks.initLocalCliPlatform.mockResolvedValue({
+      runtime: effectRuntime(),
+    });
     mocks.getVisibleAgents.mockReturnValue([
       {
         category: 'toolUse',

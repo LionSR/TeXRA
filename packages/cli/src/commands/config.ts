@@ -5,7 +5,6 @@ import {
   InvalidAgentTeamError,
   loadAgents,
 } from '@agent/index';
-import { effectRuntime } from '@platform/processRuntime';
 import { agentKeyOf, CLI_STATE_SETTINGS } from '@shared/schemas';
 import { readSetting } from '@shared/config/settingsAccess';
 import { unique } from '@utils/core';
@@ -58,8 +57,8 @@ async function runAgentRosterTeamAction(
 }
 
 async function showConfig(context: CliContext): Promise<number> {
-  await initLocalCliPlatform(context);
-  const agents = await readCliAgentRoster();
+  const { runtime } = await initLocalCliPlatform(context);
+  const agents = await readCliAgentRoster(runtime);
   const stores = platformSettingsStores();
   const settings = Object.fromEntries(
     CLI_STATE_SETTINGS.map((entry) => [
@@ -96,10 +95,10 @@ async function configureAgentRoster(
     readonly clearDefaultAgent: boolean;
   },
 ): Promise<number> {
-  await initLocalCliPlatform(context);
+  const { runtime } = await initLocalCliPlatform(context);
   // The controller below resolves agent keys, so the registry must be loaded
   // first; the honest roster read happens once, later, where it is emitted.
-  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
+  await runtime.runPromise(loadAgents({ includeRemote: false }));
   const roster = createWorkspaceAgentRosterController();
   const customRequested =
     input.workflow !== undefined || input.toolUse !== undefined;
@@ -162,17 +161,15 @@ async function configureAgentRoster(
         `Default chat agent "${input.defaultAgent}" is not in the effective workspace roster. Available agents: ${names || '(none)'}.`,
       );
     }
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       setWorkspaceCliChatAgent(context.cwd, agentKeyOf(selected)),
     );
   }
   if (input.clearDefaultAgent) {
-    await effectRuntime().runPromise(
-      setWorkspaceCliChatAgent(context.cwd, undefined),
-    );
+    await runtime.runPromise(setWorkspaceCliChatAgent(context.cwd, undefined));
   }
 
-  const record = await readCliAgentRoster();
+  const record = await readCliAgentRoster(runtime);
   emitCliResult(context, {
     json: record,
     ndjson: { kind: 'agent-roster', roster: record },
@@ -258,6 +255,7 @@ const configEditCommand = defineCliCommand({
     const { runConfigTui } = await import('../config/runConfigTui');
     await runConfigTui({
       secrets: services.secrets,
+      runtime: services.runtime,
       colorEnabled: context.stdoutColorEnabled,
       onError: writeErrorStderr,
     });

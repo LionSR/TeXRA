@@ -10,7 +10,7 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 import { Cause, Stream, SubscriptionRef } from 'effect';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   isPlainAgentIdentity,
@@ -52,9 +52,11 @@ const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
 export function bindSessionView(
   view: SubscriptionRef.SubscriptionRef<SessionView>,
   options: {
+    /** The runtime the bridge's fiber runs on, from the entry that binds. */
+    readonly runtime: ProcessRuntime;
     readonly changes?: Stream.Stream<SessionView>;
     readonly onFailure?: (error: unknown) => void;
-  } = {},
+  },
 ): () => void {
   bound.get()?.dispose();
   const changes = (options.changes ?? SubscriptionRef.changes(view)).pipe(
@@ -66,7 +68,7 @@ export function bindSessionView(
     }),
   );
   const bridgedBound = toSignal(
-    effectRuntime(),
+    options.runtime,
     changes,
     SubscriptionRef.getUnsafe(view),
   );

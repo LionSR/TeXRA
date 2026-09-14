@@ -20,6 +20,7 @@ import {
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { type RunId, type WorkflowControlAction } from '@shared/schemas';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 import type { SessionView } from '@shared/session/sessionView';
@@ -84,6 +85,7 @@ import {
   runningChildCount,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
+
 import type { InputHistory } from './history/inputHistory';
 import type { PastedImageEntry } from './input/draftAttachments';
 
@@ -148,6 +150,10 @@ export interface AppProps {
    *  ^Z→SIGTSTP translation, so the parsed key must be routed explicitly. */
   readonly onSuspend?: () => void;
   readonly history?: InputHistory;
+  /** The chat entry point's runtime, handed to the panes that run a program:
+   *  the composer's history writes and image paste, and the approval modal's
+   *  decisions. */
+  readonly runtime: ProcessRuntime;
 }
 
 export function App(props: AppProps): React.JSX.Element {
@@ -345,6 +351,7 @@ export function App(props: AppProps): React.JSX.Element {
             availableRows={availableRows}
             goalAutoApproveAll={goalAutoApproveAll}
             pending={pending}
+            runtime={props.runtime}
           />
         ) : null;
       case 'transcriptReader': {
@@ -632,6 +639,7 @@ export function App(props: AppProps): React.JSX.Element {
         renderFooterChrome={() => (
           <>
             <InputBar
+              runtime={props.runtime}
               controlRef={inputBarRef}
               onSubmit={props.onSubmit}
               collapseWhenDisabled={!inputBarVisible}

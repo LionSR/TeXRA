@@ -17,7 +17,7 @@ import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { redactDisplayValue } from '@logger/redaction';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   RunIdSchema,
   aggregateTarget,
@@ -160,13 +160,14 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
  * asks of the session, so the open runs inside the reader's own program.
  */
 export async function listCliHistoryEntries(
+  runtime: ProcessRuntime,
   session: Effect.Effect<SessionHandle>,
 ): Promise<CliHistoryEntry[]> {
   // A row's resumability comes from the checkpoint `stat` the listing already
   // did; only a failed workflow row still reads its persisted state. That read
   // is bounded here so a history full of failed workflow runs cannot open one
   // file handle burst per run. `Effect.forEach` preserves input order.
-  return effectRuntime().runPromise(
+  return runtime.runPromise(
     Effect.gen(function* () {
       const opened = yield* session;
       const entries = yield* listRuns(opened);
@@ -180,6 +181,7 @@ export async function listCliHistoryEntries(
 }
 
 export async function readCliHistoryDetails(
+  runtime: ProcessRuntime,
   sessionOpen: Effect.Effect<SessionHandle>,
   id: RunId,
   options: { includeFullConversation?: boolean } = {},
@@ -196,7 +198,7 @@ export async function readCliHistoryDetails(
     checkpointPresent,
     currentModel,
     resumable,
-  ] = await effectRuntime().runPromise(
+  ] = await runtime.runPromise(
     Effect.gen(function* () {
       const session = yield* sessionOpen;
       const store = getRunRecords(session, id);
@@ -324,11 +326,12 @@ type CliHistoryExportInputResult =
  * run simply never produced a conversation.
  */
 export async function readCliHistoryExportInput(
+  runtime: ProcessRuntime,
   session: Effect.Effect<SessionHandle>,
   id: RunId,
 ): Promise<CliHistoryExportInputResult> {
   const { run, config, conversation, hasTranscriptEvidence, exportInput } =
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       Effect.flatMap(session, (opened) => loadChatExportInput(id, opened)),
     );
   if (exportInput) return { status: 'ok', exportInput };
@@ -353,6 +356,7 @@ const TRACE_VIEWER_DIR_NAME = 'traceViewer';
  * real cause.
  */
 export async function readCliHistoryStandaloneTemplate(
+  runtime: ProcessRuntime,
   resourcesPath: string,
 ): Promise<string | null> {
   const templatePath = path.join(
@@ -360,7 +364,7 @@ export async function readCliHistoryStandaloneTemplate(
     TRACE_VIEWER_DIR_NAME,
     'index.html',
   );
-  return effectRuntime().runPromise(
+  return runtime.runPromise(
     Effect.tryPromise({
       try: () => readFile(templatePath, 'utf8'),
       catch: (cause) => cause,

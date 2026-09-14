@@ -9,6 +9,7 @@ import {
   type CliToolStatusRecord,
 } from '@cli/runtime/tools';
 import type { StateStore } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -16,6 +17,8 @@ import { setTransientNotice } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 
 interface ToolsListFormProps {
+  /** The chat entry point's runtime: the tool probes run on it. */
+  readonly runtime: ProcessRuntime;
   readonly availableRows?: number;
   /**
    * The global state the disabled-tool read and the toggle both write. Ink
@@ -57,7 +60,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       title="/tools"
       compactTitle="/tools · Toggle available external integrations."
       loadingLabel="Checking tool integrations..."
-      load={() => readCliToolStatuses(props.state)}
+      load={() => readCliToolStatuses(props.runtime, props.state)}
       items={(tools) =>
         tools.map((tool) => ({
           value: tool.id,

@@ -9,7 +9,7 @@ import {
   computeSelectWindowSize,
   isCompactFormRows,
 } from '@cli/tui/selectWindow';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas';
 
@@ -21,6 +21,8 @@ import {
 import { useAsyncPickerForm } from './_shared/ListForm';
 
 interface AgentListFormProps {
+  /** The chat entry point's runtime: the option load runs on it. */
+  readonly runtime: ProcessRuntime;
   readonly currentAgent: string;
   readonly availableRows?: number;
   readonly selectable: boolean;
@@ -144,9 +146,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     title: '/agent',
     loadingLabel: 'Loading agents...',
     load: async () => {
-      const options = await effectRuntime().runPromise(
-        computeAgentOptionsData(),
-      );
+      const options = await props.runtime.runPromise(computeAgentOptionsData());
       return { toolUse: options.toolUse, workflow: options.workflow };
     },
     isEmpty: (groups) => groups.toolUse.length === 0,

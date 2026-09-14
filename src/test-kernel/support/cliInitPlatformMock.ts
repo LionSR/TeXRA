@@ -1,6 +1,9 @@
 // Third-party imports
 import { vi } from 'vitest';
 
+// Local imports
+import { effectRuntime } from '@platform/processRuntime';
+
 /**
  * Shared mock for the `@cli/runtime/initPlatform` initializers that CLI
  * command suites stub identically: the mock bag and the `vi.mock`
@@ -22,5 +25,16 @@ const cliInitPlatformMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({ ...cliInitPlatformMock }));
+
+// Every command reads `runtime` off the services its init returns, so the
+// stub hands back the kernel harness's own process runtime by default. A
+// suite that needs more (stores, a session) resolves its own bag and keeps
+// this field in it.
+for (const init of [
+  cliInitPlatformMock.initCliPlatform,
+  cliInitPlatformMock.initLocalCliPlatform,
+]) {
+  init.mockImplementation(async () => ({ runtime: effectRuntime() }));
+}
 
 export { cliInitPlatformMock };

@@ -13,7 +13,7 @@ import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { textInputCappedRowCount } from '../input/textInputDisplay';
@@ -55,6 +55,9 @@ import type { InputHistory } from '../history/inputHistory';
 const CSI_SEQUENCE_TAIL_RE = /^\[[0-?]*[ -/]*[@-~]$/u;
 
 interface InputBarProps {
+  /** The chat entry point's runtime: input-history writes and the clipboard
+   *  image probe run on it. */
+  readonly runtime: ProcessRuntime;
   /** Forwarded to BaseTextInput; called only on real (non-paste) Enter.
    *  `mediaFiles` carries absolute paths of any pasted-image attachments. */
   readonly onSubmit: (
@@ -109,7 +112,7 @@ const INPUT_BAR_MAX_CONTENT_ROWS = 5;
 const INPUT_BAR_DECORATION_COLUMNS = 6;
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
-  const { disabled, history, onSubmit } = props;
+  const { disabled, history, onSubmit, runtime } = props;
   const keyboardActive = props.keyboardActive ?? true;
   const [value, setValueState] = useState('');
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
@@ -296,7 +299,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       const historyPersist =
         historyText.length > 0 && !shouldRedactSlashInput(historyText)
           ? historyRef.current &&
-            effectRuntime().runPromise(historyRef.current.push(historyText))
+            runtime.runPromise(historyRef.current.push(historyText))
           : null;
       historyPersist?.catch((err: unknown) => {
         writeTextStderr(
@@ -309,7 +312,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         images.length > 0 ? images : undefined,
       );
     },
-    [clearDraft, onSubmit],
+    [clearDraft, onSubmit, runtime],
   );
 
   const acceptSlashCommand = useCallback(
@@ -505,13 +508,15 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
               }
               escapeEdit={showPalette ? clearDraftEdit : undefined}
               transformPaste={transformPaste}
-              onImagePaste={onImagePaste}
-              onImagePasteError={(error) =>
-                setTransientNotice(
-                  `Image paste failed: ${toErrorMessage(error)}`,
-                  { ttlMs: Number.POSITIVE_INFINITY },
-                )
-              }
+              imagePaste={{
+                runtime,
+                probe: onImagePaste,
+                onError: (error) =>
+                  setTransientNotice(
+                    `Image paste failed: ${toErrorMessage(error)}`,
+                    { ttlMs: Number.POSITIVE_INFINITY },
+                  ),
+              }}
               onInputChunkSubmit={handleInputChunkSubmit}
               onSubmit={showPalette ? () => undefined : handleSubmit}
             />

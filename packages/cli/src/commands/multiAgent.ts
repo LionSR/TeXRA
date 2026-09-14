@@ -3,7 +3,6 @@ import { defineCommand } from 'citty';
 
 import type { AgentConfigPayload } from '@agent/runtime';
 import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
-import { effectRuntime } from '@platform/processRuntime';
 import { byCategory, AgentCategory } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -82,9 +81,9 @@ function formatAttachedFileList(
 }
 
 async function runMultiAgentList(context: CliContext): Promise<number> {
-  await initLocalCliPlatform(context);
+  const { runtime } = await initLocalCliPlatform(context);
   const { plans, remoteCatalogRefreshAttempted } =
-    await loadCliMultiAgentPresetPlanSet(readCliMultiAgentPresets());
+    await loadCliMultiAgentPresetPlanSet(runtime, readCliMultiAgentPresets());
 
   emitCliResult(context, {
     json: plans.map(cliMultiAgentPresetListRecord),
@@ -100,10 +99,10 @@ async function runMultiAgentShow(
   context: CliContext,
   presetIdOrName: string,
 ): Promise<number> {
-  await initCliPlatform({ ...context, quietLogs: true });
+  const { runtime } = await initCliPlatform({ ...context, quietLogs: true });
 
   const { plan, remoteCatalogRefreshAttempted } =
-    await loadCliMultiAgentRunPlan({
+    await loadCliMultiAgentRunPlan(runtime, {
       preset: presetIdOrName,
     });
 
@@ -138,7 +137,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
     context.mode === 'headless' && context.approvalPolicy === 'ask';
   const { plan, remoteCatalogRefreshAttempted } = yield* Effect.tryPromise({
     try: () =>
-      loadCliMultiAgentRunPlan(init, {
+      loadCliMultiAgentRunPlan(services.runtime, init, {
         reloadRemoteAgents: !rejectsHeadlessAsk,
       }),
     catch: ensureError,
@@ -240,6 +239,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
 
         const run = yield* executeCliToolUseConfig(config, runContext, {
           session: services.session,
+          runtime: services.runtime,
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
@@ -341,8 +341,8 @@ const multiAgentRunCommand = withUsageSections(
         agent: optString(ctx.args.agent),
         model: optString(ctx.args.model),
       };
-      await installCliProcessRuntime(context.storageRoot);
-      return effectRuntime().runPromise(runMultiAgentPreset(context, init));
+      const runtime = await installCliProcessRuntime(context.storageRoot);
+      return runtime.runPromise(runMultiAgentPreset(context, init));
     },
   }),
   [

@@ -11,6 +11,7 @@ import {
   saveProviderApiKey,
 } from '@cli/runtime/providerApiKey';
 import type { ApiKeyStatus, ApiProvider } from '@model/apiProviders';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { CLI_STATE_SETTINGS, type SurfacedSettingEntry } from '@shared/schemas';
@@ -39,6 +40,9 @@ import { ToolsListForm } from './ToolsListForm';
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 
 export interface CliConfigFormProps {
+  /** The runtime of the surface that opened this form: the agent-roster rows
+   *  run their reads and writes on it. */
+  readonly runtime: ProcessRuntime;
   readonly availableRows?: number;
   readonly stores?: SettingsStores;
   /**
@@ -241,6 +245,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       formRenderers={{
         agents: (onBack) => (
           <AgentRosterForm
+            runtime={props.runtime}
             availableRows={props.availableRows}
             onClose={onBack}
             onError={props.onError}
@@ -280,6 +285,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         ),
         tools: (onBack) => (
           <ToolsListForm
+            runtime={props.runtime}
             availableRows={props.availableRows}
             state={stores.globalState}
             onClose={onBack}

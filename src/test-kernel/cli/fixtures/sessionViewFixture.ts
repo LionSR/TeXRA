@@ -36,7 +36,7 @@ export async function bindTestSessionView(): Promise<void> {
   const ref = await effectRuntime().runPromise(
     SubscriptionRef.make(emptySessionView('test')),
   );
-  unbind = bindSessionView(ref);
+  unbind = bindSessionView(ref, { runtime: effectRuntime() });
 }
 
 /** Replace the whole view the components read. */

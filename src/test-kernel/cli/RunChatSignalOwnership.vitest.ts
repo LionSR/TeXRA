@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { effectRuntime } from '@platform/processRuntime';
 import '@test/support/sessionGraphTestSetup';
 
 // Local imports
@@ -273,6 +274,7 @@ describe('runChat signal ownership wiring', () => {
       globalState: installedHost().roots.globalState,
       secrets: installedHost().secrets,
       session: Effect.succeed(session),
+      runtime: effectRuntime(),
     });
     mocks.initCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initCliPlatform');

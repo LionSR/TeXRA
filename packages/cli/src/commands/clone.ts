@@ -17,7 +17,7 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -26,6 +26,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
+
 import { getCliSecrets } from '../runtime/cliSecrets';
 import { CliExitCode } from '../runtime/exitCodes';
 import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
@@ -39,11 +40,12 @@ import { emitCliResult } from './_helpers/output';
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
 function buildOverleafClonePorts(
+  runtime: ProcessRuntime,
   context: CliContext,
   remote: OverleafRemote,
   workspacePath: string,
 ): OverleafCloneWorkflowPorts {
-  const secrets = getCliSecrets();
+  const secrets = getCliSecrets(runtime);
   let canonicalWorkspacePath = workspacePath;
   return {
     getStoredToken: (key) => Effect.promise(() => secrets.get(key)),
@@ -201,13 +203,13 @@ export const cloneCommand = withUsageSections(
       // `CliSecrets`, whose reads and writes are Effect programs run at this
       // host edge. Install the process runtime before the first one, the same
       // way the update check does for the entry that precedes any platform.
-      await installCliProcessRuntime(context.storageRoot);
+      const runtime = await installCliProcessRuntime(context.storageRoot);
 
-      const outcome = await effectRuntime().runPromise(
+      const outcome = await runtime.runPromise(
         cloneOverleafProject(
           remote,
           workspacePath,
-          buildOverleafClonePorts(context, remote, workspacePath),
+          buildOverleafClonePorts(runtime, context, remote, workspacePath),
         ),
       );
       switch (outcome.status) {

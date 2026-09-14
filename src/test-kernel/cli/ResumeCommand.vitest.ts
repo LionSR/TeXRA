@@ -1,3 +1,4 @@
+import { effectRuntime } from '@platform/processRuntime';
 import '@test/support/sessionGraphTestSetup';
 import * as path from 'node:path';
 
@@ -117,6 +118,7 @@ async function seedRunRecord(seed: {
   // `runResumeCommand` reads the session off the services the init returns.
   mocks.initInteractiveCliPlatform.mockResolvedValue({
     session: Effect.succeed(session),
+    runtime: effectRuntime(),
   });
   await Effect.runPromise(
     session.commit([
@@ -234,6 +236,7 @@ describe('runResumeCommand', () => {
       }),
     );
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
+      expect.anything(),
       'correct',
       'workflowResume',
     );

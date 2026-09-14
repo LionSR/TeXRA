@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { secretsGet, type PlatformSecrets } from '@platform/secrets';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import {
@@ -49,14 +49,19 @@ const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
  * that boundary is an `Effect`.
  */
 export class CliSecrets implements PlatformSecrets {
-  constructor(private readonly filePath = cliSecretsPath()) {}
+  constructor(
+    /** The process runtime its store programs run on, from the composition
+     *  root that built it. */
+    private readonly runtime: ProcessRuntime,
+    private readonly filePath = cliSecretsPath(),
+  ) {}
 
   get(key: string): Promise<string | undefined> {
     return secretsGet(this, key);
   }
 
   getStored(key: string): Promise<string | undefined> {
-    return effectRuntime().runPromise(
+    return this.runtime.runPromise(
       Effect.map(this.openStore(), (store) => {
         const value = store.get<unknown>(key, undefined);
         return typeof value === 'string' ? value : undefined;
@@ -73,7 +78,7 @@ export class CliSecrets implements PlatformSecrets {
   }
 
   listStoredKeys(): Promise<readonly string[]> {
-    return effectRuntime().runPromise(
+    return this.runtime.runPromise(
       Effect.map(this.openStore(), (store) => store.keys()),
     );
   }
@@ -83,7 +88,7 @@ export class CliSecrets implements PlatformSecrets {
   }
 
   private mutate(key: string, value: string | undefined): Promise<void> {
-    return effectRuntime().runPromise(
+    return this.runtime.runPromise(
       withPerKeyLane(
         mutationLanes,
         this.filePath,
@@ -104,7 +109,15 @@ export function cliSecretsPath(
 
 let cliSecrets: CliSecrets | undefined;
 
-export function getCliSecrets(storageRoot?: string): CliSecrets {
-  cliSecrets ??= new CliSecrets(cliSecretsPath(storageRoot));
+/**
+ * The one secret store of this process's storage root. `runtime` is the
+ * process runtime the first caller holds; every later caller in the process
+ * holds the same one, so the memoized store is the store of that runtime.
+ */
+export function getCliSecrets(
+  runtime: ProcessRuntime,
+  storageRoot?: string,
+): CliSecrets {
+  cliSecrets ??= new CliSecrets(runtime, cliSecretsPath(storageRoot));
   return cliSecrets;
 }

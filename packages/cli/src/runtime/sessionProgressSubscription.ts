@@ -2,7 +2,7 @@ import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ActiveChildInfo, RunId } from '@shared/schemas';
 import { writeNdjsonStdout } from './logSinks';
 
@@ -34,6 +34,7 @@ export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
  * captured at detach may be exactly that row's.
  */
 export function attachCliSessionProgressProjection(
+  runtime: ProcessRuntime,
   session: Pick<SessionHandle, 'events' | 'now'> & {
     readonly runs: Pick<SessionHandle['runs'], 'onChildActivity'>;
   },
@@ -83,8 +84,8 @@ export function attachCliSessionProgressProjection(
   // The tail's coordinate: set to the commit each forward read covered once
   // that read's events have all been handled below, so a value here never
   // runs ahead of an event this fiber has yet to write.
-  const drainedTo = effectRuntime().runSync(SubscriptionRef.make(delivered));
-  const fiber = effectRuntime().runFork(
+  const drainedTo = runtime.runSync(SubscriptionRef.make(delivered));
+  const fiber = runtime.runFork(
     Stream.runForEach(session.events.all(delivered, drainedTo), (event) =>
       Effect.sync(() => {
         if (stopAt !== undefined && event.commit > stopAt) return;
@@ -94,7 +95,7 @@ export function attachCliSessionProgressProjection(
       }),
     ),
   );
-  const coordinateFiber = effectRuntime().runFork(
+  const coordinateFiber = runtime.runFork(
     Stream.runForEach(SubscriptionRef.changes(drainedTo), (commit) =>
       Effect.sync(() => passed(commit)),
     ),
@@ -111,7 +112,7 @@ export function attachCliSessionProgressProjection(
     stopAt = session.now();
     settleIfDrained();
     await drained;
-    effectRuntime().runFork(Fiber.interrupt(fiber));
-    effectRuntime().runFork(Fiber.interrupt(coordinateFiber));
+    runtime.runFork(Fiber.interrupt(fiber));
+    runtime.runFork(Fiber.interrupt(coordinateFiber));
   };
 }
