@@ -59,10 +59,13 @@ The post-cutover state, verified directly at this pass's HEAD:
   across `runtime/ModelInvoker.ts` (1,297 LoC, cohesive — "call the Model, own
   retry") and the `runtime/run/*` modules (`modelBinding.ts`, `pricing.ts`,
   `routeEndpoint.ts`, `modelFailure.ts`, `validationModel.ts`, …). Those are
-  ordinary helper modules imported directly (e.g. `ModelInvoker.ts:78-86` imports
-  `bindModel`, `classifyModelFailure`, `priceTurnUsage`, `dispatchFactsFor`); the
-  injected Context services are `AgentRun` and `ModelInvoker` itself, not the
-  helper split. **No re-export shim was left behind.** The `IModelHandler` provider-type-leak
+  a mix of directly-imported helper functions (e.g. `ModelInvoker.ts:78-86`
+  imports `bindModel`, `classifyModelFailure`, `priceTurnUsage`,
+  `dispatchFactsFor`) and injected Context services (`AgentRun`, `ModelInvoker`,
+  and `EditorModel` at `modelBinding.ts:85`, among others) — this pass does not
+  assert an exhaustive service list, only that the decomposition is real and the
+  helper split is not itself an injection boundary. **No re-export shim was left
+  behind.** The `IModelHandler` provider-type-leak
   concern the prior passes carried as a manifest-design note is now moot — the
   port is gone.
 - **Host→`@agent` deep-import width at its narrowest recorded.** Current
@@ -117,53 +120,37 @@ sufficient for the standing question (is there unnecessary abstraction _now_).
 | **Deep-import width** (cli/desktop/ext/agent) | 5 / 4 / 9 / 7 (`-09-11`)                                             | **5 / 4 / 8 / 7** — extension shrank 9→8; rest hold.                                                                                                                                                     |
 | **Tier-1 named doors**                        | manifest target                                                      | **8/8 fronted** — `src/agent/{export,followUp,index,review,runtime,storage,templates,trace}/index.ts` all present.                                                                                       |
 
-## 3. Loop ↔ ledger boundary and the run-state writers
+## 3. Loop ↔ ledger boundary — fold-based continuation, no single-writer claim
 
-The two main run programs (`runtime/loop/toolUse.ts`, `runtime/loop/reflection.ts`)
-call `ledger.appendBatch(runId, state, [...])` directly; row payloads are built
-by pure constructors in `loop/rows.ts` (`snapshotRow`, `stepRow`, `appendRow`,
-`displayRow`, `runtimeSnapshotRow`, …), each with multiple callers. The state the
-loop continues from is exactly what `appendBatch` returns (`foldRunState` over
-committed rows), so live and resume are the same function — no cursor, no graph,
-no intermediate writer service. The ledger implementation is
-`RunLedger.appendBatch` (`src/agent/runtime/RunLedger.ts:361` — the 455-LoC
-runtime implementation, distinct from the 139-LoC session contract
-`src/shared/session/runLedger.ts` cited in §0/§2; the doc uses both, so the
-capitalization disambiguates them).
+The robust, verified property here is the **continuation model**, not a writer
+inventory: the two main run programs (`runtime/loop/toolUse.ts`,
+`runtime/loop/reflection.ts`) call `ledger.appendBatch(runId, state, [...])` and
+continue from exactly what `appendBatch` returns (`foldRunState` over committed
+rows), so live and resume are the same function — no cursor, no graph, no
+intermediate flow engine. Row payloads are built by pure constructors in
+`loop/rows.ts`. The ledger implementation is `RunLedger.appendBatch`
+(`src/agent/runtime/RunLedger.ts:361` — the 455-LoC runtime implementation,
+distinct from the 139-LoC session contract `src/shared/session/runLedger.ts`
+cited in §0/§2; capitalization disambiguates the two files).
 
-The rows `foldRunState` mutates state from are `flow.snapshot`, `model.message`,
-`model.compaction`, `tool.intent`, `tool.result`, `flow.step`, and the two
-request rows. Who writes them is **deliberate, documented, and not a single
-writer across the tree** — the honest topology is:
-
-- The two main programs above are the sole writers of `flow.snapshot`,
-  `model.message`, `model.compaction`, `tool.intent`, and `tool.result`, via
-  `appendBatch`.
-- `flow.step` is written by the main programs via `appendBatch` **and** by
-  child-run loops via `SessionHandle.commit` (`commitFlowStep`,
-  `childRunLoop.ts:540`, for `waiting`/`turn.begin`), so `appendBatch` is not its
-  sole writer tree-wide.
-- The two request rows (`request.opened` `runStateFold.ts:965`,
-  `request.decided` `:986`) fold run state and are authored on more than one
-  plane by design: the loop opens/commits them via `appendBatch`,
-  `RunLedger.acquire` (`RunLedger.ts:272`) publishes `request.decided`
-  cancellation rows (`:300`) for a dead owner's unbound requests, and the host
-  request plane writes both through `SessionHandle.openRequest`/`commit` ("the
-  one door for a request outside the loop's own batches").
-- `stream.end` is **not** a run-state row at all — a trace/display-plane event
-  emitted through `TraceEmitter` (`src/agent/trace/TraceEmitter.ts:379`) that
-  folds to no state mutation (`runStateFold.ts:961` returns `null`); likewise the
-  two `session.publish` sites in `loop/` (`toolUse.ts` `run.workspaceFiles`,
-  `run.record`) are display-plane events.
-
-So the accurate claim is not "one writer for all run-state rows" but "the main
-run loop owns the append path, with `SessionHandle` as the second deliberate
-writer for child-run `flow.step` and for the request plane." (Earlier drafts of
-this section over-claimed a literal single writer and successively mislisted
-`stream.end`, then the request rows, then `flow.step`'s child-run writer; this is
-the corrected topology.) No silent degradation found in any of the four areas (no
-empty `catch {}`; every `??` is a fallback over an optional field or documented
-restore, never over a failed read).
+**This pass makes no single-writer claim.** Earlier drafts of this section
+asserted one and were repeatedly wrong: `appendBatch` is in fact called from
+several modules — the two loop programs plus `toolUseDispatch.ts`,
+`ModelInvoker.ts`, `run/compaction.ts:315`, and `FollowUps.ts:197` — and other
+ledger/session rows are written outside `appendBatch` entirely
+(`RunLedger.acquire` `RunLedger.ts:272` publishes `request.decided` cancellations
+`:300`; the host request plane writes request rows through
+`SessionHandle.openRequest`/`commit`; child-run loops write `flow.step` through
+`SessionHandle.commit`, `childRunLoop.ts:540`). `stream.end` is a
+trace/display-plane event (`TraceEmitter.ts:379`) that folds to no state
+(`runStateFold.ts:961` returns `null`), not a run-state row. So the write side is
+deliberately **multi-owner**; enumerating it completely is out of scope for this
+pass and the several rounds of attempts above are the evidence for not attempting
+it here. What is verified is the fold-based continuation, the CLAUDE.md
+"one publisher, loop-owned cards" rule holding on the loop's own path, and **no
+silent degradation** in any of the four areas (no empty `catch {}`; every `??` is
+a fallback over an optional field or documented restore, never over a failed
+read).
 
 ## 4. Subagent boundaries — shipped 4-implementor SPI; one boundary correctly open
 
@@ -219,12 +206,17 @@ deliberately lacks), not a mechanical move (manifest §7.3).
    earns its place (compile-time provider exhaustiveness); only the `export`
    keyword + the `examples` fixture are test-only surface. Cleanup: drop the
    `export`, move the fixture into the test.
-4. **Manifest drift (doc housekeeping).** `2026-09-10-agent-sdk-tier-1-manifest.md`
-   §3's export enumeration predates the one-run-model rename: it lists
-   `StreamView`/`ExecutionId`/`ExecutionIdSchema`, but the entries now export
-   `RunView` and `RunId`/`RunIdSchema`. The surface is internally consistent
-   (README documents `RunView`); the manifest's own §7.5 already flags it for
-   re-enumeration.
+4. **Manifest drift (doc housekeeping) — broader than the export rename.**
+   `2026-09-10-agent-sdk-tier-1-manifest.md` predates both the one-run-model
+   rename and the completed cutover, so several sections now point at renamed or
+   deleted surfaces: §3's export tables list `StreamView`/`ExecutionId`/
+   `ExecutionIdSchema` where the entries now export `RunView`/`RunId`/
+   `RunIdSchema`; §7.1 still treats `IModelHandler` as a live public-export
+   candidate (the port is deleted); §7.2 still discusses `AgentFinalResult` as an
+   internal surface to consider; and the §7 tail still describes the PocketFlow /
+   `IModelHandler` retirement as future work (it is done — §0). The manifest is
+   internally consistent with the _old_ tree; it wants a full re-enumeration
+   against the post-cutover surface, not just the export rename.
 5. **`@texra-ai/agent` README `effect` peer-version drift — a real defect, fixed
    in this PR.** `packages/agent/package.json` pins the `effect` peer at
    `4.0.0-rc.115` (peer and dev), but the README install guidance told consumers
@@ -270,10 +262,10 @@ stack now `ModelInvoker.ts` + the `runtime/run/*` helper modules over the run
 ledger) was already complete at the `-09-13` snapshot `a7cd2ab`, and the prior
 prose describing it as pending was stale — this pass records the post-cutover
 state as current. Extension's deep-import width shrank 9→8, and all eight named
-doors are fronted. The run loop, the run-state writer topology (§3 — the main
-loop owns the append path, with `SessionHandle` the second deliberate writer for
-child-run `flow.step` and the request plane; not a literal single writer), and
-the logger re-verify clean with no silent degradation. The public surface is
+doors are fronted. The run loop's fold-based continuation (§3 — live and resume
+are the same `foldRunState` function, no graph or cursor; this pass makes no
+single-writer claim, the write side being deliberately multi-owner) and the
+logger re-verify clean with no silent degradation. The public surface is
 clean but for one documentation defect — the README `effect` peer-version drift
 (§5.5), fixed in this PR. The subagent SPI is a real four-implementor contract;
 `agentCreator` is the single, correctly-open boundary. Of the six §5 items, five
