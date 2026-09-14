@@ -330,6 +330,10 @@ type RunToolOptions = {
  * @param args Arguments to pass to the tool (without the tool name)
  * @param options Execution options and installation check settings
  * @returns Promise<ExecResult | false> if the tool ran, or false if the tool is missing
+ *
+ * The preflight probe runs under the run's own `signal`, so interrupting the
+ * tool kills the `<tool> --version` spawns as well instead of leaving them to
+ * run out their five-second timeout.
  */
 export async function runToolWithCheck(
   toolName: string,
@@ -337,7 +341,7 @@ export async function runToolWithCheck(
   options: RunToolOptions = {},
 ): Promise<ExecResult | false> {
   const { showError = true, ...execOptions } = options;
-  if (!(await checkToolInstalled(toolName, showError))) {
+  if (!(await checkToolInstalled(toolName, showError, execOptions.signal))) {
     return false;
   }
   return executeCommand([toolName, ...args], execOptions);

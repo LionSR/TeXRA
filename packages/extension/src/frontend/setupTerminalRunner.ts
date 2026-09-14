@@ -16,7 +16,7 @@
  */
 
 // Third-party imports
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, Option } from 'effect';
 import stripAnsi from 'strip-ansi';
 import * as vscode from 'vscode';
 
@@ -129,13 +129,23 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   // Exit code is delivered via the global end-event, not the execution
   // object itself, and VS Code does not replay it: subscribe on this frame,
   // before the stream is opened, so a command that exits while the reader
-  // starts is still observed instead of waiting out the timeout.
-  const exitCode = raceWithTimeout<number | undefined>(
-    (resolve) =>
-      vscode.window.onDidEndTerminalShellExecution((event) => {
-        if (event.execution === execution) resolve(event.exitCode);
-      }),
-    args.timeoutMs,
+  // starts is still observed instead of waiting out the timeout. The wait is
+  // a child fiber (started on this frame, so the listener is registered
+  // before `read()` opens the stream) rather than an abandoned promise: an
+  // interrupted run disposes the subscription and cancels the deadline
+  // instead of holding both until the timeout elapses.
+  const exitCode = yield* Effect.forkChild(
+    Effect.callback<number | undefined>((resume) => {
+      const subscription = vscode.window.onDidEndTerminalShellExecution(
+        (event) => {
+          if (event.execution === execution) {
+            resume(Effect.succeed(event.exitCode));
+          }
+        },
+      );
+      return Effect.sync(() => subscription.dispose());
+    }).pipe(Effect.timeoutOption(args.timeoutMs)),
+    { startImmediately: true },
   );
 
   // Open the stream on this frame so no chunk is missed, then drain it on a
@@ -143,8 +153,8 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   // reading) is a value this program discards, not an unhandled rejection.
   // Opening it is a host call of its own: a terminal disposed between
   // `executeCommand` and here throws synchronously, and that is this run
-  // failing, not a defect. The abandoned exit-code wait resolves on its own
-  // timer and disposes its listener, so failing here leaks nothing.
+  // failing, not a defect. The exit-code fiber is a child of this one, so
+  // failing here tears its subscription down with it.
   const stream = yield* Effect.try({
     try: () => execution.read(),
     catch: (cause) =>
@@ -166,16 +176,7 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
     { startImmediately: true },
   );
 
-  const raced = yield* Effect.tryPromise({
-    try: () => exitCode,
-    catch: (cause) =>
-      new TerminalRunFailed({
-        reason: 'execution-failed',
-        message: 'VS Code would not report the command exit code.',
-        command: args.command,
-        cause,
-      }),
-  });
+  const raced = yield* Fiber.join(exitCode);
 
   // Drain any final chunks; bound the wait so a hung reader can't
   // block the agent forever.
@@ -185,9 +186,12 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   );
 
   return {
-    exitCode: raced.timedOut ? undefined : raced.value,
+    // `None` is the timeout; `Some(undefined)` is VS Code reporting no exit
+    // code for a command that did end. Both read as an absent exit code, and
+    // only the first is a timeout.
+    exitCode: Option.getOrUndefined(raced),
     output: truncateTerminalOutput(output),
-    timedOut: raced.timedOut,
+    timedOut: Option.isNone(raced),
   };
 });
 
