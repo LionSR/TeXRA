@@ -677,7 +677,9 @@ export function createDesktopHostRequests(
         };
       case 'launch':
         await run.runValidated(
-          await runtime.runPromise(prepareSurfaceLaunch(request, host)),
+          await runtime.runPromise(
+            prepareSurfaceLaunch(request, host, session.roots.workspaceState),
+          ),
         );
         return done;
       case 'extractFigures':

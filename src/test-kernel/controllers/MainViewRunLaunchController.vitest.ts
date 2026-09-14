@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { AgentCategory } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
   createTeamCatalogPorts: vi.fn(() => ({ catalog: true })),
@@ -39,6 +40,8 @@ function createHost() {
   };
 }
 
+const workspaceState = new FakeStateStore();
+
 function launchRequest(
   patch: Record<string, unknown> = {},
 ): Extract<HostRequest, { kind: 'launch' }> {
@@ -53,6 +56,7 @@ function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
   return prepareSurfaceLaunch(
     launchRequest({ launchTarget: 'team', selectedTeamId: teamId }),
     host,
+    workspaceState,
   );
 }
 
@@ -66,6 +70,7 @@ describe('main-view run launch controller', () => {
       const { config } = yield* prepareSurfaceLaunch(
         launchRequest({ agent: { toolUse: 'orchestrator' } }),
         createHost(),
+        workspaceState,
       );
 
       expect(config).toMatchObject({
@@ -83,7 +88,11 @@ describe('main-view run launch controller', () => {
     () =>
       Effect.gen(function* () {
         const error = yield* Effect.flip(
-          prepareSurfaceLaunch(launchRequest({ model: '' }), createHost()),
+          prepareSurfaceLaunch(
+            launchRequest({ model: '' }),
+            createHost(),
+            workspaceState,
+          ),
         );
 
         expect(error).toMatchObject({
@@ -99,6 +108,7 @@ describe('main-view run launch controller', () => {
         prepareSurfaceLaunch(
           launchRequest({ sessionType: 'workflow' }),
           createHost(),
+          workspaceState,
         ),
       );
 
@@ -198,6 +208,7 @@ describe('main-view run launch controller', () => {
             agent: { toolUse: 'stale-renderer-agent' },
           }),
           host,
+          workspaceState,
         );
 
         expect(config).toMatchObject({
