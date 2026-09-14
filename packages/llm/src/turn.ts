@@ -1610,7 +1610,10 @@ export const enrichModelError = (
  * Every provider's failure mapping treats HTTP 401/403 (or the equivalent
  * error code carried in a rejection body) as `authentication` and anything
  * else the provider rejected as `provider-rejection`. Pass every status-like
- * value a given failure carries; a match on any of them is `authentication`.
+ * value a given failure carries; the numbers `401`/`403` match, matching the
+ * prior per-provider checks this replaces — a status carried as a string
+ * (e.g. OpenRouter's `error.code`, typed `string | number`) never matches,
+ * same as before this helper existed.
  */
 export const authOrRejectionKind = (
   ...statuses: ReadonlyArray<number | string | undefined>
