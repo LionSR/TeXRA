@@ -133,44 +133,48 @@ function lookupCacheFor(secrets: PlatformSecrets): ApiKeyLookupCache {
  *
  * The read runs on a detached fiber and every caller waits on the same
  * `Deferred`, so one caller's cancellation cancels only its own wait — what
- * the shared promise this replaced did by construction. The deferred is
- * registered before the fork, so the read cannot settle before the entry it
- * clears exists.
+ * the shared promise this replaced did by construction. The claim and the
+ * fork run under one uninterruptible mask: an interrupt landing between
+ * registering the deferred and starting the fiber that settles it would
+ * otherwise leave every later caller waiting on an entry nothing completes.
+ * Only the waits themselves are interruptible.
  */
 function resolveApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Effect.Effect<ResolvedApiKey, SecretsFailed> {
-  return Effect.suspend(() => {
-    const cache = lookupCacheFor(secrets);
-    const cached = cache.resolved.get(provider);
-    if (cached !== undefined) return Effect.succeed(cached);
-    const inFlight = cache.pending.get(provider);
-    if (inFlight !== undefined) return Deferred.await(inFlight);
+  return Effect.uninterruptibleMask((restore) =>
+    Effect.suspend(() => {
+      const cache = lookupCacheFor(secrets);
+      const cached = cache.resolved.get(provider);
+      if (cached !== undefined) return Effect.succeed(cached);
+      const inFlight = cache.pending.get(provider);
+      if (inFlight !== undefined) return restore(Deferred.await(inFlight));
 
-    const request = Deferred.makeUnsafe<ResolvedApiKey, SecretsFailed>();
-    cache.pending.set(provider, request);
-    return Effect.flatMap(
-      Effect.forkDetach(
-        resolveApiKeyUncached(secrets, provider).pipe(
-          Effect.tap((resolved) =>
-            Effect.sync(() => {
-              cache.resolved.set(provider, resolved);
-            }),
-          ),
-          Effect.onExit((exit) =>
-            Effect.sync(() => {
-              if (cache.pending.get(provider) === request) {
-                cache.pending.delete(provider);
-              }
-              Deferred.doneUnsafe(request, exit);
-            }),
+      const request = Deferred.makeUnsafe<ResolvedApiKey, SecretsFailed>();
+      cache.pending.set(provider, request);
+      return Effect.flatMap(
+        Effect.forkDetach(
+          resolveApiKeyUncached(secrets, provider).pipe(
+            Effect.tap((resolved) =>
+              Effect.sync(() => {
+                cache.resolved.set(provider, resolved);
+              }),
+            ),
+            Effect.onExit((exit) =>
+              Effect.sync(() => {
+                if (cache.pending.get(provider) === request) {
+                  cache.pending.delete(provider);
+                }
+                Deferred.doneUnsafe(request, exit);
+              }),
+            ),
           ),
         ),
-      ),
-      () => Deferred.await(request),
-    );
-  });
+        () => restore(Deferred.await(request)),
+      );
+    }),
+  );
 }
 
 /**
