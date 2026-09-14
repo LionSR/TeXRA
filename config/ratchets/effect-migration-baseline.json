@@ -66,7 +66,6 @@
     },
     "Effect.run*": {
       "packages/extension/src/progressView/frontend/sessionTransport.ts": 4,
-      "src/platform/defaults/jsonStore.ts": 1,
       "src/shared/signals.ts": 2,
       "src/tools/approval/latexPreview.ts": 1
     },

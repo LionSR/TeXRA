@@ -1,9 +1,7 @@
 import { Effect } from 'effect';
 
-import {
-  openAppStateStore,
-  type RunStateWrite,
-} from '@controllers/session/appStateStore';
+import { openAppStateStore } from '@controllers/session/appStateStore';
+import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 
 interface CliStateStoresInit {
