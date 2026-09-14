@@ -29,8 +29,7 @@ import type { ChatExportInput } from '@agent/export/schemas';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
-import type { WorkspaceFs } from '@platform/rootedFs';
-import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
+import { StorageFs, type WorkspaceFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import {
   assembleTrace,
@@ -40,7 +39,6 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
-import { StorageFS } from '@utils/files/storageFS';
 
 /** Outcome of loading run data for export. */
 export type ExportInputStatus =
@@ -118,16 +116,19 @@ export class ChatExportController {
   /**
    * Format and write a Markdown export.
    */
-  async exportAsMarkdown(
+  readonly exportAsMarkdown = Effect.fn(
+    'ChatExportController.exportAsMarkdown',
+  )(function* (
+    this: ChatExportController,
     runId: RunId,
     exportInput: ChatExportInput,
-  ): Promise<ChatExportResult> {
-    return this.writeExport(
+  ): Effect.fn.Return<ChatExportResult, Error, StorageFs> {
+    return yield* this.writeExport(
       runId,
       generateExportFilename(exportInput, 'md'),
       formatChatAsMarkdown(exportInput),
     );
-  }
+  });
 
   /**
    * Format, write, and compile a LaTeX export.
@@ -144,17 +145,13 @@ export class ChatExportController {
     ): Effect.fn.Return<
       LatexExportResult,
       Error,
-      FileSystem.FileSystem | WorkspaceFs
+      FileSystem.FileSystem | StorageFs | WorkspaceFs
     > {
-      const { storagePath, absolutePath } = yield* Effect.tryPromise({
-        try: () =>
-          this.writeExport(
-            runId,
-            generateExportFilename(exportInput, 'tex'),
-            formatChatAsLatex(exportInput, this.deps.latexPreamble),
-          ),
-        catch: ensureError,
-      });
+      const { storagePath, absolutePath } = yield* this.writeExport(
+        runId,
+        generateExportFilename(exportInput, 'tex'),
+        formatChatAsLatex(exportInput, this.deps.latexPreamble),
+      );
 
       const compiled = yield* compileLatex2Pdf(
         pathToLocation(absolutePath),
@@ -184,7 +181,7 @@ export class ChatExportController {
       this: ChatExportController,
       runId: RunId,
       standaloneTemplatePath: string,
-    ): Effect.fn.Return<HtmlExportOutcome, Error> {
+    ): Effect.fn.Return<HtmlExportOutcome, Error, StorageFs> {
       const traceResult = yield* assembleTrace(runId, this.deps.session);
       if (traceResult.status !== 'ok') {
         return { status: traceResult.status };
@@ -228,25 +225,34 @@ export class ChatExportController {
       );
       return {
         status: 'ok',
-        result: yield* Effect.tryPromise({
-          try: () => this.writeExport(runId, filename, html),
-          catch: ensureError,
-        }),
+        result: yield* this.writeExport(runId, filename, html),
       };
     },
   );
 
   /** Write an export payload into the run's storage directory. */
-  private async writeExport(
-    runId: RunId,
-    filename: string,
-    content: string,
-  ): Promise<ChatExportResult> {
-    const storagePath = `executions/${runId}/${filename}`;
-    return runWithWorkspaceRoots(this.deps.session.roots, async () => {
-      await StorageFS.ensureDir(`executions/${runId}`);
-      await StorageFS.write(storagePath, content);
-      return { storagePath, absolutePath: StorageFS.fullPath(storagePath) };
-    });
-  }
+  private readonly writeExport = Effect.fn('ChatExportController.writeExport')(
+    function* (
+      this: ChatExportController,
+      runId: RunId,
+      filename: string,
+      content: string,
+    ): Effect.fn.Return<ChatExportResult, Error, StorageFs> {
+      const storagePath = `executions/${runId}/${filename}`;
+      const storageFs = yield* StorageFs;
+      return yield* Effect.gen(function* () {
+        yield* storageFs.makeDirectory(`executions/${runId}`, {
+          recursive: true,
+        });
+        yield* storageFs.writeFile(
+          storagePath,
+          new TextEncoder().encode(content),
+        );
+        return {
+          storagePath,
+          absolutePath: yield* storageFs.resolve(storagePath),
+        };
+      }).pipe(Effect.mapError(ensureError));
+    },
+  );
 }

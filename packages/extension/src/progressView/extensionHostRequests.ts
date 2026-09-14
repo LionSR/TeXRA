@@ -384,23 +384,27 @@ export function createExtensionHostRequests(
       });
     }
     const prepared = await runtime.runPromise(
-      prepareSurfaceLaunch(request, {
-        showInfoMessage: showInfo,
-        chooseTeamAvailability: async (unavailableNames) => {
-          const prompt = teamAvailabilityPrompt(unavailableNames);
-          return (
-            (await chooseTeamAvailabilityViaDialog(prompt, {
-              modal: false,
-            })) ?? 'cancel'
-          );
-        },
-        signInForRemoteAgentCatalog: async () =>
-          Boolean(
-            await vscode.commands.executeCommand<boolean>(
-              AUTH_COMMANDS.SIGN_IN,
+      prepareSurfaceLaunch(
+        request,
+        {
+          showInfoMessage: showInfo,
+          chooseTeamAvailability: async (unavailableNames) => {
+            const prompt = teamAvailabilityPrompt(unavailableNames);
+            return (
+              (await chooseTeamAvailabilityViaDialog(prompt, {
+                modal: false,
+              })) ?? 'cancel'
+            );
+          },
+          signInForRemoteAgentCatalog: async () =>
+            Boolean(
+              await vscode.commands.executeCommand<boolean>(
+                AUTH_COMMANDS.SIGN_IN,
+              ),
             ),
-          ),
-      }),
+        },
+        session.roots.workspaceState,
+      ),
     );
     await runCommand('texra.execute', prepared);
   }

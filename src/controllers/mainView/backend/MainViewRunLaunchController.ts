@@ -20,6 +20,7 @@ import {
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 
 // Local imports - shared types and errors
+import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -116,6 +117,7 @@ function buildLaunchRequest(
 export function prepareSurfaceLaunch(
   { launch, instruction }: LaunchRequest,
   host: MainViewRunLaunchHost,
+  workspaceState: StateStore,
 ): Effect.Effect<ValidatedRunRequest, Rejected | Cancelled> {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;
@@ -137,7 +139,7 @@ export function prepareSurfaceLaunch(
         return yield* new Rejected({ reason: TEAM_SELECTION_REQUIRED_MESSAGE });
       const resolution = yield* resolveTeamLaunch({
         teamId,
-        ...createTeamCatalogPorts(),
+        ...createTeamCatalogPorts(workspaceState),
         choose: (unavailableNames) =>
           host.chooseTeamAvailability(unavailableNames),
         signIn: () => host.signInForRemoteAgentCatalog(),

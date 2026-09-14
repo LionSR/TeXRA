@@ -1,7 +1,7 @@
 // Local imports
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { Effect } from 'effect';
 
@@ -12,7 +12,7 @@ import type { Effect } from 'effect';
  * presets are re-read on each call and the agent/auth ports stay live
  * functions. Hosts add only their dialog glue (choose/signIn) on top.
  */
-export function createTeamCatalogPorts(): {
+export function createTeamCatalogPorts(workspaceState: StateStore): {
   readonly customPresetsRaw: unknown;
   readonly ensureCatalogLoaded: () => Effect.Effect<void, unknown>;
   readonly getAgents: typeof getAgentsByCategory;
@@ -20,7 +20,7 @@ export function createTeamCatalogPorts(): {
   readonly refreshRemote: () => Effect.Effect<void, unknown>;
 } {
   return {
-    customPresetsRaw: workspaceRoots().workspaceState.get<unknown>(
+    customPresetsRaw: workspaceState.get<unknown>(
       WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
     ),
     ensureCatalogLoaded: () => loadAgents(),

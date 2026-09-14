@@ -34,6 +34,8 @@ type Banners = HostSnapshot['banners'];
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
   globalState: StateStore;
+  /** The owning session's workspace-scoped team and roster state. */
+  workspaceState: StateStore;
   /** The process secret store, read by the model catalog's availability
    *  answers. The host root that owns it threads it in beside
    *  {@link HostSnapshotSourceOptions.globalState}. */
@@ -159,7 +161,9 @@ export function createHostSnapshotSource(
   const loadTeams = Effect.gen(function* () {
     catalogs = {
       ...catalogs,
-      teamOptions: yield* loadTeamOptions(createTeamCatalogPorts()),
+      teamOptions: yield* loadTeamOptions(
+        createTeamCatalogPorts(options.workspaceState),
+      ),
     };
   });
 
