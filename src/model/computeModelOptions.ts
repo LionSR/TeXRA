@@ -1,3 +1,4 @@
+import { Data, Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
@@ -26,6 +27,7 @@ import {
   getPreferKimiCode,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { hasUsableApiKey, type ApiProvider } from './apiProviders';
 import {
@@ -399,29 +401,100 @@ function resolveModelAvailability(
 }
 
 /**
+ * The calling context's workspace-roots frame, entered around every host call
+ * this module makes. The two "prefer my subscription" switches are read from
+ * the roots of the calling context, and an availability read reached from an
+ * Effect program no longer sits inside its session's frame (a fiber resumes
+ * outside the frame its caller entered). A caller that owns a session and is
+ * not already inside it therefore hands its `runInSession` / `inScope`
+ * wrapper here, rather than wrapping the call and silently losing the frame
+ * the moment the program is a value instead of a promise.
+ */
+export type ModelAvailabilityScope = <T>(read: () => T) => T;
+
+/** The frame for a caller that is already in the one it wants. */
+const CALLING_SCOPE: ModelAvailabilityScope = (read) => read();
+
+/**
+ * One provider's key status could not be read at all: the store rejected.
+ * Recovered where it is raised (the provider degrades to unavailable and
+ * warns once), so it never reaches a caller — but it is raised as a tagged
+ * failure rather than swallowed so the recovery is a matched branch instead
+ * of a `.catch` that would also swallow a defect.
+ */
+class ProviderKeyUnreadable extends Data.TaggedError('ProviderKeyUnreadable')<{
+  readonly provider: ApiProvider;
+  readonly cause: unknown;
+}> {}
+
+/**
+ * A host fact this module reads synchronously — a workspace preference, a
+ * config switch, a stored state entry — could not be read at all, because the
+ * host's config or state store threw. That is environmental, not a bug in this
+ * module, so it belongs in the typed failure channel rather than as a defect:
+ * a caller that already degrades on an unreadable host (the delegation
+ * annotation skips its "Available models:" line and logs) recovers from it
+ * exactly as it recovers from an unreadable secret store, and a caller that
+ * runs this program at its boundary gets the rejection the async wrapper used
+ * to give it.
+ *
+ * The module's own invariant — a verdict reached for a provider whose key
+ * status was never read ({@link resolveModelAvailability}) — stays a defect:
+ * it can only be a programming error here, and no caller should paper over it.
+ */
+class ModelHostFactUnreadable extends Data.TaggedError(
+  'ModelHostFactUnreadable',
+)<{
+  readonly fact: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/** The one wrap of this module's synchronous host reads. */
+const hostFact = <A>(
+  fact: string,
+  read: () => A,
+): Effect.Effect<A, ModelHostFactUnreadable> =>
+  Effect.try({
+    try: read,
+    catch: (cause) =>
+      new ModelHostFactUnreadable({
+        fact,
+        message: `Could not read ${fact} from the host.`,
+        cause,
+      }),
+  });
+
+/**
  * One key status per provider, read once. A failed read degrades that provider
  * to unavailable and warns once for the provider, never once per model that
  * consults it (#11508), so one unreadable store cannot flood the log.
  */
-async function readProviderKeyStatuses(
+function readProviderKeyStatuses(
   secrets: PlatformSecrets,
   providers: readonly ApiProvider[],
-): Promise<ProviderKeyStatuses> {
-  const entries = await Promise.all(
-    providers.map(async (provider) => {
-      const usable = await hasUsableApiKey(secrets, provider).catch(
-        (error: unknown) => {
-          warnModelAvailability(
-            `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
-            error,
-          );
-          return false;
-        },
-      );
-      return [provider, usable] as const;
-    }),
-  );
-  return Object.fromEntries(entries);
+  inScope: ModelAvailabilityScope,
+): Effect.Effect<ProviderKeyStatuses> {
+  return Effect.forEach(
+    providers,
+    (provider) =>
+      Effect.tryPromise({
+        try: () => inScope(() => hasUsableApiKey(secrets, provider)),
+        catch: (cause) => new ProviderKeyUnreadable({ provider, cause }),
+      }).pipe(
+        Effect.catchTag('ProviderKeyUnreadable', (failure) =>
+          Effect.sync(() => {
+            warnModelAvailability(
+              `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
+              failure.cause,
+            );
+            return false;
+          }),
+        ),
+        Effect.map((usable) => [provider, usable] as const),
+      ),
+    { concurrency: 'unbounded' },
+  ).pipe(Effect.map((entries) => Object.fromEntries(entries)));
 }
 
 /**
@@ -430,30 +503,68 @@ async function readProviderKeyStatuses(
  * routing itself depends on them: `kimiCodeEffectiveConfig` reads `keySet`,
  * and the OpenRouter branch is decided by the OpenRouter key alone.
  */
-async function buildAvailabilityContext(
+function buildAvailabilityContext(
   stores: ModelOptionStores,
-): Promise<ModelAvailabilityContext> {
-  const { secrets, globalState } = stores;
-  const useOpenRouter = getUseOpenRouter();
-  const [routingKeys, codexSignedIn, xaiSignedIn] = await Promise.all([
-    readProviderKeyStatuses(secrets, ['openRouter', 'kimiCode']),
-    // Only worth a secrets read when the "prefer subscription" switch is on.
-    isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
-    isPreferXaiSubscription() ? isXaiSignedIn() : Promise.resolve(false),
-  ]);
-  return {
-    reasoningLevels: reasoningEffortOverrides(globalState),
-    keyStatuses: routingKeys,
-    hasOpenRouter: routingKeys.openRouter === true,
-    useOpenRouter,
-    codexSignedIn,
-    xaiSignedIn,
-    kimiRouting: {
+  inScope: ModelAvailabilityScope,
+): Effect.Effect<ModelAvailabilityContext, Error | ModelHostFactUnreadable> {
+  return Effect.gen(function* () {
+    const { secrets, globalState } = stores;
+    // The switches and stored levels, read before anything is probed: the two
+    // "prefer my subscription" answers decide whether their probe runs at all.
+    const [
       useOpenRouter,
-      keySet: routingKeys.kimiCode === true,
-      preferKimiCode: getPreferKimiCode(),
-    },
-  };
+      preferCodexSubscription,
+      preferXaiSubscription,
+      preferKimiCode,
+      reasoningLevels,
+    ] = yield* Effect.all([
+      hostFact('the OpenRouter switch', () => inScope(getUseOpenRouter)),
+      hostFact('the ChatGPT subscription preference', () =>
+        inScope(isPreferCodexSubscription),
+      ),
+      hostFact('the Grok subscription preference', () =>
+        inScope(isPreferXaiSubscription),
+      ),
+      hostFact('the Kimi Code routing preference', () =>
+        inScope(getPreferKimiCode),
+      ),
+      hostFact('the stored reasoning levels', () =>
+        reasoningEffortOverrides(globalState),
+      ),
+    ] as const);
+    const [routingKeys, codexSignedIn, xaiSignedIn] = yield* Effect.all(
+      [
+        readProviderKeyStatuses(secrets, ['openRouter', 'kimiCode'], inScope),
+        // Only worth a probe when the "prefer subscription" switch is on.
+        preferCodexSubscription
+          ? Effect.tryPromise({
+              try: () => inScope(isCodexSignedIn),
+              catch: ensureError,
+            })
+          : Effect.succeed(false),
+        preferXaiSubscription
+          ? Effect.tryPromise({
+              try: () => inScope(isXaiSignedIn),
+              catch: ensureError,
+            })
+          : Effect.succeed(false),
+      ] as const,
+      { concurrency: 'unbounded' },
+    );
+    return {
+      reasoningLevels,
+      keyStatuses: routingKeys,
+      hasOpenRouter: routingKeys.openRouter === true,
+      useOpenRouter,
+      codexSignedIn,
+      xaiSignedIn,
+      kimiRouting: {
+        useOpenRouter,
+        keySet: routingKeys.kimiCode === true,
+        preferKimiCode,
+      },
+    };
+  });
 }
 
 /**
@@ -490,11 +601,12 @@ function routeModels(
  * would consult, in one batch. A provider stage 0 already resolved is not read
  * again, so no model is charged a second read (or a second warning) for it.
  */
-async function withConsultedKeyStatuses(
+function withConsultedKeyStatuses(
   secrets: PlatformSecrets,
   routed: RoutedModels,
   ctx: ModelAvailabilityContext,
-): Promise<ModelAvailabilityContext> {
+  inScope: ModelAvailabilityScope,
+): Effect.Effect<ModelAvailabilityContext> {
   const consulted = new Set<ApiProvider>();
   for (const { route } of routed.values()) {
     if (
@@ -504,14 +616,13 @@ async function withConsultedKeyStatuses(
       consulted.add(route.needsProviderKey);
     }
   }
-  if (consulted.size === 0) return ctx;
-  return {
-    ...ctx,
-    keyStatuses: {
-      ...ctx.keyStatuses,
-      ...(await readProviderKeyStatuses(secrets, [...consulted])),
-    },
-  };
+  if (consulted.size === 0) return Effect.succeed(ctx);
+  return readProviderKeyStatuses(secrets, [...consulted], inScope).pipe(
+    Effect.map((consultedStatuses) => ({
+      ...ctx,
+      keyStatuses: { ...ctx.keyStatuses, ...consultedStatuses },
+    })),
+  );
 }
 
 /**
@@ -736,10 +847,19 @@ export interface ModelAvailabilityInputs {
 }
 
 /**
- * Read everything one availability computation runs over, in two awaits: the
+ * Read everything one availability computation runs over, in two steps: the
  * facts every model shares, then one key-status read per provider the visible
  * models actually consult, with each model routed once in between so that
  * batch consults exactly the providers the ladder reached.
+ *
+ * This is the module's only host call, and it is an Effect so that a caller
+ * inside a program yields it instead of bridging a promise: the store read
+ * behind it is interruptible and its failure is typed. Every host read it
+ * makes fails in that channel, the synchronous preference and state reads
+ * included ({@link ModelHostFactUnreadable}), so an unreadable host reaches a
+ * caller as a failure it can recover from rather than as a defect. `inScope` is the
+ * caller's workspace-roots frame — see {@link ModelAvailabilityScope}; a
+ * caller already inside the frame it wants omits it.
  *
  * When `models` is provided the caller's view of the visible-models list is
  * honored verbatim. Nothing here is cached beyond the caches its reads already
@@ -750,23 +870,39 @@ export interface ModelAvailabilityInputs {
  * (`isCodexSignedIn`, `isXaiSignedIn`, live by design), so there is no second
  * cache to keep fresh here.
  */
-export async function readModelAvailabilityInputs(
+export const readModelAvailabilityInputs = Effect.fn(
+  'readModelAvailabilityInputs',
+)(function* (
   stores: ModelOptionStores,
   models?: readonly string[],
-): Promise<ModelAvailabilityInputs> {
-  await discoveredCopilotRoutes();
-  const routeCtx = await buildAvailabilityContext(stores);
+  inScope: ModelAvailabilityScope = CALLING_SCOPE,
+) {
+  // Presentation-only refresh: the catalogue keeps its last-known entries on
+  // a discovery failure, so this step cannot fail (see `discoveredCopilotRoutes`).
+  yield* Effect.promise(() => inScope(discoveredCopilotRoutes));
+  const routeCtx = yield* buildAvailabilityContext(stores, inScope);
   const visible =
     models ??
-    visibleModelsForAccess(getEnabledModels(stores.globalState), routeCtx);
-  const routed = routeModels(visible, routeCtx, stores.globalState);
-  const context = await withConsultedKeyStatuses(
+    visibleModelsForAccess(
+      yield* hostFact('the enabled-model selection', () =>
+        getEnabledModels(stores.globalState),
+      ),
+      routeCtx,
+    );
+  // Stage 1 is computation over the stage-0 facts except for the one live
+  // state read in its ladder, the Copilot route preference, so an unreadable
+  // state store fails it the same way it fails the reads above.
+  const routed = yield* hostFact('the Copilot route preference', () =>
+    routeModels(visible, routeCtx, stores.globalState),
+  );
+  const context = yield* withConsultedKeyStatuses(
     stores.secrets,
     routed,
     routeCtx,
+    inScope,
   );
-  return { context, routed, visible };
-}
+  return { context, routed, visible } satisfies ModelAvailabilityInputs;
+});
 
 /**
  * Typed model option data for Lit-native rendering — pure, and the whole of

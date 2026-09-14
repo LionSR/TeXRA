@@ -24,12 +24,15 @@
  * does not hold is the one reported case.
  */
 
+import { Effect } from 'effect';
+
 import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { createLog } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
+  type ModelAvailabilityScope,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
@@ -43,6 +46,7 @@ import {
 import {
   annotateDelegationAvailability,
   availableModelNamesFromOptions,
+  readDelegationAnnotationState,
 } from '@tools/delegation/delegationAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ToolInjections } from './toolInjection';
@@ -71,6 +75,15 @@ interface ResolveAgentToolsInput {
    * roster's model availability.
    */
   stores: ModelOptionStores;
+  /**
+   * The run's session frame, applied around every frame-sensitive read this
+   * resolver makes: the model availability read, and the delegation
+   * annotation's scope and worktree reads. It is handed in rather than
+   * wrapped around the call because this resolver is an Effect, so a wrapper
+   * would enter the frame around building the program instead of around
+   * running it.
+   */
+  inScope?: ModelAvailabilityScope;
 }
 
 /**
@@ -81,27 +94,37 @@ interface ResolveAgentToolsInput {
  * `null` when the model options could not be loaded, and the list of available
  * model names otherwise.
  */
-async function availableDelegationModelNamesForTools(
+function availableDelegationModelNamesForTools(
   tools: readonly ToolDefinition[],
   stores: ModelOptionStores,
-): Promise<readonly string[] | null | undefined> {
+  inScope: ModelAvailabilityScope | undefined,
+): Effect.Effect<readonly string[] | null | undefined> {
   if (!hasDelegationTool(tools.map((tool) => tool.name))) {
-    return undefined;
+    return Effect.succeed(undefined);
   }
 
-  try {
-    const models = modelOptionsFrom(await readModelAvailabilityInputs(stores));
-    return availableModelNamesFromOptions(models);
-  } catch (err) {
-    // Couldn't load model options — skip the delegation annotation rather than
-    // fail the run, but log so the missing "Available models:" line is traceable.
-    log.warn(
-      `Could not load model options for delegation annotation: ${toErrorMessage(
-        err,
-      )}`,
-    );
-    return null;
-  }
+  return readModelAvailabilityInputs(stores, undefined, inScope).pipe(
+    Effect.map((inputs) =>
+      availableModelNamesFromOptions(modelOptionsFrom(inputs)),
+    ),
+    // A failed read (an unreadable store, a host call that rejected) degrades:
+    // skip the delegation annotation rather than fail the run, and log so the
+    // missing "Available models:" line is traceable. `Effect.catch` recovers
+    // typed failures only, which is the whole distinction — the pure finisher's
+    // "provider key status was never read" invariant is a programming error, so
+    // it surfaces as a defect and fails the run rather than being logged as a
+    // degraded annotation.
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        log.warn(
+          `Could not load model options for delegation annotation: ${toErrorMessage(
+            error,
+          )}`,
+        );
+        return null;
+      }),
+    ),
+  );
 }
 
 /**
@@ -111,7 +134,7 @@ async function availableDelegationModelNamesForTools(
  * so callers can substitute a test registry; it defaults to the singleton
  * returned by `getDefaultToolRegistry()`.
  */
-export async function resolveAgentTools({
+export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   tools,
   registry,
   logger,
@@ -120,7 +143,8 @@ export async function resolveAgentTools({
   toolInjections,
   config,
   stores,
-}: ResolveAgentToolsInput): Promise<ToolDefinition[]> {
+  inScope,
+}: ResolveAgentToolsInput) {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames(stores.globalState);
   const unavailable = getUnavailableToolNamesCached();
@@ -172,11 +196,20 @@ export async function resolveAgentTools({
     }
   }
 
-  const availableModelNames = await availableDelegationModelNamesForTools(
+  const availableModelNames = yield* availableDelegationModelNamesForTools(
     resolved,
     stores,
+    inScope,
   );
+  // The annotation's two frame-sensitive reads — the run's pinned delegation
+  // scope and this session's worktree opt-in — resolve inside the caller's
+  // frame and travel into the mapping as data. This fiber is outside the run's
+  // session frame, so reading them from the mapping would lose the pinned
+  // scope and read the process's roots instead of the session's.
+  const annotationState = inScope
+    ? inScope(readDelegationAnnotationState)
+    : readDelegationAnnotationState();
   return resolved.map((tool) =>
-    annotateDelegationAvailability(tool, availableModelNames),
+    annotateDelegationAvailability(tool, availableModelNames, annotationState),
   );
-}
+});

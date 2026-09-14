@@ -38,6 +38,7 @@ const {
   annotateDelegationAvailability,
   availableModelNamesFromOptions,
   formatAgentList,
+  readDelegationAnnotationState,
   selectAvailableDelegationModel,
 } = await import('@tools/delegation/delegationAvailability');
 const { resolveAgentTools } =
@@ -106,7 +107,11 @@ function rewriteRoster(
   },
 ) {
   mocks.getVisibleAgents.mockReturnValue(agents);
-  return annotateDelegationAvailability(tool, undefined);
+  return annotateDelegationAvailability(
+    tool,
+    undefined,
+    readDelegationAnnotationState(),
+  );
 }
 
 /**
@@ -128,16 +133,22 @@ function delegationRegistry(tools: readonly ToolInput[]) {
   );
 }
 
-async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
+async function resolveToolList(
+  tools: ToolInput[] = [DELEGATE_AGENT_TOOL],
+  inScope?: <T>(read: () => T) => T,
+) {
   const { secrets, globalState } = hostStores();
-  return resolveAgentTools({
-    tools,
-    registry: delegationRegistry(tools),
-    logger: { warn: () => {} },
-    toolInjections: new ToolInjectionRegistry(),
-    config: new FakeConfigProvider(),
-    stores: { secrets, globalState },
-  });
+  return Effect.runPromise(
+    resolveAgentTools({
+      tools,
+      registry: delegationRegistry(tools),
+      logger: { warn: () => {} },
+      toolInjections: new ToolInjectionRegistry(),
+      config: new FakeConfigProvider(),
+      stores: { secrets, globalState },
+      inScope,
+    }),
+  );
 }
 
 async function resolveDelegateAgent(extraTools: ToolInput[] = []) {
@@ -215,6 +226,7 @@ describe('delegation model availability', () => {
         description: 'Available models: loaded at runtime.',
       },
       null,
+      readDelegationAnnotationState(),
     );
 
     expect(rewritten.description).toContain(
@@ -227,10 +239,9 @@ describe('delegation model availability', () => {
     'rejects an explicitly requested model that is not currently available',
     () =>
       Effect.gen(function* () {
-        mocks.readModelAvailabilityInputs.mockResolvedValue([
-          model('sonnet46T'),
-          model('deepseekT'),
-        ]);
+        mocks.readModelAvailabilityInputs.mockReturnValue(
+          Effect.succeed([model('sonnet46T'), model('deepseekT')]),
+        );
 
         const failure = yield* Effect.flip(
           selectAvailableDelegationModel({
@@ -247,10 +258,9 @@ describe('delegation model availability', () => {
 
   it.effect('uses the parent model only when it is available', () =>
     Effect.gen(function* () {
-      mocks.readModelAvailabilityInputs.mockResolvedValue([
-        model('deepseekT'),
-        model('sonnet46T'),
-      ]);
+      mocks.readModelAvailabilityInputs.mockReturnValue(
+        Effect.succeed([model('deepseekT'), model('sonnet46T')]),
+      );
 
       expect(
         yield* selectAvailableDelegationModel({ parentModel: 'sonnet46T' }),
@@ -264,7 +274,7 @@ describe('delegation model availability', () => {
 
   it.effect('rejects delegation when no models are currently available', () =>
     Effect.gen(function* () {
-      mocks.readModelAvailabilityInputs.mockResolvedValue([]);
+      mocks.readModelAvailabilityInputs.mockReturnValue(Effect.succeed([]));
 
       const failure = yield* Effect.flip(
         selectAvailableDelegationModel({ parentModel: 'opus48T' }),
@@ -296,7 +306,11 @@ describe('delegation worktree availability', () => {
   it('substitutes the ENABLED guidance when worktrees are on', () => {
     mocks.isWorktreeSupportEnabled.mockReturnValue(true);
 
-    const rewritten = annotateDelegationAvailability(delegateTool(), undefined);
+    const rewritten = annotateDelegationAvailability(
+      delegateTool(),
+      undefined,
+      readDelegationAnnotationState(),
+    );
 
     expect(rewritten.description).toContain('Git worktree support: ENABLED.');
     expect(rewritten.description).toContain('Pass `working_directory`');
@@ -313,13 +327,15 @@ describe('delegation worktree availability', () => {
 describe('resolveAgentTools delegation annotation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.readModelAvailabilityInputs.mockResolvedValue([
-      {
-        value: 'deepseekT',
-        label: 'DeepSeek',
-        availability: 'provider-key',
-      },
-    ]);
+    mocks.readModelAvailabilityInputs.mockReturnValue(
+      Effect.succeed([
+        {
+          value: 'deepseekT',
+          label: 'DeepSeek',
+          availability: 'provider-key',
+        },
+      ]),
+    );
   });
 
   it('reflects the current roster on each call, not a frozen snapshot', async () => {
@@ -340,6 +356,35 @@ describe('resolveAgentTools delegation annotation', () => {
     expect(second?.description).toContain('- coder:');
     expect(second?.description).not.toContain('- research:');
     expect(second?.description).not.toContain('- numerics:');
+  });
+
+  it('reads the annotation facts inside the caller frame, not on the fiber', async () => {
+    // The annotation's worktree read resolves against the calling session's
+    // workspace, so it must happen inside the run's frame: outside it, a
+    // multi-session host reads the process's roots instead.
+    mocks.getVisibleAgents.mockReturnValue([]);
+    const worktreeTool: ToolInput = {
+      name: 'delegate_agent',
+      availabilityCategory: 'toolUse',
+      description: DELEGATE_AGENT_WORKTREE_DESCRIPTION,
+    };
+    let inFrame = false;
+    mocks.isWorktreeSupportEnabled.mockImplementation(() => inFrame);
+
+    const scoped = await resolveToolList([worktreeTool], (read) => {
+      inFrame = true;
+      try {
+        return read();
+      } finally {
+        inFrame = false;
+      }
+    });
+    const unscoped = await resolveToolList([worktreeTool]);
+
+    expect(scoped[0]?.description).toContain('Git worktree support: ENABLED.');
+    expect(unscoped[0]?.description).toContain(
+      'Git worktree support: DISABLED',
+    );
   });
 
   it('annotates each delegation tool from its own agent category', async () => {

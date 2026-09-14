@@ -1,9 +1,6 @@
 import { defineCommand } from 'citty';
 
-import {
-  getEnabledModels,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
+import { getEnabledModels } from '@model/computeModelOptions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { knownCliModelIds } from '../runtime/cliConfig';
@@ -26,6 +23,7 @@ import {
   loadCliModelAccessEntry,
   type CliModelAccess,
   type CliModelListOptions,
+  type CliModelStores,
 } from '../runtime/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -41,7 +39,7 @@ async function loadModelAccessList(
   context: CliContext,
   options: CliModelListOptions = {},
 ): Promise<
-  { models: CliModelAccess[]; stores: ModelOptionStores } | { error: string }
+  { models: CliModelAccess[]; stores: CliModelStores } | { error: string }
 > {
   try {
     return await suppressCliFetchStackLogs(async () => {

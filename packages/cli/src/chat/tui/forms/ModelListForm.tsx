@@ -10,6 +10,7 @@ import {
   getCliModelAccessList,
   modelSelectItemsForCli,
   type CliModelAccess,
+  type CliModelStores,
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/modelAccess';
 import { Select } from '@cli/tui/ui/Select';
@@ -17,7 +18,6 @@ import {
   computeSelectWindowSize,
   isCompactFormRows,
 } from '@cli/tui/selectWindow';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   CompactPickerKeyHints,
   FormFrame,
@@ -29,11 +29,12 @@ import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext'
 interface ModelListFormProps {
   readonly currentModel: string;
   /**
-   * The secret store and global state the availability computation reads. Ink
-   * components run no Effect, so the process stores arrive as a prop from the
-   * surface that opened the form.
+   * The secret store and global state the availability computation reads,
+   * with the runtime its read runs on. Ink components run no Effect
+   * themselves, so both arrive as one prop from the surface that opened the
+   * form.
    */
-  readonly stores: ModelOptionStores;
+  readonly stores: CliModelStores;
   readonly availableRows?: number;
   readonly selectable: boolean;
   readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;

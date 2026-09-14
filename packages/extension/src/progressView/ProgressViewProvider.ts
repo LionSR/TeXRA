@@ -183,6 +183,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       project: projectDisplayOf(session.roots.storage, roots.workspace),
       globalState: context.globalState,
       secrets,
+      // One session per extension host: the calling frame is this session's.
+      inScope: (read) => read(),
       fileOptions: () => workspaceFileOptions(roots.workspace),
       readRecentCommits: async () => {
         const isGitRepo =

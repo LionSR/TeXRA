@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { Effect } from 'effect';
 
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
@@ -30,15 +31,17 @@ describe('tool-use tool resolution', () => {
       runtimeUnavailableTools?: readonly string[];
     },
   ): Promise<string[]> {
-    const tools = await resolveAgentTools({
-      tools: toolDefs(names),
-      registry: getDefaultToolRegistry(),
-      logger,
-      toolInjections,
-      config: new FakeConfigProvider(),
-      stores: hostStores(),
-      ...options,
-    });
+    const tools = await Effect.runPromise(
+      resolveAgentTools({
+        tools: toolDefs(names),
+        registry: getDefaultToolRegistry(),
+        logger,
+        toolInjections,
+        config: new FakeConfigProvider(),
+        stores: hostStores(),
+        ...options,
+      }),
+    );
     return tools.map((tool) => tool.name);
   }
 
@@ -47,16 +50,18 @@ describe('tool-use tool resolution', () => {
   ): Promise<ToolDefinition[]> {
     const diagnostics = new DiagnosticsTool();
     const registry = new MapToolRegistry({ diagnostics });
-    return resolveAgentTools({
-      tools: [diagnostics.definition],
-      registry,
-      logger,
-      toolInjections,
-      config: new FakeConfigProvider(),
-      stores: hostStores(),
-      runtimeUnavailableTools,
-      approvalPromptsUnavailable: false,
-    });
+    return Effect.runPromise(
+      resolveAgentTools({
+        tools: [diagnostics.definition],
+        registry,
+        logger,
+        toolInjections,
+        config: new FakeConfigProvider(),
+        stores: hostStores(),
+        runtimeUnavailableTools,
+        approvalPromptsUnavailable: false,
+      }),
+    );
   }
 
   it('filters approval-gated tools when approval prompts are unavailable', async () => {

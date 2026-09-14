@@ -139,31 +139,33 @@ describe('run-scoped tool resolution', () => {
   it('filters approval-gated and runtime-unavailable declared tools', async () => {
     // The run's tool policy carries both gates; `AgentRun` hands them to the
     // resolver when it builds the model-facing list.
-    const resolved = await resolveAgentTools({
-      tools: AgentToolUseSettingSchema.parse({
-        tools: [
-          { name: 'bash' },
-          { name: 'grep' },
-          { name: 'inquiry' },
-          { name: 'write_file' },
-          { name: 'wolfram' },
-        ],
-      }).tools,
-      registry: new MapToolRegistry({
-        bash: approvalGatedTool('bash'),
-        grep: tool('grep'),
-        inquiry: approvalGatedTool('inquiry'),
-        write_file: approvalGatedTool('write_file'),
-        wolfram: approvalGatedTool('wolfram'),
+    const resolved = await Effect.runPromise(
+      resolveAgentTools({
+        tools: AgentToolUseSettingSchema.parse({
+          tools: [
+            { name: 'bash' },
+            { name: 'grep' },
+            { name: 'inquiry' },
+            { name: 'write_file' },
+            { name: 'wolfram' },
+          ],
+        }).tools,
+        registry: new MapToolRegistry({
+          bash: approvalGatedTool('bash'),
+          grep: tool('grep'),
+          inquiry: approvalGatedTool('inquiry'),
+          write_file: approvalGatedTool('write_file'),
+          wolfram: approvalGatedTool('wolfram'),
+        }),
+        logger: noopTrace,
+        approvalPromptsUnavailable: true,
+        runtimeUnavailableTools: ['inquiry'],
+        // No conditional injections: this pins the declared-tool gates alone.
+        toolInjections: new ToolInjectionRegistry(),
+        config: new FakeConfigProvider(),
+        stores: hostStores(),
       }),
-      logger: noopTrace,
-      approvalPromptsUnavailable: true,
-      runtimeUnavailableTools: ['inquiry'],
-      // No conditional injections: this pins the declared-tool gates alone.
-      toolInjections: new ToolInjectionRegistry(),
-      config: new FakeConfigProvider(),
-      stores: hostStores(),
-    });
+    );
 
     expect(resolved.map(({ name }) => name)).toEqual(['grep']);
   });

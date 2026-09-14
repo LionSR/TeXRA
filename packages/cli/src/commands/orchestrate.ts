@@ -53,6 +53,7 @@ import {
   getCliModelAccessList,
   selectCliRunnableModel,
   type CliModelAccess,
+  type CliModelStores,
 } from '../runtime/modelAccess';
 import { loadCliApiStatus } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
@@ -84,7 +85,7 @@ const log = createLog('orchestrate');
 const canLaunchWithDefaultModel = Effect.fn(function* (
   context: CliContext,
   models: readonly CliModelAccess[],
-  stores: ModelOptionStores,
+  stores: CliModelStores,
 ): Effect.fn.Return<boolean, Error> {
   if (models.length === 0) return true;
 

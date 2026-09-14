@@ -268,6 +268,7 @@ export async function runChat(
     session,
     secrets: services.secrets,
     state: services.globalState,
+    runtime: services.runtime,
     processCwd: process.cwd(),
     initialAgent: agent,
     initialModel: model,

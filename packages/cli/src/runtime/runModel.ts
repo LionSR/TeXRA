@@ -1,4 +1,3 @@
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { RunModelCandidate } from '@model/runModelDecision';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -9,7 +8,7 @@ import {
 } from './cliConfig';
 import { CliUsageError, type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
-import { selectCliRunnableModel } from './modelAccess';
+import { selectCliRunnableModel, type CliModelStores } from './modelAccess';
 import { shouldRenderRunProgress } from './runProgressRenderer';
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
@@ -53,7 +52,7 @@ export async function selectCliRunModel(
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
-  stores: ModelOptionStores,
+  stores: CliModelStores,
 ): Promise<string> {
   try {
     const resolution = await selectCliRunnableModel(

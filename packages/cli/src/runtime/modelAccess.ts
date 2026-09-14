@@ -12,6 +12,7 @@ import {
   type RunModelCandidate,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ModelOptionData } from '@shared/schemas';
 import {
   isModelOptionAvailable,
@@ -65,8 +66,18 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
  * `CliPlatformServices`, or the `Secrets` / `AppState` services), so nothing
  * here looks a host up.
  */
+/**
+ * The stores availability is computed from, plus the runtime the read runs
+ * on. The read is an Effect and this package is the boundary that runs one,
+ * so every CLI surface that asks for model access hands over the runtime its
+ * entry point already holds rather than looking one up.
+ */
+export type CliModelStores = ModelOptionStores & {
+  readonly runtime: ProcessRuntime;
+};
+
 interface CliModelAccessListOptions {
-  readonly stores: ModelOptionStores;
+  readonly stores: CliModelStores;
   readonly models?: readonly string[];
 }
 
@@ -78,7 +89,7 @@ interface CliModelAccessListOptions {
  * ignored.
  */
 interface CliModelAccessEntryOptions {
-  readonly stores: ModelOptionStores;
+  readonly stores: CliModelStores;
   /** Optional preloaded list, used by commands that already fetched access. */
   readonly accessList?: readonly CliModelAccess[];
 }
@@ -199,7 +210,9 @@ export async function getCliModelAccessList(
   options: CliModelAccessListOptions,
 ): Promise<CliModelAccess[]> {
   const models = modelOptionsFrom(
-    await readModelAvailabilityInputs(options.stores, options.models),
+    await options.stores.runtime.runPromise(
+      readModelAvailabilityInputs(options.stores, options.models),
+    ),
   );
   return models.map(toCliModelAccess);
 }
@@ -334,7 +347,9 @@ export async function loadCliModelAccessEntry(
   if (hiddenModelId == null) return undefined;
 
   const hiddenModelOption = modelOptionsFrom(
-    await readModelAvailabilityInputs(options.stores, [hiddenModelId]),
+    await options.stores.runtime.runPromise(
+      readModelAvailabilityInputs(options.stores, [hiddenModelId]),
+    ),
   )[0];
   if (!hiddenModelOption) {
     throw new Error(

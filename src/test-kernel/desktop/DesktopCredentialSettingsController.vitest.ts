@@ -48,8 +48,8 @@ const codexMocks = vi.hoisted(() => ({
 
 const modelMocks = vi.hoisted(() => ({
   readInputs: vi.fn(
-    async (_stores: ModelOptionStores, models: readonly string[] = []) =>
-      models.map((model) => ({ value: model, label: model })),
+    (_stores: ModelOptionStores, models: readonly string[] = []) =>
+      Effect.succeed(models.map((model) => ({ value: model, label: model }))),
   ),
 }));
 
@@ -141,6 +141,7 @@ async function createFixture({
 
   const controller = new DefaultDesktopCredentialSettingsController({
     runtime: effectRuntime(),
+    inScope: (read) => read(),
     workspaceState,
     globalState,
     config: new FakeConfigProvider(),

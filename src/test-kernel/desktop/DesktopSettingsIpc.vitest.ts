@@ -48,8 +48,8 @@ import {
 import { loadSourceModule } from './loadSourceModule.ts';
 
 const readModelAvailabilityInputs = vi.hoisted(() =>
-  vi.fn(async (_stores: ModelOptionStores, models: readonly string[] = []) =>
-    models.map((model) => ({ value: model, label: model })),
+  vi.fn((_stores: ModelOptionStores, models: readonly string[] = []) =>
+    Effect.succeed(models.map((model) => ({ value: model, label: model }))),
   ),
 );
 

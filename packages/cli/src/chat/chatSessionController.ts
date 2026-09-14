@@ -1030,7 +1030,7 @@ export function createChatSessionController(
           const currentModel = meta.model || initialModel;
           const selection = yield* hostPort(() =>
             selectCliRunnableModel(currentModel, {
-              stores: { secrets, globalState: state },
+              stores: { secrets, globalState: state, runtime },
               fallbackReason: meta.model
                 ? meta.modelSource
                 : initialModelSource,

@@ -167,13 +167,11 @@ export const runAgent = Effect.fn('runAgent')(function* (
           secrets: yield* Secrets,
         };
         const requestedConfig = preferHelperModel
-          ? yield* Effect.tryPromise({
-              try: async () =>
-                runInSession(runSession, () =>
-                  applyHelperModelPreference(request.config, modelStores),
-                ),
-              catch: ensureError,
-            })
+          ? yield* applyHelperModelPreference(
+              request.config,
+              modelStores,
+              (read) => runInSession(runSession, read),
+            )
           : request.config;
         const definition = yield* prepareAgentDefinition({
           config: requestedConfig,

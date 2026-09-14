@@ -43,6 +43,10 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
 import {
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
+} from '@model/computeModelOptions';
+import {
   API_PROVIDERS,
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
@@ -133,6 +137,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.modelSelectionController = new SettingsModelSelectionController({
       globalState,
       secrets,
+      // The availability read is an Effect; this is the boundary that holds a
+      // runtime to run it on, so the controller takes its rows as data.
+      resolveModelOptions: async (stores, models) =>
+        modelOptionsFrom(
+          await this.runtime.runPromise(
+            readModelAvailabilityInputs(stores, models),
+          ),
+        ),
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',

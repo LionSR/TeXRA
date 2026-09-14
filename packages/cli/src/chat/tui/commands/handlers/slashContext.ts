@@ -4,6 +4,7 @@ import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import type { StateStore } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
@@ -19,6 +20,12 @@ export interface SlashCommandContext {
    */
   readonly secrets: PlatformSecrets;
   readonly state: StateStore;
+  /**
+   * The runtime the chat entry point holds. Model access is read as an Effect,
+   * so the handlers that ask for it run that program here rather than looking
+   * a runtime up.
+   */
+  readonly runtime: ProcessRuntime;
   readonly processCwd?: CliContext['cwd'];
   readonly initialAgent: string;
   readonly initialModel: string;

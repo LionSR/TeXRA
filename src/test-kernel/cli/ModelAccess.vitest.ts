@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 
 import {
   findCliModelAccessEntry,
@@ -13,6 +14,7 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
+import { effectRuntime } from '@platform/processRuntime';
 import type { ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore, fakeStores } from '@test/support/FakePlatform';
@@ -117,7 +119,7 @@ type ResolveCliRunnableModelOptions = Parameters<
  * The process stores every access lookup reads, threaded in by the caller the
  * way the CLI composition root threads its own.
  */
-const stores = fakeStores();
+const stores = { ...fakeStores(), runtime: effectRuntime() };
 
 function resolveModelFromAccessList(
   accessList: readonly CliModelAccess[],
@@ -482,9 +484,9 @@ describe('CLI model access resolution', () => {
   });
 
   it('rejects explicit retired hidden models before fallback', async () => {
-    readModelAvailabilityInputsMock.mockResolvedValueOnce([
-      RETIRED_HAIKU3_OPTION,
-    ]);
+    readModelAvailabilityInputsMock.mockReturnValueOnce(
+      Effect.succeed([RETIRED_HAIKU3_OPTION]),
+    );
 
     await expect(
       selectCliRunnableModel('haiku3', {
@@ -530,11 +532,13 @@ describe('CLI model access resolution', () => {
   });
 
   it('keeps ChatGPT models available without TeXRA sign-in or API keys', async () => {
-    readModelAvailabilityInputsMock.mockResolvedValueOnce([
-      modelOption('gpt56', {
-        availability: 'subscription-access',
-      }),
-    ]);
+    readModelAvailabilityInputsMock.mockReturnValueOnce(
+      Effect.succeed([
+        modelOption('gpt56', {
+          availability: 'subscription-access',
+        }),
+      ]),
+    );
 
     await expect(getCliModelAccessList({ stores })).resolves.toMatchObject([
       {
@@ -548,11 +552,13 @@ describe('CLI model access resolution', () => {
   });
 
   it('loads explicit model ids for diagnostic lists', async () => {
-    readModelAvailabilityInputsMock.mockResolvedValueOnce([
-      modelOption('hiddenFixtureModel', {
-        availability: 'missing-key',
-      }),
-    ]);
+    readModelAvailabilityInputsMock.mockReturnValueOnce(
+      Effect.succeed([
+        modelOption('hiddenFixtureModel', {
+          availability: 'missing-key',
+        }),
+      ]),
+    );
 
     await expect(
       getCliModelAccessList({ stores, models: ['hiddenFixtureModel'] }),
@@ -570,14 +576,16 @@ describe('CLI model access resolution', () => {
   });
 
   it('uses the loaded access list as the availability source of truth', async () => {
-    readModelAvailabilityInputsMock.mockResolvedValueOnce([
-      modelOption('sonnet46T', {
-        availability: 'provider-key',
-      }),
-      modelOption('deepseekT', {
-        availability: 'missing-key',
-      }),
-    ]);
+    readModelAvailabilityInputsMock.mockReturnValueOnce(
+      Effect.succeed([
+        modelOption('sonnet46T', {
+          availability: 'provider-key',
+        }),
+        modelOption('deepseekT', {
+          availability: 'missing-key',
+        }),
+      ]),
+    );
 
     const entries = await getCliModelAccessList({ stores });
 
@@ -592,12 +600,16 @@ describe('CLI model access resolution', () => {
 
   it('checks access for explicit models hidden from the visible model list', async () => {
     readModelAvailabilityInputsMock
-      .mockResolvedValueOnce([
-        modelOption('sonnet46T', { availability: 'provider-key' }),
-      ])
-      .mockResolvedValueOnce([
-        modelOption('hiddenFixtureModel', { availability: 'provider-key' }),
-      ]);
+      .mockReturnValueOnce(
+        Effect.succeed([
+          modelOption('sonnet46T', { availability: 'provider-key' }),
+        ]),
+      )
+      .mockReturnValueOnce(
+        Effect.succeed([
+          modelOption('hiddenFixtureModel', { availability: 'provider-key' }),
+        ]),
+      );
 
     await expect(
       selectCliRunnableModel('HIDDENFIXTUREMODEL', {
@@ -611,11 +623,13 @@ describe('CLI model access resolution', () => {
   });
 
   it('checks hidden model access against a supplied visible model list', async () => {
-    readModelAvailabilityInputsMock.mockResolvedValueOnce([
-      modelOption('hiddenFixtureModel', {
-        availability: 'provider-key',
-      }),
-    ]);
+    readModelAvailabilityInputsMock.mockReturnValueOnce(
+      Effect.succeed([
+        modelOption('hiddenFixtureModel', {
+          availability: 'provider-key',
+        }),
+      ]),
+    );
 
     await expect(
       selectCliRunnableModel('hiddenFixtureModel', {
@@ -628,7 +642,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('ignores stale lower-priority hidden candidates after a runnable winner', async () => {
-    readModelAvailabilityInputsMock.mockResolvedValueOnce([]);
+    readModelAvailabilityInputsMock.mockReturnValueOnce(Effect.succeed([]));
 
     await expect(
       selectCliRunnableModel(
@@ -645,11 +659,13 @@ describe('CLI model access resolution', () => {
   });
 
   it('resolves hidden model entries for diagnostic commands', async () => {
-    readModelAvailabilityInputsMock.mockResolvedValueOnce([
-      modelOption('hiddenFixtureModel', {
-        availability: 'missing-key',
-      }),
-    ]);
+    readModelAvailabilityInputsMock.mockReturnValueOnce(
+      Effect.succeed([
+        modelOption('hiddenFixtureModel', {
+          availability: 'missing-key',
+        }),
+      ]),
+    );
 
     await expect(
       loadCliModelAccessEntry('HIDDENFIXTUREMODEL', {
@@ -676,11 +692,13 @@ describe('CLI model access resolution', () => {
       ),
     ).resolves.toEqual({ model: 'userFacingFixture' });
 
-    readModelAvailabilityInputsMock.mockResolvedValueOnce([
-      modelOption('userFacingFixture', {
-        availability: 'missing-key',
-      }),
-    ]);
+    readModelAvailabilityInputsMock.mockReturnValueOnce(
+      Effect.succeed([
+        modelOption('userFacingFixture', {
+          availability: 'missing-key',
+        }),
+      ]),
+    );
 
     await expect(
       loadCliModelAccessEntry('User Facing Fixture', {
@@ -699,10 +717,12 @@ describe('CLI model access resolution', () => {
 
   it('reports stale hidden model configuration directly', async () => {
     readModelAvailabilityInputsMock
-      .mockResolvedValueOnce([
-        modelOption('sonnet46T', { availability: 'provider-key' }),
-      ])
-      .mockResolvedValueOnce([]);
+      .mockReturnValueOnce(
+        Effect.succeed([
+          modelOption('sonnet46T', { availability: 'provider-key' }),
+        ]),
+      )
+      .mockReturnValueOnce(Effect.succeed([]));
 
     await expect(
       selectCliRunnableModel('hiddenFixtureModel', {

@@ -4,6 +4,11 @@ import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentS
 import type { DesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import type { DesktopSettingsUiHost } from '@desktop/main/desktopSettingsIpc';
 import type { DesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
+import {
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
+} from '@model/computeModelOptions';
+import { effectRuntime } from '@platform/processRuntime';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -81,6 +86,14 @@ export function createStubDesktopCredentialSettingsController(
     modelSelectionController: new SettingsModelSelectionController({
       globalState: state.globalState,
       secrets: new FakeSecrets(),
+      // The same wiring the desktop root does: the read is an Effect, run on
+      // the runtime this process holds.
+      resolveModelOptions: async (stores, models) =>
+        modelOptionsFrom(
+          await effectRuntime().runPromise(
+            readModelAvailabilityInputs(stores, models),
+          ),
+        ),
     }),
     refreshModelOptions: noOp,
     postProfileData: noOp,
