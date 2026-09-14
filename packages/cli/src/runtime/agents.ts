@@ -6,6 +6,7 @@ import {
   resolveAgentForLaunch,
   type AgentEntry,
 } from '@agent/index';
+import { loadAgentSettingAndPrompts } from '@agent/runtime';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { effectRuntime } from '@platform/processRuntime';
 import {
@@ -284,6 +285,24 @@ export function formatCliAgentList(
         `${agent.category}\t${collidingNames.has(agent.name) ? agentKeyOf(agent) : agent.name}\t${agent.description ?? ''}`,
     )
     .join('\n');
+}
+
+/**
+ * The default output files the agent's current definition declares.
+ *
+ * A remote entry comes from the catalog listing, which carries no YAML-declared
+ * `defaultOutputFiles`; only loading the definition (as every launch does)
+ * resolves them. Local entries already carry their scan-time values, so this
+ * loads nothing for them.
+ */
+export async function resolveCliAgentDefaultOutputFiles(
+  entry: AgentEntry,
+): Promise<string[] | undefined> {
+  if (entry.source !== 'remote') return entry.defaultOutputFiles;
+  const [setting] = await loadAgentSettingAndPrompts(entry);
+  return setting.defaultOutputFiles.length > 0
+    ? setting.defaultOutputFiles
+    : undefined;
 }
 
 export function formatCliAgentDetails(entry: AgentEntry): string {

@@ -1,7 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import type { AgentEntry } from '@agent/index';
 import type { AgentConfigPayload, WorkflowFlowResult } from '@agent/runtime';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import type {
@@ -229,12 +228,16 @@ function expectedInputOutputFiles(
 }
 
 export function expectedOutputFilesForOutputDir(
-  agent: AgentEntry | undefined,
+  /**
+   * The agent's declared defaults, resolved from its current definition — a
+   * remote agent's catalog listing does not carry them.
+   */
+  agentDefaultOutputFiles: readonly string[] | undefined,
   inputFiles: readonly string[],
   /** The path this run materialized stdin to, when it read stdin. */
   stdinInputPath?: string,
 ): readonly string[] {
-  const defaultOutputFiles = (agent?.defaultOutputFiles ?? []).filter(Boolean);
+  const defaultOutputFiles = (agentDefaultOutputFiles ?? []).filter(Boolean);
   return defaultOutputFiles.length > 0
     ? defaultOutputFiles
     : expectedInputOutputFiles(inputFiles, stdinInputPath);

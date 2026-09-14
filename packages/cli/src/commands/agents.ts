@@ -12,6 +12,7 @@ import {
   missingAgentMessage,
   parseCliAgentCategoryFilter,
   resolveCliAgent,
+  resolveCliAgentDefaultOutputFiles,
   type CliAgentListOptions,
 } from '../runtime/agents';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -70,10 +71,17 @@ export async function showAgent(
     return CliExitCode.Usage;
   }
 
+  // A remote entry's listing carries no `defaultOutputFiles`; resolve them
+  // from the definition so every rendering shows what a run would use.
+  const shown = {
+    ...entry,
+    defaultOutputFiles: await resolveCliAgentDefaultOutputFiles(entry),
+  };
+
   emitCliResult(context, {
-    json: entry,
-    ndjson: { kind: 'agent', agent: entry },
-    text: formatCliAgentDetails(entry),
+    json: shown,
+    ndjson: { kind: 'agent', agent: shown },
+    text: formatCliAgentDetails(shown),
   });
   return CliExitCode.Success;
 }

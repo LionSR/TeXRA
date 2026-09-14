@@ -14,11 +14,13 @@ import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
   resolveCliAgent: vi.fn(),
+  resolveCliAgentDefaultOutputFiles: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
   resolveCliAgent: mocks.resolveCliAgent,
+  resolveCliAgentDefaultOutputFiles: mocks.resolveCliAgentDefaultOutputFiles,
 }));
 
 // Import the modules under test after the mock factories above are registered
@@ -96,6 +98,7 @@ describe('CLI agents command', () => {
     vi.clearAllMocks();
     agentCatalogMock.getAgentsByCategory.mockReturnValue([]);
     agentCatalogMock.getVisibleAgents.mockReturnValue([]);
+    mocks.resolveCliAgentDefaultOutputFiles.mockResolvedValue(undefined);
   });
 
   it('parses agent category filter spellings', () => {
@@ -263,11 +266,30 @@ describe('CLI agents command', () => {
       args: 'lean',
       textContain: 'source: remote',
     },
-  ])('$name', async ({ agent, args, textContain }) => {
+    {
+      // A remote listing carries no `defaultOutputFiles`; the details come
+      // from the loaded definition instead.
+      name: 'renders a remote agent default outputs from its definition',
+      agent: {
+        name: 'paper2slide',
+        source: 'remote',
+        path: '',
+        category: AgentCategory.Workflow,
+        description: 'Account-served slide builder.',
+      },
+      args: 'paper2slide',
+      defaultOutputFiles: ['slides.tex'],
+      textContain: 'defaultOutputFiles: slides.tex',
+    },
+  ])('$name', async ({ agent, args, textContain, defaultOutputFiles }) => {
     mocks.resolveCliAgent.mockResolvedValue(agent);
+    mocks.resolveCliAgentDefaultOutputFiles.mockResolvedValue(
+      defaultOutputFiles,
+    );
 
     const exitCode = await showAgent(createRunCommandCliContext(), args);
 
+    const shown = { ...agent, defaultOutputFiles };
     expect(exitCode).toBe(0);
     expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledTimes(1);
     expect(agentCatalogMock.getAgent).not.toHaveBeenCalled();
@@ -275,8 +297,8 @@ describe('CLI agents command', () => {
     expect(cliOutputMock.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
       {
-        json: agent,
-        ndjson: { kind: 'agent', agent },
+        json: shown,
+        ndjson: { kind: 'agent', agent: shown },
         text: expect.stringContaining(textContain),
       },
     );
