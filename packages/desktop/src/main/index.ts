@@ -173,6 +173,9 @@ const credentialLog = createLog('Setup Credentials');
 const DESKTOP_RECENT_COMMIT_LIMIT = 20;
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
+/** Window-owned post-launch funnel refresh. The process resume owner reads
+ *  this; createWindow assigns it when onboarding IPC exists. */
+const afterLaunchFunnelRefresh: { current?: () => void } = {};
 let continueQuitAfterWindowClose: (() => void) | undefined;
 // Temp directories holding the `.diff` patch files written by the
 // external-editor fallback of every window's diff host. The OS editor may
@@ -421,6 +424,18 @@ function createWindow(options: {
   const reportBackgroundError = (error: unknown) => {
     console.error('Desktop background operation failed:', error);
   };
+  const refreshFunnelAfterLaunch = (): void => {
+    const refresh = onboardingIpcRef.current?.refreshOnboardingFunnel();
+    if (!refresh) return;
+    runtime.runFork(
+      Effect.tryPromise({
+        try: () => refresh,
+        catch: (error) => error,
+      }).pipe(
+        Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+      ),
+    );
+  };
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
   });
@@ -539,6 +554,28 @@ function createWindow(options: {
       case INSTRUCTION_ACTION.OPEN_MODELS_DOC:
         openExternalInBackground('https://texra.ai/guide/models.html');
         return;
+    }
+  };
+  /**
+   * A failure is an 'error' dialog; a refusal that names a docs page
+   * (`docsCommand`, e.g. a launch without an input file) adds a guide button
+   * so the desktop dialog keeps the link the extension's request-error
+   * callout renders. The URL path is host-originated, never network data.
+   */
+  const showErrorDialog = async (
+    message: string,
+    docsCommand?: string,
+  ): Promise<void> => {
+    if (!docsCommand) return showErrorMessage(message);
+    const { response } = await dialog.showMessageBox(window, {
+      type: 'error',
+      message,
+      buttons: ['Read the guide', 'OK'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    if (response === 0) {
+      openExternalInBackground(`https://texra.ai/guide/${docsCommand}`);
     }
   };
   /**
@@ -739,6 +776,8 @@ function createWindow(options: {
     showInfoMessage: (message) => awaitOrReport(showInfoMessage(message)),
     showWarningMessage,
     showErrorMessage: (message) => awaitOrReport(showErrorMessage(message)),
+    showErrorDialog: (message, docsCommand) =>
+      awaitOrReport(showErrorDialog(message, docsCommand)),
     showInstructionDialog,
     pickTranscriptExportFormat: async () => {
       const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
@@ -847,6 +886,10 @@ function createWindow(options: {
       showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.showAgentConfigBanner(agentName, category),
       onLaunched: (runId) => bridge.surfaceAction({ kind: 'select', runId }),
+      // Recompute the onboarding funnel when a launch settles so a first
+      // successful run leaves the setup card without a restart. The awaited
+      // runPromise includes AgentRunLifecycle's firstRunDone write.
+      onRunCompleted: refreshFunnelAfterLaunch,
     });
     const hostRequests = createDesktopHostRequests({
       runtime,
@@ -1282,9 +1325,7 @@ function createWindow(options: {
       // shared by every host (extension, desktop, CLI) so this credential-gating
       // logic can't drift between them.
       hasCredential: () =>
-        runtime.runPromise(
-          hasUsableSetupCredential(options.secrets, credentialLog.warn),
-        ),
+        hasUsableSetupCredential(options.secrets, credentialLog.warn),
       // Launch the setup conversation when the user clicks "Run Setup" on the
       // setup card, mirroring the extension's `launchSetupAssistant` →
       // launch path: resolve a model the user's credentials can call,
@@ -1359,6 +1400,7 @@ function createWindow(options: {
     },
   );
   onboardingIpcRef.current = onboardingIpc;
+  afterLaunchFunnelRefresh.current = refreshFunnelAfterLaunch;
   // The funnel is host state every open project's snapshot carries (8.1).
   windowResources.add(
     onboardingIpc.onFunnelChange((state) => {
@@ -1653,6 +1695,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         sessions: () =>
           [projects.fallback(), ...projects.list()].map((p) => p.session),
         runtime: () => runtime,
+        onLaunchSettled: () => afterLaunchFunnelRefresh.current?.(),
       });
       const platformInit = await initializeElectronPlatform(
         desktopMainDir,

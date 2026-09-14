@@ -502,10 +502,11 @@ export class CodexTool extends defineTool({
   ): Effect.fn.Return<ToolResult, AgentCliToolFailure, ToolCall | Runs> {
     // Resolve the effective sandbox mode once (per-call override, else the
     // user-configured default) rather than mutating the parsed input object.
-    const config = yield* agentCliCall(() => getCodexConfig());
     const sandboxMode =
       input.sandbox_mode ??
-      config.getCodexSandboxMode(toolCall.roots.workspaceState);
+      (yield* agentCliCall(getCodexConfig)).getCodexSandboxMode(
+        toolCall.roots.workspaceState,
+      );
 
     return yield* dispatchAgentCliTool({
       session,
@@ -530,7 +531,6 @@ export class CodexTool extends defineTool({
           context.parentWorkingDirectory,
           context.releaseFallbackClaim,
           session,
-          toolCall.roots,
         ),
     });
   });
@@ -543,13 +543,13 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
-  roots: WorkspaceRoots,
 ): Effect.fn.Return<ToolResult, AgentCliToolFailure, ToolCall | Runs> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
+  const { roots } = yield* ToolCall;
   const thread = yield* agentCliCall(() =>
     createCodexThread(input, sandboxMode, roots, workingDir),
   );
-  const config = (yield* agentCliCall(() => getCodexConfig())).buildCodexConfig(
+  const config = (yield* agentCliCall(getCodexConfig)).buildCodexConfig(
     input.prompt,
   );
   const preview = previewLabel(input.prompt);

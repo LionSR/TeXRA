@@ -362,12 +362,12 @@ export class FakeSecrets implements PlatformSecrets {
     this.env = env;
   }
 
-  async get(key: string): Promise<string | undefined> {
-    return this.values.get(key);
+  get(key: string): Effect.Effect<string | undefined, SecretsFailed> {
+    return Effect.sync(() => this.values.get(key));
   }
 
-  async getStored(key: string): Promise<string | undefined> {
-    return this.values.get(key);
+  getStored(key: string): Effect.Effect<string | undefined, SecretsFailed> {
+    return Effect.sync(() => this.values.get(key));
   }
 
   set(key: string, value: string): Effect.Effect<void, SecretsFailed> {

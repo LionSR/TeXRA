@@ -33,7 +33,9 @@ describe('CLI secrets', () => {
         secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key'),
       );
 
-      expect(await secrets.get('TEXRA_CLI_SECRETS_TEST_KEY')).toBe('test-key');
+      expect(
+        await Effect.runPromise(secrets.get('TEXRA_CLI_SECRETS_TEST_KEY')),
+      ).toBe('test-key');
       await expect(fs.readFile(secretsPath, 'utf8')).resolves.toContain(
         'TEXRA_CLI_SECRETS_TEST_KEY',
       );
@@ -66,8 +68,12 @@ describe('CLI secrets', () => {
         'utf8',
       );
       await Effect.runPromise(secrets.set('ANOTHER_KEY', 'another-value'));
-      expect(await secrets.get('EXISTING_KEY')).toBe('existing-value');
-      expect(await secrets.get('ANOTHER_KEY')).toBe('another-value');
+      expect(await Effect.runPromise(secrets.get('EXISTING_KEY'))).toBe(
+        'existing-value',
+      );
+      expect(await Effect.runPromise(secrets.get('ANOTHER_KEY'))).toBe(
+        'another-value',
+      );
     });
   });
 
@@ -86,9 +92,11 @@ describe('CLI secrets', () => {
         Effect.runPromise(secrets.set('ORDERED_KEY', 'new-value')),
       ]);
 
-      expect(await secrets.get('KEY_A')).toBe('value-a');
-      expect(await secrets.get('KEY_B')).toBe('value-b');
-      expect(await secrets.get('ORDERED_KEY')).toBe('new-value');
+      expect(await Effect.runPromise(secrets.get('KEY_A'))).toBe('value-a');
+      expect(await Effect.runPromise(secrets.get('KEY_B'))).toBe('value-b');
+      expect(await Effect.runPromise(secrets.get('ORDERED_KEY'))).toBe(
+        'new-value',
+      );
     });
   });
 
@@ -102,8 +110,12 @@ describe('CLI secrets', () => {
         'utf8',
       );
 
-      expect(await secrets.getStored('GOOD_KEY')).toBe('good-value');
-      expect(await secrets.getStored('BAD_KEY')).toBeUndefined();
+      expect(await Effect.runPromise(secrets.getStored('GOOD_KEY'))).toBe(
+        'good-value',
+      );
+      expect(
+        await Effect.runPromise(secrets.getStored('BAD_KEY')),
+      ).toBeUndefined();
     });
   });
 
@@ -121,13 +133,15 @@ describe('CLI secrets', () => {
           const secrets = new CliSecrets(effectRuntime(), secretsPath);
 
           await expect(
-            secrets.get('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
+            Effect.runPromise(secrets.get('TEXRA_CLI_SECRETS_ENV_ONLY_KEY')),
           ).resolves.toBe('env-value');
           await expect(
-            secrets.getStored('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
+            Effect.runPromise(
+              secrets.getStored('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
+            ),
           ).resolves.toBeUndefined();
           await expect(
-            secrets.get('TEXRA_CLI_SECRETS_MISSING_KEY'),
+            Effect.runPromise(secrets.get('TEXRA_CLI_SECRETS_MISSING_KEY')),
           ).resolves.toBeUndefined();
           await expect(
             Effect.runPromise(secrets.listStoredKeys()),

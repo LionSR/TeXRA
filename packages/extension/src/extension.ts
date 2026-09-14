@@ -227,7 +227,7 @@ async function initVscodePlatform(
         storage,
         workspaceRoot,
         (message) => log.warn(message),
-        runtime,
+        (write) => runtime.runPromise(write),
       ),
     ),
   );

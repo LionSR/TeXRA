@@ -41,6 +41,7 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import type { SessionOpenError } from '@shared/session/database';
@@ -351,12 +352,13 @@ export async function initCliPlatform(
     // platform. Keep the platform, roots, and lazy session private until the
     // fallible setup has succeeded: their ports have no reset operation.
     const install = async () => {
+      const runWrite: RunStateWrite = (write) => runtime.runPromise(write);
       const { stateStores, configStores } = await runtime.runPromise(
         Effect.gen(function* () {
           const stores = yield* createCliStateStores({
             storageRoot: context.storageRoot,
             workspacePath: context.cwd,
-            runWrite: (write) => runtime.runPromise(write),
+            runWrite,
           });
           return {
             stateStores: stores,
@@ -364,7 +366,7 @@ export async function initCliPlatform(
               stores.storage,
               context.cwd,
               showPersistentConfigWarning,
-              runtime,
+              runWrite,
             ),
           };
         }),

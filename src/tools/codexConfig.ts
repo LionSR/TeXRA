@@ -57,11 +57,11 @@ export function toCodexCliReasoningEffort(
 }
 
 export function getCodexCliReasoningEffort(
-  state: StateStore,
+  workspaceState: StateStore,
   supportsXhigh = false,
 ): CodexCliReasoningEffort {
   return toCodexCliReasoningEffort(
-    getCodexReasoningEffort(state),
+    getCodexReasoningEffort(workspaceState),
     supportsXhigh,
   );
 }
@@ -73,12 +73,13 @@ export function getCodexCliReasoningEffort(
 // The schema in `@shared` is the single source of truth for the persisted
 // values; the SDK-typed return annotation is what keeps those values aligned
 // with the Codex union — a schema value the SDK doesn't accept fails here.
-export const getCodexApprovalPolicy = (state: StateStore): ApprovalMode =>
-  createEnumStateGetter(
-    WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-    CODEX_APPROVAL_POLICY_DEFAULT,
-    parseCodexApprovalPolicy,
-  )(state);
+export const getCodexApprovalPolicy: (
+  workspaceState: StateStore,
+) => ApprovalMode = createEnumStateGetter(
+  WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  parseCodexApprovalPolicy,
+);
 
 // ============================================================================
 // Sandbox mode
@@ -86,12 +87,12 @@ export const getCodexApprovalPolicy = (state: StateStore): ApprovalMode =>
 
 // As above: the SDK-typed return annotation is the alignment guard between the
 // persisted schema values and the Codex sandbox union.
-export const getCodexSandboxMode = (state: StateStore): SandboxMode =>
+export const getCodexSandboxMode: (workspaceState: StateStore) => SandboxMode =
   createEnumStateGetter(
     WorkspaceStateKey.CODEX_SANDBOX_MODE,
     CODEX_SANDBOX_MODE_DEFAULT,
     parseCodexSandboxMode,
-  )(state);
+  );
 
 /**
  * Build synthetic run metadata for Codex child runs.

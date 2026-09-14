@@ -28,6 +28,7 @@ import {
   nodeProcesses,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
+import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import type { StateStore } from '@platform/interfaces';
 import {
   JsonValueSchema,
@@ -42,16 +43,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { databaseLayer } from './Database';
 import { WorkspaceRoots } from './WorkspaceRoots';
-
-/**
- * Runs one durable state write to completion. The port mirrors
- * `vscode.Memento`, whose `update` is a Promise, so the host entry that opens
- * the store supplies the run. A rejected write is the caller's failure, never
- * a logged best-effort.
- */
-export type RunStateWrite = (
-  write: Effect.Effect<void, Error>,
-) => PromiseLike<void>;
 
 /**
  * One write at a time per key and database, module-wide so two stores over

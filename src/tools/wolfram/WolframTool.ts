@@ -6,7 +6,6 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { hostPort } from '@common/hostPort';
 import { ToolResult, ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import {
@@ -80,13 +79,18 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
   }
 
   const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
-  const result = yield* hostPort(() =>
+  // `runToolWithCheck` answers `false` for a missing `wolframscript` and
+  // reports a failed run in its `ExecResult`; neither path rejects, so the
+  // spawn carries no error channel. The fiber's signal reaches
+  // `executeCommand`, so interrupting the tool kills the process.
+  const result = yield* Effect.promise((signal) =>
     ports.runTool('wolframscript', ['-code', input.code], {
       cwd: ports.cwd,
       showError: false,
       truncate: false,
       timeout: effectiveTimeout,
       channel: 'WolframTool',
+      signal,
     }),
   );
   if (!result) {

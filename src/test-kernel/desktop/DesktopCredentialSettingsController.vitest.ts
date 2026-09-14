@@ -245,7 +245,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       'Remove the OpenAI API key? This cannot be undone.',
     ]);
     expect(deleteSpy).not.toHaveBeenCalled();
-    expect(await secrets.get(secretName)).toBe('sk-test');
+    expect(await Effect.runPromise(secrets.get(secretName))).toBe('sk-test');
     expect(fixture.onCredentialChanged).not.toHaveBeenCalled();
   });
 
@@ -259,7 +259,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       provider: 'google',
     });
 
-    expect(await fixture.secrets.get('apiKey.google')).toBe('sk-google-secret');
+    expect(await Effect.runPromise(fixture.secrets.get('apiKey.google'))).toBe(
+      'sk-google-secret',
+    );
     expect(fixture.infos).toEqual(['Google API key has been set']);
     expect(
       fixture.posted.findLast(
@@ -292,7 +294,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
       provider: 'openai',
     });
-    expect(await secrets.get(secretName)).toBe('replacement');
+    expect(await Effect.runPromise(secrets.get(secretName))).toBe(
+      'replacement',
+    );
 
     await assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
       {
@@ -301,7 +305,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       },
     );
     expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
-    expect(await secrets.get(secretName)).toBeUndefined();
+    expect(await Effect.runPromise(secrets.get(secretName))).toBeUndefined();
     expect(fixture.confirms).toEqual([
       'Remove the OpenAI API key? This cannot be undone.',
     ]);

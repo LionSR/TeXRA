@@ -554,15 +554,13 @@ export class ClaudeAgentTool extends defineTool({
     AgentCliToolFailure,
     Secrets | ToolCall | Runs
   > {
-    const config = yield* agentCliCall(() => getClaudeAgentConfig());
+    const config = yield* agentCliCall(getClaudeAgentConfig);
+    const { workspaceState } = toolCall.roots;
     const permissionMode =
       input.permission_mode ??
-      config.getClaudeAgentPermissionMode(toolCall.roots.workspaceState);
-    const model =
-      input.model ?? config.getClaudeAgentModel(toolCall.roots.workspaceState);
-    const effort =
-      input.effort ??
-      config.getClaudeAgentEffort(toolCall.roots.workspaceState);
+      config.getClaudeAgentPermissionMode(workspaceState);
+    const model = input.model ?? config.getClaudeAgentModel(workspaceState);
+    const effort = input.effort ?? config.getClaudeAgentEffort(workspaceState);
     const sessionId = input.session_id ?? undefined;
     const isFork = input.fork_session === true;
 
@@ -615,7 +613,8 @@ const launchClaudeAgentSession = Effect.fn(
   AgentCliToolFailure,
   Secrets | ToolCall | Runs
 > {
-  const config = yield* agentCliCall(() => getClaudeAgentConfig());
+  const config = yield* agentCliCall(getClaudeAgentConfig);
+  const { roots } = yield* ToolCall;
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   // Mirrors codex behavior so subagents can see the project: when the call
   // is made from inside the workspace, the agent runs in that directory but
@@ -623,7 +622,6 @@ const launchClaudeAgentSession = Effect.fn(
   // sibling files. Out-of-workspace cwds run isolated (matches codex). The
   // claude-agent-sdk's `Options` type names these fields `cwd` /
   // `additionalDirectories`, unlike codex's `workingDirectory`.
-  const { roots } = yield* ToolCall;
   const { workingDirectory, additionalDirectories } =
     buildAgentWorkspaceOptions(roots.workspace, workingDir);
   // The env block reads only the process environment and the `Secrets`

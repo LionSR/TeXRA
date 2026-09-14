@@ -9,7 +9,6 @@ import { afterEach, describe, expect, vi } from 'vitest';
 // Local imports - platform
 import type { ElectronSecrets } from '@desktop/main/platform/electronSecrets';
 import type { JsonStore } from '@platform/defaults/jsonStore';
-import { effectRuntime } from '@platform/processRuntime';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
@@ -55,7 +54,7 @@ describe('desktop platform adapters', () => {
   const loadSecrets = (
     options?: ConstructorParameters<
       ElectronSecretsModule['ElectronSecrets']
-    >[2],
+    >[1],
   ) =>
     Effect.gen(function* () {
       const [secretsModule, JsonStore] = yield* Effect.all(
@@ -69,11 +68,7 @@ describe('desktop platform adapters', () => {
       );
       const root = yield* makeTempDir('texra-electron-secrets-');
       const store = yield* JsonStore.open(join(root, 'secrets.json'));
-      const secrets = new secretsModule.ElectronSecrets(
-        store,
-        effectRuntime(),
-        options,
-      );
+      const secrets = new secretsModule.ElectronSecrets(store, options);
       return { module: secretsModule, store, secrets };
     });
 
@@ -150,25 +145,19 @@ describe('desktop platform adapters', () => {
         expect(getSecretStorageMode()).toBe('encrypted');
         yield* secrets.set(testSecretKey, 'persisted');
 
-        expect(yield* Effect.promise(() => secrets.get(testSecretKey))).toBe(
-          'persisted',
-        );
+        expect(yield* secrets.get(testSecretKey)).toBe('persisted');
         expect(store.snapshot()[testSecretKey]).toMatchObject({
           encrypted: true,
           value: expect.any(String),
         });
 
         process.env[testSecretKey] = 'from-env';
-        expect(yield* Effect.promise(() => secrets.get(testSecretKey))).toBe(
-          'from-env',
-        );
+        expect(yield* secrets.get(testSecretKey)).toBe('from-env');
 
         delete process.env[testSecretKey];
         yield* secrets.delete(testSecretKey);
 
-        expect(
-          yield* Effect.promise(() => secrets.get(testSecretKey)),
-        ).toBeUndefined();
+        expect(yield* secrets.get(testSecretKey)).toBeUndefined();
         expect(store.snapshot()).toEqual({});
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
@@ -279,9 +268,7 @@ describe('desktop platform adapters', () => {
 
       yield* store.set(testSecretKey, { encrypted: false, value: 'plain' });
 
-      expect(
-        yield* Effect.promise(() => secrets.get(testSecretKey)),
-      ).toBeUndefined();
+      expect(yield* secrets.get(testSecretKey)).toBeUndefined();
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

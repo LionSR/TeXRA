@@ -9,7 +9,6 @@ import { execa } from 'execa';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
@@ -29,7 +28,6 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
@@ -42,36 +40,37 @@ const log = createLog('claudeAgent');
 // Model — defaults to Sonnet 5; users can override per-call or via workspace state
 // ============================================================================
 
-export const getClaudeAgentModel = (state: StateStore): ClaudeAgentModel =>
-  createEnumStateGetter(
-    WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-    CLAUDE_AGENT_DEFAULT_MODEL,
-    parseClaudeAgentModel,
-  )(state);
+export const getClaudeAgentModel: (
+  workspaceState: StateStore,
+) => ClaudeAgentModel = createEnumStateGetter(
+  WorkspaceStateKey.CLAUDE_AGENT_MODEL,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  parseClaudeAgentModel,
+);
 
 // ============================================================================
 // Permission mode
 // ============================================================================
 
-export const getClaudeAgentPermissionMode = (
-  state: StateStore,
-): ClaudeAgentPermissionMode =>
-  createEnumStateGetter(
-    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-    parseClaudeAgentPermissionMode,
-  )(state);
+export const getClaudeAgentPermissionMode: (
+  workspaceState: StateStore,
+) => ClaudeAgentPermissionMode = createEnumStateGetter(
+  WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  parseClaudeAgentPermissionMode,
+);
 
 // ============================================================================
 // Effort — adaptive thinking depth hint passed via `effort` SDK option
 // ============================================================================
 
-export const getClaudeAgentEffort = (state: StateStore): ClaudeAgentEffort =>
-  createEnumStateGetter(
-    WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-    CLAUDE_AGENT_DEFAULT_EFFORT,
-    parseClaudeAgentEffort,
-  )(state);
+export const getClaudeAgentEffort: (
+  workspaceState: StateStore,
+) => ClaudeAgentEffort = createEnumStateGetter(
+  WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  parseClaudeAgentEffort,
+);
 
 // ============================================================================
 // Auth env — pulls ANTHROPIC_API_KEY from secrets if set
@@ -241,12 +240,10 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   //    leaves the subprocess with no credential at all, so say so rather than
   //    letting it surface as an opaque "Invalid API key" from Claude Code.
   const secrets = yield* Secrets;
-  const managed = yield* hostPort(() =>
-    lookupApiKey(secrets, 'anthropic'),
-  ).pipe(
-    Effect.catch((error: unknown) => {
+  const managed = yield* lookupApiKey(secrets, 'anthropic').pipe(
+    Effect.catchTag('SecretsFailed', (error) => {
       log.warn(
-        `Failed to read the managed Anthropic API key: ${toErrorMessage(error)}`,
+        `Failed to read the managed Anthropic API key: ${error.message}`,
       );
       return Effect.succeed(undefined);
     }),

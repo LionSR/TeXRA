@@ -532,7 +532,7 @@ describe('desktop tool edit approval', () => {
     'routes LaTeX diff inspection without settling the request',
     () =>
       Effect.gen(function* () {
-        const runLatexdiff = vi.fn(async () => {});
+        const runLatexdiff = vi.fn(() => Effect.void);
         mocks.doMock('@tools/approval/latexPreview', async () => {
           const actual = await vi.importActual<
             typeof import('@tools/approval/latexPreview')

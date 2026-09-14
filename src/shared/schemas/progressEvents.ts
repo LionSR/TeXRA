@@ -60,6 +60,9 @@ export interface ShowAgentConfigBannerPayload {
 /** Request the frontend to show an error message via a host notification. */
 export interface RequestShowErrorPayload {
   message: string;
+  /** Docs page of the refusing request (e.g. 'file-management'); the host
+   *  offers it as a guide link or action beside the message. */
+  docsCommand?: string;
 }
 
 /**

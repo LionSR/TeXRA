@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { runInSession, type SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
 import { storeCredential } from '@common/secrets/storeCredential';
@@ -11,6 +13,7 @@ import { appSignals } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
@@ -45,7 +48,6 @@ import {
   gitHubTokenRejectedMessage,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
-import { StorageFS } from '@utils/files/storageFS';
 import { subscribeDesktopGoalChanges } from './desktopGoalSubscription.js';
 import type { Effect } from 'effect';
 import type {
@@ -131,7 +133,8 @@ export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): DesktopSettingsIpc {
   const { globalState, runtime } = options;
-  const { workspaceState, config } = options.session.roots;
+  const { roots } = options.session;
+  const { workspaceState, config } = roots;
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
   const onError = (error: unknown): void => {
@@ -221,15 +224,25 @@ export function createDesktopSettingsIpc(
     });
   }
 
+  // Memory lives under this project's storage root: the paths the OS opens are
+  // joined onto that root as data, and the folder is created through the
+  // session's storage view.
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
     const resolvedPath = resolveMemoryStoragePath(input.storagePath);
-    await options.ui.openPath(StorageFS.fullPath(resolvedPath));
+    await options.ui.openPath(join(roots.storage, resolvedPath));
   }
 
   async function openMemoryFolder(): Promise<void> {
     const memoryPath = resolveMemoryStoragePath();
-    await StorageFS.ensureDir(memoryPath);
-    await options.ui.openPath(StorageFS.fullPath(memoryPath));
+    await runtime.runPromise(
+      withSessionFs(
+        roots,
+        StorageFs.use((storage) =>
+          storage.makeDirectory(memoryPath, { recursive: true }),
+        ),
+      ),
+    );
+    await options.ui.openPath(join(roots.storage, memoryPath));
   }
 
   async function postGoalList(): Promise<void> {

@@ -1,5 +1,6 @@
-import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+
+import { Cause, Effect, Exit, FileSystem } from 'effect';
 
 import {
   getHelperModelName,
@@ -27,7 +28,6 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
   createExternalLocation,
   pathToLocation,
@@ -57,8 +57,8 @@ interface DesktopProgressFileActionHost {
   /** The process global state the window root holds; the merge run reads the
    *  helper model from it. */
   readonly globalState: StateStore;
-  /** The process runtime the window root holds; the latexdiff programs below
-   *  settle on it. */
+  /** The process runtime the window root holds; the latexdiff programs and
+   *  the file reads and writes below settle on it. */
   readonly runtime: ProcessRuntime;
   startRun(request: ValidatedRunRequest): void;
   listWorkspaceCandidateFiles(): Promise<string[]>;
@@ -108,31 +108,50 @@ export class DesktopProgressFileActions {
     this.host.startRun(validation.request);
   }
 
+  /**
+   * A location's absolute path is where its file is, inside the project or
+   * not, so every read and write here goes through the process filesystem at
+   * that path, settled on the window's runtime.
+   */
   async acceptEditedFile(
     baseFile: string,
     editedFile: string,
   ): Promise<boolean> {
+    const { runtime } = this.host;
+    const fs = await runtime.runPromise(Effect.service(FileSystem.FileSystem));
     return acceptEditedFileReplace(
       pathToLocation(baseFile),
       pathToLocation(editedFile),
       {
-        exists: (location) => AbsoluteFS.exists(location.absolutePath),
-        readFile: (location) => readFile(location.absolutePath, 'utf8'),
+        exists: (location) =>
+          runtime.runPromise(fs.exists(location.absolutePath)),
+        readFile: (location) =>
+          runtime.runPromise(fs.readFileString(location.absolutePath)),
         writeFile: (location, content) =>
-          writeFile(location.absolutePath, content, 'utf8'),
+          runtime.runPromise(
+            fs.writeFileString(location.absolutePath, content),
+          ),
         confirm: (message) => this.ui.confirmAcceptFile(message),
         emitWritten: (absolutePath) =>
           appSignals.emit('workspaceFilesWritten', {
             absolutePaths: [absolutePath],
           }),
         showInfo: (message) => this.ui.showInfoMessage(message),
-        deleteFile: async (location) => {
-          try {
-            await AbsoluteFS.delete(location.absolutePath);
-          } catch {
-            // Non-fatal: diff file may not exist or may be locked.
-          }
-        },
+        // Diff-file cleanup is a best-effort side effect of accepting a file:
+        // a file already gone is the post-condition, and any other failure (a
+        // locked file) is reported without failing the accept.
+        deleteFile: (location) =>
+          runtime.runPromise(
+            fs.remove(location.absolutePath, { force: true }).pipe(
+              Effect.catchTag('PlatformError', (error) =>
+                Effect.sync(() => {
+                  console.warn(
+                    `Could not remove the stale diff file ${location.absolutePath}: ${error.message}`,
+                  );
+                }),
+              ),
+            ),
+          ),
       },
     );
   }
@@ -199,11 +218,13 @@ export class DesktopProgressFileActions {
   }
 
   async findAndOpenLabel(label: string): Promise<boolean> {
+    const { runtime } = this.host;
     const candidates = new Set(await this.host.listWorkspaceCandidateFiles());
+    const fs = await runtime.runPromise(Effect.service(FileSystem.FileSystem));
     return openFirstLabelMatch(
       label,
       candidates,
-      (file) => readFile(file, 'utf8'),
+      (file) => runtime.runPromise(fs.readFileString(file)),
       (file) => this.ui.openPath(file),
     );
   }
@@ -221,37 +242,42 @@ export class DesktopProgressFileActions {
     // with the VS Code command and the CLI, instead of re-implementing it here.
     // Desktop has no per-operation progress UI.
     const progress: DiffProgressReporter = { report: () => undefined };
-    try {
-      const { outcome } = await this.host.runtime.runPromise(
-        runLatexdiffForRun({
-          filesystem: nodeFilesystem,
-          agent: scan?.agent ?? '',
-          model: scan?.model ?? '',
-          inputFile: scan?.inputFile ?? '',
-          outputFiles: scan?.outputFiles,
-          runId: runContext.runId ?? null,
-          outputsByRound: hasOutputs ? runContext.outputsByRound : null,
-          mathMarkup: DEFAULT_MATH_MARKUP,
-          generateBetweenRoundDiffs: true,
-          runDiscovery: createLatexRunDiscovery(this.host.session),
-          latexdiff: {
-            channel: DESKTOP_LATEXDIFF_CHANNEL,
-            service: new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL),
-          },
-          progress,
-        }),
-      );
-      return outcome;
-    } catch (error) {
-      // The core can throw (e.g. no workspace path). Don't abort the whole
-      // action — return undefined so the caller falls back to single-file —
-      // but log the cause so a systematic round-aware failure isn't silently
-      // downgraded to single-file diffs with no trace.
-      console.error(
-        `Round-aware LaTeX diff failed; falling back to single-file diff: ${toErrorMessage(error)}`,
-      );
-      return undefined;
+    const settled = await this.host.runtime.runPromiseExit(
+      runLatexdiffForRun({
+        filesystem: nodeFilesystem,
+        agent: scan?.agent ?? '',
+        model: scan?.model ?? '',
+        inputFile: scan?.inputFile ?? '',
+        outputFiles: scan?.outputFiles,
+        runId: runContext.runId ?? null,
+        outputsByRound: hasOutputs ? runContext.outputsByRound : null,
+        mathMarkup: DEFAULT_MATH_MARKUP,
+        generateBetweenRoundDiffs: true,
+        runDiscovery: createLatexRunDiscovery(this.host.session),
+        latexdiff: {
+          channel: DESKTOP_LATEXDIFF_CHANNEL,
+          service: new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL),
+        },
+        progress,
+      }),
+    );
+    if (Exit.isSuccess(settled)) return settled.value.outcome;
+    // An interrupt (the runtime disposing at shutdown) is not a diff failure
+    // to fall back from: rethrow it so the request settles as interrupted
+    // instead of scheduling more diff work on a closing window.
+    if (Cause.hasInterruptsOnly(settled.cause)) {
+      throw Cause.squash(settled.cause);
     }
+    // The core can fail (e.g. no workspace path). Don't abort the whole
+    // action — return undefined so the caller falls back to single-file —
+    // but log the cause so a systematic round-aware failure isn't silently
+    // downgraded to single-file diffs with no trace.
+    console.error(
+      `Round-aware LaTeX diff failed; falling back to single-file diff: ${toErrorMessage(
+        Cause.squash(settled.cause),
+      )}`,
+    );
+    return undefined;
   }
 
   /**

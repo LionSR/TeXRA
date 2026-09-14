@@ -4,10 +4,7 @@ import { Effect } from 'effect';
 
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import {
-  openAppStateStore,
-  type RunStateWrite,
-} from '@controllers/session/appStateStore';
+import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -24,7 +21,7 @@ import type {
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { JsonStore } from '@platform/defaults/jsonStore';
+import { JsonStore, type RunStateWrite } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
@@ -141,8 +138,7 @@ export async function initializeElectronPlatform(
   });
   // The Promise face of `StateStore.update`, run on this process's runtime:
   // the store itself is below the boundary and never runs an Effect.
-  const runWrite = (write: Effect.Effect<void, Error>) =>
-    runtime.runPromise(write);
+  const runWrite: RunStateWrite = (write) => runtime.runPromise(write);
   const { globalStateStore, workspaceStateStore, configStores, secretsStore } =
     await runtime.runPromise(
       Effect.gen(function* () {
@@ -161,7 +157,7 @@ export async function initializeElectronPlatform(
                 storage,
                 undefined,
                 (message) => console.warn(`[desktop] ${message}`),
-                runtime,
+                runWrite,
               ),
               JsonStore.open(join(userDataPath, 'secrets.json')),
             ],
@@ -187,7 +183,7 @@ export async function initializeElectronPlatform(
       get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
     },
   });
-  const secrets = new ElectronSecrets(secretsStore, runtime, {
+  const secrets = new ElectronSecrets(secretsStore, {
     showWarningMessage: showDesktopWarningDialog,
   });
   initPlatform(
