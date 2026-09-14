@@ -1165,9 +1165,11 @@ const SCENARIOS = [
     name: 'config-category-back-responsive',
     env: { HARNESS_ENTRIES: '4' },
     // Reuses the shared Select instance across category -> list -> category.
-    // `/config` leads with the two action rows ("API keys", "GitHub token")
-    // before the setting categories, so "Git and worktrees" is the seventh
-    // row; the picker offers no hotkeys, only ↑/↓.
+    // `/config` leads with three action rows ("Agents", "API keys", "GitHub
+    // token") before the setting categories, and "Git and worktrees" is the
+    // fourth category, so it is the seventh row (index 6). The keystrokes walk
+    // the list with ↑/↓ so the scenario does not depend on which hotkey a row
+    // happens to get.
     keys: [
       '/config',
       '\r',
