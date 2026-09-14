@@ -668,6 +668,8 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
   }
   parameters.max_tokens = turn.controls.maxOutputTokens;
   if (effort !== null) parameters.reasoning_effort = effort;
+  if (turn.tools.length > 0)
+    parameters.parallel_tool_calls = turn.controls.parallelToolCalls;
   if (turn.protocol === 'deepseek-chat') {
     if (thinking.mode === 'enabled' && turn.controls.temperature !== null) {
       return yield* new ModelError({
@@ -828,12 +830,7 @@ export function openaiChatModel(
             parsed.data.effort !== undefined)) ||
         ((config.protocol === 'openai-chat' ||
           config.protocol === 'xai-chat') &&
-          parsed.data.thinking !== undefined) ||
-        (config.protocol !== 'openai-chat' &&
-          config.protocol !== 'xai-chat' &&
-          config.protocol !== 'dashscope-chat' &&
-          config.protocol !== 'minimax-chat' &&
-          parsed.data.parallelToolCalls !== undefined)
+          parsed.data.thinking !== undefined)
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
@@ -965,6 +962,8 @@ export function openaiChatModel(
           effort,
           temperature,
           maxOutputTokens,
+          parallelToolCalls:
+            parsed.data.parallelToolCalls ?? config.defaults.parallelToolCalls,
           toolChoice,
         };
       }
