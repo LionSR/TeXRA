@@ -45,10 +45,18 @@ const BLOCKED_HOSTNAMES = new Set(['localhost']);
  * range, or an IPv4-mapped IPv6 literal like `::ffff:127.0.0.1` slipping past
  * an IPv6-only prefix check) — `ipaddr.process` normalizes that mapped form to
  * plain IPv4 before classification, so it is covered too.
+ *
+ * `hostname` is a WHATWG `URL#hostname`, which brackets an IPv6 literal
+ * (`[::1]`); `ipaddr.isValid` rejects the bracketed form outright, so an
+ * unstripped hostname would fail open on every IPv6 target.
  */
-export function isRestrictedIp(hostname: string): boolean {
-  if (!ipaddr.isValid(hostname)) return false;
-  return ipaddr.process(hostname).range() !== 'unicast';
+function isRestrictedIp(hostname: string): boolean {
+  const candidate =
+    hostname.startsWith('[') && hostname.endsWith(']')
+      ? hostname.slice(1, -1)
+      : hostname;
+  if (!ipaddr.isValid(candidate)) return false;
+  return ipaddr.process(candidate).range() !== 'unicast';
 }
 
 /** Fetch `url` with transient retries, as text plus its content type. */

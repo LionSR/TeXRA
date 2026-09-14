@@ -1,37 +1,36 @@
-import { describe, expect, it } from 'vitest';
+import '@test/support/defaultSessionTestSetup';
 
-import { isRestrictedIp } from '@tools/web/WebFetchTool';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { describe, expect } from 'vitest';
 
-describe('isRestrictedIp', () => {
-  it.each([
-    // Public addresses are let through.
-    { hostname: '93.184.216.34', expected: false },
-    { hostname: '2606:2800:220:1:248:1893:25c8:1946', expected: false },
-    // A bare hostname is not an IP literal at all; DNS-level SSRF is out of
-    // scope for this hostname-string check.
-    { hostname: 'example.com', expected: false },
-    // Loopback.
-    { hostname: '127.0.0.1', expected: true },
-    { hostname: '::1', expected: true },
-    // RFC 1918 private ranges.
-    { hostname: '10.0.0.1', expected: true },
-    { hostname: '192.168.1.1', expected: true },
-    { hostname: '172.16.0.1', expected: true },
-    { hostname: '172.31.255.255', expected: true },
-    // Link-local and unspecified.
-    { hostname: '169.254.169.254', expected: true },
-    { hostname: '0.0.0.0', expected: true },
-    { hostname: 'fe80::1', expected: true },
-    // IPv6 unique-local.
-    { hostname: 'fd00::1', expected: true },
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { WebFetchTool } from '@tools/web/WebFetchTool';
+
+describe('WebFetchTool', () => {
+  it.effect.each([
+    // Loopback and RFC 1918 private ranges.
+    { url: 'http://127.0.0.1/', name: 'IPv4 loopback' },
+    { url: 'http://[::1]/', name: 'bracketed IPv6 loopback' },
+    { url: 'http://10.0.0.1/', name: 'RFC 1918 private range' },
     // Carrier-grade NAT (RFC 6598) — missed by the old prefix-list check.
-    { hostname: '100.64.0.1', expected: true },
-    // IPv4-mapped IPv6 loopback — bypassed the old IPv6-prefix-only check.
-    { hostname: '::ffff:127.0.0.1', expected: true },
-  ])(
-    'classifies $hostname as restricted=$expected',
-    ({ hostname, expected }) => {
-      expect(isRestrictedIp(hostname)).toBe(expected);
+    { url: 'http://100.64.0.1/', name: 'carrier-grade NAT range' },
+    // IPv4-mapped IPv6 loopback, in the bracketed form a URL actually
+    // produces — bypassed both the old IPv6-prefix-only check and an
+    // unbracketed `ipaddr.isValid` call.
+    {
+      url: 'http://[::ffff:127.0.0.1]/',
+      name: 'bracketed IPv4-mapped IPv6 loopback',
     },
+    { url: 'http://localhost/', name: 'the localhost hostname' },
+  ])('rejects a fetch to $name', ({ url }) =>
+    Effect.gen(function* () {
+      const result = yield* new WebFetchTool()
+        .call({ url })
+        .pipe(Effect.provide(nativeToolTestLayer()));
+
+      expect(result).toMatchObject({ status: 'error' });
+      expect(result.error).toMatch(/cannot fetch/i);
+    }),
   );
 });

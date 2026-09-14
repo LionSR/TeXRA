@@ -1238,12 +1238,6 @@
       "name": "isTransientHttpError"
     },
     {
-      "file": "src/tools/web/WebFetchTool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isRestrictedIp"
-    },
-    {
       "file": "src/tools/wolfram/WolframTool.ts",
       "category": "production-dead",
       "kind": "exports",
