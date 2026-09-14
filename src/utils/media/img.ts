@@ -217,7 +217,7 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const outputPath = path.join(tempDir, `page-${pageNum}.png`);
-  // Density is an input option; `^` fills 1024×1024 while keeping aspect.
+  // Density is an input option; `>` fits the page inside 1024×1024.
   const convertArgs = [
     tool,
     ...(tool === 'gm' ? ['convert'] : []),
@@ -227,7 +227,7 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
     '-units',
     'PixelsPerInch',
     '-resize',
-    `${PDF_RASTER_MAX_SIZE[0]}x${PDF_RASTER_MAX_SIZE[1]}^`,
+    `${PDF_RASTER_MAX_SIZE[0]}x${PDF_RASTER_MAX_SIZE[1]}>`,
     outputPath,
   ];
   const result = yield* Effect.tryPromise({
