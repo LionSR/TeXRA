@@ -9,7 +9,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
@@ -339,21 +339,6 @@ function launchReflectionRun(
 }
 
 /**
- * The one rule both resume families share: a resumed run's parent edge is
- * the fold's (`run.start.parent`, severed by a later `run.detach`), read
- * cold so a resume racing the live fold's first replay still sees it. A
- * resume never takes the caller's word, so a resumed child stays a child
- * whether it is resumed through the tool-use arm or a host's workflow
- * launcher.
- */
-const persistedParentRunId = Effect.fn('persistedParentRunId')(function* (
-  session: SessionHandle,
-  runId: RunId,
-) {
-  return (yield* session.readView([])).runs.get(runId)?.parentId ?? undefined;
-});
-
-/**
  * The lifecycle options every entry point that drives one run passes. The
  * parent edge is an argument because resume reads it from the persisted
  * `run.start` rather than from the caller's options.
@@ -472,8 +457,9 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   launchSignal?: AbortSignal;
   /**
    * The run's `run.start` was committed by an earlier activation (a resume).
-   * That row is also where this run's parent edge comes from: a resumed run
-   * takes its lineage from the ledger, never from `parentRunId`.
+   * That row is also where this run's parent edge comes from: `runAgent`
+   * reads it onto the run's handle before this launch prepares, and a
+   * resumed run takes its lineage from there, never from `parentRunId`.
    */
   resumed?: boolean;
   /**
@@ -542,13 +528,26 @@ export function executeAgent(
     // Read here, on the Effect side of the lifecycle's Promise seam: the
     // flow drivers below resolve the run's tools from it.
     const toolInjections = yield* ToolInjections;
-    // A resumed run's parentage is the persisted `run.start`, never the
-    // caller's word: no resume caller can name one (`RunAgentOptions` has no
-    // parent field), so reading the caller's option here would relaunch a
-    // resumed child as a root run, forcing the progress view open, toasting
-    // its failure, and shaping its result as a root's.
+    // A resumed run's parentage is its handle's, never the caller's word: no
+    // resume caller can name one (`RunAgentOptions` has no parent field), so
+    // reading the caller's option here would relaunch a resumed child as a
+    // root run, forcing the progress view open, toasting its failure, and
+    // shaping its result as a root's. `runAgent` put the persisted edge on
+    // that handle before this launch began preparing, which is what lets the
+    // parent's stop reach the child meanwhile: a stop that detaches severs
+    // this very handle, and the run then legitimately continues as a root.
+    const resumedHandle = options.resumed
+      ? options.session.runs.getHandle(runId)
+      : undefined;
+    if (options.resumed && !resumedHandle) {
+      return yield* Effect.fail(
+        new Error(
+          `Cannot resume run ${runId}: no registered handle carries its lineage.`,
+        ),
+      );
+    }
     const parentRunId = options.resumed
-      ? yield* persistedParentRunId(options.session, runId)
+      ? resumedHandle?.deliveryTarget
       : options.parentRunId;
     const hasParent = parentRunId !== undefined;
     const ctx = yield* buildAgentLaunchContext({
@@ -645,7 +644,7 @@ export function executeAgent(
                     }
                     return yield* launchReflectionRun(
                       ctx,
-                      { ...options, setting },
+                      { ...options, parentRunId, setting },
                       runInScope,
                     );
                   }),

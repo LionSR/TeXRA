@@ -81,6 +81,10 @@ import { fakeProcessServices } from '@test/support/setupPlatform';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const RUN_ID = 'a9e70a9e7001' as RunId;
+const PARENT_RUN_ID = 'a9e70a9e7002' as RunId;
+// The persisted lineage a resume reads before its handle registers. Empty
+// unless a case seeds this run's `run.start` parent.
+const persistedRuns = new Map<RunId, { readonly parentId: RunId }>();
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
   agentCategory: 'toolUse',
@@ -112,6 +116,7 @@ const SESSION = {
     throughDetach: () => Effect.void,
   },
   flushArtifacts,
+  readView: () => Effect.succeed({ runs: persistedRuns }),
   acquireClaims: () => Effect.succeed(Effect.void),
   graph: { releaseClaims: () => Effect.void },
   releaseClaims: SessionHandle.prototype.releaseClaims,
@@ -150,6 +155,7 @@ describe('runAgent run ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     trackedHandle = undefined;
+    persistedRuns.clear();
     mocks.registerRun.mockResolvedValue(undefined);
     mocks.acquireResumedRunLease.mockResolvedValue('acquired');
     mocks.prepareAgentDefinition.mockImplementation(({ config }) => ({
@@ -215,6 +221,33 @@ describe('runAgent run ownership', () => {
           message: `Run not found: ${RUN_ID}`,
         });
         expect(getEventListeners(signal, 'abort')).toEqual([]);
+      }),
+  );
+
+  it.effect(
+    'admits a resumed child under the parent its `run.start` names',
+    () =>
+      Effect.gen(function* () {
+        persistedRuns.set(RUN_ID, { parentId: PARENT_RUN_ID });
+        // What the registry does to a child of a parent whose stop has begun
+        // (`assertAdmitsChild`): a resume is refused where any other child
+        // launch is, instead of installing its parent after that stop ended.
+        const refusal = new Error(
+          `Cannot launch child run ${RUN_ID} under run ${PARENT_RUN_ID} while that run is stopping.`,
+        );
+        let admittedParent: RunId | null | undefined;
+        trackRun.mockImplementationOnce((handle) => {
+          admittedParent = handle.parent;
+          throw refusal;
+        });
+
+        const exit = yield* Effect.exit(launch());
+
+        expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toBe(refusal);
+        // The edge is on the handle before launch preparation begins, so the
+        // parent's stop reaches this child instead of missing it.
+        expect(admittedParent).toBe(PARENT_RUN_ID);
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
       }),
   );
 

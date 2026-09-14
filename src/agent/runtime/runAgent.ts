@@ -5,6 +5,7 @@ import {
   acquireResumedRunOwnership,
   finalizeRun,
 } from '@agent/storage/runLifecycle';
+import { persistedParentRunId } from '@agent/storage/runRecords';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AppState } from '@platform/interfaces';
@@ -115,6 +116,15 @@ export const runAgent = Effect.fn('runAgent')(function* (
     : yield* getRunRecords(runSession, runId).readRunEnd();
   if (!shouldRegister && !(yield* getRunRecords(runSession, runId).exists()))
     return yield* Effect.fail(new Error(`Run not found: ${runId}`));
+  // A resumed run's lineage, read before its handle is registered below: from
+  // that moment a stop of the parent sees this child, so it cascades into the
+  // launch (the handle's interrupt aborts launch preparation) or detaches it,
+  // and a parent whose stop has already begun refuses the admission outright.
+  // The launch reads the edge back off the handle instead of deriving it a
+  // second time, so nothing can install a parent after its stop finished.
+  const resumedParentRunId = shouldRegister
+    ? undefined
+    : yield* persistedParentRunId(runSession, runId);
   const launchAbortController = new AbortController();
   const detachLaunchAbortLink = linkAbortSignals(
     [executeAgentOptions.launchSignal],
@@ -129,7 +139,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
           identity: { kind: 'agent', agent: request.config.agent },
           category: request.config.agentCategory,
         },
-        null,
+        resumedParentRunId ?? null,
       );
   const detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
     interrupt: () => launchAbortController.abort(),
