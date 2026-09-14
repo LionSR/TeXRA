@@ -36,14 +36,18 @@ function createSecrets(
       async getStored(key) {
         return store.get(key);
       },
-      async set(key, value) {
-        store.set(key, value);
+      set(key, value) {
+        return Effect.sync(() => {
+          store.set(key, value);
+        });
       },
-      async delete(key) {
-        store.delete(key);
+      delete(key) {
+        return Effect.sync(() => {
+          store.delete(key);
+        });
       },
-      async listStoredKeys() {
-        return [...store.keys()];
+      listStoredKeys() {
+        return Effect.sync(() => [...store.keys()]);
       },
       getEnv(name) {
         return env[name];
@@ -200,7 +204,9 @@ describe('API provider key caches', () => {
     };
 
     const staleLookup = lookupApiKeyOrigin(secrets, 'openai');
-    await secrets.set(apiKeySecretName('openai'), 'sk-after-invalidate');
+    await Effect.runPromise(
+      secrets.set(apiKeySecretName('openai'), 'sk-after-invalidate'),
+    );
     invalidateApiKeyCache();
     firstLookup.resolve(undefined);
 

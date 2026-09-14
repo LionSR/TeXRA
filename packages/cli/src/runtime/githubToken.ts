@@ -1,5 +1,7 @@
+import { Effect } from 'effect';
+
 import { storeCredential } from '@common/secrets/storeCredential';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
@@ -13,11 +15,15 @@ export function loadGitHubTokenStatus(
   return resolveGitHubTokenSource(secrets);
 }
 
-/** Persist a GitHub PAT without exposing it outside the credential store. */
+/**
+ * Persist a GitHub PAT without exposing it outside the credential store. The
+ * credential store is Effect-typed, so this is a program the terminal surface
+ * settles on the process runtime it already holds.
+ */
 export function saveGitHubToken(
   secrets: PlatformSecrets,
   token: string,
-): Promise<void> {
+): Effect.Effect<void, Error | SecretsFailed> {
   return storeCredential(secrets, {
     secretName: GITHUB_TOKEN_STORAGE_KEY,
     value: token,
@@ -25,6 +31,8 @@ export function saveGitHubToken(
   });
 }
 
-export function removeGitHubToken(secrets: PlatformSecrets): Promise<void> {
+export function removeGitHubToken(
+  secrets: PlatformSecrets,
+): Effect.Effect<void, SecretsFailed> {
   return secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
 }

@@ -5,9 +5,15 @@
  * override persisted secrets, matching ElectronSecrets and CliSecrets so a
  * key exported in the environment behaves identically in every host.
  */
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { secretsGet, type PlatformSecrets } from '@platform/secrets';
+import {
+  SecretsFailed,
+  secretsGet,
+  type PlatformSecrets,
+} from '@platform/secrets';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export class VscodeSecrets implements PlatformSecrets {
   private readonly storage: vscode.SecretStorage;
@@ -24,23 +30,55 @@ export class VscodeSecrets implements PlatformSecrets {
     return this.storage.get(key);
   }
 
-  async set(key: string, value: string): Promise<void> {
-    await this.storage.store(key, value);
+  /**
+   * `SecretStorage.store` is the commit, so the whole call is the commit
+   * region: host-controller study Q2 rules that it survives cancellation.
+   */
+  set(key: string, value: string) {
+    return Effect.uninterruptible(
+      Effect.tryPromise({
+        try: () => Promise.resolve(this.storage.store(key, value)),
+        catch: (cause) =>
+          new SecretsFailed({
+            reason: 'io',
+            operation: 'set',
+            key,
+            message: `VS Code could not store the secret "${key}": ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      }),
+    );
   }
 
-  async delete(key: string): Promise<void> {
-    await this.storage.delete(key);
+  /** The commit region of a removal, uninterruptible for the same reason. */
+  delete(key: string) {
+    return Effect.uninterruptible(
+      Effect.tryPromise({
+        try: () => Promise.resolve(this.storage.delete(key)),
+        catch: (cause) =>
+          new SecretsFailed({
+            reason: 'io',
+            operation: 'delete',
+            key,
+            message: `VS Code could not remove the secret "${key}": ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      }),
+    );
   }
 
-  async listStoredKeys(): Promise<readonly string[]> {
-    try {
-      return await this.storage.keys();
-    } catch (error) {
-      throw new Error(
-        'SecretStorage key enumeration is not supported by this host. Stored secrets may still exist, but TeXRA cannot audit their names here.',
-        { cause: error },
-      );
-    }
+  listStoredKeys() {
+    return Effect.tryPromise({
+      try: () => Promise.resolve(this.storage.keys()),
+      catch: (cause) =>
+        new SecretsFailed({
+          reason: 'enumeration-unsupported',
+          operation: 'listStoredKeys',
+          message:
+            'SecretStorage key enumeration is not supported by this host. Stored secrets may still exist, but TeXRA cannot audit their names here.',
+          cause,
+        }),
+    });
   }
 
   getEnv(name: string): string | undefined {

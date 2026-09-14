@@ -1586,10 +1586,12 @@ if (SHOW_BASH_APPROVAL) {
 }
 
 if (SHOW_RETRY_APPROVAL) {
-  await saveProviderApiKey(
-    HARNESS_PLATFORM_SERVICES.secrets,
-    'openai',
-    'sk-harness-openai-key',
+  await effectRuntime().runPromise(
+    saveProviderApiKey(
+      HARNESS_PLATFORM_SERVICES.secrets,
+      'openai',
+      'sk-harness-openai-key',
+    ),
   );
   // The credential the retry lands on is the decision's own field: the TUI
   // host prepares the card and performs the switch off the pending fact.

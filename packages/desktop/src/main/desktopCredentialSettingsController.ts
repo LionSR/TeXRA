@@ -208,9 +208,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       signIn: () => options.auth.signIn(),
       signOut: () => options.auth.signOut(),
       setProviderKey: (message) =>
-        this.profileKeyController.setProviderKey(message.provider),
+        options.runtime.runPromise(
+          this.profileKeyController.setProviderKey(message.provider),
+        ),
       removeProviderKey: (message) =>
-        this.profileKeyController.removeProviderKey(message.provider),
+        options.runtime.runPromise(
+          this.profileKeyController.removeProviderKey(message.provider),
+        ),
       openProviderKeyUrl: (message) =>
         this.profileKeyController.openProviderKeyUrl(message.provider),
       openExternalUrl: (message) =>

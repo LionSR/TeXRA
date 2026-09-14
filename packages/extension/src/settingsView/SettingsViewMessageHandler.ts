@@ -176,7 +176,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.viewName,
       this.runtime,
     );
-    this.githubHandlers = new GitHubSubscriptionHandlers(ctx, secrets);
+    this.githubHandlers = new GitHubSubscriptionHandlers(
+      ctx,
+      secrets,
+      this.runtime,
+    );
     this.chatgptHandlers = new SubscriptionHandlers(
       'chatgpt',
       async () => ({
@@ -279,9 +283,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       signOut: () =>
         safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
       setProviderKey: (message) =>
-        this.profileKeyController.setProviderKey(message.provider),
+        this.runtime.runPromise(
+          this.profileKeyController.setProviderKey(message.provider),
+        ),
       removeProviderKey: (message) =>
-        this.profileKeyController.removeProviderKey(message.provider),
+        this.runtime.runPromise(
+          this.profileKeyController.removeProviderKey(message.provider),
+        ),
       openProviderKeyUrl: (message) =>
         this.profileKeyController.openProviderKeyUrl(message.provider),
       openExternalUrl: (message) => this.openExternalUrl(message.url),

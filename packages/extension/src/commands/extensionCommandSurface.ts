@@ -112,13 +112,14 @@ export function createExtensionCommandActions(
     extractTikzFigures: latexExtractTikzFigures,
     compileTikzFigures: latexCompileTikzFigures,
     cloneOverleafProject: () => gitCloneOverleafProject(secrets, runtime),
-    removeApiKey: () => apiRemoveApiKey(secrets, refreshAfterProviderKeyChange),
+    removeApiKey: () =>
+      apiRemoveApiKey(secrets, refreshAfterProviderKeyChange, runtime),
     showImportOptions: sysShowImportOptions,
     toggleView: () => progressViewProvider.toggleDrawer(),
     showProgressView: (inPlace) =>
       progressViewProvider.showProgressView({ inPlace }),
     setApiKey: (provider) =>
-      apiSetApiKey(secrets, refreshAfterProviderKeyChange, provider),
+      apiSetApiKey(secrets, refreshAfterProviderKeyChange, runtime, provider),
     // The wizard is an Effect program; the host entry's runtime, threaded in
     // from `activate`, settles it here at the command boundary.
     createAgentWithAI: (category) =>

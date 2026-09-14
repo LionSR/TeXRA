@@ -51,7 +51,8 @@ function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
    * slot and a failed store both answer `undefined`, which every caller
    * resolves against the memory mirror. This is `@supabase/auth-js`'s own
    * Promise callback surface — a foreign-runtime boundary, not a temporary
-   * adapter — so its catch stays.
+   * adapter — so its catch stays. The store's writes are Effect-typed, so
+   * each settles on the auth subsystem's installed run edge.
    */
   const onFlowState = async <T>(
     action: string,
@@ -80,11 +81,15 @@ function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
       null,
     setItem: async (key, value) => {
       memory.set(key, value);
-      await onFlowState('store', key, () => secrets.set(key, value));
+      await onFlowState('store', key, () =>
+        runAuthProgram(secrets.set(key, value)),
+      );
     },
     removeItem: async (key) => {
       memory.delete(key);
-      await onFlowState('clear', key, () => secrets.delete(key));
+      await onFlowState('clear', key, () =>
+        runAuthProgram(secrets.delete(key)),
+      );
     },
   };
 }

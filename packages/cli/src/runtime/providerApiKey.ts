@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { storeCredential } from '@common/secrets/storeCredential';
 import {
   API_PROVIDERS,
@@ -7,7 +9,7 @@ import {
   type ApiKeyStatus,
   type ApiProvider,
 } from '@model/apiProviders';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { providerDisplayName } from '@shared/constants/providers';
 
 export function loadProviderApiKeyStatuses(
@@ -16,19 +18,25 @@ export function loadProviderApiKeyStatuses(
   return loadApiKeyStatusMap(secrets, API_PROVIDERS);
 }
 
-/** Persist a provider key without exposing it outside the credential store. */
-export async function saveProviderApiKey(
+/**
+ * Persist a provider key without exposing it outside the credential store.
+ * A program, like the store it writes to; the terminal surface that calls it
+ * settles it on the process runtime.
+ */
+export function saveProviderApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
   key: string,
-): Promise<void> {
+): Effect.Effect<void, Error | SecretsFailed> {
   // Write before invalidating so a concurrent lookup cannot restore a stale
   // missing-key cache entry after the credential has been saved.
-  await storeCredential(secrets, {
-    secretName: apiKeySecretName(provider),
-    value: key,
-    kind: 'provider',
-    label: providerDisplayName(provider),
-  });
-  invalidateApiKeyCache();
+  return Effect.tap(
+    storeCredential(secrets, {
+      secretName: apiKeySecretName(provider),
+      value: key,
+      kind: 'provider',
+      label: providerDisplayName(provider),
+    }),
+    () => Effect.sync(invalidateApiKeyCache),
+  );
 }

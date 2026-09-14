@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
@@ -41,7 +42,7 @@ async function resetKeychainState(): Promise<void> {
 /** A store whose reads are driven by the test, standing in for a JsonStore. */
 function stubStore(store: {
   get<T>(key: string): T | undefined;
-  set?(key: string, value: unknown): Promise<void>;
+  set?(key: string, value: unknown): Effect.Effect<void>;
 }): JsonStore {
   return store as unknown as JsonStore;
 }
@@ -193,14 +194,18 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
         get<T>(_key: string): T | undefined {
           return undefined;
         },
-        async set(key: string, value: unknown): Promise<void> {
-          writes.push([key, value]);
+        set(key: string, value: unknown): Effect.Effect<void> {
+          return Effect.sync(() => {
+            writes.push([key, value]);
+          });
         },
       }),
       effectRuntime(),
     );
 
-    await expect(secrets.set('a', 'b')).resolves.toBeUndefined();
+    await expect(
+      Effect.runPromise(secrets.set('a', 'b')),
+    ).resolves.toBeUndefined();
     expect(writes).toEqual([]);
     expect(encryptSpy).not.toHaveBeenCalled();
   });

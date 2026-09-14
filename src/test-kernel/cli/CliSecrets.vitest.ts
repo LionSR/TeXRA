@@ -1,6 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CliSecrets, cliSecretsPath } from '@cli/runtime/cliSecrets';
@@ -28,7 +29,9 @@ describe('CLI secrets', () => {
   it('stores secrets under the configured storage root', async () => {
     await withSecretsRoot(async ({ storageRoot, secretsPath }) => {
       const secrets = new CliSecrets(effectRuntime(), secretsPath);
-      await secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
+      await Effect.runPromise(
+        secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key'),
+      );
 
       expect(await secrets.get('TEXRA_CLI_SECRETS_TEST_KEY')).toBe('test-key');
       await expect(fs.readFile(secretsPath, 'utf8')).resolves.toContain(
@@ -41,13 +44,15 @@ describe('CLI secrets', () => {
   it('aborts a write instead of wiping the file when the read fails for a reason other than a missing file', async () => {
     await withSecretsRoot(async ({ secretsPath }) => {
       const secrets = new CliSecrets(effectRuntime(), secretsPath);
-      await secrets.set('EXISTING_KEY', 'existing-value');
+      await Effect.runPromise(secrets.set('EXISTING_KEY', 'existing-value'));
 
       // Corrupt the on-disk file to simulate a non-ENOENT read failure
       // (e.g. corrupt JSON, or an EACCES/EMFILE on the real fs.readFile).
       await fs.writeFile(secretsPath, '{ not valid json', 'utf8');
 
-      await expect(secrets.set('NEW_KEY', 'new-value')).rejects.toThrow();
+      await expect(
+        Effect.runPromise(secrets.set('NEW_KEY', 'new-value')),
+      ).rejects.toThrow();
 
       // The mutation must have aborted rather than overwriting the file
       // with a fresh `{}` merged with just the new key.
@@ -60,7 +65,7 @@ describe('CLI secrets', () => {
         '{"EXISTING_KEY":"existing-value"}\n',
         'utf8',
       );
-      await secrets.set('ANOTHER_KEY', 'another-value');
+      await Effect.runPromise(secrets.set('ANOTHER_KEY', 'another-value'));
       expect(await secrets.get('EXISTING_KEY')).toBe('existing-value');
       expect(await secrets.get('ANOTHER_KEY')).toBe('another-value');
     });
@@ -75,10 +80,10 @@ describe('CLI secrets', () => {
       // its own JsonStore off the same on-disk snapshot and the later
       // flush silently drops the other's key.
       await Promise.all([
-        secrets.set('KEY_A', 'value-a'),
-        secrets.set('KEY_B', 'value-b'),
-        secrets.set('ORDERED_KEY', 'old-value'),
-        secrets.set('ORDERED_KEY', 'new-value'),
+        Effect.runPromise(secrets.set('KEY_A', 'value-a')),
+        Effect.runPromise(secrets.set('KEY_B', 'value-b')),
+        Effect.runPromise(secrets.set('ORDERED_KEY', 'old-value')),
+        Effect.runPromise(secrets.set('ORDERED_KEY', 'new-value')),
       ]);
 
       expect(await secrets.get('KEY_A')).toBe('value-a');
@@ -90,7 +95,7 @@ describe('CLI secrets', () => {
   it('ignores a non-string stored value instead of returning it as a key', async () => {
     await withSecretsRoot(async ({ secretsPath }) => {
       const secrets = new CliSecrets(effectRuntime(), secretsPath);
-      await secrets.set('GOOD_KEY', 'good-value');
+      await Effect.runPromise(secrets.set('GOOD_KEY', 'good-value'));
       await fs.writeFile(
         secretsPath,
         JSON.stringify({ GOOD_KEY: 'good-value', BAD_KEY: { nested: true } }),
@@ -124,7 +129,9 @@ describe('CLI secrets', () => {
           await expect(
             secrets.get('TEXRA_CLI_SECRETS_MISSING_KEY'),
           ).resolves.toBeUndefined();
-          await expect(secrets.listStoredKeys()).resolves.toEqual([]);
+          await expect(
+            Effect.runPromise(secrets.listStoredKeys()),
+          ).resolves.toEqual([]);
         } finally {
           vi.unstubAllEnvs();
           await fs.chmod(root, 0o700);
@@ -138,7 +145,9 @@ describe('CLI secrets', () => {
     async () => {
       await withSecretsRoot(async ({ secretsPath }) => {
         const secrets = new CliSecrets(effectRuntime(), secretsPath);
-        await secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
+        await Effect.runPromise(
+          secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key'),
+        );
 
         const fileStat = await fs.stat(secretsPath);
         const dirStat = await fs.stat(path.dirname(secretsPath));

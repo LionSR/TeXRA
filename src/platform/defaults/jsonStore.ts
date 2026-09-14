@@ -5,10 +5,12 @@ import { Buffer } from 'node:buffer';
 import {
   Effect,
   FileSystem,
+  Layer,
   Path,
   type ManagedRuntime,
   type PlatformError,
 } from 'effect';
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import writeFileAtomic from 'write-file-atomic';
 
 // Local imports
@@ -30,6 +32,15 @@ export type JsonStoreRuntime = ManagedRuntime.ManagedRuntime<
   FileSystem.FileSystem | Path.Path,
   never
 >;
+
+/**
+ * The filesystem services a `JsonStore` reads and writes over, as a layer a
+ * caller can provide itself. A store opened for a port whose members are
+ * requirement-free by contract (the secret stores) provides these rather than
+ * making every consumer of that port carry `FileSystem | Path` in its type.
+ */
+export const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path> =
+  Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 /** Preserve the Node error identity exposed by this store's existing callers. */
 function storageError(error: PlatformError.PlatformError): Error {

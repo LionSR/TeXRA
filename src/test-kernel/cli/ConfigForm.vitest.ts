@@ -2,6 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { setTimeout as sleep } from 'node:timers/promises';
 
+import { Effect } from 'effect';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -116,13 +117,13 @@ beforeEach(() => {
   providerApiKeyRuntime.load.mockReset();
   providerApiKeyRuntime.load.mockResolvedValue(apiKeyStatuses());
   providerApiKeyRuntime.save.mockReset();
-  providerApiKeyRuntime.save.mockResolvedValue(undefined);
+  providerApiKeyRuntime.save.mockReturnValue(Effect.void);
   githubTokenRuntime.load.mockReset();
   githubTokenRuntime.load.mockResolvedValue('none');
   githubTokenRuntime.save.mockReset();
-  githubTokenRuntime.save.mockResolvedValue(undefined);
+  githubTokenRuntime.save.mockReturnValue(Effect.void);
   githubTokenRuntime.remove.mockReset();
-  githubTokenRuntime.remove.mockResolvedValue(undefined);
+  githubTokenRuntime.remove.mockReturnValue(Effect.void);
 });
 
 afterEach(() => {

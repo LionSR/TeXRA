@@ -141,9 +141,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   private async sweepPendingOAuthStates(): Promise<void> {
-    const listed = await this.settleAuthEffect(
-      callPort(() => this.secrets.listStoredKeys()),
-    );
+    const listed = await this.settleAuthEffect(this.secrets.listStoredKeys());
     if (Exit.isFailure(listed)) {
       log.warn('Unable to inspect stored OAuth callback state for cleanup');
       return;
@@ -158,7 +156,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             this.readPendingOAuthState(nonce),
           );
           if (!state?.flowId || !isPendingOAuthStateFresh(state)) {
-            yield* callPort(() => this.secrets.delete(key));
+            yield* this.secrets.delete(key);
           }
         }),
       );
@@ -180,18 +178,22 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         'Authentication attempt is no longer pending. Try again.',
       );
     }
-    await this.secrets.set(
-      this.pendingStateKey(attempt.nonce),
-      JSON.stringify({
-        nonce: attempt.nonce,
-        createdAt: attempt.createdAt,
-        flowId,
-      }),
+    await this.runtime.runPromise(
+      this.secrets.set(
+        this.pendingStateKey(attempt.nonce),
+        JSON.stringify({
+          nonce: attempt.nonce,
+          createdAt: attempt.createdAt,
+          flowId,
+        }),
+      ),
     );
   }
 
   private async clearPendingAttempt(nonce: string): Promise<void> {
-    await this.secrets.delete(this.pendingStateKey(nonce));
+    await this.runtime.runPromise(
+      this.secrets.delete(this.pendingStateKey(nonce)),
+    );
   }
 
   private callbackNonce(query: string): string | null {

@@ -306,7 +306,8 @@ export function registerBuiltinSlashCommands(options: {
       applyCliModelAccessSelection(runtime, selection, undefined, output));
   const onApiKeySave: ApiKeySaveHandler =
     options.onApiKeySave ??
-    ((provider, key) => applyCliProviderApiKey(secrets, provider, key));
+    ((provider, key) =>
+      runtime.runPromise(applyCliProviderApiKey(secrets, provider, key)));
   const onLoginSelect: FormActionHandler<LoginFormValue> =
     options.onLoginSelect ??
     ((value, output) => loginFromChat(value, runtime, undefined, output));

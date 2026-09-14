@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
@@ -27,23 +29,21 @@ const MODEL_ACCESS_USAGE =
  * extra notice a provider needs, if any — the caller owns the
  * "Saved the <provider> API key." confirmation line.
  */
-export async function applyCliProviderApiKey(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-  key: string,
-): Promise<string | undefined> {
-  await saveProviderApiKey(secrets, provider, key);
-  bumpCodexPreferenceVersion();
-  const codingPlan = codingPlanForApiProvider(provider);
-  if (!codingPlan) return undefined;
-  if (!codingPlan.exclusiveCredential) {
-    return `Tip: ${codingPlan.retryFallbackName} is the default; enable '${codingPlan.preferenceLabel}' with \`/api ${codingPlan.cliProvider}\` or in \`/config\` to use ${codingPlan.displayName}.`;
-  }
-  // The coding-only models route through the subscription automatically;
-  // dual-backend K3 needs the opt-in switch, which is only discoverable if
-  // we name it here.
-  return "Tip: the Kimi for Coding models use your subscription automatically; to use it for Kimi K3 too, enable 'Prefer Kimi Code' in /config.";
-}
+export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
+  function* (secrets: PlatformSecrets, provider: ApiProvider, key: string) {
+    yield* saveProviderApiKey(secrets, provider, key);
+    bumpCodexPreferenceVersion();
+    const codingPlan = codingPlanForApiProvider(provider);
+    if (!codingPlan) return undefined;
+    if (!codingPlan.exclusiveCredential) {
+      return `Tip: ${codingPlan.retryFallbackName} is the default; enable '${codingPlan.preferenceLabel}' with \`/api ${codingPlan.cliProvider}\` or in \`/config\` to use ${codingPlan.displayName}.`;
+    }
+    // The coding-only models route through the subscription automatically;
+    // dual-backend K3 needs the opt-in switch, which is only discoverable if
+    // we name it here.
+    return "Tip: the Kimi for Coding models use your subscription automatically; to use it for Kimi K3 too, enable 'Prefer Kimi Code' in /config.";
+  },
+);
 
 async function applyCliModelAccessSelectionWithSignal(
   runtime: ProcessRuntime,

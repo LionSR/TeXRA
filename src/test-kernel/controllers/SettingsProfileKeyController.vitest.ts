@@ -1,8 +1,10 @@
 import { strict as assert } from 'node:assert';
 
+import { Effect } from 'effect';
 import { describe, it } from 'vitest';
 
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
+import { SecretsFailed } from '@platform/secrets';
 import { createFakeUIHosts } from '@test/support/FakeHosts';
 import { FakeSecrets } from '@test/support/FakePlatform';
 
@@ -31,16 +33,20 @@ async function createController(options?: {
   let refreshCount = 0;
 
   const originalSet = secrets.set.bind(secrets);
-  secrets.set = async (key, value) => {
-    if (options?.setError) throw options.setError;
-    await originalSet(key, value);
-  };
+  secrets.set = (key, value) =>
+    options?.setError
+      ? Effect.fail(storeFailure('set', key, options.setError))
+      : originalSet(key, value);
   const originalDelete = secrets.delete.bind(secrets);
-  secrets.delete = async (key) => {
-    if (options?.deleteError) throw options.deleteError;
-    deleted.push(key);
-    await originalDelete(key);
-  };
+  secrets.delete = (key) =>
+    options?.deleteError
+      ? Effect.fail(storeFailure('delete', key, options.deleteError))
+      : Effect.andThen(
+          Effect.sync(() => {
+            deleted.push(key);
+          }),
+          originalDelete(key),
+        );
   return {
     controller: new SettingsProfileKeyController({
       secrets,
@@ -65,6 +71,21 @@ async function createController(options?: {
   };
 }
 
+/** A credential store that refuses the write, as the port reports it. */
+function storeFailure(
+  operation: 'set' | 'delete',
+  key: string,
+  cause: Error,
+): SecretsFailed {
+  return new SecretsFailed({
+    reason: 'io',
+    operation,
+    key,
+    message: cause.message,
+    cause,
+  });
+}
+
 describe('SettingsProfileKeyController', () => {
   it('stores provider keys and refreshes dependent state', async () => {
     const { controller, hosts, secrets, refreshCount } = await createController(
@@ -73,7 +94,7 @@ describe('SettingsProfileKeyController', () => {
       },
     );
 
-    await controller.setProviderKey('openai');
+    await Effect.runPromise(controller.setProviderKey('openai'));
 
     assert.equal(await secrets.get('apiKey.openai'), 'sk-real-openai-key');
     assert.equal(refreshCount(), 1);
@@ -95,7 +116,7 @@ describe('SettingsProfileKeyController', () => {
       },
     );
 
-    await controller.setProviderKey('openai');
+    await Effect.runPromise(controller.setProviderKey('openai'));
 
     assert.equal(await secrets.get('apiKey.openai'), undefined);
     assert.equal(refreshCount(), 0);
@@ -108,7 +129,9 @@ describe('SettingsProfileKeyController', () => {
     const { controller, secrets, failures, refreshCount } =
       await createController();
 
-    await controller.commitProviderKey('openai', 'sk-xxxxxx');
+    await Effect.runPromise(
+      controller.commitProviderKey('openai', 'sk-xxxxxx'),
+    );
 
     assert.equal(await secrets.get('apiKey.openai'), undefined);
     assert.equal(refreshCount(), 0);
@@ -120,7 +143,7 @@ describe('SettingsProfileKeyController', () => {
     const { controller, deleted, refreshCount, hosts } =
       await createController();
 
-    await controller.removeProviderKey('openai');
+    await Effect.runPromise(controller.removeProviderKey('openai'));
 
     assert.deepEqual(deleted, ['apiKey.openai']);
     assert.equal(refreshCount(), 1);
@@ -142,7 +165,7 @@ describe('SettingsProfileKeyController', () => {
       },
     );
 
-    await controller.removeProviderKey('openai');
+    await Effect.runPromise(controller.removeProviderKey('openai'));
 
     assert.deepEqual(deleted, []);
     assert.equal(refreshCount(), 0);
@@ -153,7 +176,9 @@ describe('SettingsProfileKeyController', () => {
     const { controller, hosts, secrets, refreshCount } =
       await createController();
 
-    await controller.commitProviderKey('openai', '  sk-direct-secret  ');
+    await Effect.runPromise(
+      controller.commitProviderKey('openai', '  sk-direct-secret  '),
+    );
 
     assert.equal(await secrets.get('apiKey.openai'), 'sk-direct-secret');
     assert.equal(hosts.prompt.inputs.length, 0);
@@ -168,7 +193,7 @@ describe('SettingsProfileKeyController', () => {
     const { controller, secrets, failures, refreshCount, hosts } =
       await createController();
 
-    await controller.commitProviderKey('openai', '');
+    await Effect.runPromise(controller.commitProviderKey('openai', ''));
 
     assert.equal(await secrets.get('apiKey.openai'), undefined);
     assert.equal(refreshCount(), 0);
@@ -183,7 +208,7 @@ describe('SettingsProfileKeyController', () => {
       setError: error,
     });
 
-    await controller.setProviderKey('openai');
+    await Effect.runPromise(controller.setProviderKey('openai'));
 
     assert.match(failures[0] ?? '', /Failed to set OpenAI API key/);
     assert.equal(refreshCount(), 0);
@@ -194,7 +219,7 @@ describe('SettingsProfileKeyController', () => {
     const { controller, refreshCount, deleted, failures } =
       await createController({ deleteError: error });
 
-    await controller.removeProviderKey('openai');
+    await Effect.runPromise(controller.removeProviderKey('openai'));
 
     assert.match(failures[0] ?? '', /Failed to remove OpenAI API key/);
     assert.deepEqual(deleted, []);

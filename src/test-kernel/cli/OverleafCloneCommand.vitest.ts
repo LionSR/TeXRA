@@ -3,6 +3,7 @@ import { access, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -77,7 +78,7 @@ describe('CLI Overleaf clone command', () => {
       stderr += text;
     });
     for (const mock of Object.values(mocks)) mock.mockReset();
-    mocks.deleteSecret.mockResolvedValue(undefined);
+    mocks.deleteSecret.mockReturnValue(Effect.void);
     mocks.execa.mockResolvedValue({});
     mocks.executeCommandSync.mockReturnValue({
       success: true,
@@ -95,7 +96,7 @@ describe('CLI Overleaf clone command', () => {
       stdoutColorEnabled: false,
       stderrColorEnabled: false,
     });
-    mocks.setSecret.mockResolvedValue(undefined);
+    mocks.setSecret.mockReturnValue(Effect.void);
   });
 
   afterEach(async () => {

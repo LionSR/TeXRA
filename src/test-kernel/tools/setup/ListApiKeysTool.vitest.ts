@@ -8,6 +8,7 @@ import { describe, vi } from 'vitest';
 
 // Local imports
 import { API_PROVIDERS, apiKeySecretName } from '@model/apiProviders';
+import { SecretsFailed } from '@platform/secrets';
 import type { ToolResult } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -45,8 +46,14 @@ function outputOf(result: ToolResult): string {
 describe('list_api_keys tool', () => {
   it.effect('reports unsupported enumeration instead of an empty store', () =>
     Effect.gen(function* () {
-      vi.spyOn(hostStores().secrets, 'listStoredKeys').mockRejectedValue(
-        new Error('SecretStorage key enumeration is not supported'),
+      vi.spyOn(hostStores().secrets, 'listStoredKeys').mockReturnValue(
+        Effect.fail(
+          new SecretsFailed({
+            reason: 'enumeration-unsupported',
+            operation: 'listStoredKeys',
+            message: 'SecretStorage key enumeration is not supported',
+          }),
+        ),
       );
 
       const result = yield* tool

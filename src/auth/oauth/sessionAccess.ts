@@ -5,8 +5,12 @@
  * here (with the status probe) so a provider does not re-copy the platform
  * dance.
  */
+import { runAuthProgram } from '@auth/authProgram';
 import { createLog } from '@logger/logUtils';
+import type { SecretsFailed } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+import type { Effect } from 'effect';
 
 import type {
   SubscriptionSessionStatus,
@@ -16,19 +20,24 @@ import type {
 /** Secret-store slice the session-storage adapter needs. */
 export interface SessionSecretStore {
   get(key: string): Promise<string | undefined>;
-  set(key: string, value: string): Promise<void>;
-  delete(key: string): Promise<void>;
+  set(key: string, value: string): Effect.Effect<void, SecretsFailed>;
+  delete(key: string): Effect.Effect<void, SecretsFailed>;
 }
 
-/** Session storage over one key of a secret store. */
+/**
+ * Session storage over one key of a secret store.
+ * {@link SubscriptionSessionStorage} is the coordinator's Promise-shaped
+ * surface, so the store's write settles on the auth subsystem's installed run
+ * edge, which re-throws the {@link SecretsFailed} unchanged.
+ */
 export function secretBackedSessionStorage(
   secrets: SessionSecretStore,
   key: string,
 ): SubscriptionSessionStorage {
   return {
     get: () => secrets.get(key),
-    store: (value) => secrets.set(key, value),
-    delete: () => secrets.delete(key),
+    store: (value) => runAuthProgram(secrets.set(key, value)),
+    delete: () => runAuthProgram(secrets.delete(key)),
   };
 }
 

@@ -1,8 +1,14 @@
+import { Effect } from 'effect';
 import { safeStorage } from 'electron';
 
-import { secretsGet, type PlatformSecrets } from '@platform/secrets';
+import {
+  SecretsFailed,
+  secretsGet,
+  type PlatformSecrets,
+  type SecretsOperation,
+} from '@platform/secrets';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { JsonStore } from '@platform/defaults/jsonStore';
+import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -88,66 +94,100 @@ export class ElectronSecrets implements PlatformSecrets {
 
     const stored = this.store.get<unknown>(key);
     if (!isStoredSecret(stored)) return undefined;
-    try {
-      return safeStorage.decryptString(Buffer.from(stored.value, 'base64'));
-    } catch (error) {
-      this.keychainDecryptUnavailable = true;
-      // The macOS keychain (and Linux libsecret/KWallet) can reject decrypts
-      // when the user denies the OS prompt or the entry encryption key has
-      // been rotated. Treat this as "no saved secret" so the rest of the
-      // app — most importantly the renderer bootstrap — keeps working.
-      // Without this swallow, a single decrypt rejection during launch can
-      // surface as an unhandled rejection in renderer bootstrap and leave
-      // the user staring at a blank white window.
-      console.warn(
-        `ElectronSecrets: safeStorage.decryptString failed for "${key}"; treating as unset. ` +
-          `Cause: ${toErrorMessage(error)}`,
-      );
-      await this.warnOnce('keychainDenied', KEYCHAIN_DENIED_WARNING_MESSAGE);
-      return undefined;
-    }
+    return this.runtime.runPromise(this.decryptStored(key, stored.value));
   }
 
-  async set(key: string, value: string): Promise<void> {
-    // Test-harness shim: with the env var set, swallow writes instead of
-    // throwing on the unavailable storage mode. The harness explicitly opts
-    // out of persisted secrets, so a thrown error would break the same
-    // bootstrap path we are trying to keep alive.
-    if (isKeychainDisabled()) {
-      warnKeychainDisabledOnce();
-      return;
-    }
-    const storageMode = getSecretStorageMode();
-    switch (storageMode) {
-      case 'encrypted': {
-        const stored: StoredSecret = {
-          encrypted: true,
-          value: safeStorage.encryptString(value).toString('base64'),
-        };
-        // `PlatformSecrets` is a Promise-shaped platform port; this is where
-        // the store's write program runs for the desktop host.
-        await this.runtime.runPromise(this.store.set(key, stored));
-        return;
+  /**
+   * Decrypt one stored value, recovering a refused decrypt to "no saved
+   * secret". The macOS keychain (and Linux libsecret/KWallet) can reject
+   * decrypts when the user denies the OS prompt or the entry encryption key
+   * has been rotated. Without this recovery a single decrypt rejection during
+   * launch surfaces as an unhandled rejection in renderer bootstrap and
+   * leaves the user staring at a blank white window — so it is recovered, but
+   * loudly: the cause is logged and the user is warned once.
+   */
+  private decryptStored(
+    key: string,
+    encrypted: string,
+  ): Effect.Effect<string | undefined> {
+    return Effect.try({
+      try: () => safeStorage.decryptString(Buffer.from(encrypted, 'base64')),
+      catch: (cause) =>
+        new SecretsFailed({
+          reason: 'decrypt-failed',
+          operation: 'getStored',
+          key,
+          message: `The system keychain refused to decrypt the stored secret "${key}": ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    }).pipe(
+      Effect.catch((failure) =>
+        Effect.as(
+          Effect.andThen(
+            Effect.sync(() => {
+              this.keychainDecryptUnavailable = true;
+              console.warn(
+                `ElectronSecrets: safeStorage.decryptString failed for "${key}"; treating as unset. ` +
+                  `Cause: ${toErrorMessage(failure.cause)}`,
+              );
+            }),
+            this.warnOnce('keychainDenied', KEYCHAIN_DENIED_WARNING_MESSAGE),
+          ),
+          undefined,
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Encrypt and commit one secret. Host-controller study Q2 rules that a
+   * credential commit survives cancellation, so the encrypt-and-write region
+   * is uninterruptible: a cancelled caller either never started the commit or
+   * observes a finished one.
+   */
+  set(key: string, value: string): Effect.Effect<void, SecretsFailed> {
+    return Effect.suspend(() => {
+      // Test-harness shim: with the env var set, swallow writes instead of
+      // failing on the unavailable storage mode. The harness explicitly opts
+      // out of persisted secrets, so a failure would break the same
+      // bootstrap path we are trying to keep alive.
+      if (isKeychainDisabled()) {
+        warnKeychainDisabledOnce();
+        return Effect.void;
       }
-      case 'unavailable':
-        throw new Error(SAFE_STORAGE_UNAVAILABLE_MESSAGE);
-      case 'basic_text':
-        await this.warnOnce(
-          'basicText',
-          LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
-        );
-        throw new Error(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE);
-      default:
-        assertNever(storageMode, 'Unhandled Electron secret storage mode');
-    }
+      const storageMode = getSecretStorageMode();
+      switch (storageMode) {
+        case 'encrypted':
+          return Effect.uninterruptible(
+            this.commit(key, {
+              encrypted: true,
+              value: safeStorage.encryptString(value).toString('base64'),
+            }),
+          );
+        case 'unavailable':
+          return Effect.fail(
+            this.unavailable(key, SAFE_STORAGE_UNAVAILABLE_MESSAGE),
+          );
+        case 'basic_text':
+          return Effect.andThen(
+            this.warnOnce('basicText', LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
+            Effect.fail(
+              this.unavailable(key, LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
+            ),
+          );
+        default:
+          assertNever(storageMode, 'Unhandled Electron secret storage mode');
+      }
+    });
   }
 
-  async delete(key: string): Promise<void> {
-    await this.runtime.runPromise(this.store.set(key, undefined));
+  /** The commit region of a removal, uninterruptible for the same reason. */
+  delete(key: string): Effect.Effect<void, SecretsFailed> {
+    return Effect.uninterruptible(this.commit(key, undefined));
   }
 
-  async listStoredKeys(): Promise<readonly string[]> {
-    return this.store.keys();
+  listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
+    return Effect.sync(() => this.store.keys());
   }
 
   getEnv(name: string): string | undefined {
@@ -160,14 +200,45 @@ export class ElectronSecrets implements PlatformSecrets {
    * (the basic_text write still rejects with the storage-policy error; the
    * keychain-denied read still resolves to undefined).
    */
-  private async warnOnce(kind: WarnOnceKind, message: string): Promise<void> {
-    if (this.warnedOnce.has(kind)) return;
-    this.warnedOnce.add(kind);
-    try {
-      await this.options.showWarningMessage?.(message);
-    } catch {
-      // Dialog failures are swallowed; see method doc comment.
-    }
+  private warnOnce(kind: WarnOnceKind, message: string): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (this.warnedOnce.has(kind)) return Effect.void;
+      this.warnedOnce.add(kind);
+      return Effect.ignore(
+        Effect.tryPromise(async () =>
+          this.options.showWarningMessage?.(message),
+        ),
+      );
+    });
+  }
+
+  /** Persist (or clear) one entry of the desktop secrets store. */
+  private commit(
+    key: string,
+    stored: StoredSecret | undefined,
+  ): Effect.Effect<void, SecretsFailed> {
+    const operation: SecretsOperation = stored ? 'set' : 'delete';
+    return Effect.mapError(
+      Effect.provide(this.store.set(key, stored), nodeFileServices),
+      (cause) =>
+        new SecretsFailed({
+          reason: 'io',
+          operation,
+          key,
+          message: `Could not ${operation === 'set' ? 'store' : 'remove'} the desktop secret "${key}": ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    );
+  }
+
+  /** The host has no secure store to write to; nothing was written. */
+  private unavailable(key: string, message: string): SecretsFailed {
+    return new SecretsFailed({
+      reason: 'store-unavailable',
+      operation: 'set',
+      key,
+      message,
+    });
   }
 }
 

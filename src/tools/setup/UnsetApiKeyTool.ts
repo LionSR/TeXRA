@@ -46,7 +46,7 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
 
   // Only a persisted entry counts here: an environment-backed key is
   // reported below instead, since `delete` cannot touch it.
-  const storedKeys = yield* hostPort(() => secrets.listStoredKeys());
+  const storedKeys = yield* secrets.listStoredKeys();
   if (!storedKeys.includes(apiKeySecretName(provider))) {
     // If no persisted entry exists but a *usable* (non-blank) key
     // is still reported, it's coming from the `<PROVIDER>_API_KEY`
@@ -64,7 +64,7 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
     );
   }
 
-  yield* hostPort(() => secrets.delete(apiKeySecretName(provider)));
+  yield* secrets.delete(apiKeySecretName(provider));
   // Mirror the manual `texra.setApiKey` command ordering: drop the cached
   // key lookups so models that just lost their credential stop appearing
   // selectable, then refresh the status surfaces.

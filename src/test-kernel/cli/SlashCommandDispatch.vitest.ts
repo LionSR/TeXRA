@@ -597,12 +597,10 @@ describe('handleTuiSlashCommand', () => {
   it('explains the shared GLM key routes after saving it', async () => {
     const save = vi
       .spyOn(providerApiKey, 'saveProviderApiKey')
-      .mockResolvedValue(undefined);
+      .mockReturnValue(Effect.void);
 
-    const notice = await applyCliProviderApiKey(
-      stores.secrets,
-      'glm',
-      'glm-secret',
+    const notice = await Effect.runPromise(
+      applyCliProviderApiKey(stores.secrets, 'glm', 'glm-secret'),
     );
 
     expect(save).toHaveBeenCalledWith(stores.secrets, 'glm', 'glm-secret');
