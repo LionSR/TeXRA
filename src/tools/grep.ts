@@ -7,7 +7,6 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
-import { hostPort } from '@common/hostPort';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   workspacePathPorts,
@@ -156,7 +155,13 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
     path.fsPath,
   ];
 
-  const result = yield* hostPort(() =>
+  // `executeCommand` reports every failure in its result (`success`,
+  // `exitCode`, `timedOut`, `outputLimitExceeded`) and never rejects, so the
+  // spawn has no error channel of its own. `ports.signal` is the fiber's own
+  // abort signal, and the region is interruptible now that the spawn is no
+  // longer behind `hostPort`: interrupting the tool tears the `rg` process
+  // down instead of abandoning it.
+  const result = yield* Effect.promise(() =>
     ports.inScope(() =>
       executeCommand(command, {
         cwd: root,
