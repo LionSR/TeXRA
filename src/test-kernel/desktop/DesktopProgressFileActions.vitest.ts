@@ -68,6 +68,7 @@ function outputInfo(filePath: string): OutputFileInfo {
 async function loadFileActions(options: {
   outcome?: DiffRunOutcome;
   throws?: boolean;
+  interrupts?: boolean;
   fallbackResult?: LaTeXdiffResult;
 }): Promise<{
   actions: InstanceType<
@@ -83,14 +84,15 @@ async function loadFileActions(options: {
   // host-neutral `runLatexdiffForRun`; mock it at that boundary so these
   // tests cover the desktop param-building + outcome-handling, not the core
   // (which `RunLatexdiff.vitest.ts` exercises in isolation).
-  const runLatexdiffForRun = vi.fn(() =>
-    options.throws
-      ? Effect.fail(new Error('No workspace path found'))
-      : Effect.succeed({
-          outcome: options.outcome ?? { results: [] },
-          source: 'metadata' as const,
-        }),
-  );
+  const runLatexdiffForRun = vi.fn(() => {
+    if (options.interrupts) return Effect.interrupt;
+    if (options.throws)
+      return Effect.fail(new Error('No workspace path found'));
+    return Effect.succeed({
+      outcome: options.outcome ?? { results: [] },
+      source: 'metadata' as const,
+    });
+  });
 
   const runDiff = vi.fn((): Effect.Effect<LaTeXdiffResult> =>
     Effect.succeed(
@@ -322,5 +324,25 @@ describe('DesktopProgressFileActions latexdiff', () => {
       openBuildDisplay,
       absolutePath('workspace', 'fallback_diff.tex'),
     );
+  });
+
+  it('does not fall back when the shared core is interrupted', async () => {
+    const { actions, openBuildDisplay, runDiff } = await loadFileActions({
+      interrupts: true,
+    });
+
+    await expect(
+      actions.diffAcceptedFilePair(
+        absolutePath('workspace', 'base.tex'),
+        absolutePath('run', 'r1', 'main.tex'),
+        {
+          outputsByRound: {},
+          workspaceScan: { agent: 'a', model: 'm', inputFile: 'main.tex' },
+        },
+      ),
+    ).rejects.toThrow('All fibers interrupted without error');
+
+    expect(runDiff).not.toHaveBeenCalled();
+    expect(openBuildDisplay).not.toHaveBeenCalled();
   });
 });

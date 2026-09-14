@@ -50,12 +50,12 @@ interface DesktopWorkspaceIpcOptions {
    */
   toWindowBounds(bounds: DesktopBrowserBounds): DesktopBrowserBounds;
   /**
-   * Root of the paper this window shows, and the only workspace root this
-   * handler resolves against — a request names a path relative to the paper
-   * it was sent for, not to whichever paper happens to be active. App-signal
+   * Root of the project this window shows, and the only workspace root this
+   * handler resolves against — a request names a path relative to the project
+   * it was sent for, not to whichever project happens to be active. App-signal
    * listeners run in the emitter's context, which for a run in another open
-   * paper is that paper's session; the window's own paper is what a re-list
-   * decision compares to.
+   * project is that project's session; the window's own project is what a
+   * re-list decision compares to.
    */
   getWorkspacePath(): string | undefined;
   getEnvironmentSummary(): Promise<DesktopEnvironmentSummary>;
@@ -102,9 +102,9 @@ function assertWithinWorkspace(
 
 /**
  * Lexical workspace containment check against `root`: rejects `..` traversal,
- * or throws. The root is the paper this handler was built for, passed in
+ * or throws. The root is the project this handler was built for, passed in
  * rather than read from the calling context's roots scope, so a request can
- * only ever be resolved against its own paper.
+ * only ever be resolved against its own project.
  */
 function locateWorkspaceTarget(
   root: string | undefined,

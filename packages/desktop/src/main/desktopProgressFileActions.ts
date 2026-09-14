@@ -109,9 +109,9 @@ export class DesktopProgressFileActions {
   }
 
   /**
-   * A location's absolute path is where its file is, inside the paper or not,
-   * so every read and write here goes through the process filesystem at that
-   * path, settled on the window's runtime.
+   * A location's absolute path is where its file is, inside the project or
+   * not, so every read and write here goes through the process filesystem at
+   * that path, settled on the window's runtime.
    */
   async acceptEditedFile(
     baseFile: string,
@@ -262,6 +262,12 @@ export class DesktopProgressFileActions {
       }),
     );
     if (Exit.isSuccess(settled)) return settled.value.outcome;
+    // An interrupt (the runtime disposing at shutdown) is not a diff failure
+    // to fall back from: rethrow it so the request settles as interrupted
+    // instead of scheduling more diff work on a closing window.
+    if (Cause.hasInterruptsOnly(settled.cause)) {
+      throw Cause.squash(settled.cause);
+    }
     // The core can fail (e.g. no workspace path). Don't abort the whole
     // action — return undefined so the caller falls back to single-file —
     // but log the cause so a systematic round-aware failure isn't silently
