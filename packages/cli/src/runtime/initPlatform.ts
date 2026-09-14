@@ -363,6 +363,7 @@ export async function initCliPlatform(
               stores.storage,
               context.cwd,
               showPersistentConfigWarning,
+              runtime,
             ),
           };
         }),

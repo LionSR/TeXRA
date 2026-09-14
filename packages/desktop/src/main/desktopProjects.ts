@@ -280,7 +280,12 @@ export function openDesktopProjectRegistry(
           const [workspaceState, workspaceConfig] = yield* Effect.all(
             [
               openAppStateStore(storage, options.runWrite),
-              openTexraWorkspaceConfigStore(storage, root, options.warn),
+              openTexraWorkspaceConfigStore(
+                storage,
+                root,
+                options.warn,
+                options.runtime,
+              ),
             ],
             { concurrency: 'unbounded' },
           );
