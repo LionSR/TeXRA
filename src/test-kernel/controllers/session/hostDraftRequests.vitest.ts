@@ -14,7 +14,8 @@ import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 
 const audio = vi.hoisted(() => ({
   startRecording: vi.fn(),
-  stopRecordingAndTranscribe: vi.fn(),
+  stopRecording: vi.fn(),
+  transcribeRecording: vi.fn(),
   killActiveRecording: vi.fn(),
 }));
 
@@ -33,13 +34,24 @@ const processStores = Layer.mergeAll(
   AppState.layer(() => new FakeStateStore()),
 );
 
+/** The same pair with no saved OpenAI key, so the take's credential read
+ *  fails after the recorder has already been stopped. */
+const storesWithoutCredential = Layer.mergeAll(
+  Secrets.layer(() => new FakeSecrets()),
+  AppState.layer(() => new FakeStateStore()),
+);
+
 it.effect(
   'returns transcription to Start when another paper stops the process recorder',
   () =>
     Effect.gen(function* () {
       const startup = pDefer<{ success: boolean }>();
       audio.startRecording.mockReturnValue(startup.promise);
-      audio.stopRecordingAndTranscribe.mockResolvedValue({
+      audio.stopRecording.mockResolvedValue({
+        success: true,
+        recordingPath: '/papers/first/recordings/take.wav',
+      });
+      audio.transcribeRecording.mockResolvedValue({
         success: true,
         text: 'A conserved quantity.',
       });
@@ -84,14 +96,14 @@ it.effect(
           'other',
         ),
       ).toEqual({ kind: 'done' });
-      expect(audio.stopRecordingAndTranscribe).not.toHaveBeenCalled();
+      expect(audio.transcribeRecording).not.toHaveBeenCalled();
       startup.resolve({ success: true });
       expect(yield* Fiber.join(started)).toEqual({
         kind: 'text',
         text: 'A conserved quantity.',
       });
       expect(audio.startRecording).toHaveBeenCalledTimes(1);
-      expect(audio.stopRecordingAndTranscribe).toHaveBeenCalledTimes(1);
+      expect(audio.transcribeRecording).toHaveBeenCalledTimes(1);
       expect(snapshot).toHaveBeenLastCalledWith(null);
 
       const killed = yield* Deferred.make<void>();
@@ -123,8 +135,51 @@ it.effect(
       // The cancelled take's kill runs on the detached take fiber.
       yield* Deferred.await(killed);
       expect(audio.killActiveRecording).toHaveBeenCalledTimes(1);
-      expect(audio.stopRecordingAndTranscribe).toHaveBeenCalledTimes(1);
+      expect(audio.transcribeRecording).toHaveBeenCalledTimes(1);
       expect(snapshot).toHaveBeenLastCalledWith(null);
       unsubscribe();
     }).pipe(Effect.provide(processStores)),
+);
+
+it.effect(
+  'stops the recorder before reading the transcription credential',
+  () =>
+    Effect.gen(function* () {
+      audio.startRecording.mockReset();
+      audio.stopRecording.mockReset();
+      audio.transcribeRecording.mockReset();
+      audio.startRecording.mockResolvedValue({ success: true });
+      audio.stopRecording.mockResolvedValue({
+        success: true,
+        recordingPath: '/papers/first/recordings/take.wav',
+      });
+      const requests = new HostDraftRequests();
+      const session = { roots: { storage: '/papers/first' } } as SessionHandle;
+
+      const take = yield* Effect.forkChild(
+        requests.handle(
+          session,
+          { kind: 'record', action: { kind: 'start', target: 'launch' } },
+          'origin',
+        ),
+      );
+      // Let the take reserve the recorder before Stop arrives.
+      yield* Effect.yieldNow;
+      expect(
+        yield* requests.handle(
+          session,
+          { kind: 'record', action: { kind: 'stop' } },
+          'origin',
+        ),
+      ).toEqual({ kind: 'done' });
+
+      expect(yield* Effect.flip(Fiber.join(take))).toMatchObject({
+        _tag: 'Rejected',
+        reason:
+          'Missing API key for openai. Set a provider API key in settings.',
+      });
+      // Sox was terminated first: the failing read cannot leave it recording.
+      expect(audio.stopRecording).toHaveBeenCalledTimes(1);
+      expect(audio.transcribeRecording).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(storesWithoutCredential)),
 );

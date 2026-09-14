@@ -15,7 +15,8 @@ import type { HostOutcome } from '@shared/session/sessionFrames';
 import {
   killActiveRecording,
   startRecording,
-  stopRecordingAndTranscribe,
+  stopRecording,
+  transcribeRecording,
 } from '@tools/media/audio';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 
@@ -178,6 +179,17 @@ export class HostDraftRequests {
             reason: 'The recording was cancelled.',
           });
         }
+        // The recorder is terminated before anything else is read: sox gets
+        // SIGTERM and the module's recording state resets here, so a slow,
+        // denied or failing credential read below cannot delay the kill or
+        // leave the microphone running when the take is rejected.
+        const stopped = yield* hostPort(() => stopRecording());
+        const recordingPath = stopped.recordingPath;
+        if (!stopped.success || recordingPath === undefined) {
+          return yield* new Rejected({
+            reason: stopped.error ?? 'The recording could not be stopped.',
+          });
+        }
         // The transcription endpoint is an OpenAI SDK operation the llm
         // package does not model, and the direct OpenAI route is deliberate:
         // `gpt-4o-transcribe` is an OpenAI-only endpoint model with no
@@ -196,7 +208,7 @@ export class HostDraftRequests {
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         const result = yield* hostPort(() =>
-          stopRecordingAndTranscribe(credential, take.session.roots),
+          transcribeRecording(recordingPath, credential, take.session.roots),
         );
         if (!result.success) {
           return yield* new Rejected({

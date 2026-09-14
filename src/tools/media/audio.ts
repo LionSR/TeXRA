@@ -34,7 +34,7 @@ function recordingsDir(roots: WorkspaceRoots): string {
 
 /**
  * Upper bound on how long a SIGTERM'd sox may take to flush and exit before
- * `stopRecordingAndTranscribe` gives up waiting and reads the file anyway.
+ * `stopRecording` gives up waiting and reads the file anyway.
  */
 const SOX_SHUTDOWN_TIMEOUT_MS = 5000;
 
@@ -162,24 +162,23 @@ export function killActiveRecording(): void {
 }
 
 /**
- * Stop the current recording and transcribe it using OpenAI. `credential` is
- * the OpenAI route the caller resolved: the key read is an Effect program
- * now, and this function is a promise the host settles, so the credential
- * arrives as data rather than as a store this function would have to read
- * from. `roots` are the recording session's, and own the directory the
- * finished takes are swept from.
+ * Stop the current recording and hand back the file it captured.
+ *
+ * This is the termination step and it waits on nothing else: sox gets
+ * SIGTERM and this module's recording state resets before the caller resolves
+ * the transcription credential, so a slow, denied or failing keychain read
+ * can never leave the microphone running. The captured file is validated
+ * here too, because "what the take captured" is the answer this step owes its
+ * caller.
  */
-export async function stopRecordingAndTranscribe(
-  credential: ApiKeyRouteCredential,
-  roots: WorkspaceRoots,
-): Promise<{
+export async function stopRecording(): Promise<{
   success: boolean;
-  text: string;
+  recordingPath?: string;
   error?: string;
 }> {
   try {
     if (!activeRecordingProcess || !activeRecordingPath) {
-      return { success: false, text: '', error: 'No active recording to stop' };
+      return { success: false, error: 'No active recording to stop' };
     }
 
     const recordingPath = activeRecordingPath;
@@ -198,14 +197,42 @@ export async function stopRecordingAndTranscribe(
     ]);
 
     if (!AbsoluteFS.existsSync(recordingPath)) {
-      return { success: false, text: '', error: 'Recording file not found' };
+      return { success: false, error: 'Recording file not found' };
     }
 
     const stats = AbsoluteFS.statSync(recordingPath);
     if (stats.size === 0) {
-      return { success: false, text: '', error: 'Recording file is empty' };
+      return { success: false, error: 'Recording file is empty' };
     }
 
+    return { success: true, recordingPath };
+  } catch (err) {
+    const message = getSdkErrorMessage(err);
+    log.error(`Error in stopRecording: ${message}`);
+    resetRecordingState();
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Transcribe a stopped recording with OpenAI. `credential` is the OpenAI
+ * route the caller resolved: the key read is an Effect program now, and this
+ * function is a promise the host settles, so the credential arrives as data
+ * rather than as a store this function would have to read from. `roots` are
+ * the recording session's, and own the directory the finished takes are swept
+ * from. The recorder is already terminated by the time this runs — it is
+ * {@link stopRecording} that owns the microphone.
+ */
+export async function transcribeRecording(
+  recordingPath: string,
+  credential: ApiKeyRouteCredential,
+  roots: WorkspaceRoots,
+): Promise<{
+  success: boolean;
+  text: string;
+  error?: string;
+}> {
+  try {
     // The transcription endpoint is an OpenAI SDK operation the llm package
     // does not model, so the client is built here.
     const client = new OpenAI({
@@ -225,8 +252,7 @@ export async function stopRecordingAndTranscribe(
     return { success: true, text: result.text };
   } catch (err) {
     const message = getSdkErrorMessage(err);
-    log.error(`Error in stopRecordingAndTranscribe: ${message}`);
-    resetRecordingState();
+    log.error(`Error in transcribeRecording: ${message}`);
     return { success: false, text: '', error: message };
   }
 }

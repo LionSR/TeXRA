@@ -112,7 +112,9 @@ export interface PlatformSecrets {
  * Default {@link PlatformSecrets.get} body: an environment-variable override,
  * else the persisted value. Every host implements `get()` this way over its
  * own `getEnv`/`getStored`, so each host's `get()` becomes a one-line
- * `secretsGet(this, key)`.
+ * `secretsGet(this, key)`. A store read that fails here fails as `get`: the
+ * operation names the member the caller invoked, not the one this body
+ * delegated to.
  */
 export function secretsGet(
   secrets: Pick<PlatformSecrets, 'getEnv' | 'getStored'>,
@@ -120,9 +122,22 @@ export function secretsGet(
 ): Effect.Effect<string | undefined, SecretsFailed> {
   return Effect.suspend(() => {
     const envValue = secrets.getEnv(key);
-    return envValue !== undefined
-      ? Effect.succeed(envValue)
-      : secrets.getStored(key);
+    if (envValue !== undefined) return Effect.succeed(envValue);
+    // `operation` names the member the caller invoked, so the store read this
+    // body delegates to is reported as the `get` it serves. Everything the
+    // store knows about the failure — reason, key, cause, message — is the
+    // store's and travels unchanged.
+    return Effect.mapError(
+      secrets.getStored(key),
+      (failure) =>
+        new SecretsFailed({
+          reason: failure.reason,
+          operation: 'get',
+          message: failure.message,
+          key: failure.key,
+          cause: failure.cause,
+        }),
+    );
   });
 }
 
