@@ -5,7 +5,10 @@ import '@test/support/sessionGraphTestSetup';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
+import { ToolUseAgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import * as DesktopAgentLaunch from '@desktop/main/desktopAgentLaunch';
 import { createDesktopAgentRun } from '@desktop/main/desktopAgentRun';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   aggregateId,
@@ -23,31 +26,40 @@ import { generateRunId } from '@utils/core';
 // Local file imports
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 
-function runEnd(runId: RunId, outcome: RunOutcomeValue): SessionEventDraft {
+function completedRunEnd(runId: RunId): SessionEventDraft {
   return {
     type: 'run.end',
     aggregateId: aggregateId('run', runId),
-    outcome,
+    outcome: RUN_OUTCOME.COMPLETED,
     output: emptyRunEndOutput(AgentCategory.ToolUse),
-    ...(outcome === RUN_OUTCOME.FAILED && {
-      error: { kind: 'unexpected' as const, message: 'boom' },
-    }),
   };
 }
-
-type RunOutcomeValue = (typeof RUN_OUTCOME)[keyof typeof RUN_OUTCOME];
 
 describe('desktop agent run completion hook', () => {
   // The desktop onboarding funnel refresh rides this hook: a first
   // successful run must clear the setup card without a restart (#11934).
-  it('reports only a completed terminal result', async () => {
+  // session.onResult fires at run.end inside finalizeTerminal, before
+  // AgentRunLifecycle writes firstRunDone; the hook must wait for the
+  // awaited launch to settle.
+  it('fires after the awaited launch settles, not from run.end', async () => {
     const session = createTestSession();
     const onRunCompleted = vi.fn();
     const host = createStubDesktopAgentRunHost();
+    let resolveLaunch!: () => void;
+    const launchSettled = new Promise<void>((resolve) => {
+      resolveLaunch = resolve;
+    });
+    const launch = vi
+      .spyOn(DesktopAgentLaunch, 'launchDesktopAgent')
+      .mockReturnValue(launchSettled);
+    onTestFinished(() => {
+      launch.mockRestore();
+    });
     const run = createDesktopAgentRun({
       host,
       toolEditPreview: host,
       session,
+      runtime: effectRuntime(),
       showAgentConfigBanner: () => undefined,
       onRunCompleted,
     });
@@ -56,14 +68,20 @@ describe('desktop agent run completion hook', () => {
       session.dispose();
     });
 
-    const failedRun = publishTestRunStart(session, generateRunId());
-    session.publish([runEnd(failedRun, RUN_OUTCOME.FAILED)]);
+    const settled = run.runValidated({
+      config: ToolUseAgentConfigSchema.parse({
+        agent: 'proofreader',
+        model: 'deepseekproT',
+        agentCategory: AgentCategory.ToolUse,
+      }),
+    });
+    const completedRun = publishTestRunStart(session, generateRunId());
+    session.publish([completedRunEnd(completedRun)]);
     await session.settlePublications();
     expect(onRunCompleted).not.toHaveBeenCalled();
 
-    const completedRun = publishTestRunStart(session, generateRunId());
-    session.publish([runEnd(completedRun, RUN_OUTCOME.COMPLETED)]);
-    await session.settlePublications();
+    resolveLaunch();
+    await settled;
     expect(onRunCompleted).toHaveBeenCalledOnce();
   });
 });

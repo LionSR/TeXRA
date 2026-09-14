@@ -31,7 +31,6 @@ import type {
   RequestOpenFilePayload,
   RunId,
 } from '@shared/schemas';
-import { RUN_OUTCOME } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 
 import {
@@ -61,10 +60,10 @@ export interface DesktopAgentRunOptions {
   /** The process runtime this window was handed; the run and its approval
    *  wiring settle on it. */
   runtime: ProcessRuntime;
-  /** A run on this session committed a completed terminal result. The run
-   *  lifecycle has already persisted `firstRunDone`; the host recomputes
-   *  state derived from it (the onboarding funnel) so a first successful run
-   *  clears the setup card without waiting for a restart. */
+  /** Fired when a launch this window started settles. That is after
+   *  `AgentRunLifecycle` writes `firstRunDone` on a successful run, so the
+   *  host can recompute the onboarding funnel from the updated flag. The
+   *  refresh is idempotent and runs on every settle. */
   onRunCompleted?: () => void;
   logger?: AgentTrace;
 }
@@ -199,22 +198,26 @@ export function createDesktopAgentRun(
     // behind it to go.
     releaseToolEdit: (requestId) => toolEditApprovals.release(requestId),
   });
-  const detachRunCompleted = session.onResult((event) => {
-    if (event.outcome === RUN_OUTCOME.COMPLETED) options.onRunCompleted?.();
-  });
 
-  function runValidated(
+  async function runValidated(
     request: ValidatedRunRequest,
     runOptions: DesktopRunOptions = {},
   ): Promise<void> {
-    return launchDesktopAgent(
-      { kind: 'fresh', ...request },
-      { session, runtime },
-      {
-        onRunResolved: options.onLaunched,
-        ...runOptions,
-      },
-    );
+    try {
+      await launchDesktopAgent(
+        { kind: 'fresh', ...request },
+        { session, runtime },
+        {
+          onRunResolved: options.onLaunched,
+          ...runOptions,
+        },
+      );
+    } finally {
+      // After the awaited runPromise, including setFirstRunDone. Do not
+      // hook session.onResult: that fires from run.end inside
+      // finalizeTerminal, before the flag write.
+      options.onRunCompleted?.();
+    }
   }
 
   return {
@@ -234,7 +237,6 @@ export function createDesktopAgentRun(
       if (disposed) return;
       disposed = true;
       detachHostInteractions();
-      detachRunCompleted();
       runtime.runFork(Fiber.interrupt(sessionEvents));
       toolEditApprovals.dispose();
     },

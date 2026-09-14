@@ -869,9 +869,9 @@ function createWindow(options: {
       showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.showAgentConfigBanner(agentName, category),
       onLaunched: (runId) => bridge.surfaceAction({ kind: 'select', runId }),
-      // Recompute the onboarding funnel after a run completes so a user's
-      // first successful run leaves the setup card without waiting for a
-      // restart (the run lifecycle has already persisted firstRunDone).
+      // Recompute the onboarding funnel when a launch settles so a first
+      // successful run leaves the setup card without a restart. The awaited
+      // runPromise includes AgentRunLifecycle's firstRunDone write.
       onRunCompleted: () => {
         void onboardingIpcRef.current?.refreshOnboardingFunnel();
       },
