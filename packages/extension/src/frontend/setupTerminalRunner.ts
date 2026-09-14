@@ -113,6 +113,18 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
       }),
   });
 
+  // Exit code is delivered via the global end-event, not the execution
+  // object itself, and VS Code does not replay it: subscribe on this frame,
+  // before the stream is opened, so a command that exits while the reader
+  // starts is still observed instead of waiting out the timeout.
+  const exitCode = raceWithTimeout<number | undefined>(
+    (resolve) =>
+      vscode.window.onDidEndTerminalShellExecution((event) => {
+        if (event.execution === execution) resolve(event.exitCode);
+      }),
+    args.timeoutMs,
+  );
+
   // Open the stream on this frame so no chunk is missed, then drain it on a
   // child fiber: a late stream error (terminal closed after we stopped
   // reading) is a value this program discards, not an unhandled rejection.
@@ -127,17 +139,8 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
     { startImmediately: true },
   );
 
-  // Exit code is delivered via the global end-event, not the execution
-  // object itself, so subscribe before reading.
   const raced = yield* Effect.tryPromise({
-    try: () =>
-      raceWithTimeout<number | undefined>(
-        (resolve) =>
-          vscode.window.onDidEndTerminalShellExecution((event) => {
-            if (event.execution === execution) resolve(event.exitCode);
-          }),
-        args.timeoutMs,
-      ),
+    try: () => exitCode,
     catch: (cause) =>
       new TerminalRunFailed({
         reason: 'execution-failed',
