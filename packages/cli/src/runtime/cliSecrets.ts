@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { secretsGet, type PlatformSecrets } from '@platform/secrets';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import {
@@ -45,18 +45,22 @@ const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
  * handles cross-instance and cross-process exclusion while flushing.
  *
  * `PlatformSecrets` is a Promise-shaped platform port, so this host
- * implementation is where its programs are run; every line of logic above
- * that boundary is an `Effect`.
+ * implementation is where its programs are run, on the process runtime the
+ * composition root hands it; every line of logic above that boundary is an
+ * `Effect`.
  */
 export class CliSecrets implements PlatformSecrets {
-  constructor(private readonly filePath = cliSecretsPath()) {}
+  constructor(
+    readonly runtime: ProcessRuntime,
+    private readonly filePath = cliSecretsPath(),
+  ) {}
 
   get(key: string): Promise<string | undefined> {
     return secretsGet(this, key);
   }
 
   getStored(key: string): Promise<string | undefined> {
-    return effectRuntime().runPromise(
+    return this.runtime.runPromise(
       Effect.map(this.openStore(), (store) => {
         const value = store.get<unknown>(key, undefined);
         return typeof value === 'string' ? value : undefined;
@@ -73,7 +77,7 @@ export class CliSecrets implements PlatformSecrets {
   }
 
   listStoredKeys(): Promise<readonly string[]> {
-    return effectRuntime().runPromise(
+    return this.runtime.runPromise(
       Effect.map(this.openStore(), (store) => store.keys()),
     );
   }
@@ -83,7 +87,7 @@ export class CliSecrets implements PlatformSecrets {
   }
 
   private mutate(key: string, value: string | undefined): Promise<void> {
-    return effectRuntime().runPromise(
+    return this.runtime.runPromise(
       withPerKeyLane(
         mutationLanes,
         this.filePath,
@@ -104,7 +108,18 @@ export function cliSecretsPath(
 
 let cliSecrets: CliSecrets | undefined;
 
-export function getCliSecrets(storageRoot?: string): CliSecrets {
-  cliSecrets ??= new CliSecrets(cliSecretsPath(storageRoot));
+/**
+ * The one secret store of this process, over the runtime it runs on. A
+ * runtime that replaced a disposed one (an init retried after its failure
+ * disposed the first) gets a store of its own rather than one bound to the
+ * runtime that is gone.
+ */
+export function getCliSecrets(
+  runtime: ProcessRuntime,
+  storageRoot?: string,
+): CliSecrets {
+  if (cliSecrets?.runtime !== runtime) {
+    cliSecrets = new CliSecrets(runtime, cliSecretsPath(storageRoot));
+  }
   return cliSecrets;
 }

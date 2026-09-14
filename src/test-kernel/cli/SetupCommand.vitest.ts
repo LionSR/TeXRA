@@ -35,6 +35,7 @@ vi.mock('@cli/runtime/initPlatform', () => ({
 
 import { runSetup } from '@cli/commands/setup';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { effectRuntime } from '@platform/processRuntime';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -57,7 +58,7 @@ describe('texra setup combined flow', () => {
     // stub resolves with a bag rather than undefined.
     mocks.initInteractiveCliPlatform
       .mockReset()
-      .mockResolvedValue(createFakePlatform());
+      .mockResolvedValue({ ...createFakePlatform(), runtime: effectRuntime() });
   });
 
   it('rejects non-interactive terminals before doing anything', async () => {

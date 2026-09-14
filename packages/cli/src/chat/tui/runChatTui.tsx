@@ -39,7 +39,6 @@ import {
   clearTerminalScrollback,
   installTerminalRestoreOnExit,
 } from '@cli/tui/terminalCleanup';
-import { effectRuntime } from '@platform/processRuntime';
 import { DisposableStore } from '@platform/disposable';
 import {
   formatTexraApprovalPolicy,
@@ -170,7 +169,7 @@ export async function runChat(
   const initialResume = init.initialResume;
   // The entry's runtime, in a local: the chat is the first thing that opens
   // the process session, and the Effects below settle on the same runtime.
-  const runtime = effectRuntime();
+  const { runtime } = services;
   const runtimeSession = await runtime.runPromise(services.session);
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
@@ -222,7 +221,7 @@ export async function runChat(
   // wins, otherwise the persisted account default. Model resolution, the
   // no-models hints, and the header/status all read this same value so they can
   // never disagree.
-  const modelSelectionExit = await effectRuntime().runPromiseExit(
+  const modelSelectionExit = await runtime.runPromiseExit(
     Effect.tryPromise({
       try: () =>
         selectCliRunnableModel(defaults.model, {
@@ -306,7 +305,7 @@ export async function runChat(
     appendLocalAssistantTranscript(startupNotice);
   }
 
-  const inputHistory = await effectRuntime().runPromise(
+  const inputHistory = await runtime.runPromise(
     loadInputHistory(() => services.globalStorage),
   );
 
@@ -356,7 +355,7 @@ export async function runChat(
     const key = ids.join('\0');
     if (key === subscribedRuns) return;
     subscribedRuns = key;
-    effectRuntime().runFork(
+    runtime.runFork(
       runtimeSession.setTranscriptSubscriptions(
         'tui',
         ids.map((id) => ({ id, fromSeq: 0 })),
@@ -470,6 +469,7 @@ export async function runChat(
   registerBuiltinSlashCommands({
     secrets: services.secrets,
     state: services.globalState,
+    runtime,
     runtimeSession,
     canSelectAgent: () => chatTuiCanStartRootRun(session),
     onAgentSelect: (nextAgent) =>
@@ -490,7 +490,8 @@ export async function runChat(
     // `onApiKeySave` and `onLogoutSelect` are deliberately absent: the
     // registry's own defaults are exactly these handlers. Only `/login` needs
     // an override, to carry this session's CliContext.
-    onLoginSelect: (value, output) => loginFromChat(value, context, output),
+    onLoginSelect: (value, output) =>
+      loginFromChat(value, runtime, context, output),
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: chatController.activateSkill,
     onResumeSelect: chatController.resume,
@@ -526,7 +527,7 @@ export async function runChat(
         // A refused detach commit leaves the run alive: the parent's
         // interrupt runs only after the detach batch commits. Surface that
         // failure instead of discarding the forked settlement's exit.
-        effectRuntime().runFork(
+        runtime.runFork(
           stop.settlement.pipe(
             Effect.catch((error) =>
               Effect.sync(() => {

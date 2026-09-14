@@ -2,7 +2,6 @@ import { defineCommand } from 'citty';
 
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { effectRuntime } from '@platform/processRuntime';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 
@@ -53,7 +52,7 @@ export async function runSetup(context: CliContext): Promise<number> {
   // `texra login`'s job under the new vocabulary.
   if (!(await hasUsableSetupCredential(services.secrets, credentialLog.warn))) {
     const { runCliOnboarding } = await import('../onboarding/runOnboarding');
-    const result = await effectRuntime().runPromise(
+    const result = await services.runtime.runPromise(
       runCliOnboarding(services, context.stdoutColorEnabled),
     );
     // Skipped or abandoned the picker: exit cleanly (the skip summary already

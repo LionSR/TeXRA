@@ -32,6 +32,7 @@ import {
   type ApiKeyStatus,
   type ApiProvider,
 } from '@model/apiProviders';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -167,6 +168,7 @@ async function renderCliConfigForm(
     React.createElement(CliConfigForm, {
       stores: makeFakeSettingsStores().stores,
       secrets: formSecrets,
+      runtime: effectRuntime(),
       onClose: () => undefined,
       onError,
     }),
@@ -218,6 +220,7 @@ async function openConfigFormProps(
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
     state: stores.globalState,
+    runtime: effectRuntime(),
     runtimeSession: defaultSession(),
     getConfigStores: () => stores,
   });
@@ -471,13 +474,17 @@ describe('CliConfigForm API-key status lifecycle', () => {
     );
     const { React } = await loadInk();
     const standalone = await renderInkElement(
-      React.createElement(ConfigApp, { secrets: formSecrets }),
+      React.createElement(ConfigApp, {
+        secrets: formSecrets,
+        runtime: effectRuntime(),
+      }),
     );
 
     const { stores } = makeFakeSettingsStores();
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
       state: stores.globalState,
+      runtime: effectRuntime(),
       runtimeSession: defaultSession(),
       getConfigStores: () => stores,
     });
@@ -507,6 +514,7 @@ describe('/config slash command wiring', () => {
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
       state: stores.globalState,
+      runtime: effectRuntime(),
       runtimeSession: defaultSession(),
       getConfigStores: () => stores,
     });
@@ -531,6 +539,7 @@ describe('/config slash command wiring', () => {
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
       state: stores.globalState,
+      runtime: effectRuntime(),
       runtimeSession: defaultSession(),
       getConfigStores: () => stores,
       onApprovalPolicySelect: (policy) => {
@@ -565,6 +574,7 @@ describe('/config slash command wiring', () => {
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
       state: stores.globalState,
+      runtime: effectRuntime(),
       runtimeSession: defaultSession(),
       getConfigStores: () => stores,
       onError: () => {

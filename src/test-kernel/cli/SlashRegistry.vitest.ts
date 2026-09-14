@@ -35,6 +35,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
+import { effectRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
@@ -79,12 +80,13 @@ const CHATGPT_PREFERENCE_FORM_VALUE: AccountAccessFormValue = {
 function registerBuiltins(
   options: Omit<
     Parameters<typeof registerBuiltinSlashCommands>[0],
-    'secrets' | 'state' | 'runtimeSession'
+    'secrets' | 'state' | 'runtime' | 'runtimeSession'
   > = {},
 ): void {
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
     state: new FakeStateStore(),
+    runtime: effectRuntime(),
     runtimeSession: defaultSession(),
     ...options,
   });

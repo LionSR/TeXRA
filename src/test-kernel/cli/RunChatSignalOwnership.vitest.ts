@@ -19,6 +19,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -273,6 +274,7 @@ describe('runChat signal ownership wiring', () => {
       globalState: installedHost().roots.globalState,
       secrets: installedHost().secrets,
       session: Effect.succeed(session),
+      runtime: effectRuntime(),
     });
     mocks.initCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initCliPlatform');

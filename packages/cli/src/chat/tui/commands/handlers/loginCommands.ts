@@ -30,7 +30,7 @@ import {
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { Secrets, PlatformSecrets } from '@platform/secrets';
 import {
   ACCOUNT_OUTCOME,
@@ -91,12 +91,13 @@ const SUBSCRIPTION_AUTH_COPY: Record<
  * preference, then report the outcome in this surface's copy.
  */
 async function loginToSubscription(
+  runtime: ProcessRuntime,
   providerId: SubscriptionProviderId,
   args: CliSubscriptionLoginTransportInit,
   output: SlashCommandOutput,
   signal: AbortSignal,
 ): Promise<void> {
-  const account = await effectRuntime().runPromise(
+  const account = await runtime.runPromise(
     signInCliSubscription(providerId, args, {
       writeProgress: (message) =>
         output.writeProgress(message, { copyable: true }),
@@ -113,6 +114,7 @@ async function loginToSubscription(
 }
 
 async function loginToTexraAccount(
+  runtime: ProcessRuntime,
   args: CliTexraLoginSlashArgs,
   output: SlashCommandOutput,
   signal: AbortSignal,
@@ -125,7 +127,7 @@ async function loginToTexraAccount(
     // The slash command's abort is the program's interruption, surfaced as
     // the abort reason the browser transport rejects with so the caller
     // treats both alike.
-    const exit = await effectRuntime().runPromiseExit(
+    const exit = await runtime.runPromiseExit(
       signInCliSupabaseDeviceCode({
         onDeviceCode: (authorization) => {
           output.writeProgress(formatCliDeviceAuthMessage(authorization), {
@@ -140,7 +142,7 @@ async function loginToTexraAccount(
     }
     session = exit.value;
   } else {
-    session = await signInCliSupabase({
+    session = await signInCliSupabase(runtime, {
       provider: args.provider,
       openBrowser: !args.noBrowser,
       selectAccount: args.selectAccount,
@@ -161,6 +163,7 @@ async function loginToTexraAccount(
 
 export function loginFromChat(
   input: string,
+  runtime: ProcessRuntime,
   context?: CliContext,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ): Promise<void> & { readonly abort: () => void } {
@@ -188,10 +191,16 @@ export function loginFromChat(
     output.writeProgress(loginStartMessage(loginArgs));
 
     if (loginArgs.target === 'chatgpt' || loginArgs.target === 'grok') {
-      await loginToSubscription(loginArgs.target, loginArgs, output, signal);
+      await loginToSubscription(
+        runtime,
+        loginArgs.target,
+        loginArgs,
+        output,
+        signal,
+      );
       return;
     }
-    await loginToTexraAccount(loginArgs, output, signal);
+    await loginToTexraAccount(runtime, loginArgs, output, signal);
   });
 }
 
@@ -273,6 +282,7 @@ const logoutLines = (
 
 export async function logoutFromChat(
   input: string,
+  runtime: ProcessRuntime,
   secrets: PlatformSecrets,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ): Promise<void> {
@@ -282,6 +292,6 @@ export async function logoutFromChat(
     return;
   }
 
-  const lines = await effectRuntime().runPromise(logoutLines(target, secrets));
+  const lines = await runtime.runPromise(logoutLines(target, secrets));
   output.appendOutcome(collapseWhitespace(lines.join(' · ')));
 }

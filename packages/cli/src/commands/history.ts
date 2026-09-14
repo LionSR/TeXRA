@@ -2,7 +2,6 @@ import { defineCommand } from 'citty';
 
 import { formatChatAsMarkdown } from '@agent/export';
 import { listRuns } from '@agent/storage';
-import { effectRuntime } from '@platform/processRuntime';
 import { type RunId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/runHistory';
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
@@ -50,7 +49,7 @@ async function runHistoryList(
   options: { limit?: number },
 ): Promise<number> {
   const stores = await initLocalCliPlatform(context);
-  const entries = await listCliHistoryEntries(stores.session);
+  const entries = await listCliHistoryEntries(stores.runtime, stores.session);
   const visibleEntries =
     options.limit !== undefined ? entries.slice(0, options.limit) : entries;
 
@@ -74,9 +73,14 @@ async function runHistoryShow(
   options: { full?: boolean },
 ): Promise<number> {
   const stores = await initLocalCliPlatform(context);
-  const details = await readCliHistoryDetails(stores.session, id, {
-    includeFullConversation: options.full === true,
-  });
+  const details = await readCliHistoryDetails(
+    stores.runtime,
+    stores.session,
+    id,
+    {
+      includeFullConversation: options.full === true,
+    },
+  );
   if (!details) {
     writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
     return CliExitCode.Usage;
@@ -111,7 +115,11 @@ export async function runHistoryExport(
   const stores = await initLocalCliPlatform(context);
 
   if (format === 'md') {
-    const exportResult = await readCliHistoryExportInput(stores.session, id);
+    const exportResult = await readCliHistoryExportInput(
+      stores.runtime,
+      stores.session,
+      id,
+    );
     if (exportResult.status === 'not_found') {
       writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
       return CliExitCode.Usage;
@@ -127,8 +135,8 @@ export async function runHistoryExport(
     return CliExitCode.Success;
   }
 
-  const session = await effectRuntime().runPromise(stores.session);
-  const traceResult = await effectRuntime().runPromise(
+  const session = await stores.runtime.runPromise(stores.session);
+  const traceResult = await stores.runtime.runPromise(
     assembleTrace(id, session),
   );
   if (traceResult.status !== 'ok') {
@@ -150,6 +158,7 @@ export async function runHistoryExport(
   }
   const { trace } = traceResult;
   const template = await readCliHistoryStandaloneTemplate(
+    stores.runtime,
     context.resourcesPath,
   );
   if (template === null) {
@@ -171,7 +180,7 @@ async function runHistoryDelete(
   const stores = await initLocalCliPlatform(context);
   // Both deletion paths read the same session: opened once here, on the
   // runtime they then run on.
-  const runtime = effectRuntime();
+  const { runtime } = stores;
   const session = await runtime.runPromise(stores.session);
 
   // `--all` is destructive and unrecoverable. Refuse it unless the caller

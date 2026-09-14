@@ -59,6 +59,7 @@ import * as providerApiKey from '@cli/runtime/providerApiKey';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import * as codexPreference from '@model/codex/codexPreference';
+import { effectRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -152,6 +153,7 @@ function seedChildRoster(
 const stores = {
   secrets: new FakeSecrets(),
   state: new FakeStateStore(),
+  runtime: effectRuntime(),
   runtimeSession: defaultSession(),
 };
 
@@ -558,6 +560,7 @@ describe('handleTuiSlashCommand', () => {
 
     const completion = loginFromChat(
       'chatgpt --no-browser',
+      effectRuntime(),
       createCliContext(),
       silentOutput(),
     );
