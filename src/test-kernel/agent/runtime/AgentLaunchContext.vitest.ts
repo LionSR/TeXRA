@@ -326,7 +326,6 @@ describe('AgentLaunchContext', () => {
     const runScope = createRunScope({
       runId,
       session,
-      signal: new AbortController().signal,
     });
     const onApprovalPolicyDenial = vi.fn();
     const ctx = {

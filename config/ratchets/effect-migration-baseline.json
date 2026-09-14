@@ -56,7 +56,6 @@
     "new AbortController()": {
       "packages/cli/src/chat/tui/commands/handlers/slashContext.ts": 1,
       "packages/cli/src/runtime/executeCli.ts": 1,
-      "src/agent/runtime/AgentLaunchContext.ts": 1,
       "src/agent/runtime/childRunLoop.ts": 1,
       "src/agent/runtime/runAgent.ts": 1,
       "src/platform/defaults/lifecycleHost.ts": 1,

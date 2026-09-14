@@ -48,7 +48,7 @@ import {
   RUN_PHASE,
 } from '@shared/schemas';
 import { createRunTrace, type RunTrace } from '@transcript';
-import { isObject, linkAbortSignals, onAbort } from '@utils/core';
+import { isObject, onAbort } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, runInSession, withRunContext } from './RunContext';
@@ -134,14 +134,6 @@ export interface AgentLaunchContext {
    * loop as a fiber interruption whose finalizers record the halt.
    */
   readonly stopped: Deferred.Deferred<void>;
-  /**
-   * Abort the sticky signal published on {@link AgentLaunchContext.runScope}.
-   * Driven by the program's interruption — and, before that program exists,
-   * by the lifecycle's stop-before-start branch: the signal is how the
-   * Promise-tier work a run still owns hears the stop, never a second way to
-   * stop the run.
-   */
-  abortRunSignal: () => void;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -528,36 +520,22 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 
     const agentPath = path.dirname(agentEntry.path);
     const workingDirectory = config.workingDirectory?.trim() || undefined;
-    const runAbortController = new AbortController();
     // The run's one stop. `interrupt()` completes it; the runner races it and
     // the program is interrupted from it.
     const stopped = Deferred.makeUnsafe<void>();
     const stopRun = () => {
       Deferred.doneUnsafe(stopped, Effect.void);
     };
-    // Linked, not composed: `AbortSignal.any` would keep this run's signal (and
-    // every listener still attached to it) reachable from the caller's signal
-    // until that signal aborts. A parent run's signal outlives each subagent it
-    // launches, so a long orchestration would retain every finished child's run
-    // scope. The link is detached with the run trace at end-of-run.
-    const detachRunAbortLink = linkAbortSignals(
-      [input.signal],
-      runAbortController,
-    );
-    resources.push(detachRunAbortLink);
     // A caller that aborts the launch signal is asking this run to stop, so it
     // enters through the same stop as every other stop entry. Detached with
-    // the run trace at end-of-run, for the same reason the link above is: a
-    // parent's signal outlives every subagent it launches.
+    // the run trace at end-of-run: the caller's signal may outlive this run.
     const detachLaunchStop = onAbort(input.signal, stopRun);
     resources.push(detachLaunchStop);
-    const runSignal = runAbortController.signal;
     const runScope = createRunScope({
       runId,
       workingDirectory,
       delegationAgentScope: config.delegationAgentScope,
       session,
-      signal: runSignal,
     });
     const buildVars = () =>
       buildUserVars(
@@ -626,12 +604,10 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       runScope,
       interrupt: stopRun,
       stopped,
-      abortRunSignal: () => runAbortController.abort(),
       initialUserMessageForTranscript: initialMediaMayBeInserted
         ? initialInstruction
         : undefined,
       disposeTrace: () => {
-        detachRunAbortLink();
         detachLaunchStop();
         runTrace.dispose();
       },
