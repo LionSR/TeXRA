@@ -82,12 +82,31 @@ export function getValidatedConfig<T>(
   schema: ZodType<T>,
   defaultValue: T,
 ): T {
-  const raw = getConfig<unknown>(path);
+  return readValidatedConfig(
+    workspaceRoots().config,
+    path,
+    schema,
+    defaultValue,
+  );
+}
+
+/**
+ * {@link getValidatedConfig} over an explicit provider. Session-owned code
+ * uses this form so the setting comes from the session it already holds,
+ * without re-entering an ambient workspace-roots frame.
+ */
+export function readValidatedConfig<T>(
+  config: ConfigProvider,
+  path: string,
+  schema: ZodType<T>,
+  defaultValue: T,
+): T {
+  const raw = readConfig<unknown>(config, path);
   const result = schema.safeParse(raw);
   if (result.success) return result.data;
   // Warn only when the user explicitly set the value (global, workspace, or
   // workspace folder); an unset setting failing the schema is normal.
-  if (workspaceRoots().config.isExplicitlySet(path)) {
+  if (config.isExplicitlySet(path)) {
     log.warn(
       `Ignoring invalid value for setting "${path}": ${toErrorMessage(result.error)}`,
     );
