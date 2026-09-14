@@ -50,6 +50,7 @@ import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
+import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
@@ -84,7 +85,6 @@ import {
   getToolDocsCommand,
 } from '@utils/system/toolUtils';
 import { formatResultCount } from '@utils/text/stringUtils';
-import { chooseTeamAvailabilityViaDialog } from '../common/teamAvailabilityDialog';
 
 const CHANNEL = 'ExtensionHostRequests';
 const log = createLog(CHANNEL);
