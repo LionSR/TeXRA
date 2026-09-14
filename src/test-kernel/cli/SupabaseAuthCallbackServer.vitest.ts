@@ -43,7 +43,9 @@ const withServer = <A, E>(
 ) =>
   Effect.acquireUseRelease(
     Effect.promise(() =>
-      effectRuntime().runPromise(startLoopbackCallbackServer(coordinator)),
+      effectRuntime().runPromise(
+        startLoopbackCallbackServer(effectRuntime(), coordinator),
+      ),
     ),
     use,
     (server) => Effect.promise(() => effectRuntime().runPromise(server.close)),

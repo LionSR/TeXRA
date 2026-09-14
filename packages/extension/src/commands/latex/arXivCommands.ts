@@ -10,13 +10,15 @@ import {
 } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'arXivCommands';
 const log = createLog(CHANNEL);
 
-export async function downloadArXivSource(): Promise<void> {
+export async function downloadArXivSource(
+  runtime: ProcessRuntime,
+): Promise<void> {
   try {
     const arxivId = await vscode.window.showInputBox({
       placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
@@ -73,7 +75,7 @@ export async function downloadArXivSource(): Promise<void> {
           log.info('User cancelled the download');
         });
 
-        const downloadResult = await effectRuntime().runPromise(
+        const downloadResult = await runtime.runPromise(
           ArxivProcessor.downloadSource(arxivId, {
             progressCallback: (message, increment) =>
               progress.report({ message, increment }),

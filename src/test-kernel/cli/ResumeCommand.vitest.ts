@@ -16,6 +16,7 @@ import {
 } from '@agent/storage/runLease';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { effectRuntime } from '@platform/processRuntime';
 import { aggregateId } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -116,6 +117,7 @@ async function seedRunRecord(seed: {
   const session = await Effect.runPromise(createProcessSession());
   // `runResumeCommand` reads the session off the services the init returns.
   mocks.initInteractiveCliPlatform.mockResolvedValue({
+    runtime: effectRuntime(),
     session: Effect.succeed(session),
   });
   await Effect.runPromise(

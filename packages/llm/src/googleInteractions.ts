@@ -14,6 +14,7 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  authOrRejectionKind,
   enrichModelError,
   parseInboundToolArguments,
   parseOutboundToolArguments,
@@ -303,10 +304,7 @@ function sdkFailure(cause: unknown): ModelError {
   let kind: ModelError['kind'] = 'transport';
   if (cause instanceof SyntaxError) kind = 'malformed-output';
   else if (status !== undefined) {
-    kind =
-      status === 401 || status === 403
-        ? 'authentication'
-        : 'provider-rejection';
+    kind = authOrRejectionKind(status);
   }
   return new ModelError({
     kind,

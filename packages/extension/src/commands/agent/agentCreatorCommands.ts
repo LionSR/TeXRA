@@ -16,6 +16,7 @@ import { hostPort } from '@common/hostPort';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { AgentCategory } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -103,7 +104,7 @@ async function pickToolGroups(
   });
 }
 
-function buildVSCodeUI(): AgentCreatorUI {
+function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
   return {
     async promptAgentName(categoryLabel) {
       return vscode.window.showInputBox({
@@ -154,7 +155,7 @@ function buildVSCodeUI(): AgentCreatorUI {
     },
 
     promptAddToConfig(agentName, category) {
-      return promptToAddAgentToConfig(agentName, 'custom', category);
+      return promptToAddAgentToConfig(agentName, 'custom', category, runtime);
     },
 
     async openCreatedFile(filePath) {
@@ -180,10 +181,11 @@ export function handleCreateAgentWithAI(
   context: vscode.ExtensionContext,
   category: AgentCategory,
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ) {
   return Effect.gen(function* () {
     const config = yield* hostPort(() => loadCreatorConfig(context));
-    yield* runAgentCreator(config, category, buildVSCodeUI(), {
+    yield* runAgentCreator(config, category, buildVSCodeUI(runtime), {
       secrets,
       globalState: context.globalState,
     });

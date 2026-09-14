@@ -35,7 +35,7 @@ import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   cloneRoundIndexed,
@@ -102,6 +102,9 @@ interface DesktopHostRequestsOptions {
   openExternalUrl(url: string): Promise<void>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Promise<void>;
+  /** The process runtime this window was handed; every request arm below runs
+   *  on it. */
+  runtime: ProcessRuntime;
   logger: {
     warn(message: string, data?: { data?: unknown }): void;
     error(message: string, data?: { data?: unknown }): void;
@@ -131,10 +134,7 @@ function operationLabel(operation: WorkflowFileOperation): {
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
-  const { session, host, run, logger } = options;
-  // The window's handle on the process runtime, taken once here rather than
-  // re-fetched at each of the request arms below.
-  const runtime = effectRuntime();
+  const { session, host, run, logger, runtime } = options;
   // Shared controllers propagate request failures to the dispatcher.
   const rejectRequest = async (reason: string): Promise<never> => {
     throw new Rejected({ reason });
@@ -190,6 +190,7 @@ export function createDesktopHostRequests(
     {
       session,
       globalState: options.globalState,
+      runtime,
       // The request schedules a merge; its later run failure belongs to this
       // lifecycle callback, after the request has already completed.
       startRun: (request) => {

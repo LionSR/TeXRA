@@ -1,5 +1,6 @@
+import { Effect } from 'effect';
+
 import { createWorkspaceAgentRosterController, loadAgents } from '@agent/index';
-import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   byCategory,
@@ -20,21 +21,20 @@ export type CliAgentRosterRecord = AgentRosterSnapshot & {
   readonly agentKeys: ByCategory<AgentRosterCategorySelection>;
 };
 
-export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
-  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
+/** The workspace roster as a program, run by the surface that shows it. */
+export const readCliAgentRoster = Effect.gen(function* () {
+  yield* loadAgents({ includeRemote: false });
   const roster = createWorkspaceAgentRosterController();
   const cwd = workspaceRoots().workspace;
-  const config = cwd
-    ? await effectRuntime().runPromise(loadWorkspaceCliConfig(cwd))
-    : undefined;
+  const config = cwd ? yield* loadWorkspaceCliConfig(cwd) : undefined;
   return {
     ...roster.snapshot(),
     defaultChatAgent: resolveConfiguredAgent(config?.values, 'chat'),
     agentKeys: byCategory(
       (category) => roster.getEnabledAgentKeys(category) ?? 'all',
     ),
-  };
-}
+  } satisfies CliAgentRosterRecord;
+});
 
 function formatSelection(selection: AgentRosterSelection): string {
   switch (selection.kind) {

@@ -54,7 +54,7 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
@@ -84,6 +84,7 @@ import {
   getToolDocsCommand,
 } from '@utils/system/toolUtils';
 import { formatResultCount } from '@utils/text/stringUtils';
+import { chooseTeamAvailabilityViaDialog } from '../common/teamAvailabilityDialog';
 
 const CHANNEL = 'ExtensionHostRequests';
 const log = createLog(CHANNEL);
@@ -108,6 +109,9 @@ export interface ExtensionHostRequestsOptions {
   readonly snapshot: HostSnapshotSource;
   readonly draftRequests: HostDraftRequests;
   readonly toolEditApprovals: ToolEditApprovalController;
+  /** The process runtime the extension root holds; every request arm that
+   *  settles an Effect runs it here. */
+  readonly runtime: ProcessRuntime;
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
   /** The placement commands the sidebar and the editor tab share. */
@@ -155,11 +159,14 @@ const showError = async (message: string): Promise<void> => {
 export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
-  const { session, snapshot, toolEditApprovals, secrets, globalState } =
-    options;
-  // The view's handle on the process runtime, taken once here rather than
-  // re-fetched at each of the request arms below.
-  const runtime = effectRuntime();
+  const {
+    session,
+    snapshot,
+    toolEditApprovals,
+    secrets,
+    globalState,
+    runtime,
+  } = options;
   const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
@@ -369,13 +376,10 @@ export function createExtensionHostRequests(
         showInfoMessage: showInfo,
         chooseTeamAvailability: async (unavailableNames) => {
           const prompt = teamAvailabilityPrompt(unavailableNames);
-          const choice = await vscode.window.showWarningMessage(
-            prompt.message,
-            ...prompt.actions.map((action) => action.label),
-          );
           return (
-            prompt.actions.find((action) => action.label === choice)?.choice ??
-            'cancel'
+            (await chooseTeamAvailabilityViaDialog(prompt, {
+              modal: false,
+            })) ?? 'cancel'
           );
         },
         signInForRemoteAgentCatalog: async () =>
@@ -571,7 +575,7 @@ export function createExtensionHostRequests(
   ): Promise<void> {
     switch (action) {
       case 'signInChatGpt':
-        await signInWithSubscription(CHANNEL, 'chatgpt');
+        await signInWithSubscription(CHANNEL, 'chatgpt', runtime);
         await refreshAfterCredentialChange();
         return;
       case 'setApiKey':

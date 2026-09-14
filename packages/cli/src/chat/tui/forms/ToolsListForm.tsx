@@ -9,6 +9,7 @@ import {
   type CliToolStatusRecord,
 } from '@cli/runtime/tools';
 import type { StateStore } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -23,6 +24,8 @@ interface ToolsListFormProps {
    * surface that opened the form.
    */
   readonly state: StateStore;
+  /** The process runtime the tool probes run on, from the same surface. */
+  readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
 }
 
@@ -57,7 +60,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       title="/tools"
       compactTitle="/tools · Toggle available external integrations."
       loadingLabel="Checking tool integrations..."
-      load={() => readCliToolStatuses(props.state)}
+      load={() => readCliToolStatuses(props.runtime, props.state)}
       items={(tools) =>
         tools.map((tool) => ({
           value: tool.id,

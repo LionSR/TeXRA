@@ -8,8 +8,8 @@
  * (`installProcessRuntime`), which installs the owner here beside
  * `initPlatform()`, exactly as it installs the process roots. `src/agent`
  * never imports `src/controllers`, so the owner arrives through this port
- * rather than by import; the runtime itself is reached through
- * `effectRuntime()` (`@platform/processRuntime`).
+ * rather than by import; the runtime itself is handed to each
+ * `SessionHandle` by the owner that built it, never looked up.
  */
 
 import {

@@ -1845,6 +1845,7 @@ function handleHarnessSlashCommand(line: string): boolean {
 registerBuiltinSlashCommands({
   secrets: HARNESS_PLATFORM_SERVICES.secrets,
   state: HARNESS_PLATFORM_SERVICES.globalState,
+  runtime: HARNESS_PLATFORM_SERVICES.runtime,
   runtimeSession: harnessRuntimeSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending, the same fact the status bar's `/agent` hint derives from.

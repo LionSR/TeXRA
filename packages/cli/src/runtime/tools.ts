@@ -1,6 +1,6 @@
 // Local imports
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   EXTERNAL_TOOL_DEFS,
   type ExternalToolDef,
@@ -59,13 +59,11 @@ function noteForTool(
  * and the toggle that follows it hit the same store.
  */
 export async function readCliToolStatuses(
+  runtime: ProcessRuntime,
   state: StateStore,
 ): Promise<CliToolStatusRecord[]> {
   const checks = new Map(
-    (await effectRuntime().runPromise(runExternalToolChecks())).map((r) => [
-      r.id,
-      r,
-    ]),
+    (await runtime.runPromise(runExternalToolChecks())).map((r) => [r.id, r]),
   );
   const disabledIds = getDisabledToolIds(state);
 
@@ -96,10 +94,13 @@ export async function readCliToolStatuses(
 }
 
 export async function readCliToolStatus(
+  runtime: ProcessRuntime,
   state: StateStore,
   id: string,
 ): Promise<CliToolStatusRecord | undefined> {
-  return (await readCliToolStatuses(state)).find((record) => record.id === id);
+  return (await readCliToolStatuses(runtime, state)).find(
+    (record) => record.id === id,
+  );
 }
 
 function findCliToolDef(id: string): ExternalToolDef | undefined {

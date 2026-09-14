@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
+import { effectRuntime } from '@platform/processRuntime';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
@@ -127,7 +128,7 @@ let storageRoot: string;
 function createApprovalHarness(): ApprovalHarness {
   const decide = createDecideSpy();
   const controller = new ToolEditApprovalController({
-    host: new VscodeToolEditApprovalHost(storageRoot, decide),
+    host: new VscodeToolEditApprovalHost(storageRoot, decide, effectRuntime()),
   });
   const harness = { controller, decide };
   harnesses.push(harness);

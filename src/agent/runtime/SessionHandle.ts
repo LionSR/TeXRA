@@ -47,7 +47,7 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import { DisposableStore } from '@platform/disposable';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -229,8 +229,8 @@ export class SessionHandle {
   readonly events: SessionEventReads;
   /**
    * The one handler of every request a surface issues to this session (PRD
-   * 7.6, 8.2): an in-process surface runs it on the process runtime
-   * (`effectRuntime()`) and reads the Effect's own result as the response.
+   * 7.6, 8.2): an in-process surface runs it on the runtime its own
+   * composition root owns and reads the Effect's own result as the response.
    */
   readonly requests: SessionGraph['requests'];
   /** The run ledger over this session's event plane, provided to each run's
@@ -265,6 +265,14 @@ export class SessionHandle {
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
   private readonly graph: SessionGraph;
+  /**
+   * The runtime this session's owner built and runs it on, captured at
+   * construction rather than read from the process when a fiber is wanted.
+   * Two members of this class face Promises and have no fiber of their own
+   * to borrow -- {@link settlePublications} and the `unreadable` write -- and
+   * both start theirs here. Nothing else in the session runs an Effect.
+   */
+  private readonly runtime: ProcessRuntime;
   private disposed = false;
   private readonly publications = new Set<TrackedPublication>();
   /** Session-scoped host interaction owner. */
@@ -300,12 +308,15 @@ export class SessionHandle {
       Pick<SessionHandle, 'transcripts' | 'modelRetries'> & {
         readonly roots: WorkspaceRoots;
         readonly graph: (session: SessionHandle) => SessionGraph;
+        /** The owner's runtime, for this session's two Promise faces. */
+        readonly runtime: ProcessRuntime;
       },
   ) {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
     this.transcripts = init.transcripts;
     this.roots = init.roots;
+    this.runtime = init.runtime;
     const graph = init.graph(this);
     this.graph = graph;
     this.events = graph.events;
@@ -1049,7 +1060,7 @@ export class SessionHandle {
     runId?: RunId,
     options: { readonly consume?: boolean } = {},
   ): Promise<void> {
-    await effectRuntime().runPromise(this.graph.settle);
+    await this.runtime.runPromise(this.graph.settle);
     const settled = await Promise.all(
       [...this.publications].map(async (publication) => ({
         publication,
@@ -1161,7 +1172,7 @@ export class SessionHandle {
 
   private setUnreadable(runId: RunId, detail: string | null): void {
     if (this.disposed) return;
-    effectRuntime().runFork(
+    this.runtime.runFork(
       SubscriptionRef.update(this.graph.local, (local) => {
         const rest = local.unreadable.filter((u) => u.runId !== runId);
         if (detail === null && rest.length === local.unreadable.length) {

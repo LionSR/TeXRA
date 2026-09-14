@@ -9,8 +9,11 @@ import { z } from 'zod';
 import {
   ModelConfigurationSchema,
   ModelError,
+  authOrRejectionKind,
   enrichModelError,
+  hasErrorField,
   parseInboundToolArguments,
+  parseJsonOrModelError,
   pullStream,
   sseEvents,
   readerAbortSignal,
@@ -738,13 +741,7 @@ export function openrouterChatModel(
               });
             const error = parsedError.data;
             return new ModelError({
-              kind:
-                status === 401 ||
-                status === 403 ||
-                error.code === 401 ||
-                error.code === 403
-                  ? 'authentication'
-                  : 'provider-rejection',
+              kind: authOrRejectionKind(status, error.code),
               message: error.message,
               status,
               cause: payload,
@@ -770,20 +767,18 @@ export function openrouterChatModel(
                   () => '',
                   (all, chunk) => all + chunk,
                 );
-                const raw: unknown = yield* Effect.try({
-                  try: () => JSON.parse(text),
-                  catch: (cause) =>
+                const raw = yield* parseJsonOrModelError(
+                  text,
+                  (cause) =>
                     new ModelError({
                       kind: 'provider-rejection',
                       message: `OpenRouter rejected the request (HTTP ${response.status}).`,
                       status: response.status,
                       cause,
                     }),
-                });
+                );
                 return yield* failure(
-                  typeof raw === 'object' && raw !== null && 'error' in raw
-                    ? raw.error
-                    : raw,
+                  hasErrorField(raw) ? raw.error : raw,
                   response.status,
                 );
               }).pipe(Effect.mapError(enrich)),
@@ -822,15 +817,15 @@ export function openrouterChatModel(
                   sentinel = true;
                   return [];
                 }
-                const raw: unknown = yield* Effect.try({
-                  try: () => JSON.parse(event.data),
-                  catch: (cause) =>
+                const raw = yield* parseJsonOrModelError(
+                  event.data,
+                  (cause) =>
                     new ModelError({
                       kind: 'malformed-output',
                       message: 'OpenRouter returned malformed stream JSON.',
                       cause,
                     }),
-                });
+                );
                 const identity = IdentitySchema.safeParse(raw);
                 if (identity.success) {
                   if (
@@ -848,15 +843,8 @@ export function openrouterChatModel(
                   responseId ??= identity.data.id;
                   returnedModel ??= identity.data.model;
                 }
-                if (
-                  event.event === 'error' ||
-                  (typeof raw === 'object' && raw !== null && 'error' in raw)
-                )
-                  return yield* failure(
-                    typeof raw === 'object' && raw !== null && 'error' in raw
-                      ? raw.error
-                      : raw,
-                  );
+                if (event.event === 'error' || hasErrorField(raw))
+                  return yield* failure(hasErrorField(raw) ? raw.error : raw);
                 const parsedChunk = ChunkSchema.safeParse(raw);
                 if (!parsedChunk.success)
                   return yield* new ModelError({

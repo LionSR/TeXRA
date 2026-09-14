@@ -33,7 +33,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { StateStore } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKey,
@@ -47,6 +47,8 @@ import {
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+
+import { chooseTeamAvailabilityViaDialog } from '../../common/teamAvailabilityDialog';
 
 import {
   withHandlerErrorHandling,
@@ -68,6 +70,7 @@ export class AgentHandlers {
       agentCatalogAlreadyFresh?: boolean,
     ) => Promise<void>,
     globalState: StateStore,
+    private readonly runtime: ProcessRuntime,
   ) {
     const controllers = createSettingsAgentControllers({
       workspaceState: workspaceRoots().workspaceState,
@@ -118,7 +121,7 @@ export class AgentHandlers {
   // ── Agent selection data ──
 
   async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
-    await effectRuntime().runPromise(loadAgents());
+    await this.runtime.runPromise(loadAgents());
     await webview.postMessage(
       buildAgentSelectionMessage({
         buildSelectionItems: () => this.catalogController.buildSelectionItems(),
@@ -293,7 +296,7 @@ export class AgentHandlers {
       'Failed to apply agent team',
       async () => {
         await withAgentCatalogAuthRefreshDeferred(() =>
-          effectRuntime().runPromise(
+          this.runtime.runPromise(
             applySettingsTeamRoster(data.presetId, {
               catalog: this.catalogController,
               loadLocalCatalog: () => loadAgents({ includeRemote: false }),
@@ -341,7 +344,7 @@ export class AgentHandlers {
         });
         if (!name) return; // cancelled
 
-        await effectRuntime().runPromise(loadAgents());
+        await this.runtime.runPromise(loadAgents());
 
         await this.catalogController.saveCurrentPreset(name);
 
@@ -380,17 +383,7 @@ export class AgentHandlers {
   // ── Private helpers ──
 
   private async chooseTeamAvailability(prompt: TeamAvailabilityPrompt) {
-    const items = prompt.actions.map((action) => ({
-      title: action.label,
-      isCloseAffordance: action.choice === 'cancel',
-    }));
-    const choice = await vscode.window.showWarningMessage(
-      prompt.message,
-      { modal: true },
-      ...items,
-    );
-    return prompt.actions.find((action) => action.label === choice?.title)
-      ?.choice;
+    return chooseTeamAvailabilityViaDialog(prompt, { modal: true });
   }
 
   private async createAgentFromTemplate(

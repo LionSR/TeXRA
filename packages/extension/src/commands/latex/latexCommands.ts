@@ -21,7 +21,7 @@ import { runLatexFormatter } from '@latex/formatter/texFormatter';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
 
 import {
@@ -100,7 +100,9 @@ export async function handleIndentCurrentTeX(): Promise<void> {
   );
 }
 
-export async function handleGetTeXCount(): Promise<void> {
+export async function handleGetTeXCount(
+  runtime: ProcessRuntime,
+): Promise<void> {
   await runGuardedLatexCommand(
     {
       channel: CHANNEL,
@@ -139,7 +141,7 @@ export async function handleGetTeXCount(): Promise<void> {
         async (progress) => {
           progress.report({ message: 'Running texcount...' });
 
-          const { output, errors } = await effectRuntime().runPromise(
+          const { output, errors } = await runtime.runPromise(
             getTeXCount(relativePath, {
               mode: countingMode.value,
               channel: CHANNEL,

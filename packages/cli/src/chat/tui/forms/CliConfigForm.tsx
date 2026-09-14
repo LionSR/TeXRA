@@ -11,6 +11,7 @@ import {
   saveProviderApiKey,
 } from '@cli/runtime/providerApiKey';
 import type { ApiKeyStatus, ApiProvider } from '@model/apiProviders';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { CLI_STATE_SETTINGS, type SurfacedSettingEntry } from '@shared/schemas';
@@ -47,6 +48,8 @@ export interface CliConfigFormProps {
    * surface that opened this form.
    */
   readonly secrets: PlatformSecrets;
+  /** The process runtime the tools row's probes run on, from the same surface. */
+  readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
   /**
@@ -282,6 +285,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           <ToolsListForm
             availableRows={props.availableRows}
             state={stores.globalState}
+            runtime={props.runtime}
             onClose={onBack}
           />
         ),

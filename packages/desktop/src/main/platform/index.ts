@@ -10,7 +10,7 @@ import {
 } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { initPlatform } from '@platform/platform';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
@@ -94,6 +94,12 @@ export interface ElectronPlatformInitResult {
    * each re-resolve it.
    */
   resourcesPath: string;
+  /**
+   * The one Effect runtime of this process, built here. Returned so the entry
+   * and everything it wires take it as a parameter instead of reading the
+   * process-global locator.
+   */
+  runtime: ProcessRuntime;
 }
 
 export async function initializeElectronPlatform(
@@ -151,8 +157,11 @@ export async function initializeElectronPlatform(
                 runWrite,
               ),
               openAppStateStore(storage.getStoragePath(), runWrite),
-              openTexraConfigStores(storage, undefined, (message) =>
-                console.warn(`[desktop] ${message}`),
+              openTexraConfigStores(
+                storage,
+                undefined,
+                (message) => console.warn(`[desktop] ${message}`),
+                runtime,
               ),
               JsonStore.open(join(userDataPath, 'secrets.json')),
             ],
@@ -178,7 +187,7 @@ export async function initializeElectronPlatform(
       get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
     },
   });
-  const secrets = new ElectronSecrets(secretsStore, {
+  const secrets = new ElectronSecrets(secretsStore, runtime, {
     showWarningMessage: showDesktopWarningDialog,
   });
   initPlatform(
@@ -208,21 +217,16 @@ export async function initializeElectronPlatform(
   // carries an undefined host/version, so a queue shorter than one batch is
   // lost at quit — including plan accounting. `dispose()` drains it, from the
   // same BEFORE phase the other two hosts use.
-  await effectRuntime().runPromise(
-    UsageLogService.initialize(
-      effectRuntime().scope,
-      {},
-      app.getVersion(),
-      'desktop',
-    ),
+  await runtime.runPromise(
+    UsageLogService.initialize(runtime.scope, {}, app.getVersion(), 'desktop'),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    effectRuntime().runPromise(UsageLogService.dispose()),
+    runtime.runPromise(UsageLogService.dispose()),
   );
 
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
-  await effectRuntime().runPromise(seedDisabledToolDefaults(globalStateStore));
+  await runtime.runPromise(seedDisabledToolDefaults(globalStateStore));
 
   // Project skills follow each project's session; only the bundle is fixed.
   initializeNodeRuntimeSkills({ resourcesPath });
@@ -238,5 +242,6 @@ export async function initializeElectronPlatform(
     agentDirectories,
     dataRoot,
     resourcesPath,
+    runtime,
   };
 }

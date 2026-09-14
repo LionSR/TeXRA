@@ -76,11 +76,11 @@ export function createExtensionCommandActions(
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
     signOut: authSignOut,
     runSetupAssistant: async () => {
-      await launchSetupAssistant(secrets, context.globalState);
+      await launchSetupAssistant(secrets, context.globalState, runtime);
     },
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () => sysCreateSampleProject(context.extensionPath),
-    downloadArXivSource: latexDownloadArXivSource,
+    downloadArXivSource: () => latexDownloadArXivSource(runtime),
     openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     async openDoc(page) {
       if (!page) return;
@@ -90,10 +90,10 @@ export function createExtensionCommandActions(
     },
     indentCurrentTeX: latexIndentCurrentTeX,
     fixCompilation: latexFixCompilation,
-    getTeXCount: latexGetTeXCount,
+    getTeXCount: () => latexGetTeXCount(runtime),
     extractTikzFigures: latexExtractTikzFigures,
     compileTikzFigures: latexCompileTikzFigures,
-    cloneOverleafProject: () => gitCloneOverleafProject(secrets),
+    cloneOverleafProject: () => gitCloneOverleafProject(secrets, runtime),
     removeApiKey: () => apiRemoveApiKey(secrets, refreshAfterProviderKeyChange),
     showImportOptions: sysShowImportOptions,
     toggleView: () => progressViewProvider.toggleDrawer(),
@@ -105,14 +105,14 @@ export function createExtensionCommandActions(
     // from `activate`, settles it here at the command boundary.
     createAgentWithAI: (category) =>
       runtime.runPromise(
-        agentHandleCreateAgentWithAI(context, category, secrets),
+        agentHandleCreateAgentWithAI(context, category, secrets, runtime),
       ),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.
     execute: (input) =>
       input === undefined
         ? progressViewProvider.submit()
-        : agentRunExecuteCommand(input),
+        : agentRunExecuteCommand(input, runtime),
   };
 }
 

@@ -1,6 +1,7 @@
 import { useApp, useWindowSize } from 'ink';
 
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { CliConfigForm } from '../chat/tui/forms/CliConfigForm';
 
@@ -10,6 +11,8 @@ export function ConfigApp(props: {
    * command that opened this view; Ink components run no Effect.
    */
   readonly secrets: PlatformSecrets;
+  /** The process runtime the tools row runs on, from the same command. */
+  readonly runtime: ProcessRuntime;
   readonly onError?: (error: unknown) => void;
 }) {
   const { exit } = useApp();
@@ -18,6 +21,7 @@ export function ConfigApp(props: {
     <CliConfigForm
       availableRows={rows}
       secrets={props.secrets}
+      runtime={props.runtime}
       onClose={exit}
       onError={props.onError}
     />
@@ -26,11 +30,18 @@ export function ConfigApp(props: {
 
 export async function runConfigTui(options: {
   readonly secrets: PlatformSecrets;
+  readonly runtime: ProcessRuntime;
   readonly colorEnabled?: boolean;
   readonly onError?: (error: unknown) => void;
 }): Promise<void> {
   await renderCliPrompt(
-    () => <ConfigApp secrets={options.secrets} onError={options.onError} />,
+    () => (
+      <ConfigApp
+        secrets={options.secrets}
+        runtime={options.runtime}
+        onError={options.onError}
+      />
+    ),
     {
       stdout: process.stdout,
       stderr: process.stderr,

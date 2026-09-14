@@ -4,7 +4,7 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
-import { initProcessRuntime } from '@platform/processRuntime';
+import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
@@ -129,6 +129,7 @@ function createHandlers(): AgentHandlers {
     },
     mocks.refreshAfterAgentMutation,
     installedHost().roots.globalState,
+    effectRuntime(),
   );
 }
 

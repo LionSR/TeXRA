@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   prepareAgentDefinition: vi.fn(),
   readRunEnd: vi.fn(),
   runExists: vi.fn(),
+  runActive: vi.fn(() => false),
   executeAgent: vi.fn(),
   finalizeRun: vi.fn(),
   registerRun: vi.fn(),
@@ -81,6 +82,10 @@ import { fakeProcessServices } from '@test/support/setupPlatform';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const RUN_ID = 'a9e70a9e7001' as RunId;
+const PARENT_RUN_ID = 'a9e70a9e7002' as RunId;
+// The persisted lineage a resume reads before its handle registers. Empty
+// unless a case seeds this run's `run.start` parent.
+const persistedRuns = new Map<RunId, { readonly parentId: RunId }>();
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
   agentCategory: 'toolUse',
@@ -104,6 +109,14 @@ const SESSION = {
       trackedHandle?.runId === runId ? trackedHandle : undefined,
     ),
     untrack: untrackRun,
+    // No generation is live unless a case says so.
+    isActiveOrResuming: () => mocks.runActive(),
+    // The registry's local application of a durable detach, over the one
+    // handle this fixture tracks.
+    detachChildren: vi.fn((_parent: RunId, children: readonly RunId[]) => {
+      if (trackedHandle && children.includes(trackedHandle.runId))
+        trackedHandle.detach();
+    }),
     // No competing generation exists in this fixture; the lane is a passthrough.
     launchRun: vi.fn(
       (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,
@@ -112,6 +125,7 @@ const SESSION = {
     throughDetach: () => Effect.void,
   },
   flushArtifacts,
+  readView: () => Effect.succeed({ runs: persistedRuns }),
   acquireClaims: () => Effect.succeed(Effect.void),
   graph: { releaseClaims: () => Effect.void },
   releaseClaims: SessionHandle.prototype.releaseClaims,
@@ -150,6 +164,7 @@ describe('runAgent run ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     trackedHandle = undefined;
+    persistedRuns.clear();
     mocks.registerRun.mockResolvedValue(undefined);
     mocks.acquireResumedRunLease.mockResolvedValue('acquired');
     mocks.prepareAgentDefinition.mockImplementation(({ config }) => ({
@@ -199,6 +214,24 @@ describe('runAgent run ownership', () => {
   );
 
   it.effect(
+    'refuses a resume of a run this session already runs before any snapshot',
+    () =>
+      Effect.gen(function* () {
+        mocks.runActive.mockReturnValueOnce(true);
+        expect(
+          yield* Effect.flip(
+            launchRun(
+              { kind: 'resume', config: CONFIG, runId: RUN_ID },
+              { session: SESSION },
+            ),
+          ),
+        ).toMatchObject({ message: `Run is already running: ${RUN_ID}` });
+        expect(mocks.readRunEnd).not.toHaveBeenCalled();
+        expect(trackRun).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
     'does not retain an abort listener when the resumed run is not found',
     () =>
       Effect.gen(function* () {
@@ -215,6 +248,56 @@ describe('runAgent run ownership', () => {
           message: `Run not found: ${RUN_ID}`,
         });
         expect(getEventListeners(signal, 'abort')).toEqual([]);
+      }),
+  );
+
+  it.effect(
+    'admits a resumed child under the parent its `run.start` names',
+    () =>
+      Effect.gen(function* () {
+        persistedRuns.set(RUN_ID, { parentId: PARENT_RUN_ID });
+        // What the registry does to a child of a parent whose stop has begun
+        // (`assertAdmitsChild`): a resume is refused where any other child
+        // launch is, instead of installing its parent after that stop ended.
+        const refusal = new Error(
+          `Cannot launch child run ${RUN_ID} under run ${PARENT_RUN_ID} while that run is stopping.`,
+        );
+        let admittedParent: RunId | null | undefined;
+        trackRun.mockImplementationOnce((handle) => {
+          admittedParent = handle.parent;
+          throw refusal;
+        });
+
+        const exit = yield* Effect.exit(launch());
+
+        expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toBe(refusal);
+        // The edge is on the handle before launch preparation begins, so the
+        // parent's stop reaches this child instead of missing it.
+        expect(admittedParent).toBe(PARENT_RUN_ID);
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'takes a detach another host committed while the launch prepared',
+    () =>
+      Effect.gen(function* () {
+        persistedRuns.set(RUN_ID, { parentId: PARENT_RUN_ID });
+        // The foreign `run.detach` folds before this launch owns the run; a
+        // foreign row never reaches the handle this session tracked.
+        mocks.acquireResumedRunLease.mockImplementationOnce(async () => {
+          persistedRuns.delete(RUN_ID);
+          return 'acquired';
+        });
+        let launched: RunHandle | undefined;
+        trackRun.mockImplementationOnce((handle) => {
+          trackedHandle = handle;
+          launched = handle;
+        });
+
+        yield* launch();
+
+        expect(launched?.parent).toBeNull();
       }),
   );
 
@@ -347,7 +430,8 @@ describe('runAgent run ownership', () => {
     () =>
       Effect.gen(function* () {
         const launchError = new Error('resume launch failed');
-        mocks.readRunEnd.mockReturnValueOnce({
+        // Read twice: the snapshot, then the revalidation before it is restored.
+        mocks.readRunEnd.mockReturnValue({
           outcome: RUN_OUTCOME.CANCELLED,
         });
         mocks.executeAgent.mockRejectedValueOnce(launchError);

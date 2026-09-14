@@ -5,7 +5,7 @@ import { Cause, Effect, Exit } from 'effect';
 import { nanoid } from 'nanoid';
 
 import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
@@ -37,6 +37,9 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
    * removes the recorded directories once during quit.
    */
   recordPatchDir(tempDir: string): void;
+  /** The process runtime the window was handed; the external-editor fallback
+   *  settles its file work on it. */
+  runtime: ProcessRuntime;
 }
 
 /** The pair of Review-tab verbs the main process owns. */
@@ -115,7 +118,7 @@ export function createDesktopDiffHost(
     options.recordPatchDir(tempDir);
     const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
-    const opened = await effectRuntime().runPromiseExit(
+    const opened = await options.runtime.runPromiseExit(
       Effect.tryPromise({
         try: async () => {
           await writeFile(diffPath, patch, 'utf8');
@@ -129,7 +132,7 @@ export function createDesktopDiffHost(
       // until quit, and preserve the original failure for the caller. The
       // directory stays recorded, so a failed removal is retried by the
       // process-level removal, and the failure is logged instead of swallowed.
-      const removed = await effectRuntime().runPromiseExit(
+      const removed = await options.runtime.runPromiseExit(
         Effect.tryPromise({
           try: () => rm(tempDir, { recursive: true, force: true }),
           catch: (error) => error,

@@ -14,7 +14,6 @@ import {
   type SubscriptionAccount,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
-import { effectRuntime } from '@platform/processRuntime';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 
 import { withCliAuthError } from './cliAuthError';
@@ -55,11 +54,11 @@ export function defineSubscriptionAuthCommand(
     context: CliContext,
     init: { device: boolean; noBrowser: boolean },
   ): Promise<number> {
-    await initCliPlatform({ ...context, quietLogs: true });
+    const { runtime } = await initCliPlatform({ ...context, quietLogs: true });
     const writeProgress = cliProgressWriter(context);
 
     const signInResult = await withCliAuthError(() =>
-      effectRuntime().runPromise(
+      runtime.runPromise(
         signInCliSubscription(
           options.providerId,
           { ...init, device: shouldUseSubscriptionDeviceCode(context, init) },
@@ -123,9 +122,12 @@ export function defineSubscriptionAuthCommand(
     },
     args: { ...GLOBAL_ARGS },
     async run(context) {
-      await initCliPlatform({ ...context, quietLogs: true });
+      const { runtime } = await initCliPlatform({
+        ...context,
+        quietLogs: true,
+      });
       const signOutResult = await withCliAuthError(() =>
-        effectRuntime().runPromise(signOutCliSubscription(options.providerId)),
+        runtime.runPromise(signOutCliSubscription(options.providerId)),
       );
       if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
       const update = signOutResult.value;

@@ -1,5 +1,5 @@
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
@@ -30,6 +30,9 @@ interface DesktopOnboardingIpcOptions {
   /** Run ChatGPT sign-in flow from the welcome card. */
   signInWithChatGpt: () => Promise<void>;
   onAsyncError: (error: unknown) => void;
+  /** The process runtime the composition root built; the funnel refresh runs
+   *  on it rather than on a looked-up one. */
+  runtime: ProcessRuntime;
 }
 
 /**
@@ -109,7 +112,7 @@ export function createDesktopOnboardingIpc(
   }
 
   function refreshOnboardingFunnel(): Promise<void> {
-    return effectRuntime().runPromise(funnel.run());
+    return options.runtime.runPromise(funnel.run());
   }
 
   async function dismiss(): Promise<void> {

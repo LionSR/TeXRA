@@ -2,7 +2,7 @@
 import OpenAI from 'openai';
 
 // Local imports - canonical model errors
-import { ModelError } from './turn.js';
+import { authOrRejectionKind, ModelError } from './turn.js';
 
 /** Classifies failures shared by the two direct OpenAI protocols. */
 export function openaiFailure(cause: unknown): ModelError {
@@ -11,10 +11,7 @@ export function openaiFailure(cause: unknown): ModelError {
   }
   if (cause instanceof OpenAI.APIError) {
     return new ModelError({
-      kind:
-        cause.status === 401 || cause.status === 403
-          ? 'authentication'
-          : 'provider-rejection',
+      kind: authOrRejectionKind(cause.status),
       message: cause.message,
       status: cause.status,
       requestId: cause.requestID ?? undefined,

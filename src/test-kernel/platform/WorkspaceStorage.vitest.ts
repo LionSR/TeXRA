@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, ManagedRuntime } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - platform
@@ -164,6 +164,13 @@ describe('workspace storage defaults', () => {
           storage,
           workspacePath,
           (m) => warnings.push(m),
+          // The store's Promise-shaped `update` is not exercised here; the
+          // suite writes through `set`. The runtime the opener requires is
+          // scoped to the test.
+          yield* Effect.acquireRelease(
+            Effect.sync(() => ManagedRuntime.make(nodePlatformLayer)),
+            (runtime) => Effect.promise(() => runtime.dispose()),
+          ),
         );
         yield* stores.workspace.set('texra.files.exclude', ['dist']);
 
@@ -174,6 +181,6 @@ describe('workspace storage defaults', () => {
             pathExists(join(storage.getStoragePath(), 'config.json')),
           ),
         ).toBe(true);
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer)),
   );
 });

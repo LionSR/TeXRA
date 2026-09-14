@@ -17,6 +17,7 @@ import {
   type DesktopAuthCoordinator,
   type DesktopSupabaseAuthHost,
 } from '@desktop/main/desktopSupabaseAuth';
+import { effectRuntime } from '@platform/processRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 
@@ -70,7 +71,10 @@ function createTestAuth(options: DesktopAuthTestOptions) {
     router,
     coordinator,
     oauthClient,
-    callbackState = createDesktopAuthCallbackState(createLog()),
+    callbackState = createDesktopAuthCallbackState(
+      effectRuntime(),
+      createLog(),
+    ),
     log = createLog(),
     openExternalUrl = vi.fn(async () => {}),
     showInfoMessage = vi.fn(),
@@ -89,6 +93,7 @@ function createTestAuth(options: DesktopAuthTestOptions) {
       onSessionChanged,
     },
     log,
+    runtime: effectRuntime(),
   });
   testAuths.push(auth);
   return auth;
@@ -447,6 +452,7 @@ describe('desktop Supabase auth', () => {
   it('preserves pending sign-in across desktop auth recreation', async () => {
     const stateStore = new FakeStateStore();
     const callbackState = createDesktopAuthCallbackState(
+      effectRuntime(),
       createLog(),
       stateStore,
     );
@@ -457,6 +463,7 @@ describe('desktop Supabase auth', () => {
     await auth.signIn();
     auth.dispose();
     const persistedCallbackState = createDesktopAuthCallbackState(
+      effectRuntime(),
       createLog(),
       stateStore,
     );
@@ -485,7 +492,11 @@ describe('desktop Supabase auth', () => {
       vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
       const stateStore = new FakeStateStore();
       const { router, coordinator, auth } = createAuthSetup({
-        callbackState: createDesktopAuthCallbackState(createLog(), stateStore),
+        callbackState: createDesktopAuthCallbackState(
+          effectRuntime(),
+          createLog(),
+          stateStore,
+        ),
       });
 
       await auth.signIn();
@@ -493,6 +504,7 @@ describe('desktop Supabase auth', () => {
 
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
       const expiredCallbackState = createDesktopAuthCallbackState(
+        effectRuntime(),
         createLog(),
         stateStore,
       );
@@ -523,6 +535,7 @@ describe('desktop Supabase auth', () => {
       vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
       const stateStore = new FakeStateStore();
       const initialState = createDesktopAuthCallbackState(
+        effectRuntime(),
         createLog(),
         stateStore,
       );
@@ -539,6 +552,7 @@ describe('desktop Supabase auth', () => {
       );
 
       const recreatedState = createDesktopAuthCallbackState(
+        effectRuntime(),
         createLog(),
         stateStore,
       );
@@ -553,6 +567,7 @@ describe('desktop Supabase auth', () => {
       await beginNewAttempt;
 
       const persistedState = createDesktopAuthCallbackState(
+        effectRuntime(),
         createLog(),
         stateStore,
       );
@@ -565,7 +580,10 @@ describe('desktop Supabase auth', () => {
   });
 
   it('cancels pending callback state on sign-out', async () => {
-    const callbackState = createDesktopAuthCallbackState(createLog());
+    const callbackState = createDesktopAuthCallbackState(
+      effectRuntime(),
+      createLog(),
+    );
     const log = createLog();
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
       callbackState,
@@ -603,7 +621,10 @@ describe('desktop Supabase auth', () => {
   });
 
   it('does not store a superseded callback or clear the newer sign-in', async () => {
-    const callbackState = createDesktopAuthCallbackState(createLog());
+    const callbackState = createDesktopAuthCallbackState(
+      effectRuntime(),
+      createLog(),
+    );
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
       callbackState,
     });
@@ -650,7 +671,10 @@ describe('desktop Supabase auth', () => {
   });
 
   it('removes a stored callback before starting a newer sign-in', async () => {
-    const callbackState = createDesktopAuthCallbackState(createLog());
+    const callbackState = createDesktopAuthCallbackState(
+      effectRuntime(),
+      createLog(),
+    );
     const onSessionChanged = vi.fn(async () => {});
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
       callbackState,

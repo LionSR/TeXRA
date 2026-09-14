@@ -25,7 +25,7 @@ import {
   ToolEditApprovalController,
   type ToolEditApprovalHost,
 } from '@controllers/approval/ToolEditApprovalController';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
   AgentCategory,
   RequestOpenFilePayload,
@@ -57,6 +57,9 @@ export interface DesktopAgentRunOptions {
   }): void;
   /** Select the run launched by this window. */
   onLaunched?: (runId: RunId) => void;
+  /** The process runtime this window was handed; the run and its approval
+   *  wiring settle on it. */
+  runtime: ProcessRuntime;
   logger?: AgentTrace;
 }
 
@@ -80,10 +83,8 @@ export interface DesktopAgentRun {
 export function createDesktopAgentRun(
   options: DesktopAgentRunOptions,
 ): DesktopAgentRun {
-  const { session, host } = options;
+  const { session, host, runtime } = options;
   const logger = options.logger ?? createChannelTrace('DesktopAgentRun');
-  // The process runtime, held once for this window's session work.
-  const runtime = effectRuntime();
   let disposed = false;
 
   /**
@@ -166,6 +167,7 @@ export function createDesktopAgentRun(
         showErrorMessage: host.showErrorMessage,
       },
       decide: decideRequest,
+      runtime,
     }),
   });
   const sessionEvents = runtime.runFork(
@@ -198,7 +200,7 @@ export function createDesktopAgentRun(
   ): Promise<void> {
     return launchDesktopAgent(
       { kind: 'fresh', ...request },
-      { session },
+      { session, runtime },
       {
         onRunResolved: options.onLaunched,
         ...runOptions,

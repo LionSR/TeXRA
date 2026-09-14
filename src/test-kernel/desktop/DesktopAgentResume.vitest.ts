@@ -17,6 +17,7 @@ import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import * as AgentRunner from '@agent/runtime/runAgent';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   aggregateId,
@@ -149,7 +150,10 @@ async function createResumeHarness(): Promise<{
     },
   ]);
   await session.settlePublications();
-  const owner = new DesktopProcessResumeOwner({ sessions: () => [session] });
+  const owner = new DesktopProcessResumeOwner({
+    sessions: () => [session],
+    runtime: effectRuntime,
+  });
   let disposed = false;
   const dispose = async (): Promise<void> => {
     if (disposed) return;

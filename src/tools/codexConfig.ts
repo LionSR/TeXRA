@@ -1,11 +1,7 @@
 // Local imports - agent config
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { CodexReasoningEffort } from '@shared/schemas';
 import {
-  AgentCategory,
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
@@ -14,6 +10,7 @@ import {
   parseCodexSandboxMode,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { createEnumStateGetter } from './support/enumConfig';
 import { CODEX_AGENT_NAME } from './codexShared';
 
@@ -97,11 +94,10 @@ export const getCodexSandboxMode: () => SandboxMode = createEnumStateGetter(
  * instead of inheriting the generic AgentConfig defaults.
  */
 export function buildCodexConfig(prompt: string): AgentConfig {
-  return AgentConfigSchema.parse({
+  return buildSyntheticToolUseConfig({
     agent: CODEX_AGENT_NAME,
     // Fabricated label, not a routed model: Codex drives its own model.
     model: 'gpt55',
     instruction: prompt,
-    agentCategory: AgentCategory.ToolUse,
   });
 }

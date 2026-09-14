@@ -26,6 +26,7 @@ import {
   type FakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
+import { effectRuntime } from '@platform/processRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => ({
@@ -258,9 +259,9 @@ describe('CLI multi-agent run command', () => {
     vi.clearAllMocks();
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
-    const { platform } = installedHost();
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
+    const services = { ...installedHost().platform, runtime: effectRuntime() };
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(services);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(services);
     mockExpandedRunInputs({
       inputFiles: ['problem.tex'],
       contextFiles: [],
@@ -382,7 +383,7 @@ describe('CLI multi-agent run command', () => {
     mocks.teamPlanHasGaps.mockReturnValueOnce(true);
     isAuthenticatedSpy.mockResolvedValueOnce(true);
 
-    const result = await loadCliMultiAgentRunPlan({
+    const result = await loadCliMultiAgentRunPlan(effectRuntime(), {
       preset: 'mathematician',
     });
 

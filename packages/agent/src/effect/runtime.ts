@@ -19,7 +19,7 @@
  * the one `packages/agent/src/index.ts` takes, released by
  * `lifecycle.runShutdown()`.
  */
-import { Context, Effect, Layer } from 'effect';
+import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
 
 import {
   closeSession as closeOwnedSession,
@@ -96,6 +96,17 @@ const PACKAGE_SETUP: SetupPlatformShape = {
  *  end of its claim on what it found or installed. */
 export interface ProcessHold {
   readonly runtime: AgentRuntime;
+  /**
+   * The Effect runtime this composition installed, or the one it found a
+   * host had already installed. The package's Promise entry runs the
+   * shutdown settlement on it: that program is the session owner's, so it
+   * belongs on the owner's runtime rather than on a fresh default one, and
+   * the entry takes it from here instead of reading the process global.
+   *
+   * Typed by what is run on it -- programs that carry their own context --
+   * so the process service set stays out of this package's declarations.
+   */
+  readonly processRuntime: ManagedRuntime.ManagedRuntime<never, never>;
   readonly sessions: Context.Service.Shape<typeof Sessions>;
   /**
    * End this hold (R6). The last hold to end closes every session the owner
@@ -198,6 +209,7 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   let held = true;
   return {
     runtime,
+    processRuntime,
     sessions,
     release: Effect.suspend(() => {
       if (!held) return Effect.void;

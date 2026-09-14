@@ -16,7 +16,7 @@ import {
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { AGENT_SOURCE } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
@@ -33,9 +33,10 @@ const AGENT_WATCHER_REBUILD_LANE = 'agent-watcher-rebuild';
  * `Exit` fold re-throws the original error, as the queued rebuild did.
  */
 async function runSettledEffect<A>(
+  runtime: ProcessRuntime,
   effect: Effect.Effect<A, unknown>,
 ): Promise<A> {
-  const exit = await effectRuntime().runPromiseExit(effect);
+  const exit = await runtime.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
   throw Cause.squash(exit.cause);
 }
@@ -45,6 +46,8 @@ async function runSettledEffect<A>(
 interface AgentDirectoryHost {
   readonly directories: AgentDirectoryService;
   readonly globalState: vscode.Memento;
+  /** The host entry's process runtime, handed down with the two services. */
+  readonly runtime: ProcessRuntime;
 }
 
 class AgentDirectoryManager {
@@ -56,9 +59,14 @@ class AgentDirectoryManager {
   private watcherDirectories: AgentDirectoryEntry[] | null = null;
   private readonly watcherRebuildLanes = new Map<string, PerKeyLane>();
 
-  initialize(globalState: vscode.Memento, resourcesPath: string): void {
+  initialize(
+    globalState: vscode.Memento,
+    resourcesPath: string,
+    runtime: ProcessRuntime,
+  ): void {
     this.host = {
       globalState,
+      runtime,
       directories: createPlatformAgentDirectories({
         channel: CHANNEL,
         // Built-in agents are read straight out of the installed extension's
@@ -179,6 +187,7 @@ class AgentDirectoryManager {
       // waiting one answers this request too. Claim the lane with no work to
       // wait for both — what awaiting the queue's idle did.
       await runSettledEffect(
+        this.getHost().runtime,
         withPerKeyLane(
           this.watcherRebuildLanes,
           AGENT_WATCHER_REBUILD_LANE,
@@ -188,6 +197,7 @@ class AgentDirectoryManager {
     }
 
     await runSettledEffect(
+      this.getHost().runtime,
       withPerKeyLane(
         this.watcherRebuildLanes,
         AGENT_WATCHER_REBUILD_LANE,
@@ -339,7 +349,7 @@ class AgentDirectoryManager {
       visitedRealPaths.add(realPath);
       directories.push(uri);
 
-      const listed = await effectRuntime().runPromiseExit(
+      const listed = await this.getHost().runtime.runPromiseExit(
         Effect.tryPromise({
           try: () => vscode.workspace.fs.readDirectory(uri),
           catch: (error) => error,
@@ -396,7 +406,7 @@ class AgentDirectoryManager {
     directories: readonly vscode.Uri[],
   ): Promise<void> {
     for (const directory of directories) {
-      const listed = await effectRuntime().runPromiseExit(
+      const listed = await this.getHost().runtime.runPromiseExit(
         Effect.tryPromise({
           try: () => vscode.workspace.fs.readDirectory(directory),
           catch: (error) => error,
@@ -418,7 +428,7 @@ class AgentDirectoryManager {
   }
 
   private scheduleAgentWatcherSetup(): void {
-    effectRuntime().runFork(
+    this.getHost().runtime.runFork(
       Effect.tryPromise({
         try: () => this.ensureAgentWatchers(),
         catch: (error) => error,
@@ -435,7 +445,7 @@ class AgentDirectoryManager {
   }
 
   private async isDirectoryUri(uri: vscode.Uri): Promise<boolean> {
-    const stat = await effectRuntime().runPromiseExit(
+    const stat = await this.getHost().runtime.runPromiseExit(
       Effect.tryPromise({
         try: () => vscode.workspace.fs.stat(uri),
         catch: (error) => error,
@@ -448,7 +458,7 @@ class AgentDirectoryManager {
   }
 
   private async realDirectoryPath(uri: vscode.Uri): Promise<string> {
-    const realPath = await effectRuntime().runPromiseExit(
+    const realPath = await this.getHost().runtime.runPromiseExit(
       Effect.tryPromise({
         try: () => fs.realpath(uri.fsPath),
         catch: (error) => error,

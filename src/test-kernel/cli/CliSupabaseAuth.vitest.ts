@@ -140,31 +140,30 @@ async function loadSupabaseAuth() {
   const { createFakeWorkspaceRoots } =
     await import('@test/support/FakePlatform');
   const { globalStorage } = createFakeWorkspaceRoots();
-  initProcessRuntime(
-    ManagedRuntime.make(
-      Layer.mergeAll(
-        testHttpClientLayer,
-        nodePlatformLayer,
-        Layer.mock(UpdateCheckRecords, {}),
-        Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
-        inquiryRecordsLayer(() => globalStorage).pipe(
-          Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
-        ),
-        // The process services over this suite's platform mock: the auth run
-        // edge reads none of them, so a member call is a test error that
-        // surfaces through the mock.
-        Secrets.layer(() => mocks.platform().secrets),
-        AppState.layer(() => mocks.platform().globalState),
-        SetupPlatform.layer({ host: 'cli', signIn: async () => false }),
-        ToolInjections.layer([]),
+  const runtime = ManagedRuntime.make(
+    Layer.mergeAll(
+      testHttpClientLayer,
+      nodePlatformLayer,
+      Layer.mock(UpdateCheckRecords, {}),
+      Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
+      inquiryRecordsLayer(() => globalStorage).pipe(
+        Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
       ),
+      // The process services over this suite's platform mock: the auth run
+      // edge reads none of them, so a member call is a test error that
+      // surfaces through the mock.
+      Secrets.layer(() => mocks.platform().secrets),
+      AppState.layer(() => mocks.platform().globalState),
+      SetupPlatform.layer({ host: 'cli', signIn: async () => false }),
+      ToolInjections.layer([]),
     ),
   );
+  initProcessRuntime(runtime);
   const supabaseAuth = await import('@cli/runtime/supabaseAuth');
   // The root's init is what builds the coordinator and installs the auth run
   // edge; nothing below it builds one on demand.
-  supabaseAuth.initializeCliSupabaseAuth(cliSecrets);
-  return supabaseAuth;
+  supabaseAuth.initializeCliSupabaseAuth(runtime, cliSecrets);
+  return { ...supabaseAuth, runtime };
 }
 
 /** The device authorization every device-code path replays. */
@@ -248,10 +247,10 @@ describe('CLI Supabase auth', () => {
   });
 
   it('builds one coordinator for the root secret store', async () => {
-    const { initializeCliSupabaseAuth } = await loadSupabaseAuth();
+    const { initializeCliSupabaseAuth, runtime } = await loadSupabaseAuth();
 
-    initializeCliSupabaseAuth(cliSecrets);
-    initializeCliSupabaseAuth(cliSecrets);
+    initializeCliSupabaseAuth(runtime, cliSecrets);
+    initializeCliSupabaseAuth(runtime, cliSecrets);
 
     expect(mocks.createHostAuthCoordinator).toHaveBeenCalledTimes(1);
     expect(mocks.createHostAuthCoordinator).toHaveBeenCalledWith(
@@ -318,10 +317,10 @@ describe('CLI Supabase auth', () => {
           ),
         ),
       );
-      const { signInCliSupabase, signInCliSupabaseDeviceCode } =
+      const { signInCliSupabase, signInCliSupabaseDeviceCode, runtime } =
         yield* Effect.promise(() => loadSupabaseAuth());
       yield* Effect.promise(() =>
-        signInCliSupabase({
+        signInCliSupabase(runtime, {
           openBrowser: false,
           signal: controller.signal,
         }),
@@ -354,8 +353,10 @@ describe('CLI Supabase auth', () => {
       sessionSettled: Effect.never,
     });
     mocks.openBrowser.mockReturnValue(new Promise(() => {}));
-    const { signInCliSupabase } = await loadSupabaseAuth();
-    const completion = signInCliSupabase({ signal: controller.signal });
+    const { signInCliSupabase, runtime } = await loadSupabaseAuth();
+    const completion = signInCliSupabase(runtime, {
+      signal: controller.signal,
+    });
     const rejection = expect(completion).rejects.toThrow(/interrupted/);
 
     controller.abort();
@@ -376,8 +377,10 @@ describe('CLI Supabase auth', () => {
       commitStarted: true,
     });
     mocks.openBrowser.mockReturnValue(new Promise(() => {}));
-    const { signInCliSupabase } = await loadSupabaseAuth();
-    const completion = signInCliSupabase({ signal: controller.signal });
+    const { signInCliSupabase, runtime } = await loadSupabaseAuth();
+    const completion = signInCliSupabase(runtime, {
+      signal: controller.signal,
+    });
 
     controller.abort();
     // The commit grace re-awaits the session on a fresh fiber; arm the
@@ -399,9 +402,9 @@ describe('CLI Supabase auth', () => {
         failBrowserLaunch = reject;
       }),
     );
-    const { signInCliSupabase } = await loadSupabaseAuth();
+    const { signInCliSupabase, runtime } = await loadSupabaseAuth();
 
-    await expect(signInCliSupabase()).resolves.toBe(session);
+    await expect(signInCliSupabase(runtime)).resolves.toBe(session);
     failBrowserLaunch(new Error('launcher exited late'));
     await Promise.resolve();
 
@@ -441,9 +444,9 @@ describe('CLI Supabase auth', () => {
       Effect.fail(new Error('local rebuild failed')),
     );
     const warn = vi.fn();
-    const { initializeCliSupabaseAuth, signOutCliSupabase } =
+    const { initializeCliSupabaseAuth, signOutCliSupabase, runtime } =
       await loadSupabaseAuth();
-    initializeCliSupabaseAuth(cliSecrets, {
+    initializeCliSupabaseAuth(runtime, cliSecrets, {
       debug: vi.fn(),
       info: vi.fn(),
       warn,
