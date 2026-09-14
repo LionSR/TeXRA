@@ -1,4 +1,4 @@
-import { Effect, Latch, Queue, type Scope } from 'effect';
+import { Cause, Effect, Latch, Queue, type Scope } from 'effect';
 
 /**
  * The chat session's follow-up deliveries: one at a time, in the order they
@@ -17,8 +17,9 @@ import { Effect, Latch, Queue, type Scope } from 'effect';
  *   delivery settles or `clear` drops it, keeps a `Latch` open exactly while
  *   the count is zero.
  * - **A delivery cannot fail.** Its type admits no error, so the caller
- *   attaches recovery before the delivery enters the queue and a failure
- *   never stops the drain.
+ *   attaches recovery before the delivery enters the queue. A defect (a
+ *   throw from the body) is recovered at the drain so the worker continues;
+ *   an interruption is the scope closing and stops the drain.
  *
  * A `Semaphore` with a `FiberSet` of forked deliveries was the alternative,
  * and it does not fit: a semaphore cannot drop its waiters, so `clear` would
@@ -57,7 +58,13 @@ export const makeFollowUpDeliveryQueue = (
       restore(Queue.take(deliveries)).pipe(
         Effect.flatMap((delivery) =>
           Effect.ensuring(
-            restore(delivery),
+            restore(delivery).pipe(
+              Effect.catchCause((cause) =>
+                Cause.hasInterrupts(cause)
+                  ? Effect.failCause(cause)
+                  : Effect.void,
+              ),
+            ),
             Effect.sync(() => settle(1)),
           ),
         ),

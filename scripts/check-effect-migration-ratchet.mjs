@@ -56,6 +56,9 @@ const INJECTION_PLAN =
 const SCRIPT_REL = 'scripts/check-effect-migration-ratchet.mjs';
 
 const SUPERSEDED_PACKAGES = ['p-queue', 'p-defer', 'async-mutex'];
+/** Surveyed row IDs omitted from the baseline at zero. `--update` must not
+ *  treat these as newly introduced rows and reseed them from the tree. */
+const RETIRED_ROW_IDS = new Set(['import:p-queue']);
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
 const PROCESS_RUNTIME_MODULE = '@platform/processRuntime';
@@ -827,8 +830,14 @@ function readCommittedCounts() {
     // just gained has no ceiling to respect yet, so `--update` seeds it from
     // the tree; without the distinction, "never add a file" would write it
     // empty and then report every real entry as new, and the row could never
-    // be introduced at all.
-    unseeded: new Set(ROWS.map((row) => row.id).filter((id) => !has(id))),
+    // be introduced at all. Retired IDs are surveyed at zero and omitted on
+    // purpose: seeding them would re-admit a row the no-regrowth contract
+    // deleted.
+    unseeded: new Set(
+      ROWS.map((row) => row.id).filter(
+        (id) => !has(id) && !RETIRED_ROW_IDS.has(id),
+      ),
+    ),
   };
 }
 
