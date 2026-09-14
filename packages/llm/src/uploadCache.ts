@@ -111,6 +111,12 @@ export function uploadCache(provider: {
       { concurrency: 'unbounded', discard: true },
     ).pipe(
       Effect.as(true),
+      // A release runs as the binding scope's finalizer, in an uninterruptible
+      // region. The deadline below only bounds the deletes if it can
+      // interrupt them: the pinned Effect already forks each racer
+      // interruptible, but that is the race's detail, so the deletes say it
+      // here rather than depend on it.
+      Effect.interruptible,
       Effect.timeoutOrElse({
         duration: RELEASE_DEADLINE,
         orElse: () => Effect.succeed(false),

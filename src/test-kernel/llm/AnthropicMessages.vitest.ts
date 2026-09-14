@@ -273,6 +273,57 @@ describe('canonical Anthropic Messages protocol', () => {
         });
         yield* TestClock.adjust('1 hour');
         expect(yield* sentSource(expiring)).toStrictEqual(bytes);
+
+        // Release runs as the binding scope's finalizer, and finalizers run
+        // uninterruptibly: a DELETE the provider never answers must still
+        // let the scope close at the release deadline, reporting the file.
+        const deleteIssued = yield* Deferred.make<void>();
+        fetchModel.mockImplementation(async (url, init) => {
+          if (String(url).endsWith('/v1/files'))
+            return Response.json({ id: 'file_stalled', expires_at: null });
+          if (init?.method === 'DELETE') {
+            Deferred.doneUnsafe(deleteIssued, Effect.void);
+            return new Promise<Response>((_, reject) =>
+              init.signal?.addEventListener('abort', () =>
+                reject(init.signal?.reason),
+              ),
+            );
+          }
+          return response(signedEvents());
+        });
+        const stalling = model();
+        assert(stalling.uploadFile && stalling.releaseUploads);
+        const { uploadFile, releaseUploads } = stalling;
+        let unreleased: unknown;
+        const binding = yield* Effect.forkChild(
+          Effect.scoped(
+            Effect.gen(function* () {
+              yield* uploadFile({
+                mimeType: 'application/pdf',
+                filename: 'paper.pdf',
+                base64: 'AQ==',
+              });
+              yield* Effect.addFinalizer(() =>
+                releaseUploads().pipe(
+                  Effect.flatMap((result) =>
+                    Effect.sync(() => {
+                      unreleased = result;
+                    }),
+                  ),
+                ),
+              );
+            }),
+          ),
+        );
+        yield* Deferred.await(deleteIssued);
+        yield* TestClock.adjust('10 seconds');
+        yield* Fiber.join(binding);
+        expect(unreleased).toStrictEqual([
+          {
+            fileId: 'file_stalled',
+            reason: expect.stringContaining('no answer'),
+          },
+        ]);
       }),
   );
 
