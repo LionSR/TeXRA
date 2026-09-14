@@ -1,7 +1,9 @@
 import { Deferred, Effect, Fiber } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { storeCredential } from '@common/secrets/storeCredential';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 
 const mocks = vi.hoisted(() => ({
   invalidateApiKeyCache: vi.fn(),
@@ -13,7 +15,6 @@ vi.mock('@model/apiProviders', async (importOriginal) => {
 });
 
 const { saveProviderApiKey } = await import('@cli/runtime/providerApiKey');
-const { saveGitHubToken } = await import('@cli/runtime/githubToken');
 
 const secrets = new FakeSecrets();
 const set = vi.spyOn(secrets, 'set');
@@ -116,7 +117,7 @@ describe('saveProviderApiKey', () => {
   });
 });
 
-describe('saveGitHubToken', () => {
+describe('storeCredential (github)', () => {
   beforeEach(() => {
     set.mockReset().mockReturnValue(Effect.void);
   });
@@ -128,7 +129,13 @@ describe('saveGitHubToken', () => {
     '[REDACTED_GITHUB_TOKEN]',
   ])('rejects the GitHub placeholder %s', async (placeholder) => {
     await expect(
-      Effect.runPromise(saveGitHubToken(secrets, placeholder)),
+      Effect.runPromise(
+        storeCredential(secrets, {
+          secretName: GITHUB_TOKEN_STORAGE_KEY,
+          value: placeholder,
+          kind: 'github',
+        }),
+      ),
     ).rejects.toThrow('placeholder');
     expect(set).not.toHaveBeenCalled();
   });
