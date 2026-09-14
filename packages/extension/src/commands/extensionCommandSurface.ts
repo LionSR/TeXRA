@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import {
   signIn as authSignIn,
   signOut as authSignOut,
@@ -36,7 +37,12 @@ import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/g
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild } from '@housekeeping/clean';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import {
+  withSessionFs,
+  type StorageFs,
+  type WorkspaceFs,
+} from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -47,6 +53,7 @@ import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
+import type { Effect } from 'effect';
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
@@ -58,6 +65,17 @@ export function createExtensionCommandActions(
   const refreshAfterProviderKeyChange = (provider: string) =>
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
 
+  /**
+   * Settle a housekeeping program over the default session's rooted
+   * filesystems. The session is looked up per command, not captured here:
+   * this factory runs during activation, and a default session closed and
+   * reopened later is a new session with its own snapshot of roots.
+   */
+  const onSessionFiles = <A, E>(
+    program: Effect.Effect<A, E, WorkspaceFs | StorageFs | ProcessServices>,
+  ): Promise<A> =>
+    runtime.runPromise(withSessionFs(defaultSession().roots, program));
+
   return {
     showSettings(tab, agentSubTab) {
       return settingsViewProvider.showSettingsView(tab, agentSubTab);
@@ -65,9 +83,9 @@ export function createExtensionCommandActions(
     // New Session is the header's "+" (PRD 12.4): the New-task state into
     // view with the launcher's selections as they are.
     resetMainView: () => progressViewProvider.showLauncher(),
-    cleanBuild: runCleanBuild,
-    pack: fileHandlePack,
-    clean: fileHandleClean,
+    cleanBuild: () => onSessionFiles(runCleanBuild),
+    pack: (config) => onSessionFiles(fileHandlePack(config)),
+    clean: (config) => onSessionFiles(fileHandleClean(config)),
     compare: latexHandleCompare,
     acceptEdited: latexHandleAcceptEdited,
     indentTeX: handleIndentTeX,

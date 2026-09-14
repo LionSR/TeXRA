@@ -41,7 +41,12 @@ import {
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import {
+  withSessionFs,
+  type StorageFs,
+  type WorkspaceFs,
+} from '@platform/rootedFs';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { FileLocation } from '@shared/schemas';
@@ -258,6 +263,16 @@ async function runDiffAndOpen(
   await openLatexdiffResult(result.diffPath);
 }
 
+/** Settle a housekeeping program on the host entry's runtime over the
+ *  default session's rooted filesystems, read per command rather than
+ *  captured at registration. */
+function onSessionFiles<A, E>(
+  runtime: ProcessRuntime,
+  program: Effect.Effect<A, E, WorkspaceFs | StorageFs | ProcessServices>,
+): Promise<A> {
+  return runtime.runPromise(withSessionFs(defaultSession().roots, program));
+}
+
 // Turn pack/clean run results into user notifications. Folds the notification
 // derivation and display that every latexdiff-vc handler invoked together.
 function reportLatexdiff(result: LatexdiffPackResult): void {
@@ -280,8 +295,21 @@ export function registerLatexdiffCommands(
       handler: (inputFile: string, baseFile: string, commitHash: string) =>
         handleLatexdiffvc(inputFile, baseFile, commitHash, runtime),
     },
-    { id: 'texra.packLatexdiffvc', handler: handlePackLatexdiffvc },
-    { id: 'texra.cleanLatexdiffvc', handler: handleCleanLatexdiffvc },
+    {
+      id: 'texra.packLatexdiffvc',
+      handler: (
+        inputFile: string,
+        baseFile: string,
+        commitHash: string,
+        clean: boolean,
+      ) =>
+        handlePackLatexdiffvc(inputFile, baseFile, commitHash, clean, runtime),
+    },
+    {
+      id: 'texra.cleanLatexdiffvc',
+      handler: (inputFile: string, baseFile: string, commitHash: string) =>
+        handleCleanLatexdiffvc(inputFile, baseFile, commitHash, runtime),
+    },
     {
       id: 'texra.runLatexdiff',
       handler: (config: RunLatexdiffCommandConfig) =>
@@ -370,6 +398,7 @@ async function handlePackLatexdiffvc(
   baseFile: string,
   commitHash: string,
   clean: boolean,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   await withLatexdiffTool(
     'latexdiff-vc',
@@ -380,7 +409,12 @@ async function handlePackLatexdiffvc(
       );
       const fileToUse = await resolveDiffBase(inputFile, baseFile);
       if (!fileToUse) return;
-      reportLatexdiff(await runPackLatexdiffvc(fileToUse, commitHash, clean));
+      reportLatexdiff(
+        await onSessionFiles(
+          runtime,
+          runPackLatexdiffvc(fileToUse, commitHash, clean),
+        ),
+      );
     },
   );
 }
@@ -389,6 +423,7 @@ async function handleCleanLatexdiffvc(
   inputFile: string,
   baseFile: string,
   commitHash: string,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   await withLatexdiffTool(
     'latexdiff-vc',
@@ -399,7 +434,12 @@ async function handleCleanLatexdiffvc(
       );
       const fileToUse = await resolveDiffBase(inputFile, baseFile);
       if (!fileToUse) return;
-      reportLatexdiff(await runPackLatexdiffvc(fileToUse, commitHash, true));
+      reportLatexdiff(
+        await onSessionFiles(
+          runtime,
+          runPackLatexdiffvc(fileToUse, commitHash, true),
+        ),
+      );
     },
   );
 }

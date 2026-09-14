@@ -1,13 +1,18 @@
 import * as path from 'node:path';
 
-import { createLog } from '@logger/logUtils';
+import { Effect } from 'effect';
+
+import { withLogChannel } from '@logger/effectLog';
+import { WorkspaceFs } from '@platform/rootedFs';
 import type { FileOpResult } from '@shared/schemas';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { copyFileExclusive } from '@utils/files/fsDurability';
 
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';
-import { collectFilesFromPatterns, generateTimestamp } from './utils';
-
-const log = createLog(CHANNEL);
+import {
+  collectFilesFromPatterns,
+  filesystemFor,
+  generateTimestamp,
+} from './utils';
 
 /**
  * Reuses FileOpResult's `noFiles` and `success` shapes for the outcomes this
@@ -41,64 +46,90 @@ export function latexdiffPackMessage(
   }
 }
 
-export async function runPackLatexdiffvc(
-  inputFile: string,
-  commitHash: string,
-  clean: boolean = false,
-): Promise<LatexdiffPackResult> {
-  const baseName = path.parse(inputFile).name;
-  const inputDir = path.dirname(inputFile);
-  const filePatterns = [`${baseName}-diff${commitHash}`];
-
-  const mainFiles = await collectFilesFromPatterns(inputDir, filePatterns, [
-    '.tex',
-    '.pdf',
-  ]);
-  const tempFiles = await collectFilesFromPatterns(
-    inputDir,
-    filePatterns,
-    TEMP_EXTENSIONS,
-  );
-
-  if (mainFiles.size === 0 && tempFiles.size === 0) {
-    log.warn('No LaTeX diff files found to process');
-    return { status: 'noFiles' };
-  }
-
-  if (clean) {
-    for (const file of [...mainFiles, ...tempFiles]) {
-      await WorkspaceFS.delete(file);
+export const runPackLatexdiffvc = Effect.fn('housekeeping.packLatexdiffvc')(
+  function* (inputFile: string, commitHash: string, clean: boolean = false) {
+    const workspaceFs = yield* WorkspaceFs;
+    const workspaceRoot = workspaceFs.root;
+    if (!workspaceRoot) {
+      return { status: 'noFiles' } satisfies LatexdiffPackResult;
     }
-    log.info('Cleanup complete.');
-    return { status: 'cleaned' };
-  }
 
-  // Only temp files matched: delete them and report nothing packed.
-  if (mainFiles.size === 0) {
-    for (const file of tempFiles) {
-      await WorkspaceFS.delete(file);
-    }
-    return { status: 'processed' };
-  }
+    const baseName = path.parse(inputFile).name;
+    const inputDir = path.dirname(inputFile);
+    const filePatterns = [`${baseName}-diff${commitHash}`];
 
-  const outputFolder = path.join(
-    inputDir,
-    'Diffs',
-    `${generateTimestamp()}_${baseName}_${commitHash}`,
-  );
-
-  await WorkspaceFS.createDir(outputFolder);
-  for (const file of mainFiles) {
-    await WorkspaceFS.rename(
-      file,
-      path.join(outputFolder, path.basename(file)),
+    const mainFiles = yield* collectFilesFromPatterns(
+      workspaceRoot,
+      inputDir,
+      filePatterns,
+      ['.tex', '.pdf'],
     );
-  }
+    const tempFiles = yield* collectFilesFromPatterns(
+      workspaceRoot,
+      inputDir,
+      filePatterns,
+      TEMP_EXTENSIONS,
+    );
 
-  for (const file of tempFiles) {
-    await WorkspaceFS.delete(file);
-  }
+    /** `force`: the sweep tolerates a file a sibling host already removed. */
+    const discard = (files: Iterable<string>) =>
+      Effect.forEach(files, (file) =>
+        Effect.flatMap(filesystemFor(workspaceFs, file), (artifact) =>
+          artifact.fs.remove(artifact.absolutePath, { force: true }),
+        ),
+      );
 
-  log.info(`Files packed into ${outputFolder}`);
-  return { status: 'success', outputFolder };
-}
+    if (mainFiles.size === 0 && tempFiles.size === 0) {
+      yield* Effect.logWarning('No LaTeX diff files found to process').pipe(
+        withLogChannel(CHANNEL),
+      );
+      return { status: 'noFiles' } satisfies LatexdiffPackResult;
+    }
+
+    if (clean) {
+      yield* discard([...mainFiles, ...tempFiles]);
+      yield* Effect.logInfo('Cleanup complete.').pipe(withLogChannel(CHANNEL));
+      return { status: 'cleaned' } satisfies LatexdiffPackResult;
+    }
+
+    // Only temp files matched: delete them and report nothing packed.
+    if (mainFiles.size === 0) {
+      yield* discard(tempFiles);
+      return { status: 'processed' } satisfies LatexdiffPackResult;
+    }
+
+    const outputFolder = path.join(
+      inputDir,
+      'Diffs',
+      `${generateTimestamp()}_${baseName}_${commitHash}`,
+    );
+
+    const outputSide = yield* filesystemFor(workspaceFs, outputFolder);
+    yield* outputSide.fs.makeDirectory(outputSide.absolutePath, {
+      recursive: true,
+    });
+    // Move each file without replacing an existing one: an exclusive copy
+    // (`AlreadyExists` when the name is taken — a second pack of the same
+    // commit within the timestamp's second) followed by removing the source.
+    // `FileSystem.rename` would silently replace the earlier archive, and a
+    // crash between the two steps leaves the source in place, never a loss.
+    for (const file of mainFiles) {
+      const source = yield* filesystemFor(workspaceFs, file);
+      yield* copyFileExclusive(
+        source.absolutePath,
+        (yield* filesystemFor(
+          workspaceFs,
+          path.join(outputFolder, path.basename(file)),
+        )).absolutePath,
+      );
+      yield* source.fs.remove(source.absolutePath);
+    }
+
+    yield* discard(tempFiles);
+
+    yield* Effect.logInfo(`Files packed into ${outputFolder}`).pipe(
+      withLogChannel(CHANNEL),
+    );
+    return { status: 'success', outputFolder } satisfies LatexdiffPackResult;
+  },
+);

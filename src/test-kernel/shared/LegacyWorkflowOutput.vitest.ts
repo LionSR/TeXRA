@@ -1,15 +1,16 @@
 // Node imports
-import { access, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, symlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { beforeEach, describe, expect, it as vitestIt } from 'vitest';
 
 // Local imports
 import { runPackSingle } from '@housekeeping/pack';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { workflowOutputCopyStem } from '@shared/constants/workflowOutput';
-import { installPlatform } from '@test/support/setupPlatform';
+import { pathExists, rootedFsLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('Save-as-copy stem and workspace pack', () => {
@@ -21,14 +22,9 @@ describe('Save-as-copy stem and workspace pack', () => {
       'texra-legacy-workflow-output-',
       tempDirs,
     );
-    await installPlatform({ workspacePath }, { fs: nodeFilesystem });
   });
 
-  afterEach(async () => {
-    await installPlatform();
-  });
-
-  it.each([
+  vitestIt.each([
     ['builtInWorkflow:write-polish', 'polish'],
     ['custom:alpha_beta', 'alpha'],
     ['remote:alpha-beta', 'alpha'],
@@ -44,43 +40,145 @@ describe('Save-as-copy stem and workspace pack', () => {
     ).toBe(`paper_${expected}_r0_gpt-4`);
   });
 
-  it("packs the source's own files and leaves Save-as-copy files and the source's .bib/.bak alone", async () => {
-    const saveAsCopy = 'paper_polish_r0_gpt-4.tex';
-    for (const name of [
-      'paper.tex',
-      'paper.pdf',
-      'paper.bib',
-      'paper.bak1',
-      'paper.aux',
-      saveAsCopy,
-    ]) {
-      await writeFile(path.join(workspacePath, name), 'fixture');
-    }
+  it.live(
+    "packs the source's own files and leaves Save-as-copy files and the source's .bib/.bak alone",
+    () =>
+      Effect.gen(function* () {
+        const saveAsCopy = 'paper_polish_r0_gpt-4.tex';
+        yield* Effect.promise(() =>
+          Promise.all(
+            [
+              'paper.tex',
+              'paper.pdf',
+              'paper.bib',
+              'paper.bak1',
+              'paper.aux',
+              saveAsCopy,
+            ].map((name) =>
+              writeFile(path.join(workspacePath, name), 'fixture'),
+            ),
+          ),
+        );
 
-    const result = await runPackSingle(
-      'gpt-4',
-      'paper.tex',
-      'custom:polish_long',
-    );
+        // The pack takes its workspace from context: the rooted view over
+        // this test's temp root, with no ambient platform installed.
+        const result = yield* runPackSingle(
+          'gpt-4',
+          'paper.tex',
+          'custom:polish_long',
+        ).pipe(
+          Effect.provide(
+            rootedFsLayer({
+              workspace: workspacePath,
+              storage: path.join(workspacePath, '.texra'),
+            }),
+          ),
+        );
 
-    if (result.status !== 'success' || result.outputFolder === undefined) {
-      throw new Error(`Expected a successful pack, got ${result.status}`);
-    }
-    const outputFolder = path.join(workspacePath, result.outputFolder);
-    expect(path.basename(result.outputFolder)).not.toContain(':');
-    await expect(
-      access(path.join(outputFolder, 'paper.pdf')),
-    ).resolves.toBeUndefined();
-    for (const kept of ['paper.bib', 'paper.bak1', saveAsCopy]) {
-      await expect(
-        access(path.join(workspacePath, kept)),
-      ).resolves.toBeUndefined();
-    }
-    await expect(
-      access(path.join(outputFolder, saveAsCopy)),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
-    await expect(
-      access(path.join(workspacePath, 'paper.aux')),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
-  });
+        expect(result).toMatchObject({ status: 'success' });
+        const outputFolderRelative =
+          result.status === 'success' ? result.outputFolder : undefined;
+        expect(outputFolderRelative).toBeDefined();
+        const outputFolder = path.join(
+          workspacePath,
+          outputFolderRelative ?? '',
+        );
+        expect(path.basename(outputFolderRelative ?? '')).not.toContain(':');
+
+        const exists = (target: string) =>
+          Effect.promise(() => pathExists(target));
+        expect(yield* exists(path.join(outputFolder, 'paper.pdf'))).toBe(true);
+        for (const kept of ['paper.bib', 'paper.bak1', saveAsCopy]) {
+          expect(yield* exists(path.join(workspacePath, kept))).toBe(true);
+        }
+        expect(yield* exists(path.join(outputFolder, saveAsCopy))).toBe(false);
+        expect(yield* exists(path.join(workspacePath, 'paper.aux'))).toBe(
+          false,
+        );
+      }),
+  );
+
+  it.live('packs a selection made through a symlink into the workspace', () =>
+    Effect.gen(function* () {
+      // The picker path is an alias outside the workspace whose target is
+      // inside it: the pack resolves it as the workspace path it names.
+      const aliasDir = yield* Effect.promise(() =>
+        makeTempDir('texra-legacy-workflow-alias-', tempDirs),
+      );
+      const chapter = path.join(workspacePath, 'chapter');
+      yield* Effect.promise(async () => {
+        await mkdir(chapter);
+        await Promise.all(
+          ['ch.tex', 'ch.pdf'].map((name) =>
+            writeFile(path.join(chapter, name), 'fixture'),
+          ),
+        );
+        await symlink(chapter, path.join(aliasDir, 'alias'), 'dir');
+      });
+
+      const result = yield* runPackSingle(
+        'gpt-4',
+        path.join(aliasDir, 'alias', 'ch.tex'),
+        'custom:polish',
+      ).pipe(
+        Effect.provide(
+          rootedFsLayer({
+            workspace: workspacePath,
+            storage: path.join(workspacePath, '.texra'),
+          }),
+        ),
+      );
+
+      expect(result).toMatchObject({ status: 'success' });
+      const packed = yield* Effect.promise(() =>
+        readdir(path.join(chapter, 'History')),
+      );
+      expect(packed).toHaveLength(1);
+    }),
+  );
+
+  it.live(
+    'packs a picker selection outside the workspace next to the selection',
+    () =>
+      Effect.gen(function* () {
+        // The picker keeps an out-of-workspace selection absolute; the whole
+        // pack happens where the selection is, as the old facade did.
+        const externalDir = yield* Effect.promise(() =>
+          makeTempDir('texra-legacy-workflow-external-', tempDirs),
+        );
+        yield* Effect.promise(() =>
+          Promise.all(
+            ['notes.tex', 'notes.pdf', 'notes.aux'].map((name) =>
+              writeFile(path.join(externalDir, name), 'fixture'),
+            ),
+          ),
+        );
+
+        const result = yield* runPackSingle(
+          'gpt-4',
+          path.join(externalDir, 'notes.tex'),
+          'custom:polish',
+        ).pipe(
+          Effect.provide(
+            rootedFsLayer({
+              workspace: workspacePath,
+              storage: path.join(workspacePath, '.texra'),
+            }),
+          ),
+        );
+
+        expect(result).toMatchObject({ status: 'success' });
+        const outputFolder =
+          result.status === 'success' ? (result.outputFolder ?? '') : '';
+        expect(path.dirname(outputFolder)).toBe(
+          path.join(externalDir, 'History'),
+        );
+        const exists = (target: string) =>
+          Effect.promise(() => pathExists(target));
+        expect(yield* exists(path.join(outputFolder, 'notes.pdf'))).toBe(true);
+        expect(yield* exists(path.join(workspacePath, 'History'))).toBe(false);
+        expect(yield* exists(path.join(externalDir, 'notes.pdf'))).toBe(true);
+        expect(yield* exists(path.join(externalDir, 'notes.aux'))).toBe(false);
+      }),
+  );
 });

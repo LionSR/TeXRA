@@ -2,15 +2,67 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Data, Effect, FileSystem } from 'effect';
 import { globIterate } from 'glob';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+import { normalizeFilePath } from '@utils/core';
 
 import { CHANNEL } from './constants';
 
 const log = createLog(CHANNEL);
+
+/**
+ * A workspace listing that did not complete. The `glob` package rejects, and
+ * a housekeeping command reports that as an error result rather than as a
+ * defect, so the rejection is typed here instead of caught raw.
+ */
+export class GlobFailed extends Data.TaggedError('GlobFailed')<{
+  readonly pattern: string;
+  readonly cause: unknown;
+}> {
+  override get message(): string {
+    return `Failed to list ${this.pattern}: ${String(this.cause)}`;
+  }
+}
+
+/**
+ * The filesystem a housekeeping path is handled through, with the path in
+ * absolute form. The extension's picker keeps a selection outside the
+ * workspace as an absolute path, and the old `WorkspaceFS` facade passed such
+ * paths through; so does this, whole: every path of an external selection —
+ * its sources, the `History/` or `Diffs/` folder beside it, the artifacts
+ * swept there — is absolute and goes through the process `FileSystem` at its
+ * own location. Every other path goes through the confined workspace view,
+ * which is never loosened: a relative path as written, and an absolute one as
+ * the workspace-relative path the symlink-aware `relativeToRoot` computes for
+ * it — so a selection made through a symlinked directory whose target is
+ * inside the workspace resolves, and the one computation that decides the
+ * side is also the path handed to that side. Deciding per path also covers a
+ * multi-file pack that copies an external output file into the workspace
+ * folder beside its main input.
+ */
+export const filesystemFor = Effect.fn('housekeeping.filesystemFor')(function* (
+  workspaceFs: RootedFileSystem,
+  target: string,
+) {
+  let workspacePath: string | undefined = target;
+  if (path.isAbsolute(target)) {
+    workspacePath =
+      workspaceFs.root === undefined
+        ? undefined
+        : relativeToRoot(workspaceFs.root, target);
+  }
+  if (workspacePath === undefined) {
+    const fs: FileSystem.FileSystem = yield* FileSystem.FileSystem;
+    return { fs, absolutePath: target };
+  }
+  const fs: FileSystem.FileSystem = workspaceFs;
+  return { fs, absolutePath: yield* workspaceFs.resolve(workspacePath) };
+});
 
 /**
  * Produce an ISO-8601 timestamp stripped of separators, suitable for use in
@@ -21,13 +73,12 @@ export function generateTimestamp(): string {
 }
 
 /**
- * Yield matching workspace files as they are discovered.
- *
- * Overlapping patterns may yield the same path more than once. Consumers that
- * retain the complete result set must deduplicate it; cleanup consumers delete
- * each yielded file before advancing, so later patterns cannot rediscover it.
+ * Matching workspace files, as paths relative to `workspaceRoot` — the root
+ * of the caller's `WorkspaceFs`, passed in rather than read from an ambient
+ * store, so a listing and the deletions it feeds name the same workspace.
  */
-export async function* findFilesFromPatterns(
+async function* findFilesFromPatterns(
+  workspaceRoot: string,
   inputDir: string,
   patterns: string[],
   extensions: string[],
@@ -36,18 +87,13 @@ export async function* findFilesFromPatterns(
     `Finding files in ${inputDir} using patterns ${patterns} and extensions ${extensions}`,
   );
 
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) {
-    return;
-  }
-
   // `resolve`, not `join`: an inputDir that is already absolute names the
   // directory it says, while a workspace-relative one is taken from the
   // workspace root. Joining an absolute path onto the root duplicated the
   // prefix and found nothing.
-  const searchDirs = [path.resolve(workspacePath, inputDir)];
+  const searchDirs = [path.resolve(workspaceRoot, inputDir)];
   if (!inputDir.includes('build')) {
-    searchDirs.push(path.resolve(workspacePath, inputDir, 'build'));
+    searchDirs.push(path.resolve(workspaceRoot, inputDir, 'build'));
   }
 
   for (const pattern of patterns) {
@@ -59,7 +105,9 @@ export async function* findFilesFromPatterns(
           path.join(dir, `${pattern}${ext}`),
           { nodir: true },
         )) {
-          const relativePath = WorkspaceFS.relativePath(match);
+          const relativePath = normalizeFilePath(
+            relativeToRoot(workspaceRoot, match) ?? match,
+          );
           log.debug(`Found file: ${relativePath}`);
           yield relativePath;
 
@@ -79,19 +127,33 @@ export async function* findFilesFromPatterns(
   }
 }
 
-/** Collect {@link findFilesFromPatterns} matches, deduplicated. */
-export async function collectFilesFromPatterns(
+/**
+ * The workspace-relative files matching `patterns` × `extensions` under
+ * `inputDir`, deduplicated — overlapping patterns match the same path more
+ * than once.
+ */
+export const collectFilesFromPatterns = Effect.fn(
+  'housekeeping.collectFilesFromPatterns',
+)(function* (
+  workspaceRoot: string,
   inputDir: string,
   patterns: string[],
   extensions: string[],
-): Promise<Set<string>> {
-  const files = new Set<string>();
-  for await (const file of findFilesFromPatterns(
-    inputDir,
-    patterns,
-    extensions,
-  )) {
-    files.add(file);
-  }
-  return files;
-}
+) {
+  return yield* Effect.tryPromise({
+    try: async () => {
+      const files = new Set<string>();
+      for await (const file of findFilesFromPatterns(
+        workspaceRoot,
+        inputDir,
+        patterns,
+        extensions,
+      )) {
+        files.add(file);
+      }
+      return files;
+    },
+    catch: (cause) =>
+      new GlobFailed({ pattern: `${inputDir}: ${patterns.join(', ')}`, cause }),
+  });
+});

@@ -36,6 +36,7 @@ import { LaTeXdiffService } from '@latex/latexdiff';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import { sessionFsLayer } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   cloneRoundIndexed,
@@ -135,6 +136,11 @@ export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
   const { session, host, run, logger, runtime } = options;
+  /** The rooted filesystems of this window's paper, for the housekeeping
+   *  programs. An open session holds a snapshot of its roots for its whole
+   *  lifetime, so the layer is built once from it here, never from an
+   *  ambient store. */
+  const sessionFiles = sessionFsLayer(session.roots);
   // Shared controllers propagate request failures to the dispatcher.
   const rejectRequest = async (reason: string): Promise<never> => {
     throw new Rejected({ reason });
@@ -354,13 +360,12 @@ export function createDesktopHostRequests(
       throw new Rejected({ reason: `Missing run identity for ${verb}.` });
     }
     const ran = await runtime.runPromiseExit(
-      Effect.tryPromise({
-        try: () =>
-          operation === 'pack'
-            ? runPackRunDir(runId as RunId, agent, model, inputFile)
-            : runCleanRunDir(runId as RunId),
-        catch: (error) => error,
-      }),
+      Effect.provide(
+        operation === 'pack'
+          ? runPackRunDir(runId as RunId, agent, model, inputFile)
+          : runCleanRunDir(runId as RunId),
+        sessionFiles,
+      ),
     );
     if (Exit.isFailure(ran)) {
       const error = Cause.squash(ran.cause);
@@ -457,10 +462,11 @@ export function createDesktopHostRequests(
       await host.openBuildDisplay(createExternalLocation(result.diffPath));
       return;
     }
-    const packed = await runPackLatexdiffvc(
-      baseFile,
-      commit,
-      action === 'cleanLatexdiffvc',
+    const packed = await runtime.runPromise(
+      Effect.provide(
+        runPackLatexdiffvc(baseFile, commit, action === 'cleanLatexdiffvc'),
+        sessionFiles,
+      ),
     );
     const message = latexdiffPackMessage(packed);
     if (message) await host.showInfoMessage(message);
