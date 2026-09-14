@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  removeGitHubToken,
-  saveGitHubToken,
-  type GitHubTokenStatus,
-} from '@cli/runtime/githubToken';
-import {
   loadProviderApiKeyStatuses,
   saveProviderApiKey,
 } from '@cli/runtime/providerApiKey';
+import { storeCredential } from '@common/secrets/storeCredential';
 import type { ApiKeyStatus, ApiProvider } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -19,7 +15,10 @@ import {
   type SettingsStores,
 } from '@shared/config/settingsAccess';
 import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
-import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
+import {
+  GITHUB_TOKEN_STORAGE_KEY,
+  resolveGitHubTokenSource,
+} from '@tools/github/githubAuth';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -29,6 +28,7 @@ import { ConfigForm } from './ConfigForm';
 import {
   formatGitHubTokenSummary,
   GitHubTokenForm,
+  type GitHubTokenStatus,
   type GitHubTokenStatusView,
 } from './GitHubTokenForm';
 import {
@@ -275,12 +275,20 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             availableRows={props.availableRows}
             statusView={githubTokenStatusView}
             onSave={async (token) => {
-              await props.runtime.runPromise(saveGitHubToken(secrets, token));
+              await props.runtime.runPromise(
+                storeCredential(secrets, {
+                  secretName: GITHUB_TOKEN_STORAGE_KEY,
+                  value: token,
+                  kind: 'github',
+                }),
+              );
               markGitHubToken(() => ({ status: 'secret' }));
               await refreshGitHubTokenStatus();
             }}
             onRemove={async () => {
-              await props.runtime.runPromise(removeGitHubToken(secrets));
+              await props.runtime.runPromise(
+                secrets.delete(GITHUB_TOKEN_STORAGE_KEY),
+              );
               await refreshGitHubTokenStatus();
             }}
             onDone={onBack}

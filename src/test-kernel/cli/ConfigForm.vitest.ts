@@ -61,30 +61,16 @@ import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 
 const providerApiKeyRuntime = vi.hoisted(() => ({
   load: vi.fn(),
   save: vi.fn(),
 }));
-const githubTokenRuntime = vi.hoisted(() => ({
-  load: vi.fn(),
-  save: vi.fn(),
-  remove: vi.fn(),
-}));
 
 vi.mock('@cli/runtime/providerApiKey', () => ({
   loadProviderApiKeyStatuses: providerApiKeyRuntime.load,
   saveProviderApiKey: providerApiKeyRuntime.save,
-}));
-vi.mock('@cli/runtime/githubToken', () => ({
-  saveGitHubToken: githubTokenRuntime.save,
-  removeGitHubToken: githubTokenRuntime.remove,
-}));
-// The form reads the token's source through the shared credential program and
-// settles it on the runtime prop, so the status stub is a program too.
-vi.mock('@tools/github/githubAuth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tools/github/githubAuth')>()),
-  resolveGitHubTokenSource: githubTokenRuntime.load,
 }));
 
 type ConfigFormProps = Parameters<
@@ -123,12 +109,6 @@ beforeEach(() => {
   providerApiKeyRuntime.load.mockResolvedValue(apiKeyStatuses());
   providerApiKeyRuntime.save.mockReset();
   providerApiKeyRuntime.save.mockReturnValue(Effect.void);
-  githubTokenRuntime.load.mockReset();
-  githubTokenRuntime.load.mockReturnValue(Effect.succeed('none'));
-  githubTokenRuntime.save.mockReset();
-  githubTokenRuntime.save.mockReturnValue(Effect.void);
-  githubTokenRuntime.remove.mockReset();
-  githubTokenRuntime.remove.mockReturnValue(Effect.void);
 });
 
 afterEach(() => {
@@ -451,22 +431,17 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 
   it('saves a GitHub token from /config without rendering the secret', async () => {
-    githubTokenRuntime.load
-      .mockReturnValueOnce(Effect.succeed('none'))
-      .mockReturnValueOnce(Effect.succeed('secret'));
     const rendered = await renderCliConfigForm();
 
     try {
       await waitFor(() => rendered.stdout.output.includes('GitHub token'));
       rendered.stdout.output = '';
       await submitGitHubToken(rendered.stdin, rendered.stdout);
-      await waitFor(() => githubTokenRuntime.save.mock.calls.length === 1);
-      expect(githubTokenRuntime.save).toHaveBeenCalledWith(
-        formSecrets,
-        'ghp_private-test-token',
-      );
-      expect(rendered.stdout.output).not.toContain('ghp_private-test-token');
       await waitFor(() => rendered.stdout.output.includes('Token set'));
+      await expect(
+        formSecrets.getStored(GITHUB_TOKEN_STORAGE_KEY),
+      ).resolves.toBe('ghp_private-test-token');
+      expect(rendered.stdout.output).not.toContain('ghp_private-test-token');
     } finally {
       rendered.instance.unmount();
     }

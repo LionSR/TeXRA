@@ -2,7 +2,6 @@ import { Text } from 'ink';
 import { useState } from 'react';
 
 import { tryOpenBrowser } from '@cli/runtime/browser';
-import type { GitHubTokenStatus } from '@cli/runtime/githubToken';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { CROSS } from '@cli/tui/ui/glyphs';
 import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
@@ -11,6 +10,12 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { CredentialEntryForm } from './ApiKeyEntryForm';
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
+
+/**
+ * Which source backs the GitHub token, as `resolveGitHubTokenSource` reports
+ * it. The vocabulary lives beside the view that labels it.
+ */
+export type GitHubTokenStatus = 'secret' | 'env' | 'none';
 
 export interface GitHubTokenStatusView {
   readonly status?: GitHubTokenStatus;
