@@ -1,6 +1,6 @@
 ---
 created: 2026-09-11
-updated: 2026-09-11
+updated: 2026-09-14
 status: proposed
 ---
 
@@ -18,6 +18,8 @@ status: proposed
 > ownership, policy and value. Nine themes survived both lenses, in whole or
 > in part, and are proposed below. Eight were refuted, and the reasons are
 > recorded at the end. Rechecked against `4bc68a85c3`, after #12246 merged.
+> T06 `loadSourceModule.ts` figures re-counted on 2026-09-14 against
+> `4d33271c8b`.
 
 This note is evidence for the tracker that owns the topic, #12077 ("Testing on
 `@effect/vitest`"). It does not reopen that tracker's rulings. TestClock
@@ -217,11 +219,11 @@ reason** (T06; about −78 lines proven, about −210 estimated).
   `isolate: false` `pure` project, doing exactly what that project forbids.
   Deleting `githubClientMock.ts` (its only consumers are these two suites) moves
   them to `kernel`, which is the correct tier.
-- `src/test-kernel/desktop/loadSourceModule.ts` is a 61-line file-URL importer
-  with a hand-kept type map (6 of its 30 entries already unused). It exists for
+- `src/test-kernel/desktop/loadSourceModule.ts` is a 66-line file-URL importer
+  with a hand-kept type map (9 of its 27 entries already unused). It exists for
   "a fresh module across `vi.resetModules`, built after `vi.mock`". An alias
   import (`await import('@desktop/...')`) gives the same result, as the prototype
-  confirmed on `DesktopNavigationPolicy`. There are 28 call sites in 18 suites.
+  confirmed on `DesktopNavigationPolicy`. There are 24 call sites in 16 suites.
   Exclude the `JsonStore`/`jsonConfigProvider` consumers, which are on the
   retirement boundary, and note that `DesktopCommandSurface` imports the helper
   and never calls it.
