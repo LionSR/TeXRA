@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
 
 import { debugInternal, logInternal, type AgentTrace } from '@agent/trace';
@@ -19,7 +20,7 @@ import {
   getFileDirectory,
 } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { addCdataToTagsMultiple } from '@utils/text/xmlCdata';
 import {
@@ -38,6 +39,7 @@ import {
   extractFilenameHeaderDocuments,
   normalizeDocumentName,
 } from './extraction/filenameHeaders';
+import { fsCall } from './outputOperations';
 import { reportMissingOutputs, type OutputState } from './outputState';
 
 /** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
@@ -79,6 +81,8 @@ export class XmlOutputManager {
     /** The run's round map: a missing-output report records the round and
      *  publishes the whole map, since the fact is a latest-only listing row. */
     private readonly outputState: OutputState,
+    /** The run's `inScope`: binds a call to the session's roots scope. */
+    private readonly inScope: <A>(operation: () => A) => A,
   ) {}
 
   private extractMultipleDocumentsByRegex(
@@ -170,315 +174,353 @@ export class XmlOutputManager {
    * input files by content similarity rather than guessing from response
    * order, since a model can reorder or drop files in its response.
    */
-  private async extractDocumentsByContentSimilarity(
+  private extractDocumentsByContentSimilarity(
     outputContent: string,
     outputLocation: FileLocation,
     round: number,
     baseFiles: readonly FileLocation[],
-  ): Promise<NamedDocument[] | null> {
-    const blocks = this.collectLatexFencedBlocks(outputContent);
-    if (blocks.length === 0) return null;
+  ): Effect.Effect<NamedDocument[] | null> {
+    return Effect.gen({ self: this }, function* () {
+      const blocks = this.collectLatexFencedBlocks(outputContent);
+      if (blocks.length === 0) return null;
 
-    const inputFiles = this.agentConfig.inputFiles;
-    const files = await Promise.all(
-      baseFiles.slice(0, inputFiles.length).map(async (loc, idx) => ({
-        name: inputFiles[idx],
-        // An unreadable base file becomes '': it will score near-zero
-        // similarity against any real fenced block rather than aborting the
-        // whole recovery pass.
-        content: await AbsoluteFS.read(loc.absolutePath).catch(() => ''),
-      })),
-    );
-    if (files.length === 0) return null;
-
-    const documents = assignByContentSimilarity(blocks, files).filter(
-      (d): d is NamedDocument => d !== null,
-    );
-    if (documents.length === 0) return null;
-
-    logInternal(
-      this.logger,
-      `Recovered ${OUTPUT_DOCUMENTS_TAG} by matching unlabeled fenced ` +
-        `blocks against the original input files (${formatResultCount(documents.length, 'document')})`,
-    );
-
-    // Recovery is best-effort per block: surface what stayed unmatched so a
-    // partially recovered round never silently reads as a complete one.
-    const matchedNames = new Set(documents.map((doc) => doc.name));
-    const unmatchedFiles = files
-      .map((file) => file.name)
-      .filter((name) => !matchedNames.has(name));
-    if (unmatchedFiles.length > 0) {
-      reportMissingOutputs(this.outputState, this.logger, {
-        round,
-        missing: unmatchedFiles,
-        xmlFile: outputLocation.absolutePath,
-      });
-    }
-    if (documents.length < blocks.length) {
-      debugInternal(
-        this.logger,
-        `${blocks.length - documents.length} of ${formatResultCount(blocks.length, 'fenced block')} matched no input file and were dropped`,
+      const inputFiles = this.agentConfig.inputFiles;
+      const files = yield* Effect.forEach(
+        baseFiles.slice(0, inputFiles.length),
+        (loc, idx) =>
+          fsCall(() => AbsoluteFS.read(loc.absolutePath)).pipe(
+            // An unreadable base file becomes '': it will score near-zero
+            // similarity against any real fenced block rather than aborting
+            // the whole recovery pass.
+            Effect.orElseSucceed(() => ''),
+            Effect.map((content) => ({ name: inputFiles[idx], content })),
+          ),
+        { concurrency: 'unbounded' },
       );
-    }
-    return documents;
+      if (files.length === 0) return null;
+
+      const documents = assignByContentSimilarity(blocks, files).filter(
+        (d): d is NamedDocument => d !== null,
+      );
+      if (documents.length === 0) return null;
+
+      logInternal(
+        this.logger,
+        `Recovered ${OUTPUT_DOCUMENTS_TAG} by matching unlabeled fenced ` +
+          `blocks against the original input files (${formatResultCount(documents.length, 'document')})`,
+      );
+
+      // Recovery is best-effort per block: surface what stayed unmatched so a
+      // partially recovered round never silently reads as a complete one.
+      const matchedNames = new Set(documents.map((doc) => doc.name));
+      const unmatchedFiles = files
+        .map((file) => file.name)
+        .filter((name) => !matchedNames.has(name));
+      if (unmatchedFiles.length > 0) {
+        reportMissingOutputs(this.outputState, this.logger, {
+          round,
+          missing: unmatchedFiles,
+          xmlFile: outputLocation.absolutePath,
+        });
+      }
+      if (documents.length < blocks.length) {
+        debugInternal(
+          this.logger,
+          `${blocks.length - documents.length} of ${formatResultCount(blocks.length, 'fenced block')} matched no input file and were dropped`,
+        );
+      }
+      return documents;
+    });
   }
 
-  async splitScratchpadMultipleOutputXml(
+  splitScratchpadMultipleOutputXml(
     outputLocation: FileLocation,
     round: number,
     baseFiles: readonly FileLocation[] = [],
-  ): Promise<OutputFileInfo[]> {
-    const rawOutputContent = await AbsoluteFS.read(outputLocation.absolutePath);
-    // Count document tag occurrences with name attributes (case-sensitive to
-    // match extraction).
-    const expectedDocumentCount =
-      rawOutputContent.match(DOCUMENT_NAME_REGEX_GLOBAL)?.length ?? 0;
-
-    // The XML-parse and regex tiers read the CDATA-wrapped variant (so the
-    // parser treats thinking/document bodies as opaque text); the header and
-    // similarity tiers below read the raw response instead.
-    const cdataWrapped = addCdataToTagsMultiple(rawOutputContent, [
-      SCRATCHPAD_TAG,
-      OUTPUT_DOCUMENT_TAG,
-    ]);
-
-    let documents: NamedDocument[] | null = null;
-
-    try {
-      const parser = new XMLParser(XML_PARSER_OPTIONS);
-      const root = parser.parse(cdataWrapped);
-      documents = extractContentFromXMLbyTagMultiple(
-        root,
-        OUTPUT_DOCUMENTS_TAG,
+  ): Effect.Effect<OutputFileInfo[], Error> {
+    return Effect.gen({ self: this }, function* () {
+      const rawOutputContent = yield* fsCall(() =>
+        AbsoluteFS.read(outputLocation.absolutePath),
       );
+      // Count document tag occurrences with name attributes (case-sensitive to
+      // match extraction).
+      const expectedDocumentCount =
+        rawOutputContent.match(DOCUMENT_NAME_REGEX_GLOBAL)?.length ?? 0;
+
+      // The XML-parse and regex tiers read the CDATA-wrapped variant (so the
+      // parser treats thinking/document bodies as opaque text); the header and
+      // similarity tiers below read the raw response instead.
+      const cdataWrapped = addCdataToTagsMultiple(rawOutputContent, [
+        SCRATCHPAD_TAG,
+        OUTPUT_DOCUMENT_TAG,
+      ]);
+
+      // A response the XML parser refuses is expected input, not a defect:
+      // every later tier below exists to recover from exactly that, so the
+      // parse failure is reported at debug and extraction continues.
+      let documents: NamedDocument[] | null = yield* Effect.try({
+        try: () => {
+          const parser = new XMLParser(XML_PARSER_OPTIONS);
+          const root = parser.parse(cdataWrapped) as Record<string, unknown>;
+          return extractContentFromXMLbyTagMultiple(root, OUTPUT_DOCUMENTS_TAG);
+        },
+        catch: ensureError,
+      }).pipe(
+        Effect.tap((parsed) =>
+          Effect.sync(() => {
+            if (!parsed) {
+              debugInternal(
+                this.logger,
+                `No ${OUTPUT_DOCUMENTS_TAG} found in parsed XML, attempting fallback extraction...`,
+              );
+            }
+          }),
+        ),
+        Effect.catch((err) =>
+          Effect.sync((): NamedDocument[] | null => {
+            debugInternal(
+              this.logger,
+              `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
+            );
+            return null;
+          }),
+        ),
+      );
+
       if (!documents) {
-        debugInternal(
-          this.logger,
-          `No ${OUTPUT_DOCUMENTS_TAG} found in parsed XML, attempting fallback extraction...`,
-        );
+        documents = this.extractMultipleDocumentsByRegex(cdataWrapped);
       }
-    } catch (err) {
-      debugInternal(
-        this.logger,
-        `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
+
+      // The files this agent is expected to write: the declared outputFiles
+      // when present (single-artifact agents like ocr / paper2slide, whose
+      // inputs can be media files a response might mention in prose),
+      // otherwise the inputs (workflow edit agents reuse the input names as
+      // output names). Bare labels may only name these, and single-document
+      // synthesis may only use one of these — never an input name when the
+      // agent declares a different output.
+      const expectedFiles =
+        this.agentConfig.outputFiles.length > 0
+          ? this.agentConfig.outputFiles
+          : this.agentConfig.inputFiles;
+      const soleExpectedFile =
+        expectedFiles.length === 1 ? expectedFiles[0] : null;
+
+      if (!documents) {
+        documents = extractFilenameHeaderDocuments(rawOutputContent, {
+          roundDir: getFileDirectory(outputLocation),
+          labelFiles: expectedFiles,
+          synthesisName: soleExpectedFile,
+          coalesceRepeatedName:
+            this.agentConfig.outputFiles.length === 1 ? soleExpectedFile : null,
+        });
+        if (documents) {
+          logInternal(
+            this.logger,
+            `Recovered ${OUTPUT_DOCUMENTS_TAG} from filename headers (${formatResultCount(documents.length, 'document')})`,
+          );
+          if (expectedFiles.length > 1) {
+            this.warnMissingExpectedFiles(
+              outputLocation,
+              round,
+              expectedFiles,
+              documents,
+            );
+          }
+        }
+      }
+
+      // A response that carries an explicit <latex_document> has named its final
+      // answer, and an untagged fence has not — a model may well emit an example
+      // or a draft fence before the tagged answer. So the tagged tier below wins
+      // outright and this one stands down, exactly as it did before fence
+      // recovery moved here. Reads the raw response, which agrees with the
+      // cdataWrapped text the tagged tier parses: addCdataToTagsMultiple only
+      // wraps the thinking and document tags, never <latex_document>.
+      const taggedLatexDocument = extractTextFromTag(
+        rawOutputContent,
+        'latex_document',
       );
-    }
 
-    if (!documents) {
-      documents = this.extractMultipleDocumentsByRegex(cdataWrapped);
-    }
-
-    // The files this agent is expected to write: the declared outputFiles
-    // when present (single-artifact agents like ocr / paper2slide, whose
-    // inputs can be media files a response might mention in prose),
-    // otherwise the inputs (workflow edit agents reuse the input names as
-    // output names). Bare labels may only name these, and single-document
-    // synthesis may only use one of these — never an input name when the
-    // agent declares a different output.
-    const expectedFiles =
-      this.agentConfig.outputFiles.length > 0
-        ? this.agentConfig.outputFiles
-        : this.agentConfig.inputFiles;
-    const soleExpectedFile =
-      expectedFiles.length === 1 ? expectedFiles[0] : null;
-
-    if (!documents) {
-      documents = extractFilenameHeaderDocuments(rawOutputContent, {
-        roundDir: getFileDirectory(outputLocation),
-        labelFiles: expectedFiles,
-        synthesisName: soleExpectedFile,
-        coalesceRepeatedName:
-          this.agentConfig.outputFiles.length === 1 ? soleExpectedFile : null,
-      });
-      if (documents) {
-        logInternal(
-          this.logger,
-          `Recovered ${OUTPUT_DOCUMENTS_TAG} from filename headers (${formatResultCount(documents.length, 'document')})`,
-        );
-        if (expectedFiles.length > 1) {
-          this.warnMissingExpectedFiles(
-            outputLocation,
-            round,
-            expectedFiles,
-            documents,
+      if (!documents && soleExpectedFile && !taggedLatexDocument) {
+        // This fully unlabeled tier is intentionally stricter than
+        // filename-header recovery: without a trusted file label, only fences
+        // explicitly marked latex/tex are treated as output. It handles the
+        // single-block case too (rather than leaving it to the legacy tier)
+        // because it strips the thinking tag first — a scratchpad that drafts
+        // inside a ```latex fence would otherwise be written to the user's file
+        // as if it were the answer.
+        const fencedBlocks = this.collectLatexFencedBlocks(rawOutputContent);
+        // A single-artifact agent (ocr/paper2slide: one declared output, many
+        // inputs) emits one fence per input, so all of them belong to the
+        // output. An edit agent reusing its input name emits the revised
+        // document first, and any later fence is explanatory prose.
+        const blocks =
+          this.agentConfig.outputFiles.length === 1
+            ? fencedBlocks
+            : fencedBlocks.slice(0, 1);
+        if (blocks.length > 0) {
+          documents = [
+            {
+              name: soleExpectedFile,
+              content: blocks.join('\n\n'),
+            },
+          ];
+          logInternal(
+            this.logger,
+            `Recovered ${OUTPUT_DOCUMENTS_TAG} from ` +
+              `unlabeled fenced blocks under ${soleExpectedFile} (${formatResultCount(blocks.length, 'block')})`,
           );
         }
       }
-    }
 
-    // A response that carries an explicit <latex_document> has named its final
-    // answer, and an untagged fence has not — a model may well emit an example
-    // or a draft fence before the tagged answer. So the tagged tier below wins
-    // outright and this one stands down, exactly as it did before fence
-    // recovery moved here. Reads the raw response, which agrees with the
-    // cdataWrapped text the tagged tier parses: addCdataToTagsMultiple only
-    // wraps the thinking and document tags, never <latex_document>.
-    const taggedLatexDocument = extractTextFromTag(
-      rawOutputContent,
-      'latex_document',
-    );
-
-    if (!documents && soleExpectedFile && !taggedLatexDocument) {
-      // This fully unlabeled tier is intentionally stricter than
-      // filename-header recovery: without a trusted file label, only fences
-      // explicitly marked latex/tex are treated as output. It handles the
-      // single-block case too (rather than leaving it to the legacy tier)
-      // because it strips the thinking tag first — a scratchpad that drafts
-      // inside a ```latex fence would otherwise be written to the user's file
-      // as if it were the answer.
-      const fencedBlocks = this.collectLatexFencedBlocks(rawOutputContent);
-      // A single-artifact agent (ocr/paper2slide: one declared output, many
-      // inputs) emits one fence per input, so all of them belong to the
-      // output. An edit agent reusing its input name emits the revised
-      // document first, and any later fence is explanatory prose.
-      const blocks =
-        this.agentConfig.outputFiles.length === 1
-          ? fencedBlocks
-          : fencedBlocks.slice(0, 1);
-      if (blocks.length > 0) {
-        documents = [
-          {
-            name: soleExpectedFile,
-            content: blocks.join('\n\n'),
-          },
-        ];
-        logInternal(
-          this.logger,
-          `Recovered ${OUTPUT_DOCUMENTS_TAG} from ` +
-            `unlabeled fenced blocks under ${soleExpectedFile} (${formatResultCount(blocks.length, 'block')})`,
+      if (!documents && soleExpectedFile) {
+        // Agents expected to write exactly one file whose model regressed to a
+        // legacy single-doc shape (<latex_document> or a bare \documentclass)
+        // can still be recovered: pass that filename so the fallback can
+        // synthesize a named document. Agents with several expected files
+        // cannot safely recover — without per-document names there's no way to
+        // route content (and without a preferredName this call would just
+        // repeat the earlier one).
+        // Keep the relative path verbatim — getExtractedDocOutputFileName
+        // preserves subdirectories so `Draft/Draft1.tex` lands at the right
+        // workspace location instead of collapsing to the round root.
+        documents = this.extractMultipleDocumentsByRegex(
+          cdataWrapped,
+          soleExpectedFile,
         );
       }
-    }
 
-    if (!documents && soleExpectedFile) {
-      // Agents expected to write exactly one file whose model regressed to a
-      // legacy single-doc shape (<latex_document> or a bare \documentclass)
-      // can still be recovered: pass that filename so the fallback can
-      // synthesize a named document. Agents with several expected files
-      // cannot safely recover — without per-document names there's no way to
-      // route content (and without a preferredName this call would just
-      // repeat the earlier one).
-      // Keep the relative path verbatim — getExtractedDocOutputFileName
-      // preserves subdirectories so `Draft/Draft1.tex` lands at the right
-      // workspace location instead of collapsing to the round root.
-      documents = this.extractMultipleDocumentsByRegex(
-        cdataWrapped,
-        soleExpectedFile,
-      );
-    }
+      if (
+        !documents &&
+        this.agentConfig.inputFiles.length > 1 &&
+        this.agentConfig.outputFiles.length === 0
+      ) {
+        // Multi-input agents have no name to synthesize a single-document
+        // recovery from, but an unlabeled fenced block can still be routed by
+        // comparing it against each original input file's content. Only valid
+        // when baseFiles really is the input files: the reflection loop
+        // substitutes config.outputFiles for baseFiles whenever the agent
+        // declares any (single-artifact-from-many-inputs agents like ocr/
+        // paper2slide), so zipping baseFiles[i] with inputFiles[i] there would
+        // label a matched block with the wrong input filename.
+        documents = yield* this.extractDocumentsByContentSimilarity(
+          rawOutputContent,
+          outputLocation,
+          round,
+          baseFiles,
+        );
+      }
 
-    if (
-      !documents &&
-      this.agentConfig.inputFiles.length > 1 &&
-      this.agentConfig.outputFiles.length === 0
-    ) {
-      // Multi-input agents have no name to synthesize a single-document
-      // recovery from, but an unlabeled fenced block can still be routed by
-      // comparing it against each original input file's content. Only valid
-      // when baseFiles really is the input files: the reflection loop
-      // substitutes config.outputFiles for baseFiles whenever the agent
-      // declares any (single-artifact-from-many-inputs agents like ocr/
-      // paper2slide), so zipping baseFiles[i] with inputFiles[i] there would
-      // label a matched block with the wrong input filename.
-      documents = await this.extractDocumentsByContentSimilarity(
-        rawOutputContent,
-        outputLocation,
-        round,
-        baseFiles,
-      );
-    }
+      if (!documents) {
+        this.warnPartialExtraction(
+          outputLocation,
+          round,
+          expectedDocumentCount,
+          0,
+        );
+        return [];
+      }
 
-    if (!documents) {
       this.warnPartialExtraction(
         outputLocation,
         round,
         expectedDocumentCount,
-        0,
+        documents.length,
       );
-      return [];
-    }
-
-    this.warnPartialExtraction(
-      outputLocation,
-      round,
-      expectedDocumentCount,
-      documents.length,
-    );
-    return this.processMultipleLatexDocuments(documents, outputLocation, round);
+      return yield* this.processMultipleLatexDocuments(
+        documents,
+        outputLocation,
+        round,
+      );
+    });
   }
 
-  async processMultipleLatexDocuments(
+  processMultipleLatexDocuments(
     latexDocuments: NamedDocument[],
     outputLocation: FileLocation,
     round: number,
-  ): Promise<OutputFileInfo[]> {
-    const outputFiles: OutputFileInfo[] = [];
-    // For workspace/runStorage outputs use the workspace-relative round dir
-    // so fileService.createLocation can route through its storage layer.
-    // For external outputs, work in absolute paths directly — an absolute
-    // path passed through createLocation would be re-classified as external
-    // anyway, so skip the round-trip and build the location explicitly.
-    const isExternal = outputLocation.kind === 'external';
-    const roundDir = getFileDirectory(outputLocation);
+  ): Effect.Effect<OutputFileInfo[], Error> {
+    return Effect.gen({ self: this }, function* () {
+      const outputFiles: OutputFileInfo[] = [];
+      // For workspace/runStorage outputs use the workspace-relative round dir
+      // so fileService.createLocation can route through its storage layer.
+      // For external outputs, work in absolute paths directly — an absolute
+      // path passed through createLocation would be re-classified as external
+      // anyway, so skip the round-trip and build the location explicitly.
+      const isExternal = outputLocation.kind === 'external';
+      const roundDir = getFileDirectory(outputLocation);
 
-    for (const doc of latexDocuments) {
-      if (!doc.name || doc.name === 'unknown' || !doc.content) {
-        this.logger.debug(`Skipping document with empty name or content`);
-        continue;
-      }
+      for (const doc of latexDocuments) {
+        if (!doc.name || doc.name === 'unknown' || !doc.content) {
+          this.logger.debug(`Skipping document with empty name or content`);
+          continue;
+        }
 
-      const source = doc.name.trim();
-      if (!source) {
-        this.logger.debug(
-          `Skipping document with empty source name after trimming`,
+        const source = doc.name.trim();
+        if (!source) {
+          this.logger.debug(
+            `Skipping document with empty source name after trimming`,
+          );
+          continue;
+        }
+
+        const texFile = getExtractedDocOutputFileName(source, roundDir);
+        const texLocation = isExternal
+          ? createExternalLocation(texFile)
+          : this.fileService.createLocation(texFile);
+        const cleanedContent = this.cleanExtractedDocumentContent(
+          doc.content.trim(),
+          texFile,
         );
-        continue;
+        yield* fsCall(() =>
+          writeRoundOutput(texLocation.absolutePath, cleanedContent),
+        );
+        outputFiles.push({
+          source,
+          round,
+          location: texLocation,
+          lineage: null,
+          diff: null,
+        });
+        this.logger.debug('XML source written to TeX file', {
+          data: { source, texFile },
+        });
       }
 
-      const texFile = getExtractedDocOutputFileName(source, roundDir);
-      const texLocation = isExternal
-        ? createExternalLocation(texFile)
-        : this.fileService.createLocation(texFile);
-      const cleanedContent = this.cleanExtractedDocumentContent(
-        doc.content.trim(),
-        texFile,
-      );
-      await writeRoundOutput(texLocation.absolutePath, cleanedContent);
-      outputFiles.push({
-        source,
-        round,
-        location: texLocation,
-        lineage: null,
-        diff: null,
-      });
-      this.logger.debug('XML source written to TeX file', {
-        data: { source, texFile },
-      });
-    }
-
-    return outputFiles;
+      return outputFiles;
+    });
   }
 
-  async ensureCorrectXmlStructure(fileLocation: FileLocation): Promise<void> {
-    this.logger.debug(
-      `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
-    );
-    const originalContent = await AbsoluteFS.read(fileLocation.absolutePath);
-    let content = replacementEngine.applyFor(originalContent, 'xml-content');
+  ensureCorrectXmlStructure(
+    fileLocation: FileLocation,
+  ): Effect.Effect<void, Error> {
+    return Effect.gen({ self: this }, function* () {
+      this.logger.debug(
+        `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
+      );
+      const originalContent = yield* fsCall(() =>
+        AbsoluteFS.read(fileLocation.absolutePath),
+      );
+      // Session-scoped until #12421 roots src/latex; see #12433.
+      let content = this.inScope(() =>
+        replacementEngine.applyFor(originalContent, 'xml-content'),
+      );
 
-    const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
-    const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;
+      const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
+      const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;
 
-    if (content.includes(openTag) && !content.endsWith(closeTag)) {
-      content =
-        content.replace(new RegExp(`${closeTag}.*$`, 's'), '') +
-        `\n${closeTag}`;
-    }
+      if (content.includes(openTag) && !content.endsWith(closeTag)) {
+        content =
+          content.replace(new RegExp(`${closeTag}.*$`, 's'), '') +
+          `\n${closeTag}`;
+      }
 
-    if (content !== originalContent) {
-      await AbsoluteFS.write(fileLocation.absolutePath, content);
-    }
+      if (content !== originalContent) {
+        yield* fsCall(() =>
+          AbsoluteFS.write(fileLocation.absolutePath, content),
+        );
+      }
+    });
   }
 
   private cleanExtractedDocumentContent(

@@ -1,10 +1,11 @@
 import * as path from 'node:path';
 
+import { Effect, FileSystem } from 'effect';
+
 import type { AgentTrace } from '@agent/trace';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { effectRuntime } from '@platform/processRuntime';
-import { platform } from '@platform/platform';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   fileLocationDisplayPath,
   type DiffResult,
@@ -20,7 +21,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
@@ -28,7 +29,7 @@ import {
   getWorkflowAutoCompileTimeoutMs,
   resolveWorkspaceSourceDir,
 } from './compileCheck';
-import { tryOperation } from './outputOperations';
+import { fsCall, recoverOutputFailure } from './outputOperations';
 import type { RoundFileEntry, RoundFileMapping } from './types';
 
 interface DiffOutputDirectory {
@@ -51,15 +52,31 @@ export class LatexDiffManager {
     private readonly logger: AgentTrace,
     private readonly runId: RunId,
     private readonly fileService: TaskRunFileService,
+    /** The run's session roots: the workspace and setting stores it reads. */
+    private readonly roots: WorkspaceRoots,
+    /** The run's `inScope`: binds a call to the session's roots scope. */
+    private readonly inScope: <A>(operation: () => A) => A,
   ) {
-    this.latexdiffService = new LaTeXdiffService(runId);
+    this.latexdiffService = new LaTeXdiffService(runId, roots);
   }
 
-  private async getWorkingDirectory(location: FileLocation): Promise<string> {
-    const resolved = await platform()
-      .fs.realPath(location.absolutePath)
-      .catch(() => location.absolutePath);
-    return path.dirname(resolved);
+  /**
+   * The directory latexdiff runs in: the revised file's own folder, with
+   * symlinks resolved so a mirrored dependency's relative `\input{}` still
+   * points at real siblings. A path the filesystem cannot canonicalize (it
+   * was removed under us, or a link cycle) falls back to the path as given —
+   * the same directory latexdiff would have used without resolution.
+   */
+  private getWorkingDirectory(
+    location: FileLocation,
+  ): Effect.Effect<string, never, FileSystem.FileSystem> {
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const resolved = yield* fs
+        .realPath(location.absolutePath)
+        .pipe(Effect.orElseSucceed(() => location.absolutePath));
+      return path.dirname(resolved);
+    });
   }
 
   private logLatexdiffResult(
@@ -87,32 +104,43 @@ export class LatexDiffManager {
     });
   }
 
-  private async ensureWorkspaceDependency(
+  /**
+   * Mirror an existing workspace dependency into run storage so latexdiff's
+   * relative `\input{}` resolution finds it. A dependency whose existence
+   * check or mirror fails (a permission denial, a transient I/O error) is
+   * reported with its path and cause and skipped: the other file pairs still
+   * diff, and this diff still runs and names whatever it could not resolve.
+   */
+  private ensureWorkspaceDependency(
     targetLocation: FileLocation | null | undefined,
-  ): Promise<void> {
-    if (
-      !targetLocation ||
-      !(await AbsoluteFS.exists(targetLocation.absolutePath))
-    ) {
-      return;
-    }
-
-    try {
-      await this.fileService.mirrorWorkspaceFile(targetLocation);
-    } catch (error) {
-      this.logger.warn('Unable to mirror workspace dependency', {
-        data: { path: targetLocation.absolutePath, error },
-        messageType: MESSAGE_TYPES.INTERNAL,
-      });
-    }
+  ): Effect.Effect<void> {
+    if (!targetLocation) return Effect.void;
+    const dependencyPath = targetLocation.absolutePath;
+    return Effect.gen({ self: this }, function* () {
+      const exists = yield* fsCall(() => AbsoluteFS.exists(dependencyPath));
+      if (!exists) return;
+      yield* fsCall(() => this.fileService.mirrorWorkspaceFile(targetLocation));
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          this.logger.warn(
+            `Unable to mirror workspace dependency ${dependencyPath}: ${toErrorMessage(error)}`,
+            {
+              data: { path: dependencyPath, error },
+              messageType: MESSAGE_TYPES.INTERNAL,
+            },
+          );
+        }),
+      ),
+    );
   }
 
-  async handleLatexdiffOfOutput(
+  handleLatexdiffOfOutput(
     currRound: number,
     mapping: RoundFileMapping,
-  ): Promise<RunStorageFileLocation[]> {
-    const execute = async (): Promise<RunStorageFileLocation[]> => {
-      if (!(await checkToolInstalled('latexdiff'))) {
+  ): Effect.Effect<RunStorageFileLocation[], never, FileSystem.FileSystem> {
+    const execute = Effect.gen({ self: this }, function* () {
+      if (!(yield* fsCall(() => checkToolInstalled('latexdiff')))) {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
         );
@@ -129,8 +157,10 @@ export class LatexDiffManager {
 
       // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
       // relative \input{} resolution works when its cwd is runDir/r{round}.
-      await this.fileService.ensureMirroredInRoundDir(currRound);
-      await this.fileService.ensureMirroredInDiffRoundDir(currRound);
+      yield* fsCall(() => this.fileService.ensureMirroredInRoundDir(currRound));
+      yield* fsCall(() =>
+        this.fileService.ensureMirroredInDiffRoundDir(currRound),
+      );
       const relativePath = path.join('diff', `r${currRound}`);
       const diffDirectory: DiffOutputDirectory = {
         absolutePath: path.join(this.fileService.runDirectory, relativePath),
@@ -170,10 +200,10 @@ export class LatexDiffManager {
         // nothing to diff against. Skip those pairs rather than gating the
         // whole call, so the between-round branch below still runs.
         const candidatePairs = collectPairs((entry) => entry.base);
-        const baseExists = await Promise.all(
-          candidatePairs.map(([, base]) =>
-            AbsoluteFS.exists(base.absolutePath),
-          ),
+        const baseExists = yield* Effect.forEach(
+          candidatePairs,
+          ([, base]) => fsCall(() => AbsoluteFS.exists(base.absolutePath)),
+          { concurrency: 'unbounded' },
         );
         const basePairs = candidatePairs.filter(
           (_, index) => baseExists[index],
@@ -187,24 +217,19 @@ export class LatexDiffManager {
 
         for (const [outputPath, baseLocation] of basePairs) {
           collect(
-            await this.runSingleDiff({
+            yield* this.runSingleDiff({
               outputPath,
               baseLocation,
               outputByPath,
               originalLocation: baseLocation,
               baseRound: null,
-              // The one Promise seam left in this manager: the diff service
-              // is Effect below this line and the reflection flow above it is
-              // not. The run goes when the flow becomes an Effect loop (R4).
               runDiff: (base, revised, cwd) =>
-                effectRuntime().runPromise(
-                  this.latexdiffService.runDiffForRound(
-                    base,
-                    revised,
-                    currRound,
-                    undefined,
-                    { cwd, outputDirectory: diffDirectory.absolutePath },
-                  ),
+                this.latexdiffService.runDiffForRound(
+                  base,
+                  revised,
+                  currRound,
+                  undefined,
+                  { cwd, outputDirectory: diffDirectory.absolutePath },
                 ),
               label: 'round-diff',
               pdfStemSuffix: '-diff',
@@ -214,7 +239,8 @@ export class LatexDiffManager {
         }
       }
 
-      const generateBetweenRoundDiffs = readPlatformSetting<boolean>(
+      const generateBetweenRoundDiffs = readSettingFrom<boolean>(
+        this.roots,
         WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
       );
 
@@ -228,25 +254,20 @@ export class LatexDiffManager {
         for (const [outputPath, prevLocation] of prevPairs) {
           const originalLocation = mapping.get(outputPath)?.origin ?? null;
           collect(
-            await this.runSingleDiff({
+            yield* this.runSingleDiff({
               outputPath,
               baseLocation: prevLocation,
               outputByPath,
               originalLocation,
               baseRound: currRound - 1,
               runDiff: (base, revised, cwd) =>
-                effectRuntime().runPromise(
-                  this.latexdiffService.runDiffBetweenRounds(
-                    base,
-                    revised,
-                    currRound - 1,
-                    currRound,
-                    undefined,
-                    {
-                      cwd,
-                      outputDirectory: diffDirectory.absolutePath,
-                    },
-                  ),
+                this.latexdiffService.runDiffBetweenRounds(
+                  base,
+                  revised,
+                  currRound - 1,
+                  currRound,
+                  undefined,
+                  { cwd, outputDirectory: diffDirectory.absolutePath },
                 ),
               label: 'between-rounds-diff',
               pdfStemSuffix: '-round-diff',
@@ -271,13 +292,15 @@ export class LatexDiffManager {
       }
 
       return artifacts;
-    };
-    return tryOperation(execute, {
-      logger: this.logger,
-      level: 'error',
-      label: 'Error during latexdiff processing',
-      recover: () => [],
     });
+    return execute.pipe(
+      recoverOutputFailure({
+        logger: this.logger,
+        level: 'error',
+        label: 'Error during latexdiff processing',
+        recover: () => Effect.succeed<RunStorageFileLocation[]>([]),
+      }),
+    );
   }
 
   private logPairMatches(
@@ -297,7 +320,7 @@ export class LatexDiffManager {
     });
   }
 
-  private async runSingleDiff({
+  private runSingleDiff({
     outputPath,
     baseLocation,
     outputByPath,
@@ -317,125 +340,137 @@ export class LatexDiffManager {
       base: FileLocation,
       revised: FileLocation,
       cwd: string,
-    ) => Promise<LaTeXdiffResult>;
+    ) => Effect.Effect<LaTeXdiffResult>;
     label: string;
     pdfStemSuffix: string;
     diffDirectory: DiffOutputDirectory;
-  }): Promise<SingleDiffOutcome | null> {
-    const revisedFile = outputByPath.get(outputPath);
-    if (!revisedFile) {
-      this.logger.debug(
-        `Skipping diff: output file not found for path ${outputPath}`,
-      );
-      return null;
-    }
+  }): Effect.Effect<SingleDiffOutcome | null, Error, FileSystem.FileSystem> {
+    return Effect.gen({ self: this }, function* () {
+      const revisedFile = outputByPath.get(outputPath);
+      if (!revisedFile) {
+        this.logger.debug(
+          `Skipping diff: output file not found for path ${outputPath}`,
+        );
+        return null;
+      }
 
-    await this.ensureWorkspaceDependency(baseLocation);
-    await this.ensureWorkspaceDependency(revisedFile.location);
+      yield* this.ensureWorkspaceDependency(baseLocation);
+      yield* this.ensureWorkspaceDependency(revisedFile.location);
 
-    const cwd = await this.getWorkingDirectory(revisedFile.location);
-    const result = await runDiff(baseLocation, revisedFile.location, cwd);
-    this.logLatexdiffResult(result, label);
+      const cwd = yield* this.getWorkingDirectory(revisedFile.location);
+      const result = yield* runDiff(baseLocation, revisedFile.location, cwd);
+      this.logLatexdiffResult(result, label);
 
-    const compiled = await this.compileDiffIfSuccessful(
-      result,
-      baseLocation,
-      diffDirectory,
-      revisedFile.round,
-      revisedFile.location,
-      pdfStemSuffix,
-    );
-    const diffLocation = compiled?.diffLocation ?? null;
-
-    const revisedWithLineage: OutputFileInfo = {
-      ...revisedFile,
-      lineage: {
-        original: originalLocation,
-        diffBase: baseLocation,
-      },
-    };
-
-    return {
-      diffResult: {
+      const compiled = yield* this.compileDiffIfSuccessful(
+        result,
         baseLocation,
-        baseRound,
-        revised: revisedWithLineage,
-        diffLocation,
-        status: result.success ? 'success' : 'error',
-        message: result.success ? undefined : result.message,
-      },
-      artifact: compiled?.artifact ?? null,
-    };
+        diffDirectory,
+        revisedFile.round,
+        revisedFile.location,
+        pdfStemSuffix,
+      );
+      const diffLocation = compiled?.diffLocation ?? null;
+
+      const revisedWithLineage: OutputFileInfo = {
+        ...revisedFile,
+        lineage: {
+          original: originalLocation,
+          diffBase: baseLocation,
+        },
+      };
+
+      return {
+        diffResult: {
+          baseLocation,
+          baseRound,
+          revised: revisedWithLineage,
+          diffLocation,
+          status: result.success ? 'success' : 'error',
+          message: result.success ? undefined : result.message,
+        },
+        artifact: compiled?.artifact ?? null,
+      };
+    });
   }
 
-  private async compileDiffIfSuccessful(
+  private compileDiffIfSuccessful(
     result: LaTeXdiffResult,
     referenceLocation: FileLocation,
     diffDirectory: DiffOutputDirectory,
     round: number,
     sourceLocation: FileLocation,
     pdfStemSuffix: string,
-  ): Promise<{
-    diffLocation: FileLocation;
-    artifact: RunStorageFileLocation | null;
-  } | null> {
-    if (!result.success) {
-      return null;
-    }
+  ): Effect.Effect<
+    {
+      diffLocation: FileLocation;
+      artifact: RunStorageFileLocation | null;
+    } | null,
+    Error,
+    FileSystem.FileSystem
+  > {
+    return Effect.gen({ self: this }, function* () {
+      if (!result.success) {
+        return null;
+      }
 
-    const diffFileName = path.basename(result.diffPath);
-    const diffLocation = createRunStorageLocation(
-      path.join(diffDirectory.absolutePath, diffFileName),
-      path.join(diffDirectory.relativePath, diffFileName),
-      diffDirectory.runId,
-    );
-
-    const buildDir = path.join(
-      path.dirname(diffLocation.absolutePath),
-      'build',
-    );
-    // Reuse the workflow compile-check timeout so a hanging diff build
-    // gets killed by execa instead of orphaning latexmk/pdflatex.
-    const timeoutMs = getWorkflowAutoCompileTimeoutMs();
-    // The diff `.tex` is written to `diff/r{round}/`, away from both the
-    // revised round output and the live workspace source. Search the revised
-    // round directory first so same-round sibling edits win, then fall back to
-    // the original source tree for unchanged inputs and bibliographies.
-    const extraInputDirs = [
-      sourceLocation.kind === 'runStorage'
-        ? path.dirname(sourceLocation.absolutePath)
-        : null,
-      // Snapshot bases live under `original/`, while between-round bases live
-      // under `r<N>/`; map either back without confusing a real `r<N>` folder.
-      resolveWorkspaceSourceDir(referenceLocation) ??
-        path.dirname(referenceLocation.absolutePath),
-    ].filter((dir): dir is string => dir !== null);
-    const compiled = await compileLatex2Pdf(diffLocation, {
-      channel: this.runId,
-      outputDirectory: buildDir,
-      timeout: timeoutMs,
-      extraInputDirs,
-    });
-
-    if (!compiled.ok) {
-      // Keep the missing auxiliary PDF visible, but leave the compiler tail in
-      // structured diagnostic data. Dumping that tail into the message makes a
-      // recoverable latexdiff failure dominate the workflow transcript.
-      this.logger.warn(
-        `Failed to compile latexdiff PDF: ${path.basename(diffLocation.absolutePath)}`,
-        {
-          data: {
-            diffFile: diffLocation.absolutePath,
-            logTail: compiled.logTail,
-          },
-        },
+      const diffFileName = path.basename(result.diffPath);
+      const diffLocation = createRunStorageLocation(
+        path.join(diffDirectory.absolutePath, diffFileName),
+        path.join(diffDirectory.relativePath, diffFileName),
+        diffDirectory.runId,
       );
-      return { diffLocation, artifact: null };
-    }
 
-    const { runId, runDirectory } = this.fileService;
-    try {
-      const artifact = await publishCompiledPdfArtifact({
+      const buildDir = path.join(
+        path.dirname(diffLocation.absolutePath),
+        'build',
+      );
+      // Reuse the workflow compile-check timeout so a hanging diff build
+      // gets killed by execa instead of orphaning latexmk/pdflatex.
+      const timeoutMs = getWorkflowAutoCompileTimeoutMs(this.roots);
+      // The diff `.tex` is written to `diff/r{round}/`, away from both the
+      // revised round output and the live workspace source. Search the revised
+      // round directory first so same-round sibling edits win, then fall back
+      // to the original source tree for unchanged inputs and bibliographies.
+      const extraInputDirs = [
+        sourceLocation.kind === 'runStorage'
+          ? path.dirname(sourceLocation.absolutePath)
+          : null,
+        // Snapshot bases live under `original/`, while between-round bases
+        // live under `r<N>/`; map either back without confusing a real `r<N>`
+        // folder.
+        resolveWorkspaceSourceDir(this.roots, referenceLocation) ??
+          path.dirname(referenceLocation.absolutePath),
+      ].filter((dir): dir is string => dir !== null);
+      const compiled = yield* fsCall(() =>
+        // Session-scoped until #12421 roots src/latex; see #12433.
+        this.inScope(() =>
+          compileLatex2Pdf(diffLocation, {
+            channel: this.runId,
+            outputDirectory: buildDir,
+            timeout: timeoutMs,
+            extraInputDirs,
+          }),
+        ),
+      );
+
+      if (!compiled.ok) {
+        // Keep the missing auxiliary PDF visible, but leave the compiler tail
+        // in structured diagnostic data. Dumping that tail into the message
+        // makes a recoverable latexdiff failure dominate the transcript.
+        this.logger.warn(
+          `Failed to compile latexdiff PDF: ${path.basename(diffLocation.absolutePath)}`,
+          {
+            data: {
+              diffFile: diffLocation.absolutePath,
+              logTail: compiled.logTail,
+            },
+          },
+        );
+        return { diffLocation, artifact: null };
+      }
+
+      const { runId, runDirectory } = this.fileService;
+      const artifact = yield* publishCompiledPdfArtifact({
         runDirectory,
         runId,
         round,
@@ -443,20 +478,26 @@ export class LatexDiffManager {
         source: sourceLocation,
         compiledPdfPath: compiled.pdfPath,
         pdfStemSuffix,
-      });
-      return { diffLocation, artifact };
-    } catch (error) {
-      this.logger.warn(
-        `Failed to publish latexdiff PDF: ${toErrorMessage(error)}`,
-        {
-          data: {
-            diffFile: diffLocation.absolutePath,
-            compiledPdfPath: compiled.pdfPath,
-            error,
-          },
-        },
+      }).pipe(
+        // Publishing the auxiliary PDF is best effort: a copy that failed is
+        // reported here and leaves the diff `.tex` itself intact.
+        Effect.catch((error) =>
+          Effect.sync((): RunStorageFileLocation | null => {
+            this.logger.warn(
+              `Failed to publish latexdiff PDF: ${toErrorMessage(error)}`,
+              {
+                data: {
+                  diffFile: diffLocation.absolutePath,
+                  compiledPdfPath: compiled.pdfPath,
+                  error,
+                },
+              },
+            );
+            return null;
+          }),
+        ),
       );
-      return { diffLocation, artifact: null };
-    }
+      return { diffLocation, artifact };
+    });
   }
 }

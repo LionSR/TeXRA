@@ -1,5 +1,7 @@
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Exit } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
@@ -34,36 +36,38 @@ describe('createFileMapping', () => {
 });
 
 describe('replaceInputCommands', () => {
-  it('rewrites an extensionless LaTeX input to the generated file', async () => {
-    const baseMain = externalLocation('/workspace/main.tex');
-    const baseSection = externalLocation('/workspace/sections/method.tex');
-    const outputMain = externalLocation('/run/main_r1.tex');
-    const outputSection = externalLocation('/run/sections/method_r1.tex');
-    const read = vi
-      .spyOn(AbsoluteFS, 'read')
-      .mockImplementation((target) =>
-        Promise.resolve(
-          target === outputMain.absolutePath
-            ? String.raw`\input{sections/method}`
-            : 'Section content',
-        ),
+  it.effect('rewrites an extensionless LaTeX input to the generated file', () =>
+    Effect.gen(function* () {
+      const baseMain = externalLocation('/workspace/main.tex');
+      const baseSection = externalLocation('/workspace/sections/method.tex');
+      const outputMain = externalLocation('/run/main_r1.tex');
+      const outputSection = externalLocation('/run/sections/method_r1.tex');
+      const read = vi
+        .spyOn(AbsoluteFS, 'read')
+        .mockImplementation((target) =>
+          Promise.resolve(
+            target === outputMain.absolutePath
+              ? String.raw`\input{sections/method}`
+              : 'Section content',
+          ),
+        );
+      const write = vi.spyOn(AbsoluteFS, 'write').mockResolvedValue();
+
+      yield* replaceInputCommands(
+        [baseMain, baseSection],
+        [outputMain, outputSection],
       );
-    const write = vi.spyOn(AbsoluteFS, 'write').mockResolvedValue();
 
-    await replaceInputCommands(
-      [baseMain, baseSection],
-      [outputMain, outputSection],
-    );
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(write).toHaveBeenCalledOnce();
+      expect(write).toHaveBeenCalledWith(
+        outputMain.absolutePath,
+        String.raw`\input{sections/method_r1}`,
+      );
+    }),
+  );
 
-    expect(read).toHaveBeenCalledTimes(2);
-    expect(write).toHaveBeenCalledOnce();
-    expect(write).toHaveBeenCalledWith(
-      outputMain.absolutePath,
-      String.raw`\input{sections/method_r1}`,
-    );
-  });
-
-  it.each([
+  const failureCases = [
     {
       name: 'read failure',
       read: async () => {
@@ -82,24 +86,32 @@ describe('replaceInputCommands', () => {
       log: 'Error processing input commands in /run/chapter_r1.tex: write failed',
       writeNotCalled: false,
     },
-  ])(
-    'logs a $name without rejecting the replacement pass',
-    async ({ read, write, log, writeNotCalled }) => {
-      const base = externalLocation('/workspace/chapter.tex');
-      const output = externalLocation('/run/chapter_r1.tex');
-      vi.spyOn(AbsoluteFS, 'read').mockImplementation(read);
-      const writeSpy = vi.spyOn(AbsoluteFS, 'write').mockImplementation(write);
-      const warn = vi.fn<AgentTrace['warn']>();
-      const logger = spiedTrace({ warn });
+  ];
 
-      await expect(
-        replaceInputCommands([base], [output], logger),
-      ).resolves.toBeUndefined();
+  for (const { name, read, write, log, writeNotCalled } of failureCases) {
+    it.effect(`logs a ${name} without failing the replacement pass`, () =>
+      Effect.gen(function* () {
+        const base = externalLocation('/workspace/chapter.tex');
+        const output = externalLocation('/run/chapter_r1.tex');
+        vi.spyOn(AbsoluteFS, 'read').mockImplementation(read);
+        const writeSpy = vi
+          .spyOn(AbsoluteFS, 'write')
+          .mockImplementation(write);
+        const warn = vi.fn<AgentTrace['warn']>();
+        const logger = spiedTrace({ warn });
 
-      if (writeNotCalled) {
-        expect(writeSpy).not.toHaveBeenCalled();
-      }
-      expect(warn).toHaveBeenCalledWith(log);
-    },
-  );
+        // A per-file failure must not fail the pass: assert through the exit
+        // so a sync throw inside the program reads as the defect it is.
+        const exit = yield* Effect.exit(
+          replaceInputCommands([base], [output], logger),
+        );
+
+        expect(Exit.isSuccess(exit)).toBe(true);
+        if (writeNotCalled) {
+          expect(writeSpy).not.toHaveBeenCalled();
+        }
+        expect(warn).toHaveBeenCalledWith(log);
+      }),
+    );
+  }
 });

@@ -9,6 +9,8 @@
  * parsing. Low-level XML text utilities live in @utils/text/xmlExtraction.
  */
 
+import { Effect } from 'effect';
+
 import {
   fileLocationDisplayPath,
   OUTPUT_DOCUMENTS_TAG,
@@ -18,11 +20,10 @@ import { normalizeFilePath } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 import { replaceInputCommands } from './fileMapping';
-import { tryOperation } from './outputOperations';
+import { fsCall, recoverOutputFailure } from './outputOperations';
 import {
   ensureRoundData,
   reportMissingOutputs,
-  withOutputStage,
   type OutputState,
   type OutputDependencies,
 } from './outputState';
@@ -75,20 +76,22 @@ function similarityBaseFiles(
 /**
  * Signal a missing/empty round to the UI, then persist the empty round summary.
  */
-async function handleNoOutputs(
+const handleNoOutputs = Effect.fn('reflection.handleNoOutputs')(function* (
   state: OutputState,
   deps: OutputDependencies,
   currRound: number,
   outputLocation: FileLocation,
-): Promise<void> {
+) {
   // Distinguish a genuinely empty turn from a non-empty response that simply
   // could not be parsed: if the model returned content but nothing extracted,
   // it almost always means it did not wrap each file in
   // `<document name="…">`. Surface that as a warning so the round is not a
   // silent "success" that writes no files; the raw response is kept for recovery.
-  const rawText = await AbsoluteFS.read(outputLocation.absolutePath).catch(
-    () => '',
-  );
+  // An unreadable raw response reads as empty here — the missing-output report
+  // below still fires, so the round is never recorded as a quiet success.
+  const rawText = yield* fsCall(() =>
+    AbsoluteFS.read(outputLocation.absolutePath),
+  ).pipe(Effect.orElseSucceed(() => ''));
   if (rawText.trim().length > 0) {
     deps.logger.warn(
       `The model returned output but no files could be extracted from it: it likely did not wrap each document in <${OUTPUT_DOCUMENTS_TAG}>. The raw response was kept at ${outputLocation.absolutePath} for recovery.`,
@@ -107,65 +110,56 @@ async function handleNoOutputs(
   });
 
   ensureRoundData(state, currRound).outputs = [];
-}
+});
 
 /**
  * Extracts files from XML output for a round: the unified protocol emits
  * <documents><document name="..."> containers (N >= 1), so every agent
  * unpacks that container into per-document output files.
  */
-export async function extractFilesFromXml(
-  state: OutputState,
-  deps: OutputDependencies,
-  xmlManager: XmlOutputManager,
-  outputLocation: FileLocation,
-  currRound: number,
-): Promise<void> {
-  const { logger } = deps;
+export const extractFilesFromXml = Effect.fn('reflection.extractFilesFromXml')(
+  function* (
+    state: OutputState,
+    deps: OutputDependencies,
+    xmlManager: XmlOutputManager,
+    outputLocation: FileLocation,
+    currRound: number,
+  ) {
+    const { logger } = deps;
+    const data = ensureRoundData(state, currRound);
+    data.rawOutput ??= outputLocation;
 
-  await withOutputStage(
-    deps,
-    `Process files r${currRound}`,
-    undefined,
-    async () => {
-      const data = ensureRoundData(state, currRound);
-      data.rawOutput ??= outputLocation;
+    logger.debug(
+      `Processing multiple outputs for ${outputLocation.absolutePath}`,
+    );
 
-      logger.debug(
-        `Processing multiple outputs for ${outputLocation.absolutePath}`,
+    yield* Effect.gen(function* () {
+      const processedPairs = yield* xmlManager.splitScratchpadMultipleOutputXml(
+        outputLocation,
+        currRound,
+        similarityBaseFiles(state, deps, currRound),
       );
 
-      await tryOperation(
-        async () => {
-          const processedPairs =
-            await xmlManager.splitScratchpadMultipleOutputXml(
-              outputLocation,
-              currRound,
-              similarityBaseFiles(state, deps, currRound),
-            );
+      if (processedPairs.length === 0) {
+        logger.debug(
+          `No processed files were generated from ${outputLocation.absolutePath}`,
+        );
+        yield* handleNoOutputs(state, deps, currRound, outputLocation);
+        return;
+      }
 
-          if (processedPairs.length === 0) {
-            logger.debug(
-              `No processed files were generated from ${outputLocation.absolutePath}`,
-            );
-            await handleNoOutputs(state, deps, currRound, outputLocation);
-            return;
-          }
-
-          const locations = processedPairs.map((p) => p.location);
-          if (deps.baseFiles.length > 0) {
-            await replaceInputCommands(deps.baseFiles, locations, logger);
-          }
-          data.outputs = processedPairs;
-        },
-        {
-          logger,
-          level: 'debug',
-          label: 'Error processing output file',
-          recover: () =>
-            handleNoOutputs(state, deps, currRound, outputLocation),
-        },
-      );
-    },
-  );
-}
+      const locations = processedPairs.map((p) => p.location);
+      if (deps.baseFiles.length > 0) {
+        yield* replaceInputCommands(deps.baseFiles, locations, logger);
+      }
+      data.outputs = processedPairs;
+    }).pipe(
+      recoverOutputFailure({
+        logger,
+        level: 'debug',
+        label: 'Error processing output file',
+        recover: () => handleNoOutputs(state, deps, currRound, outputLocation),
+      }),
+    );
+  },
+);

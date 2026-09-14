@@ -62,11 +62,17 @@ export function platformSettingsStores(): SettingsStores {
  * preferable when they also own normalization or side effects.
  */
 export function readPlatformSetting<T>(key: string): T {
-  return readSetting(
-    requireEntry(key),
-    platformSettingsStores(),
-    processSettingHost,
-  ) as T;
+  return readSettingFrom<T>(platformSettingsStores(), key);
+}
+
+/**
+ * {@link readPlatformSetting} over stores the caller already holds — a run's
+ * session roots carry all three slots. Code that holds its roots as data (a
+ * run's Effect program, which is not guaranteed to sit inside its session's
+ * roots scope) reads through this instead of the calling context's scope.
+ */
+export function readSettingFrom<T>(stores: SettingsStores, key: string): T {
+  return readSetting(requireEntry(key), stores, processSettingHost) as T;
 }
 
 /**

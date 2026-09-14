@@ -247,7 +247,7 @@ function agentRunTestLayer(init: HarnessInit) {
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
         userVarChannels: {},
         initialUserMessageForTranscript: 'Run the tools.',
-        fileService: new TaskRunFileService(init.runId),
+        fileService: new TaskRunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry(init.tools),
         finalToolName: null,
         structured: { value: undefined },

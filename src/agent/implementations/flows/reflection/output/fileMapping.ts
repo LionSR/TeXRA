@@ -1,10 +1,14 @@
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+
+import { fsCall } from './outputOperations';
 
 /**
  * Create a mapping between two file lists based on name similarity.
@@ -73,11 +77,13 @@ const TEX_EXTENSION_REGEX = /\.tex$/i;
  * @param outputFiles Output file paths
  * @param logger Optional logger for debug messages
  */
-export async function replaceInputCommands(
+export const replaceInputCommands = Effect.fn(
+  'reflection.replaceInputCommands',
+)(function* (
   baseFiles: FileLocation[],
   outputFiles: FileLocation[],
   logger?: AgentTrace,
-): Promise<void> {
+) {
   if (baseFiles.length === 0 || outputFiles.length === 0) {
     logger?.debug('No files to process for input command replacement');
     return;
@@ -142,8 +148,10 @@ export async function replaceInputCommands(
   for (const outputLocation of outputFiles) {
     const outputPath = fileLocationDisplayPath(outputLocation);
 
-    try {
-      const content = await AbsoluteFS.read(outputLocation.absolutePath);
+    yield* Effect.gen(function* () {
+      const content = yield* fsCall(() =>
+        AbsoluteFS.read(outputLocation.absolutePath),
+      );
       const newContent = content.replaceAll(
         /\\input{([^}]+)}/g,
         (match, rawPath) => {
@@ -156,13 +164,21 @@ export async function replaceInputCommands(
       );
 
       if (newContent !== content) {
-        await AbsoluteFS.write(outputLocation.absolutePath, newContent);
+        yield* fsCall(() =>
+          AbsoluteFS.write(outputLocation.absolutePath, newContent),
+        );
         logger?.debug(`Updated input commands in ${outputPath}`);
       }
-    } catch (err) {
-      logger?.warn(
-        `Error processing input commands in ${outputPath}: ${toErrorMessage(err)}`,
-      );
-    }
+    }).pipe(
+      // One unreadable or unwritable output must not stop the rewrite of the
+      // rest; the file keeps its original `\input{}` targets and says so.
+      Effect.catch((err) =>
+        Effect.sync(() => {
+          logger?.warn(
+            `Error processing input commands in ${outputPath}: ${toErrorMessage(err)}`,
+          );
+        }),
+      ),
+    );
   }
-}
+});

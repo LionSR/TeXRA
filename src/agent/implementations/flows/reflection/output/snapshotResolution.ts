@@ -8,27 +8,41 @@
  * canonical "before" content for accurate stats.
  */
 
+import { Effect } from 'effect';
+
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
-import { getOriginalSnapshotPath } from '@utils/files/runStorageFs';
+import { originalSnapshotPathUnder } from '@utils/files/runStorageFs';
+
+import { fsCall } from './outputOperations';
 
 /** Map each workspace base file to its snapshot location when one exists.
- *  Non-workspace files and missing snapshots pass through unchanged. */
-export async function resolveBaseFilesForDiff(
-  baseFiles: FileLocation[],
-  runId: RunId,
-): Promise<FileLocation[]> {
-  return Promise.all(
-    baseFiles.map(async (loc) => {
-      if (loc.kind !== 'workspace') return loc;
-      const snapshotAbsolute = getOriginalSnapshotPath(runId, loc.relativePath);
-      if (!(await AbsoluteFS.isFile(snapshotAbsolute))) return loc;
-      return createRunStorageLocation(
-        snapshotAbsolute,
-        loc.relativePath,
-        runId,
-      );
-    }),
+ *  Non-workspace files and missing snapshots pass through unchanged. The
+ *  snapshot is looked up under the run's own session storage root. */
+export const resolveBaseFilesForDiff = Effect.fn(
+  'reflection.resolveBaseFilesForDiff',
+)(function* (baseFiles: FileLocation[], runId: RunId, roots: WorkspaceRoots) {
+  return yield* Effect.forEach(
+    baseFiles,
+    (loc) =>
+      Effect.gen(function* () {
+        if (loc.kind !== 'workspace') return loc;
+        const snapshotAbsolute = originalSnapshotPathUnder(
+          roots.storage,
+          runId,
+          loc.relativePath,
+        );
+        if (!(yield* fsCall(() => AbsoluteFS.isFile(snapshotAbsolute)))) {
+          return loc;
+        }
+        return createRunStorageLocation(
+          snapshotAbsolute,
+          loc.relativePath,
+          runId,
+        );
+      }),
+    { concurrency: 'unbounded' },
   );
-}
+});

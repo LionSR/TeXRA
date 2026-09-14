@@ -43,7 +43,7 @@ import {
 import { LatexDiffManager } from '@agent/implementations/flows/reflection/output/LatexDiffManager';
 import { traceFileLineage } from '@agent/implementations/flows/reflection/output/lineageMapping';
 import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
-import { tryOperation } from '@agent/implementations/flows/reflection/output/outputOperations';
+import { recoverOutputFailure } from '@agent/implementations/flows/reflection/output/outputOperations';
 import {
   createOutputState,
   ensureRoundData,
@@ -97,7 +97,7 @@ import {
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
@@ -189,8 +189,14 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   }
 
   // ------------------------------------------------------------ services
+  // The run's session roots, as data. This program runs on a fiber that is not
+  // guaranteed to sit inside the launch's roots scope, so the output
+  // pipeline's workspace, storage and setting reads take them from here
+  // instead of from `workspaceRoots()`.
+  const { roots } = session;
   const getRejectOnCompileFailure = () =>
-    readPlatformSetting<boolean>(
+    readSettingFrom<boolean>(
+      roots,
       WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
     );
   const baseFiles: FileLocation[] = (
@@ -202,6 +208,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     logger,
     fileService,
     outputState,
+    run.inScope,
   );
   const diffManager = new LatexDiffManager(
     setting.isRewrite,
@@ -209,11 +216,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     logger,
     runId,
     fileService,
+    roots,
+    run.inScope,
   );
   const promptBuilder = new PromptBuilder(
     prompt,
     run.userVarChannels,
-    run.session.roots.workspace,
+    roots.workspace,
     logger,
   );
   const latexMediaManager = new LatexMediaManager(logger, fileService);
@@ -231,14 +240,18 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     baseFiles,
     logger,
     fileService,
+    roots,
   };
-  const recoverWarn = (label: string) => ({
-    logger,
-    level: 'warn' as const,
-    label,
-    messageType: MESSAGE_TYPES.DEFAULT,
-    recover: () => undefined,
-  });
+  /** An output step whose failure costs that step, not the round: reported at
+   *  `warn` on the transcript, then the pipeline carries on. */
+  const recoverWarn = (label: string) =>
+    recoverOutputFailure({
+      logger,
+      level: 'warn' as const,
+      label,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      recover: () => Effect.void,
+    });
 
   // ---------------------------------------------------------------- state
   const latest = yield* Ref.make<RunState | null>(null);
@@ -783,43 +796,49 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 
   /** The output pipeline over the round's raw output: extraction, lineage,
    *  latexdiff, the compile check, and the round summary. */
-  const processOutput = async (
+  const processOutput = Effect.fn('reflection.processOutput')(function* (
     round: number,
     outputLocation: AgentFileLocation,
     endTurn: boolean,
-  ): Promise<OutputExecResult> => {
-    const diffBaseFiles = await resolveBaseFilesForDiff(baseFiles, runId);
+  ): Effect.fn.Return<OutputExecResult, Error, FileSystem.FileSystem> {
+    const diffBaseFiles = yield* resolveBaseFilesForDiff(
+      baseFiles,
+      runId,
+      roots,
+    );
     let mapping: RoundFileMapping | undefined;
     let compileRoundResult: CompileResult | undefined;
     const compiledArtifacts: RunStorageFileLocation[] = [];
     let emitCompileFailures = false;
     if (endTurn) {
       logger.debug(`Processing output for round ${round}`);
-      await tryOperation(
-        () => xmlManager.ensureCorrectXmlStructure(outputLocation),
-        recoverWarn('XML structure'),
-      );
-      await tryOperation(
-        () =>
-          extractFilesFromXml(
-            outputState,
-            deps,
-            xmlManager,
-            outputLocation,
-            round,
-          ),
-        recoverWarn('Output processing'),
-      );
+      yield* xmlManager
+        .ensureCorrectXmlStructure(outputLocation)
+        .pipe(recoverWarn('XML structure'));
+      yield* extractFilesFromXml(
+        outputState,
+        deps,
+        xmlManager,
+        outputLocation,
+        round,
+      ).pipe(recoverWarn('Output processing'));
       if ((outputState.rounds.get(round)?.outputs.length ?? 0) > 0) {
         mapping = traceFileLineage(outputState, diffBaseFiles, round);
         compiledArtifacts.push(
-          ...(await diffManager.handleLatexdiffOfOutput(round, mapping)),
+          ...(yield* diffManager.handleLatexdiffOfOutput(round, mapping)),
         );
-        await tryOperation(async () => {
+        yield* Effect.gen(function* () {
           const hadCompileFailures =
             (outputState.rounds.get(round)?.compileFailures.length ?? 0) > 0;
-          const check = await runCompileCheck(
-            { fileService, outputState, logger, runId },
+          const check = yield* runCompileCheck(
+            {
+              roots,
+              inScope: run.inScope,
+              fileService,
+              outputState,
+              logger,
+              runId,
+            },
             round,
           );
           compileRoundResult = check.compileResult;
@@ -828,10 +847,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           setCompileFailures(outputState, round, compileFailures);
           emitCompileFailures =
             compileFailures.length > 0 || hadCompileFailures;
-        }, recoverWarn('Compile check'));
+        }).pipe(recoverWarn('Compile check'));
       }
     }
-    const summary = await summarizeRound(
+    const summary = yield* summarizeRound(
       outputState,
       deps,
       outputLocation,
@@ -844,7 +863,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       compiledArtifacts,
       emitCompileFailures,
     };
-  };
+  });
 
   /** The output pipeline failed: keep what the round reported, drop what it
    *  produced, and summarize what can still be summarized. */
@@ -854,15 +873,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     error: Error,
   ): Effect.fn.Return<OutputExecResult> {
     logger.warn(`Output processing failed: ${error.message}`, { data: error });
-    const summary = yield* Effect.tryPromise({
-      try: () =>
-        run.inScope(() =>
-          summarizeRound(outputState, deps, outputLocation, round, {
-            isRewrite: setting.isRewrite,
-          }),
-        ),
-      catch: ensureError,
-    }).pipe(
+    const summary = yield* summarizeRound(
+      outputState,
+      deps,
+      outputLocation,
+      round,
+      { isRewrite: setting.isRewrite },
+    ).pipe(
       Effect.catch((summaryError) =>
         Effect.sync((): RoundSummary => {
           logger.warn(
@@ -886,12 +903,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   });
 
   /** Publish the round's facts, open its files, and validate its outputs. */
-  const publishOutput = async (
+  const publishOutput = Effect.fn('reflection.publishOutput')(function* (
     round: number,
     outputLocation: AgentFileLocation,
     endTurn: boolean,
     result: OutputExecResult,
-  ): Promise<void> => {
+  ) {
     const interactions = session.interactions;
     const { summary } = result;
     const compileFailures = compileFailuresOf(result.compileResult);
@@ -916,7 +933,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     }
     if (
       endTurn &&
-      readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF)
+      readSettingFrom<boolean>(roots, WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF)
     ) {
       if (compileFailures.length > 0) {
         for (const failure of compileFailures) {
@@ -935,13 +952,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       }
     }
     if (endTurn) {
-      await tryOperation(async () => {
-        const validation = await checkExpectedOutputs(
+      yield* Effect.gen(function* () {
+        const validation = yield* checkExpectedOutputs(
           outputState,
           deps,
           outputLocation,
           round,
-          summary.stage,
         );
         if (validation.missing.length > 0) {
           interactions.emit('requestShowInstruction', {
@@ -949,7 +965,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             message: 'Missing output files detected',
           });
         }
-      }, recoverWarn('Validate expected outputs'));
+      }).pipe(recoverWarn('Validate expected outputs'));
     }
     if (result.compileResult) {
       const compileFailureContext = getRejectOnCompileFailure()
@@ -966,7 +982,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         delete flow.unresolvedCompileRejection;
       }
     }
-  };
+  });
 
   /**
    * The round's output, entered at `output.pending`, which was committed
@@ -975,22 +991,25 @@ export const runReflection = Effect.fn('reflection.run')(function* (
    */
   const produceOutput = Effect.fn('reflection.produceOutput')(function* (
     state: RunState,
-  ): Effect.fn.Return<RunState, Error> {
+  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem> {
     const round = flow.currentRound;
     const location = flow.outputLocation;
     if (location === null) {
       return yield* Effect.die(new Error('Output needs the round location.'));
     }
     const endTurn = flow.endTurn;
-    const result = yield* Effect.tryPromise({
-      try: () => run.inScope(() => processOutput(round, location, endTurn)),
-      catch: ensureError,
-    }).pipe(Effect.catch((error) => fallbackOutput(round, location, error)));
-    yield* Effect.tryPromise({
-      try: () =>
-        run.inScope(() => publishOutput(round, location, endTurn, result)),
-      catch: ensureError,
-    });
+    const result = yield* processOutput(round, location, endTurn).pipe(
+      // The pipeline's own steps recover what they can; anything that still
+      // reaches here — a failed step or a defect in one — costs the round its
+      // outputs, not the run. Interruption is not an output failure and stays
+      // a cancelled run.
+      Effect.catchCause((cause) =>
+        Cause.hasInterrupts(cause)
+          ? Effect.failCause(cause)
+          : fallbackOutput(round, location, ensureError(Cause.squash(cause))),
+      ),
+    );
+    yield* publishOutput(round, location, endTurn, result);
     return state;
   });
 
@@ -1040,7 +1059,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
                 getSystemPromptWithRules(
                   prompt.systemPrompt,
                   run.userVarChannels,
-                  run.session.roots.workspace,
+                  roots.workspace,
                 ),
               catch: ensureError,
             });

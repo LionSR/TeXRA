@@ -21,22 +21,54 @@ import { getPathSegments } from '@utils/core/pathCore';
 
 // Local file imports
 import { createRunStorageLocation } from './fileLocation';
+import { AbsoluteFS } from './absoluteFS';
 import { isDirectory, isFile, isSymlink } from './fsEntryType';
 import { StorageFS } from './storageFS';
 
 export const CHANNEL = 'taskRunStorage';
 const log = createLog(CHANNEL);
 
+/*
+ * Each path helper below has a rooted form taking the storage root as data —
+ * for code that holds a session's roots, such as a run's `TaskRunFileService`
+ * — and an ambient form that resolves the calling context's storage root and
+ * delegates to it.
+ */
+
+/** The calling context's storage root, for the ambient forms. */
+function ambientStorageRoot(): string {
+  return StorageFS.fullPath('.');
+}
+
+/** A run's directory under `storageRoot`. */
+export function runDirUnder(storageRoot: string, id: RunId): string {
+  return path.join(storageRoot, resolveRunStoragePath(id));
+}
+
 export function getRunDir(id: RunId): string {
-  return StorageFS.fullPath(resolveRunStoragePath(id));
+  return runDirUnder(ambientStorageRoot(), id);
+}
+
+/** A workspace file's pre-run snapshot path under `storageRoot`. */
+export function originalSnapshotPathUnder(
+  storageRoot: string,
+  runId: RunId,
+  workspaceRelativePath: string,
+): string {
+  return path.join(
+    storageRoot,
+    resolveRunOriginalSnapshotPath(runId, workspaceRelativePath),
+  );
 }
 
 export function getOriginalSnapshotPath(
   runId: RunId,
   workspaceRelativePath: string,
 ): string {
-  return StorageFS.fullPath(
-    resolveRunOriginalSnapshotPath(runId, workspaceRelativePath),
+  return originalSnapshotPathUnder(
+    ambientStorageRoot(),
+    runId,
+    workspaceRelativePath,
   );
 }
 
@@ -133,16 +165,26 @@ export async function inspectRunStorageEntry(
   return { kind: 'unsupported', absolutePath };
 }
 
-export async function ensureRunDir(id: RunId): Promise<void> {
-  await StorageFS.ensureDir(RUNS_STORAGE_DIR);
-  await StorageFS.ensureDir(resolveRunStoragePath(id));
+/** Create the runs directory and a run's directory under `storageRoot`. */
+export async function ensureRunDirUnder(
+  storageRoot: string,
+  id: RunId,
+): Promise<void> {
+  await AbsoluteFS.ensureDir(path.join(storageRoot, RUNS_STORAGE_DIR));
+  await AbsoluteFS.ensureDir(runDirUnder(storageRoot, id));
 }
 
-export function getRunStorageAbsolutePath(
+export async function ensureRunDir(id: RunId): Promise<void> {
+  await ensureRunDirUnder(ambientStorageRoot(), id);
+}
+
+/** An absolute path inside a run's directory under `storageRoot`. */
+export function runStorageAbsolutePathUnder(
+  storageRoot: string,
   id: RunId,
   workspaceRelative: string,
 ): string {
-  return StorageFS.fullPath(resolveRunStoragePath(id, workspaceRelative));
+  return path.join(storageRoot, resolveRunStoragePath(id, workspaceRelative));
 }
 
 export function runStorageLocationFromAbsolutePath(
@@ -158,13 +200,17 @@ export function runStorageLocationFromAbsolutePath(
   return createRunStorageLocation(absolutePath, relativePath, runId);
 }
 
-/** Recover run identity from an absolute run-storage path. */
-export function runStorageLocationFromAnyAbsolutePath(
+/**
+ * Recover run identity from an absolute path inside the runs directory under
+ * `storageRoot`.
+ */
+export function runStorageLocationUnder(
+  storageRoot: string,
   absolutePath: string,
 ): RunStorageFileLocation | undefined {
   if (!path.isAbsolute(absolutePath)) return undefined;
 
-  const root = StorageFS.fullPath(resolveRunStoragePath());
+  const root = path.join(storageRoot, resolveRunStoragePath());
   const runRelativePath = resolveRunStorageRelativePath(absolutePath, root);
   if (!runRelativePath) return undefined;
 
@@ -177,6 +223,13 @@ export function runStorageLocationFromAnyAbsolutePath(
     entrySegments.join('/'),
     runId.data,
   );
+}
+
+/** Recover run identity from an absolute run-storage path. */
+export function runStorageLocationFromAnyAbsolutePath(
+  absolutePath: string,
+): RunStorageFileLocation | undefined {
+  return runStorageLocationUnder(ambientStorageRoot(), absolutePath);
 }
 
 export async function ensureParentDir(filePath: string): Promise<void> {

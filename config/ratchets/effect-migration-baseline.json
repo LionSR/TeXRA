@@ -5,8 +5,6 @@
       "packages/cli/src/runtime/executeCli.ts": 1,
       "packages/desktop/src/main/desktopWorkspaceIpc.ts": 6,
       "src/agent/followUp/ToolUseFollowUp.ts": 1,
-      "src/agent/implementations/flows/reflection/output/LatexDiffManager.ts": 1,
-      "src/agent/implementations/flows/reflection/output/compiledPdfArtifacts.ts": 2,
       "src/agent/index/agentRegistry.ts": 1,
       "src/controllers/session/hostRunActions.ts": 1,
       "src/controllers/session/workspaceFileOptions.ts": 1,
@@ -34,7 +32,6 @@
       "packages/cli/src/runtime/memory.ts": 1,
       "packages/cli/src/runtime/runProgressRenderer.ts": 4,
       "packages/cli/src/runtime/sessionProgressSubscription.ts": 5,
-      "src/agent/implementations/flows/reflection/output/LatexDiffManager.ts": 2,
       "src/tools/approval/latexPreview.ts": 1
     },
     "ambient:asyncLocalStorage": {
@@ -104,7 +101,6 @@
     },
     "Effect.run*": {
       "packages/extension/src/progressView/frontend/sessionTransport.ts": 4,
-      "src/agent/implementations/flows/reflection/output/LatexDiffManager.ts": 2,
       "src/agent/runtime/SessionHandle.ts": 2,
       "src/platform/defaults/jsonStore.ts": 1,
       "src/shared/signals.ts": 2,

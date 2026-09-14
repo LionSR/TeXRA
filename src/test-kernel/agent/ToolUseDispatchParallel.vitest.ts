@@ -256,7 +256,7 @@ function agentRun(
     toolPolicy: {},
     userVarChannels: {},
     initialUserMessageForTranscript: undefined,
-    fileService: new TaskRunFileService(runId),
+    fileService: new TaskRunFileService(runId, session.roots),
     tools,
     finalToolName: null,
     structured: { value: undefined },

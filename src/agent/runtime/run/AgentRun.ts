@@ -316,7 +316,7 @@ export const agentRunLayer = (
         stores: ctx.stores,
         userVarChannels: ctx.userVarChannels,
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
-        fileService: new TaskRunFileService(runId),
+        fileService: new TaskRunFileService(runId, session.roots),
         tools,
         finalToolName,
         structured,

@@ -276,7 +276,7 @@ function agentRunTestLayer(init: LoopInit) {
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
         userVarChannels: {},
         initialUserMessageForTranscript: 'Do the thing.',
-        fileService: new TaskRunFileService(init.runId),
+        fileService: new TaskRunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry({}),
         finalToolName: init.finalToolName ?? null,
         structured: { value: undefined },

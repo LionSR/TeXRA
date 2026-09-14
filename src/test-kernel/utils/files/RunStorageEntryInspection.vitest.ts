@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { workspaceRoots } from '@platform/workspaceRoots';
 
 // Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
@@ -180,7 +181,7 @@ describe('inspectRunStorageEntry', () => {
   });
 
   it('preserves source provenance instead of treating workspace inputs as outputs', () => {
-    const fileService = new TaskRunFileService(runId);
+    const fileService = new TaskRunFileService(runId, workspaceRoots());
 
     expect(fileService.locateSource('draft.tex')).toEqual({
       kind: 'workspace',
