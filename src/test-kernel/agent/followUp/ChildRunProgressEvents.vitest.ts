@@ -11,6 +11,7 @@ import { getRunRecords, registerRun } from '@agent/storage';
 import { inspectRunLease } from '@agent/storage/runLease';
 import { runInSession } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { Runs } from '@agent/runtime/runRegistry';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
@@ -71,14 +72,18 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
       },
     );
     const child = yield* createChildRun(...args).pipe(
+      Effect.provideService(Runs, session.runs),
       Effect.onError(() => session.releaseRunLease(runId).pipe(Effect.orDie)),
     );
     return {
       ...child,
-      finalize: (input: Parameters<ChildRun['finalize']>[0]) =>
+      finalize: (
+        input: Parameters<ChildRun['finalize']>[0],
+      ): Effect.Effect<void, Error> =>
         child
           .finalize(input)
           .pipe(
+            Effect.provideService(Runs, session.runs),
             Effect.ensuring(session.releaseRunLease(runId).pipe(Effect.orDie)),
           ),
     };
@@ -456,7 +461,7 @@ describe('child run progress events', () => {
               summary: 'unreachable',
               launchedLine: 'unreachable',
               followUpLine: 'unreachable',
-            }),
+            }).pipe(Effect.provideService(Runs, session.runs)),
           );
           const id = yield* Deferred.await(committed);
           const interrupting = yield* Effect.forkChild(
@@ -520,7 +525,7 @@ describe('child run progress events', () => {
               summary: 'unreachable',
               launchedLine: 'unreachable',
               followUpLine: 'unreachable',
-            }),
+            }).pipe(Effect.provideService(Runs, session.runs)),
           ).pipe(Effect.catchDefect((cause) => Effect.fail(cause))),
         );
         expect(defect).toBe(setupError);

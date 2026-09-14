@@ -7,6 +7,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
 import { RUN_OUTCOME, RUN_PHASE } from '@shared/schemas';
@@ -56,7 +57,9 @@ export interface ChildRun {
    * untracked — callers that must not exit before the terminal status lands
    * (headless CLI session loops) await it.
    */
-  finalize: (options: FinalizeChildRunOptions) => Effect.Effect<void, Error>;
+  finalize: (
+    options: FinalizeChildRunOptions,
+  ) => Effect.Effect<void, Error, Runs>;
 }
 
 /**
@@ -73,12 +76,13 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   runId: RunId,
   parentRunId: RunId,
   options: CreateChildRunOptions,
-): Effect.fn.Return<ChildRun, Error> {
+): Effect.fn.Return<ChildRun, Error, Runs> {
   // No barrier here: registration committed the launch and its activation
   // awaited (`registerRun`), and every write below is either awaited or this
   // run's own queued fact, which its own drain answers for. A session-wide
   // settle would instead report whatever session-scoped publication anyone
   // else queued and fail an otherwise sound launch over it.
+  const runs = yield* Runs;
   const residency = yield* session.transcripts.acquireRunResidency(runId);
   const runTrace = createRunTrace(residency);
   const handle = new RunHandle(
@@ -103,7 +107,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
 
       // Registration already committed the launch and activation together.
       started = true;
-      session.runs.track(handle);
+      runs.track(handle);
       runTrace.trace.emit({
         type: 'run.config',
         runId,
@@ -157,7 +161,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
           : Effect.void,
       ),
       Effect.sync(() => {
-        session.runs.untrackIfCurrent(handle);
+        runs.untrackIfCurrent(handle);
       }),
       Effect.sync(() => detachSessionTrace?.()),
       Effect.sync(() => runTrace.dispose()),

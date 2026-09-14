@@ -14,6 +14,7 @@ import {
   settleLiveSessionRuns,
 } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import { Runs } from '@agent/runtime/runRegistry';
 import { acquireFreshRunLease, ownsRunLease } from '@agent/storage/runLease';
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
@@ -217,7 +218,7 @@ describe('session isolation', () => {
     }
   });
 
-  it('runFlowWithLifecycle tracks the handle in the run session, not the default', async () => {
+  it('runFlowWithLifecycle tracks the handle in the runs it is provided, not the default', async () => {
     await installPlatform({
       globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
     });
@@ -242,7 +243,7 @@ describe('session isolation', () => {
                 output: emptyRunEndOutput(AgentCategory.ToolUse),
               };
             }),
-          ),
+          ).pipe(Effect.provideService(Runs, sessionB.runs)),
           fakeProcessServices(),
         ),
       );

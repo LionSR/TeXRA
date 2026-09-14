@@ -66,6 +66,7 @@ import {
   toolUseFlowState,
   type Message,
 } from './rows';
+import type { Runs } from '../runRegistry';
 
 /** Max concurrently executing tool calls within one parallel-safe partition. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
@@ -238,7 +239,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
-  AgentRun | RunLedger | ProcessServices
+  AgentRun | RunLedger | ProcessServices | Runs
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -359,7 +360,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: DispatchFacts,
     call: LocalCall,
     attempt: number,
-  ): Effect.fn.Return<void, InvokeError, ProcessServices> {
+  ): Effect.fn.Return<void, InvokeError, ProcessServices | Runs> {
     const tool: ITool | undefined = run.tools.get(fact.toolName);
     const parsedInput = parseCallArguments(call, logger);
     const stageId = fact.stageId ?? undefined;
@@ -721,7 +722,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const dispatchCall = Effect.fn('toolUse.dispatchCall')(function* (
     fact: DispatchFacts,
     afterEndTurn: boolean,
-  ): Effect.fn.Return<void, InvokeError, ProcessServices> {
+  ): Effect.fn.Return<void, InvokeError, ProcessServices | Runs> {
     const current = yield* SynchronizedRef.get(stateRef);
     if (settledOf(current, fact.callId) !== null) return;
     const call = calls[fact.ordinal];
@@ -775,7 +776,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const deriveDuplicate = Effect.fn('toolUse.duplicate')(function* (
     fact: DispatchFacts,
     primaryId: string,
-  ): Effect.fn.Return<void, InvokeError, ProcessServices> {
+  ): Effect.fn.Return<void, InvokeError, ProcessServices | Runs> {
     const current = yield* SynchronizedRef.get(stateRef);
     if (settledOf(current, fact.callId) !== null) return;
     const primary = settledOf(current, primaryId);

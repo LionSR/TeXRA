@@ -26,6 +26,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import type { FileStat } from '@platform/interfaces';
 import {
@@ -165,7 +166,7 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       ),
       (stop) => Effect.sync(stop),
     );
-    const statusChange = context.session.runs.waitForAnyChange(runIds);
+    const statusChange = (yield* Runs).waitForAnyChange(runIds);
     const alreadySettled = Effect.suspend(() =>
       settled() ? Effect.void : Effect.never,
     );
@@ -282,7 +283,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     this: ExecutionsTool,
     context: RunToolContext,
     input: ExecutionsToolInput,
-  ): Effect.fn.Return<ToolResult, Error | ExecutionsReadFailed> {
+  ): Effect.fn.Return<ToolResult, Error | ExecutionsReadFailed, Runs> {
     const segments = getPathSegments(input.path);
     const [namespace, id, resource, ...rest] = segments;
 
@@ -425,18 +426,15 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     timeout: number,
     ids?: readonly RunId[] | null,
   ) {
-    const candidateIds = ids?.length
-      ? unique(ids)
-      : context.session.runs.getActiveIds();
+    const runs = yield* Runs;
+    const candidateIds = ids?.length ? unique(ids) : runs.getActiveIds();
     // Exclude runs that are already effectively done
     // (completed, inactive, or tool-use subagent WAITING with result delivered).
-    const pendingIds = candidateIds.filter(
-      (id) => !shouldSkipWait(context.session, id),
-    );
+    const pendingIds = candidateIds.filter((id) => !shouldSkipWait(runs, id));
     if (pendingIds.length === 0) return;
 
     yield* awaitStatusChange(context, timeout, pendingIds, () =>
-      pendingIds.every((id) => shouldSkipWait(context.session, id)),
+      pendingIds.every((id) => shouldSkipWait(runs, id)),
     );
   });
 
@@ -477,7 +475,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     ) {
       // Check in-memory handle first (free) — a live run has everything we need
       const session = context.session;
-      const handle = session.runs.getHandle(runId);
+      const runs = yield* Runs;
+      const handle = runs.getHandle(runId);
 
       if (handle) {
         // Running run: agent/status and task state are session-owned;
@@ -490,7 +489,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           { concurrency: 2 },
         );
 
-        const info = session.runs.getStatus(handle);
+        const info = runs.getStatus(handle);
         // `handle.category` is the live wire's run mode, fabricated for a
         // non-agent run (a background bash reports toolUse). The stamped
         // identity is what the completed branch displays, so the running branch
@@ -664,7 +663,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
-      const target = context.session.runs.getHandle(runId);
+      const runs = yield* Runs;
+      const target = runs.getHandle(runId);
       if (!target) {
         return yield* Effect.fail(
           new ToolError(`Run ${runId} not found or already completed.`),
@@ -695,7 +695,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       }
 
       const success = yield* Effect.suspend(() => {
-        const stop = context.session.runs.kill(runId, {
+        const stop = runs.kill(runId, {
           detachActiveChildren: context.inRunScope(() =>
             detachSubagentsOnStop(),
           ),
@@ -728,7 +728,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     runId: RunId,
   ) {
     const session = context.session;
-    const handle = session.runs.getHandle(runId);
+    const handle = (yield* Runs).getHandle(runId);
     const todos = handle
       ? getRunningTodos(session, handle)
       : yield* readCompletedRunTodos(runId, session).pipe(
@@ -898,7 +898,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     ) {
       // The handle only proves the run is live in this process; liveness
       // itself is resolved below, from facts that outlive this process.
-      const handle = context.session.runs.getHandle(runId);
+      const handle = (yield* Runs).getHandle(runId);
       const run = context.session.runView(runId);
       if (!run && !handle) {
         return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));

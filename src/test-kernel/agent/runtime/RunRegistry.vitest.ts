@@ -13,7 +13,7 @@ import type {
   LiveToolUseFlowContext,
 } from '@agent/runtime/RunHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import { RunRegistry } from '@agent/runtime/runRegistry';
+import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import { RunBusy } from '@agent/runtime/runLanes';
 import {
   defaultSession,
@@ -809,7 +809,6 @@ describe('runRegistry', () => {
           });
 
           const session = {
-            runs: registry,
             flushArtifacts: async () => {},
           } as unknown as SessionHandle;
           const finalized = yield* Effect.forkChild(
@@ -817,7 +816,7 @@ describe('runRegistry', () => {
               session,
               handle,
               outcome: RUN_OUTCOME.COMPLETED,
-            }),
+            }).pipe(Effect.provideService(Runs, registry)),
           );
           // The finalizer claims the run before it reaches its persist, so a
           // settlement parked at the persist proves the claim already landed.

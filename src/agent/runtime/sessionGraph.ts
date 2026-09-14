@@ -43,6 +43,7 @@ import type {
 } from '@shared/session/sessionEvents';
 import type { SessionStoreCleared } from '@shared/session/database';
 import type { SessionInputs } from '@shared/session/sessionInputs';
+import type { Runs } from './runRegistry';
 import type { SessionHandle, SessionHandleInit } from './SessionHandle';
 
 /** What a session holds of its graph, resolved once at construction. */
@@ -115,6 +116,9 @@ export interface SessionGraph {
       set: readonly TranscriptSubscription[],
     ) => Effect.Effect<void>;
   };
+  /** The session's runs (`Runs`): built by the session layer over the
+   *  session's doors, disposed when the session's scope closes. */
+  readonly runs: Context.Service.Shape<typeof Runs>;
   /** The one handler of every request a surface issues to this session
    *  (PRD 7.6, 8.2): answered exactly once, an outcome or a request error. */
   readonly requests: {
@@ -131,9 +135,11 @@ export interface SessionGraph {
   /** The session's current commit ordinal: where a reader attaching now
    *  starts its `all` read (PRD 10.3). */
   readonly now: () => CommitOrdinal;
-  /** Release the session from its owner: the owner unwinds the session and
-   *  frees the root's graph after it. Settles once the root's entry has
-   *  unwound, on the caller's own fiber. */
+  /** Release the session from its owner: the owner unwinds the session (its
+   *  runs first, then the handle's owners) and frees the root's graph after
+   *  it. The unwind happens before this Effect's first yield; it settles
+   *  once the root's entry has unwound, on the caller's own fiber. A teardown
+   *  failure surfaces as a defect and still releases the entry. */
   readonly close: () => Effect.Effect<void>;
 }
 

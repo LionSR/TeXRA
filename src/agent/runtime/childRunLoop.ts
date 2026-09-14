@@ -26,6 +26,7 @@ import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import { stepRow } from '@agent/runtime/loop/rows';
 import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 import type {
   FollowUpQueue,
   FollowUpQueueBatchItem,
@@ -131,7 +132,7 @@ interface ChildRunPort {
     stage?: Pick<StageHandle, 'end'>;
     /** Drop the child's tab once finalized (ephemeral process children). */
     autoClose?: boolean;
-  }): Effect.Effect<void, Error>;
+  }): Effect.Effect<void, Error, Runs>;
 }
 
 /**
@@ -782,11 +783,12 @@ export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
  */
 export function startChildRunLoop<TTurn, R = never>(
   params: ChildRunLoopParams<TTurn, R>,
-): Effect.Effect<Fiber.Fiber<void, Error>, Error, R> {
+): Effect.Effect<Fiber.Fiber<void, Error>, Error, R | Runs> {
   return Effect.gen(function* () {
     const runSession = params.session;
+    const runs = yield* Runs;
     const budget = params.budgeted
-      ? yield* childRunBudgetFor(runSession)
+      ? yield* childRunBudgetFor(runSession, runs)
       : undefined;
     const { childRun, parentRunId, runId, agentName, strategy } = params;
     // Agent-CLI children log to their own presentation stream; native children
@@ -808,7 +810,7 @@ export function startChildRunLoop<TTurn, R = never>(
     let activationDetached = false;
     const releaseChildActivation = childRun
       ? () => undefined
-      : runSession.runs.reserveChildActivation({
+      : runs.reserveChildActivation({
           runId,
           parentRunId,
           interrupt: () => loop.interrupt(),
@@ -829,7 +831,7 @@ export function startChildRunLoop<TTurn, R = never>(
     let attachedHandle: RunHandle | undefined;
     let detachLoopInterrupt: (() => void) | undefined;
     const attachLoopInterrupt = (): void => {
-      const handle = runSession.runs.getHandle(runId);
+      const handle = runs.getHandle(runId);
       if (!handle || handle === attachedHandle) return;
       detachLoopInterrupt?.();
       attachedHandle = handle;
@@ -893,9 +895,7 @@ export function startChildRunLoop<TTurn, R = never>(
     // Keep the child-stream handle itself, not a target snapshot. Finalization
     // untracks the handle before terminal delivery, while detachment still
     // mutates this object's live delivery target.
-    const childRunHandle = childRun
-      ? runSession.runs.getHandle(runId)
-      : undefined;
+    const childRunHandle = childRun ? runs.getHandle(runId) : undefined;
 
     let bestCostUsd: number | undefined;
     const ports: ChildRunPorts = {
@@ -1144,7 +1144,7 @@ export function startChildRunLoop<TTurn, R = never>(
             });
           } else {
             // A native turn normally finalizes itself. A stopped between-turn handle remains ours.
-            const handle = runSession.runs.getHandle(runId);
+            const handle = runs.getHandle(runId);
             if (handle) {
               yield* finalizeRunTerminal({
                 session: runSession,
@@ -1188,7 +1188,7 @@ export function startChildRunLoop<TTurn, R = never>(
       }
     }).pipe(Effect.uninterruptible);
     return yield* Effect.forkDetach(
-      runSession.runs.launchRun(runId, run).pipe(
+      runs.launchRun(runId, run).pipe(
         Effect.catchCause((cause) =>
           Effect.gen(function* () {
             const error = runStarted

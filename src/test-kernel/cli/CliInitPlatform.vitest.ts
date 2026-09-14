@@ -317,10 +317,10 @@ describe('CLI platform init', () => {
     await initCliPlatform(cliContext({ installSignalHandlers: false }));
     const session = createTestSession();
     const interruptCodex = vi
-      .spyOn(codexThreadsFor(session), 'interruptAll')
+      .spyOn(codexThreadsFor(session.runs), 'interruptAll')
       .mockImplementation(() => {});
     const interruptClaude = vi
-      .spyOn(claudeAgentSessionsFor(session), 'interruptAll')
+      .spyOn(claudeAgentSessionsFor(session.runs), 'interruptAll')
       .mockImplementation(() => {});
 
     try {

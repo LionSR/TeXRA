@@ -129,8 +129,10 @@ Issue #10640 lands the previously-cut user-facing setting:
 - Surface: the native VS Code/desktop settings view Multi-Agent tab and, since
   2026-08-29, the CLI `/config` panel (`cliConfig`).
 - Runtime: `childRunBudgetFor` re-reads the configured value on every call and
-  live re-pins the session queue to it, so the queue always tracks the
-  configured value. Absent and invalid persisted values both resolve to auto.
+  live re-pins the session's semaphore to it (held by the session's runs,
+  `RunRegistry.childRunBudget`, since 2026-09-14), so the budget always tracks
+  the configured value. Absent and invalid persisted values both resolve to
+  auto.
 - Provider-key partitioning remains rejected (maintainer ruling) — this
   implementation is per-session count-based only.
 

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_PHASE,
@@ -315,7 +316,10 @@ function runInBand(
     session: prepared.session,
     signal,
     prepare: () => Effect.succeed(prepared),
-  }).pipe(Effect.provide(fakeProcessServices()));
+  }).pipe(
+    Effect.provide(fakeProcessServices()),
+    Effect.provideService(Runs, prepared.session.runs),
+  );
 }
 
 /**
@@ -573,7 +577,7 @@ describe('headless delegation', () => {
               session: prepared.session,
               signal,
               prepare: () => Effect.succeed(prepared),
-            }),
+            }).pipe(Effect.provideService(Runs, prepared.session.runs)),
             fakeProcessServices(),
           );
         expect(yield* Effect.flip(run())).toMatchObject({

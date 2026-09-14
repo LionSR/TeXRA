@@ -52,7 +52,7 @@ const testSession = {
     getHandle: () => sessionHandles.byRunId,
   },
 } as unknown as SessionHandle;
-const ClaudeAgentSessions = claudeAgentSessionsFor(testSession);
+const ClaudeAgentSessions = claudeAgentSessionsFor(testSession.runs);
 
 vi.mock('@agent/storage', () => ({
   registerRun: mocks.registerRun,

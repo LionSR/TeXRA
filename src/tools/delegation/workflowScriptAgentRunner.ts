@@ -12,6 +12,7 @@ import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
@@ -332,9 +333,9 @@ function probeJournal<A>(
 const fenceSupersededRun = (
   session: InBandSubagentLaunchOptions['session'],
   runId: RunId,
-): Effect.Effect<void, Error, Scope.Scope> =>
+): Effect.Effect<void, Error, Runs | Scope.Scope> =>
   Effect.gen(function* () {
-    yield* session.runs
+    yield* (yield* Runs)
       .holdInactiveRun(runId)
       .pipe(
         Effect.mapError(

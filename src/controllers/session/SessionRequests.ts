@@ -21,7 +21,7 @@
  * the response; a bridge posts it as the `Response` of 8.4.
  *
  * Built per `SessionHandle` by `sessionLayer.ts`'s opener: it acts on
- * exactly the session it was built for.
+ * exactly the session it was built for, and on that session's `Runs`.
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
@@ -29,6 +29,7 @@ import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunBusy } from '@agent/runtime/runLanes';
+import { Runs } from '@agent/runtime/runRegistry';
 import {
   aggregateId as qualifyAggregateId,
   requestParksItsCaller,
@@ -84,6 +85,7 @@ export function sessionRequests(
     const admitted = yield* admit(log, local, req);
     return yield* handle(session, req, log, admitted, local).pipe(
       Effect.provideService(InquiryRecords, inquiryRecords),
+      Effect.provideService(Runs, session.runs),
     );
   });
   const removeRun = Effect.fn('SessionRequests.removeRun')(function* (
@@ -103,7 +105,9 @@ export function sessionRequests(
         }),
       );
     }
-    return yield* deleteAdmittedRun(session, log, runId, admitted, mode);
+    return yield* deleteAdmittedRun(log, runId, admitted, mode).pipe(
+      Effect.provideService(Runs, session.runs),
+    );
   });
   return { request, removeRun };
 }
@@ -250,12 +254,11 @@ function decide(
 
 /** Delete the admitted lifetime after acquiring its inactive run slot. */
 function deleteAdmittedRun(
-  session: SessionHandle,
   log: SessionRequestLog,
   runId: RunId,
   admitted: AggregateState,
   mode: DeletionMode,
-): Effect.Effect<Outcome, RequestError> {
+): Effect.Effect<Outcome, RequestError, Runs> {
   const aggregateId = qualifyAggregateId('run', runId);
   return Effect.gen(function* () {
     if (admitted.startCommit === null) {
@@ -277,7 +280,7 @@ function deleteAdmittedRun(
         }),
       );
     }
-    yield* session.runs
+    yield* (yield* Runs)
       .withInactiveRunStep(
         runId,
         log.removeRun(aggregateId, mode, start.commit),
@@ -312,11 +315,11 @@ function handle(
   log: SessionRequestLog,
   admitted: AggregateState,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-): Effect.Effect<Outcome, RequestError, InquiryRecords> {
+): Effect.Effect<Outcome, RequestError, InquiryRecords | Runs> {
   switch (req.kind) {
     case 'run.stop':
-      return Effect.suspend(() =>
-        session.runs.stopAgentRun(req.runId, {
+      return Effect.flatMap(Runs, (runs) =>
+        runs.stopAgentRun(req.runId, {
           detachActiveChildren: req.detachActiveChildren ?? undefined,
         }),
       ).pipe(
@@ -334,10 +337,10 @@ function handle(
         Effect.uninterruptible,
       );
     case 'run.delete':
-      return deleteAdmittedRun(session, log, req.runId, admitted, 'single');
+      return deleteAdmittedRun(log, req.runId, admitted, 'single');
     case 'run.compact':
-      return Effect.suspend((): Effect.Effect<Outcome, RequestError> => {
-        const result = session.runs.requestManualCompaction(req.runId);
+      return Effect.flatMap(Runs, (runs) => {
+        const result = runs.requestManualCompaction(req.runId);
         switch (result.kind) {
           case 'requested':
             return Effect.succeed(done);

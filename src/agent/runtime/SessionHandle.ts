@@ -7,8 +7,9 @@
  * readiness gate: a restored session is usable the moment it is constructed,
  * and what a stream with no live flow context in this process is gets decided
  * by the fold's `readOnly` and `group` rules over the session's view, never
- * by a boot pass. It composes {@link RunRegistry},
- * {@link SessionHostInteractions}, and the other session-scoped owners.
+ * by a boot pass. It carries the session's `Runs` as the session layer built
+ * it, and composes {@link SessionHostInteractions} and the other
+ * session-scoped owners.
  *
  * A session is one per workspace storage root, built and held by the
  * process's session owner (the `Sessions` map behind `openSessionEffect`): the
@@ -98,7 +99,6 @@ import {
   runInSession,
   tryUseRunContext,
 } from './RunContext';
-import { RunRegistry } from './runRegistry';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -116,6 +116,7 @@ import {
 } from './runApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
+import type { RunRegistry } from './runRegistry';
 import type { ModelRetryGate } from './ModelRetryGate';
 
 const logger = createLog('sessionHandle');
@@ -213,8 +214,11 @@ export class SessionHandle {
    *  the host that opened the session presents it once. */
   readonly storeCleared: SessionGraph['storeCleared'];
   /**
-   * Per-run run handles: registration, lookup, change listeners, and
-   * subagent lineage. Hears every phase-moving row this process committed
+   * The session's `Runs` service, as the session layer built it in the
+   * session's scope (`SessionGraph.runs`): registration, lookup, change
+   * listeners, and subagent lineage. The record carries it for a host that
+   * holds the session; Effect code below a launch takes it from context.
+   * Hears every phase-moving row this process committed
    * ({@link receiveFoldedEvent}), in commit order and only once the view has
    * folded it; the phase itself is the fold's (`RunView.status`), never a
    * second map here.
@@ -317,6 +321,16 @@ export class SessionHandle {
     this.transcripts = init.transcripts;
     this.roots = init.roots;
     this.runtime = init.runtime;
+    const interactions = new SessionHostInteractions();
+    // The approval authority publishes a stream's full policy snapshot on
+    // every effective bypass change; `setApprovalPolicy` below publishes the
+    // same snapshot when the policy half moves. Built before the graph: the
+    // session's runs are built over it.
+    const approvals = createSessionApprovals(interactions, (runId) =>
+      this.publishApprovalPolicy(runId),
+    );
+    this.interactions = interactions;
+    this.approvals = approvals;
     const graph = init.graph(this);
     this.graph = graph;
     this.events = graph.events;
@@ -328,26 +342,8 @@ export class SessionHandle {
     this.requests = graph.requests;
     this.inputs = graph.inputs;
     this.subscriptions = graph.subscriptions;
+    this.runs = graph.runs;
     this.followUps = new ToolUseFollowUpQueue();
-    const interactions = new SessionHostInteractions();
-    // The approval authority publishes a stream's full policy snapshot on
-    // every effective bypass change; `setApprovalPolicy` below publishes the
-    // same snapshot when the policy half moves.
-    const approvals = createSessionApprovals(interactions, (runId) =>
-      this.publishApprovalPolicy(runId),
-    );
-    this.runs = new RunRegistry({
-      runView: (runId) => this.runView(runId),
-      commit: (events) => this.commit(events).pipe(Effect.asVoid),
-      approvals,
-      finalizeRun: (input) => finalizeRun(this, input),
-      acquireRunClaim: (runId) =>
-        this.acquireClaims(qualifyAggregateId('run', runId)),
-      releaseRootRunLease: (runId) => this.releaseRunLease(runId),
-    });
-
-    this.interactions = interactions;
-    this.approvals = approvals;
     this.modelRetries = init.modelRetries;
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
@@ -370,7 +366,6 @@ export class SessionHandle {
     this.teardown.add(() => this.interactions.dispose());
     // Drop bypass state before the interaction slot settles pending approvals.
     this.teardown.add(() => this.approvals.clearAll());
-    this.teardown.add(() => this.runs.dispose());
     this.teardown.add(() => this.followUps.dispose());
   }
 
@@ -1187,21 +1182,18 @@ export class SessionHandle {
   }
 
   /**
-   * Unwind this session ({@link unwind}) and release it from its owner,
-   * which frees the root's graph after it: the returned Effect settles once
-   * the root's entry has unwound. A teardown failure surfaces to the caller
-   * as a defect and still releases the session. Settles no runs: a host that
+   * Release this session from its owner (`graph.close`), which unwinds it
+   * (its runs, then {@link unwind}) and frees the root's graph after it: the
+   * returned Effect settles once the root's entry has unwound. A teardown
+   * failure surfaces to the caller as a defect and still releases the
+   * session. Settles no runs: a host that
    * needs the session's live runs ended first closes through
    * `closeSession`, which ends here. Idempotent, so a handle released once
    * never reaches the session its owner built over the same root later.
    */
   dispose(): Effect.Effect<void> {
     return Effect.suspend(() =>
-      this.disposed
-        ? Effect.void
-        : Effect.sync(() => this.unwind()).pipe(
-            Effect.ensuring(this.graph.close()),
-          ),
+      this.disposed ? Effect.void : this.graph.close(),
     );
   }
 
@@ -1209,9 +1201,9 @@ export class SessionHandle {
    * Tear down everything this session owns through the constructor-registered
    * LIFO store, once: the store aggregates each disposer's failure and still
    * runs the remaining disposers, including the final `liveSessions`
-   * removal. The session owner calls this as it releases the session (a
-   * `closeSession`, the runtime's disposal); {@link dispose} calls it first
-   * and then asks for that release.
+   * removal. The session owner calls it, after disposing the session's
+   * runs, whenever it releases the session (a `closeSession`, the runtime's
+   * disposal, {@link dispose}).
    */
   unwind(): void {
     this.teardown.dispose();

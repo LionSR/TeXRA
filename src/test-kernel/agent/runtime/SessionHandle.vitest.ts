@@ -54,7 +54,22 @@ describe('SessionHandle', () => {
     const runs = vi.spyOn(session.runs, 'dispose');
     await expect(Effect.runPromise(session.dispose())).rejects.toThrow(failure);
     expect(interactions).toHaveBeenCalledOnce();
-    expect(runs).toHaveBeenCalledOnce();
+    expect(runs).toHaveBeenCalled();
+  });
+
+  it('refuses run work once disposal has begun', async () => {
+    const session = createTestSession();
+    let attempted = false;
+    // The handle's owners unwind after the session's runs: a launch reaching
+    // the registry from inside that unwind is already refused.
+    vi.spyOn(session.interactions, 'dispose').mockImplementation(() => {
+      attempted = true;
+      expect(() => trackAgent(session, generateRunId())).toThrow(
+        'Cannot register run work after session disposal.',
+      );
+    });
+    await Effect.runPromise(session.dispose());
+    expect(attempted).toBe(true);
   });
 
   it('rejects run work registered after disposal', async () => {

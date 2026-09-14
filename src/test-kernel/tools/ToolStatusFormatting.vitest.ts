@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
 import type { RunListingEntry } from '@agent/storage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -58,7 +59,11 @@ describe('tool status formatting', () => {
     // shows it without re-reading the metadata file it came from. The other
     // columns under test are the `process` category and the suppressed model.
     await expect(
-      Effect.runPromise(formatListingLine(entry, defaultSession())),
+      Effect.runPromise(
+        formatListingLine(entry, defaultSession()).pipe(
+          Effect.provideService(Runs, defaultSession().runs),
+        ),
+      ),
     ).resolves.toBe(
       '16c0f3f748e4  2026-05-15 23:42:06  bash  process  [completed]  parent=fcf5150d37c6',
     );

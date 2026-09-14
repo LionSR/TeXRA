@@ -1,7 +1,7 @@
+import type { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   forEachLiveSession,
   settleLiveSessionRuns,
-  type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 
@@ -9,25 +9,26 @@ import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { Effect } from 'effect';
 
 /**
- * Owns the two session-keyed stores (`codexThreadsFor`, `claudeAgentSessionsFor`)
- * that hold each session's live agent-CLI registries, plus the host shutdown
- * wiring that interrupts them at teardown — kept together because the shutdown
- * handlers close over the same `WeakMap`s the accessors read.
+ * Owns the two stores (`codexThreadsFor`, `claudeAgentSessionsFor`) that hold
+ * each session's live agent-CLI registries, keyed by that session's `Runs`,
+ * plus the host shutdown wiring that interrupts them at teardown — kept
+ * together because the shutdown handlers close over the same `WeakMap`s the
+ * accessors read.
  */
 
-// Session-keyed (the childRunBudget WeakMap model): each session owns its own
-// codex/claude registry, so per-session teardown interrupts exactly its own
-// agent-CLI children and a registry dies with its session instead of living
-// as a process singleton.
+// Keyed by the session's runs (the childRunBudget WeakMap model): each
+// session owns its own codex/claude registry, so per-session teardown
+// interrupts exactly its own agent-CLI children and a registry dies with its
+// session instead of living as a process singleton.
 function sessionRegistries() {
-  const registries = new WeakMap<SessionHandle, AgentCliSessionRegistry>();
+  const registries = new WeakMap<RunRegistry, AgentCliSessionRegistry>();
   return {
     registries,
-    for: (session: SessionHandle): AgentCliSessionRegistry => {
-      let registry = registries.get(session);
+    for: (runs: RunRegistry): AgentCliSessionRegistry => {
+      let registry = registries.get(runs);
       if (!registry) {
-        registry = new AgentCliSessionRegistry(session.runs);
-        registries.set(session, registry);
+        registry = new AgentCliSessionRegistry(runs);
+        registries.set(runs, registry);
       }
       return registry;
     },
@@ -59,8 +60,8 @@ function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
   });
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
     forEachLiveSession((session) => {
-      codexThreads.registries.get(session)?.interruptAll();
-      claudeAgentSessions.registries.get(session)?.interruptAll();
+      codexThreads.registries.get(session.runs)?.interruptAll();
+      claudeAgentSessions.registries.get(session.runs)?.interruptAll();
     });
   });
 }

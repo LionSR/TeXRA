@@ -38,6 +38,7 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { runInSession } from '@agent/runtime/RunContext';
 import { Secrets } from '@platform/secrets';
@@ -428,7 +429,7 @@ function startClaudeAgentLoop(params: {
   resumeSessionId: string | undefined;
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
-}): Effect.Effect<void, Error> {
+}): Effect.Effect<void, Error, Runs> {
   const { childRun, parentRunId, runId, initialPrompt } = params;
   const { logger } = childRun;
 
@@ -549,7 +550,11 @@ export class ClaudeAgentTool extends defineTool({
     session: SessionHandle,
     toolCall: ToolCallShape,
     requestApproval: typeof requestBashApproval,
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, Secrets | ToolCall> {
+  ): Effect.fn.Return<
+    ToolResult,
+    AgentCliToolFailure,
+    Secrets | ToolCall | Runs
+  > {
     const config = yield* agentCliCall(() =>
       runInSession(session, getClaudeAgentConfig),
     );
@@ -604,7 +609,11 @@ const launchClaudeAgentSession = Effect.fn(
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure, Secrets | ToolCall> {
+): Effect.fn.Return<
+  ToolResult,
+  AgentCliToolFailure,
+  Secrets | ToolCall | Runs
+> {
   const config = yield* agentCliCall(() =>
     runInSession(session, getClaudeAgentConfig),
   );

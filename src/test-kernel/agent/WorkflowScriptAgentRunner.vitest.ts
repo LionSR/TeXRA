@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { RunLanes } from '@agent/runtime/runLanes';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
@@ -38,7 +39,10 @@ function createWorkflowScriptAgentRunner(
 ) {
   const runner = createNativeWorkflowScriptAgentRunner(...args);
   return (invocation: WorkflowAgentInvocation) =>
-    Effect.provide(runner(invocation), fakeProcessServices());
+    runner(invocation).pipe(
+      Effect.provide(fakeProcessServices()),
+      Effect.provideService(Runs, args[0].run.session.runs),
+    );
 }
 
 function fingerprintWorkflowAgentDependencies(

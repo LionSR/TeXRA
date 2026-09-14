@@ -1,5 +1,6 @@
 import { Cause, Effect, Exit, Fiber } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { Runs } from '@agent/runtime/runRegistry';
 /**
  * Shared detached-child launch choreography for delegation launch sites.
  *
@@ -87,7 +88,7 @@ export type DetachedChildRunInput<
   (
     | {
         /** Create the stream inside the lease guard, before any stream-dependent setup. */
-        readonly createChildRun: () => Effect.Effect<ChildRun, Error>;
+        readonly createChildRun: () => Effect.Effect<ChildRun, Error, Runs>;
         /** Build attempt-scoped setup around the stream retained by the launch guard. */
         readonly buildLaunch: (
           childRun: ChildRun,
@@ -121,7 +122,7 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
     completion: Fiber.Fiber<void, Error>;
   },
   Error,
-  R
+  R | Runs
 > {
   return runWithOwnedRunLeaseLaunchGuard(
     input.session,

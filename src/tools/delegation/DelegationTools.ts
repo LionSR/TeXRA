@@ -15,6 +15,7 @@ import { z } from 'zod';
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import {
@@ -320,8 +321,8 @@ Git worktree support: resolved from the active workspace at runtime.`,
       instruction: string,
       session: SessionHandle,
       callerRunId: RunId | undefined,
-    ): Effect.fn.Return<ToolResult, Error> {
-      const handle = session.runs.getHandle(runId);
+    ): Effect.fn.Return<ToolResult, Error, Runs> {
+      const handle = (yield* Runs).getHandle(runId);
       if (!handle) {
         return yield* Effect.fail(
           new Error(

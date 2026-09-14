@@ -23,6 +23,7 @@ import { RunLeaseActiveError, inspectRunLease } from '@agent/storage/runLease';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
+import type { ProcessServices } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -45,6 +46,7 @@ import {
   type SubagentRunOptions,
 } from './executeAgent';
 import { classifyRun } from './runClassification';
+import { Runs } from './runRegistry';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
@@ -130,16 +132,18 @@ export interface ResumeRunOptions extends Pick<
 
 /**
  * Resume a stream through the single host entry path. Recovery is claimed
- * when the program starts, before the stream-to-run index performs I/O.
+ * when the program starts, before the stream-to-run index performs I/O. The
+ * resume is on the session's `Runs`, provided here from that one session.
  */
 export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
+): Effect.fn.Return<ResumeRunResult, Error, ProcessServices> {
   const session = options.session ?? defaultSession();
+  const { runs } = session;
   if (
     options.isCancellationRequested?.() === true ||
-    session.runs.isActiveOrResuming(runId)
+    runs.isActiveOrResuming(runId)
   )
     return REFUSED;
   const recovery = options.recovery
@@ -153,7 +157,7 @@ export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
     runId,
     { ...options, session, recovery },
     options.recovery == null,
-  );
+  ).pipe(Effect.provideService(Runs, runs));
 }, Effect.uninterruptible);
 
 const log = createLog('ResumeRun');
@@ -191,7 +195,12 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
   runId: RunId,
   options: ResumeRunOptions,
 ) {
-  return yield* resumeRunWithRecoveryProvenance(runId, options, false);
+  const session = options.session ?? defaultSession();
+  return yield* resumeRunWithRecoveryProvenance(
+    runId,
+    { ...options, session },
+    false,
+  ).pipe(Effect.provideService(Runs, session.runs));
 }, Effect.uninterruptible);
 
 /** Resume preparation is one ordered program; checkpoint interpretation is unchanged. */
@@ -203,6 +212,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   recoveryIsProvisional: boolean,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const session = options.session ?? defaultSession();
+  const runs = yield* Runs;
   const cancelled = () => options.isCancellationRequested?.() === true;
   const suppliedRecovery = options.recovery
     ? session.followUps.useRecovery(options.recovery)
@@ -224,7 +234,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     abandonSupplied(false);
     return REFUSED;
   }
-  if (cancelled() || session.runs.isActiveOrResuming(runId)) {
+  if (cancelled() || runs.isActiveOrResuming(runId)) {
     abandonSupplied();
     return REFUSED;
   }
@@ -249,7 +259,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     return yield* Effect.fail(retrieved.failure);
   }
   const resume = retrieved.success;
-  if (cancelled() || session.runs.isActiveOrResuming(runId)) {
+  if (cancelled() || runs.isActiveOrResuming(runId)) {
     releaseQueue();
     return REFUSED;
   }
@@ -278,7 +288,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
       try: async () => onResumeResolved(),
       catch: ensureError,
     }).pipe(Effect.onError(() => Effect.sync(releaseQueue)));
-    if (cancelled() || session.runs.isActiveOrResuming(runId)) {
+    if (cancelled() || runs.isActiveOrResuming(runId)) {
       releaseQueue();
       return REFUSED;
     }
@@ -372,7 +382,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const runId = resume.runId;
   const followUpsQueue = session.followUps;
 
-  if (session.runs.getHandle(resume.runId)?.suspendedTerminationStarted) {
+  if ((yield* Runs).getHandle(resume.runId)?.suspendedTerminationStarted) {
     followUpsQueue.release(queueLease, 'recoverable');
     return REFUSED;
   }
