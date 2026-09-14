@@ -15,7 +15,6 @@ import { Markdown } from '../render/Markdown';
 import { ToolUseRow } from './ToolUseRow';
 import {
   COMPACTION_ACTIVITY_STATUS_STYLE,
-  LIVE_TAIL_ROWS,
   WORKFLOW_TASK_STATUS_COLOR,
   boundedTranscriptEntryLayout,
   transcriptEntryLayout,
@@ -82,11 +81,14 @@ function PlainEntryRows({
     rowColor = COMPACTION_ACTIVITY_STATUS_STYLE[entry.block.status].color;
   } else if (entry.kind === 'workflowTask' && colorEnabled !== false) {
     rowColor = WORKFLOW_TASK_STATUS_COLOR[entry.call.status];
+  } else if (entry.kind === 'phase' && colorEnabled !== false) {
+    rowColor = COLOR_HINT;
   }
 
   return (
     <Box {...boxProps}>
       <Text
+        bold={entry.kind === 'phase'}
         color={rowColor}
         inverse={entry.kind === 'user' && colorEnabled !== false}
       >
@@ -173,7 +175,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   }
 });
 
-export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
+export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
   colorEnabled,
   entry,
   maxRows,
@@ -182,7 +184,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
 }: {
   readonly colorEnabled?: boolean;
   readonly entry: TranscriptRow;
-  readonly maxRows: number;
+  readonly maxRows?: number;
   readonly subagentRunLabels?: RunLabels;
   readonly width?: number;
 }): React.JSX.Element {
@@ -197,35 +199,23 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
     );
   }
 
-  const layout = boundedTranscriptEntryLayout(
-    transcriptEntryLayout(entry, {
-      colorEnabled,
-      maxRows,
-      mode: 'bounded',
-      width,
-    }),
-    maxRows,
-  );
+  // Paint every live row from the same layout the viewport measures. A
+  // separate kind switch in the pane can reserve space for rows it omits.
+  const layout = transcriptEntryLayout(entry, {
+    colorEnabled,
+    mode: 'live',
+    width,
+  });
   return (
     <PlainEntryRows
       colorEnabled={colorEnabled}
       entry={entry}
       fillWidth
-      layout={layout}
+      layout={
+        maxRows === undefined
+          ? layout
+          : boundedTranscriptEntryLayout(layout, maxRows)
+      }
     />
   );
-});
-
-export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
-  entry,
-  width,
-}: {
-  readonly entry: TranscriptRow;
-  readonly width?: number;
-}): React.JSX.Element {
-  const layout = boundedTranscriptEntryLayout(
-    transcriptEntryLayout(entry, { mode: 'live', width }),
-    LIVE_TAIL_ROWS,
-  );
-  return <PlainEntryRows entry={entry} fillWidth layout={layout} />;
 });

@@ -292,7 +292,7 @@ const IMMEDIATELY_SETTLED_ROW_KINDS = new Set<TranscriptRowKind>([
  * This is the position-independent half of {@link isSettledRow}, which a host
  * with an append-only surface asks about a row it holds no position for.
  */
-export function isSelfSettledRow(row: TranscriptRow): boolean {
+function isSelfSettledRow(row: TranscriptRow): boolean {
   if (row.kind === 'compactionActivity') return row.block.finalized;
   return (
     row.settlementSeqNo !== undefined ||

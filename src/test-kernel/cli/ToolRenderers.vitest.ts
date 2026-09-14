@@ -46,10 +46,10 @@ async function renderBoundedTool(
   maxRows: number,
 ): Promise<string> {
   const { ink, React } = await loadInk();
-  const { BoundedTranscriptEntry } =
+  const { LiveTranscriptEntry } =
     await import('@cli/chat/tui/panes/TranscriptEntry');
   return ink.renderToString(
-    React.createElement(BoundedTranscriptEntry, {
+    React.createElement(LiveTranscriptEntry, {
       entry,
       maxRows,
       width: 80,

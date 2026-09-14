@@ -11,7 +11,6 @@
 export { projectTranscriptRow } from './projectTranscriptRow';
 export {
   compactionActivityRow,
-  isSelfSettledRow,
   isSettledRow,
   promotesOnlyOnTypedTerminalState,
   type CompactionActivityRow,

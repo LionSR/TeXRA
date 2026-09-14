@@ -21,11 +21,7 @@ import {
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
 import type { WorkflowCallProgress } from '@shared/schemas';
-import {
-  isSelfSettledRow,
-  type TranscriptRow,
-  type TranscriptRowKind,
-} from '@shared/transcript';
+import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
 import { WORKFLOW_CALL_STATUS_GLYPH } from '@shared/copy/workflowCall';
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
@@ -41,10 +37,9 @@ const DEFAULT_TRANSCRIPT_COLUMNS = 80;
 const USER_ENTRY_MARGIN_TOP_ROWS = 1;
 const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 const ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS = 0;
-export const LIVE_TAIL_ROWS = 24;
+const LIVE_TAIL_ROWS = 24;
 
-type TranscriptEntryLayoutMode =
-  'bounded' | 'live' | 'scrollback' | 'scrollback-budget';
+type TranscriptEntryLayoutMode = 'live' | 'scrollback' | 'scrollback-budget';
 
 interface RowGeometry {
   readonly firstPrefix: string;
@@ -279,7 +274,6 @@ function entryLines(
   mode: TranscriptEntryLayoutMode,
   columns: number,
   colorEnabled: boolean | undefined,
-  maxRows: number | undefined,
   runLabels: RunLabels | undefined,
 ): readonly string[] {
   const body = entryBodyLines(row, mode, columns);
@@ -297,32 +291,20 @@ function entryLines(
       ];
     case 'assistant':
     case 'log': {
-      // A bounded pane paints an unsettled reply as its raw streaming tail;
-      // only a row that has settled on its own is worth a Markdown pass. Every
-      // row the bounded pane sees is past the promotion frontier, so its own
-      // settlement is the whole answer.
-      const renderLiveTail =
-        mode === 'live' || (mode === 'bounded' && !isSelfSettledRow(row));
-      if (renderLiveTail) {
+      if (mode === 'live') {
         return liveAssistantDisplayLines({
-          rows:
-            mode === 'bounded' && maxRows !== undefined
-              ? Math.max(1, maxRows)
-              : LIVE_TAIL_ROWS,
+          rows: LIVE_TAIL_ROWS,
           text: headline,
           width: columns,
         });
       }
-      // Every other mode ('scrollback' | 'scrollback-budget' | settled
-      // 'bounded') renders through the Markdown pass.
       return renderAnsiMarkdown(headline, {
         width: columns,
         colorEnabled,
       }).split('\n');
     }
     case 'tool': {
-      const useRichDisplay =
-        mode === 'live' || mode === 'bounded' || mode === 'scrollback-budget';
+      const useRichDisplay = mode === 'live' || mode === 'scrollback-budget';
       const lines = toolUseDisplayLines(row, {
         elide: mode !== 'scrollback-budget',
         runLabels,
@@ -388,14 +370,12 @@ export function transcriptEntryLayout(
   row: TranscriptRow,
   {
     colorEnabled,
-    maxRows,
     mode = 'scrollback',
     runLabels,
     previousEntry,
     width,
   }: {
     readonly colorEnabled?: boolean;
-    readonly maxRows?: number;
     readonly mode?: TranscriptEntryLayoutMode;
     readonly runLabels?: RunLabels;
     /** The row rendered directly above this one, when the caller knows it.
@@ -422,7 +402,7 @@ export function transcriptEntryLayout(
   const columns = transcriptColumns(width, inset);
   return {
     columns,
-    lines: entryLines(row, mode, columns, colorEnabled, maxRows, runLabels),
+    lines: entryLines(row, mode, columns, colorEnabled, runLabels),
     inset,
     marginBottomRows,
     marginTopRows,

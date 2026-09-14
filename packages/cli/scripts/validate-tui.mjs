@@ -212,6 +212,24 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'streaming-tool-output-spacing',
+    frame: 'scrollback',
+    rows: 40,
+    cols: 80,
+    env: { HARNESS_STREAMING_TOOL_OUTPUT: '1' },
+    keys: [{ input: '', delayMs: 2500 }],
+    expect: [
+      'Checking the streamed calculation.',
+      '● bash (python3 calculation.py)',
+      'output-1:',
+      'output-12:',
+    ],
+    maxBlankLinesBetween: [
+      { from: 'Checking the streamed calculation.', to: '● bash', max: 0 },
+      { from: '● bash', to: 'output-12:', max: 0 },
+    ],
+  },
+  {
     name: 'live-tool-only-spacing',
     frame: 'scrollback',
     env: {
