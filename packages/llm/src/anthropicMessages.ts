@@ -18,6 +18,7 @@ import {
   ModelError,
   authOrRejectionKind,
   enrichModelError,
+  FILE_UPLOAD_LIFETIME_SECONDS,
   parseInboundToolArguments,
   parseOutboundToolArguments,
   pullStream,
@@ -1114,6 +1115,7 @@ export function anthropicMessagesModel(
               upload.filename,
               { type: upload.mimeType },
             ),
+            expires_in_seconds: FILE_UPLOAD_LIFETIME_SECONDS,
           },
           { signal },
         ),
@@ -1137,11 +1139,35 @@ export function anthropicMessagesModel(
       expiresAtMs,
     };
   });
+  /**
+   * Remove a file this binding uploaded. A receipt from another protocol or
+   * issuer names a file this key cannot own, so it is refused, never sent; a
+   * 404 means the provider already expired it, which is the outcome asked for.
+   */
+  const deleteFile: NonNullable<Model['deleteFile']> = Effect.fn(
+    'llm.anthropic.deleteFile',
+  )(function* (receipt) {
+    if (receipt.protocol !== 'anthropic-messages' || receipt.issuer !== issuer)
+      return yield* new ModelError({
+        kind: 'unsupported',
+        message: 'This binding did not upload the file it was asked to delete.',
+      });
+    yield* Effect.tryPromise({
+      try: (signal) => client.files.delete(receipt.fileId, null, { signal }),
+      catch: (cause) =>
+        enrichModelError(sdkFailure(cause), { model: origin.requestedModel }),
+    }).pipe(
+      Effect.catchTag('ModelError', (error) =>
+        error.status === 404 ? Effect.void : Effect.fail(error),
+      ),
+    );
+  });
   return Object.freeze({
     prepareTurn,
     streamTurn,
     generateTurn,
     uploadFile,
+    deleteFile,
     ...(config.supportsInputTokenEstimation ? { estimateInputTokens } : {}),
   });
 }

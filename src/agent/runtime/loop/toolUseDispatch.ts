@@ -20,7 +20,7 @@
  * skip; a barrier with an intent and no result is outcome-unknown and asks;
  * a parallel-safe call without a result re-runs.
  */
-import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, Result, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
@@ -178,6 +178,13 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
 });
 
 /**
+ * How long a run's end waits on one provider to delete a file it uploaded.
+ * Deletes run as the run's scope closes, so an interrupted run waits for them
+ * too; a stalled provider must not hold that close open.
+ */
+const UPLOAD_DELETE_TIMEOUT = '10 seconds';
+
+/**
  * The model-visible content of one settlement: text, then its attachments.
  *
  * A document is uploaded where the bound model serves a files endpoint
@@ -190,6 +197,14 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
  * subscription route, every Chat protocol, Google Interactions) send the
  * bytes as before.
  *
+ * What a run uploads it removes when it ends. Each successful upload adds a
+ * finalizer to the run's scope, which closes after the run settles whether it
+ * completed, failed or was interrupted, and that finalizer deletes the file
+ * through the binding that uploaded it. The delete is best effort: a failure
+ * or a slow provider is a `warn` naming the file id, never a failed run, and
+ * the upload's bounded lifetime still clears a file that no delete reached. A
+ * resumed run whose receipts were deleted lowers those documents from bytes.
+ *
  * An attachment the binding cannot carry at all — a PDF on a route without
  * native PDF support, an image on a text-only route, any other type — still
  * reaches the model as the text mention only, and says so in the transcript
@@ -199,6 +214,7 @@ const settlementContent = Effect.fn('toolUse.settlementContent')(function* (
   settlement: Settlement,
   bound: BoundModel,
   logger: AgentTrace,
+  runScope: Scope.Scope,
 ): Effect.fn.Return<readonly InputPart[]> {
   const attachments: ToolFileAttachment[] = settlement.attachments.map(
     (attachment) => ({
@@ -254,7 +270,35 @@ const settlementContent = Effect.fn('toolUse.settlementContent')(function* (
         }),
       ),
     );
-    media.push(receipt === undefined ? inline : { ...inline, receipt });
+    if (receipt === undefined) {
+      media.push(inline);
+      continue;
+    }
+    const deleteFile = bound.model.deleteFile;
+    if (deleteFile !== undefined) {
+      yield* Scope.addFinalizer(
+        runScope,
+        deleteFile(receipt).pipe(
+          Effect.catchTag('ModelError', (error) =>
+            Effect.sync(() =>
+              logger.warn(
+                `Could not delete uploaded file ${receipt.fileId} when the run ended (${error.message}); the provider expires it on its own.`,
+              ),
+            ),
+          ),
+          Effect.timeoutOrElse({
+            duration: UPLOAD_DELETE_TIMEOUT,
+            orElse: () =>
+              Effect.sync(() =>
+                logger.warn(
+                  `Could not delete uploaded file ${receipt.fileId} when the run ended (no answer within ${UPLOAD_DELETE_TIMEOUT}); the provider expires it on its own.`,
+                ),
+              ),
+          }),
+        ),
+      );
+    }
+    media.push({ ...inline, receipt });
   }
   return [{ kind: 'text', text }, ...media];
 });
@@ -889,6 +933,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           { ...settlement, stateMutation: [] },
           bound,
           logger,
+          run.scope,
         ),
       };
     }),

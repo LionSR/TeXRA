@@ -21,6 +21,7 @@ import {
   ModelError,
   authOrRejectionKind,
   enrichModelError,
+  FILE_UPLOAD_LIFETIME_SECONDS,
   pullStream,
   ObservationPolicySchema,
   parseInboundToolArguments,
@@ -2148,6 +2149,10 @@ export function openaiResponsesModel(
                       { type: upload.mimeType },
                     ),
                     purpose: 'user_data',
+                    expires_after: {
+                      anchor: 'created_at',
+                      seconds: FILE_UPLOAD_LIFETIME_SECONDS,
+                    },
                   },
                   { signal },
                 ),
@@ -2179,11 +2184,41 @@ export function openaiResponsesModel(
           },
         );
 
+  /**
+   * Remove a file this binding uploaded. A receipt from another protocol or
+   * issuer names a file this key cannot own, so it is refused, never sent; a
+   * 404 means the provider already expired it, which is the outcome asked for.
+   */
+  const deleteFile: NonNullable<Model['deleteFile']> = Effect.fn(
+    'llm.responses.deleteFile',
+  )(function* (receipt) {
+    if (
+      issuer === null ||
+      receipt.protocol !== 'openai-responses' ||
+      receipt.issuer !== issuer
+    )
+      return yield* new ModelError({
+        kind: 'unsupported',
+        message: 'This binding did not upload the file it was asked to delete.',
+      });
+    yield* Effect.tryPromise({
+      try: (signal) => client.files.delete(receipt.fileId, { signal }),
+      catch: (cause) =>
+        enrichModelError(openaiFailure(cause), {
+          model: origin.requestedModel,
+        }),
+    }).pipe(
+      Effect.catchTag('ModelError', (error) =>
+        error.status === 404 ? Effect.void : Effect.fail(error),
+      ),
+    );
+  });
+
   return Object.freeze({
     prepareTurn,
     streamTurn,
     generateTurn,
-    ...(uploadFile !== undefined ? { uploadFile } : {}),
+    ...(uploadFile !== undefined ? { uploadFile, deleteFile } : {}),
     ...(config.supportsInputTokenEstimation
       ? {
           estimateInputTokens: (

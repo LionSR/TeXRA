@@ -25,6 +25,7 @@ import {
 } from 'effect';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
+import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 // Local imports
@@ -56,7 +57,9 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import {
+  ModelError,
   TurnResultSchema,
+  type FileReceipt,
   type Model,
   type ModelOrigin,
   type TurnResult,
@@ -232,6 +235,7 @@ function agentRun(
   tools: RuntimeToolRegistry,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
   rootUserInstruction: string | undefined,
+  scope: Scope.Scope,
 ): AgentRunShape {
   const config = AgentConfigSchema.parse({
     agent: 'assistant',
@@ -261,7 +265,7 @@ function agentRun(
     finalToolName: null,
     structured: { value: undefined },
     model,
-    scope: Scope.makeUnsafe(),
+    scope,
     declinedRoutes: [],
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
@@ -293,6 +297,10 @@ interface HarnessOptions {
   /** Opened with the slices a real run carries, for the cases that read the
    *  workspace a settlement persisted. */
   readonly stateSlices?: ToolUseFlowState['stateSlices'];
+  /** The run's binding, for the cases that read more than capabilities. */
+  readonly bound?: BoundModel;
+  /** The run's scope, for the cases that close it as the run ends. */
+  readonly scope?: Scope.Scope;
 }
 
 /** The slices of a run that has yet to touch a file. */
@@ -355,7 +363,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       },
     },
   ]);
-  const model = yield* SynchronizedRef.make(boundModel());
+  const model = yield* SynchronizedRef.make(options.bound ?? boundModel());
   const layer = Layer.mergeAll(
     nativeToolTestLayer(),
     Layer.succeed(
@@ -367,6 +375,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         tools,
         model,
         options.rootUserInstruction,
+        options.scope ?? Scope.makeUnsafe(),
       ),
     ),
     Layer.succeed(RunLedger, session.ledger),
@@ -838,5 +847,106 @@ describe('tool-use dispatch', () => {
       expect(delivered[1]?.text).toBe(delivered[0]?.text);
       yield* kit.session.dispose();
     }),
+  );
+
+  it.effect(
+    'deletes what a run uploaded when its scope closes, and a failed or stalled delete only warns',
+    () =>
+      Effect.gen(function* () {
+        const pdf = Buffer.from('%PDF-1.7').toString('base64');
+        const uploads: string[] = [];
+        const deletes: string[] = [];
+        const warnings: string[] = [];
+        const receiptFor = (fileId: string): FileReceipt => ({
+          protocol: 'openai-responses',
+          issuer: 'issuer-a',
+          fileId,
+          expiresAtMs: null,
+        });
+        const uploading: Model = {
+          ...boundModel().model,
+          uploadFile: (file) =>
+            Effect.sync(() => {
+              uploads.push(file.filename);
+              return receiptFor(`file_${uploads.length}`);
+            }),
+          // The first file's delete is refused; the second never answers.
+          deleteFile: (receipt) =>
+            Effect.suspend(() => {
+              deletes.push(receipt.fileId);
+              return receipt.fileId === 'file_1'
+                ? Effect.fail(
+                    new ModelError({
+                      kind: 'provider-rejection',
+                      message: 'quota service unavailable',
+                    }),
+                  )
+                : Effect.never;
+            }),
+        };
+        const scope = Scope.makeUnsafe();
+        const kit = yield* openDispatch({
+          tools: {
+            fetch_papers: {
+              definition: { name: 'fetch_papers' },
+              call: () =>
+                Effect.succeed({
+                  status: 'executed',
+                  output: 'fetched',
+                  files: ['a.pdf', 'b.pdf'].map((path) => ({
+                    path,
+                    mimeType: 'application/pdf',
+                    base64Data: pdf,
+                  })),
+                } satisfies ToolResult),
+            } as ITool,
+          },
+          calls: [makeCall('fetch', 'fetch_papers', {})],
+          logger: {
+            ...noopTrace,
+            warn: (message: string) => {
+              warnings.push(message);
+            },
+          },
+          bound: {
+            ...boundModel(),
+            model: uploading,
+            supportsVision: true,
+            supportsNativePdf: true,
+          },
+          scope,
+        });
+        const outcome = yield* dispatch(kit);
+        const group = outcome.state.messages.at(-1);
+        if (group?.role !== 'tool') {
+          throw new Error('The dispatch delivered no tool group.');
+        }
+        // The row keeps each document's bytes and its receipt beside them.
+        expect(group.results[0]?.content.slice(1)).toStrictEqual([
+          {
+            kind: 'document',
+            mimeType: 'application/pdf',
+            base64: pdf,
+            receipt: receiptFor('file_1'),
+          },
+          {
+            kind: 'document',
+            mimeType: 'application/pdf',
+            base64: pdf,
+            receipt: receiptFor('file_2'),
+          },
+        ]);
+        expect(deletes).toStrictEqual([]);
+
+        const closing = yield* Effect.forkChild(Scope.close(scope, Exit.void));
+        yield* TestClock.adjust('10 seconds');
+        yield* Fiber.join(closing);
+        expect([...deletes].sort()).toStrictEqual(['file_1', 'file_2']);
+        expect(warnings).toStrictEqual([
+          expect.stringContaining('file_2'),
+          expect.stringContaining('file_1'),
+        ]);
+        yield* kit.session.dispose();
+      }),
   );
 });

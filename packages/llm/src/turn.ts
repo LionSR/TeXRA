@@ -62,6 +62,17 @@ export const FileUploadSchema = z
 export type FileUpload = z.infer<typeof FileUploadSchema>;
 
 /**
+ * The lifetime every upload asks its provider for, in seconds: one day, long
+ * enough for a typical run and inside both files endpoints' accepted range
+ * (OpenAI `expires_after.seconds` 3600-2592000, Anthropic
+ * `expires_in_seconds` 3600-7776000, per the pinned SDK typings). Without it
+ * OpenAI keeps a non-batch file until it is deleted. The run deletes what it
+ * uploaded when it ends; this bound is what still clears a file a crashed
+ * process never got to delete.
+ */
+export const FILE_UPLOAD_LIFETIME_SECONDS = 86_400;
+
+/**
  * Time allowed between lowering a turn and the provider resolving its file
  * ids, so a receipt that would expire while the request is in flight lowers
  * from bytes instead. A TeXRA margin, not a provider figure.
@@ -1929,6 +1940,12 @@ export interface Model {
    * fingerprint.
    */
   uploadFile?(file: FileUpload): Effect.Effect<FileReceipt, ModelError>;
+  /**
+   * Remove a file this binding uploaded. The counterpart of `uploadFile`,
+   * present wherever it is: a receipt another issuer holds is refused rather
+   * than sent, and a file the provider already expired counts as removed.
+   */
+  deleteFile?(receipt: FileReceipt): Effect.Effect<void, ModelError>;
   /** Estimate supported prepared input and report the counted scope. */
   estimateInputTokens?(
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
