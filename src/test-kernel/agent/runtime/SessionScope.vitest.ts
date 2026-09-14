@@ -22,7 +22,7 @@ describe('session-owned transcripts and follow-up queues', () => {
 
     try {
       publishTestRunStart(launching, runId);
-      await launching.settlePublications();
+      await Effect.runPromise(launching.settlePublications());
       const lease = await Effect.runPromise(
         launching.transcripts.acquireRunResidency(runId),
       );
@@ -32,7 +32,7 @@ describe('session-owned transcripts and follow-up queues', () => {
         const output = handle.trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
         output.append('owned by launching session');
         output.finalize();
-        await launching.settlePublications();
+        await Effect.runPromise(launching.settlePublications());
 
         expect(
           launching.transcripts
@@ -56,7 +56,7 @@ describe('session-owned transcripts and follow-up queues', () => {
     const session = createTestSession();
     const runId = generateRunId();
     publishTestRunStart(session, runId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const lease = await Effect.runPromise(
       session.transcripts.acquireRunResidency(runId),
     );
@@ -65,12 +65,12 @@ describe('session-owned transcripts and follow-up queues', () => {
     try {
       const output = handle.trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
       output.append('partial text');
-      await session.settlePublications();
+      await Effect.runPromise(session.settlePublications());
       // The `waiting` step parks the run and the loop commits the closure
       // facts in that batch (`loop/toolUse.ts`), so the partial text becomes
       // the row's final text instead of streaming forever.
       session.publish(session.streamClosureFacts(runId));
-      await session.settlePublications();
+      await Effect.runPromise(session.settlePublications());
       const entries = await Effect.runPromise(
         session.transcripts.readEntries(runId),
       );

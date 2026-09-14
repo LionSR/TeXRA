@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentEvent } from '@agent/trace';
@@ -200,7 +201,7 @@ function projectionOver(session: SessionHandle) {
   const publish = async (source: Source): Promise<void> => {
     if ('run' in source) session.publishRunEvent(runId, source.run);
     else session.publish([source.draft]);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
   };
   const records = (): CliNdjsonRecord[] =>
     vi.mocked(writeRecord).mock.calls.map(([record]) => record);
@@ -221,7 +222,7 @@ describe('attachCliSessionProgressProjection', () => {
     publishTestRunStart(session, childRunId, { parent: runId });
     // The projection attaches at the current ordinal: settle the seeded
     // existence facts first so only what the test publishes is projected.
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const { records, publish, detach } = projectionOver(session);
     try {
       for (const { source } of PASS_THROUGH_CASES) {
@@ -242,7 +243,7 @@ describe('attachCliSessionProgressProjection', () => {
   it('carries the parent edge on run.start and the terminal fact on run.end', async () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const { records, publish, detach } = projectionOver(session);
     try {
       await publish({
@@ -312,7 +313,7 @@ describe('attachCliSessionProgressProjection', () => {
         description: 'Recorded before the resume',
       },
     ]);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
 
     const { records, publish, detach } = projectionOver(session);
     try {
@@ -364,12 +365,12 @@ describe('attachCliSessionProgressProjection', () => {
     ];
     const session = createTestSession();
     publishTestRunStart(session, runId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const { writeRecord, records, emitRoster, detach } =
       projectionOver(session);
     try {
       emitRoster(runId, items);
-      await session.settlePublications();
+      await Effect.runPromise(session.settlePublications());
       expect(writeRecord).toHaveBeenCalledTimes(1);
       expect(records()[0]).toEqual({
         kind: 'progress',
@@ -385,7 +386,7 @@ describe('attachCliSessionProgressProjection', () => {
   it('writes nothing after detach', async () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const { writeRecord, publish, detach } = projectionOver(session);
     await publish({
       draft: {
@@ -397,7 +398,7 @@ describe('attachCliSessionProgressProjection', () => {
     expect(writeRecord).toHaveBeenCalledTimes(1);
 
     detach();
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     await publish({
       draft: {
         type: 'run.description',
@@ -411,7 +412,7 @@ describe('attachCliSessionProgressProjection', () => {
   it('writes one record per published flow step without renderer dedup', async () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const { records, publish, detach } = projectionOver(session);
     try {
       for (const turn of [1, 2]) {

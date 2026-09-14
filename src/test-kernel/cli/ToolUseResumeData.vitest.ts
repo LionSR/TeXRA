@@ -109,7 +109,7 @@ describe('CLI listing resumability', () => {
     state: Partial<ReflectionState>,
   ): Promise<void> {
     publishTestRunStart(session, runId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     await Effect.runPromise(session.ledger.acquire(runId));
     await Effect.runPromise(
       session.ledger.appendBatch(runId, null, [

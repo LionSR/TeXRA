@@ -132,8 +132,10 @@ const NO_USAGE = {
   totalServerToolRequests: 0,
 };
 
-/** The artifact flush the lane's lease release drains; a case may fail it. */
-const flushArtifacts = vi.fn(async () => {});
+/** The settle the lane's lease release drains; a case may fail it. */
+const settlePublications = vi.fn(
+  (_runId?: RunId): Effect.Effect<void, Error> => Effect.void,
+);
 
 /**
  * The session whose run lane admits the resume. No competing generation
@@ -160,8 +162,7 @@ const LANE_SESSION = {
       catch: ensureError,
     }),
   status: {},
-  flushArtifacts,
-  settlePublications: vi.fn(async () => {}),
+  settlePublications,
   releaseRunLease: SessionHandle.prototype.releaseRunLease,
 } as never;
 
@@ -278,7 +279,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         runScope: {
           runId: resume.runId,
           session: {
-            flushArtifacts: vi.fn(),
             releaseRunLease: vi.fn(async () => {}),
           },
         },
@@ -401,7 +401,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         mocks.runToolUse.mockImplementationOnce(() =>
           Effect.succeed(completedTurn()),
         );
-        flushArtifacts.mockRejectedValueOnce(teardownFailure);
+        settlePublications.mockReturnValueOnce(Effect.fail(teardownFailure));
 
         // A failed drain rolled back facts the run had queued, so it reaches
         // the caller typed, carrying what threw.
@@ -427,7 +427,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         buildResumeContext(runId),
       );
       mocks.runToolUse.mockImplementationOnce(() => Effect.fail(turnFailure));
-      flushArtifacts.mockRejectedValueOnce(teardownFailure);
+      settlePublications.mockReturnValueOnce(Effect.fail(teardownFailure));
 
       const error = yield* Effect.flip(
         resumeToolUseFromResumeData(createToolUseResumeData({ runId })),

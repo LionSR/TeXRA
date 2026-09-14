@@ -33,7 +33,15 @@
  * session is justified only as the ownership container.
  */
 
-import { Cause, Effect, Exit, Option, Stream, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Option,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -42,7 +50,6 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import { DisposableStore } from '@platform/disposable';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -68,7 +75,9 @@ import {
 import {
   DatabaseNotOwner,
   type AggregateClaim,
+  type DatabaseReadFailed,
   type DatabaseWriteFailed,
+  type SessionOpenError,
 } from '@shared/session/database';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -87,13 +96,9 @@ import type {
   StreamLogStore,
   StreamLogStoreMode,
 } from '@transcript/StreamLogStore';
-import { throwAggregated } from '@utils/core';
+import { aggregateError } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  getRunContextSession,
-  runInSession,
-  tryUseRunContext,
-} from './RunContext';
+import { getRunContextSession, tryUseRunContext } from './RunContext';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -118,7 +123,7 @@ const logger = createLog('sessionHandle');
 
 /**
  * Facts a run had queued did not commit before its lease ended: the artifact
- * drain (`flushArtifacts`, which settles the ordered publisher), the
+ * drain (`settlePublications`, which settles the ordered publisher), the
  * post-drain step, or the settle after them failed, so those rows were rolled
  * back. Deliberately distinct from a claim or lease-file release that failed,
  * which happens once every fact is already committed and leaves the record
@@ -146,8 +151,10 @@ export class RunArtifactDrainError extends Error {
  */
 interface TrackedPublication {
   readonly runId: RunId | null;
-  readonly settled: Promise<
-    Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>
+  /** Completed with the job's own Exit once the publisher has run it. */
+  readonly settled: Deferred.Deferred<
+    unknown,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   >;
 }
 
@@ -264,14 +271,6 @@ export class SessionHandle {
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
   private readonly graph: SessionGraph;
-  /**
-   * The runtime this session's owner built and runs it on, captured at
-   * construction rather than read from the process when a fiber is wanted.
-   * Two members of this class face Promises and have no fiber of their own
-   * to borrow -- {@link settlePublications} and the `unreadable` write -- and
-   * both start theirs here. Nothing else in the session runs an Effect.
-   */
-  private readonly runtime: ProcessRuntime;
   private disposed = false;
   private readonly publications = new Set<TrackedPublication>();
   /** Session-scoped host interaction owner. */
@@ -307,15 +306,12 @@ export class SessionHandle {
       Pick<SessionHandle, 'transcripts' | 'modelRetries'> & {
         readonly roots: WorkspaceRoots;
         readonly graph: (session: SessionHandle) => SessionGraph;
-        /** The owner's runtime, for this session's two Promise faces. */
-        readonly runtime: ProcessRuntime;
       },
   ) {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
     this.transcripts = init.transcripts;
     this.roots = init.roots;
-    this.runtime = init.runtime;
     const interactions = new SessionHostInteractions();
     // The approval authority publishes a stream's full policy snapshot on
     // every effective bypass change; `setApprovalPolicy` below publishes the
@@ -445,8 +441,7 @@ export class SessionHandle {
   ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const drained = yield* Effect.exit(
-        Effect.tryPromise({
-          try: () => runInSession(this, () => this.flushArtifacts(runId)),
+        this.settlePublications(runId).pipe(
           // The drain is the ordered publisher's settle, so anything that
           // fails here left facts this run had queued uncommitted. The one
           // exception is a refused append, which keeps its own identity: it
@@ -455,11 +450,12 @@ export class SessionHandle {
           // type. A drain that refused several publications aggregates them
           // and the identity is lost; one refusal, the case those callers
           // exercise, arrives unwrapped.
-          catch: (cause) =>
+          Effect.mapError((cause) =>
             cause instanceof DatabaseNotOwner
               ? cause
               : new RunArtifactDrainError(runId, cause),
-        }),
+          ),
+        ),
       );
       const finalized = yield* Effect.exit(
         afterArtifactsDrained(
@@ -473,10 +469,9 @@ export class SessionHandle {
       // the owner already queued, and it covers the facts
       // `afterArtifactsDrained` published.
       const published = yield* Effect.exit(
-        Effect.tryPromise({
-          try: () => this.settlePublications(runId),
-          catch: (cause) => new RunArtifactDrainError(runId, cause),
-        }),
+        this.settlePublications(runId).pipe(
+          Effect.mapError((cause) => new RunArtifactDrainError(runId, cause)),
+        ),
       );
       // A child a parent's detach has snapshotted keeps its claim until that
       // batch has committed: the `run.detach` row lands on the child's own
@@ -557,18 +552,6 @@ export class SessionHandle {
           Effect.fail(ensureError(Cause.squash(cause))),
         ),
       );
-  }
-
-  /**
-   * The host-facing name for "everything this session owes storage has
-   * landed": a session's durable artifacts are the facts it publishes, so
-   * this is exactly {@link settlePublications}. Hosts call it on shutdown and
-   * every run driver reaches it through {@link releaseRunLease}. A run id
-   * narrows whose failure the caller is asking about, exactly as it does
-   * there.
-   */
-  flushArtifacts(runId?: RunId): Promise<void> {
-    return this.settlePublications(runId);
   }
 
   /**
@@ -821,7 +804,10 @@ export class SessionHandle {
     runId: RunId,
     requestId: string,
     decision: RequestDecision,
-  ): Effect.Effect<boolean, DatabaseNotOwner | DatabaseWriteFailed> {
+  ): Effect.Effect<
+    boolean,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  > {
     return this.graph.exclusive((append) =>
       this.decisionRow(runId, requestId, decision, append),
     );
@@ -835,7 +821,10 @@ export class SessionHandle {
     requestId: string,
     decision: RequestDecision,
     append: Append,
-  ): Effect.Effect<boolean, DatabaseNotOwner | DatabaseWriteFailed> {
+  ): Effect.Effect<
+    boolean,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  > {
     const aggregateId = qualifyAggregateId('run', runId);
     return Effect.gen({ self: this }, function* () {
       let open = false;
@@ -905,7 +894,10 @@ export class SessionHandle {
       readonly events: readonly SessionEventDraft[];
       readonly value: A;
     },
-  ): Effect.Effect<A, DatabaseNotOwner | DatabaseWriteFailed> {
+  ): Effect.Effect<
+    A,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  > {
     const graph = this.graph;
     return graph.exclusive((append) =>
       Effect.gen(function* () {
@@ -960,21 +952,30 @@ export class SessionHandle {
   }
 
   /** Private record reads (`run.record`, `run.report`, ...) read the database's latest row of each type, never the display fold. */
-  readRunRecords(runId: RunId): Effect.Effect<readonly SessionEvent[]> {
+  readRunRecords(
+    runId: RunId,
+  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
     return this.graph.runRecords(runId);
   }
 
-  readRunChildren(runId: RunId): Effect.Effect<readonly SessionEvent[]> {
+  readRunChildren(
+    runId: RunId,
+  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
     return this.graph.runChildren(runId);
   }
 
   /** Every committed row of one aggregate, private rows included, for the
    *  readers that fold a keyed record or a journal over the whole aggregate. */
-  readAggregate(id: AggregateId): Effect.Effect<readonly SessionEvent[]> {
+  readAggregate(
+    id: AggregateId,
+  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
     return this.graph.aggregateRows(id);
   }
 
-  readRecordListing(): Effect.Effect<readonly SessionEvent[]> {
+  readRecordListing(): Effect.Effect<
+    readonly SessionEvent[],
+    DatabaseReadFailed
+  > {
     return this.graph.recordListing();
   }
 
@@ -992,17 +993,15 @@ export class SessionHandle {
     runId: RunId | null,
     job: (
       append: Append,
-    ) => Effect.Effect<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
+    ) => Effect.Effect<
+      unknown,
+      DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+    >,
   ): void {
-    let settle: (
-      exit: Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
-    ) => void = () => {};
-    const settled = new Promise<
-      Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>
-    >((resolve) => {
-      settle = resolve;
-    });
-    const publication: TrackedPublication = { runId, settled };
+    const publication: TrackedPublication = {
+      runId,
+      settled: Deferred.makeUnsafe(),
+    };
     this.publications.add(publication);
     this.graph.detach((append) =>
       job(append).pipe(
@@ -1012,20 +1011,23 @@ export class SessionHandle {
           }).pipe(Effect.ignoreCause),
         ),
         Effect.exit,
-        Effect.tap((exit) => Effect.sync(() => settle(exit))),
+        Effect.tap((exit) =>
+          Effect.sync(() => {
+            // A committed publication is done with; a failed one is a fact
+            // this run queued and lost, and the drain that decides its run's
+            // terminal row is what has to hear it. A fire-and-forget
+            // publication fails on its own schedule, so dropping it here
+            // would leave a drain that arrives later reading an empty set
+            // and writing a COMPLETED row with no `artifact-drain` marker. It
+            // stays tracked until a drain that answers for it reports it
+            // ({@link settlePublications}).
+            if (Exit.isSuccess(exit)) this.publications.delete(publication);
+            Deferred.doneUnsafe(publication.settled, exit);
+          }),
+        ),
         Effect.asVoid,
       ),
     );
-    void settled.then((exit) => {
-      // A committed publication is done with; a failed one is a fact this run
-      // queued and lost, and the drain that decides its run's terminal row is
-      // what has to hear it. A fire-and-forget publication rejects on its own
-      // schedule, so dropping it here would leave a drain that arrives one
-      // tick later reading an empty set and writing a COMPLETED row with no
-      // `artifact-drain` marker. It stays tracked until a drain that answers
-      // for it reports it ({@link settlePublications}).
-      if (Exit.isSuccess(exit)) this.publications.delete(publication);
-    });
   }
 
   /** Await every detached publication enqueued so far and the view's fold
@@ -1065,28 +1067,50 @@ export class SessionHandle {
    *  since ending the run over a lost fact is the loop's own failure path and
    *  the row it lands on still has to say `artifact-drain` rather than
    *  `unexpected`. */
-  async settlePublications(
+  settlePublications(
     runId?: RunId,
     options: { readonly consume?: boolean } = {},
-  ): Promise<void> {
-    await this.runtime.runPromise(this.graph.settle);
-    const settled = await Promise.all(
-      [...this.publications].map(async (publication) => ({
-        publication,
-        exit: await publication.settled,
-      })),
-    );
-    const reported = settled.flatMap(({ publication, exit }) =>
-      Exit.isFailure(exit) && publication.runId === (runId ?? null)
-        ? [{ publication, error: Cause.squash(exit.cause) }]
-        : [],
-    );
-    if (options.consume !== false)
-      for (const { publication } of reported)
-        this.publications.delete(publication);
-    throwAggregated(
-      reported.map(({ error }) => error),
-      'Session publication failed',
+  ): Effect.Effect<void, Error> {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.graph.settle;
+      const settled = yield* Effect.forEach(
+        [...this.publications],
+        (publication) =>
+          Effect.exit(Deferred.await(publication.settled)).pipe(
+            Effect.map((exit) => ({ publication, exit })),
+          ),
+        { concurrency: 'unbounded' },
+      );
+      const reported = settled.flatMap(({ publication, exit }) =>
+        Exit.isFailure(exit) && publication.runId === (runId ?? null)
+          ? [{ publication, error: Cause.squash(exit.cause) }]
+          : [],
+      );
+      if (options.consume !== false)
+        for (const { publication } of reported)
+          this.publications.delete(publication);
+      if (reported.length > 0)
+        return yield* Effect.fail(
+          ensureError(
+            aggregateError(
+              reported.map(({ error }) => error),
+              'Session publication failed',
+            ),
+          ),
+        );
+    }).pipe(
+      // A settle that cannot complete (the plane's consumer stopped) is a
+      // settle that failed: its caller decides the run's terminal row on it
+      // (the `artifact-drain` marker), so it is a typed failure here, never a
+      // defect that ends the caller before that row is written. Interruption
+      // still propagates.
+      Effect.catchDefect((defect) =>
+        Effect.sync(() => {
+          logger.warn('Session publications could not be settled', {
+            data: defect,
+          });
+        }).pipe(Effect.andThen(Effect.fail(ensureError(defect)))),
+      ),
     );
   }
 
@@ -1102,31 +1126,42 @@ export class SessionHandle {
    * result listener all read the run's view synchronously, so a notification
    * ahead of the fold would hand them the state the row just replaced.
    */
-  receiveFoldedEvent(event: SessionEvent): void {
-    // Runtime waiters and host notifications belong to the authoring process.
-    const { self } = SubscriptionRef.getUnsafe(this.graph.local);
-    if (event.ownerId == null || !self.includes(event.ownerId)) return;
-    const target = aggregateTarget(event.aggregateId);
-    if (target.kind !== 'run') return;
-    if (event.type === 'run.end') {
-      for (const listener of [...this.resultListeners]) {
-        try {
-          listener({ ...event, runId: target.id });
-        } catch (error) {
-          logger.warn('Session result listener threw', { data: error });
-        }
+  receiveFoldedEvent(event: SessionEvent): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      // Runtime waiters and host notifications belong to the authoring process.
+      const { self } = yield* SubscriptionRef.get(this.graph.local);
+      if (event.ownerId == null || !self.includes(event.ownerId)) return;
+      const target = aggregateTarget(event.aggregateId);
+      if (target.kind !== 'run') return;
+      if (event.type === 'run.end') {
+        // A throwing listener is logged and never stops the ones after it.
+        yield* Effect.forEach(
+          [...this.resultListeners],
+          (listener) =>
+            Effect.try({
+              try: () => listener({ ...event, runId: target.id }),
+              catch: (error) => error,
+            }).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  logger.warn('Session result listener threw', { data: error });
+                }),
+              ),
+            ),
+          { discard: true },
+        );
       }
-    }
-    // The rows that move a run's phase (one run model, 3.3): every
-    // activation, the park and the step that leaves it, the end.
-    const phaseMoved =
-      event.type === 'run.activate' ||
-      event.type === 'run.end' ||
-      (event.type === 'flow.step' &&
-        (event.payload.step === 'waiting' ||
-          event.payload.step === 'turn.begin'));
-    if (!phaseMoved) return;
-    this.runs.handleStatus(target.id);
+      // The rows that move a run's phase (one run model, 3.3): every
+      // activation, the park and the step that leaves it, the end.
+      const phaseMoved =
+        event.type === 'run.activate' ||
+        event.type === 'run.end' ||
+        (event.type === 'flow.step' &&
+          (event.payload.step === 'waiting' ||
+            event.payload.step === 'turn.begin'));
+      if (!phaseMoved) return;
+      this.runs.handleStatus(target.id);
+    });
   }
 
   /**
@@ -1170,28 +1205,32 @@ export class SessionHandle {
    * holds it, its state could not be read): local truth the fold reads as
    * `readOnly` with the detail as `statusDetail` (PRD 5.1), never a row.
    */
-  markUnreadable(runId: RunId, detail: string): void {
-    this.setUnreadable(runId, detail);
+  markUnreadable(runId: RunId, detail: string): Effect.Effect<void> {
+    return this.setUnreadable(runId, detail);
   }
 
   /** Drop a run's unreadable detail: a read that found it free disproved it. */
-  clearUnreadable(runId: RunId): void {
-    this.setUnreadable(runId, null);
+  clearUnreadable(runId: RunId): Effect.Effect<void> {
+    return this.setUnreadable(runId, null);
   }
 
-  private setUnreadable(runId: RunId, detail: string | null): void {
-    if (this.disposed) return;
-    this.runtime.runFork(
-      SubscriptionRef.update(this.graph.local, (local) => {
-        const rest = local.unreadable.filter((u) => u.runId !== runId);
-        if (detail === null && rest.length === local.unreadable.length) {
-          return local;
-        }
-        return {
-          ...local,
-          unreadable: detail === null ? rest : [...rest, { runId, detail }],
-        };
-      }),
+  private setUnreadable(
+    runId: RunId,
+    detail: string | null,
+  ): Effect.Effect<void> {
+    return Effect.suspend(() =>
+      this.disposed
+        ? Effect.void
+        : SubscriptionRef.update(this.graph.local, (local) => {
+            const rest = local.unreadable.filter((u) => u.runId !== runId);
+            if (detail === null && rest.length === local.unreadable.length) {
+              return local;
+            }
+            return {
+              ...local,
+              unreadable: detail === null ? rest : [...rest, { runId, detail }],
+            };
+          }),
     );
   }
 
@@ -1272,10 +1311,7 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
         // Host exit needs no presentation residency or mutable writer handle.
         const transcript = yield* Effect.exit(
           Effect.gen(function* () {
-            yield* Effect.tryPromise({
-              try: () => session.settlePublications(),
-              catch: ensureError,
-            });
+            yield* session.settlePublications();
             return tracked ? yield* session.transcripts.readEntries(runId) : [];
           }),
         );
@@ -1331,10 +1367,7 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
               }
             }
             const settled = yield* Effect.exit(
-              Effect.tryPromise({
-                try: () => session.settlePublications(runId),
-                catch: ensureError,
-              }),
+              session.settlePublications(runId),
             );
             return Exit.isFailure(settled)
               ? ensureError(Cause.squash(settled.cause))
@@ -1411,7 +1444,7 @@ let defaultSessionFallbackWarned = false;
  */
 export function initializeDefaultSession(
   init: SessionHandleInit,
-): Effect.Effect<SessionHandle> {
+): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.suspend(() => {
     if (defaultRootSession()) {
       throw new Error('The default session has already been initialized.');
@@ -1456,13 +1489,9 @@ export function defaultSession(): SessionHandle {
     [...liveSessions].some((session) => session !== processDefault)
   ) {
     defaultSessionFallbackWarned = true;
-    try {
-      logger.warn(
-        'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
-      );
-    } catch {
-      // Diagnostics must not break the sanctioned fallback.
-    }
+    logger.warn(
+      'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
+    );
   }
   return processDefault;
 }

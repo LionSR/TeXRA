@@ -169,7 +169,7 @@ function ensureRun(runId: RunId): Effect.Effect<void> {
     started.add(runId);
     const session = defaultSession();
     publishTestRunStart(session, runId, { parent: root ?? null });
-    yield* Effect.promise(() => session.settlePublications());
+    yield* session.settlePublications().pipe(Effect.orDie);
   });
 }
 
@@ -416,7 +416,7 @@ afterEach(async () => {
         .pipe(Effect.ignore),
     );
   }
-  await session.settlePublications();
+  await Effect.runPromise(session.settlePublications());
   session.approvals.clearAll();
   resetCliState();
   mocks.apiKeyExistsUncached.mockReset();
@@ -450,7 +450,7 @@ describe('TUI request decisions', () => {
         session.publish([
           { type: 'run.detach', aggregateId: aggregateId('run', runId) },
         ]);
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
         expect(
           SubscriptionRef.getUnsafe(session.view).runs.get(runId)?.ownedHere,
         ).toBe(true);
@@ -845,7 +845,7 @@ describe('TUI request decisions', () => {
         }
         finishLookup?.();
         yield* settle();
-        yield* Effect.promise(() => defaultSession().settlePublications());
+        yield* defaultSession().settlePublications();
         expect(
           SubscriptionRef.getUnsafe(defaultSession().view).requests.some(
             (request) => request.requestId === permission.requestId,

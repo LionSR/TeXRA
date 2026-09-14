@@ -114,7 +114,7 @@ describe('child run progress events', () => {
   beforeEach(async () => {
     const session = await Effect.runPromise(createProcessSession());
     publishTestRunStart(session, parentRunId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
   });
 
   it('publishes child run lifecycle events through the session hub', async () => {

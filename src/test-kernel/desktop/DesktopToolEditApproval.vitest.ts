@@ -190,7 +190,7 @@ function createApprovalFixture(
           if (!started.has(runId)) {
             started.add(runId);
             publishTestRunStart(session, runId);
-            yield* Effect.tryPromise(() => session.settlePublications());
+            yield* session.settlePublications();
           }
           return yield* modules.requestToolEditApproval(request).pipe(
             Effect.provide(

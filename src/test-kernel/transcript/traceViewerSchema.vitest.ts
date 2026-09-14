@@ -50,7 +50,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
 
     const session = createTestSession();
     publishTestRunStart(session, runId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     await Effect.runPromise(
       getRunRecords(session, runId).writeRunRecord(runConfigRecord),
     );
@@ -69,7 +69,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
         output: emptyRunEndOutput(AgentCategory.ToolUse),
       },
     ]);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const result = await Effect.runPromise(assembleTrace(runId, session));
     await Effect.runPromise(session.dispose());
     expect(result.status).toBe('ok');

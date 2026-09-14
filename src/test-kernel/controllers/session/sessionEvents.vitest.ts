@@ -757,7 +757,7 @@ describe('Sessions owner', () => {
               aggregateId: qualifyAggregateId('run', RUN),
             },
           ]);
-          yield* Effect.promise(() => session.settlePublications());
+          yield* session.settlePublications();
           expect(session.now()).toBe(3);
           session.publish([
             {
@@ -828,7 +828,7 @@ describe('Sessions owner', () => {
           for (const event of committed) {
             const foreign = { ...event, ownerId: OTHER };
             yield* session.receiveCommittedEvent(foreign);
-            session.receiveFoldedEvent(foreign);
+            yield* session.receiveFoldedEvent(foreign);
           }
           expect(handleStatus).toHaveBeenCalledTimes(2);
           expect(onResult).toHaveBeenCalledOnce();
@@ -853,35 +853,33 @@ describe('Sessions owner', () => {
         const session = yield* open('/workspace/owner/retained-failure');
         try {
           session.publish([runStart]);
-          yield* Effect.promise(() => session.settlePublications(RUN));
+          yield* session.settlePublications(RUN);
           // A second `run.start` on the live aggregate violates its sequence:
           // the batch rolls back whole and the publication fails.
           session.publish([runStart]);
           // A sibling run's drain awaits every publication — so this one has
           // settled by the time it returns — and reports no fact of this run's.
-          yield* Effect.promise(() => session.settlePublications(OLDER));
+          yield* session.settlePublications(OLDER);
           // A session-wide settle is a barrier (host exit takes one before it
           // releases each live run's lease; so does a child launch): it awaits
           // every publication and answers for the session's own facts, so this
           // run's stays tracked for the drain that marks the row it decides.
-          yield* Effect.promise(() => session.settlePublications());
+          yield* session.settlePublications();
           // A mid-run barrier (the loop's park) observes without answering:
           // it reports the run's rollback so the run ends on it, and leaves
           // the failure for the drain that decides the terminal row, which is
           // the only place the `artifact-drain` marker can still be stamped.
-          yield* Effect.promise(() =>
-            expect(
+          expect(
+            yield* Effect.flip(
               session.settlePublications(RUN, { consume: false }),
-            ).rejects.toMatchObject({ _tag: 'DatabaseWriteFailed' }),
-          );
-          yield* Effect.promise(() =>
-            expect(session.settlePublications(RUN)).rejects.toMatchObject({
-              _tag: 'DatabaseWriteFailed',
-            }),
-          );
+            ),
+          ).toMatchObject({ _tag: 'DatabaseWriteFailed' });
+          expect(
+            yield* Effect.flip(session.settlePublications(RUN)),
+          ).toMatchObject({ _tag: 'DatabaseWriteFailed' });
           // Once: the drain that told the run cleared it, so the next drain
           // does not fail a run whose remaining facts are whole.
-          yield* Effect.promise(() => session.settlePublications(RUN));
+          yield* session.settlePublications(RUN);
         } finally {
           yield* session.dispose();
         }
@@ -952,7 +950,7 @@ describe('Sessions owner', () => {
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/settled');
         session.publish([runStart]);
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
         // A request nobody answers: the fold lists it while the fiber that
         // opened it waits on the decision.
         const pending = yield* Effect.forkScoped(

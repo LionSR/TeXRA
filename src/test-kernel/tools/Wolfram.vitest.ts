@@ -37,7 +37,7 @@ function dispatchWolfram(runId: RunId, code: string) {
       (session) => session.dispose(),
     );
     publishTestRunStart(session, runId);
-    yield* Effect.promise(() => session.settlePublications());
+    yield* session.settlePublications();
     const requestOpened = yield* Deferred.make<void>();
     const requests = yield* Effect.acquireRelease(
       Effect.sync(() =>

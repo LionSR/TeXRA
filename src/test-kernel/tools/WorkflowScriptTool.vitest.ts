@@ -255,7 +255,7 @@ function publishWorkflowBoard(
         status: 'running',
       },
     });
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
   });
 }
 
@@ -304,7 +304,7 @@ beforeEach(async () => {
     }),
   );
   publishTestRunStart(session, parentRunId);
-  await session.settlePublications();
+  await Effect.runPromise(session.settlePublications());
   vi.clearAllMocks();
   mocks.recordStores.clear();
   await WorkspaceFS.ensureDir('.');

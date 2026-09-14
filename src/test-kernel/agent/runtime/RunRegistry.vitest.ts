@@ -809,7 +809,7 @@ describe('runRegistry', () => {
           });
 
           const session = {
-            flushArtifacts: async () => {},
+            settlePublications: () => Effect.void,
           } as unknown as SessionHandle;
           const finalized = yield* Effect.forkChild(
             finalizeRunTerminal({
@@ -861,7 +861,7 @@ describe('runRegistry', () => {
 
         try {
           publishTestRunStart(defaultSession(), runId);
-          yield* Effect.promise(() => defaultSession().settlePublications());
+          yield* defaultSession().settlePublications();
           yield* store.writeResultMeta({
             producer: 'subagent',
             agentName: 'test-subagent',
@@ -1244,7 +1244,7 @@ describe('runRegistry', () => {
         // `finalizeOwnerlessStop` fails for a run that has none, and today the
         // registry's own runFork drops that failure.
         publishTestRunStart(defaultSession(), runId);
-        yield* Effect.promise(() => defaultSession().settlePublications());
+        yield* defaultSession().settlePublications();
         yield* registry.stopAgentRun(runId);
 
         // `run.end` is the run's whole terminal fact (one run model, 3.3), so

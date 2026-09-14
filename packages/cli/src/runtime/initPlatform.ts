@@ -43,6 +43,7 @@ import {
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
+import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
@@ -80,7 +81,7 @@ let shutdownHandlers: DisposableStore | undefined;
 // built by the first init beside the roots it installs; undefined only when
 // another root installed the platform before this init ran (a test harness's
 // fake host), in which case the session is whichever one that root opened.
-let sessionOpen: Effect.Effect<SessionHandle> | undefined;
+let sessionOpen: Effect.Effect<SessionHandle, SessionOpenError> | undefined;
 
 type CliPlatformInitOptions = Pick<
   CliContext,
@@ -126,7 +127,7 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> & {
    * `models`, `skills`, `tools` and `init` never run it, so a storage root
    * nothing can write to fails a command only when it asks for a transcript.
    */
-  readonly session: Effect.Effect<SessionHandle>;
+  readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
 };
 
 function logAt(
@@ -451,7 +452,10 @@ export async function initCliPlatform(
         runSettlement: (settlement) => runtime.runPromise(settlement),
         // The session is opened lazily (`sessionOpen`); a process that never
         // asked for one has nothing to flush.
-        flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
+        flushArtifacts: async () => {
+          const session = tryDefaultSession();
+          if (session) await runtime.runPromise(session.settlePublications());
+        },
         afterFlushArtifacts: [
           () => runtime.runPromise(UsageLogService.dispose()),
         ],

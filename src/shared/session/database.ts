@@ -110,6 +110,10 @@ export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   override readonly message = toErrorMessage(this.cause);
 }
 
+/** Why a session's root could not be opened: its database would not open,
+ *  or the reads the session is built from failed. */
+export type SessionOpenError = DatabaseOpenFailed | DatabaseReadFailed;
+
 /**
  * What opening a store of another event format left behind: the file, the
  * rows it held, and the format they were written under. Null when the store

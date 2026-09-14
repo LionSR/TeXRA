@@ -811,10 +811,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // row that path writes is the one that has to carry the
       // `artifact-drain` marker, which it can only do while the drain that
       // decides it still finds the lost fact.
-      yield* Effect.tryPromise({
-        try: () => session.settlePublications(runId, { consume: false }),
-        catch: ensureError,
-      });
+      yield* session.settlePublications(runId, { consume: false });
       // The turn boundary: the snapshot precedes the steps in one batch, so
       // a viewer cut at either step sees the fields, and a stop between the
       // turn and its wait cannot leave the turn unended. The `waiting` step

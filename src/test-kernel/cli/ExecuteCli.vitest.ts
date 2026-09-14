@@ -275,8 +275,8 @@ async function spyOnArtifactFlush() {
   const { defaultSession } = await import('@agent/runtime/SessionHandle');
   const store = defaultSession().transcripts;
   const flushSpy = vi
-    .spyOn(defaultSession(), 'flushArtifacts')
-    .mockResolvedValue(undefined);
+    .spyOn(defaultSession(), 'settlePublications')
+    .mockReturnValue(Effect.void);
   return { store, flushSpy };
 }
 
@@ -609,9 +609,11 @@ describe('executeCliRequest', () => {
         const request = baseRequest();
         const { store, flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
         const callOrder: string[] = [];
-        flushSpy.mockImplementation(async () => {
-          callOrder.push('flush');
-        });
+        flushSpy.mockImplementation(() =>
+          Effect.sync(() => {
+            callOrder.push('flush');
+          }),
+        );
         mocks.runAgent.mockImplementationOnce(async () => {
           callOrder.push('runAgent');
           return {
@@ -685,7 +687,7 @@ describe('executeCliRequest', () => {
         const runError = new Error('provider transport failed');
         const flushError = new Error('transcript flush failed');
         mocks.runAgent.mockRejectedValueOnce(runError);
-        flushSpy.mockRejectedValueOnce(flushError);
+        flushSpy.mockReturnValueOnce(Effect.fail(flushError));
 
         const rejection = yield* Effect.flip(
           executeCliRequest(baseRequest(), cliContext()),
@@ -768,7 +770,8 @@ describe('executeCliRequest', () => {
         );
         const killSpy = vi.spyOn(defaultSession().runs, 'kill');
         mocks.releaseRunLeaseAfterArtifacts.mockImplementationOnce(
-          async (session, runId) => session.flushArtifacts(runId),
+          async (session, runId) =>
+            Effect.runPromise(session.settlePublications(runId)),
         );
         let settleRecoveryWrite!: () => void;
         const recoveryWrite = new Promise<void>((resolve) => {

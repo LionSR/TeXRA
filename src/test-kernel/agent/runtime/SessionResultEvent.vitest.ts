@@ -244,7 +244,7 @@ describe('terminal result event', () => {
         yield* runFlow(ctx, () => Effect.succeed(completedRun(ctx)), {
           parentRunId,
         });
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
         expect(onResult).toHaveBeenCalledOnce();
         expect(onResult.mock.calls[0][0]).toMatchObject({
           type: 'run.end',

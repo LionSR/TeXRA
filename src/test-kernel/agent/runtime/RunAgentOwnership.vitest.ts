@@ -95,7 +95,9 @@ const CONFIG = AgentConfigSchema.parse({
   agentCategory: 'toolUse',
   model: 'test-model',
 });
-const flushArtifacts = vi.fn();
+const settlePublications = vi.fn(
+  (_runId?: RunId): Effect.Effect<void, Error> => Effect.void,
+);
 let trackedHandle: RunHandle | undefined;
 const trackRun = vi.fn((handle: RunHandle) => {
   trackedHandle = handle;
@@ -103,7 +105,7 @@ const trackRun = vi.fn((handle: RunHandle) => {
 const untrackRun = vi.fn((runId: RunId) => {
   if (trackedHandle?.runId === runId) trackedHandle = undefined;
 });
-// The real exit choreography over the fake's flushArtifacts and the mocked
+// The real exit choreography over the fake's settlePublications and the mocked
 // claim verbs, so the existing flush/release assertions keep
 // observing the same tree through its one owner.
 const SESSION = {
@@ -128,14 +130,13 @@ const SESSION = {
     // No parent is detaching this run, so its release waits on nothing.
     throughDetach: () => Effect.void,
   },
-  flushArtifacts,
   readView: () => Effect.succeed({ runs: persistedRuns }),
   acquireClaims: (...args: unknown[]) => mocks.acquireClaims(...args),
   graph: {
     releaseClaims: (...args: unknown[]) => mocks.releaseClaims(...args),
   },
   releaseClaims: SessionHandle.prototype.releaseClaims,
-  settlePublications: vi.fn(async () => {}),
+  settlePublications,
   releaseRunLease: SessionHandle.prototype.releaseRunLease,
 } as never;
 
@@ -179,7 +180,7 @@ describe('runAgent run ownership', () => {
     }));
     mocks.readRunEnd.mockReturnValue(null);
     mocks.runExists.mockReturnValue(true);
-    flushArtifacts.mockResolvedValue(undefined);
+    settlePublications.mockReturnValue(Effect.void);
     mocks.finalizeRun.mockResolvedValue(FINALIZE_RESULT);
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
@@ -589,9 +590,11 @@ describe('runAgent run ownership', () => {
           order.push('release');
         }),
       );
-      flushArtifacts.mockImplementationOnce(async () => {
-        order.push('session-artifacts');
-      });
+      settlePublications.mockImplementationOnce(() =>
+        Effect.sync(() => {
+          order.push('session-artifacts');
+        }),
+      );
 
       yield* launch({
         kind: 'fresh',
@@ -644,7 +647,7 @@ describe('runAgent run ownership', () => {
         });
 
         expect(order).toEqual(['execute', 'host-artifacts-and-release']);
-        expect(flushArtifacts).not.toHaveBeenCalled();
+        expect(settlePublications).not.toHaveBeenCalled();
         expect(mocks.releaseClaims).not.toHaveBeenCalled();
       }),
   );
@@ -716,7 +719,7 @@ describe('runAgent run ownership', () => {
         expect(mocks.releaseClaims).toHaveBeenCalledWith(
           qualifyAggregateId('run', RUN_ID),
         );
-        expect(flushArtifacts).toHaveBeenCalledOnce();
+        expect(settlePublications).toHaveBeenCalledWith(RUN_ID);
       }),
   );
 });

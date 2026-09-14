@@ -49,12 +49,12 @@ describe('SessionHandle', () => {
         // The project view can contain runs owned by another terminal.
         publishTestRunStart(a, isolated);
         publishTestRunStart(a, runB);
-        yield* Effect.promise(() => a.settlePublications());
+        yield* a.settlePublications();
         const foreignPolicy = SubscriptionRef.getUnsafe(a.view).policy.get(
           runB,
         );
         a.setApprovalPolicy('yolo');
-        yield* Effect.promise(() => a.settlePublications());
+        yield* a.settlePublications();
         expect(
           SubscriptionRef.getUnsafe(a.view).policy.get(isolated)?.policy,
         ).toBe('yolo');
@@ -65,12 +65,12 @@ describe('SessionHandle', () => {
         expect(SubscriptionRef.getUnsafe(a.view).runs.has(provisional)).toBe(
           false,
         );
-        yield* Effect.promise(() => a.settlePublications(provisional));
+        yield* a.settlePublications(provisional);
         // A birth queued before the next policy change must receive that
         // change even though the display has not folded the birth yet.
         publishTestRunStart(a, provisional);
         a.setApprovalPolicy('never');
-        yield* Effect.promise(() => a.settlePublications());
+        yield* a.settlePublications();
         expect(
           SubscriptionRef.getUnsafe(a.view).policy.get(provisional)?.policy,
         ).toBe('never');

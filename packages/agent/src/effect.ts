@@ -40,6 +40,11 @@ export {
   ToolsRefused,
 } from './effect/errors.js';
 export type { LaunchError } from './effect/errors.js';
+export {
+  DatabaseOpenFailed,
+  DatabaseReadFailed,
+} from '@shared/session/database';
+export type { SessionOpenError } from '@shared/session/database';
 
 // The payloads, as the runtime defines them.
 export { aggregateId } from '@shared/schemas';

@@ -219,6 +219,17 @@ export const createHostRunActions = (
           request.payload.kind === 'retry',
       );
 
+    const retryNotSettled =
+      (runId: RunId, requestId: string) =>
+      (cause: unknown): Effect.Effect<boolean> =>
+        Effect.sync(() => {
+          log.warn(
+            `Retry request ${requestId} of run ${runId} could not be settled`,
+            { data: cause },
+          );
+          return false;
+        });
+
     const settleRetry = (
       runId: RunId,
       requestId: string,
@@ -227,8 +238,9 @@ export const createHostRunActions = (
         | { action: 'cancel' },
     ): Effect.Effect<boolean> =>
       // A settle that fails for any reason — the request's own error or a
-      // defect — reports false, as the Promise edge's rejection handler did.
-      // Interruption is not caught: it belongs to the caller's fiber.
+      // defect — is logged and reports false, as the Promise edge's rejection
+      // handler did. Interruption is not caught: it belongs to the caller's
+      // fiber.
       session.requests
         .request({
           kind: 'request.decide',
@@ -238,8 +250,8 @@ export const createHostRunActions = (
         })
         .pipe(
           Effect.as(true),
-          Effect.catch(() => Effect.succeed(false)),
-          Effect.catchDefect(() => Effect.succeed(false)),
+          Effect.catch(retryNotSettled(runId, requestId)),
+          Effect.catchDefect(retryNotSettled(runId, requestId)),
         );
 
     const apiKeyRetry = new ProgressApiKeyRetryController({

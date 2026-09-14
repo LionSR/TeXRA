@@ -159,7 +159,7 @@ describe('requestBashApproval queueing', () => {
           yield* Effect.addFinalizer(() => session.dispose());
           const runId = generateRunId();
           publishTestRunStart(session, runId);
-          yield* Effect.tryPromise(() => session.settlePublications());
+          yield* session.settlePublications();
           const requests = yield* watchBashRequests(session);
 
           const request = (command: string) =>

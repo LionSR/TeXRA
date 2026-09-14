@@ -9,6 +9,7 @@ import {
 } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
+import type { SessionOpenError } from '@shared/session/database';
 import { ensureError } from '@utils/errors/errorMessage';
 import { snapshotHoldsTerminalCompileRejection } from '../runtime/toolUseResumeData';
 
@@ -316,7 +317,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     options: {
       /** The process session the run executes under: `initCliPlatform`'s one
        *  memoized open. */
-      readonly session: Effect.Effect<SessionHandle>;
+      readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
       /** The process runtime the shared skeleton runs its Promise-edge
        *  callbacks on, from the same services. */
       readonly runtime: CliConfigExecuteOptions['runtime'];

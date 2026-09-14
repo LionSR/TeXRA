@@ -38,6 +38,7 @@ import type { LocalRuntimeState, RunId } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseWriteFailed,
   type AggregateState,
   type Database,
@@ -221,12 +222,12 @@ function decide(
       .decideRequest(req.runId, req.requestId, req.decision)
       .pipe(
         Effect.mapError((error): RequestError =>
-          error instanceof DatabaseWriteFailed
-            ? new Unavailable({
+          error instanceof DatabaseNotOwner
+            ? new NotOwner({ runId: req.runId })
+            : new Unavailable({
                 runId: req.runId,
                 reason: 'The decision could not be recorded.',
-              })
-            : new NotOwner({ runId: req.runId }),
+              }),
         ),
       );
     if (!recorded) return yield* Effect.fail(settled(req.runId));

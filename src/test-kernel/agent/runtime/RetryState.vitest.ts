@@ -349,7 +349,7 @@ const openRun = Effect.fn('openRun')(function* (
 > {
   const runId = retryRunId();
   publishTestRunStart(session, runId);
-  yield* Effect.promise(() => session.settlePublications());
+  yield* session.settlePublications().pipe(Effect.orDie);
   yield* session.ledger.acquire(runId);
   const state = yield* session.ledger.appendBatch(runId, null, [
     appendRow(runId, [

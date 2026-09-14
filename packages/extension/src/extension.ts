@@ -622,7 +622,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
       () => killActiveRecording(),
       () => runtime.runPromise(UsageLogService.dispose()),
     ],
-    flushArtifacts: () => runtimeSession.flushArtifacts(),
+    flushArtifacts: () =>
+      runtime.runPromise(runtimeSession.settlePublications()),
     afterRunSettlement: [() => disposeDiffRefresh()],
   });
   runtimeSession.setApprovalPolicy(

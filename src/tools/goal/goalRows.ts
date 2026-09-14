@@ -19,6 +19,7 @@ import {
   type GoalState,
   type RunId,
 } from '@shared/schemas';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import type { RunView } from '@shared/session/sessionView';
 import { hexId12 } from '@utils/core';
 
@@ -189,7 +190,7 @@ export function clearGoal(
  */
 export function goalStateChanges(
   session: Pick<SessionHandle, 'folded' | 'now'>,
-): Stream.Stream<GoalStateChange> {
+): Stream.Stream<GoalStateChange, DatabaseReadFailed> {
   return session.folded(session.now()).pipe(
     Stream.filter(
       (event) =>

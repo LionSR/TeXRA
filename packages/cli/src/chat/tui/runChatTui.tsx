@@ -587,7 +587,8 @@ export async function runChat(
     disposeTerminalRestoreOnExit,
     followUpQueue,
     getApprovalPolicy,
-    flushArtifacts: () => runtimeSession.flushArtifacts(),
+    flushArtifacts: () =>
+      runtime.runPromise(runtimeSession.settlePublications()),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
     suspendTerminalTitle: terminalTitleUpdates.suspend,
     resumeTerminalTitle: terminalTitleUpdates.resume,

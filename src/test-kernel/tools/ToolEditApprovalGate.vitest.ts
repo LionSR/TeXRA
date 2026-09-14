@@ -113,7 +113,7 @@ describe('Tool edit approval gating', () => {
     tracker = new FileInteractionState();
     defaultSession().approvals.clearAll();
     runId = publishTestRunStart(defaultSession(), generateRunId());
-    await defaultSession().settlePublications();
+    await Effect.runPromise(defaultSession().settlePublications());
     decisions = autoDecideRequests(defaultSession(), () => nextDecision());
   });
 
@@ -452,7 +452,7 @@ describe('Tool edit approval gating', () => {
         );
 
         yield* Fiber.interrupt(request);
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
 
         assert.deepStrictEqual(releasedPreviews, []);
       }),

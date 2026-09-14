@@ -185,10 +185,8 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   // outcome rather than being logged past. The run id is what keeps that
   // decision this run's own: a sibling run's rolled-back fact is that run's
   // terminal outcome, never this one's.
-  const drainFailure = yield* Effect.tryPromise({
-    try: () => session.flushArtifacts(handle.runId),
-    catch: (cause) => new RunArtifactDrainError(handle.runId, cause),
-  }).pipe(
+  const drainFailure = yield* session.settlePublications(handle.runId).pipe(
+    Effect.mapError((cause) => new RunArtifactDrainError(handle.runId, cause)),
     Effect.as(undefined),
     Effect.catch((failure) => Effect.succeed(failure)),
   );
@@ -664,7 +662,15 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
             }
           },
           catch: ensureError,
-        }).pipe(Effect.ignore);
+        }).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() =>
+              logger.warn('Failed to record the first completed run', {
+                data: error,
+              }),
+            ),
+          ),
+        );
       }
 
       logger.debug(`Task completed with outcome: ${resolvedOutcome}`);

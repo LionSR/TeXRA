@@ -30,7 +30,7 @@ import {
   type SessionEventDraft,
   type RunId,
 } from '@shared/schemas';
-import { Database } from '@shared/session/database';
+import { Database, type DatabaseReadFailed } from '@shared/session/database';
 import {
   SessionEvents,
   type Append,
@@ -79,15 +79,15 @@ function trackingAppend(
  * that must know the tail passed an ordinal (the NDJSON detach drain) waits
  * on this coordinate, never on the events alone.
  */
-export function tailFrom<A extends SessionEvent>(
-  read: (fromCommit: SessionCursor) => Stream.Stream<A>,
+export function tailFrom<A extends SessionEvent, E>(
+  read: (fromCommit: SessionCursor) => Stream.Stream<A, E>,
   level: {
-    readonly get: Effect.Effect<CommitOrdinal>;
+    readonly get: Effect.Effect<CommitOrdinal, E>;
     readonly changes: Stream.Stream<CommitOrdinal>;
   },
   fromCommit: SessionCursor,
   drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-): Stream.Stream<A> {
+): Stream.Stream<A, E> {
   return Stream.unwrap(
     Effect.gen(function* () {
       const at = yield* Ref.make(fromCommit);
@@ -154,7 +154,17 @@ export const sessionEventsLayer = Layer.effect(
     yield* Effect.addFinalizer(() =>
       Queue.end(inbox).pipe(
         Effect.andThen(Fiber.join(consumer)),
-        Effect.ignore,
+        // Every job's refusal is kept on its own Exit, so the consumer ends
+        // abnormally only on a defect; closing still proceeds, and says so.
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.sync(() =>
+                logger.warn('Session publisher ended abnormally on close', {
+                  data: Cause.squash(cause),
+                }),
+              ),
+        ),
       ),
     );
     const enqueue = (job: PublicationJob): boolean =>
@@ -240,14 +250,14 @@ export const sessionEventsLayer = Layer.effect(
     const all = (
       fromCommit: SessionCursor,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ): Stream.Stream<DisplaySessionEvent> =>
+    ): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed> =>
       tailFrom(
         (from) =>
-          Stream.fromIterableEffect(log.readAll(from).pipe(Effect.orDie)).pipe(
+          Stream.fromIterableEffect(log.readAll(from)).pipe(
             Stream.filter(isDisplaySessionEvent),
           ),
         {
-          get: log.currentCommit.pipe(Effect.orDie),
+          get: log.currentCommit,
           changes: SubscriptionRef.changes(log.level),
         },
         fromCommit,
@@ -259,14 +269,14 @@ export const sessionEventsLayer = Layer.effect(
       detach,
       settle,
       listing: () =>
-        Stream.fromIterableEffect(log.readListing().pipe(Effect.orDie)).pipe(
+        Stream.fromIterableEffect(log.readListing()).pipe(
           Stream.filter(isDisplaySessionEvent),
         ),
       all,
       aggregate: (aggregateId, fromSeq) =>
-        Stream.fromIterableEffect(
-          log.readAggregate(aggregateId, fromSeq).pipe(Effect.orDie),
-        ).pipe(Stream.filter(isDisplaySessionEvent)),
+        Stream.fromIterableEffect(log.readAggregate(aggregateId, fromSeq)).pipe(
+          Stream.filter(isDisplaySessionEvent),
+        ),
     };
   }),
 );

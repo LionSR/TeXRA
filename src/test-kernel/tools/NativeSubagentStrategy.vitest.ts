@@ -711,7 +711,7 @@ describe('NativeSubagentStrategy', () => {
         const parentRunId = RunIdSchema.parse('fa110002');
         const childRunId = RunIdSchema.parse('fa110001');
         publishTestRunStart(session, childRunId);
-        yield* Effect.promise(() => session.settlePublications());
+        yield* session.settlePublications();
         const deliveries = yield* Queue.unbounded<string>();
         mocks.submitFollowUp.mockImplementation((_runId, followUp) =>
           Queue.offer(deliveries, followUp.text).pipe(
@@ -836,7 +836,7 @@ describe('NativeSubagentStrategy', () => {
             ],
           ]);
           expect(session.followUps.getAll(childRunId)).toEqual([]);
-          yield* Effect.promise(() => session.settlePublications());
+          yield* session.settlePublications();
           expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.WAITING);
           const resumedDeliveries = mocks.submitFollowUp.mock.calls.filter(
             ([, followUp]) => followUp.text.includes('follow-up response'),

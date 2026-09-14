@@ -78,9 +78,8 @@ describe('Concurrent session tool edit approval handlers', () => {
         const runA = publishTestRunStart(sessionA);
         const runB = publishTestRunStart(sessionB);
         yield* Effect.all(
-          [sessionA.settlePublications(), sessionB.settlePublications()].map(
-            (settled) => Effect.tryPromise(() => settled),
-          ),
+          [sessionA.settlePublications(), sessionB.settlePublications()],
+          { concurrency: 'unbounded' },
         );
 
         const call = (

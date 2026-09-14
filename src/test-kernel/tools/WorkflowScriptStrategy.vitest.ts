@@ -133,7 +133,7 @@ beforeEach(async () => {
     }),
   );
   publishTestRunStart(session, runId);
-  await session.settlePublications();
+  await Effect.runPromise(session.settlePublications());
   workflowControls = new WorkflowControlRegistry();
   checkpointGeneration += 1;
 });

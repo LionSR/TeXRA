@@ -151,7 +151,7 @@ describe('the goal row is the goal', () => {
           aggregateId: qualifyAggregateId('run', RUN_A),
         },
       ]);
-      yield* Effect.promise(() => session.settlePublications());
+      yield* session.settlePublications();
 
       expect(goalOf(session, RUN_A)).toBeNull();
       expect(goalList(session)).toEqual([]);
@@ -194,8 +194,8 @@ describe('goalStateChanges', () => {
           state: { active: false },
         },
       ]);
-      yield* Effect.promise(() => sessionA.settlePublications());
-      yield* Effect.promise(() => sessionB.settlePublications());
+      yield* sessionA.settlePublications();
+      yield* sessionB.settlePublications();
       yield* changes.first;
 
       expect(changes.seen).toEqual([{ runId: SAME_SESSION_RUN }]);

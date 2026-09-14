@@ -104,13 +104,13 @@ const captureStartedLaunch = Effect.fn(function* (
       Effect.gen(function* () {
         if (options.parentRunId) {
           publishTestRunStart(session, options.parentRunId);
-          yield* Effect.promise(() => session.settlePublications());
+          yield* session.settlePublications();
         }
         if (options.resumedRunId) {
           publishTestRunStart(session, options.resumedRunId, {
             parent: options.parentRunId ?? null,
           });
-          yield* Effect.promise(() => session.settlePublications());
+          yield* session.settlePublications();
         }
         const recordedSession = recordSessionEvents(session);
         const trace = new TraceEmitter();
