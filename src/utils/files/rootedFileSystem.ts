@@ -199,7 +199,11 @@ export function rootedFileSystem(
       on('remove', (resolved) => fs.remove(resolved, options))(target),
     rename: (from, to) => onPair('rename', fs.rename)(from, to),
     stat: on('stat', fs.stat),
-    symlink: (from, to) => onPair('symlink', fs.symlink)(from, to),
+    // A symlink's target is the text stored in the link, resolved by the OS
+    // relative to the link's own directory at read time — not a path of this
+    // view. Only the link location is confined; the target passes verbatim.
+    symlink: (from, to) =>
+      on('symlink', (resolvedTo) => fs.symlink(from, resolvedTo))(to),
     truncate: (target, length) =>
       on('truncate', (resolved) => fs.truncate(resolved, length))(target),
     utimes: (target, atime, mtime) =>

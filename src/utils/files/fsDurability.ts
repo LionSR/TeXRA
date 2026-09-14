@@ -1,22 +1,28 @@
 /**
  * The filesystem primitives the repo must keep that the standard library's
  * `FileSystem` does not provide: crash-safe replace, single-writer publish,
- * empty-directory removal, a directory listing carrying each entry's type,
- * and a symlink-dereferencing copy.
+ * empty-directory removal, a directory listing carrying each entry's own
+ * (unfollowed) type, and exclusive or symlink-dereferencing copies.
  *
  * These are the Effect form of what `baseFS.ts` reached `platform().fs` for.
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
- * no wrapper — and the two that must call Node directly (`rmdir`, and `cp`
- * with `dereference`) classify their errno exactly as `@effect/platform-node`
- * does, so a consumer matches `SystemError` by `reason._tag` either way.
+ * no wrapper. The Node calls `FileSystem` cannot express (`rmdir`, `lstat`,
+ * `copyFile` with `COPYFILE_EXCL`, `cp` with `dereference`, and the
+ * `write-file-atomic` package) classify their errno exactly as
+ * `@effect/platform-node` does, so a consumer matches `SystemError` by
+ * `reason._tag` either way.
  */
 
 // Node imports
+import { randomBytes } from 'node:crypto';
+import { constants as fsConstants, type Stats } from 'node:fs';
 import * as nodeFs from 'node:fs/promises';
+import { pid } from 'node:process';
 
 // Third-party imports
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
+import writeFileAtomicLib from 'write-file-atomic';
 
 const MODULE = 'FsDurability';
 
@@ -54,23 +60,40 @@ function systemErrorFrom(
   });
 }
 
-/** Distinguishes the staging names of concurrent writers in one process. */
-let stagingSequence = 0;
+/**
+ * Crash-safe replace, delegated to `write-file-atomic` — the package the
+ * `platform().fs` port uses — rather than re-derived: it stages under a name
+ * unique across processes and threads, fsyncs, preserves an existing
+ * target's mode and ownership, and resolves the target's real path so a
+ * symlinked target is replaced where it points. For durable state a torn
+ * file would make unreadable on resume; not for workspace files.
+ */
+export const writeFileAtomic = Effect.fn('fsDurability.writeFileAtomic')(
+  function* (target: string, data: Uint8Array) {
+    yield* Effect.tryPromise({
+      try: () => writeFileAtomicLib(target, Buffer.from(data)),
+      catch: (cause) => systemErrorFrom('writeFileAtomic', target, cause),
+    });
+  },
+);
 
 /**
- * Write `data` to `staging`, fsync it, then rename it over `target`, so the
- * target is either the old file or the whole new one — never a truncated
- * one — after an unclean exit. A failed write takes its staging file with it.
+ * Publish a name that belongs to exactly one writer (a run-lease claim):
+ * staged, fsynced, then renamed into place, so it is either absent or
+ * complete and durable. The staging name carries the process id and random
+ * bytes and is created exclusively, so two processes racing for the same
+ * name never write through one staging file: each rename installs one
+ * complete file. A failed write takes its staging file with it.
  */
-const stageAndRename = Effect.fn('fsDurability.stageAndRename')(function* (
+export const publishFile = Effect.fn('fsDurability.publishFile')(function* (
   target: string,
-  staging: string,
   data: Uint8Array,
 ) {
   const fs = yield* FileSystem.FileSystem;
+  const staging = `${target}.${pid}.${randomBytes(6).toString('hex')}.tmp`;
   yield* Effect.scoped(
     Effect.gen(function* () {
-      const file = yield* fs.open(staging, { flag: 'w' });
+      const file = yield* fs.open(staging, { flag: 'wx' });
       yield* file.writeAll(data);
       yield* file.sync;
     }),
@@ -78,44 +101,6 @@ const stageAndRename = Effect.fn('fsDurability.stageAndRename')(function* (
     Effect.onError(() => Effect.ignore(fs.remove(staging, { force: true }))),
   );
   yield* fs.rename(staging, target);
-});
-
-/**
- * Crash-safe replace: stage beside the target, fsync, rename over it. For
- * durable state a torn file would make unreadable on resume. Not for
- * workspace files — the rename replaces a user's symlink with a regular
- * file, which is why the target's real path is resolved first.
- */
-export const writeFileAtomic = Effect.fn('fsDurability.writeFileAtomic')(
-  function* (target: string, data: Uint8Array) {
-    const fs = yield* FileSystem.FileSystem;
-    const real = yield* fs.realPath(target).pipe(
-      // A target that does not exist yet is its own real path.
-      Effect.catchIf(
-        (error) => error.reason._tag === 'NotFound',
-        () => Effect.succeed(target),
-      ),
-    );
-    stagingSequence += 1;
-    yield* stageAndRename(
-      real,
-      `${real}.${Date.now().toString(36)}.${stagingSequence}.tmp`,
-      data,
-    );
-  },
-);
-
-/**
- * Publish a name that belongs to exactly one writer (a run-lease claim):
- * staged, fsynced, then renamed into place, so it is either absent or
- * complete and durable. The fixed `.tmp` sibling is safe precisely because
- * the name has one publisher.
- */
-export const publishFile = Effect.fn('fsDurability.publishFile')(function* (
-  target: string,
-  data: Uint8Array,
-) {
-  yield* stageAndRename(target, `${target}.tmp`, data);
 });
 
 /**
@@ -133,10 +118,24 @@ export const removeEmptyDirectory = Effect.fn(
   });
 });
 
+/** An `lstat` result as `FileSystem`'s entry type: a link is itself. */
+function entryTypeOf(stats: Stats): FileSystem.File.Type {
+  if (stats.isSymbolicLink()) return 'SymbolicLink';
+  if (stats.isFile()) return 'File';
+  if (stats.isDirectory()) return 'Directory';
+  if (stats.isBlockDevice()) return 'BlockDevice';
+  if (stats.isCharacterDevice()) return 'CharacterDevice';
+  if (stats.isFIFO()) return 'FIFO';
+  if (stats.isSocket()) return 'Socket';
+  return 'Unknown';
+}
+
 /**
- * The entries of `target` with the type of each: one `stat` per entry, which
- * is what a caller deciding "file or directory?" per entry needs and what
- * `FileSystem.readDirectory`, returning names alone, does not carry.
+ * The entries of `target` with the type of each, one `lstat` per entry: a
+ * symlink reports as `SymbolicLink`, never as what it points at, so the
+ * deletion and containment walkers that replace the old lstat-backed listing
+ * can refuse to follow it. `FileSystem.stat` follows links and
+ * `FileSystem.readDirectory` returns names alone, so neither carries this.
  */
 export const readDirectoryTyped = Effect.fn('fsDurability.readDirectoryTyped')(
   function* (target: string) {
@@ -145,13 +144,32 @@ export const readDirectoryTyped = Effect.fn('fsDurability.readDirectoryTyped')(
     const names = yield* fs.readDirectory(target);
     return yield* Effect.forEach(
       names,
-      (name) =>
-        Effect.map(
-          fs.stat(path.join(target, name)),
-          (info) => [name, info.type] as const,
-        ),
+      (name) => {
+        const entry = path.join(target, name);
+        return Effect.tryPromise({
+          try: async () =>
+            [name, entryTypeOf(await nodeFs.lstat(entry))] as const,
+          catch: (cause) => systemErrorFrom('readDirectoryTyped', entry, cause),
+        });
+      },
       { concurrency: 'unbounded' },
     );
+  },
+);
+
+/**
+ * Copy one file to a destination that must not exist yet (`COPYFILE_EXCL`):
+ * the existence check and the creation are one step, so of two concurrent
+ * copies to the same name exactly one succeeds and the other fails with
+ * `AlreadyExists`. `FileSystem.copy` silently skips an existing destination
+ * and `FileSystem.copyFile` replaces it.
+ */
+export const copyFileExclusive = Effect.fn('fsDurability.copyFileExclusive')(
+  function* (from: string, to: string) {
+    yield* Effect.tryPromise({
+      try: () => nodeFs.copyFile(from, to, fsConstants.COPYFILE_EXCL),
+      catch: (cause) => systemErrorFrom('copyFileExclusive', to, cause),
+    });
   },
 );
 

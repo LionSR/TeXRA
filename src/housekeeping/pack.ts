@@ -9,6 +9,7 @@ import { withLogChannel, withLogData } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { getCleanAgentName, type FileOpResult } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { copyFileExclusive } from '@utils/files/fsDurability';
 
 // Local file imports
 import {
@@ -17,11 +18,7 @@ import {
   HISTORY_DIR,
   CHANNEL,
 } from './constants';
-import {
-  DestinationExists,
-  generateTimestamp,
-  collectFilesFromPatterns,
-} from './utils';
+import { generateTimestamp, collectFilesFromPatterns } from './utils';
 
 /** Every pack failure reaches the host as the same result shape. */
 const asErrorResult = (error: unknown) =>
@@ -104,10 +101,14 @@ export const runPackSingle = Effect.fn('housekeeping.runPackSingle')(function* (
       yield* Effect.logDebug(`Copying: ${file} -> ${destination}`).pipe(
         withLogChannel(CHANNEL),
       );
-      if (yield* workspaceFs.exists(destination)) {
-        return yield* Effect.fail(new DestinationExists({ destination }));
-      }
-      yield* workspaceFs.copy(file, destination);
+      // Exclusive: the check and the creation are one step, so when
+      // `runPackMultiple` packs two same-basename sources into one folder
+      // concurrently, the losing copy fails with `AlreadyExists` and its pack
+      // reports the collision instead of silently omitting its file.
+      yield* copyFileExclusive(
+        yield* workspaceFs.resolve(file),
+        yield* workspaceFs.resolve(destination),
+      );
     }
     yield* Effect.logInfo(`Files packed into ${resolvedOutputFolder}`).pipe(
       withLogChannel(CHANNEL),

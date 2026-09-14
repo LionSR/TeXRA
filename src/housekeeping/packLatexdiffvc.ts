@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { FileOpResult } from '@shared/schemas';
+import { copyFileExclusive } from '@utils/files/fsDurability';
 
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';
 import { collectFilesFromPatterns, generateTimestamp } from './utils';
@@ -98,11 +99,19 @@ export const runPackLatexdiffvc = Effect.fn('housekeeping.packLatexdiffvc')(
     );
 
     yield* workspaceFs.makeDirectory(outputFolder, { recursive: true });
+    // Move each file without replacing an existing one: an exclusive copy
+    // (`AlreadyExists` when the name is taken — a second pack of the same
+    // commit within the timestamp's second) followed by removing the source.
+    // `FileSystem.rename` would silently replace the earlier archive, and a
+    // crash between the two steps leaves the source in place, never a loss.
     for (const file of mainFiles) {
-      yield* workspaceFs.rename(
-        file,
-        path.join(outputFolder, path.basename(file)),
+      yield* copyFileExclusive(
+        yield* workspaceFs.resolve(file),
+        yield* workspaceFs.resolve(
+          path.join(outputFolder, path.basename(file)),
+        ),
       );
+      yield* workspaceFs.remove(file);
     }
 
     yield* discard(tempFiles);

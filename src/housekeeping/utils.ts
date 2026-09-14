@@ -29,20 +29,6 @@ export class GlobFailed extends Data.TaggedError('GlobFailed')<{
 }
 
 /**
- * A copy whose destination name is already taken. `FileSystem.copy` without
- * `overwrite` silently skips an existing destination; the pack commands must
- * report it, because a skipped copy means the packed folder is missing a file
- * the user was told it contains.
- */
-export class DestinationExists extends Data.TaggedError('DestinationExists')<{
-  readonly destination: string;
-}> {
-  override get message(): string {
-    return `Destination already exists: ${this.destination}`;
-  }
-}
-
-/**
  * Produce an ISO-8601 timestamp stripped of separators, suitable for use in
  * a file or folder name (e.g. `20260422T003541`). Second-level granularity.
  */
