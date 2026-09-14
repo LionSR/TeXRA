@@ -11,6 +11,7 @@ import {
   DESKTOP_ONBOARDING_COMMANDS,
   DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
 } from '../shared/desktopOnboardingMessages.js';
+import type { Effect } from 'effect';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -22,9 +23,10 @@ interface DesktopOnboardingIpcOptions {
   state: StateStore;
   /**
    * Host-provided check for a usable credential (a subscription or any
-   * provider API key). Async because the secrets read can involve disk I/O.
+   * provider API key), as a program: the secrets read behind it is one, and
+   * the funnel refresh below yields it on the runtime it already holds.
    */
-  hasCredential: () => boolean | Promise<boolean>;
+  hasCredential: () => Effect.Effect<boolean>;
   /** Launch the setup conversation when the user clicks "Run Setup". */
   kickoffSetup: () => Promise<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */

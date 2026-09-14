@@ -22,16 +22,12 @@
 import { Effect, Semaphore } from 'effect';
 
 import { hostPort } from '@common/hostPort';
-import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
-const log = createLog('OnboardingFunnel');
 
 export interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */
@@ -93,11 +89,13 @@ export function planOnboardingFunnelTransition(
 export interface OnboardingFunnelHost {
   /**
    * This host's usable-credential check (a subscription or any provider API
-   * key). A failure is warned and read as "no credential": the funnel must
-   * still paint, but never silently — that answer blanks a user who has keys
-   * back down to the first-run welcome card.
+   * key), as a program the refresh yields. It cannot fail: every host binds
+   * `hasUsableSetupCredential`, which already warns about each probe it could
+   * not answer and reads it as "no credential of that kind" — the funnel must
+   * still paint, but never silently, since that answer blanks a user who has
+   * keys back down to the first-run welcome card.
    */
-  readonly hasCredential: () => boolean | PromiseLike<boolean>;
+  readonly hasCredential: () => Effect.Effect<boolean>;
   /** The user-scoped flag store; onboarding is a fact about the user. */
   readonly flags: StateStore;
   /**
@@ -144,18 +142,7 @@ export class OnboardingFunnelRefresher {
 
   private readonly refresh = Effect.fn('OnboardingFunnelRefresher.refresh')(
     function* (this: OnboardingFunnelRefresher) {
-      const hasCredential = yield* hostPort(() =>
-        this.host.hasCredential(),
-      ).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            log.warn(
-              `Credential probe failed; treating as no credential: ${toErrorMessage(error)}`,
-            );
-            return false;
-          }),
-        ),
-      );
+      const hasCredential = yield* this.host.hasCredential();
       const transition = planOnboardingFunnelTransition(this.current, {
         hasCredential,
         ...readOnboardingFlags(this.host.flags),

@@ -96,7 +96,10 @@ describe('SettingsProfileKeyController', () => {
 
     await Effect.runPromise(controller.setProviderKey('openai'));
 
-    assert.equal(await secrets.get('apiKey.openai'), 'sk-real-openai-key');
+    assert.equal(
+      await Effect.runPromise(secrets.get('apiKey.openai')),
+      'sk-real-openai-key',
+    );
     assert.equal(refreshCount(), 1);
     assert.equal(
       hosts.prompt.inputs[0]?.options.prompt,
@@ -118,7 +121,10 @@ describe('SettingsProfileKeyController', () => {
 
     await Effect.runPromise(controller.setProviderKey('openai'));
 
-    assert.equal(await secrets.get('apiKey.openai'), undefined);
+    assert.equal(
+      await Effect.runPromise(secrets.get('apiKey.openai')),
+      undefined,
+    );
     assert.equal(refreshCount(), 0);
     assert.equal(hosts.prompt.messages.length, 0);
   });
@@ -133,7 +139,10 @@ describe('SettingsProfileKeyController', () => {
       controller.commitProviderKey('openai', 'sk-xxxxxx'),
     );
 
-    assert.equal(await secrets.get('apiKey.openai'), undefined);
+    assert.equal(
+      await Effect.runPromise(secrets.get('apiKey.openai')),
+      undefined,
+    );
     assert.equal(refreshCount(), 0);
     assert.match(failures[0] ?? '', /Failed to set OpenAI API key/);
     assert.match(failures[0] ?? '', /looks like a placeholder/);
@@ -180,7 +189,10 @@ describe('SettingsProfileKeyController', () => {
       controller.commitProviderKey('openai', '  sk-direct-secret  '),
     );
 
-    assert.equal(await secrets.get('apiKey.openai'), 'sk-direct-secret');
+    assert.equal(
+      await Effect.runPromise(secrets.get('apiKey.openai')),
+      'sk-direct-secret',
+    );
     assert.equal(hosts.prompt.inputs.length, 0);
     assert.equal(refreshCount(), 1);
     assert.equal(
@@ -195,7 +207,10 @@ describe('SettingsProfileKeyController', () => {
 
     await Effect.runPromise(controller.commitProviderKey('openai', ''));
 
-    assert.equal(await secrets.get('apiKey.openai'), undefined);
+    assert.equal(
+      await Effect.runPromise(secrets.get('apiKey.openai')),
+      undefined,
+    );
     assert.equal(refreshCount(), 0);
     assert.equal(hosts.prompt.messages.length, 0);
     assert.match(failures[0] ?? '', /empty/);

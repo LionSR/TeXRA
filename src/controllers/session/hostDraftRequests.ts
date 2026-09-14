@@ -1,6 +1,8 @@
 /** Shared draft operations and the process recorder's originating request. */
 import { Deferred, Effect } from 'effect';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
+import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import { hostPort } from '@common/hostPort';
@@ -13,7 +15,8 @@ import type { HostOutcome } from '@shared/session/sessionFrames';
 import {
   killActiveRecording,
   startRecording,
-  stopRecordingAndTranscribe,
+  stopRecording,
+  transcribeRecording,
 } from '@tools/media/audio';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 
@@ -176,8 +179,36 @@ export class HostDraftRequests {
             reason: 'The recording was cancelled.',
           });
         }
+        // The recorder is terminated before anything else is read: sox gets
+        // SIGTERM and the module's recording state resets here, so a slow,
+        // denied or failing credential read below cannot delay the kill or
+        // leave the microphone running when the take is rejected.
+        const stopped = yield* hostPort(() => stopRecording());
+        const recordingPath = stopped.recordingPath;
+        if (!stopped.success || recordingPath === undefined) {
+          return yield* new Rejected({
+            reason: stopped.error ?? 'The recording could not be stopped.',
+          });
+        }
+        // The transcription endpoint is an OpenAI SDK operation the llm
+        // package does not model, and the direct OpenAI route is deliberate:
+        // `gpt-4o-transcribe` is an OpenAI-only endpoint model with no
+        // OpenRouter route, so the global OpenRouter preference is not
+        // applied to it. The take holds no session frame to enter — its
+        // roots travel with each call — so the endpoint read runs in the
+        // calling frame, and the resolved credential reaches the
+        // transcription as data.
+        const inCallingScope = <A>(read: () => A): A => read();
+        const credential = yield* resolveRouteCredential(
+          MODEL_CONFIGS['gpt4o'],
+          false,
+          secrets,
+          inCallingScope,
+        ).pipe(
+          Effect.mapError((error) => new Rejected({ reason: error.message })),
+        );
         const result = yield* hostPort(() =>
-          stopRecordingAndTranscribe(secrets, take.session.roots),
+          transcribeRecording(recordingPath, credential, take.session.roots),
         );
         if (!result.success) {
           return yield* new Rejected({

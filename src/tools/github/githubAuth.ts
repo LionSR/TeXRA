@@ -11,8 +11,7 @@
  */
 import { Effect } from 'effect';
 
-import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
 export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';
@@ -64,43 +63,18 @@ function getGitHubEnvToken(
   return undefined;
 }
 
-/**
- * The token's persisted value as a typed read. `get` and `getStored` are the
- * two members of {@link PlatformSecrets} that are still Promise-shaped, so
- * this is where a store rejection becomes a {@link SecretsFailed} for both
- * readers below rather than an untyped rejection their callers cannot match
- * on.
- */
-function readStoredToken(
-  secrets: PlatformSecrets,
-  operation: 'get' | 'getStored',
-): Effect.Effect<string | undefined, SecretsFailed> {
-  return Effect.tryPromise({
-    try: () =>
-      operation === 'get'
-        ? secrets.get(GITHUB_TOKEN_STORAGE_KEY)
-        : secrets.getStored(GITHUB_TOKEN_STORAGE_KEY),
-    catch: (cause) =>
-      new SecretsFailed({
-        reason: 'io',
-        operation,
-        message: `Reading the GitHub token failed: ${toErrorMessage(cause)}`,
-        key: GITHUB_TOKEN_STORAGE_KEY,
-        cause,
-      }),
-  });
-}
-
 export function getGitHubToken(
   secrets: PlatformSecrets,
 ): Effect.Effect<string | undefined, SecretsFailed> {
-  return readStoredToken(secrets, 'get').pipe(
-    Effect.map(
-      (stored) =>
-        normalizeGitHubToken(stored) ??
-        getGitHubEnvToken((name) => secrets.getEnv(name)),
-    ),
-  );
+  return secrets
+    .get(GITHUB_TOKEN_STORAGE_KEY)
+    .pipe(
+      Effect.map(
+        (stored) =>
+          normalizeGitHubToken(stored) ??
+          getGitHubEnvToken((name) => secrets.getEnv(name)),
+      ),
+    );
 }
 
 /**
@@ -115,7 +89,7 @@ export function getGitHubToken(
 export function resolveGitHubTokenSource(
   secrets: PlatformSecrets,
 ): Effect.Effect<'secret' | 'env' | 'none', SecretsFailed> {
-  return readStoredToken(secrets, 'getStored').pipe(
+  return secrets.getStored(GITHUB_TOKEN_STORAGE_KEY).pipe(
     Effect.map((stored) => {
       if (normalizeGitHubToken(stored)) return 'secret';
       return getGitHubEnvToken((name) => secrets.getEnv(name)) ? 'env' : 'none';

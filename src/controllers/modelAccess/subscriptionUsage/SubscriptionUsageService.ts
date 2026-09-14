@@ -1,5 +1,6 @@
 import { LRUCache } from 'lru-cache';
 
+import { runAuthProgram } from '@auth/authProgram';
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
 import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -108,7 +109,12 @@ function defaultCredentials(
     async loadApiKey(
       provider: 'kimiCode' | 'glm',
     ): Promise<string | undefined> {
-      const key = await lookupApiKey(secrets, provider);
+      // The key read is a program; this bag is the Promise-shaped credential
+      // surface the adapters above consume, so it settles on the auth
+      // subsystem's installed run edge — the same edge `loadChatGpt`'s
+      // coordinator already storages through — which re-throws the port's own
+      // `SecretsFailed` unchanged, as the rejected store read did.
+      const key = await runAuthProgram(lookupApiKey(secrets, provider));
       return key === undefined ? undefined : exposeApiKey(key);
     },
     useGlmChina: () => useChinaRegion('glm'),

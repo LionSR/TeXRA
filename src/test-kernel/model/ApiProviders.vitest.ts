@@ -13,7 +13,7 @@ import {
   loadApiKeyStatusMap,
   lookupApiKeyOrigin,
 } from '@model/apiProviders';
-import type { PlatformSecrets } from '@platform/secrets';
+import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -30,11 +30,11 @@ function createSecrets(
   return {
     store,
     secrets: {
-      async get(key) {
-        return store.get(key);
+      get(key) {
+        return Effect.sync(() => store.get(key));
       },
-      async getStored(key) {
-        return store.get(key);
+      getStored(key) {
+        return Effect.sync(() => store.get(key));
       },
       set(key, value) {
         return Effect.sync(() => {
@@ -157,50 +157,62 @@ describe('API provider key caches', () => {
     }),
   );
 
-  it('propagates credential-store read failures to execution callers', async () => {
-    const readError = new Error('credential store unavailable');
-    const { secrets: backing } = createSecrets();
-    const secrets: PlatformSecrets = {
-      ...backing,
-      get: vi.fn().mockRejectedValue(readError),
-    };
+  it.effect(
+    'propagates credential-store read failures to execution callers',
+    () =>
+      Effect.gen(function* () {
+        const readFailure = new SecretsFailed({
+          reason: 'io',
+          operation: 'get',
+          message: 'credential store unavailable',
+        });
+        const { secrets: backing } = createSecrets();
+        const secrets: PlatformSecrets = {
+          ...backing,
+          get: vi.fn(() => Effect.fail(readFailure)),
+        };
 
-    await expect(getApiKey(secrets, 'openai')).rejects.toBe(readError);
-  });
+        expect(yield* Effect.flip(getApiKey(secrets, 'openai'))).toBe(
+          readFailure,
+        );
+      }),
+  );
 
-  it('keeps concurrent and cached API keys bound to their credential stores', async () => {
-    const firstRead = createDeferred<string | undefined>();
-    const { secrets: backing } = createSecrets();
-    const first: PlatformSecrets = {
-      ...backing,
-      get: vi.fn(() => firstRead.promise),
-    };
-    const { secrets: second } = createSecrets({
-      [apiKeySecretName('openai')]: 'second-store-key',
-    });
-    const secondRead = vi.spyOn(second, 'get');
+  it.effect(
+    'keeps concurrent and cached API keys bound to their credential stores',
+    () =>
+      Effect.gen(function* () {
+        const firstRead = createDeferred<string | undefined>();
+        const { secrets: backing } = createSecrets();
+        const first: PlatformSecrets = {
+          ...backing,
+          get: vi.fn(() => Effect.promise(() => firstRead.promise)),
+        };
+        const { secrets: second } = createSecrets({
+          [apiKeySecretName('openai')]: 'second-store-key',
+        });
+        const secondRead = vi.spyOn(second, 'get');
 
-    const firstKey = getApiKey(first, 'openai');
-    const secondKey = getApiKey(second, 'openai');
-    firstRead.resolve('first-store-key');
+        const firstKey = yield* Effect.forkChild(getApiKey(first, 'openai'));
+        const secondKey = yield* Effect.forkChild(getApiKey(second, 'openai'));
+        firstRead.resolve('first-store-key');
 
-    const [firstResolved, secondResolved] = await Promise.all([
-      firstKey,
-      secondKey,
-    ]);
-    // Keys leave the boundary sealed; unwrapping is explicit at every use.
-    expect(String(firstResolved)).toBe('<redacted:openai>');
-    expect(Redacted.value(firstResolved)).toBe('first-store-key');
-    expect(Redacted.value(secondResolved)).toBe('second-store-key');
-    await expect(getApiKey(first, 'openai').then(Redacted.value)).resolves.toBe(
-      'first-store-key',
-    );
-    await expect(
-      getApiKey(second, 'openai').then(Redacted.value),
-    ).resolves.toBe('second-store-key');
-    expect(first.get).toHaveBeenCalledTimes(1);
-    expect(secondRead).toHaveBeenCalledTimes(1);
-  });
+        const firstResolved = yield* Fiber.join(firstKey);
+        const secondResolved = yield* Fiber.join(secondKey);
+        // Keys leave the boundary sealed; unwrapping is explicit at every use.
+        expect(String(firstResolved)).toBe('<redacted:openai>');
+        expect(Redacted.value(firstResolved)).toBe('first-store-key');
+        expect(Redacted.value(secondResolved)).toBe('second-store-key');
+        expect(Redacted.value(yield* getApiKey(first, 'openai'))).toBe(
+          'first-store-key',
+        );
+        expect(Redacted.value(yield* getApiKey(second, 'openai'))).toBe(
+          'second-store-key',
+        );
+        expect(first.get).toHaveBeenCalledTimes(1);
+        expect(secondRead).toHaveBeenCalledTimes(1);
+      }),
+  );
 
   it.effect(
     'does not let in-flight stale lookups repopulate the cache after invalidation',
@@ -212,13 +224,15 @@ describe('API provider key caches', () => {
         let reads = 0;
         const secrets: PlatformSecrets = {
           ...backing,
-          async get(key) {
-            reads += 1;
-            if (reads === 1) {
-              firstLookupStarted.resolve();
-              return firstLookup.promise;
-            }
-            return store.get(key);
+          get(key) {
+            return Effect.suspend(() => {
+              reads += 1;
+              if (reads === 1) {
+                firstLookupStarted.resolve();
+                return Effect.promise(() => firstLookup.promise);
+              }
+              return Effect.succeed(store.get(key));
+            });
           },
         };
 
@@ -259,8 +273,8 @@ describe('API provider key caches', () => {
       });
       // The persisted entry is listed but unreadable: the removal path keys off
       // the stored key *names*, so it still has something to delete.
-      vi.spyOn(secrets, 'get').mockResolvedValue(undefined);
-      vi.spyOn(secrets, 'getStored').mockResolvedValue(undefined);
+      vi.spyOn(secrets, 'get').mockReturnValue(Effect.succeed(undefined));
+      vi.spyOn(secrets, 'getStored').mockReturnValue(Effect.succeed(undefined));
       yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
 
       const result = yield* new UnsetApiKeyTool()

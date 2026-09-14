@@ -54,8 +54,8 @@ const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
  * it: a mutation cancelled there has written nothing. The commit itself is
  * not — `JsonStore.set` masks its own read-modify-write once it holds the
  * file's write lane, which is where host-controller study Q2's guarantee
- * lives. The port's remaining Promise-shaped reads are run here on the
- * process runtime the composition root hands over.
+ * lives. Reads are plain programs; the process runtime this instance is
+ * keyed by is only its identity in {@link getCliSecrets}.
  */
 export class CliSecrets implements PlatformSecrets {
   constructor(
@@ -63,16 +63,25 @@ export class CliSecrets implements PlatformSecrets {
     private readonly filePath = cliSecretsPath(),
   ) {}
 
-  get(key: string): Promise<string | undefined> {
+  get(key: string) {
     return secretsGet(this, key);
   }
 
-  getStored(key: string): Promise<string | undefined> {
-    return this.runtime.runPromise(
-      Effect.map(this.openStore(), (store) => {
-        const value = store.get<unknown>(key, undefined);
-        return typeof value === 'string' ? value : undefined;
-      }),
+  getStored(key: string) {
+    return Effect.map(this.openStore(), (store) => {
+      const value = store.get<unknown>(key, undefined);
+      return typeof value === 'string' ? value : undefined;
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new SecretsFailed({
+            reason: 'io',
+            operation: 'getStored',
+            key,
+            message: `Could not read the CLI secrets file at ${this.filePath}: ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      ),
     );
   }
 

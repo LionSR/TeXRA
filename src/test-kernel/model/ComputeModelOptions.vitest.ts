@@ -19,6 +19,7 @@ import {
 import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { SecretsFailed } from '@platform/secrets';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   isModelOptionAvailable,
@@ -117,6 +118,16 @@ describe('model catalogue direct-route key ownership', () => {
     }
   });
 });
+
+/** The port's own failure for a credential store that cannot be read. */
+function unreadableStore(cause: Error): SecretsFailed {
+  return new SecretsFailed({
+    reason: 'io',
+    operation: 'get',
+    message: cause.message,
+    cause,
+  });
+}
 
 describe('model availability', () => {
   setupPlatform({
@@ -223,7 +234,9 @@ describe('model availability', () => {
       Effect.gen(function* () {
         const readError = new Error('credential store unavailable');
         const secrets = new FakeSecrets();
-        vi.spyOn(secrets, 'get').mockRejectedValue(readError);
+        vi.spyOn(secrets, 'get').mockReturnValue(
+          Effect.fail(unreadableStore(readError)),
+        );
         yield* Effect.promise(() =>
           installPlatform(
             {
@@ -274,8 +287,8 @@ describe('model availability', () => {
         // inside the ladder, and the verdict finishes the decision it produced
         // instead of running the ladder again over inputs that may have moved.
         const secrets = new FakeSecrets();
-        vi.spyOn(secrets, 'get').mockRejectedValue(
-          new Error('unreadable store'),
+        vi.spyOn(secrets, 'get').mockReturnValue(
+          Effect.fail(unreadableStore(new Error('unreadable store'))),
         );
         const globalState = new CountingStateStore({
           [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),

@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { effectRuntime } from '@platform/processRuntime';
@@ -84,7 +85,7 @@ async function createOnboardingHarness({
   const onboarding = createDesktopOnboardingIpc(
     { postToRenderer },
     {
-      hasCredential: () => false,
+      hasCredential: () => Effect.succeed(false),
       kickoffSetup: async () => {},
       signInWithChatGpt: async () => {},
       onAsyncError: vi.fn(),
@@ -178,7 +179,7 @@ describe('desktop IPC adapters', () => {
 
   it('derives State 1 (setup) when hasCredential is true on fresh install', async () => {
     const { onboarding } = await createOnboardingHarness({
-      hasCredential: () => true,
+      hasCredential: () => Effect.succeed(true),
     });
 
     await onboarding.refreshOnboardingFunnel();
@@ -190,7 +191,7 @@ describe('desktop IPC adapters', () => {
   it('derives State 2 (done) for veterans with firstRunDone set', async () => {
     const { onboarding } = await createOnboardingHarness({
       seed: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
-      hasCredential: () => true,
+      hasCredential: () => Effect.succeed(true),
     });
 
     await onboarding.refreshOnboardingFunnel();
@@ -201,7 +202,7 @@ describe('desktop IPC adapters', () => {
 
   it('handles skipSetup by setting firstRunDone and deriving done', async () => {
     const { onboarding, update } = await createOnboardingHarness({
-      hasCredential: () => true,
+      hasCredential: () => Effect.succeed(true),
     });
 
     await onboarding.refreshOnboardingFunnel();
@@ -221,7 +222,7 @@ describe('desktop IPC adapters', () => {
   it('runs the real kickoff path on runSetup and refreshes after', async () => {
     const kickoffSetup = vi.fn(async () => {});
     const { onboarding } = await createOnboardingHarness({
-      hasCredential: () => true,
+      hasCredential: () => Effect.succeed(true),
       kickoffSetup,
     });
 
@@ -240,11 +241,13 @@ describe('desktop IPC adapters', () => {
     // second refresh sees `previous === 'setup'` and reports no change. (The
     // assertion pins the terminal state; it is not a strict interleave probe.)
     let credentialPresent = false;
-    const hasCredential = vi.fn(
-      () =>
-        new Promise<boolean>((resolve) => {
-          setTimeout(() => resolve(credentialPresent), 0);
-        }),
+    const hasCredential = vi.fn(() =>
+      Effect.promise(
+        () =>
+          new Promise<boolean>((resolve) => {
+            setTimeout(() => resolve(credentialPresent), 0);
+          }),
+      ),
     );
     const { onboarding } = await createOnboardingHarness({ hasCredential });
     const funnelStates: string[] = [];

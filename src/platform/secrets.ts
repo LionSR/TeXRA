@@ -17,18 +17,17 @@ import { Context, Data, Effect, Layer } from 'effect';
  *   (Electron `safeStorage` unavailable, or Linux `basic_text` backing).
  *   Only {@link PlatformSecrets.set} raises it.
  * - `decrypt-failed` — a stored value exists but the OS refused to decrypt it
- *   (a denied keychain prompt, a rotated key, a corrupt entry). Raised by
- *   `getStored` in the desktop store, which still recovers it to "no saved
- *   secret" itself because that member is Promise-shaped; it reaches callers
- *   when the reads are typed.
+ *   (a denied keychain prompt, a rotated key, a corrupt entry). It is raised
+ *   and recovered inside the desktop store's `getStored`
+ *   (`ElectronSecrets.decryptStored`), which answers "no saved secret" after
+ *   logging the cause and warning the user once. That recovery is the
+ *   documented rule, not a swallow: every reader of a credential wants the
+ *   same answer from a value that cannot be decrypted, and failing the
+ *   channel instead would take down surfaces that only ask whether a key
+ *   exists. The reason stays in this vocabulary because the store constructs
+ *   it to report it.
  * - `io` — the backing file or host API failed: a Node errno, a corrupt JSON
  *   store, a rejected host call.
- *
- * `get` and `getStored` stay Promise-shaped for now: typing them runs through
- * the model-availability computation, which is its own slice (#12424, lane A
- * finding), not a port change. A program that reads through either member
- * types the rejection itself, at its own store read, as `io` against the
- * member it called.
  */
 type SecretsFailureReason =
   'enumeration-unsupported' | 'store-unavailable' | 'decrypt-failed' | 'io';
@@ -55,9 +54,10 @@ export class SecretsFailed extends Data.TaggedError('SecretsFailed')<{
 /**
  * Provider for secure secret storage (API keys, tokens).
  *
- * The writing members and the key audit are `Effect`s, so a caller inside a
- * program gets the failure typed as {@link SecretsFailed} instead of
- * `unknown`. {@link PlatformSecrets.set} and {@link PlatformSecrets.delete}
+ * Every member but `getEnv` is an `Effect`, so a caller inside a program gets
+ * the failure typed as {@link SecretsFailed} instead of `unknown`, and a
+ * credential read is interruptible like the program around it.
+ * {@link PlatformSecrets.set} and {@link PlatformSecrets.delete}
  * carry one extra rule, ruled for host-controller study Q2: a credential
  * commit survives cancellation. The uninterruptible region is the commit
  * itself and nothing before it — for the file-backed stores it begins once
@@ -75,14 +75,14 @@ export class SecretsFailed extends Data.TaggedError('SecretsFailed')<{
  */
 export interface PlatformSecrets {
   /** Get a raw secret by key name. */
-  get(key: string): Promise<string | undefined>;
+  get(key: string): Effect.Effect<string | undefined, SecretsFailed>;
 
   /**
    * Get a persisted secret without applying environment-variable overrides.
    * This lets credential-management code distinguish a stored key from an
    * equally named key supplied by the process environment.
    */
-  getStored(key: string): Promise<string | undefined>;
+  getStored(key: string): Effect.Effect<string | undefined, SecretsFailed>;
 
   /** Store a secret. The commit region is uninterruptible (see above). */
   set(key: string, value: string): Effect.Effect<void, SecretsFailed>;
@@ -112,22 +112,41 @@ export interface PlatformSecrets {
  * Default {@link PlatformSecrets.get} body: an environment-variable override,
  * else the persisted value. Every host implements `get()` this way over its
  * own `getEnv`/`getStored`, so each host's `get()` becomes a one-line
- * `secretsGet(this, key)`.
+ * `secretsGet(this, key)`. A store read that fails here fails as `get`: the
+ * operation names the member the caller invoked, not the one this body
+ * delegated to.
  */
-export async function secretsGet(
+export function secretsGet(
   secrets: Pick<PlatformSecrets, 'getEnv' | 'getStored'>,
   key: string,
-): Promise<string | undefined> {
-  const envValue = secrets.getEnv(key);
-  return envValue !== undefined ? envValue : secrets.getStored(key);
+): Effect.Effect<string | undefined, SecretsFailed> {
+  return Effect.suspend(() => {
+    const envValue = secrets.getEnv(key);
+    if (envValue !== undefined) return Effect.succeed(envValue);
+    // `operation` names the member the caller invoked, so the store read this
+    // body delegates to is reported as the `get` it serves. Everything the
+    // store knows about the failure — reason, key, cause, message — is the
+    // store's and travels unchanged.
+    return Effect.mapError(
+      secrets.getStored(key),
+      (failure) =>
+        new SecretsFailed({
+          reason: failure.reason,
+          operation: 'get',
+          message: failure.message,
+          key: failure.key,
+          cause: failure.cause,
+        }),
+    );
+  });
 }
 
 /**
  * The process's secret store as an Effect service (`@texra/platform/Secrets`,
  * injection plan §5 row 1), provided once by the composition root through
- * `installProcessRuntime`. The shape is the port itself: a program that
- * writes a credential yields the store's own Effect, and the members that are
- * still Promise-shaped are the reads this port has not typed yet.
+ * `installProcessRuntime`. The shape is the port itself: a program that reads
+ * or writes a credential yields the store's own Effect and matches
+ * {@link SecretsFailed}.
  *
  * `layer` takes the store as a thunk because a `ManagedRuntime` builds its
  * whole layer at its first run, and in the desktop and CLI roots that first

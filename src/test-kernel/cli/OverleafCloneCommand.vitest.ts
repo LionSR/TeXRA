@@ -86,7 +86,7 @@ describe('CLI Overleaf clone command', () => {
       stdout: 'git version 2.50.0',
       stderr: '',
     });
-    mocks.getSecret.mockResolvedValue('olp_secret');
+    mocks.getSecret.mockReturnValue(Effect.succeed('olp_secret'));
     mocks.readCliAmbientState.mockReturnValue({
       isCi: false,
       stdinIsTty: true,
@@ -221,7 +221,7 @@ describe('CLI Overleaf clone command', () => {
   });
 
   it('does not create a positional destination when the token is missing', async () => {
-    mocks.getSecret.mockResolvedValue(undefined);
+    mocks.getSecret.mockReturnValue(Effect.succeed(undefined));
     const destination = path.join(workspacePath, 'missing-token');
     const result = await withProcessCwd(workspacePath, () =>
       runCli(['clone', PROJECT_ID, 'missing-token', '--no-input']),
@@ -274,7 +274,7 @@ describe('CLI Overleaf clone command', () => {
   ])(
     'does not prompt for a missing token in $mode mode',
     async ({ extraArgs }) => {
-      mocks.getSecret.mockResolvedValue(undefined);
+      mocks.getSecret.mockReturnValue(Effect.succeed(undefined));
 
       const result = await runCli([
         'clone',
