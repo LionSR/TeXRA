@@ -26,7 +26,7 @@ type SortableReorderCallback = (result: SortableReorderResult) => void;
  * private sortableController = new SortableController(
  *   this,
  *   () => this.fileListElement,
- *   () => this.currentFiles,
+ *   () => [...this.files],
  *   (result) => this.dispatchEvent(
  *     SessionUiEvents.surface({
  *       kind: 'launch',

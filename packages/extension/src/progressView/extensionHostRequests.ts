@@ -120,7 +120,7 @@ const MULTIPLE_FILE_PICKERS: Record<
   output: selectOutputFiles,
 };
 
-export interface ExtensionHostRequestsOptions {
+interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
   readonly extensionPath: string;
   readonly globalState: vscode.Memento;
@@ -142,7 +142,7 @@ export interface ExtensionHostRequestsOptions {
   refreshOnboardingFunnel(): Promise<void>;
 }
 
-export interface ExtensionHostRequests {
+interface ExtensionHostRequests {
   handle(request: HostRequest, port: string): Promise<HostOutcome>;
   closePort(port: string): void;
   /** Stops a recording this host owns; the take is discarded. */

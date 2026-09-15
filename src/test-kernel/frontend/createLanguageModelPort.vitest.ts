@@ -84,7 +84,6 @@ function fakeModel(overrides: Partial<Record<string, unknown>> = {}) {
     version: '2026-07',
     maxInputTokens: 128_000,
     sendRequest: vi.fn(),
-    countTokens: vi.fn(async () => 42),
     ...overrides,
   };
 }
@@ -173,176 +172,6 @@ describe('createLanguageModelPort', () => {
     },
   );
 
-  it('resolves operations by vendor and model id', async () => {
-    const model = fakeModel();
-    mocks.selectChatModels.mockImplementation(async ({ id }) =>
-      id === 'missing' ? [] : [model],
-    );
-    const port = createPort();
-
-    const reference = { vendor: 'copilot', id: 'copilot-gpt-4o' };
-    await expect(port.countTokens(reference, 'hello')).resolves.toBe(42);
-    await expect(
-      port.countTokens({ vendor: 'copilot', id: 'missing' }, 'hello'),
-    ).rejects.toThrow('Language model "missing" is unavailable.');
-    expect(model.countTokens).toHaveBeenCalledWith('hello', expect.anything());
-    expect(mocks.selectChatModels).toHaveBeenCalledWith(reference);
-  });
-
-  it('does not select a model with the same id from another vendor', async () => {
-    const otherVendor = fakeModel({
-      vendor: 'other-provider',
-      countTokens: vi.fn(async () => 99),
-    });
-    const copilot = fakeModel();
-    mocks.selectChatModels.mockResolvedValue([otherVendor, copilot]);
-
-    await expect(
-      createPort().countTokens(
-        { vendor: 'copilot', id: 'copilot-gpt-4o' },
-        'hello',
-      ),
-    ).resolves.toBe(42);
-    expect(otherVendor.countTokens).not.toHaveBeenCalled();
-    expect(copilot.countTokens).toHaveBeenCalledOnce();
-  });
-
-  it('translates messages, tools, and streamed parts', async () => {
-    const sendRequest = vi.fn(
-      async (_messages: unknown[], _options: unknown, _token: unknown) => ({
-        stream: (async function* () {
-          yield new LanguageModelTextPart('hello');
-          yield new LanguageModelToolCallPart('next', 'search', { query: 'x' });
-          yield { unsupported: true };
-        })(),
-      }),
-    );
-    mocks.selectChatModels.mockResolvedValue([fakeModel({ sendRequest })]);
-    const parts = [];
-
-    for await (const part of createPort().sendRequest(
-      { vendor: 'copilot', id: 'copilot-gpt-4o' },
-      [
-        {
-          role: 'assistant',
-          content: [
-            { kind: 'text', text: 'prior' },
-            {
-              kind: 'toolCall',
-              callId: 'call-1',
-              name: 'search',
-              input: { query: 'input' },
-            },
-          ],
-        },
-        {
-          role: 'user',
-          content: [
-            {
-              kind: 'data',
-              data: new Uint8Array([1, 2, 3]),
-              mimeType: 'image/png',
-            },
-            { kind: 'toolResult', callId: 'call-1', text: 'done' },
-          ],
-        },
-      ],
-      {
-        justification: 'Run TeXRA',
-        tools: [
-          {
-            name: 'search',
-            description: 'Search sources',
-            inputSchema: { type: 'object' },
-          },
-        ],
-        toolMode: 'required',
-        maxTokens: 128,
-      },
-      new AbortController().signal,
-    )) {
-      parts.push(part);
-    }
-
-    expect(parts).toEqual([
-      { kind: 'text', text: 'hello' },
-      {
-        kind: 'toolCall',
-        callId: 'next',
-        name: 'search',
-        input: { query: 'x' },
-      },
-    ]);
-    const call = sendRequest.mock.calls.at(0);
-    if (!call) throw new Error('Expected the adapter to send one request.');
-    const [messages, options] = call;
-    expect(messages).toEqual([
-      LanguageModelChatMessage.Assistant([
-        new LanguageModelTextPart('prior'),
-        new LanguageModelToolCallPart('call-1', 'search', { query: 'input' }),
-      ]),
-      LanguageModelChatMessage.User([
-        LanguageModelDataPart.image(new Uint8Array([1, 2, 3]), 'image/png'),
-        new LanguageModelToolResultPart('call-1', [
-          new LanguageModelTextPart('done'),
-        ]),
-      ]),
-    ]);
-    expect(options).toEqual({
-      justification: 'Run TeXRA',
-      tools: [
-        {
-          name: 'search',
-          description: 'Search sources',
-          inputSchema: { type: 'object' },
-        },
-      ],
-      toolMode: 2,
-      modelOptions: { max_tokens: 128 },
-    });
-  });
-
-  it.each([
-    ['before iteration', 'pre-abort'],
-    ['during streaming', 'abort'],
-    ['when the consumer stops', 'return'],
-  ])('cancels %s', async (_case, mode) => {
-    mocks.selectChatModels.mockResolvedValue([
-      fakeModel({
-        sendRequest: vi.fn(async () => ({
-          stream: (async function* () {
-            yield new LanguageModelTextPart('hello');
-          })(),
-        })),
-      }),
-    ]);
-    const controller = new AbortController();
-    if (mode === 'pre-abort') controller.abort();
-    const stream = createPort().sendRequest(
-      { vendor: 'copilot', id: 'copilot-gpt-4o' },
-      [],
-      {},
-      controller.signal,
-    );
-    const iterator = stream[Symbol.asyncIterator]();
-
-    if (mode === 'pre-abort') {
-      await expect(iterator.next()).rejects.toMatchObject({
-        code: LANGUAGE_MODEL_PORT_ERROR_CODE.CANCELLED,
-        message: 'Language model "copilot-gpt-4o" request was cancelled.',
-      });
-      expect(cancellationSources[0]?.cancel).toHaveBeenCalledOnce();
-      return;
-    }
-
-    await iterator.next();
-    if (mode === 'abort') controller.abort();
-    if (mode === 'return') await iterator.return?.();
-
-    expect(cancellationSources[0]?.cancel).toHaveBeenCalledOnce();
-    if (mode !== 'return') await iterator.return?.();
-  });
-
   it('logs discovery failures at the VS Code language-model adapter boundary', async () => {
     const nativeError = new Error('discovery failed');
     mocks.selectChatModels.mockRejectedValue(nativeError);
@@ -375,55 +204,14 @@ describe('createLanguageModelPort', () => {
     const nativeError = Object.assign(new Error('native failure'), {
       code: nativeCode,
     });
-    mocks.selectChatModels.mockResolvedValue([
-      fakeModel({
-        sendRequest: vi.fn(async () => Promise.reject(nativeError)),
-      }),
-    ]);
+    mocks.selectChatModels.mockRejectedValue(nativeError);
 
-    const consume = async () => {
-      for await (const _part of createPort().sendRequest(
-        { vendor: 'copilot', id: 'copilot-gpt-4o' },
-        [],
-        {},
-        new AbortController().signal,
-      )) {
-        // The request rejects before producing a part.
-      }
-    };
-
-    await expect(consume()).rejects.toMatchObject({
+    await expect(
+      createPort().selectModels({ vendor: 'copilot' }),
+    ).rejects.toMatchObject({
       name: 'LanguageModelPortError',
       code: expectedCode,
       cause: nativeError,
-    });
-  });
-
-  it('reports cancellation when VS Code closes the stream normally', async () => {
-    const controller = new AbortController();
-    mocks.selectChatModels.mockResolvedValue([
-      fakeModel({
-        sendRequest: vi.fn(async () => ({
-          stream: (async function* () {
-            yield new LanguageModelTextPart('partial');
-            controller.abort();
-          })(),
-        })),
-      }),
-    ]);
-    const stream = createPort().sendRequest(
-      { vendor: 'copilot', id: 'copilot-gpt-4o' },
-      [],
-      {},
-      controller.signal,
-    );
-    const iterator = stream[Symbol.asyncIterator]();
-
-    await expect(iterator.next()).resolves.toMatchObject({
-      value: { kind: 'text', text: 'partial' },
-    });
-    await expect(iterator.next()).rejects.toMatchObject({
-      code: LANGUAGE_MODEL_PORT_ERROR_CODE.CANCELLED,
     });
   });
 });

@@ -31,11 +31,10 @@ export function toolDefinitionsFor(
   }));
 }
 
-/** One local call of a completed turn, with its ordinal in content order. */
+/** One local call of a completed turn. */
 export interface LocalCall {
   readonly callId: string;
   readonly name: string;
-  readonly ordinal: number;
   readonly argumentsText: string;
 }
 
@@ -43,10 +42,9 @@ export function localCallsOf(turn: TurnResult): readonly LocalCall[] {
   if (turn.kind !== 'http') return [];
   return turn.content
     .filter((part) => part.kind === 'local-call')
-    .map((part, ordinal) => ({
+    .map((part) => ({
       callId: part.providerCallId,
       name: part.name,
-      ordinal,
       argumentsText: part.argumentsText,
     }));
 }

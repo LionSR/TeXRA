@@ -66,12 +66,6 @@ function languageModelPort(
     isAvailable: () => true,
     selectModels: vi.fn(async () => models),
     onDidChange: () => ({ dispose() {} }),
-    sendRequest: vi.fn(() =>
-      (async function* () {
-        yield { kind: 'text' as const, text: 'OK' };
-      })(),
-    ),
-    countTokens: async () => 0,
   };
 }
 

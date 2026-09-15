@@ -50,7 +50,7 @@ import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { AgentRun, RunHalted } from '../run/AgentRun';
+import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import {
   bindModel,
@@ -931,11 +931,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         `The run ledger refused a write (${error.reason}): ${error.detail}`,
         { cause: error },
       );
-    }
-    if (error instanceof RunHalted) {
-      return new Error(error.error?.message ?? `Run ${error.outcome}`, {
-        cause: error,
-      });
     }
     return ensureError(error);
   };

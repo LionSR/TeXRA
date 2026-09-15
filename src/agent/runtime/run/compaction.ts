@@ -10,8 +10,7 @@
  * every failure is logged and shown as a compaction activity, never silent.
  *
  * The compaction prompts, the summary cap and the token heuristic live here
- * because this is the reader that owns them on the run loop; the handler
- * tree's non-loop paths import them from here until that tree goes.
+ * because this is the reader that owns them on the run loop.
  */
 import { Cause, Effect, Exit } from 'effect';
 

@@ -1,7 +1,7 @@
 /**
  * LaTeX settings handlers: UPDATE_LATEX_SETTINGS_STATUS,
  * UPDATE_INLINE_CRITICISM_ENABLED. The LaTeX config values arrive through
- * UPDATE_SETTINGS_SNAPSHOT (miscSettingsSlice.ts).
+ * UPDATE_SETTINGS_SNAPSHOT (messageDispatcher.ts).
  *
  * Feeds `<latex-tab>` (a stateless props-in/events-out leaf component — it
  * needs no changes for this migration).
