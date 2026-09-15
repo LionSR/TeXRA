@@ -6,6 +6,7 @@ import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import { NotificationFailed } from '@hosts/uiHosts';
 import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
@@ -48,6 +49,7 @@ import { UsageLogService } from '@telemetry/UsageLogService';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { desktopSetupPlatform } from '../desktopSetupAuth.js';
@@ -171,7 +173,16 @@ export async function initializeElectronPlatform(
       }).pipe(Effect.provide(nodeFileServices)),
     );
   const secrets = new ElectronSecrets(secretsStore, {
-    showWarningMessage: showDesktopWarningDialog,
+    showWarningMessage: (message) =>
+      Effect.tryPromise({
+        try: () => showDesktopWarningDialog(message),
+        catch: (cause) =>
+          new NotificationFailed({
+            member: 'showWarningMessage',
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      }),
   });
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on

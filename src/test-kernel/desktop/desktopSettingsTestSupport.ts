@@ -1,4 +1,6 @@
 // Local imports
+import { Effect } from 'effect';
+
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import type { DesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
@@ -29,8 +31,8 @@ export function createStubDesktopSettingsUiHost(
     getRunLabel: () => undefined,
     promptForSecret: async () => undefined,
     openExternal: noOp,
-    showInfoMessage: noOp,
-    showErrorMessage: noOp,
+    showInfoMessage: () => Effect.void,
+    showErrorMessage: () => Effect.void,
     confirmAction: async () => true,
     onError: () => undefined,
     ...overrides,

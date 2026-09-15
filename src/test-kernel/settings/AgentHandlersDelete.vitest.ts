@@ -173,8 +173,8 @@ describe('AgentHandlers custom-agent file actions', () => {
     );
     mocks.applySettingsTeamRoster.mockImplementationOnce(
       (_presetId, { presentation }) =>
-        Effect.promise(async () => {
-          await presentation.showErrorMessage('Unable to apply team');
+        Effect.gen(function* () {
+          yield* presentation.showErrorMessage('Unable to apply team');
         }),
     );
 

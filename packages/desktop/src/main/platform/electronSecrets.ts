@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import { safeStorage } from 'electron';
 
+import type { MessageHost } from '@hosts/uiHosts';
 import {
   SecretsFailed,
   secretsGet,
@@ -16,7 +17,7 @@ type StoredSecret = { encrypted: true; value: string };
 type SecretStorageMode = 'encrypted' | 'basic_text' | 'unavailable';
 
 interface ElectronSecretsOptions {
-  showWarningMessage?: (message: string) => Promise<void> | void;
+  showWarningMessage?: MessageHost['showWarningMessage'];
 }
 
 export const LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE =
@@ -224,9 +225,7 @@ export class ElectronSecrets implements PlatformSecrets {
       if (this.warnedOnce.has(kind)) return Effect.void;
       this.warnedOnce.add(kind);
       return Effect.ignore(
-        Effect.tryPromise(async () =>
-          this.options.showWarningMessage?.(message),
-        ),
+        this.options.showWarningMessage?.(message) ?? Effect.void,
       );
     });
   }

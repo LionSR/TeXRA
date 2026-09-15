@@ -76,9 +76,10 @@ async function secretsWithWarningLog(): Promise<{
   const { ElectronSecrets } = await loadElectronSecrets();
   const warnings: string[] = [];
   const secrets = new ElectronSecrets(encryptedRecordStore(), {
-    showWarningMessage: (message: string) => {
-      warnings.push(message);
-    },
+    showWarningMessage: (message: string) =>
+      Effect.sync(() => {
+        warnings.push(message);
+      }),
   });
   return { secrets, warnings };
 }

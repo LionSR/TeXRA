@@ -167,9 +167,11 @@ describe('extension settings AgentHandlers', () => {
       'orchestrator',
       true,
     );
-    expect(notifications).toEqual([
-      'Applied "Physicist" with 7 members still unavailable',
-    ]);
+    await vi.waitFor(() =>
+      expect(notifications).toEqual([
+        'Applied "Physicist" with 7 members still unavailable',
+      ]),
+    );
   });
 
   it('does not write roster state when team preflight is cancelled', async () => {

@@ -27,6 +27,7 @@ import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
+import type { Rejected } from '@shared/session/requestErrors';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
@@ -43,8 +44,15 @@ type DesktopProgressFileActionUi = Pick<
   | 'openDiff'
   | 'confirmAcceptFile'
   | 'showInfoMessage'
-  | 'showErrorMessage'
->;
+> & {
+  /**
+   * The error notice, which this surface answers by refusing the request:
+   * unlike the {@link DesktopAgentRunHost} member it sits beside, its failure
+   * channel carries the request's own `Rejected`, so the caller rethrows the
+   * refusal exactly as the rejecting promise did.
+   */
+  showErrorMessage(message: string): Effect.Effect<void, Rejected>;
+};
 
 /**
  * Bridge-owned capabilities the file actions reach back into: starting a fresh
@@ -102,7 +110,9 @@ export class DesktopProgressFileActions {
       },
     });
     if (!validation.valid) {
-      await this.ui.showErrorMessage(`Merge: ${validation.message}`);
+      await this.host.runtime.runPromise(
+        this.ui.showErrorMessage(`Merge: ${validation.message}`),
+      );
       return;
     }
     this.host.startRun(validation.request);
@@ -136,7 +146,8 @@ export class DesktopProgressFileActions {
           appSignals.emit('workspaceFilesWritten', {
             absolutePaths: [absolutePath],
           }),
-        showInfo: (message) => this.ui.showInfoMessage(message),
+        showInfo: (message) =>
+          this.host.runtime.runPromise(this.ui.showInfoMessage(message)),
         // Diff-file cleanup is a best-effort side effect of accepting a file:
         // a file already gone is the post-condition, and any other failure (a
         // locked file) is reported without failing the accept.
@@ -187,14 +198,16 @@ export class DesktopProgressFileActions {
   ): Promise<void> {
     const outcome = await this.runSharedLatexdiff(runContext);
     if (!outcome?.results.length) {
-      await this.ui.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
+      await this.host.runtime.runPromise(
+        this.ui.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE),
+      );
       return;
     }
 
     if (await this.openSharedLatexdiffResults(outcome)) return;
 
-    await this.ui.showErrorMessage(
-      latexdiffAllFailedMessage(DEFAULT_MATH_MARKUP),
+    await this.host.runtime.runPromise(
+      this.ui.showErrorMessage(latexdiffAllFailedMessage(DEFAULT_MATH_MARKUP)),
     );
   }
 
@@ -210,7 +223,9 @@ export class DesktopProgressFileActions {
     );
 
     if (!result.success) {
-      await this.ui.showErrorMessage(result.message);
+      await this.host.runtime.runPromise(
+        this.ui.showErrorMessage(result.message),
+      );
       return;
     }
 

@@ -283,9 +283,9 @@ describe('completedRunArchive facade', () => {
         session: taskSession,
         runAgentRequest,
         loadModelOptions: async () => [],
-        promptForApiKey: async () => undefined,
-        showInfo: vi.fn(),
-        showWarning: vi.fn(),
+        promptForApiKey: () => Effect.void,
+        showInfo: () => Effect.void,
+        showWarning: () => Effect.void,
       }).pipe(Effect.provide(Secrets.layer(installedHost().secrets))),
     );
     await Effect.runPromise(actions.runNew(runId));

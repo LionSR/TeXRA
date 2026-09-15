@@ -418,26 +418,30 @@ function createWindow(options: {
     readonly cause: unknown;
   }> {}
   const showMessageBoxOfType =
-    (type: 'error' | 'info' | 'warning') => async (message: string) => {
-      await dialog.showMessageBox(window, { type, message });
-    };
-  const showErrorMessage = showMessageBoxOfType('error');
+    (
+      member: NotificationFailed['member'],
+      type: 'error' | 'info' | 'warning',
+    ) =>
+    (message: string): Effect.Effect<void, NotificationFailed> =>
+      Effect.tryPromise({
+        try: async () => {
+          await dialog.showMessageBox(window, { type, message });
+        },
+        catch: (cause) =>
+          new NotificationFailed({
+            member,
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      });
+  const showErrorMessage = showMessageBoxOfType('showErrorMessage', 'error');
   const reportAsyncError = (error: unknown) => {
     console.error('Desktop asynchronous operation failed:', error);
     runtime.runFork(
-      Effect.tryPromise({
-        try: () =>
-          showErrorMessage(
-            `A desktop operation failed: ${toErrorMessage(error)}`,
-          ),
-        catch: (cause) =>
-          new NotificationFailed({
-            member: 'showErrorMessage',
-            message: 'The desktop failure dialog could not be shown.',
-            cause,
-          }),
-      }).pipe(
-        Effect.catch((notificationError) =>
+      showErrorMessage(
+        `A desktop operation failed: ${toErrorMessage(error)}`,
+      ).pipe(
+        Effect.catchTag('NotificationFailed', (notificationError) =>
           Effect.sync(() => {
             console.error(
               'Failed to display desktop asynchronous operation error:',
@@ -466,8 +470,11 @@ function createWindow(options: {
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
   });
-  const showInfoMessage = showMessageBoxOfType('info');
-  const showWarningMessage = showMessageBoxOfType('warning');
+  const showInfoMessage = showMessageBoxOfType('showInfoMessage', 'info');
+  const showWarningMessage = showMessageBoxOfType(
+    'showWarningMessage',
+    'warning',
+  );
   // Shared shape for the "confirm this action" dialog: a warning with a
   // confirm button (defaulted, id 0) and a 'Cancel' button (id 1), collapsed
   // to a boolean. Used by confirmAcceptFile, the agent-settings confirm
@@ -602,7 +609,12 @@ function createWindow(options: {
     message: string,
     docsCommand?: string,
   ): Promise<void> => {
-    if (!docsCommand) return showErrorMessage(message);
+    // The member is an Effect; settle it on the runtime so the dialog shows
+    // and its rejection still propagates to the awaiting caller.
+    if (!docsCommand) {
+      await runtime.runPromise(showErrorMessage(message));
+      return;
+    }
     const { response } = await dialog.showMessageBox(window, {
       type: 'error',
       message,
@@ -778,28 +790,16 @@ function createWindow(options: {
     },
   });
   /**
-   * Await a host promise the caller has already started, reporting rather than
+   * Await a host dialog the caller has already started, reporting rather than
    * raising its failure: a dialog that could not be shown must not fail the
-   * run behind it. `member` is the port member whose promise this is, so the
-   * report names the dialog that actually rejected.
+   * run behind it. The caller still awaits the dialog, as it did before.
    */
   const awaitOrReport = (
-    member: NotificationFailed['member'],
-    started: Promise<void>,
-  ): Promise<void> =>
-    runtime.runPromise(
-      Effect.tryPromise({
-        try: () => started,
-        catch: (cause) =>
-          new NotificationFailed({
-            member,
-            message: `A desktop dialog could not be shown: ${toErrorMessage(cause)}`,
-            cause,
-          }),
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => reportBackgroundError(error)),
-        ),
+    started: Effect.Effect<void, NotificationFailed>,
+  ): Effect.Effect<void> =>
+    started.pipe(
+      Effect.catchTag('NotificationFailed', (error) =>
+        Effect.sync(() => reportBackgroundError(error)),
       ),
     );
   const requestDiffHost = createDesktopDiffHost({
@@ -823,13 +823,23 @@ function createWindow(options: {
     // Presentation failures are reported, never raised: a run must not
     // fail because a dialog could not be shown. The caller still awaits the
     // dialog, as it did before.
-    showInfoMessage: (message) =>
-      awaitOrReport('showInfoMessage', showInfoMessage(message)),
+    showInfoMessage: (message) => awaitOrReport(showInfoMessage(message)),
     showWarningMessage,
-    showErrorMessage: (message) =>
-      awaitOrReport('showErrorMessage', showErrorMessage(message)),
+    showErrorMessage: (message) => awaitOrReport(showErrorMessage(message)),
     showErrorDialog: (message, docsCommand) =>
-      awaitOrReport('showErrorMessage', showErrorDialog(message, docsCommand)),
+      runtime.runPromise(
+        awaitOrReport(
+          Effect.tryPromise({
+            try: () => showErrorDialog(message, docsCommand),
+            catch: (cause) =>
+              new NotificationFailed({
+                member: 'showErrorMessage',
+                message: `A desktop dialog could not be shown: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          }),
+        ),
+      ),
     showInstructionDialog,
     pickTranscriptExportFormat: async () => {
       const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
@@ -1274,19 +1284,19 @@ function createWindow(options: {
                 }),
             }),
           info: (message) =>
-            Effect.tryPromise({
-              try: async () => {
-                await showInfoMessage(message);
-                return undefined;
-              },
-              catch: (cause) =>
-                new PromptFailed({
-                  reason: 'host-unavailable',
-                  member: 'info',
-                  message: 'The desktop window would not show the notice.',
-                  cause,
-                }),
-            }),
+            showInfoMessage(message).pipe(
+              Effect.map(() => undefined),
+              Effect.catchTag('NotificationFailed', (failure) =>
+                Effect.fail(
+                  new PromptFailed({
+                    reason: 'host-unavailable',
+                    member: 'info',
+                    message: 'The desktop window would not show the notice.',
+                    cause: failure.cause,
+                  }),
+                ),
+              ),
+            ),
         },
         externalOpener: {
           // The desktop's shell-facing openExternal stays Promise-shaped by

@@ -17,6 +17,7 @@ import {
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
+import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import {
   createHostRunActions,
@@ -148,6 +149,14 @@ export function createDesktopHostRequests(
   const rejectRequest = async (reason: string): Promise<never> => {
     throw new Rejected({ reason });
   };
+  // `rejectRequest` only ever throws `Rejected`, so its failure channel is
+  // exactly that; the notice's callers rethrow the refusal unchanged.
+  const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
+    Effect.tryPromise({
+      try: () => rejectRequest(reason),
+      catch: (cause) =>
+        cause instanceof Rejected ? cause : new Rejected({ reason }),
+    });
   const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
@@ -176,12 +185,26 @@ export function createDesktopHostRequests(
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
       // The controller re-reads the secret store after this returns.
-      promptForApiKey: async () => {
-        postDesktopSettingsView(options.postToRenderer, 'models');
-        await host.showInfoMessage(
-          'Add a provider API key in Models, then use "Retry" on the request.',
-        );
-      },
+      promptForApiKey: () =>
+        Effect.gen(function* () {
+          postDesktopSettingsView(options.postToRenderer, 'models');
+          yield* host.showInfoMessage(
+            'Add a provider API key in Models, then use "Retry" on the request.',
+          );
+        }).pipe(
+          Effect.catchTag(
+            'NotificationFailed',
+            (failure): Effect.Effect<void, ApiKeyPromptFailed> =>
+              Effect.fail(
+                new ApiKeyPromptFailed({
+                  provider: undefined,
+                  message:
+                    'The desktop could not show the API key instruction.',
+                  cause: failure.cause,
+                }),
+              ),
+          ),
+        ),
       showInfo: (message) => host.showInfoMessage(message),
       showWarning: (message) => host.showWarningMessage(message),
     }),
@@ -199,7 +222,12 @@ export function createDesktopHostRequests(
   };
 
   const fileActions = new DesktopProgressFileActions(
-    { ...host, showErrorMessage: rejectRequest },
+    {
+      ...host,
+      // The refusal is the notice: the member fails with the `Rejected` the
+      // request answers with, exactly as the rejecting promise did.
+      showErrorMessage: rejectRequestEffect,
+    },
     {
       session,
       globalState: options.globalState,
@@ -299,9 +327,7 @@ export function createDesktopHostRequests(
       openDirectory: (directory) => host.openPath(directory),
       openLabel: (label) => fileActions.findAndOpenLabel(label),
       readFile: (file) => readFile(file, 'utf8'),
-      showInfo: async (message) => {
-        await host.showInfoMessage(message);
-      },
+      showInfo: (message) => runtime.runPromise(host.showInfoMessage(message)),
       showError: rejectRequest,
       logError: (message, error) =>
         logger.error(message, { data: toLogData(error) }),
@@ -341,12 +367,12 @@ export function createDesktopHostRequests(
         if (operation === 'pack') {
           message = folder ? `Files packed into ${folder}` : 'Files packed.';
         }
-        await host.showInfoMessage(message);
+        await runtime.runPromise(host.showInfoMessage(message));
         return;
       }
       case 'noFiles':
-        await host.showInfoMessage(
-          `No files found to ${verb} for ${inputFile}`,
+        await runtime.runPromise(
+          host.showInfoMessage(`No files found to ${verb} for ${inputFile}`),
         );
         return;
       case 'error':
@@ -425,8 +451,10 @@ export function createDesktopHostRequests(
         exportRunTranscript(runId, {
           pickFormat: () => host.pickTranscriptExportFormat(),
           openPath: (filePath) => host.openPath(filePath),
-          showInfo: (message) => host.showInfoMessage(message),
-          showWarning: (message) => host.showWarningMessage(message),
+          showInfo: (message) =>
+            runtime.runPromise(host.showInfoMessage(message)),
+          showWarning: (message) =>
+            runtime.runPromise(host.showWarningMessage(message)),
           showError: rejectRequest,
           reportDetail: (message) => logger.error(message),
           getController: getChatExportController,
@@ -479,7 +507,7 @@ export function createDesktopHostRequests(
       ),
     );
     const message = latexdiffPackMessage(packed);
-    if (message) await host.showInfoMessage(message);
+    if (message) await runtime.runPromise(host.showInfoMessage(message));
   }
 
   /** The Tools sheet's verbs over the launcher's base and edited files. */
@@ -730,8 +758,8 @@ export function createDesktopHostRequests(
           options.showFirstRunWalkthrough();
           return done;
         }
-        await host.showInfoMessage(
-          vsCodeOnlyGettingStartedMessage(request.action),
+        await runtime.runPromise(
+          host.showInfoMessage(vsCodeOnlyGettingStartedMessage(request.action)),
         );
         return done;
       case 'onboarding':

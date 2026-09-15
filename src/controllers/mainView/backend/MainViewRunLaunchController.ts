@@ -20,6 +20,8 @@ import {
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 
 // Local imports - shared types and errors
+import type { MessageHost } from '@hosts/uiHosts';
+import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategory,
@@ -36,6 +38,8 @@ import { getPastedImageFullPath } from '@utils/files/pastedImageUtils';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
+const log = createLog('MainViewRunLaunch');
+
 type LaunchPreparation =
   | { valid: true; request: ValidatedRunRequest }
   | { valid: false; message: string; docsCommand?: string };
@@ -46,7 +50,7 @@ export interface MainViewRunLaunchHost {
     unavailableNames: readonly string[],
   ): Promise<TeamAvailabilityChoice | undefined>;
   signInForRemoteAgentCatalog(): Promise<boolean>;
-  showInfoMessage(message: string): Promise<void> | void;
+  showInfoMessage: MessageHost['showInfoMessage'];
 }
 
 /** Turn the launcher's selections into a validated run request. */
@@ -203,7 +207,22 @@ export function prepareSurfaceLaunch(
         }),
       });
     }
-    if (infoMessage) void host.showInfoMessage(infoMessage);
+    if (infoMessage) {
+      // Fire-and-forget, as the `void` promise was: the launch does not wait
+      // on the notice, and a host that cannot show it leaves a warn rather
+      // than failing the launch.
+      yield* Effect.forkDetach(
+        host.showInfoMessage(infoMessage).pipe(
+          Effect.catchTag('NotificationFailed', (failure) =>
+            Effect.sync(() => {
+              log.warn(
+                `The partial team launch notice could not be shown: ${failure.message}`,
+              );
+            }),
+          ),
+        ),
+      );
+    }
     return preparation.request;
   });
 }

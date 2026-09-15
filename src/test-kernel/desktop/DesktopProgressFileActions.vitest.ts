@@ -9,6 +9,7 @@ import type { LaTeXdiffResult } from '@latex/latexdiff';
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { OutputFileInfo } from '@shared/schemas';
+import { Rejected } from '@shared/session/requestErrors';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
@@ -136,7 +137,13 @@ async function loadFileActions(options: {
 
   const openBuildDisplay = vi.fn();
   const actions = new DesktopProgressFileActions(
-    createStubDesktopAgentRunHost({ openBuildDisplay }),
+    {
+      // The stub's error notice succeeds; this surface's binding refuses the
+      // request, as the production one in `desktopHostRequests` does.
+      ...createStubDesktopAgentRunHost({ openBuildDisplay }),
+      showErrorMessage: (message) =>
+        Effect.fail(new Rejected({ reason: message })),
+    },
     {
       startRun: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(async () => []),

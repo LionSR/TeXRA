@@ -5,6 +5,7 @@ import { Data, Effect } from 'effect';
 
 import { isFileNotFoundError } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import type { ExternalOpener, MessageHost } from '@hosts/uiHosts';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -51,7 +52,7 @@ interface DesktopPreviewHost {
 
 interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
   shell: DesktopShellAdapter;
-  showErrorMessage?: (message: string) => Promise<void> | void;
+  showErrorMessage?: MessageHost['showErrorMessage'];
   /** The process runtime a LaTeX preview compiles on. */
   runtime: ProcessRuntime;
 }
@@ -74,14 +75,17 @@ export function createDesktopPreviewHost(
    * failure carrying that rejection's own text, never a fiber defect.
    */
   function fail(message: string): Effect.Effect<never, PreviewUnavailable> {
-    return Effect.tryPromise({
-      try: async () => {
-        await options.showErrorMessage?.(message);
-      },
-      catch: (error) =>
-        new PreviewUnavailable({ message: toErrorMessage(error) }),
-    }).pipe(
-      Effect.flatMap(() => Effect.fail(new PreviewUnavailable({ message }))),
+    return Effect.suspend(() =>
+      options.showErrorMessage === undefined
+        ? Effect.fail(new PreviewUnavailable({ message }))
+        : options.showErrorMessage(message).pipe(
+            Effect.catchTag('NotificationFailed', (error) =>
+              Effect.fail(new PreviewUnavailable({ message: error.message })),
+            ),
+            Effect.flatMap(() =>
+              Effect.fail(new PreviewUnavailable({ message })),
+            ),
+          ),
     );
   }
 
