@@ -8,21 +8,28 @@ import writeFileAtomicLib from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
 
-import { type FileSystemProvider, type FileStat } from '../interfaces';
-import { fileTypeFor } from './fsEntryTypeBits';
+import {
+  type FileSystemProvider,
+  type FileStat,
+  FileType,
+} from '../interfaces';
+import { fileTypeBitsOf, fileTypeFor } from './fsEntryTypeBits';
 
 export const nodeFilesystem: FileSystemProvider = {
   async stat(target: string): Promise<FileStat> {
     const lstats = await fs.promises.lstat(target);
-    const type = await fileTypeFor(lstats, target);
-    // For symlinks, use stat (follows link) for size/timestamps to match
-    // vscode.workspace.fs.stat behavior, falling back to lstat metadata for a
-    // dangling symlink. For non-symlinks, lstat === stat.
+    // For symlinks, use stat (follows link) for size/timestamps and for the
+    // target's own type, to match vscode.workspace.fs.stat behavior, falling
+    // back to lstat metadata for a dangling symlink. For non-symlinks,
+    // lstat === stat. One lookup answers both, so a type and the metadata it
+    // describes can never come from two different reads of the target.
     const stats = lstats.isSymbolicLink()
       ? await fs.promises.stat(target).catch(() => lstats)
       : lstats;
     return {
-      type,
+      type:
+        fileTypeBitsOf(stats) |
+        (lstats.isSymbolicLink() ? FileType.SymbolicLink : 0),
       ctime: stats.ctimeMs,
       mtime: stats.mtimeMs,
       size: stats.size,
@@ -52,21 +59,6 @@ export const nodeFilesystem: FileSystemProvider = {
     // write-file-atomic stages to a sibling temp, fsyncs, and renames over the
     // target — resolving the realpath first, so a symlinked path is preserved.
     await writeFileAtomicLib(target, Buffer.from(content));
-  },
-
-  async publishFile(target: string, content: Uint8Array): Promise<void> {
-    // Stage beside the target, fsync, then rename. The target name is unique
-    // to its publisher, so the rename never contends with anyone and a crash
-    // leaves at most a `.tmp` sibling, never a torn target.
-    const staging = `${target}.tmp`;
-    const handle = await fs.promises.open(staging, 'w');
-    try {
-      await handle.writeFile(content);
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    await fs.promises.rename(staging, target);
   },
 
   async removeEmptyDirectory(target: string): Promise<void> {

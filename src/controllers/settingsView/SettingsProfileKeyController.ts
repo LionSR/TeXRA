@@ -156,7 +156,10 @@ export class SettingsProfileKeyController {
       if (!changed.value) return;
 
       const refreshed = yield* Effect.exit(
-        this.fromPort(() => this.deps.refreshAfterKeyChange(provider)),
+        Effect.tryPromise({
+          try: () => this.deps.refreshAfterKeyChange(provider),
+          catch: ensureError,
+        }),
       );
       if (Exit.isFailure(refreshed)) {
         if (Cause.hasInterrupts(refreshed.cause)) {
@@ -169,11 +172,6 @@ export class SettingsProfileKeyController {
         );
       }
     });
-  }
-
-  /** One call of a still-Promise-shaped host port, failing as an `Error`. */
-  private fromPort<A>(call: () => Promise<A>): Effect.Effect<A, Error> {
-    return Effect.tryPromise({ try: call, catch: ensureError });
   }
 
   /**

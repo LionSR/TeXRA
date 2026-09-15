@@ -31,7 +31,6 @@ import {
   type SessionEvent,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
@@ -112,6 +111,10 @@ export const registerRun = Effect.fn('registerRun')(function* (
         : (options.category ?? AgentCategory.ToolUse);
       const events: SessionEventDraft[] = [];
       if (!prior) {
+        // The worktree the fold spells is the run's working directory as a
+        // bare path chip: the fold never shells out, so `branch`/`dirty`
+        // stay absent.
+        const worktreeCwd = pinned.workingDirectory?.trim();
         events.push({
           type: 'run.start',
           aggregateId: target,
@@ -122,7 +125,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
           isRemote:
             options.identity.kind === 'agent' &&
             isRemoteAgent(options.identity.agent),
-          worktree: launchWorktreeInfo(pinned.workingDirectory),
+          worktree: worktreeCwd ? { workingDirectory: worktreeCwd } : undefined,
           parent:
             options.parentRunId === undefined
               ? null

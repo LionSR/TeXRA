@@ -72,6 +72,6 @@ export const vscodeSetupPlatform: SetupPlatformShape = {
       }),
   },
   terminal: {
-    runCommand: (args) => runTerminalCommand(args),
+    runCommand: runTerminalCommand,
   },
 };

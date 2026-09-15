@@ -61,7 +61,13 @@ async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
     'texra.git.numberOfCommitsToShow',
   );
 
-  const commits = await readRecentCommitLabels(workspacePath, numberOfCommits);
+  const commits = await readRecentCommitLabels(workspacePath, numberOfCommits, {
+    // A failed `git log` comes back as undefined and is answered as an empty
+    // list; without this hook that failure would be invisible in this host
+    // (the desktop host passes its own onError to the same read).
+    onError: (error) =>
+      log.warn(`recent commit read failed: ${toErrorMessage(error)}`),
+  });
   return commits ?? [];
 }
 

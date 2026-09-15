@@ -24,7 +24,6 @@ import { Glob } from 'glob';
 
 // Local imports
 import {
-  publishFile,
   readDirectoryTyped,
   removeEmptyDirectory,
   writeFileAtomic,
@@ -61,11 +60,6 @@ export interface RootedFileSystem extends FileSystem.FileSystem {
    * operation is documented as storage-only, never for workspace files.
    */
   readonly writeFileAtomic: (
-    target: string,
-    data: Uint8Array,
-  ) => Effect.Effect<void, PlatformError.PlatformError>;
-  /** Publish a single-writer name: staged, fsynced, renamed into place. */
-  readonly publishFile: (
     target: string,
     data: Uint8Array,
   ) => Effect.Effect<void, PlatformError.PlatformError>;
@@ -375,10 +369,6 @@ export function rootedFileSystem(
       on('writeFileAtomic', (resolved) =>
         bound(writeFileAtomic(resolved, data)),
       )(target),
-    publishFile: (target, data) =>
-      on('publishFile', (resolved) => bound(publishFile(resolved, data)))(
-        target,
-      ),
     removeEmptyDirectory: on('removeEmptyDirectory', (resolved) =>
       bound(removeEmptyDirectory(resolved)),
     ),

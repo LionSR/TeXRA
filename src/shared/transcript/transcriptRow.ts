@@ -355,15 +355,6 @@ export function isSettledRow(
   }
 }
 
-/**
- * Rows a final stream status cannot promote on its own. Bridge cleanup can
- * still replace a planned/running compaction or workflow call after a
- * cancellation, so those two settle only on their own typed terminal state.
- */
-export function promotesOnlyOnTypedTerminalState(row: TranscriptRow): boolean {
-  return row.kind === 'compactionActivity' || row.kind === 'workflowTask';
-}
-
 // ---------------------------------------------------------------------------
 // Compaction activity
 // ---------------------------------------------------------------------------

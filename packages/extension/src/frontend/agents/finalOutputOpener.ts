@@ -36,7 +36,9 @@ export async function openFinalOutputIfAvailable(
       8000,
     );
   } catch (error) {
-    log.debug(
+    // The preview is the whole point of this call: a failure leaves the user
+    // with only the status-bar hint, so it is loud, not a debug note.
+    log.warn(
       `Unable to auto-open final output ${primary.absolutePath}: ${String(error)}`,
     );
   }

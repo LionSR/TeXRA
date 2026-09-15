@@ -52,6 +52,23 @@ import { SharedPRPollingSource } from './PRPollingSource';
 import { parseGitHubSlug } from './githubSlug';
 import type { GhIssue } from './prTypes';
 
+/**
+ * What each level brings in, keyed by level. Declared above the schema because
+ * the schema's own `describe` reads it at module load.
+ */
+const ANNOTATION_LEVEL_DESCRIPTIONS: Record<
+  GitHubCheckAnnotationLevel,
+  string
+> = {
+  failure: 'failures only',
+  warning: 'warnings and failures',
+  notice: 'notices, warnings, and failures',
+};
+
+/** The default level's own description, for the two model-facing strings. */
+const DEFAULT_ANNOTATION_LEVEL_DESCRIPTION =
+  ANNOTATION_LEVEL_DESCRIPTIONS[DEFAULT_CHECK_ANNOTATION_LEVEL];
+
 const SUBSCRIPTION_PATH_DESCRIPTION =
   'Subscription target, mirroring GitHub\'s REST URL shape: "owner/repo" (repo-wide, coarse), "owner/repo/pulls/N" (per-PR, nuanced), or "owner/repo/issues/N" (per-issue).';
 
@@ -65,14 +82,14 @@ const GitHubSubscriptionInputSchema = z.discriminatedUnion('command', [
     path: z.string().describe(SUBSCRIPTION_PATH_DESCRIPTION),
     /**
      * Lowest inline check-annotation level to send for PR subscriptions.
-     * Defaults to failures only; use "warning" to include warnings, or
-     * "notice" to include every annotation GitHub reports.
+     * Defaults to `DEFAULT_CHECK_ANNOTATION_LEVEL`; use "warning" to include
+     * warnings, or "notice" to include every annotation GitHub reports.
      */
     min_annotation_level: z
       .enum(['failure', 'warning', 'notice'])
       .nullish()
       .describe(
-        'Lowest inline check-annotation level for PR subscriptions. Defaults to failures only; "warning" includes warnings, "notice" includes every annotation.',
+        `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
       ),
   }),
   z.looseObject({
@@ -188,15 +205,6 @@ function requirePath(input: { command: string; path: string }): ParsedPath {
   }
   return parsePath(input.path);
 }
-
-const ANNOTATION_LEVEL_DESCRIPTIONS: Record<
-  GitHubCheckAnnotationLevel,
-  string
-> = {
-  failure: 'failures only',
-  warning: 'warnings and failures',
-  notice: 'notices, warnings, and failures',
-};
 
 /** Shared body sentence describing what a PR subscription delivers. */
 function prSubscriptionActivitySentence(
@@ -559,7 +567,7 @@ export const GitHubSubscriptionTool = defineTool({
     'Path mirrors GitHub\'s REST URL shape and encodes the hierarchy: "owner/repo" addresses the whole repo (coarse, orchestrator-friendly); "owner/repo/pulls/N" addresses a specific pull request and "owner/repo/issues/N" addresses a specific issue (detailed, worker-friendly).',
     'Commands:',
     '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a repo-wide merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once: typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened: the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
-    'For PR subscriptions, min_annotation_level controls inline check annotations: "failure" (default) sends failures only, "warning" includes warnings, and "notice" includes every annotation.',
+    `For PR subscriptions, min_annotation_level controls inline check annotations: "${DEFAULT_CHECK_ANNOTATION_LEVEL}" (default) sends ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}, "warning" includes warnings, and "notice" includes every annotation.`,
     '- unsubscribe: stop watching the path.',
     '- list: list active subscriptions on this run.',
     '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',

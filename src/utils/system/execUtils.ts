@@ -162,6 +162,14 @@ function logCommandStderr(
   log.debug(`Command stderr: ${stderrForLog}`);
 }
 
+/**
+ * The workspace root, or the process cwd when there is no workspace to name.
+ *
+ * A caller that runs before any roots are installed (the pre-platform
+ * `git --version` probe `executeCommandSync` documents above) has no workspace
+ * at all, so the cwd is the honest answer rather than a retargeted one.
+ * `WorkspaceFS.getPath` throws in that state.
+ */
 function workspacePathOrProcessCwd(): string {
   try {
     return WorkspaceFS.getPath() ?? process.cwd();

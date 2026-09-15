@@ -77,12 +77,6 @@ vi.mock('@tools/claudeAgentConfig', () => ({
   getClaudeAgentModel: () => 'claude-sonnet-4-6',
   getClaudeAgentEffort: () => 'high',
   buildClaudeAgentEnv: mocks.buildClaudeAgentEnv,
-  buildClaudeAgentConfig: () => ({
-    agent: 'claude_agent',
-    model: 'Claude Code CLI',
-    instruction: 'test',
-    agentCategory: 'toolUse',
-  }),
 }));
 
 vi.mock('@tools/claudeAgentImport', () => ({

@@ -525,12 +525,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         });
       } else {
         const media = yield* Effect.exit(
-          mediaInputParts(
-            [...workspace.media.files],
-            bound,
-            logger,
-            run.inScope,
-          ),
+          mediaInputParts([...workspace.media.files], bound, logger),
         );
         if (Exit.isFailure(media)) {
           if (Cause.hasInterrupts(media.cause)) return yield* Effect.interrupt;

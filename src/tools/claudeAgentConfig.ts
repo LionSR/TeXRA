@@ -8,7 +8,6 @@ import { Effect } from 'effect';
 import { execa } from 'execa';
 
 // Local imports
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
@@ -27,12 +26,10 @@ import {
   parseClaudeAgentPermissionMode,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
 import { createEnumStateGetter } from './support/enumConfig';
-import { CLAUDE_AGENT_NAME } from './claudeAgentShared';
 
 const log = createLog('claudeAgent');
 
@@ -254,16 +251,3 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
 
   return env;
 });
-
-// ============================================================================
-// Synthetic run metadata for child runs
-// ============================================================================
-
-export function buildClaudeAgentConfig(prompt: string): AgentConfig {
-  return buildSyntheticToolUseConfig({
-    agent: CLAUDE_AGENT_NAME,
-    // Fabricated label, not a routed model: Claude Code drives its own model.
-    model: 'claude',
-    instruction: prompt,
-  });
-}

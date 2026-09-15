@@ -9,8 +9,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel, withLogData } from '@logger/effectLog';
+import { fsCall } from '@utils/errors/fsCall';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { ensureError } from '@utils/errors/errorMessage';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 const CHANNEL = 'LatexParsing';
@@ -96,10 +96,7 @@ export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
  */
 export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
   function* (absolutePath: string) {
-    const exists = yield* Effect.tryPromise({
-      try: () => AbsoluteFS.exists(absolutePath),
-      catch: ensureError,
-    });
+    const exists = yield* fsCall(() => AbsoluteFS.exists(absolutePath));
     return exists ? absolutePath : null;
   },
 );

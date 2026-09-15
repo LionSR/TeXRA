@@ -1,8 +1,9 @@
 import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
 import {
-  protectLatexMathSpansForNormalize,
-  protectLatexMathSpansForNormalizeInline,
-} from '@shared/markdown/latexMathShield';
+  MATH_SPAN_PATTERNS,
+  protectByPatterns,
+} from '@shared/markdown/latexPlaceholders';
+import { protectLatexMathSpansForNormalize } from '@shared/markdown/latexMathShield';
 import { clamp } from '@utils/core';
 
 // Only exact supported tag names enter the presentation grammar. Suffixes such
@@ -424,8 +425,11 @@ export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   // First shield inline/display math so paragraph/div wrapper removal cannot
   // touch HTML-shaped LaTeX, then remove those wrappers and convert
   // environment-containing blockquotes, then shield environments.
-  const inlineMathProtection = protectLatexMathSpansForNormalizeInline(
+  const inlineMathProtection = protectByPatterns(
     literalDollarProtection.content,
+    MATH_SPAN_PATTERNS,
+    'LATEX-MATH',
+    true,
   );
   const structural = removeParagraphDivWrappers(
     convertEnvironmentBlockquotes(inlineMathProtection.content),

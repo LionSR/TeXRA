@@ -29,7 +29,7 @@ type RuntimeSkillSourceResolver = (cwd: string) => readonly SkillSource[];
 
 let resolveRuntimeSkillSources: RuntimeSkillSourceResolver = () => [];
 
-export interface RuntimeSkillCatalogResult {
+interface RuntimeSkillCatalogResult {
   catalog: string;
   skills: RawAcceptedSkill[];
   issues: SkillLoadIssue[];

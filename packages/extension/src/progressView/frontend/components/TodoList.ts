@@ -9,12 +9,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-import {
-  TODO_STATUS,
-  STATUS_DISPLAY,
-  STATUS_ICONS,
-  type TodoItem,
-} from '@shared/schemas';
+import { TODO_STATUS, STATUS_DISPLAY, type TodoItem } from '@shared/schemas';
 import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
@@ -133,7 +128,7 @@ export class TodoList extends CollapsiblePanel {
   private renderTodo(todo: TodoItem): TemplateResult {
     const status = todo.status;
     const isInProgress = status === TODO_STATUS.IN_PROGRESS;
-    const icon = STATUS_ICONS[status];
+    const icon = STATUS_DISPLAY[status].waIcon;
     const content = isInProgress ? todo.activeForm : todo.content;
 
     return html`

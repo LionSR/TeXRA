@@ -56,6 +56,7 @@ import {
   referencedAggregates,
   type AggregateId,
   type JsonValue,
+  type OwnerId,
   type RunParent,
   type SessionEvent,
   type SessionEventDraft,
@@ -1277,6 +1278,30 @@ export const databaseLayer = (
       };
     }),
   ).pipe(Layer.provide(Reactivity.layer));
+
+/**
+ * Run one operation on a scoped persistent connection to `storage`, owned by
+ * `ownerId`: the connection is acquired and released per operation, so no
+ * caller holds one across a project the desktop closes. Every application
+ * record in this directory reads its root and its identity here rather than
+ * composing the layer itself.
+ */
+export const withScopedDatabase = <A, E>(
+  storage: string,
+  ownerId: OwnerId,
+  operation: Effect.Effect<A, E, Database>,
+) =>
+  Effect.scoped(
+    operation.pipe(
+      Effect.provide(
+        databaseLayer('persistent').pipe(
+          Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+          Layer.provide(ProcessIdentity.layer(ownerId)),
+        ),
+      ),
+    ),
+  );
+
 function prepareEventDraft(input: SessionEventDraft) {
   const draft = redactTraceDraft(SessionEventDraftSchema.parse(input));
   return { draft, payload: payloadOf(draft) };

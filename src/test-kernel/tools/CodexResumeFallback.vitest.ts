@@ -70,12 +70,6 @@ vi.mock('@tools/codexConfig', () => ({
   getCodexApprovalPolicy: () => 'on-request',
   getCodexCliReasoningEffort: () => 'high',
   CODEX_CLI_MODEL: 'gpt-5.2-codex',
-  buildCodexConfig: () => ({
-    agent: 'codex',
-    model: 'Codex CLI',
-    instruction: 'test',
-    agentCategory: 'toolUse',
-  }),
 }));
 
 vi.mock('@tools/codexImport', () => ({

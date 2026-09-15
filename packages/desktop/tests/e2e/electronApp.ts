@@ -15,7 +15,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(HERE, '..', '..');
 const MAIN_ENTRY = join(PACKAGE_ROOT, 'dist', 'main', 'index.js');
 
-export interface LaunchOptions {
+interface LaunchOptions {
   /**
    * Workspace folder the app opens at launch, seeded into the profile's
    * remembered projects (there is no launch flag; the app reopens what it
@@ -253,7 +253,7 @@ export async function showLauncher(launched: LaunchedApp): Promise<void> {
   );
 }
 
-export type DesktopWorkbenchKind = 'settings' | 'logs';
+type DesktopWorkbenchKind = 'settings' | 'logs';
 
 export async function openWorkbench(
   launched: LaunchedApp,

@@ -16,27 +16,20 @@ import { copilotRouteForModel } from './runtimeModelRegistry';
 import type { Effect } from 'effect';
 
 /**
+ * Persisted canonical model ids whose Copilot route the user prefers, read
+ * from the process global state the caller holds (the `AppState` service, or
+ * the store a host root threaded down). Settings needs the raw list so a model
+ * the editor no longer discovers still surfaces its undo (#9659).
+ *
  * Copilot discovery never matches a retired or deprecated base model, so a
  * preference for one could never resolve to a route; it drops out at read.
- */
-function copilotRouteModels(state: Pick<StateStore, 'get'>): readonly string[] {
-  return state
-    .get<readonly string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS, [])
-    .filter((model) => !isRetiredModel(model) && !isDeprecatedModel(model));
-}
-
-/**
- * Persisted canonical model ids whose Copilot route the user prefers. Settings
- * needs the raw list so a model the editor no longer discovers still surfaces
- * its undo (#9659).
- *
- * `state` is the process global state the caller holds (the `AppState`
- * service, or the store a host root threaded down).
  */
 export function preferredCopilotRouteModels(
   state: Pick<StateStore, 'get'>,
 ): readonly string[] {
-  return copilotRouteModels(state);
+  return state
+    .get<readonly string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS, [])
+    .filter((model) => !isRetiredModel(model) && !isDeprecatedModel(model));
 }
 
 /** Whether the user prefers the Copilot route for this canonical base model. */
@@ -44,7 +37,7 @@ export function prefersCopilotRoute(
   model: string,
   state: Pick<StateStore, 'get'>,
 ): boolean {
-  return copilotRouteModels(state).includes(model);
+  return preferredCopilotRouteModels(state).includes(model);
 }
 
 /** Persist (or clear) the Copilot route preference for one base model. */
@@ -53,7 +46,7 @@ export function setCopilotRoutePreference(
   preferred: boolean,
   state: StateStore,
 ): Effect.Effect<void, StateWriteFailed> {
-  const current = copilotRouteModels(state);
+  const current = preferredCopilotRouteModels(state);
   const next = preferred
     ? [...new Set([...current, model])]
     : current.filter((entry) => entry !== model);

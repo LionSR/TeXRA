@@ -78,10 +78,6 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     return callPort(() => this.options.whenReady());
   }
 
-  loadSession(): Effect.Effect<SupabaseSession | null, AuthPortError> {
-    return this.load();
-  }
-
   storeSession(session: SupabaseSession): Effect.Effect<void, AuthPortError> {
     return this.mutate(this.write(session));
   }
@@ -139,7 +135,10 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * travels as {@link AuthPortError} and the caller decides what to show.
    */
   getStoredAccountLabel(): Effect.Effect<string | null, AuthPortError> {
-    return Effect.map(this.load(), (session) => session?.account.label ?? null);
+    return Effect.map(
+      this.loadSession(),
+      (session) => session?.account.label ?? null,
+    );
   }
 
   getLastRefreshFailure(): SessionRefreshFailure | null {
@@ -169,16 +168,8 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       : Effect.succeed(parsedCode);
   }
 
-  /** Refresh session via Supabase native refresh, with concurrency protection. */
-  refreshSession(
-    session: SupabaseSession,
-    expectedVersion = this.sessionMutationVersion,
-  ): Effect.Effect<SupabaseSession | null> {
-    return this.refresh(session, expectedVersion);
-  }
-
   /** Read and parse the stored session. */
-  private readonly load = Effect.fn('SupabaseSessionCoordinator.load')(
+  readonly loadSession = Effect.fn('SupabaseSessionCoordinator.loadSession')(
     function* (this: SupabaseSessionCoordinator) {
       const raw = yield* callPort(() => this.options.storage.get());
       return parseStoredSupabaseSession(raw, {
@@ -208,7 +199,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private readonly clearIfCurrent = Effect.fn(
     'SupabaseSessionCoordinator.clearSessionIfCurrent',
   )(function* (this: SupabaseSessionCoordinator, expected: SupabaseSession) {
-    const current = yield* this.load();
+    const current = yield* this.loadSession();
     if (
       !current ||
       current.accessToken !== expected.accessToken ||
@@ -230,7 +221,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       // A mutation that starts after the barrier bumps the version and
       // re-loops.
       yield* this.sessionMutations.awaitIdle();
-      const session = yield* this.load();
+      const session = yield* this.loadSession();
       if (versionBeforeLoad === this.sessionMutationVersion) {
         return { session, version: versionBeforeLoad };
       }
@@ -282,12 +273,12 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * in the attempt is a transient failure, logged here where its disposition
    * is decided.
    */
-  private readonly refresh = Effect.fn(
+  readonly refreshSession = Effect.fn(
     'SupabaseSessionCoordinator.refreshSession',
   )(function* (
     this: SupabaseSessionCoordinator,
     session: SupabaseSession,
-    expectedVersion: number,
+    expectedVersion: number = this.sessionMutationVersion,
   ) {
     const existing = this.refreshInFlight;
     if (existing) return yield* Deferred.await(existing);
@@ -388,7 +379,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
         'SupabaseSession',
         `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
       );
-      const refreshed = yield* this.refresh(session, version);
+      const refreshed = yield* this.refreshSession(session, version);
       if (refreshed) return refreshed;
       if (timeUntilExpiry <= 0) {
         this.log.warn(

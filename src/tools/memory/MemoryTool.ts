@@ -48,7 +48,6 @@ import {
   ViewRangeSchema,
 } from '../formatting';
 import {
-  MAX_VIEW_LINES,
   MAX_PINNED_MEMORIES,
   DIRECTORY_LISTING_DEPTH,
   MEMORY_DISPLAY_ROOT,
@@ -396,13 +395,6 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     );
     yield* recordToolFileRead(inputPath);
     const lines = splitContentLines(content);
-    if (lines.length > MAX_VIEW_LINES) {
-      return yield* Effect.fail(
-        new ToolError(
-          `File ${inputPath} exceeds maximum line limit of 999,999 lines.`,
-        ),
-      );
-    }
 
     // Build metadata suffix for the summary
     const metaParts: string[] = [];

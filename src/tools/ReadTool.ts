@@ -73,18 +73,6 @@ type AttachmentKind = 'pdf' | 'image' | 'document';
 /** Guard against very large EML files exhausting memory during parsing. */
 const MAX_EML_BYTES = 15 * 1024 * 1024; // 15 MiB — matches ATTACHMENT_MAX_BYTES
 
-const IMAGE_EXTENSIONS = new Set([
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.gif',
-  '.bmp',
-  '.webp',
-  '.tif',
-  '.tiff',
-  '.svg',
-]);
-
 const ATTACHMENT_COPY: Record<
   AttachmentKind,
   {
@@ -241,7 +229,7 @@ export class ReadFileTool extends defineTool({
 
     // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
     // even though the underlying file is XML text.
-    if (isImageMimeType(mimeType) || IMAGE_EXTENSIONS.has(extension)) {
+    if (isImageMimeType(mimeType)) {
       return 'image';
     }
 

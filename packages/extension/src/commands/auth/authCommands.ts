@@ -220,12 +220,3 @@ export const signOut: Effect.Effect<void> = Effect.gen(function* () {
     }),
   ),
 );
-
-/**
- * Login-banner input for the main view. Only the authenticated flag is
- * consumed, so this deliberately avoids the profile and tier round-trips that
- * the settings-view profile message makes.
- */
-export async function getAuthStatus(): Promise<{ authenticated: boolean }> {
-  return { authenticated: await SupabaseClient.isAuthenticated() };
-}

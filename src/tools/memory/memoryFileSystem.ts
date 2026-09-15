@@ -21,7 +21,6 @@ import {
   MAX_PINNED_MEMORIES,
   MAX_PREVIEW_LINES,
   MAX_PREVIEW_CHARS,
-  shouldSkipEntry,
 } from '@tools/memory/constants';
 import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
 import {
@@ -326,6 +325,14 @@ const describeEntry = Effect.fn('memoryFileSystem.describeEntry')(function* (
   const meta = yield* readMemoryMeta(storagePath, stats, storageRoot);
   return { ...entry, isDir: false, meta } satisfies MemoryWalkEntry;
 });
+
+/**
+ * The memory tree's own ignore rule: dotted entries and dependency
+ * directories are not part of it.
+ */
+function shouldSkipEntry(name: string): boolean {
+  return name.startsWith('.') || name === 'node_modules';
+}
 
 /**
  * One directory level of the walk. Entries are described in listing order

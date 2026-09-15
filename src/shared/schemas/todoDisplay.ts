@@ -2,28 +2,30 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 import { TODO_STATUS, type TodoStatus } from './todo';
 
-/** wa-icon names for each todo/plan step status (used in webview components). */
-export const STATUS_ICONS: Readonly<Record<TodoStatus, TeXRAIconName>> =
-  Object.freeze({
-    [TODO_STATUS.PENDING]: 'circle',
-    [TODO_STATUS.IN_PROGRESS]: 'spinner',
-    [TODO_STATUS.COMPLETED]: 'circle-check',
-  });
-
 /**
- * Text glyph + human label per status, shared by tool output formatting and by
- * the webview and terminal renderers. One casing for every host.
+ * Per-status presentation for todo/plan steps: the webview's wa-icon name, the
+ * text glyph, and the human label, shared by tool output formatting and by the
+ * webview and terminal renderers. One casing for every host.
  */
 export const STATUS_DISPLAY: Readonly<
-  Record<TodoStatus, Readonly<{ icon: string; label: string }>>
+  Record<
+    TodoStatus,
+    Readonly<{ icon: string; waIcon: TeXRAIconName; label: string }>
+  >
 > = Object.freeze({
-  [TODO_STATUS.PENDING]: Object.freeze({ icon: '\u25CB', label: 'Pending' }),
+  [TODO_STATUS.PENDING]: Object.freeze({
+    icon: '\u25CB',
+    waIcon: 'circle',
+    label: 'Pending',
+  }),
   [TODO_STATUS.IN_PROGRESS]: Object.freeze({
     icon: '\u25D0',
+    waIcon: 'spinner',
     label: 'In progress',
   }),
   [TODO_STATUS.COMPLETED]: Object.freeze({
     icon: '\u25CF',
+    waIcon: 'circle-check',
     label: 'Completed',
   }),
 });

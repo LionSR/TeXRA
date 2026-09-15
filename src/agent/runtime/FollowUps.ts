@@ -146,7 +146,6 @@ export const followUpsLayer: Layer.Layer<
           ),
           bound,
           logger,
-          run.inScope,
         );
         parts.push(...media.parts);
         kinds.push(...media.kinds);

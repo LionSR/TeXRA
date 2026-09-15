@@ -6,25 +6,18 @@ import {
 } from '@agent/core/state/runRequests';
 import { createLog } from '@logger/logUtils';
 import { hasUsableApiKey, API_PROVIDERS } from '@model/apiProviders';
-import {
-  isCodexSubscriptionActive,
-  isXaiSubscriptionActive,
-} from '@model/providerCapabilities';
+import { SETUP_MODEL_BY_PROVIDER } from '@model/setupModelDefaults';
 import {
   decideRunModel,
   type RunModelCandidate,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
-import {
-  CHATGPT_SETUP_MODEL,
-  SETUP_MODEL_BY_PROVIDER,
-  XAI_SETUP_MODEL,
-} from '@model/setupModelDefaults';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   probeSetupCredential,
   setupCredentialProbeFailed,
+  setupSubscriptionModel,
 } from '@model/setupCredentialAccess';
 import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory } from '@shared/schemas';
@@ -49,28 +42,10 @@ export function selectSetupCredentialModelExcludingOpenRouter(
     // Subscription routes follow the global OpenRouter selection.
     // When it is enabled, only managed direct credentials can bypass it.
     if (!useOpenRouter) {
-      if (
-        yield* probeSetupCredential(
-          Effect.tryPromise({
-            try: () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
-            catch: setupCredentialProbeFailed('ChatGPT subscription'),
-          }),
-          credentialLog.warn,
-        )
-      ) {
-        return CHATGPT_SETUP_MODEL;
-      }
-      if (
-        yield* probeSetupCredential(
-          Effect.tryPromise({
-            try: () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
-            catch: setupCredentialProbeFailed('Grok subscription'),
-          }),
-          credentialLog.warn,
-        )
-      ) {
-        return XAI_SETUP_MODEL;
-      }
+      const subscriptionModel = yield* setupSubscriptionModel(
+        credentialLog.warn,
+      );
+      if (subscriptionModel !== null) return subscriptionModel;
     }
 
     for (const provider of API_PROVIDERS) {
