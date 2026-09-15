@@ -57,6 +57,7 @@ async function createShellHarness(
       signIn: vi.fn(async () => {}),
       showInfoMessage: vi.fn(),
       onAsyncError: vi.fn(),
+      runtime: effectRuntime(),
       ...overrides,
     },
   );

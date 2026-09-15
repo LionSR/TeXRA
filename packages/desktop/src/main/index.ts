@@ -1533,6 +1533,7 @@ function createWindow(options: {
       signIn,
       showInfoMessage,
       onAsyncError: reportAsyncError,
+      runtime,
     },
   );
   /** Each document/project owns one auxiliary transport and its resources.
