@@ -7,6 +7,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { createLog } from '@logger/logUtils';
 import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
+import { tryProcessRuntime } from '@platform/processRuntime';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
@@ -113,12 +114,19 @@ export function refreshCustomAgentRoot(): Effect.Effect<void> {
 export async function initializeLatexSupport(
   globalState: StateStore,
 ): Promise<void> {
+  const runtime = tryProcessRuntime();
+  if (runtime === undefined) {
+    log.warn(
+      'Skipped LaTeX support setup: the process runtime is not installed.',
+    );
+    return;
+  }
   // Extend process.env.PATH with common TeX installation directories so that
   // child processes spawned by other extensions (e.g., LaTeX Workshop) can
   // find latexmk, pdflatex, and other TeX binaries.  When VS Code is launched
   // from the macOS Finder or Windows Start Menu it often inherits a minimal
   // PATH that excludes TeX directories, causing "spawn latexmk ENOENT" errors.
-  await Effect.runPromise(
+  await runtime.runPromise(
     Effect.sync(() => {
       const extendedPath = extendEnvPath(process.env.PATH);
       if (extendedPath !== process.env.PATH) {
@@ -136,7 +144,7 @@ export async function initializeLatexSupport(
     ),
   );
 
-  await Effect.runPromise(
+  await runtime.runPromise(
     Effect.tryPromise({
       try: async () => {
         const latexWorkshop = vscode.extensions.getExtension(
@@ -174,7 +182,14 @@ export async function initializeLatexSupport(
 }
 
 async function workspaceContainsLatexFiles(): Promise<boolean> {
-  return Effect.runPromise(
+  const runtime = tryProcessRuntime();
+  if (runtime === undefined) {
+    log.warn(
+      'Could not scan the workspace for LaTeX files: the process runtime is not installed.',
+    );
+    return false;
+  }
+  return runtime.runPromise(
     Effect.tryPromise({
       try: async () =>
         (await vscode.workspace.findFiles('**/*.tex', '**/node_modules/**', 1))
