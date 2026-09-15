@@ -15,6 +15,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { ReviewIssue, ReviewSeverity } from '@agent/review';
+import { groupBy } from '@utils/core';
 
 import { AgentReviewService } from './AgentReviewService';
 
@@ -57,12 +58,10 @@ export class AgentReviewTreeProvider
 
   getChildren(element?: AgentReviewNode): AgentReviewNode[] {
     if (!element) {
-      const byFile = new Map<string, ReviewIssue[]>();
-      for (const issue of AgentReviewService.getState().issues) {
-        const existing = byFile.get(issue.file) ?? [];
-        existing.push(issue);
-        byFile.set(issue.file, existing);
-      }
+      const byFile = groupBy(
+        AgentReviewService.getState().issues,
+        (issue) => issue.file,
+      );
       return [...byFile.entries()]
         .toSorted(([a], [b]) => a.localeCompare(b))
         .map(([file, issues]) => ({

@@ -1,6 +1,8 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+import { Result } from 'effect';
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { postMessage } from '@shared/hostBridge';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
@@ -96,8 +98,8 @@ export function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
 
   const duplicateIds = new Map<string, number>();
   return lines.map((raw) => {
-    const parsed = DesktopLogLineSchema.safeParse(safeParseJson(raw));
-    const line = parsed.success ? parsed.data : undefined;
+    const parsed = parseJsonWith(raw, DesktopLogLineSchema);
+    const line = Result.isSuccess(parsed) ? parsed.success : undefined;
     const message = line ? desktopLogLineText(line) : raw;
 
     let hash = 2_166_136_261;
@@ -124,16 +126,6 @@ export function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
       timestampLabel: timestamp ? formatTimestamp(timestamp) : 'Partial entry',
     };
   });
-}
-
-function safeParseJson(line: string): unknown {
-  try {
-    return JSON.parse(line);
-  } catch {
-    // A partial or foreign line is shown verbatim, not dropped: the schema
-    // rejects the result below and the row is marked partial.
-    return undefined;
-  }
 }
 
 export function createLogsPane(
