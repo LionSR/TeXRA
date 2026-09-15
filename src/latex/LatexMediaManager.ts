@@ -12,7 +12,8 @@ import { ToolConfig } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { fsCall } from '@utils/errors/fsCall';
 import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -66,10 +67,6 @@ export interface LatexTrace {
   warn(message: string, options?: LatexLogOptions): void;
   error(message: string, options?: LatexLogOptions): void;
 }
-
-/** Run `effect`, reading a filesystem promise as a typed failure. */
-const fsCall = <A>(thunk: () => Promise<A>): Effect.Effect<A, Error> =>
-  Effect.tryPromise({ try: thunk, catch: ensureError });
 
 /**
  * Handles LaTeX related media extraction and compilation for agents.
