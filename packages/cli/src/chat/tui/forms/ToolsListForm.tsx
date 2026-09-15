@@ -78,7 +78,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       onSelect={(id, { data: tools, reload }) => {
         const tool = tools.find((candidate) => candidate.id === id);
         if (!tool || tool.enabled == null) return;
-        void setCliToolEnabled(props.state, id, !tool.enabled)
+        void setCliToolEnabled(props.state, id, !tool.enabled, props.runtime)
           .then(reload)
           .catch((error: unknown) => {
             setTransientNotice(toErrorMessage(error));

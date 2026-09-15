@@ -331,6 +331,7 @@ if (RESET_WORKFLOW_SCRIPT_DISABLED) {
     HARNESS_PLATFORM_SERVICES.globalState,
     'workflow-script',
     false,
+    HARNESS_PLATFORM_SERVICES.runtime,
   );
 }
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
