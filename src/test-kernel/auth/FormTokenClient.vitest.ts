@@ -2,7 +2,7 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { FetchHttpClient } from 'effect/unstable/http';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 import { z } from 'zod';
 
 // Local imports
@@ -13,7 +13,7 @@ import {
 } from '@auth/oauth/formTokenClient';
 import { decodeJwtClaimsWithSchema } from '@auth/oauth/jwtDecode';
 import { oauthTokenErrorKind, postOAuth } from '@auth/oauth/oauthRequest';
-import { stubJsonFetch } from '@test/support/fetchTestUtils';
+import { jsonResponse } from '@test/support/fetchTestUtils';
 
 const TokenSchema = z.object({
   access_token: z.string().min(1),
@@ -28,15 +28,23 @@ const ENDPOINT: OAuthFormEndpoint<z.infer<typeof TokenSchema>> = {
   tokenResponseSchema: TokenSchema,
 };
 
+/**
+ * A fetch mock answering every call with `payload` as JSON. It is handed to the
+ * client through the `FetchHttpClient.Fetch` reference rather than installed on
+ * the global, so nothing here depends on test ordering.
+ */
+function jsonFetchMock(payload: unknown): Mock<typeof fetch> {
+  return vi.fn<typeof fetch>(async () => jsonResponse(payload));
+}
+
 describe('form token endpoint (declarative)', () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
   it.effect('exchanges an authorization code via form body', () =>
     Effect.gen(function* () {
-      const fetchMock = stubJsonFetch({
+      const fetchMock = jsonFetchMock({
         access_token: 'access',
         refresh_token: 'refresh',
         expires_in: 3600,
@@ -48,7 +56,7 @@ describe('form token endpoint (declarative)', () => {
         redirectUri: 'http://127.0.0.1/callback',
       }).pipe(
         Effect.provide(FetchHttpClient.layer),
-        Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+        Effect.provideService(FetchHttpClient.Fetch, fetchMock),
       );
 
       expect(tokens.access_token).toBe('access');
@@ -70,14 +78,14 @@ describe('form token endpoint (declarative)', () => {
 
   it.effect('refreshes with the refresh_token grant', () =>
     Effect.gen(function* () {
-      const fetchMock = stubJsonFetch({
+      const fetchMock = jsonFetchMock({
         access_token: 'new-access',
         expires_in: 1800,
       });
 
       const tokens = yield* refreshOAuthTokens(ENDPOINT, 'old-refresh').pipe(
         Effect.provide(FetchHttpClient.layer),
-        Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+        Effect.provideService(FetchHttpClient.Fetch, fetchMock),
       );
       expect(tokens.access_token).toBe('new-access');
       const body = new URLSearchParams(
@@ -90,15 +98,14 @@ describe('form token endpoint (declarative)', () => {
 
   it.effect('maps 401 token errors to fatal', () =>
     Effect.gen(function* () {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async () => new Response('nope', { status: 401 })),
+      const fetchMock = vi.fn<typeof fetch>(
+        async () => new Response('nope', { status: 401 }),
       );
 
       const error = yield* Effect.flip(
         refreshOAuthTokens(ENDPOINT, 'bad').pipe(
           Effect.provide(FetchHttpClient.layer),
-          Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+          Effect.provideService(FetchHttpClient.Fetch, fetchMock),
         ),
       );
       expect(error).toMatchObject({
@@ -125,7 +132,6 @@ describe('postOAuth', () => {
       const fetchMock = vi.fn<typeof fetch>(
         async () => new Response(new ReadableStream(), { status: 200 }),
       );
-      vi.stubGlobal('fetch', fetchMock);
 
       const error = yield* Effect.flip(
         postOAuth({
@@ -136,7 +142,7 @@ describe('postOAuth', () => {
           networkErrorMessage: 'Network error contacting token',
         }).pipe(
           Effect.provide(FetchHttpClient.layer),
-          Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+          Effect.provideService(FetchHttpClient.Fetch, fetchMock),
         ),
       );
       expect(error).toMatchObject({
