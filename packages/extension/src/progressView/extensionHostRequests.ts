@@ -566,14 +566,20 @@ export function createExtensionHostRequests(
             `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
           );
         }
-        const sourceExists = await runtime.runPromise(
-          withSessionFs(
-            session.roots,
-            Effect.flatMap(Effect.service(WorkspaceFs), (workspaceFs) =>
-              workspaceFs.exists(parsed.sourcePath),
-            ),
-          ),
+        const sourceLocation = locateInWorkspace(
+          session.roots.workspace,
+          parsed.sourcePath,
         );
+        const sourceExists =
+          sourceLocation.kind === 'workspace' &&
+          (await runtime.runPromise(
+            withSessionFs(
+              session.roots,
+              Effect.flatMap(Effect.service(WorkspaceFs), (workspaceFs) =>
+                workspaceFs.exists(sourceLocation.relativePath),
+              ),
+            ),
+          ));
         if (sourceExists) {
           await runtime.runPromise(snapshot.refreshFiles);
           return { kind: 'files', paths: [parsed.sourcePath] };

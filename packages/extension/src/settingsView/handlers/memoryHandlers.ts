@@ -18,6 +18,7 @@ import { StorageFs, withSessionFs } from '@platform/rootedFs';
 
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 import { hasExtension } from '@utils/core/pathCore';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   withHandlerErrorHandling,
@@ -27,7 +28,7 @@ import {
 /** A settings-view message the webview refused to accept. */
 class MemoryMessageUndelivered extends Data.TaggedError(
   'MemoryMessageUndelivered',
-)<{ readonly cause: unknown }> {}
+)<{ readonly cause: unknown; readonly message: string }> {}
 
 /** Memory-settings handler delegate. */
 export class MemoryHandlers {
@@ -61,7 +62,11 @@ export class MemoryHandlers {
             (preview) =>
               Effect.tryPromise({
                 try: () => webview.postMessage(preview),
-                catch: (cause) => new MemoryMessageUndelivered({ cause }),
+                catch: (cause) =>
+                  new MemoryMessageUndelivered({
+                    cause,
+                    message: toErrorMessage(cause),
+                  }),
               }),
           ),
         ),
@@ -149,7 +154,11 @@ export class MemoryHandlers {
             ? Effect.void
             : Effect.tryPromise({
                 try: () => this.ctx.postMessageToActiveWebview(message),
-                catch: (cause) => new MemoryMessageUndelivered({ cause }),
+                catch: (cause) =>
+                  new MemoryMessageUndelivered({
+                    cause,
+                    message: toErrorMessage(cause),
+                  }),
               }),
         ),
       ),
