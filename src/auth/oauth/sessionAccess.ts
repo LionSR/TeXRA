@@ -58,8 +58,10 @@ export function createSecretBackedCoordinator<C>(init: {
 }): (secrets: SessionSecretStore) => C {
   const coordinators = new WeakMap<SessionSecretStore, C>();
   return (secrets) => {
-    const existing = coordinators.get(secrets);
-    if (existing !== undefined) return existing;
+    if (coordinators.has(secrets)) {
+      // `has` proved the entry, and only this closure writes the map.
+      return coordinators.get(secrets) as C;
+    }
     const coordinator = init.makeCoordinator(
       secretBackedSessionStorage(secrets, init.secretKey),
     );
