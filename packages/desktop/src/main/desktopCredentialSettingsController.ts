@@ -1,3 +1,5 @@
+import { Data, Effect } from 'effect';
+
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
@@ -40,6 +42,32 @@ import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+/**
+ * A sign-in presenter (the device-code dialog, the browser-opened notice)
+ * rejected. Reported, never propagated: the flow that called it is not
+ * waiting on the presentation.
+ */
+class SignInPresentationFailed extends Data.TaggedError(
+  'SignInPresentationFailed',
+)<{
+  readonly cause: unknown;
+  readonly message: string;
+}> {}
+
+/** The error dialog that reports a presentation failure itself rejected. */
+class SignInNoticeFailed extends Data.TaggedError('SignInNoticeFailed')<{
+  readonly cause: unknown;
+  readonly message: string;
+}> {}
+
+/** A subscription-provider mutation (sign-in, sign-out, preference) failed. */
+class SubscriptionActionFailed extends Data.TaggedError(
+  'SubscriptionActionFailed',
+)<{
+  readonly cause: unknown;
+  readonly message: string;
+}> {}
 
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
   readonly config: ConfigProvider;
@@ -282,53 +310,93 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   /**
+   * Show one informational part of a sign-in without waiting for it, and
+   * report a failure the way an awaited presentation would: the cause goes to
+   * `onError`, then the dialog says which presentation could not be shown. A
+   * dialog that itself fails is reported through the same `onError`.
+   */
+  private presentInBackground(
+    displayName: string,
+    present: () => void | Promise<void>,
+  ): void {
+    const options = this.options;
+    void options.runtime.runPromise(
+      Effect.tryPromise({
+        try: async () => {
+          await present();
+        },
+        catch: (cause) =>
+          new SignInPresentationFailed({
+            cause,
+            message: toErrorMessage(cause),
+          }),
+      }).pipe(
+        Effect.catchTag('SignInPresentationFailed', (failure) =>
+          Effect.gen(function* () {
+            options.onError(failure.cause);
+            yield* Effect.tryPromise({
+              try: async () => {
+                await options.notifications.showErrorMessage(
+                  `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure.cause)}`,
+                );
+              },
+              catch: (cause) =>
+                new SignInNoticeFailed({
+                  cause,
+                  message: toErrorMessage(cause),
+                }),
+            }).pipe(
+              Effect.catchTag('SignInNoticeFailed', (notice) =>
+                Effect.sync(() => {
+                  options.onError(notice.cause);
+                }),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  /**
    * Desktop presentation for a subscription sign-in. The loopback browser is
    * the normal route; failing to reach one is reported as a transport
    * failure so the shared flow can retry with a device code, which this host
    * shows in its own dialog.
    */
-  private reportSignInPresentationFailure(
-    displayName: string,
-    error: unknown,
-  ): void {
-    this.options.onError(error);
-    void Promise.resolve(
-      this.options.notifications.showErrorMessage(
-        `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(error)}`,
-      ),
-    ).catch(this.options.onError);
-  }
-
   private signInPresenter(displayName: string): SubscriptionSignInPresenter {
     return {
       presentDeviceCode: (prompt) => {
         // Informational only — awaiting would block the approval poll.
-        void Promise.resolve(
+        this.presentInBackground(displayName, () =>
           this.options.externalOpener.presentSubscriptionDeviceCode(
             prompt,
             displayName,
           ),
-        ).catch((error: unknown) =>
-          this.reportSignInPresentationFailure(displayName, error),
         );
       },
       presentSignInUrl: async (url) => {
-        try {
-          await this.options.externalOpener.openSubscriptionSignInUrl(url);
-        } catch (error) {
-          throw new LoopbackTransportUnavailableError(
-            `Could not open a browser for ${displayName} sign-in.`,
-            { cause: error },
-          );
-        }
+        // Promise-shaped for the loopback flow, which awaits the browser open
+        // before it starts the callback wait and reads the transport failure
+        // off the rejection. The program settles on the process runtime.
+        await this.options.runtime.runPromise(
+          Effect.tryPromise({
+            try: async () => {
+              await this.options.externalOpener.openSubscriptionSignInUrl(url);
+            },
+            catch: (cause) =>
+              new LoopbackTransportUnavailableError(
+                `Could not open a browser for ${displayName} sign-in.`,
+                { cause },
+              ),
+          }),
+        );
         // Informational only — awaiting would block the OAuth callback.
-        void Promise.resolve(
+        this.presentInBackground(displayName, () =>
           this.options.externalOpener.presentSubscriptionSignInUrl(
             url,
             displayName,
           ),
-        ).catch((error: unknown) =>
-          this.reportSignInPresentationFailure(displayName, error),
         );
       },
     };
@@ -340,7 +408,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
    * afterward — the one piece of control flow sign-in, sign-out, and the
    * preference toggle all share.
    */
-  private async withSubscriptionAuthChange(
+  private withSubscriptionAuthChange(
     providerId: SubscriptionProviderId,
     buildErrorMessage: (
       provider: ReturnType<typeof subscriptionProvider>,
@@ -349,16 +417,46 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     work: (provider: ReturnType<typeof subscriptionProvider>) => Promise<void>,
   ): Promise<void> {
     const provider = subscriptionProvider(providerId);
-    try {
-      await work(provider);
-    } catch (error) {
-      await this.options.notifications.showErrorMessage(
-        buildErrorMessage(provider, error),
-      );
-      this.options.onError(error);
-    } finally {
-      await this.refreshAfterSubscriptionAuthChange(providerId);
-    }
+    const options = this.options;
+    const refresh = () => this.refreshAfterSubscriptionAuthChange(providerId);
+    const attempt = Effect.tryPromise({
+      try: () => work(provider),
+      catch: (cause) =>
+        new SubscriptionActionFailed({
+          cause,
+          message: toErrorMessage(cause),
+        }),
+    }).pipe(
+      Effect.catchTag('SubscriptionActionFailed', (failure) =>
+        Effect.tryPromise({
+          try: async () => {
+            await options.notifications.showErrorMessage(
+              buildErrorMessage(provider, failure.cause),
+            );
+          },
+          // A dialog that fails reaches the caller, as the bare `await` did.
+          catch: (cause) => cause,
+        }).pipe(
+          Effect.flatMap(() =>
+            Effect.sync(() => {
+              options.onError(failure.cause);
+            }),
+          ),
+        ),
+      ),
+    );
+    return options.runtime.runPromise(
+      Effect.gen(function* () {
+        // The refresh is the old `finally`: it runs on every path, and its own
+        // failure replaces whatever the attempt left behind.
+        const attempted = yield* Effect.exit(attempt);
+        yield* Effect.tryPromise({
+          try: refresh,
+          catch: (cause) => cause,
+        });
+        return yield* attempted;
+      }),
+    );
   }
 
   private signInSubscription(
