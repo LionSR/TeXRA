@@ -666,17 +666,28 @@ async function validateChatOnboardingPickers() {
     'Use your own provider A…',
   ];
 
-  await validateChatOnboardingPicker({
-    label: 'texra chat first-run onboarding',
-    args: ['chat'],
-    env: {},
-    expected: [
-      'Use ChatGPT subscription',
-      'Use your own API keys',
-      'Skip for now',
-    ],
-    forbidden: truncatedOnboardingLabels,
-  });
+  // Both the explicit subcommand and the bare command, because the bare form is
+  // routed by `defaultRootSubcommand` in root.ts rather than by citty's own
+  // dispatch. Only the process boundary can catch the route regressing to help,
+  // to a removed subcommand, or to a model-resolution failure.
+  const onboardingCases = [
+    { label: 'texra chat first-run onboarding', args: ['chat'] },
+    { label: 'bare texra first-run onboarding', args: [] },
+  ];
+
+  for (const { label, args } of onboardingCases) {
+    await validateChatOnboardingPicker({
+      label,
+      args,
+      env: {},
+      expected: [
+        'Use ChatGPT subscription',
+        'Use your own API keys',
+        'Skip for now',
+      ],
+      forbidden: truncatedOnboardingLabels,
+    });
+  }
 }
 
 function validateRunCommand() {
