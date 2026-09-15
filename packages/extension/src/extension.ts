@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { Cause, Data, Effect, Exit } from 'effect';
 
 // Local imports
 import { loadAgents } from '@agent/index';
@@ -126,6 +127,16 @@ import { registerCommands } from './commands';
 const log = createLog('extension');
 
 const authLog = createLog('SupabaseAuthProvider');
+
+/** The TeXRA account provider and its URI handler could not be registered. */
+class SupabaseAuthRegistrationFailed extends Data.TaggedError(
+  'SupabaseAuthRegistrationFailed',
+)<{ readonly cause: unknown }> {}
+
+/** The workspace `.env` file could not be read into the process env. */
+class WorkspaceEnvFileUnreadable extends Data.TaggedError(
+  'WorkspaceEnvFileUnreadable',
+)<{ readonly cause: unknown }> {}
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
@@ -338,72 +349,94 @@ function registerSupabaseAuth(
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
 ): void {
-  try {
-    setRuntimeExtensionId(context.extension.id);
-    const authProvider = new SupabaseAuthProvider(
-      {
-        showError: (msg) => void vscode.window.showErrorMessage(msg),
-        showInfo: (msg) => void vscode.window.showInformationMessage(msg),
-        showSignInPrompt: async (reason) => {
-          const message =
-            reason === 'expired'
-              ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
-              : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
-          const action = await vscode.window.showWarningMessage(
-            message,
-            'Sign In',
-          );
-          if (action === 'Sign In') {
-            await vscode.commands
-              .executeCommand('texra.auth.signIn')
-              .then(undefined, (err: unknown) =>
-                authLog.error(
-                  `Failed to trigger sign-in: ${toErrorMessage(err)}`,
-                ),
+  runtime.runSync(
+    Effect.try({
+      try: () => {
+        setRuntimeExtensionId(context.extension.id);
+        const authProvider = new SupabaseAuthProvider(
+          {
+            showError: (msg) => void vscode.window.showErrorMessage(msg),
+            showInfo: (msg) => void vscode.window.showInformationMessage(msg),
+            showSignInPrompt: async (reason) => {
+              const message =
+                reason === 'expired'
+                  ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
+                  : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
+              const action = await vscode.window.showWarningMessage(
+                message,
+                'Sign In',
               );
-          }
-        },
+              if (action === 'Sign In') {
+                await vscode.commands
+                  .executeCommand('texra.auth.signIn')
+                  .then(undefined, (err: unknown) =>
+                    authLog.error(
+                      `Failed to trigger sign-in: ${toErrorMessage(err)}`,
+                    ),
+                  );
+              }
+            },
+          },
+          secrets,
+          runtime,
+        );
+        context.subscriptions.push(
+          vscode.authentication.registerAuthenticationProvider(
+            AUTH_PROVIDER_ID,
+            'TeXRA Account',
+            authProvider,
+            { supportsMultipleAccounts: false },
+          ),
+        );
+
+        const uriHandler = new SupabaseUriHandler();
+        context.subscriptions.push(
+          vscode.window.registerUriHandler(uriHandler),
+        );
+        authProvider.setUriHandler(uriHandler);
+
+        log.info('Supabase authentication provider registered');
       },
-      secrets,
-      runtime,
-    );
-    context.subscriptions.push(
-      vscode.authentication.registerAuthenticationProvider(
-        AUTH_PROVIDER_ID,
-        'TeXRA Account',
-        authProvider,
-        { supportsMultipleAccounts: false },
+      catch: (cause) => new SupabaseAuthRegistrationFailed({ cause }),
+    }).pipe(
+      Effect.catchTag('SupabaseAuthRegistrationFailed', (failure) =>
+        Effect.sync(() => {
+          SupabaseClient.setInitError(ensureError(failure.cause));
+          log.error(
+            `Failed to initialize Supabase authentication: ${toErrorMessage(failure.cause)}`,
+          );
+        }),
       ),
-    );
-
-    const uriHandler = new SupabaseUriHandler();
-    context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
-    authProvider.setUriHandler(uriHandler);
-
-    log.info('Supabase authentication provider registered');
-  } catch (error) {
-    SupabaseClient.setInitError(ensureError(error));
-    log.error(
-      `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
-    );
-  }
+    ),
+  );
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-  try {
-    await activateExtension(context);
-  } catch (activationError) {
-    if (lifecycleHost !== undefined) {
-      try {
-        await shutdownExtension();
-      } catch (cleanupError) {
-        log.error('Extension cleanup after failed activation failed', {
-          data: cleanupError,
-        });
-      }
-    }
-    throw activationError;
-  }
+  // No runtime exists yet here: `activateExtension` is the call that installs
+  // one, and the cleanup below is what disposes it, so this fold runs on the
+  // context-free runner (the program needs no services). `onError` runs the
+  // cleanup on a failed activation only, and re-fails with the same cause.
+  const activation = await Effect.runPromiseExit(
+    Effect.promise(() => activateExtension(context)).pipe(
+      Effect.onError(() =>
+        lifecycleHost === undefined
+          ? Effect.void
+          : Effect.promise(() => shutdownExtension()).pipe(
+              Effect.catchCause((cause) =>
+                Effect.sync(() => {
+                  log.error(
+                    'Extension cleanup after failed activation failed',
+                    { data: Cause.squash(cause) },
+                  );
+                }),
+              ),
+            ),
+      ),
+    ),
+  );
+  // The squashed cause is the activation's own thrown value, so the failure
+  // VS Code reports keeps the original error and its stack.
+  if (Exit.isFailure(activation)) throw Cause.squash(activation.cause);
 }
 
 async function activateExtension(context: vscode.ExtensionContext) {
@@ -468,13 +501,21 @@ async function activateExtension(context: vscode.ExtensionContext) {
   if (!rawWorkspacePath) return;
   const workspaceRoot = canonicalizeWorkspacePath(rawWorkspacePath);
 
-  try {
-    process.loadEnvFile(path.join(workspaceRoot, '.env'));
-  } catch (error) {
-    // A workspace without a .env is the normal case; any other failure
-    // (EACCES, ERR_INVALID_ARG_TYPE) stays loud instead of silently dropping it.
-    if (!isFileNotFoundError(error)) throw error;
-  }
+  Effect.runSync(
+    Effect.try({
+      try: () => process.loadEnvFile(path.join(workspaceRoot, '.env')),
+      catch: (cause) => new WorkspaceEnvFileUnreadable({ cause }),
+    }).pipe(
+      // A workspace without a .env is the normal case; any other failure
+      // (EACCES, ERR_INVALID_ARG_TYPE) stays loud instead of silently dropping
+      // it: `runSync` throws the squashed defect, which is that same error.
+      Effect.catchTag('WorkspaceEnvFileUnreadable', (failure) =>
+        isFileNotFoundError(failure.cause)
+          ? Effect.void
+          : Effect.die(failure.cause),
+      ),
+    ),
+  );
   setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
@@ -584,13 +625,25 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
   // directories, and loadAgents scans them.
   await registerAgentDirectoryRoots(context);
-  try {
-    await runtime.runPromise(loadAgents({ includeRemote: false }));
-    void runtime.runPromise(loadAgents()).catch((err) => {
-      log.warn(`Remote agent refresh failed: ${toErrorMessage(err)}`);
-    });
-  } catch (err) {
-    log.error(`Failed to initialize agent index: ${toErrorMessage(err)}`);
+  const agentIndex = await runtime.runPromiseExit(
+    loadAgents({ includeRemote: false }),
+  );
+  if (Exit.isFailure(agentIndex)) {
+    log.error(
+      `Failed to initialize agent index: ${toErrorMessage(Cause.squash(agentIndex.cause))}`,
+    );
+  } else {
+    void runtime.runPromise(
+      loadAgents().pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            log.warn(
+              `Remote agent refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
+            );
+          }),
+        ),
+      ),
+    );
   }
 
   registerSupabaseAuth(context, secrets, runtime);
@@ -603,18 +656,22 @@ async function activateExtension(context: vscode.ExtensionContext) {
     typeof context.extension.packageJSON?.version === 'string'
       ? context.extension.packageJSON.version
       : undefined;
-  try {
-    await runtime.runPromise(
-      UsageLogService.initialize(
-        runtime.scope,
-        {},
-        extensionVersion,
-        vscode.env.appName || undefined,
+  await runtime.runPromise(
+    UsageLogService.initialize(
+      runtime.scope,
+      {},
+      extensionVersion,
+      vscode.env.appName || undefined,
+    ).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          log.warn(
+            `Failed to initialize usage logging: ${toErrorMessage(Cause.squash(cause))}`,
+          );
+        }),
       ),
-    );
-  } catch (error) {
-    log.warn(`Failed to initialize usage logging: ${toErrorMessage(error)}`);
-  }
+    ),
+  );
 
   const progressViewProvider = new ProgressViewProvider(
     context,
@@ -635,37 +692,40 @@ async function activateExtension(context: vscode.ExtensionContext) {
   registerFileDecorations(context, runtime);
 
   // VS Code's event emitters don't await async listeners, so we funnel
-  // fire-and-forget async work through this helper to log rejections
-  // instead of letting them become unhandled promise rejections.
-  const logRefreshFailure = (trigger: string) => (err: unknown) => {
-    log.error(
-      `Tool availability refresh failed (${trigger}): ${toErrorMessage(err)}`,
+  // fire-and-forget async work through this program, which logs a failed
+  // refresh instead of letting it become an unhandled rejection.
+  const refreshToolAvailabilityLogged = (trigger: string) =>
+    refreshToolAvailability().pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          log.error(
+            `Tool availability refresh failed (${trigger}): ${toErrorMessage(Cause.squash(cause))}`,
+          );
+        }),
+      ),
     );
-  };
 
   context.subscriptions.push(
     context.secrets.onDidChange((e) => {
       if (e.key !== GITHUB_TOKEN_STORAGE_KEY) return;
       // Re-probe so any subscribed UI (Tools tab) reflects the new token
       // presence; getGitHubToken() now reads SecretStorage live (no cache).
-      void runtime
-        .runPromise(refreshToolAvailability())
-        .catch(logRefreshFailure('secret change'));
+      void runtime.runPromise(refreshToolAvailabilityLogged('secret change'));
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
-      void runtime
-        .runPromise(refreshToolAvailability())
-        .catch(logRefreshFailure('extension change'));
+      void runtime.runPromise(
+        refreshToolAvailabilityLogged('extension change'),
+      );
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
     // gates the GitHub PR subscription tool group. ProgressViewProvider owns
     // the ordered workspace-storage and native-config replacement.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void runtime
-        .runPromise(refreshToolAvailability())
-        .catch(logRefreshFailure('workspace folder change'));
+      void runtime.runPromise(
+        refreshToolAvailabilityLogged('workspace folder change'),
+      );
     }),
   );
   const disposeGitHubAuthListener = appSignals.on(
@@ -710,21 +770,27 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // newest credential state and is the last one to update the UI. The
   // refresh starts inside the lane, so no started refresh waits there.
   const apiKeyStatusRefreshLanes = new Map<'refresh', PerKeyLane>();
-  const queueApiKeyStatusRefresh = (): Promise<void> =>
-    runtime.runPromise(
-      withPerKeyLane(
-        apiKeyStatusRefreshLanes,
-        'refresh',
-      )(
-        refreshApiKeyStatusBar(secrets, {
-          setup: apiKeyStatusBarItem,
-          tasks: statusBarItem,
-        }),
-      ),
+  const apiKeyStatusRefresh = () =>
+    withPerKeyLane(
+      apiKeyStatusRefreshLanes,
+      'refresh',
+    )(
+      refreshApiKeyStatusBar(secrets, {
+        setup: apiKeyStatusBarItem,
+        tasks: statusBarItem,
+      }),
     );
-  const safeRefreshApiKeyStatus = () =>
-    queueApiKeyStatusRefresh().catch((err) =>
-      log.error(`API key status refresh failed: ${toErrorMessage(err)}`),
+  const safeRefreshApiKeyStatus = (): Promise<void> =>
+    runtime.runPromise(
+      apiKeyStatusRefresh().pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            log.error(
+              `API key status refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
+            );
+          }),
+        ),
+      ),
     );
   void safeRefreshApiKeyStatus();
   // Without this listener the pill stayed on "Get Started" forever after
@@ -819,14 +885,24 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // Registered here rather than through the shared command registry because
     // the handler closes over this activation's status-bar refresh queue.
     vscode.commands.registerCommand('texra.refreshApiKeyStatus', async () => {
-      await queueApiKeyStatusRefresh();
+      await runtime.runPromise(apiKeyStatusRefresh());
       // Credential facts changed (set/unset API key from any entry point —
       // palette, walkthrough, welcome card), so the onboarding funnel must
       // recompute too: the State 0 card has no other signal when a key is
       // added outside the main view's own round-trip.
-      await progressViewProvider.refreshOnboardingFunnel().catch((err) => {
-        log.warn(`Onboarding funnel refresh failed: ${toErrorMessage(err)}`);
-      });
+      await runtime.runPromise(
+        Effect.promise(() =>
+          progressViewProvider.refreshOnboardingFunnel(),
+        ).pipe(
+          Effect.catchCause((cause) =>
+            Effect.sync(() => {
+              log.warn(
+                `Onboarding funnel refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
+              );
+            }),
+          ),
+        ),
+      );
     }),
   );
 
