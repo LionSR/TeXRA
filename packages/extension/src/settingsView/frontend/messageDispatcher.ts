@@ -34,7 +34,10 @@ import {
   goalItems,
   grokAuth,
   helperModel,
+  inlineCriticismEnabled,
   latexConfigValues,
+  latexSettingsLoaded,
+  latexSettingsStatus,
   memoryItems,
   modelSelectionItems,
   multiAgentSettingsRevision,
@@ -52,7 +55,6 @@ import {
   unsupportedCommands,
   userEmail,
 } from './settingsState';
-import { latexHandlers } from './slices/latexSlice';
 
 export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   // View chrome: active tab and the derived capability gating across tabs.
@@ -186,7 +188,15 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
     subscriptionUsage.set(data.snapshots);
   },
 
-  // LaTeX settings status — still a slice module while the LaTeX wire
-  // projection is being reworked; fold it in here once that lands.
-  ...latexHandlers,
+  // LaTeX settings status. The LaTeX config values themselves arrive through
+  // UPDATE_SETTINGS_SNAPSHOT above; these two carry the toolchain status the
+  // LaTeX tab renders around them.
+  [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS]: (data) => {
+    latexSettingsStatus.set(data.settings);
+    latexSettingsLoaded.set(true);
+  },
+
+  [SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED]: (data) => {
+    inlineCriticismEnabled.set(data.enabled);
+  },
 };

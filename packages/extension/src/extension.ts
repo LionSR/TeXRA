@@ -444,6 +444,28 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   const hasSingleWorkspace = workspaceFolders?.length === 1;
 
+  const lifecycle = createLifecycleHost();
+  lifecycleHost = lifecycle;
+
+  /**
+   * The wiring both activation shapes settle once their platform exists, in
+   * the order they settle it. One owner, so the credential-only path and the
+   * workspace-backed path cannot drift apart.
+   */
+  const wirePostPlatform = (
+    secrets: PlatformSecrets,
+    runtime: ProcessRuntime,
+  ): void => {
+    // After the platform above, which built the runtime the manager settles
+    // its watcher rebuilds on.
+    agentDirectories.initialize(
+      context.globalState,
+      path.join(context.extensionPath, 'resources'),
+      runtime,
+    );
+    registerSupabaseAuth(context, secrets, runtime);
+  };
+
   if (!hasSingleWorkspace) {
     registerWelcomeView(context);
     // Credential-only platform. Every sign-in path stores into SecretStorage
@@ -451,20 +473,13 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
-    const lifecycle = createLifecycleHost();
-    lifecycleHost = lifecycle;
     const { secrets, runtime } = await initVscodePlatform(
       context,
       lifecycle,
       undefined,
       context.workspaceState,
     );
-    agentDirectories.initialize(
-      context.globalState,
-      path.join(context.extensionPath, 'resources'),
-      runtime,
-    );
-    registerSupabaseAuth(context, secrets, runtime);
+    wirePostPlatform(secrets, runtime);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
     // path below, so the welcome view registers its own standalone variant:
@@ -527,8 +542,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
         gitRepoRoot,
       )
     : context.workspaceState;
-  const lifecycle = createLifecycleHost();
-  lifecycleHost = lifecycle;
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearVscodeLeanServerEntries());
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
@@ -554,13 +567,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
       },
     },
   );
-  // After the platform above, which built the runtime the manager settles its
-  // watcher rebuilds on.
-  agentDirectories.initialize(
-    context.globalState,
-    path.join(context.extensionPath, 'resources'),
-    runtime,
-  );
+  wirePostPlatform(secrets, runtime);
+  // That registration precedes the fire-and-forget remote agent refresh below,
+  // which reads `SupabaseClient.getAccessToken()`: with the provider in place
+  // the refresh fetches the real catalog instead of short-circuiting on a null
+  // token, so activation now performs that one background fetch.
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes(secrets);
@@ -651,8 +662,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ),
     );
   }
-
-  registerSupabaseAuth(context, secrets, runtime);
 
   // Usage logging is a runtime service, not an authentication-provider
   // capability. Initialize it even when Supabase sign-in is not configured,
