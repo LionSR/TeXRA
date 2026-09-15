@@ -14,7 +14,10 @@ import type { Response } from '@shared/session/sessionFrames';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { emptySessionView } from '@shared/session/sessionView';
 import { PersistedSurfaceSchema } from '@shared/session/surface';
-import { FakeStateStore } from '@test/support/FakePlatform';
+import {
+  createWebviewStorage,
+  type KeyValueStore,
+} from '@shared/state/PersistedState';
 import {
   buildScenario,
   CHILD,
@@ -40,7 +43,8 @@ vi.mock('@progressView/frontend/sessionTransport', async (original) => ({
 
 const KEY = 'paper';
 let surfaces: ReturnType<typeof createSessionSurfaces>;
-let storage: FakeStateStore;
+let storage: KeyValueStore;
+let webviewState: Record<string, unknown>;
 let view: ReturnType<typeof signal<ReturnType<typeof emptySessionView>>>;
 let host: ReturnType<typeof signal<HostSnapshot | null>>;
 
@@ -48,11 +52,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   view = signal(emptySessionView(KEY));
   host = signal<HostSnapshot | null>(null);
-  storage = new FakeStateStore({
+  // The surface's storage is the renderer's SYNCHRONOUS `KeyValueStore`, so
+  // the suite builds it the way a renderer does rather than handing it an
+  // Effect-shaped store: returning an Effect where `void` is expected is
+  // assignable, which would let a discarded write look correct here.
+  webviewState = {
     [`surface:${KEY}`]: PersistedSurfaceSchema.parse({
       selected: ROOT,
       drafts: [[ROOT, 'Saved text']],
     }),
+  };
+  storage = createWebviewStorage({
+    getState: () => webviewState,
+    setState: (state) => {
+      webviewState = state as Record<string, unknown>;
+    },
   });
   transport.open.mockReturnValue({
     key: KEY,

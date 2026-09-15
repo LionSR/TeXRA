@@ -15,7 +15,9 @@ import { Effect } from 'effect';
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
+import { StateWriteFailed } from '@platform/interfaces';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getModelLabel } from '@shared/model/modelLabel';
 
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
@@ -58,10 +60,11 @@ export function listCliEnabledModelCatalog(
  * Enable or disable one model from a CLI argument, resolving common spellings
  * (`grok-4.5` → `grok45`) before handing the id to the shared writer.
  *
- * One program: the caller runs it on the process runtime, so a refused write
- * and the writer's own invariant refusals reach the same `catch`. Both the
- * unknown-id refusal and the writer's throws land inside `Effect.suspend`, so
- * neither escapes before the caller has a program to run.
+ * One program: the caller runs it on the process runtime, so this refusal and
+ * the writer's own invariant refusals land in the same channel — the
+ * unknown-id case as a `StateWriteFailed`, the writer's as its own typed
+ * refusals — and `Effect.suspend` keeps both inside the program rather than
+ * at the call site.
  */
 export function setCliModelEnabled(
   state: StateStore,
@@ -78,8 +81,16 @@ export function setCliModelEnabled(
   return Effect.suspend(() => {
     const model = resolveKnownCliModelId(modelInput);
     if (!model) {
-      throw new Error(
-        `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`,
+      // A refusal in the channel this signature declares, not a defect: the
+      // caller shows it to the user, and a defect would reach that caller as a
+      // FiberFailure with the message buried in the pretty-printed cause.
+      const message = `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`;
+      return Effect.fail(
+        new StateWriteFailed({
+          key: GlobalStateKey.MODEL_SELECTION,
+          message,
+          cause: new Error(message),
+        }),
       );
     }
 

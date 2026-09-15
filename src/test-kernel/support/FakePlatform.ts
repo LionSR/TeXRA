@@ -359,19 +359,20 @@ export class FakeStateStore implements StateStore {
   /**
    * A map write cannot fail, so the port's error channel stays empty.
    *
-   * The write applies here rather than inside the returned Effect: the map is
-   * in-memory, so a lazy run defers nothing, and the double is also handed to
-   * callers that take a synchronous `KeyValueStore` (the webview surfaces'
-   * storage), where the returned Effect is discarded and a lazy write would
-   * silently not happen.
+   * The write happens INSIDE the returned Effect, like the real `JsonStore`.
+   * A double that applied it eagerly would let a caller which awaits or
+   * discards the effect look correct here while silently writing nothing
+   * against the real store — the exact class this port's conversion exists to
+   * expose.
    */
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed> {
-    if (value === undefined) {
-      this.values.delete(key);
-    } else {
-      this.values.set(key, value);
-    }
-    return Effect.void;
+    return Effect.sync(() => {
+      if (value === undefined) {
+        this.values.delete(key);
+      } else {
+        this.values.set(key, value);
+      }
+    });
   }
 }
 
