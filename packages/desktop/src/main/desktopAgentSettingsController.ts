@@ -73,7 +73,13 @@ class AgentSettingsActionFailed extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
-/** Show one settings notification, reporting a host that could not show it. */
+/**
+ * Show one settings notification, reporting a host that could not show it.
+ * The failure carries the rejection's own text, not the text that was being
+ * presented: the surrounding `catchCause` renders
+ * `toErrorMessage(Cause.squash(cause))` behind its own prefix, so presenting
+ * the announcement again there would hide the reason the host gave.
+ */
 const notify = (
   present: (message: string) => Promise<void> | void,
   member: NotificationFailed['member'],
@@ -83,7 +89,8 @@ const notify = (
     try: async () => {
       await present(message);
     },
-    catch: (cause) => new NotificationFailed({ member, message, cause }),
+    catch: (cause) =>
+      new NotificationFailed({ member, message: toErrorMessage(cause), cause }),
   });
 
 type AgentCommand = SettingsViewInboundMessage['command'];

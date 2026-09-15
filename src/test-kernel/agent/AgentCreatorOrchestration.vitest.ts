@@ -1,14 +1,15 @@
 // Node imports
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
   type AgentCreatorUI,
@@ -69,12 +70,10 @@ const CONFIG: CreatorConfig = {
 let agentDir: string;
 const agentPath = (): string => join(agentDir, 'editor.yaml');
 
-/** Settle the creator with the `FileSystem` its YAML write requires. */
-const createAgent = (ui: AgentCreatorUI): Promise<void> =>
-  Effect.runPromise(
-    runAgentCreator(CONFIG, 'workflow', ui, STORES).pipe(
-      Effect.provide(nodePlatformLayer),
-    ),
+/** The creator program with the `FileSystem` its YAML write requires. */
+const createAgent = (ui: AgentCreatorUI): Effect.Effect<void, unknown> =>
+  runAgentCreator(CONFIG, 'workflow', ui, STORES).pipe(
+    Effect.provide(nodePlatformLayer),
   );
 
 function createUi(
@@ -188,67 +187,83 @@ describe('agent creator orchestration', () => {
     await rm(agentDir, { recursive: true, force: true });
   });
 
-  it('creates a workflow agent and preserves registration side-effect order', async () => {
-    const events: string[] = [];
-    const ui = createUi(events);
+  it.live(
+    'creates a workflow agent and preserves registration side-effect order',
+    () =>
+      Effect.gen(function* () {
+        const events: string[] = [];
+        const ui = createUi(events);
 
-    await createAgent(ui);
+        yield* createAgent(ui);
 
-    expect(ui.promptAgentName).toHaveBeenCalledWith('Workflow');
-    expect(ui.promptDescription).toHaveBeenCalledWith(
-      'New Workflow Agent: editor',
-      expect.stringContaining('What should this agent do?'),
-    );
-    expect(ui.pickTools).not.toHaveBeenCalled();
-    expect(await readFile(agentPath(), 'utf8')).toBe('generated: true');
-    expect(ui.promptAddToConfig).toHaveBeenCalledWith('editor', 'workflow');
-    expect(ui.openCreatedFile).toHaveBeenCalledWith(agentPath());
-    expect(events).toContain('written');
-    expect(events.indexOf('written')).toBeLessThan(events.indexOf('register'));
-  });
-
-  it('includes the validation error in the second generation attempt', async () => {
-    const ui = createUi();
-    fetchModel
-      .mockImplementationOnce(async () =>
-        generatedResponse('<yaml>invalid</yaml>'),
-      )
-      .mockImplementationOnce(async () =>
-        generatedResponse('<yaml>valid: true</yaml>'),
-      );
-    mocks.validateAgentYamlContent
-      .mockImplementationOnce(() => {
-        throw new Error('missing prompts');
-      })
-      .mockImplementationOnce(() => undefined);
-
-    await createAgent(ui);
-
-    expect(mocks.helperCompletion).toHaveBeenCalledTimes(2);
-    expect(fetchModel).toHaveBeenCalledTimes(2);
-    expect(mocks.helperCompletion.mock.calls[1]?.[1]).toEqual(
-      expect.objectContaining({
-        userPrompt: expect.stringContaining('Retry workflow: missing prompts'),
+        expect(ui.promptAgentName).toHaveBeenCalledWith('Workflow');
+        expect(ui.promptDescription).toHaveBeenCalledWith(
+          'New Workflow Agent: editor',
+          expect.stringContaining('What should this agent do?'),
+        );
+        expect(ui.pickTools).not.toHaveBeenCalled();
+        expect(readFileSync(agentPath(), 'utf8')).toBe('generated: true');
+        expect(ui.promptAddToConfig).toHaveBeenCalledWith('editor', 'workflow');
+        expect(ui.openCreatedFile).toHaveBeenCalledWith(agentPath());
+        expect(events).toContain('written');
+        expect(events.indexOf('written')).toBeLessThan(
+          events.indexOf('register'),
+        );
       }),
-    );
-    expect(await readFile(agentPath(), 'utf8')).toBe('valid: true');
-  });
+  );
 
-  it('uses the deterministic template after both generation attempts fail', async () => {
-    const ui = createUi();
-    fetchModel.mockRejectedValue(
-      new TypeError('synthetic network unavailable'),
-    );
+  it.live(
+    'includes the validation error in the second generation attempt',
+    () =>
+      Effect.gen(function* () {
+        const ui = createUi();
+        fetchModel
+          .mockImplementationOnce(async () =>
+            generatedResponse('<yaml>invalid</yaml>'),
+          )
+          .mockImplementationOnce(async () =>
+            generatedResponse('<yaml>valid: true</yaml>'),
+          );
+        mocks.validateAgentYamlContent
+          .mockImplementationOnce(() => {
+            throw new Error('missing prompts');
+          })
+          .mockImplementationOnce(() => undefined);
 
-    await createAgent(ui);
+        yield* createAgent(ui);
 
-    expect(mocks.helperModel).toHaveBeenCalledTimes(2);
-    expect(mocks.helperCompletion).toHaveBeenCalledTimes(2);
-    expect(fetchModel).toHaveBeenCalledTimes(2);
-    expect(ui.renderTemplate).toHaveBeenCalledWith('workflow fallback', {
-      AGENT_NAME: 'editor',
-      DESCRIPTION: 'Edit documents',
-    });
-    expect(await readFile(agentPath(), 'utf8')).toBe('fallback yaml');
-  });
+        expect(mocks.helperCompletion).toHaveBeenCalledTimes(2);
+        expect(fetchModel).toHaveBeenCalledTimes(2);
+        expect(mocks.helperCompletion.mock.calls[1]?.[1]).toEqual(
+          expect.objectContaining({
+            userPrompt: expect.stringContaining(
+              'Retry workflow: missing prompts',
+            ),
+          }),
+        );
+        expect(readFileSync(agentPath(), 'utf8')).toBe('valid: true');
+      }),
+  );
+
+  it.live(
+    'uses the deterministic template after both generation attempts fail',
+    () =>
+      Effect.gen(function* () {
+        const ui = createUi();
+        fetchModel.mockRejectedValue(
+          new TypeError('synthetic network unavailable'),
+        );
+
+        yield* createAgent(ui);
+
+        expect(mocks.helperModel).toHaveBeenCalledTimes(2);
+        expect(mocks.helperCompletion).toHaveBeenCalledTimes(2);
+        expect(fetchModel).toHaveBeenCalledTimes(2);
+        expect(ui.renderTemplate).toHaveBeenCalledWith('workflow fallback', {
+          AGENT_NAME: 'editor',
+          DESCRIPTION: 'Edit documents',
+        });
+        expect(readFileSync(agentPath(), 'utf8')).toBe('fallback yaml');
+      }),
+  );
 });

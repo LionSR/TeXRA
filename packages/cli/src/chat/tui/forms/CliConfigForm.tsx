@@ -1,3 +1,4 @@
+import { Cause, Effect } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -69,7 +70,13 @@ const INITIAL_STATUS_VIEW: StatusViewBase = Object.freeze({
 
 function useAsyncStatusView<Status, View extends StatusViewBase>(options: {
   readonly initial: View;
-  readonly load: () => Promise<Status>;
+  /**
+   * The status read, as the program its module exposes. The hook settles it
+   * on the surface's runtime and recovers from the whole cause there, so a
+   * failed read reaches the view without a Promise rejection in between.
+   */
+  readonly load: () => Effect.Effect<Status, unknown>;
+  readonly runtime: ProcessRuntime;
   readonly buildView: (status: Status) => View;
   readonly onErrorRef: {
     readonly current: ((error: unknown) => void) | undefined;
@@ -103,18 +110,28 @@ function useAsyncStatusView<Status, View extends StatusViewBase>(options: {
         (current) => ({ ...current, loading: true, error: false }) as View,
       );
     }
-    try {
-      const status = await options.load();
-      if (!mounted.current || request !== requestSequence.current) return;
-      setView(options.buildView(status));
-    } catch (error: unknown) {
-      if (!mounted.current || request !== requestSequence.current) return;
-      setView(
-        (current) => ({ ...current, loading: false, error: true }) as View,
-      );
-      options.onErrorRef.current?.(error);
-    }
-  }, [options.load, options.buildView, options.onErrorRef]);
+    await options.runtime.runPromise(
+      options.load().pipe(
+        Effect.matchCause({
+          onSuccess: (status) => {
+            if (!mounted.current || request !== requestSequence.current) return;
+            setView(options.buildView(status));
+          },
+          onFailure: (cause) => {
+            if (!mounted.current || request !== requestSequence.current) return;
+            setView(
+              (current) =>
+                ({ ...current, loading: false, error: true }) as View,
+            );
+            // The squashed cause is the value the runtime would have rejected
+            // this read with, so the surface's error hook still sees the
+            // failure the status module reported.
+            options.onErrorRef.current?.(Cause.squash(cause));
+          },
+        }),
+      ),
+    );
+  }, [options.load, options.runtime, options.buildView, options.onErrorRef]);
 
   useEffect(() => {
     mounted.current = true;
@@ -147,14 +164,14 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const { secrets } = props;
   const { runtime } = props;
   const loadApiKeyStatuses = useCallback(
-    () => runtime.runPromise(loadProviderApiKeyStatuses(secrets)),
-    [runtime, secrets],
+    () => loadProviderApiKeyStatuses(secrets),
+    [secrets],
   );
   // The status read is a program like the save and remove rows below it, so
   // this surface settles all three on the runtime it was handed.
   const loadGitHubToken = useCallback(
-    () => runtime.runPromise(resolveGitHubTokenSource(secrets)),
-    [runtime, secrets],
+    () => resolveGitHubTokenSource(secrets),
+    [secrets],
   );
 
   const {
@@ -164,6 +181,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   } = useAsyncStatusView({
     initial: INITIAL_STATUS_VIEW as ProviderApiKeyStatusView,
     load: loadApiKeyStatuses,
+    runtime,
     buildView: buildApiKeyStatusView,
     onErrorRef: onError,
   });
@@ -175,6 +193,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   } = useAsyncStatusView({
     initial: INITIAL_STATUS_VIEW as GitHubTokenStatusView,
     load: loadGitHubToken,
+    runtime,
     buildView: buildGitHubTokenStatusView,
     onErrorRef: onError,
   });
