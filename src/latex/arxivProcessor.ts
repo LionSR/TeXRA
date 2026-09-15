@@ -1,16 +1,29 @@
+import { createReadStream, createWriteStream } from 'node:fs';
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 
 import { parse as parseContentDisposition } from 'content-disposition';
-import { Cause, Clock, Data, Duration, Effect, Random, Schedule } from 'effect';
+import {
+  Cause,
+  Clock,
+  Data,
+  Duration,
+  Effect,
+  FileSystem,
+  Path,
+  PlatformError,
+  Random,
+  Schedule,
+} from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
+import { isNotADirectoryError } from '@common/errors';
 import { withLogChannel, withLogData } from '@logger/effectLog';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
+import { readDirectoryTyped } from '@utils/files/fsDurability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
@@ -76,9 +89,9 @@ const downloadBackoff = Schedule.exponential(Duration.seconds(1)).pipe(
 );
 
 /**
- * Wrap a foreign Promise edge (filesystem, tar, the formatter) as a permanent
- * failure: only the download attempt itself is retried, so nothing else has a
- * retry loop to abort.
+ * Wrap a foreign Promise edge (tar, the formatter) as a permanent failure:
+ * only the download attempt itself is retried, so nothing else has a retry
+ * loop to abort.
  */
 const permanent = <T>(
   run: () => Promise<T>,
@@ -88,6 +101,40 @@ const permanent = <T>(
     catch: (cause) =>
       new ArxivSourcePermanentError({ message: toErrorMessage(cause) }),
   });
+
+/**
+ * {@link permanent}'s envelope around a filesystem step taken from context —
+ * the same classification, for the operations that are Effects rather than
+ * Promises: a failed read, write or rename is permanent too.
+ */
+const permanentFs = <T, R>(
+  effect: Effect.Effect<T, PlatformError.PlatformError, R>,
+): Effect.Effect<T, ArxivSourcePermanentError, R> =>
+  effect.pipe(
+    Effect.mapError(
+      (cause) =>
+        new ArxivSourcePermanentError({ message: toErrorMessage(cause) }),
+    ),
+  );
+
+/**
+ * Whether `target` exists. `BaseFS.exists` counted a path whose parent is not
+ * a directory (ENOTDIR) as absent alongside ENOENT, and `FileSystem.exists`
+ * reports that case as `BadResource`; the predicate names ENOTDIR
+ * specifically so an operational failure (`ELOOP`) still propagates.
+ */
+const existsAt = (
+  fs: FileSystem.FileSystem,
+  target: string,
+): Effect.Effect<boolean, PlatformError.PlatformError> =>
+  fs.exists(target).pipe(
+    Effect.catchIf(
+      (error) =>
+        error.reason._tag === 'BadResource' &&
+        isNotADirectoryError(error.reason.cause),
+      () => Effect.succeed(false),
+    ),
+  );
 
 /**
  * Abort foreign stream work on interruption, then join its actual promise.
@@ -206,15 +253,23 @@ function getExtensionFromContentType(contentType: string): string {
 const ARXIV_CHANNEL = 'arxivProcessor';
 
 class ArxivSourceProcessor {
-  /** Best-effort delete that logs failures at debug level instead of failing. */
+  /**
+   * Best-effort delete that logs failures at debug level instead of failing.
+   * `force` mirrors the facade's `delete`, which swallowed a missing target
+   * (`ENOENT`) rather than reporting it; every other failure still reaches
+   * the debug log below.
+   */
   private cleanUpBestEffort(
     target: string,
     description: string,
     options?: { recursive?: boolean },
-  ): Effect.Effect<void> {
-    return Effect.tryPromise({
-      try: () => AbsoluteFS.delete(target, options),
-      catch: (error) => error,
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      yield* fs.remove(target, {
+        recursive: options?.recursive ?? false,
+        force: true,
+      });
     }).pipe(
       Effect.catch((error) =>
         Effect.logDebug(`Failed to clean up ${description} ${target}`).pipe(
@@ -249,7 +304,7 @@ class ArxivSourceProcessor {
     url: string,
     destBasePath: string,
     timeout = 30000,
-  ): Effect.Effect<string, ArxivSourceError> {
+  ): Effect.Effect<string, ArxivSourceError, FileSystem.FileSystem> {
     return this.downloadFileOnce(url, destBasePath, timeout).pipe(
       // Retry the whole ordinary failure, never a mixed cleanup cause. Effect's
       // typed-error retry otherwise selects one failure and drops its siblings.
@@ -288,7 +343,7 @@ class ArxivSourceProcessor {
     url: string,
     destBasePath: string,
     timeout: number,
-  ): Effect.Effect<string, ArxivSourceError> {
+  ): Effect.Effect<string, ArxivSourceError, FileSystem.FileSystem> {
     let destPath = destBasePath;
     return Effect.gen(function* () {
       const deadline = (yield* Clock.currentTimeMillis) + timeout;
@@ -383,7 +438,7 @@ class ArxivSourceProcessor {
           pipeline(
             // response.body is a web ReadableStream; Readable.fromWeb bridges to Node runs.
             Readable.fromWeb(response.body as NodeWebReadableStream),
-            AbsoluteFS.createWriteStream(destPath),
+            createWriteStream(destPath),
             { signal },
           ),
         (cause) => Effect.fail(downloadError(cause)),
@@ -510,15 +565,20 @@ class ArxivSourceProcessor {
   private hasExistingSource(
     isRoot: boolean,
     paperDirFull: string,
-  ): Effect.Effect<boolean, ArxivSourceError> {
+  ): Effect.Effect<
+    boolean,
+    ArxivSourceError,
+    FileSystem.FileSystem | Path.Path
+  > {
     return Effect.gen(function* () {
       if (isRoot) {
         return false;
       }
-      if (!(yield* permanent(() => AbsoluteFS.exists(paperDirFull)))) {
+      const fs = yield* FileSystem.FileSystem;
+      if (!(yield* permanentFs(existsAt(fs, paperDirFull)))) {
         return false;
       }
-      const entries = yield* permanent(() => AbsoluteFS.readDir(paperDirFull));
+      const entries = yield* permanentFs(readDirectoryTyped(paperDirFull));
       const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
       if (hasTexFiles) {
         yield* Effect.logInfo(
@@ -546,12 +606,15 @@ class ArxivSourceProcessor {
       isRoot: boolean,
       progressCallback: DownloadSourceOptions['progressCallback'],
     ) {
-      yield* permanent(() => AbsoluteFS.ensureDir(paperDirFull));
+      const fs = yield* FileSystem.FileSystem;
+      yield* permanentFs(fs.makeDirectory(paperDirFull, { recursive: true }));
 
       // Use a unique staging directory name to avoid clobbering an existing 'download/' folder at root
       const stagingDirName = `.arxiv-download-${id.replaceAll('/', '_')}`;
       const downloadDirFull = path.join(paperDirFull, stagingDirName);
-      yield* permanent(() => AbsoluteFS.ensureDir(downloadDirFull));
+      yield* permanentFs(
+        fs.makeDirectory(downloadDirFull, { recursive: true }),
+      );
       // The staging directory belongs to this scope, so removing it is a scope
       // finalizer rather than a step on the happy path. Every non-success exit
       // used to leave `.arxiv-download-<id>/` behind in the paper directory: a
@@ -575,7 +638,7 @@ class ArxivSourceProcessor {
 
       // Detect PDF-only submissions (no LaTeX source available)
       if (hasExtension(downloadedPath, '.pdf')) {
-        yield* permanent(() => AbsoluteFS.delete(downloadedPath));
+        yield* permanentFs(fs.remove(downloadedPath, { force: true }));
         // Only clean up the paper directory when it was created for this download
         if (!isRoot) {
           yield* this.cleanUpBestEffort(paperDirFull, 'paper dir', {
@@ -610,6 +673,7 @@ class ArxivSourceProcessor {
       paperDirFull: string,
       progressCallback: DownloadSourceOptions['progressCallback'],
     ) {
+      const fs = yield* FileSystem.FileSystem;
       const isArchive =
         hasExtension(downloadedPath, '.tar') ||
         downloadedPath.endsWith('.tar.gz') ||
@@ -636,7 +700,7 @@ class ArxivSourceProcessor {
         progressCallback?.('Cleaning up...', 80);
 
         // Remove the downloaded archive file
-        yield* permanent(() => AbsoluteFS.delete(downloadedPath));
+        yield* permanentFs(fs.remove(downloadedPath, { force: true }));
         return;
       }
 
@@ -648,9 +712,9 @@ class ArxivSourceProcessor {
         yield* joinedStream(
           (signal) =>
             pipeline(
-              AbsoluteFS.createReadStream(downloadedPath),
+              createReadStream(downloadedPath),
               createGunzip(),
-              AbsoluteFS.createWriteStream(decompressedPath),
+              createWriteStream(decompressedPath),
               { signal },
             ),
           (cause) =>
@@ -658,14 +722,24 @@ class ArxivSourceProcessor {
               new ArxivSourcePermanentError({ message: toErrorMessage(cause) }),
             ),
         );
-        yield* permanent(() => AbsoluteFS.delete(downloadedPath));
+        yield* permanentFs(fs.remove(downloadedPath, { force: true }));
         sourceFilePath = decompressedPath;
       }
 
-      // Rename to main.tex and move to paper root
+      // Rename to main.tex and move to paper root. The facade's `rename`
+      // refused to clobber an existing target (its platform provider threw
+      // `EEXIST`), while the standard library's `rename` is node's, which
+      // overwrites silently — so the refusal is spelled out here.
       const targetPath = path.join(paperDirFull, 'main.tex');
       if (sourceFilePath !== targetPath) {
-        yield* permanent(() => AbsoluteFS.rename(sourceFilePath, targetPath));
+        if (yield* permanentFs(existsAt(fs, targetPath))) {
+          return yield* Effect.fail(
+            new ArxivSourcePermanentError({
+              message: `Target already exists: ${targetPath}`,
+            }),
+          );
+        }
+        yield* permanentFs(fs.rename(sourceFilePath, targetPath));
       }
     },
   );

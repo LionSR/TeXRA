@@ -15,6 +15,7 @@ import type { RunId, OutputFileInfo } from '@shared/schemas';
 import { getCoreSettingDefault } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { captureLogEntries } from '@test/support/logSinkCapture';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
@@ -284,7 +285,7 @@ describe('LaTeXdiffService shadow output', () => {
           readFile(path.join(firstDir, 'paper_diffr2r1.tex'), 'utf8'),
         ),
       ).toContain('changed');
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(

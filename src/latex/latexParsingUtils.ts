@@ -8,8 +8,8 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
+import { isNotADirectoryError } from '@common/errors';
 import { withLogChannel, withLogData } from '@logger/effectLog';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
@@ -91,15 +91,25 @@ export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
 
 /**
  * Return `absolutePath` if it exists on disk, otherwise null. Centralizes
- * the `AbsoluteFS.exists(...)` boilerplate used by the various LaTeX
- * dependency resolvers.
+ * the existence probe used by the various LaTeX dependency resolvers.
+ *
+ * `BaseFS.exists` counted a path whose parent is not a directory (ENOTDIR)
+ * as absent alongside ENOENT, and `FileSystem.exists` reports that case as
+ * `BadResource`; the predicate names ENOTDIR specifically so an operational
+ * failure (`ELOOP`) still propagates.
  */
 export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
   function* (absolutePath: string) {
-    const exists = yield* Effect.tryPromise({
-      try: () => AbsoluteFS.exists(absolutePath),
-      catch: ensureError,
-    });
+    const fs = yield* FileSystem.FileSystem;
+    const exists = yield* fs.exists(absolutePath).pipe(
+      Effect.catchIf(
+        (error) =>
+          error.reason._tag === 'BadResource' &&
+          isNotADirectoryError(error.reason.cause),
+        () => Effect.succeed(false),
+      ),
+      Effect.mapError(ensureError),
+    );
     return exists ? absolutePath : null;
   },
 );

@@ -7,15 +7,15 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports
+import { isNotADirectoryError } from '@common/errors';
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
 import { withLogChannel } from '@logger/effectLog';
 import { getEffectiveDiffBase, roundIndexedEntries } from '@shared/schemas';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
@@ -35,7 +35,7 @@ const executeDiffOperations = Effect.fn('latexdiff.executeDiffOperations')(
     latexdiff: LatexdiffRuntime,
     progress: DiffProgressReporter,
     immediateResults: DiffRunResult[] = [],
-  ): Effect.fn.Return<DiffRunOutcome, Error> {
+  ): Effect.fn.Return<DiffRunOutcome, Error, FileSystem.FileSystem> {
     const results: DiffRunResult[] = [...immediateResults];
     // Zero operations never enter the loop, so the bare division is safe.
     const incrementPct = 100 / operations.length;
@@ -94,10 +94,26 @@ const executeDiffOperations = Effect.fn('latexdiff.executeDiffOperations')(
   },
 );
 
-const exists = (absolutePath: string): Effect.Effect<boolean, Error> =>
-  Effect.tryPromise({
-    try: () => AbsoluteFS.exists(absolutePath),
-    catch: ensureError,
+/**
+ * Whether `absolutePath` exists. `BaseFS.exists` counted a path whose parent
+ * is not a directory (ENOTDIR) as absent alongside ENOENT, and
+ * `FileSystem.exists` reports that case as `BadResource`; the predicate names
+ * ENOTDIR specifically so an operational failure still propagates.
+ */
+const exists = (
+  absolutePath: string,
+): Effect.Effect<boolean, Error, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* fs.exists(absolutePath).pipe(
+      Effect.catchIf(
+        (error) =>
+          error.reason._tag === 'BadResource' &&
+          isNotADirectoryError(error.reason.cause),
+        () => Effect.succeed(false),
+      ),
+      Effect.mapError(ensureError),
+    );
   });
 
 export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
@@ -107,7 +123,7 @@ export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
     generateBetweenRoundDiffs: boolean;
     latexdiff: LatexdiffRuntime;
     progress: DiffProgressReporter;
-  }): Effect.fn.Return<DiffRunOutcome, Error> {
+  }): Effect.fn.Return<DiffRunOutcome, Error, FileSystem.FileSystem> {
     const {
       rounds,
       mathMarkup,
