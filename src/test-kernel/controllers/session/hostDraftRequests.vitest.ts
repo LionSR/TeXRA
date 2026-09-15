@@ -17,6 +17,7 @@ const audio = vi.hoisted(() => ({
   stopRecording: vi.fn(),
   transcribeRecording: vi.fn(),
   killActiveRecording: vi.fn(),
+  cleanupOldRecordings: vi.fn(),
 }));
 
 vi.mock('@tools/media/audio', () => audio);
@@ -53,6 +54,7 @@ it.effect(
         success: true,
         text: 'A conserved quantity.',
       });
+      audio.cleanupOldRecordings.mockReturnValue(Effect.void);
       const requests = new HostDraftRequests();
       const first = { roots: { storage: '/papers/first' } } as SessionHandle;
       const second = { roots: { storage: '/papers/second' } } as SessionHandle;
@@ -146,6 +148,8 @@ it.effect(
       audio.startRecording.mockReset();
       audio.stopRecording.mockReset();
       audio.transcribeRecording.mockReset();
+      audio.cleanupOldRecordings.mockReset();
+      audio.cleanupOldRecordings.mockReturnValue(Effect.void);
       audio.startRecording.mockResolvedValue({ success: true });
       audio.stopRecording.mockResolvedValue({
         success: true,

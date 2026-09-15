@@ -9,7 +9,7 @@
 import { readFile, rm } from 'node:fs/promises';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - types
 import type {
@@ -95,7 +95,9 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
    */
   async revealApprovalSurface(): Promise<void> {}
 
-  runPreview(program: Effect.Effect<void>): Promise<void> {
+  runPreview(
+    program: Effect.Effect<void, unknown, FileSystem.FileSystem>,
+  ): Promise<void> {
     return this.options.runtime.runPromise(program);
   }
 

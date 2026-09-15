@@ -1,8 +1,9 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { mkdir, readdir, stat, unlink } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { Effect, FileSystem, Option } from 'effect';
 import { execa, type Subprocess } from 'execa';
 import OpenAI from 'openai';
 
@@ -62,39 +63,51 @@ function resetRecordingState(): void {
  * — the absolute form the old `RelativeFS.cleanupOldFiles` resolved to — so
  * the sweep no longer reads an ambient storage root.
  */
-async function cleanupOldRecordings(
-  directory: string,
-  maxAgeMs: number,
-): Promise<void> {
-  const cutoff = Date.now() - maxAgeMs;
-  try {
-    const entries = await readdir(directory, { withFileTypes: true });
-    await Promise.all(
-      entries
-        .filter((entry) => entry.isFile() || entry.isSymbolicLink())
-        .map(async (entry) => {
-          const filePath = path.join(directory, entry.name);
-          try {
-            const stats = await stat(filePath);
+export function cleanupOldRecordings(
+  roots: WorkspaceRoots,
+): Effect.Effect<void, never, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
+    const directory = recordingsDir(roots);
+    const fs = yield* FileSystem.FileSystem;
+    const cutoff = Date.now() - THREE_DAYS_MS;
+    const names = yield* fs.readDirectory(directory).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          log.warn(`Skipped cleanup of ${directory}: ${toErrorMessage(error)}`);
+          return [] as string[];
+        }),
+      ),
+    );
+    yield* Effect.forEach(
+      names,
+      (name) => {
+        const filePath = path.join(directory, name);
+        return fs.stat(filePath).pipe(
+          Effect.flatMap((stats) => {
             // The sweep it replaces filtered on the provider's type bits,
             // where a symlink answers for its target and so counted as a file
             // when it pointed at one. The follow above does the same job: a
             // link to a file is swept by its target's age, a link to a
             // directory is not swept at all.
-            if (!stats.isFile()) return;
-            if (stats.mtimeMs <= cutoff) {
-              await unlink(filePath);
-            }
-          } catch (error) {
-            log.warn(
-              `Could not remove stale recording ${filePath}: ${toErrorMessage(error)}`,
-            );
-          }
-        }),
+            if (stats.type !== 'File') return Effect.void;
+            const mtime = Option.match(stats.mtime, {
+              onNone: () => 0,
+              onSome: (modified) => modified.getTime(),
+            });
+            return mtime <= cutoff ? fs.remove(filePath) : Effect.void;
+          }),
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              log.warn(
+                `Could not remove stale recording ${filePath}: ${toErrorMessage(error)}`,
+              );
+            }),
+          ),
+        );
+      },
+      { concurrency: 'unbounded', discard: true },
     );
-  } catch (error) {
-    log.warn(`Skipped cleanup of ${directory}: ${toErrorMessage(error)}`);
-  }
+  });
 }
 
 /** Resolve the sox executable command from config or auto-detection. */
@@ -277,15 +290,15 @@ export async function stopRecording(): Promise<{
  * Transcribe a stopped recording with OpenAI. `credential` is the OpenAI
  * route the caller resolved: the key read is an Effect program now, and this
  * function is a promise the host settles, so the credential arrives as data
- * rather than as a store this function would have to read from. `roots` are
- * the recording session's, and own the directory the finished takes are swept
- * from. The recorder is already terminated by the time this runs — it is
- * {@link stopRecording} that owns the microphone.
+ * rather than as a store this function would have to read from. The recorder
+ * is already terminated by the time this runs — it is {@link stopRecording}
+ * that owns the microphone. Stale takes under the session's recordings
+ * directory are swept by {@link cleanupOldRecordings} at that same host
+ * boundary after a successful transcription.
  */
 export async function transcribeRecording(
   recordingPath: string,
   credential: ApiKeyRouteCredential,
-  roots: WorkspaceRoots,
 ): Promise<{
   success: boolean;
   text: string;
@@ -303,10 +316,6 @@ export async function transcribeRecording(
       model: 'gpt-4o-transcribe',
       response_format: 'json',
     });
-
-    // The sweep is rooted by the caller's storage root, as data, rather than
-    // by an ambient read of the calling fiber's roots.
-    await cleanupOldRecordings(recordingsDir(roots), THREE_DAYS_MS);
 
     return { success: true, text: result.text };
   } catch (err) {

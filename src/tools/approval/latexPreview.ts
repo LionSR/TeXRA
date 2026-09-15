@@ -8,13 +8,11 @@
  */
 
 import path from 'node:path';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, FileSystem } from 'effect';
 import { sync as globSync } from 'glob';
 import { z } from 'zod';
 
-import { isFileNotFoundError } from '@common/errors';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
@@ -61,7 +59,9 @@ export interface LatexPreviewEntry {
    */
   settled: Promise<void>;
   /** Removals of the temp files the previews wrote, run when the request settles. */
-  workspaceTempCleanup: Array<Effect.Effect<void>>;
+  workspaceTempCleanup: Array<
+    Effect.Effect<void, never, FileSystem.FileSystem>
+  >;
   latexOperationInProgress: boolean;
   /** Platform-specific error reporter, injected by the caller. */
   onError: (message: string) => void;
@@ -75,31 +75,35 @@ const DIFF_SUFFIX = '_diff';
 
 const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 
+type PreviewFs = FileSystem.FileSystem;
+
 /** Silently attempt to delete a file or directory, ignoring errors */
 const silentDelete = (
   targetPath: string,
   kind: 'file' | 'dir',
-): Effect.Effect<void> =>
-  Effect.tryPromise({
+): Effect.Effect<void, never, PreviewFs> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     // What `BaseFS.delete` reached on the process provider: a non-directory
     // (a symlink included) is unlinked, a directory is `rm`'d without
     // recursion, and an already-absent target is not an error — that last is
     // what `force` carries, not a new best-effort.
-    try: () => rm(targetPath, { force: true }),
-    catch: (error) => error,
-  }).pipe(
-    // Best-effort temp cleanup; the target may already be gone.
-    Effect.catch((error) =>
-      Effect.sync(() => {
-        debug('latexPreview', `Failed to delete temp ${kind} ${targetPath}`, {
-          data: error,
-        });
-      }),
-    ),
-  );
+    yield* fs.remove(targetPath, { force: true }).pipe(
+      // Best-effort temp cleanup; the target may already be gone.
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          debug('latexPreview', `Failed to delete temp ${kind} ${targetPath}`, {
+            data: error,
+          });
+        }),
+      ),
+    );
+  });
 
 /** Delete a file and the LaTeX auxiliary files built beside it */
-const deleteWithAuxFiles = (filePath: string): Effect.Effect<void> =>
+const deleteWithAuxFiles = (
+  filePath: string,
+): Effect.Effect<void, never, PreviewFs> =>
   Effect.suspend(() => {
     const ext = path.extname(filePath);
     const basePathNoExt = filePath.slice(0, -ext.length);
@@ -118,8 +122,8 @@ const deleteWithAuxFiles = (filePath: string): Effect.Effect<void> =>
 /** Register cleanup with the entry, or run it now if the entry already settled */
 const registerCleanup = (
   entry: LatexPreviewEntry,
-  cleanup: Effect.Effect<void>,
-): Effect.Effect<void> =>
+  cleanup: Effect.Effect<void, never, PreviewFs>,
+): Effect.Effect<void, never, PreviewFs> =>
   Effect.suspend(() => {
     if (entry.isSettled()) return cleanup;
     entry.workspaceTempCleanup.push(cleanup);
@@ -133,8 +137,8 @@ const registerCleanup = (
 const withLatexOperation = (
   entry: LatexPreviewEntry,
   operationName: string,
-  operation: Effect.Effect<void, unknown>,
-): Effect.Effect<void> =>
+  operation: Effect.Effect<void, unknown, PreviewFs>,
+): Effect.Effect<void, never, PreviewFs> =>
   Effect.suspend(() => {
     if (entry.latexOperationInProgress) return Effect.void;
     entry.latexOperationInProgress = true;
@@ -166,27 +170,27 @@ const withLatexOperation = (
 const readFileWithFallback = (
   uri: { fsPath: string },
   fallback: string,
-): Effect.Effect<string> =>
-  Effect.tryPromise({
+): Effect.Effect<string, never, PreviewFs> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     // `BaseFS.readBytes` returned the raw bytes: no line-ending normalization
     // and no BOM handling, unlike `read`.
-    try: () => readFile(uri.fsPath),
-    catch: (error) => error,
-  }).pipe(
-    Effect.map((bytes) => bytes.toString('utf8')),
-    Effect.catch((error) =>
-      Effect.sync(() => {
-        if (!isFileNotFoundError(error)) {
-          warn(
-            'latexPreview',
-            `Failed to read ${uri.fsPath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,
-            { data: error },
-          );
-        }
-        return fallback;
-      }),
-    ),
-  );
+    return yield* fs.readFile(uri.fsPath).pipe(
+      Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          if (error.reason._tag !== 'NotFound') {
+            warn(
+              'latexPreview',
+              `Failed to read ${uri.fsPath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,
+              { data: error },
+            );
+          }
+          return fallback;
+        }),
+      ),
+    );
+  });
 
 /**
  * Create a temporary file and register its cleanup with the entry.
@@ -197,7 +201,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     entry: LatexPreviewEntry,
     content: string,
     suffix: string,
-  ): Effect.fn.Return<string, unknown> {
+  ): Effect.fn.Return<string, unknown, PreviewFs> {
     const workspacePath = entry.request.workspacePath;
     if (!workspacePath) {
       return yield* Effect.fail(new Error('No workspace folder open'));
@@ -229,16 +233,14 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     // The removal is registered however the write ends, since a failed write
     // can still leave a partial file behind.
     yield* Effect.uninterruptible(
-      Effect.tryPromise({
-        try: async () => {
-          if (location === 'workspaceTemp') {
-            // Recursive because the provider's `createDirectory` always was:
-            // two previews of files in one folder share this temp directory.
-            await mkdir(tempDir, { recursive: true });
-          }
-          await writeFile(tempPath, content);
-        },
-        catch: (error) => error,
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        if (location === 'workspaceTemp') {
+          // Recursive because the provider's `createDirectory` always was:
+          // two previews of files in one folder share this temp directory.
+          yield* fs.makeDirectory(tempDir, { recursive: true });
+        }
+        yield* fs.writeFileString(tempPath, content);
       }).pipe(
         Effect.onExit(() =>
           registerCleanup(
@@ -281,7 +283,7 @@ function tempPathToLocation(
 export const previewProposedLatex = (
   entry: LatexPreviewEntry,
   options: LatexPreviewDisplayOptions,
-): Effect.Effect<void> =>
+): Effect.Effect<void, never, PreviewFs> =>
   withLatexOperation(
     entry,
     'Preview',
@@ -322,7 +324,7 @@ interface LatexdiffOptions extends LatexPreviewDisplayOptions {
 export const runLatexdiff = (
   entry: LatexPreviewEntry,
   options: LatexdiffOptions,
-): Effect.Effect<void> =>
+): Effect.Effect<void, never, PreviewFs> =>
   withLatexOperation(
     entry,
     'LaTeXdiff',
