@@ -384,7 +384,7 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
-  /** `⬇41k · $1.84 · 38m`: what the run has produced and spent so far. */
+  /** `↓41k · $1.84 · 38m`: what the run has produced and spent so far. */
   private renderUsage(): TemplateResult {
     const usage = this.run.usage;
     const { runStartedAt } = this.run;
@@ -506,7 +506,7 @@ export class WorkflowRunBoard extends LitElement {
   /** `attempt 2`, `6m · ↓4k`: what a row shows beside its last line. The
    *  card's kind, agent, and model stay in the child's header; the board
    *  keeps the attempt, the elapsed time while it runs, and its tokens. */
-  private rowMeta(row: WorkflowTaskRow): readonly string[] {
+  private rowMeta(row: WorkflowTaskRow): readonly (string | TemplateResult)[] {
     const { call } = row;
     const live = this.model?.liveOf.get(row.id);
     return [
@@ -519,7 +519,9 @@ export class WorkflowRunBoard extends LitElement {
         ? formatCompactDuration(this.nowMs - live.runStartedAt)
         : undefined,
       live?.outputTokens !== undefined && live.outputTokens > 0
-        ? `↓${formatCompactTokenCount(live.outputTokens)}`
+        ? html`${waIcon('arrow-down', {
+            label: 'Output tokens',
+          })}${formatCompactTokenCount(live.outputTokens)}`
         : undefined,
     ].filter((part) => part !== undefined);
   }
@@ -581,7 +583,7 @@ export class WorkflowRunBoard extends LitElement {
       }
       ${
         meta.length > 0
-          ? html`<span class="row-meta">${meta.join(' · ')}</span>`
+          ? html`<span class="row-meta">${join(meta, ' · ')}</span>`
           : nothing
       }
       ${actions}
