@@ -132,7 +132,7 @@ half lands now; automatic header redaction follows only if transport moves to `H
 
 ### 3.4 Transcript: a queue with one consumer, not a listener set
 
-`TraceEmitter` fans out synchronously to a `createListenerSet` registry. Examine what the three
+`TraceEmitter` fans out synchronously to a subscriber `Set`. Examine what the three
 production subscribers do with that callback:
 
 | Subscriber                                  | Callback body                                                       | Fate                            |
@@ -256,7 +256,7 @@ is a standalone logger migration, and no step introduces a bridge between old an
 
 4. **Trace hub, after model-handler retirement.** That retirement deletes
    `ModelHandler.ts:279`, leaving one construction site and two consumers that both already want
-   a queue. `createListenerSet` and the SDK's buffer cap collapse together; the publication
+   a queue. The emitter's subscriber `Set` and the SDK's buffer cap collapse together; the publication
    half (`publicationGate`, the promise `Set`) is already gone (§3.4, landed 2026-09-13), so the
    hub feeds `SessionEvents.detach` and adds no ordering of its own.
 5. **`logUtils.ts` dies last**, with the final Promise-based subsystem — not first.
