@@ -524,11 +524,9 @@ function ChatGptProgressStep(
               },
             },
           );
-          const update = yield* Effect.tryPromise({
-            try: () =>
-              subscriptionProvider('chatgpt').setPreferSubscription(true),
-            catch: ensureError,
-          });
+          const update = yield* subscriptionProvider('chatgpt')
+            .setPreferSubscription(true)
+            .pipe(Effect.mapError(ensureError));
           if (!update.effective) {
             if (!isCancelled())
               props.onError(

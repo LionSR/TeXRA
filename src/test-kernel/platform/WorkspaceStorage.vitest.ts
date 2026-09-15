@@ -164,9 +164,6 @@ describe('workspace storage defaults', () => {
           storage,
           workspacePath,
           (m) => warnings.push(m),
-          // The store's Promise-shaped `update` is not exercised here; the
-          // suite writes through `set`.
-          (write) => Effect.runPromise(write),
         );
         yield* stores.workspace.set('texra.files.exclude', ['dist']);
 

@@ -200,11 +200,8 @@ async function initVscodePlatform(
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(
     await runtime.runPromise(
-      openTexraConfigStores(
-        storage,
-        workspaceRoot,
-        (message) => log.warn(message),
-        (write) => runtime.runPromise(write),
+      openTexraConfigStores(storage, workspaceRoot, (message) =>
+        log.warn(message),
       ),
     ),
   );

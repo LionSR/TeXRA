@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, it, vi } from 'vitest';
 
 // Local imports
@@ -412,9 +413,11 @@ describe('settingsAccess', () => {
     const fake = makeFakeSettingsStores();
     const entry = entryByKey(options.key);
     const store = fake[options.storeName];
-    await writeSetting(entry, false, fake.stores, options.host);
+    await Effect.runPromise(
+      writeSetting(entry, false, fake.stores, options.host),
+    );
     assert.equal(isStored(store, entry.key), true);
-    await resetSetting(entry, fake.stores, options.host);
+    await Effect.runPromise(resetSetting(entry, fake.stores, options.host));
     assert.equal(isStored(store, entry.key), false);
     assert.equal(
       readSetting(entry, fake.stores, options.host),
@@ -431,7 +434,7 @@ describe('settingsAccess', () => {
   it('routes extension writes to the canonical store', async () => {
     const { stores, config, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await writeSetting(entry, false, stores, 'vscode');
+    await Effect.runPromise(writeSetting(entry, false, stores, 'vscode'));
     assert.equal(isStored(workspaceState, entry.key), true);
     assert.equal(isStored(config, entry.key), false);
     assert.equal(readSetting(entry, stores, 'vscode'), false);
@@ -440,7 +443,7 @@ describe('settingsAccess', () => {
   it('routes CLI writes to the CLI slot (config)', async () => {
     const { stores, config, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await writeSetting(entry, false, stores, 'cli');
+    await Effect.runPromise(writeSetting(entry, false, stores, 'cli'));
     assert.equal(isStored(config, entry.key), true);
     assert.equal(isStored(workspaceState, entry.key), false);
     // The config write used the default 'workspace' target.
@@ -456,7 +459,7 @@ describe('settingsAccess', () => {
     const entry = settingsViewSettingByKey('texra.telemetry.enabled');
     assert.ok(entry);
 
-    await writeSetting(entry, false, stores, 'vscode');
+    await Effect.runPromise(writeSetting(entry, false, stores, 'vscode'));
 
     assert.deepEqual(config.inspect(entry.key), {
       globalValue: false,
@@ -467,7 +470,9 @@ describe('settingsAccess', () => {
   it('routes CLI endpoint writes to global state', async () => {
     const { stores, config, globalState } = makeFakeSettingsStores();
     const entry = entryByKey(GlobalStateKey.ENDPOINT_GOOGLE);
-    await writeSetting(entry, 'https://example.invalid/v1', stores, 'cli');
+    await Effect.runPromise(
+      writeSetting(entry, 'https://example.invalid/v1', stores, 'cli'),
+    );
     assert.equal(isStored(globalState, entry.key), true);
     assert.equal(isStored(config, entry.key), false);
     assert.equal(
@@ -480,7 +485,9 @@ describe('settingsAccess', () => {
     const { stores } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
     await assert.rejects(() =>
-      writeSetting(entry, 'not-a-formatter', stores, 'vscode'),
+      Effect.runPromise(
+        writeSetting(entry, 'not-a-formatter', stores, 'vscode'),
+      ),
     );
   });
 

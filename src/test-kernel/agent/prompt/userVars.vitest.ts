@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import {
   afterEach,
   beforeEach,
@@ -47,7 +48,7 @@ const callerDefaultConfig: ConfigProvider = {
   get<T>(_key: string, defaultValue?: T): T {
     return defaultValue as T;
   },
-  async update<T>(_key: string, _value: T): Promise<void> {},
+  update: () => Effect.void,
   inspect: () => undefined,
   isExplicitlySet: () => false,
 };
@@ -108,11 +109,15 @@ describe('buildUserVars runtime skill diagnostics', () => {
 
   afterEach(async () => {
     setRuntimeSkillSources([]);
-    await fakeConfig.update('texra.skills.enabled', undefined);
+    await Effect.runPromise(
+      fakeConfig.update('texra.skills.enabled', undefined),
+    );
   });
 
   it('keeps skills off until the master switch is enabled', async () => {
-    await fakeConfig.update('texra.skills.enabled', undefined);
+    await Effect.runPromise(
+      fakeConfig.update('texra.skills.enabled', undefined),
+    );
     const warn = vi.fn();
     const emit = vi.fn();
 

@@ -1,8 +1,12 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import { createLog } from '@logger/logUtils';
 import type {
   ConfigProvider,
   ConfigTarget,
+  ConfigWriteFailed,
   StateStore,
 } from '@platform/interfaces';
 import type {
@@ -11,7 +15,7 @@ import type {
   StateSettingEntry,
 } from '@shared/schemas';
 import { settingByKey } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('settingsAccess');
 
@@ -97,6 +101,15 @@ export function readSetting(
  * Persist a value to an entry's resolved slot. The only slot-specific detail is
  * that `config` writes carry a target while state stores do not, so the
  * dispatch lives here once for both write and reset.
+ *
+ * The config slot composes the store's own Effect write and raises its
+ * `ConfigWriteFailed`. The state slot is still `vscode.Memento`-shaped — that
+ * port is its own conversion — so the one `PromiseLike` it returns is adopted
+ * here, at the slot boundary, and the store's own failure is what the caller
+ * reads. It is not re-tagged into the platform's `StateWriteFailed`: `src/shared`
+ * may not reach `src/platform` at runtime (the LAY-1 edge ratchet holds that
+ * pair to type-only), and the value it would carry is already the error the
+ * host reports.
  */
 function writeSlot(
   entry: StateSettingEntry,
@@ -104,25 +117,32 @@ function writeSlot(
   stores: SettingsStores,
   host: SettingHost,
   target: ConfigTarget | undefined,
-): Promise<void> {
+): Effect.Effect<void, ConfigWriteFailed | Error> {
   const slot = settingSlot(entry, host);
-  return Promise.resolve(
-    slot === 'config'
-      ? stores.config.update(
-          entry.key,
-          value,
-          target ?? entry.configTarget ?? 'workspace',
-        )
-      : stores[slot].update(entry.key, value),
-  );
+  if (slot === 'config') {
+    return stores.config.update(
+      entry.key,
+      value,
+      target ?? entry.configTarget ?? 'workspace',
+    );
+  }
+  return Effect.tryPromise({
+    try: () => Promise.resolve(stores[slot].update(entry.key, value)),
+    catch: ensureError,
+  });
 }
 
 /**
  * Validate and persist a state-backed setting, then apply the row's declared
- * write effects. Throws if `value` fails the entry's schema. Config-backed
- * settings use the target declared by their catalog row, falling back to
- * `'workspace'`; an explicit caller target wins. State-store slots ignore
- * target.
+ * write effects. A value the entry's schema rejects, and a row that excludes a
+ * setting the catalog does not have, are both defects of the program rather
+ * than members of the write's error channel — the failure is thrown, not
+ * constructed, because `src/shared` may not take a value import from
+ * `src/platform` (the subsystem edge ratchet pins that edge to type-only).
+ * Callers that hand this an unvalidated `unknown` must therefore validate
+ * first. Config-backed settings use the target declared by their catalog
+ * row, falling back to `'workspace'`; an explicit caller target wins.
+ * State-store slots ignore target.
  *
  * `onWrite.disablesWhenEnabled` is applied here rather than in each host's
  * form so mutually exclusive routes (Kimi Code vs OpenRouter) cannot be
@@ -130,26 +150,26 @@ function writeSlot(
  * written directly — their own effects do not cascade, which is what keeps the
  * rule a single hop.
  */
-export async function writeSetting(
+export function writeSetting(
   entry: StateSettingEntry,
   value: unknown,
   stores: SettingsStores,
   host: SettingHost = 'vscode',
   target?: ConfigTarget,
-): Promise<void> {
-  // `async` so a schema-rejected value surfaces as a rejected promise rather
-  // than a synchronous throw — callers rely on the uniform promise contract.
-  await writeSlot(entry, entry.schema.parse(value), stores, host, target);
-  if (value !== true) return;
-  for (const excludedKey of entry.onWrite?.disablesWhenEnabled ?? []) {
-    const excluded = settingByKey(excludedKey);
-    if (!excluded) {
-      throw new Error(
-        `Setting "${entry.key}" excludes unknown setting "${excludedKey}"`,
-      );
+): Effect.Effect<void, ConfigWriteFailed | Error> {
+  return Effect.gen(function* () {
+    yield* writeSlot(entry, entry.schema.parse(value), stores, host, target);
+    if (value !== true) return;
+    for (const excludedKey of entry.onWrite?.disablesWhenEnabled ?? []) {
+      const excluded = settingByKey(excludedKey);
+      if (!excluded) {
+        throw new Error(
+          `Setting "${entry.key}" excludes unknown setting "${excludedKey}"`,
+        );
+      }
+      yield* writeSlot(excluded, false, stores, host, target);
     }
-    await writeSlot(excluded, false, stores, host, target);
-  }
+  });
 }
 
 /**
@@ -162,6 +182,6 @@ export function resetSetting(
   stores: SettingsStores,
   host: SettingHost = 'vscode',
   target?: ConfigTarget,
-): Promise<void> {
+): Effect.Effect<void, ConfigWriteFailed | Error> {
   return writeSlot(entry, undefined, stores, host, target);
 }

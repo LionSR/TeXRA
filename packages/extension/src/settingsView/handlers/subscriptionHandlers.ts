@@ -95,7 +95,9 @@ export class SubscriptionHandlers {
       this.ctx,
       `Could not update the ${displayName} subscription preference`,
       async () => {
-        const update = await this.provider.setPreferSubscription(enabled);
+        const update = await this.runtime.runPromise(
+          this.provider.setPreferSubscription(enabled),
+        );
         if (update.effective !== enabled) {
           void vscode.window.showWarningMessage(
             `A more specific setting still keeps ${displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,

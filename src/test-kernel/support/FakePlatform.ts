@@ -15,11 +15,12 @@ import { Effect } from 'effect';
 // Local imports
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
+  type AgentDirectoriesPort,
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
+  ConfigWriteFailed,
   type StateStore,
-  type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
@@ -173,18 +174,20 @@ export class FakeConfigProvider implements ConfigProvider {
     this.targets.set(key, 'workspace');
   }
 
-  async update<T>(
+  update<T>(
     key: string,
     value: T,
     target: ConfigTarget = 'workspace',
-  ): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-      this.targets.delete(key);
-    } else {
-      this.values.set(key, value);
-      this.targets.set(key, target);
-    }
+  ): Effect.Effect<void, ConfigWriteFailed> {
+    return Effect.sync(() => {
+      if (value === undefined) {
+        this.values.delete(key);
+        this.targets.delete(key);
+      } else {
+        this.values.set(key, value);
+        this.targets.set(key, target);
+      }
+    });
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
@@ -257,23 +260,37 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;
   }
 
-  async update<T>(key: string, value: T, target?: ConfigTarget): Promise<void> {
+  update<T>(
+    key: string,
+    value: T,
+    target?: ConfigTarget,
+  ): Effect.Effect<void, ConfigWriteFailed> {
     if (target !== undefined && target === this.failUpdatesForTarget) {
-      throw new Error(`simulated ${target}-scope update failure for ${key}`);
+      const message = `simulated ${target}-scope update failure for ${key}`;
+      return Effect.fail(
+        new ConfigWriteFailed({
+          key,
+          target,
+          message,
+          cause: new Error(message),
+        }),
+      );
     }
-    this.updateCalls.push({ key, value, target });
-    if (target === undefined) {
-      this.lastTargets.delete(key);
-    } else {
-      this.lastTargets.set(key, target);
-    }
-    const store =
-      target === 'global' ? this.globalValues : this.workspaceValues;
-    if (value === undefined) {
-      store.delete(key);
-    } else {
-      store.set(key, value);
-    }
+    return Effect.sync(() => {
+      this.updateCalls.push({ key, value, target });
+      if (target === undefined) {
+        this.lastTargets.delete(key);
+      } else {
+        this.lastTargets.set(key, target);
+      }
+      const store =
+        target === 'global' ? this.globalValues : this.workspaceValues;
+      if (value === undefined) {
+        store.delete(key);
+      } else {
+        store.set(key, value);
+      }
+    });
   }
 
   /** The most recent explicit `target` passed to `update()` for `key`, or `undefined` if none was given. */

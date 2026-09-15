@@ -13,7 +13,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { ConfigWriteFailed } from '@platform/interfaces';
 import {
   settingByKey,
   settingSchemaWithoutPrefault,
@@ -22,7 +21,6 @@ import {
 } from '@shared/schemas';
 
 import { executed } from '@tools/core/result';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { defineTool } from '../core/define';
 
 /**
@@ -129,16 +127,7 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
   const config = call.roots.config;
   const previous = config.get(input.key);
   const target = input.target === 'workspace' ? 'workspace' : 'global';
-  yield* Effect.tryPromise({
-    try: () => config.update(input.key, parsed.data, target),
-    catch: (cause) =>
-      new ConfigWriteFailed({
-        key: input.key,
-        target,
-        message: `The ${target} configuration store refused the write: ${toErrorMessage(cause)}`,
-        cause,
-      }),
-  });
+  yield* config.update(input.key, parsed.data, target);
 
   const before = JSON.stringify(previous);
   const after = JSON.stringify(parsed.data);
