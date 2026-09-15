@@ -10,6 +10,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { randomUUID } from 'node:crypto';
+import { dirname } from 'node:path';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Layer, SynchronizedRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
@@ -332,6 +333,9 @@ interface LoopInit {
   readonly turns?: readonly ScriptedTurn[];
   /** Runs inside the invoker before it answers, for interrupt scenarios. */
   readonly beforeResponse?: (round: number) => Effect.Effect<void>;
+  /** Runs after the invoker committed its response rows, before it answers:
+   *  the crash point between a paid response and the output write. */
+  readonly afterResponse?: (round: number) => Effect.Effect<void>;
 }
 
 function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
@@ -393,6 +397,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
               },
               stepRow(run.runId, state, 'response.ready'),
             ]);
+            if (init.afterResponse) yield* init.afterResponse(request.round);
             return {
               kind: 'response' as const,
               state: next,
@@ -495,22 +500,24 @@ const loadState = Effect.fn('test.loadState')(function* (init: LoopInit) {
 /**
  * Start a run and interrupt it once the invoker is reached in `round`, the
  * way a host stop lands mid-turn; returns the state the halt left behind.
+ * `at` picks the side of the invoker's own commit the stop lands on.
  */
 const interruptedAt = Effect.fn('test.interruptedAt')(function* (
   init: LoopInit,
   round: number,
+  at: 'beforeResponse' | 'afterResponse' = 'beforeResponse',
 ) {
   const reached = yield* Deferred.make<void>();
+  const park = (current: number) =>
+    current === round
+      ? Deferred.succeed(reached, undefined).pipe(Effect.andThen(Effect.never))
+      : Effect.void;
   const fiber = yield* Effect.forkDetach(
     loopProgram(
       {
         ...init,
-        beforeResponse: (current) =>
-          current === round
-            ? Deferred.succeed(reached, undefined).pipe(
-                Effect.andThen(Effect.never),
-              )
-            : Effect.void,
+        beforeResponse: at === 'beforeResponse' ? park : undefined,
+        afterResponse: at === 'afterResponse' ? park : undefined,
       },
       [],
     ),
@@ -1171,6 +1178,47 @@ describe('an interrupted reflection run', () => {
         });
         expect(resumed.requests.map((request) => request.round)).toEqual([1]);
         expect(resumed.result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      }),
+  );
+
+  /**
+   * C15: a crash between the committed response row and the round's raw
+   * output write. The response is paid for and durable, so resume reprocesses
+   * it; the file it appends to is whatever the crash left on disk. The
+   * recorded byte offset is what keeps the reprocessed response from landing
+   * twice, whichever of the three states the file is in.
+   */
+  it.effect(
+    'writes a reprocessed response into the round output exactly once, whatever the crash left on disk',
+    () =>
+      Effect.gen(function* () {
+        const session = yield* createProcessSession();
+        const seeds = [null, 'round 0 output', 'stale bytes from the crash'];
+        for (const seed of seeds) {
+          const runId = startedRun(session);
+          const halted = yield* interruptedAt(
+            { runId, session, rounds: 1 },
+            0,
+            'afterResponse',
+          );
+          // The response row is committed and no snapshot has recorded a
+          // write: the offset resume reconciles against is zero.
+          expect(halted.lastTurn).not.toBeNull();
+          expect(flowOf(halted).rawOutputBytes).toBe(0);
+          const path = flowOf(halted).outputLocation?.absolutePath;
+          if (path === undefined) throw new Error('The round has no output.');
+          yield* Effect.promise(async () => {
+            if (seed === null) return;
+            await AbsoluteFS.ensureDir(dirname(path));
+            await AbsoluteFS.write(path, seed);
+          });
+
+          yield* runLoop({ runId, session, rounds: 1, resume: true });
+
+          const content = yield* Effect.promise(() => AbsoluteFS.read(path));
+          expect(content.split('round 0 output')).toHaveLength(2);
+          expect(content).not.toContain('stale bytes');
+        }
       }),
   );
 });

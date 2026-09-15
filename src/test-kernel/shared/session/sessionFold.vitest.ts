@@ -1573,6 +1573,59 @@ describe('foldRunState', () => {
       },
     ],
     [
+      'the provider continuation anchor is row data: restored by the fold, dropped when the history it anchored is replaced',
+      () => {
+        const anchor = {
+          coveredMessages: 1,
+          prefixFingerprint: 'a'.repeat(64),
+          origin: {
+            protocol: 'openai-responses',
+            requestedModel: 'gpt-test',
+            deployment: {
+              endpoint: 'https://api.example.test/v1',
+              credentialScope: 'openai',
+            },
+            codecVersion: 1,
+          },
+          anchor: {
+            kind: 'stored',
+            responseId: 'resp-stored',
+            coveredItems: 2,
+          },
+        };
+        const compaction = (body: Record<string, unknown>) => ({
+          type: 'model.compaction',
+          payload: {
+            keepPrefix: 1,
+            messages: [USER('summary')],
+            cause: 'context-limit',
+            continuation: null,
+            continuationDropped: null,
+            ...body,
+          },
+        });
+        // C6: the anchor is a field of the rows, so the cold fold a resume
+        // reads restores it. A resume that lost it re-sends the prefix the
+        // provider already holds and pays for it again.
+        expect(
+          stateOf(through(11, compaction({ continuation: anchor })))
+            ?.continuation,
+        ).toEqual(anchor);
+        // And a compaction that replaced the history it anchored to clears
+        // it: continuing from an anchor over a prefix that is gone is the
+        // same window in the other direction.
+        expect(
+          stateOf(
+            through(
+              11,
+              compaction({ continuation: anchor }),
+              compaction({ continuationDropped: 'history-replaced' }),
+            ),
+          )?.continuation,
+        ).toBeNull();
+      },
+    ],
+    [
       'a completed run being continued: a snapshot exists, full stop',
       () => {
         const state = stateOf(
