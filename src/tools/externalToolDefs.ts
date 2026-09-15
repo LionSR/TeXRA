@@ -217,11 +217,6 @@ function probeZoteroBbt(port: number): Effect.Effect<boolean> {
   );
 }
 
-interface GitHubPRPrerequisites {
-  tokenPresent: boolean;
-  inGitRepo: boolean;
-}
-
 const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
   function* () {
     const secrets = yield* Secrets;
@@ -236,34 +231,11 @@ const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
   },
 );
 
-function resolveGitHubPRPrerequisites(
-  probeResult: unknown,
-): Effect.Effect<GitHubPRPrerequisites, unknown, Secrets> {
-  // The probe runs in-process and its result is handed straight back here, so
-  // the shape is structurally guaranteed; only a failed probe (probeResult
-  // undefined) needs the re-probe fallback.
-  return probeResult === undefined
-    ? getGitHubPRPrerequisites()
-    : Effect.succeed(probeResult as GitHubPRPrerequisites);
-}
-
 interface Lean4Prerequisites {
   extensionAvailable: boolean;
   lakeAvailable: boolean;
   /** The VS Code build drives Lean through the lean4 extension; other hosts spawn `lake` directly. */
   requiresExtension: boolean;
-}
-
-function resolveLean4Prerequisites(probeResult: unknown): Lean4Prerequisites {
-  // In-process probe shape is structurally guaranteed; only a missing/absent
-  // probe (probeResult undefined) falls back to the not-detected defaults.
-  return probeResult === undefined
-    ? {
-        extensionAvailable: false,
-        lakeAvailable: false,
-        requiresExtension: false,
-      }
-    : (probeResult as Lean4Prerequisites);
 }
 
 /** Lean tools work through the extension in VS Code and through `lake` elsewhere. */
@@ -384,22 +356,30 @@ function probeSdkBinaryStatus(config: {
 /**
  * Wire a prerequisites-style availability entry. `probe` runs once and its
  * result is cached by the availability layer, then handed back to every
- * callback as `probeResult`. `resolve` turns that (possibly absent) cached
- * value into a typed prerequisites object which `check`/`statusLabel`/
- * `detailCheck` receive directly — so each entry declares the
- * `resolve(probeResult)` step once instead of repeating it in all three
- * callbacks, and those callbacks stay pure functions of the resolved value.
+ * callback as `probeResult`, typed `unknown` at the `ExternalToolDef`
+ * boundary because the dashboard's entries are heterogeneous — each group
+ * has its own prerequisites shape `T`. Bridging that cached `unknown` back to
+ * `T` happens once, here, in `resolve`: a cache miss (`probeResult`
+ * undefined) re-probes via `fallback` (defaulting to `probe` itself), and a
+ * hit is cast back to `T`, which is safe because the value only ever
+ * originated from this same entry's own `probe`. `check`/`statusLabel`/
+ * `detailCheck` then receive the resolved `T` directly and stay pure
+ * functions of it, instead of each tool group writing its own
+ * `resolve(probeResult)` cast.
  */
 function prerequisitesChecks<T>(config: {
   probe: () => Effect.Effect<T, unknown, ToolProbeServices>;
-  resolve: (
-    probeResult: unknown,
-  ) => Effect.Effect<T, unknown, ToolProbeServices>;
+  /** Re-derives `T` on a cache miss. Defaults to `probe`. */
+  fallback?: () => Effect.Effect<T, unknown, ToolProbeServices>;
   check: (prereqs: T) => boolean;
   statusLabel: (prereqs: T) => string | undefined;
   detailCheck: (prereqs: T) => string | undefined;
 }): Pick<ExternalToolDef, 'probe' | 'check' | 'statusLabel' | 'detailCheck'> {
-  const { probe, resolve, check, statusLabel, detailCheck } = config;
+  const { probe, fallback = probe, check, statusLabel, detailCheck } = config;
+  const resolve = (
+    probeResult: unknown,
+  ): Effect.Effect<T, unknown, ToolProbeServices> =>
+    probeResult === undefined ? fallback() : Effect.succeed(probeResult as T);
   return {
     probe,
     check: (probeResult) => Effect.map(resolve(probeResult), check),
@@ -570,8 +550,12 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
           const requiresExtension = getProcessSettingHost() === 'vscode';
           return { extensionAvailable, lakeAvailable, requiresExtension };
         }),
-      resolve: (probeResult) =>
-        Effect.succeed(resolveLean4Prerequisites(probeResult)),
+      fallback: () =>
+        Effect.succeed({
+          extensionAvailable: false,
+          lakeAvailable: false,
+          requiresExtension: false,
+        }),
       check: leanReady,
       statusLabel: (prerequisites) => {
         if (!leanReady(prerequisites)) return 'Needs setup';
@@ -638,7 +622,6 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     toggleable: true,
     ...prerequisitesChecks({
       probe: getGitHubPRPrerequisites,
-      resolve: resolveGitHubPRPrerequisites,
       check: ({ tokenPresent, inGitRepo }) => tokenPresent && inGitRepo,
       statusLabel: ({ tokenPresent, inGitRepo }) => {
         if (tokenPresent && inGitRepo) return undefined;
