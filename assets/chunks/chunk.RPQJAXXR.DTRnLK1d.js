@@ -1,0 +1,1 @@
+var e={small:`s`,medium:`m`,large:`l`},t=new Set;function n(n,r){r in e&&!t.has(`${n}:${r}`)&&(t.add(`${n}:${r}`),console.warn(`[${n}] size="${r}" is deprecated. Use size="${e[r]}" instead. The long-form value will be removed in the next major version.`))}export{n as t};
