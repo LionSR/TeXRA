@@ -6,6 +6,7 @@
  */
 import * as path from 'node:path';
 
+import { Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import {
@@ -55,6 +56,18 @@ import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
+
+/**
+ * The team-apply error notification never reached the user: the host's own
+ * error dialog faulted after the roster program had already handed the
+ * message off. The team is applied either way, so this is reported and
+ * dropped rather than surfaced.
+ */
+class AgentTeamNotificationFailed extends Data.TaggedError(
+  'AgentTeamNotificationFailed',
+)<{
+  readonly message: string;
+}> {}
 
 /** Agent selection, directory, and team handler delegate. */
 export class AgentHandlers {
@@ -315,12 +328,24 @@ export class AgentHandlers {
                   void vscode.window.showInformationMessage(message);
                 },
                 showErrorMessage: async (message) => {
-                  void showLoggedMessage(this.ctx.channel, message).catch(
-                    (err: unknown) => {
-                      this.ctx.log.warn(
-                        `Error notification failed after handoff: ${toErrorMessage(err)}`,
-                      );
-                    },
+                  this.runtime.runFork(
+                    Effect.tryPromise({
+                      try: () => showLoggedMessage(this.ctx.channel, message),
+                      catch: (cause) =>
+                        new AgentTeamNotificationFailed({
+                          message: toErrorMessage(cause),
+                        }),
+                    }).pipe(
+                      Effect.catchTag(
+                        'AgentTeamNotificationFailed',
+                        (failure) =>
+                          Effect.sync(() => {
+                            this.ctx.log.warn(
+                              `Error notification failed after handoff: ${failure.message}`,
+                            );
+                          }),
+                      ),
+                    ),
                   );
                 },
               },
