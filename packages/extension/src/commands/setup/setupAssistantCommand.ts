@@ -60,8 +60,8 @@ function selectLaunchModel(
 
 /**
  * The restore write's own failure. It never leaves this module: the finalizer
- * logs it and continues, exactly as the previous rejection handler did, so a
- * failed restore never masks the launch's own outcome.
+ * logs it and continues, so a failed restore never masks the launch's own
+ * outcome.
  */
 class OpenRouterFlagRestoreFailed extends Data.TaggedError(
   'OpenRouterFlagRestoreFailed',
@@ -69,9 +69,12 @@ class OpenRouterFlagRestoreFailed extends Data.TaggedError(
 
 /**
  * Temporarily flip `useOpenRouter` on for the OR-only launch path and always
- * restore it, including failures before `executeAgent` starts. The restore is
- * an `Effect.ensuring` finalizer, so it also runs when the launch fiber is
- * interrupted.
+ * restore it, including failures before `executeAgent` starts. The flip is the
+ * acquisition of an `Effect.acquireUseRelease`, so it is uninterruptible: a
+ * runtime disposal landing while the enabling write is in flight cannot let
+ * the restore run against an outstanding write and leave the flag on. The
+ * restore is the release, so it runs on every exit, interruption included, and
+ * only after the write it undoes has committed.
  */
 function withOpenRouterFlagOn<A, E, R>(
   globalState: StateStore,
@@ -81,11 +84,12 @@ function withOpenRouterFlagOn<A, E, R>(
     globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
   if (prior) return program;
 
-  return Effect.promise(() =>
-    Promise.resolve(globalState.update(GlobalStateKey.USE_OPENROUTER, true)),
-  ).pipe(
-    Effect.andThen(program),
-    Effect.ensuring(
+  return Effect.acquireUseRelease(
+    Effect.promise(() =>
+      Promise.resolve(globalState.update(GlobalStateKey.USE_OPENROUTER, true)),
+    ),
+    () => program,
+    () =>
       Effect.tryPromise({
         try: () =>
           Promise.resolve(
@@ -101,7 +105,6 @@ function withOpenRouterFlagOn<A, E, R>(
           }),
         ),
       ),
-    ),
   );
 }
 
@@ -228,8 +231,10 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
 /**
  * Host boundary: the command surface calls this as a `Promise`, so the launch
  * program runs on the process runtime here and folds every failure — a failed
- * host call, a failed model resolution, a failed `runAgent` — into the same
- * error report and `not-started` result the previous `try`/`catch` produced.
+ * host call, a failed model resolution, a failed `runAgent` — into one error
+ * report and a `not-started` result, which is the contract the host caller
+ * relies on. An interrupted launch is not a failure: the cause is re-raised so
+ * a runtime disposal stays a cancellation instead of a launch-failure notice.
  */
 export function launchSetupAssistant(
   secrets: PlatformSecrets,
@@ -329,16 +334,20 @@ export function launchSetupAssistant(
         : launch;
       return 'launched' as const;
     }).pipe(
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
+      Effect.catchCause((cause) => {
+        // Shutdown interrupts this fiber while it waits on a host prompt.
+        // That is a cancellation, not a launch failure: re-raise it so no
+        // error notification appears during teardown.
+        if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+        return Effect.sync(() => {
           const error = Cause.squash(cause);
           log.error('Setup assistant failed to launch.', { data: error });
           void vscode.window.showErrorMessage(
             `Failed to launch setup assistant: ${toErrorMessage(error)}`,
           );
           return 'not-started' as const;
-        }),
-      ),
+        });
+      }),
     ),
   );
 }
