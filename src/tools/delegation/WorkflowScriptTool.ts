@@ -20,7 +20,6 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { ToolServices } from '@agent/runtime/ToolServices';
-import { isNotADirectoryError } from '@common/errors/errorPredicates';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult, WorkflowAgentProposal } from '@shared/schemas';
 import {
@@ -45,6 +44,7 @@ import {
 } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
@@ -181,17 +181,7 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
     );
     assertWritable(resolved, resolved.relative);
     const fs = yield* fileSystemAt(resolved.fsPath);
-    // A path whose parent is not a directory is a missing draft, not a tool
-    // failure: `BaseFS.exists` counted ENOTDIR as absent alongside ENOENT, and
-    // `FileSystem.exists` reports it as `BadResource`.
-    const exists = yield* fs.exists(resolved.fsPath).pipe(
-      Effect.catchIf(
-        (error) =>
-          error.reason._tag === 'BadResource' &&
-          isNotADirectoryError(error.reason.cause),
-        () => Effect.succeed(false),
-      ),
-    );
+    const exists = yield* entryExists(fs, resolved.fsPath);
     if (exists) {
       const existing = yield* fs.readFile(resolved.fsPath).pipe(
         Effect.map((bytes) =>

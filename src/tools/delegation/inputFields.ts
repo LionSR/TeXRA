@@ -17,7 +17,7 @@ import { resolveChildRunOutput } from '@agent/storage';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentCallOptions } from '@agent/workflowScript/types';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { formatError, isNotADirectoryError } from '@common/errors';
+import { formatError } from '@common/errors';
 import type { RunId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -26,6 +26,7 @@ import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 import {
   ensureError,
@@ -147,22 +148,6 @@ function ensureWorkingDirectoryExists(dir: string): void {
 }
 
 /**
- * `BaseFS`'s existence probe without the facade: `ENOENT` and `ENOTDIR` read
- * as absent, every other failure propagates. `FileSystem.exists` reports a
- * non-directory parent as `BadResource`, which the facade's own probe counted
- * as absent alongside the missing path.
- */
-const pathExists = (fs: FileSystem.FileSystem, target: string) =>
-  fs.exists(target).pipe(
-    Effect.catchIf(
-      (error) =>
-        error.reason._tag === 'BadResource' &&
-        isNotADirectoryError(error.reason.cause),
-      () => Effect.succeed(false),
-    ),
-  );
-
-/**
  * Shared Zod field for the `working_directory` parameter on delegation tools.
  * Validates and normalizes in one step so downstream code always receives the
  * canonical `string | undefined` value — no trimming or absolute-path checks
@@ -214,7 +199,21 @@ export const rejectOversizedBibAttachments = Effect.fn(
     .filter((file) => hasExtension(file, '.bib'));
 
   for (const bibFile of bibFiles) {
-    const stats = yield* fs.stat(workspaceAbsolutePath(workspaceRoot, bibFile));
+    const absolute = workspaceAbsolutePath(workspaceRoot, bibFile);
+    // The facade's `stat` was lstat-backed: a link whose target does not
+    // resolve still answered, with the link's own size, which never crossed
+    // this limit. `FileSystem.stat` follows the link instead, so it fails
+    // where the facade measured the link itself; a path `readLink` cannot
+    // name is no entry at all and fails just as the facade's probe did.
+    const stats = yield* fs.stat(absolute).pipe(
+      Effect.catch((error) =>
+        fs.readLink(absolute).pipe(
+          Effect.as(undefined),
+          Effect.catch(() => Effect.fail(error)),
+        ),
+      ),
+    );
+    if (stats === undefined) continue;
     if (Number(stats.size) <= LARGE_BIB_LIMIT_BYTES) continue;
 
     const sizeBytes = Number(stats.size);
@@ -255,7 +254,7 @@ export const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
     const inspected = yield* Effect.forEach(
       entries,
       (entry) =>
-        pathExists(fs, workspaceAbsolutePath(workspaceRoot, entry.path)).pipe(
+        entryExists(fs, workspaceAbsolutePath(workspaceRoot, entry.path)).pipe(
           Effect.map((exists) => ({ ...entry, exists })),
         ),
       { concurrency: 'unbounded' },

@@ -4,7 +4,6 @@ import { Effect, FileSystem } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { isNotADirectoryError } from '@common/errors/errorPredicates';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import {
@@ -25,6 +24,7 @@ import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
 import { clamp, generateShortId } from '@utils/core';
 import { readConfig } from '@utils/config/configUtils';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { applyPatchToText } from '@utils/text/diff';
 import { buildDiffHunks, unifiedDiffText } from '@utils/text/unifiedDiff';
@@ -344,21 +344,6 @@ interface WriteApprovedContentResult {
   baseContent: string;
 }
 
-/**
- * `BaseFS.exists` without the facade: `ENOENT` and `ENOTDIR` read as absent,
- * every other failure propagates. `FileSystem.exists` reports a non-directory
- * parent as `BadResource`, which the facade's own probe counted as absent.
- */
-const targetExists = (fs: FileSystem.FileSystem, target: string) =>
-  fs.exists(target).pipe(
-    Effect.catchIf(
-      (error) =>
-        error.reason._tag === 'BadResource' &&
-        isNotADirectoryError(error.reason.cause),
-      () => Effect.succeed(false),
-    ),
-  );
-
 /** `BaseFS.read` without the facade: the bytes with line endings normalized. */
 const readTarget = (fs: FileSystem.FileSystem, target: string) =>
   fs
@@ -393,7 +378,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
     const fs = nodePath.isAbsolute(path)
       ? yield* FileSystem.FileSystem
       : yield* WorkspaceFs;
-    const exists = yield* targetExists(fs, path);
+    const exists = yield* entryExists(fs, path);
     let baseContent = '';
     let appliedContent = finalContent;
     let shouldWrite = true;

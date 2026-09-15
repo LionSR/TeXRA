@@ -39,6 +39,7 @@ import {
 } from '@tools/approval/toolEditApproval';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
+import { entryExists } from '@utils/files/fsEntryExists';
 import {
   formatResultCount,
   normalizeLineEndings,
@@ -50,21 +51,6 @@ import {
   inspectRunStorageEntry,
 } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
-
-/**
- * `BaseFS.exists` without the facade: `ENOENT` and `ENOTDIR` read as absent,
- * every other failure propagates — `FileSystem.exists` reports a non-directory
- * parent as `BadResource`, which the facade's own probe counted as absent.
- */
-const targetExists = (fs: FileSystem.FileSystem, target: string) =>
-  fs.exists(target).pipe(
-    Effect.catchIf(
-      (error) =>
-        error.reason._tag === 'BadResource' &&
-        isNotADirectoryError(error.reason.cause),
-      () => Effect.succeed(false),
-    ),
-  );
 
 /**
  * `BaseFS.isFile` without the facade: `ENOENT` and `ENOTDIR` read as "not a
@@ -291,7 +277,7 @@ Parameters map directly to subagent-result delivery attributes:
               strip_criticize
                 ? stripCriticizeAnnotations(rawContent)
                 : { content: rawContent, count: 0 };
-            const destExists = yield* targetExists(
+            const destExists = yield* entryExists(
               workspaceFs,
               dest.relativePath,
             ).pipe(Effect.mapError(ensureError));
@@ -508,7 +494,7 @@ Parameters map directly to subagent-result delivery attributes:
     const wsLoc = locateInWorkspace(call.roots.workspace, runPath);
     if (
       wsLoc.kind !== 'external' &&
-      (yield* targetExists(workspaceFs, wsLoc.relativePath).pipe(
+      (yield* entryExists(workspaceFs, wsLoc.relativePath).pipe(
         Effect.mapError(ensureError),
       ))
     ) {
