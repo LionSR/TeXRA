@@ -5,8 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-import { loadSourceModule } from './loadSourceModule.ts';
-
 type DesktopFileSelectionModule =
   typeof import('@desktop/main/desktopFileSelection');
 
@@ -17,7 +15,7 @@ async function loadDesktopFileSelection(): Promise<DesktopFileSelectionModule> {
     import('@platform/defaults/nodeFilesystem'),
   ]);
   await installPlatform({}, { fs: nodeFilesystem });
-  return loadSourceModule('@desktop/main/desktopFileSelection');
+  return import('@desktop/main/desktopFileSelection');
 }
 
 const BASE_FILE_OPTIONS = [

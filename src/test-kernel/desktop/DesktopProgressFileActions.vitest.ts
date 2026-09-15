@@ -13,7 +13,6 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
-import { loadSourceModule } from './loadSourceModule.ts';
 
 const mocks = createModuleMocks();
 
@@ -132,9 +131,8 @@ async function loadFileActions(options: {
     };
   });
 
-  const { DesktopProgressFileActions } = await loadSourceModule(
-    '@desktop/main/desktopProgressFileActions',
-  );
+  const { DesktopProgressFileActions } =
+    await import('@desktop/main/desktopProgressFileActions');
 
   const openBuildDisplay = vi.fn();
   const actions = new DesktopProgressFileActions(

@@ -20,8 +20,6 @@ import {
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 
-import { loadSourceModule } from './loadSourceModule.ts';
-
 const mocks = createModuleMocks();
 
 type FakeCompile = (location: { absolutePath: string }) => Effect.Effect<{
@@ -70,7 +68,7 @@ async function loadDesktopPreviewHost(
       access,
     }));
   }
-  return loadSourceModule('@desktop/main/desktopPreviewHost');
+  return import('@desktop/main/desktopPreviewHost');
 }
 
 function makeShell(openPathResult = '') {

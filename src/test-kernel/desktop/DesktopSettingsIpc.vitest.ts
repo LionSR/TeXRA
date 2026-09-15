@@ -45,7 +45,6 @@ import {
   createStubDesktopSettingsUiHost,
   createStubDesktopToolingSettingsController,
 } from './desktopSettingsTestSupport';
-import { loadSourceModule } from './loadSourceModule.ts';
 
 const readModelAvailabilityInputs = vi.hoisted(() =>
   vi.fn((_stores: ModelOptionStores, models: readonly string[] = []) =>
@@ -210,9 +209,8 @@ function newStatePorts() {
 
 describe('desktop settings IPC', () => {
   beforeAll(async () => {
-    ({ createDesktopSettingsIpc } = await loadSourceModule(
-      '@desktop/main/desktopSettingsIpc',
-    ));
+    ({ createDesktopSettingsIpc } =
+      await import('@desktop/main/desktopSettingsIpc'));
   });
 
   afterEach(() => {

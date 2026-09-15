@@ -1,9 +1,6 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - test support
-import { loadSourceModule } from './loadSourceModule.ts';
-
 type DesktopPromptControllerModule =
   typeof import('@desktop/main/desktopPromptController');
 type DesktopPromptController = InstanceType<
@@ -13,9 +10,8 @@ type DesktopPromptController = InstanceType<
 async function createPromptController(
   postToRenderer: (message: unknown) => boolean,
 ): Promise<DesktopPromptController> {
-  const { DesktopPromptController: Controller } = await loadSourceModule(
-    '@desktop/main/desktopPromptController',
-  );
+  const { DesktopPromptController: Controller } =
+    await import('@desktop/main/desktopPromptController');
   return new Controller({ postToRenderer });
 }
 

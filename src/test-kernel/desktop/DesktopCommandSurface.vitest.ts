@@ -14,9 +14,6 @@ import {
 } from '@shared/commands/accelerators';
 import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
 
-// Local imports - test support
-import { loadSourceModule } from './loadSourceModule.ts';
-
 type MockedDesktopActions = Record<keyof DesktopCommandActions, Mock>;
 
 /** Every dispatchable desktop command, with the shell action it must reach. */

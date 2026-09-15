@@ -26,7 +26,6 @@ import {
   REPO_ROOT,
   desktopSourcePath,
 } from './desktopTestPaths.ts';
-import { loadSourceModule } from './loadSourceModule.ts';
 
 function readDesktopMainIndex(): Promise<string> {
   return readFile(desktopSourcePath('main', 'index.ts'), 'utf8');
@@ -262,9 +261,8 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('shares the CLI ~/.texra data root by default, isolating only under the e2e override (#7987)', async () => {
-    const { resolveDesktopDataRoot } = await loadSourceModule(
-      '@desktop/main/platform/paths',
-    );
+    const { resolveDesktopDataRoot } =
+      await import('@desktop/main/platform/paths');
     const userDataPath = '/tmp/some-electron-user-data';
 
     expect(resolveDesktopDataRoot(userDataPath, { env: {} })).toBe(
@@ -278,9 +276,8 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('finds resources in packaged and monorepo development layouts', async () => {
-    const { resolveResourcesPath } = await loadSourceModule(
-      '@desktop/main/platform/paths',
-    );
+    const { resolveResourcesPath } =
+      await import('@desktop/main/platform/paths');
     const root = await makeTempDir('texra-electron-root-', tempDirs);
     const appResources = join(root, 'app', 'resources');
     const packagedResources = join(root, 'electron-resources', 'resources');
@@ -314,9 +311,8 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('requires bundled agent sources to be directories', async () => {
-    const { resolveResourcesPath } = await loadSourceModule(
-      '@desktop/main/platform/paths',
-    );
+    const { resolveResourcesPath } =
+      await import('@desktop/main/platform/paths');
     const root = await makeTempDir('texra-electron-root-', tempDirs);
     const incompleteApp = join(root, 'incomplete-app');
     const fileBackedApp = join(root, 'file-backed-app');
@@ -345,9 +341,8 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('throws with every checked resource candidate when resources are missing', async () => {
-    const { resolveResourcesPath } = await loadSourceModule(
-      '@desktop/main/platform/paths',
-    );
+    const { resolveResourcesPath } =
+      await import('@desktop/main/platform/paths');
     const root = await makeTempDir('texra-electron-root-', tempDirs);
     const mainDirname = join(root, 'packages', 'desktop', 'dist', 'main');
 
@@ -367,9 +362,7 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('repairs macOS launch PATH idempotently without changing non-macOS PATH', async () => {
-    const { repairLaunchPath } = await loadSourceModule(
-      '@desktop/main/platform/pathFix',
-    );
+    const { repairLaunchPath } = await import('@desktop/main/platform/pathFix');
     const env = { PATH: '/custom/bin:/usr/bin' };
 
     const first = repairLaunchPath({

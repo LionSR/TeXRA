@@ -9,7 +9,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 // Local imports - test support
 import { effectRuntime } from '@platform/processRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { loadSourceModule } from './loadSourceModule.ts';
 
 type DesktopDiffHostModule = typeof import('@desktop/main/desktopDiffHost');
 type DiffHostOptions = Parameters<
@@ -94,12 +93,10 @@ async function openDiffPair(
 }
 
 describe('createDesktopDiffHost', () => {
-  // `loadSourceModule` pulls the full desktop main graph through the module
+  // The dynamic import pulls the full desktop main graph through the module
   // runner; keep the hook timeout generous for cold combined test runs.
   beforeAll(async () => {
-    ({ createDesktopDiffHost } = await loadSourceModule(
-      '@desktop/main/desktopDiffHost',
-    ));
+    ({ createDesktopDiffHost } = await import('@desktop/main/desktopDiffHost'));
   }, 60_000);
 
   it('falls back to a generated patch file when no renderer is wired', async () => {
