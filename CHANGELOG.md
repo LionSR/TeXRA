@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A child run is no longer refused over its parent's pending registration** — delegating right after a run starts used to read the parent as unavailable; the child's admission check now waits for the parent's registration to commit first.
 - Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
 - Messages you queue for a run are no longer lost when you stop the run or TeXRA exits unexpectedly: they stay queued and are delivered once the run resumes.
 

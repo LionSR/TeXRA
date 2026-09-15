@@ -10,7 +10,10 @@ import {
   registerRun,
 } from '@agent/storage/runLifecycle';
 import { aggregateId, type RunId } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace/root' });
@@ -61,6 +64,50 @@ describe('run registration and finalization', () => {
           followUpSupport: 'nativeInteractive',
         });
       }),
+  );
+
+  it.effect('reads a parent only after its queued rows have settled', () =>
+    Effect.gen(function* () {
+      // A record read goes straight to the database, so a parent published
+      // on this fiber is still uncommitted when the child's admission check
+      // runs: the settle is the whole order between the two paths, and this
+      // pins that it happens — and that it happens before the read — rather
+      // than the scheduler leaving the publisher enough room to win the race.
+      const order: string[] = [];
+      const parentRunId = publishTestRunStart(session);
+      const settle = session.settlePublications.bind(session);
+      vi.spyOn(session, 'settlePublications').mockImplementation(
+        (id, settleOptions) => {
+          order.push(`settle:${id ?? 'session'}`);
+          return settle(id, settleOptions);
+        },
+      );
+      const read = session.readRunRecords.bind(session);
+      vi.spyOn(session, 'readRunRecords').mockImplementation((id) => {
+        order.push(`read:${id}`);
+        return read(id);
+      });
+      yield* registerRun(session, runId, baseConfig, 'chat', {
+        ...options,
+        parentRunId,
+      });
+      expect(order).toContain(`settle:${parentRunId}`);
+      expect(order.indexOf(`settle:${parentRunId}`)).toBeLessThan(
+        order.indexOf(`read:${parentRunId}`),
+      );
+      // A parent nothing ever published must still refuse its child rather
+      // than wait on the barrier for a row that is not coming.
+      const absentParentId = 'def456' as RunId;
+      const refusal = yield* Effect.flip(
+        registerRun(session, 'fed789' as RunId, baseConfig, 'chat', {
+          ...options,
+          parentRunId: absentParentId,
+        }),
+      );
+      expect(refusal.message).toBe(
+        `Parent run ${absentParentId} is unavailable.`,
+      );
+    }),
   );
 
   it.effect(
