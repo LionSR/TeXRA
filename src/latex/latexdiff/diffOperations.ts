@@ -95,8 +95,9 @@ const executeDiffOperations = Effect.fn('latexdiff.executeDiffOperations')(
 );
 
 /**
- * Whether `absolutePath` exists -- `pathExists`'s ENOTDIR reading, in this
- * module's error channel.
+ * Whether `absolutePath` exists -- `pathExists`'s reading (the ENOTDIR
+ * correction, and a link that resolves to nothing read as absent, since a
+ * dangling symlink supplies no input), in this module's error channel.
  */
 const exists = (
   absolutePath: string,

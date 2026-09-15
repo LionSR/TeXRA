@@ -153,11 +153,16 @@ function entryTypeOf(entry: {
  * ENOTDIR specifically, so an operational failure (`ELOOP`, `EACCES`) still
  * propagates instead of reading as "absent".
  *
+ * One reading differs, and it is deliberate: the facade's probe was
+ * `lstat`-backed, so a dangling or circular symlink was present, while this
+ * one follows the link and finds nothing there. A caller asking whether a
+ * dependency, figure, bibliography or input *file* is unusable wants the
+ * follow; a caller asking whether the path names an entry wants `readLink`
+ * first and this as the fallback, which is what `entryExists` does.
+ *
  * The caller passes the filesystem it probes with, so a rooted view answers
  * for the paths inside its root and the process filesystem answers for the
- * rest. For the question "does this path *name* an entry" -- which counts a
- * dangling or circular symlink, where this probe follows the link and finds
- * nothing -- ask `readLink` first and fall back to this.
+ * rest.
  */
 export const pathExists = (
   fs: FileSystem.FileSystem,
