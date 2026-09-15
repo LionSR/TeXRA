@@ -123,7 +123,11 @@ export class ElectronSecrets implements PlatformSecrets {
           cause,
         }),
     }).pipe(
-      Effect.catch((failure) =>
+      // The decrypt above is the only step that can fail here, so the handler
+      // names its tag: a second failure added to this channel (another
+      // `mapError`, a joined step) fails to compile instead of being reported
+      // as a refused decrypt and answered with "no saved secret".
+      Effect.catchTag('SecretsFailed', (failure) =>
         Effect.as(
           Effect.andThen(
             Effect.sync(() => {
