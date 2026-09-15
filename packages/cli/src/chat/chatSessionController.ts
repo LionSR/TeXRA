@@ -5,6 +5,7 @@
 
 import {
   Cause,
+  Data,
   Deferred,
   Effect,
   Option,
@@ -46,13 +47,17 @@ import {
   runOutcomeExitCode,
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
-import { hostPort } from '@common/hostPort';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
-import type { RecoveryContinuation, StateStore } from '@platform/interfaces';
+import {
+  StateWriteFailed,
+  type RecoveryContinuation,
+  type StateStore,
+} from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
@@ -144,12 +149,23 @@ interface AutoResumeOptions {
 
 /**
  * The recovery tail every run/resume program below shares. A typed failure
- * from a `hostPort` leaf and a throw from the imperative body alike reach
+ * from a host call and a throw from the imperative body alike reach
  * `recover` with the original value, which is exactly what the `try`/`catch`
  * around these bodies did before they became programs. Interruption is not
  * folded in: a fiber the runtime is tearing down is not a run failure to
  * report, and the caller's own settlement still sees it.
  */
+/**
+ * A chat-session host call this controller drives faulted. The model
+ * selection reads the process stores and the settled wait is the interrupted
+ * run's own promise; neither reports a normal outcome this way.
+ */
+class ChatSessionCallFailed extends Data.TaggedError('ChatSessionCallFailed')<{
+  readonly member: 'selectRunnableModel' | 'awaitInterruptedRun';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 const recoverRun = <A, E, R>(
   program: Effect.Effect<A, E, R>,
   recover: (error: unknown) => A,
@@ -899,7 +915,15 @@ export function createChatSessionController(
         focusRun(runId);
         session.runExitCode = CliExitCode.Success;
 
-        yield* hostPort(() => setCliHelperModel(state, config.model));
+        yield* Effect.tryPromise({
+          try: () => setCliHelperModel(state, config.model),
+          catch: (cause) =>
+            new StateWriteFailed({
+              key: GlobalStateKey.HELPER_MODEL,
+              message: 'The helper model could not be recorded.',
+              cause,
+            }),
+        });
         recoveryHandedOff = true;
         const result = yield* resumeRun(runId, {
           ...toolUseResumeOptions(runId, approvalsUnavailable),
@@ -973,7 +997,15 @@ export function createChatSessionController(
       // any failure) is already reported by the run's own recovery.
       await runtime.runPromise(
         Effect.ignoreCause(
-          hostPort(() => session.runPromise ?? Promise.resolve()),
+          Effect.tryPromise({
+            try: () => session.runPromise ?? Promise.resolve(),
+            catch: (cause) =>
+              new ChatSessionCallFailed({
+                member: 'awaitInterruptedRun',
+                message: 'The interrupted run did not settle cleanly.',
+                cause,
+              }),
+          }),
         ),
       );
       if (batch.superseded) return true;
@@ -1038,18 +1070,33 @@ export function createChatSessionController(
           const meta = sessionMetaSignal.get();
           const currentAgent = meta.agent || initialAgent;
           const currentModel = meta.model || initialModel;
-          const selection = yield* hostPort(() =>
-            selectCliRunnableModel(currentModel, {
-              stores: { secrets, globalState: state, runtime },
-              fallbackReason: meta.model
-                ? meta.modelSource
-                : initialModelSource,
-              noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-                CHAT_API_MODE_MODEL_RECOVERY,
-              ),
-            }),
-          );
-          yield* hostPort(() => setCliHelperModel(state, selection.model));
+          const selection = yield* Effect.tryPromise({
+            try: () =>
+              selectCliRunnableModel(currentModel, {
+                stores: { secrets, globalState: state, runtime },
+                fallbackReason: meta.model
+                  ? meta.modelSource
+                  : initialModelSource,
+                noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+                  CHAT_API_MODE_MODEL_RECOVERY,
+                ),
+              }),
+            catch: (cause) =>
+              new ChatSessionCallFailed({
+                member: 'selectRunnableModel',
+                message: 'No runnable model could be selected.',
+                cause,
+              }),
+          });
+          yield* Effect.tryPromise({
+            try: () => setCliHelperModel(state, selection.model),
+            catch: (cause) =>
+              new StateWriteFailed({
+                key: GlobalStateKey.HELPER_MODEL,
+                message: 'The helper model could not be recorded.',
+                cause,
+              }),
+          });
           if (session.stopRequested) {
             session.markRunCompleted();
             return;

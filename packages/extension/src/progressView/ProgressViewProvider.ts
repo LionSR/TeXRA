@@ -47,6 +47,7 @@ import {
 } from '@controllers/session/SessionBridge';
 import {
   createHostSnapshotSource,
+  HostSnapshotReadFailed,
   type HostSnapshotSource,
 } from '@controllers/session/hostSnapshotSource';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
@@ -185,41 +186,86 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       secrets,
       // One session per extension host: the calling frame is this session's.
       inScope: (read) => read(),
-      fileOptions: () => workspaceFileOptions(roots.workspace),
-      readRecentCommits: async () => {
-        const isGitRepo =
-          (await vscode.commands.executeCommand<boolean>(
-            'texra.isGitRepository',
-          )) ?? false;
-        const commits = isGitRepo
-          ? ((await vscode.commands.executeCommand<string[]>(
-              'texra.getRecentCommits',
-              RECENT_COMMIT_LIMIT,
-            )) ?? [])
-          : [];
-        return { commits, isGitRepo };
-      },
-      isAuthenticated: async () => (await getAuthStatus()).authenticated,
+      fileOptions: () =>
+        Effect.tryPromise({
+          try: () => workspaceFileOptions(roots.workspace),
+          catch: (cause) =>
+            new HostSnapshotReadFailed({
+              member: 'fileOptions',
+              message: 'The workspace file lists could not be read.',
+              cause,
+            }),
+        }),
+      readRecentCommits: () =>
+        Effect.tryPromise({
+          try: async () => {
+            const isGitRepo =
+              (await vscode.commands.executeCommand<boolean>(
+                'texra.isGitRepository',
+              )) ?? false;
+            const commits = isGitRepo
+              ? ((await vscode.commands.executeCommand<string[]>(
+                  'texra.getRecentCommits',
+                  RECENT_COMMIT_LIMIT,
+                )) ?? [])
+              : [];
+            return { commits, isGitRepo };
+          },
+          catch: (cause) =>
+            new HostSnapshotReadFailed({
+              member: 'readRecentCommits',
+              message: 'The recent commits could not be read.',
+              cause,
+            }),
+        }),
+      isAuthenticated: () =>
+        Effect.tryPromise({
+          try: async () => (await getAuthStatus()).authenticated,
+          catch: (cause) =>
+            new HostSnapshotReadFailed({
+              member: 'isAuthenticated',
+              message: 'The TeXRA sign-in state could not be read.',
+              cause,
+            }),
+        }),
       workspaceRoots: () =>
         vscode.workspace.workspaceFolders?.map((folder) => ({
           label: folder.name,
           value: folder.uri.fsPath,
         })) ?? [],
       debugMode: isDebugModeEnabled,
-      apiKeyBanner: async () => ({
-        visible: !(await this.runtime.runPromise(
-          hasUsableSetupCredential(this.secrets, (message) =>
-            log.warn(message),
+      // Already an Effect program: the typed port lets the banner read it
+      // directly instead of settling it on the runtime first.
+      apiKeyBanner: () =>
+        hasUsableSetupCredential(this.secrets, (message) =>
+          log.warn(message),
+        ).pipe(
+          Effect.map((usable) => ({ visible: !usable })),
+          Effect.mapError(
+            (cause) =>
+              new HostSnapshotReadFailed({
+                member: 'apiKeyBanner',
+                message: 'The provider credential status could not be read.',
+                cause,
+              }),
           ),
-        )),
-      }),
-      dependencyBanner: async () => {
-        const missingTools = await checkCoreDependencies(false);
-        return {
-          visible: missingTools.length > 0,
-          missingTools: [...missingTools],
-        };
-      },
+        ),
+      dependencyBanner: () =>
+        Effect.tryPromise({
+          try: async () => {
+            const missingTools = await checkCoreDependencies(false);
+            return {
+              visible: missingTools.length > 0,
+              missingTools: [...missingTools],
+            };
+          },
+          catch: (cause) =>
+            new HostSnapshotReadFailed({
+              member: 'dependencyBanner',
+              message: 'The external tool dependencies could not be probed.',
+              cause,
+            }),
+        }),
       onError: (error) => {
         this.logger.error('Host snapshot refresh failed', { data: error });
       },

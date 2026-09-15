@@ -1,6 +1,9 @@
 // Node imports
 import assert from 'node:assert/strict';
-import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // Third-party imports
 import { openaiChatModel } from '@texra-ai/llm/openai-chat';
@@ -14,7 +17,7 @@ import {
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { fakeStores } from '@test/support/FakePlatform';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 const mocks = vi.hoisted(() => ({
   helperModel: vi.fn(),
@@ -58,6 +61,22 @@ const CONFIG: CreatorConfig = {
   },
 };
 
+/**
+ * The custom agent directory the creator writes into. The YAML write is a
+ * real one on the process filesystem, so the suite gives it a real directory
+ * and reads the file back instead of asserting on a mocked facade.
+ */
+let agentDir: string;
+const agentPath = (): string => join(agentDir, 'editor.yaml');
+
+/** Settle the creator with the `FileSystem` its YAML write requires. */
+const createAgent = (ui: AgentCreatorUI): Promise<void> =>
+  Effect.runPromise(
+    runAgentCreator(CONFIG, 'workflow', ui, STORES).pipe(
+      Effect.provide(nodePlatformLayer),
+    ),
+  );
+
 function createUi(
   events: string[] = [],
   overrides: Partial<AgentCreatorUI> = {},
@@ -68,10 +87,12 @@ function createUi(
     pickTools: vi.fn(() =>
       Effect.succeed({ tools: ['edit_file'], groups: [] }),
     ),
-    getCustomAgentDir: vi.fn(() => Effect.succeed(resolve('/agents'))),
+    getCustomAgentDir: vi.fn(() => Effect.succeed(agentDir)),
     showCreatedInfo: vi.fn(() => events.push('show')),
     promptAddToConfig: vi.fn(() =>
       Effect.sync(() => {
+        // The definition must already be on disk when it is registered.
+        events.push(existsSync(agentPath()) ? 'written' : 'not-written');
         events.push('register');
       }),
     ),
@@ -101,7 +122,8 @@ describe('agent creator orchestration', () => {
     });
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    agentDir = await mkdtemp(join(tmpdir(), 'texra-agent-creator-'));
     mocks.helperModel.mockReset();
     mocks.helperCompletion.mockReset();
     mocks.validateAgentYamlContent.mockReset();
@@ -159,21 +181,18 @@ describe('agent creator orchestration', () => {
         }),
     );
     mocks.validateAgentYamlContent.mockImplementation(() => undefined);
-    vi.spyOn(AbsoluteFS, 'write').mockResolvedValue(undefined);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks();
+    await rm(agentDir, { recursive: true, force: true });
   });
 
   it('creates a workflow agent and preserves registration side-effect order', async () => {
     const events: string[] = [];
     const ui = createUi(events);
-    vi.mocked(AbsoluteFS.write).mockImplementation(async () => {
-      events.push('write');
-    });
 
-    await Effect.runPromise(runAgentCreator(CONFIG, 'workflow', ui, STORES));
+    await createAgent(ui);
 
     expect(ui.promptAgentName).toHaveBeenCalledWith('Workflow');
     expect(ui.promptDescription).toHaveBeenCalledWith(
@@ -181,15 +200,11 @@ describe('agent creator orchestration', () => {
       expect.stringContaining('What should this agent do?'),
     );
     expect(ui.pickTools).not.toHaveBeenCalled();
-    expect(AbsoluteFS.write).toHaveBeenCalledWith(
-      resolve('/agents/editor.yaml'),
-      'generated: true',
-    );
+    expect(await readFile(agentPath(), 'utf8')).toBe('generated: true');
     expect(ui.promptAddToConfig).toHaveBeenCalledWith('editor', 'workflow');
-    expect(ui.openCreatedFile).toHaveBeenCalledWith(
-      resolve('/agents/editor.yaml'),
-    );
-    expect(events.indexOf('write')).toBeLessThan(events.indexOf('register'));
+    expect(ui.openCreatedFile).toHaveBeenCalledWith(agentPath());
+    expect(events).toContain('written');
+    expect(events.indexOf('written')).toBeLessThan(events.indexOf('register'));
   });
 
   it('includes the validation error in the second generation attempt', async () => {
@@ -207,7 +222,7 @@ describe('agent creator orchestration', () => {
       })
       .mockImplementationOnce(() => undefined);
 
-    await Effect.runPromise(runAgentCreator(CONFIG, 'workflow', ui, STORES));
+    await createAgent(ui);
 
     expect(mocks.helperCompletion).toHaveBeenCalledTimes(2);
     expect(fetchModel).toHaveBeenCalledTimes(2);
@@ -216,10 +231,7 @@ describe('agent creator orchestration', () => {
         userPrompt: expect.stringContaining('Retry workflow: missing prompts'),
       }),
     );
-    expect(AbsoluteFS.write).toHaveBeenCalledWith(
-      resolve('/agents/editor.yaml'),
-      'valid: true',
-    );
+    expect(await readFile(agentPath(), 'utf8')).toBe('valid: true');
   });
 
   it('uses the deterministic template after both generation attempts fail', async () => {
@@ -228,7 +240,7 @@ describe('agent creator orchestration', () => {
       new TypeError('synthetic network unavailable'),
     );
 
-    await Effect.runPromise(runAgentCreator(CONFIG, 'workflow', ui, STORES));
+    await createAgent(ui);
 
     expect(mocks.helperModel).toHaveBeenCalledTimes(2);
     expect(mocks.helperCompletion).toHaveBeenCalledTimes(2);
@@ -237,9 +249,6 @@ describe('agent creator orchestration', () => {
       AGENT_NAME: 'editor',
       DESCRIPTION: 'Edit documents',
     });
-    expect(AbsoluteFS.write).toHaveBeenCalledWith(
-      resolve('/agents/editor.yaml'),
-      'fallback yaml',
-    );
+    expect(await readFile(agentPath(), 'utf8')).toBe('fallback yaml');
   });
 });

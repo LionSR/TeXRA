@@ -3,8 +3,11 @@ import path from 'node:path';
 import { Cause, Effect, Exit, FileSystem } from 'effect';
 import { nanoid } from 'nanoid';
 
-import { hostPort } from '@common/hostPort';
-import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
+import {
+  ExternalOpenFailed,
+  type DiffSource,
+  type DiffViewHost,
+} from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
@@ -133,7 +136,16 @@ export function createDesktopDiffHost(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         yield* fs.writeFileString(diffPath, patch);
-        yield* hostPort(() => options.openPath(diffPath));
+        yield* Effect.tryPromise({
+          try: () => options.openPath(diffPath),
+          catch: (cause) =>
+            new ExternalOpenFailed({
+              kind: 'path',
+              target: diffPath,
+              message: 'The patch file could not be opened.',
+              cause,
+            }),
+        });
       }),
     );
     if (Exit.isFailure(opened)) {

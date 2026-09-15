@@ -1,5 +1,4 @@
-import { Effect } from 'effect';
-import { hostPort } from '@common/hostPort';
+import { Data, Effect } from 'effect';
 
 import {
   subscriptionProvider,
@@ -10,7 +9,7 @@ import {
   codingPlanSubscriptionRuntimes,
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
-import { AppState } from '@platform/interfaces';
+import { AppState, StateWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -32,6 +31,22 @@ import type { CliAuthProfile } from './supabaseAuth';
 interface CliModelAccessSelectionResult {
   readonly message: string;
 }
+
+/**
+ * A subscription preference transition the stores would not carry out. The
+ * three members are the session read and the two preference writes; the
+ * preference writes go through the same settings store every host shares, and
+ * that store's `update` keeps its `Promise` shape because a settings slot
+ * travels with the state slot beside it.
+ */
+class ModelAccessPreferenceFailed extends Data.TaggedError(
+  'ModelAccessPreferenceFailed',
+)<{
+  readonly member: 'getStatus' | 'setPreferSubscription' | 'setEnabled';
+  readonly subscription: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 /**
  * A program: each coding plan's key status is a credential read that types its
@@ -117,7 +132,16 @@ const updateSubscriptionCliModelAccess = Effect.fn(
   const secrets = yield* Secrets;
   const { displayName, modelFamily } = provider;
   if (selection.state === 'off') {
-    const update = yield* hostPort(() => provider.setPreferSubscription(false));
+    const update = yield* Effect.tryPromise({
+      try: () => provider.setPreferSubscription(false),
+      catch: (cause) =>
+        new ModelAccessPreferenceFailed({
+          member: 'setPreferSubscription',
+          subscription: providerId,
+          message: `The ${displayName} subscription preference could not be disabled.`,
+          cause,
+        }),
+    });
     return {
       message: update.effective
         ? `${displayName} subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
@@ -125,7 +149,16 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     } satisfies CliModelAccessSelectionResult;
   }
 
-  const status = yield* hostPort(() => provider.getStatus(secrets));
+  const status = yield* Effect.tryPromise({
+    try: () => provider.getStatus(secrets),
+    catch: (cause) =>
+      new ModelAccessPreferenceFailed({
+        member: 'getStatus',
+        subscription: providerId,
+        message: `The ${displayName} subscription session could not be read.`,
+        cause,
+      }),
+  });
   let accountLabel = status.label;
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
@@ -139,9 +172,28 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     accountLabel = account.label;
   }
 
-  const update = yield* hostPort(() => provider.setPreferSubscription(true));
+  const update = yield* Effect.tryPromise({
+    try: () => provider.setPreferSubscription(true),
+    catch: (cause) =>
+      new ModelAccessPreferenceFailed({
+        member: 'setPreferSubscription',
+        subscription: providerId,
+        message: `The ${displayName} subscription preference could not be enabled.`,
+        cause,
+      }),
+  });
   const appState = yield* AppState;
-  yield* hostPort(() => appState.update(GlobalStateKey.USE_OPENROUTER, false));
+  yield* Effect.tryPromise({
+    try: async () => {
+      await appState.update(GlobalStateKey.USE_OPENROUTER, false);
+    },
+    catch: (cause) =>
+      new StateWriteFailed({
+        key: GlobalStateKey.USE_OPENROUTER,
+        message: 'The OpenRouter preference could not be cleared.',
+        cause,
+      }),
+  });
   return {
     message: update.effective
       ? `Prefer ${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`
@@ -158,7 +210,16 @@ const updateKeyedCliModelAccess = Effect.fn(
 ) {
   const plan = runtime.descriptor;
   if (selection.state === 'off') {
-    yield* hostPort(() => runtime.setEnabled(false));
+    yield* Effect.tryPromise({
+      try: () => runtime.setEnabled(false),
+      catch: (cause) =>
+        new ModelAccessPreferenceFailed({
+          member: 'setEnabled',
+          subscription: plan.id,
+          message: `${plan.preferenceLabel} could not be disabled.`,
+          cause,
+        }),
+    });
     return {
       message: `${plan.preferenceLabel} disabled for ${plan.modelFamily}.`,
     } satisfies CliModelAccessSelectionResult;
@@ -173,7 +234,16 @@ const updateKeyedCliModelAccess = Effect.fn(
       message: `No ${plan.credentialName} API key configured — add one with /key or /config → API keys (get one at ${plan.credentialSetupUrl}).`,
     } satisfies CliModelAccessSelectionResult;
   }
-  yield* hostPort(() => runtime.setEnabled(true));
+  yield* Effect.tryPromise({
+    try: () => runtime.setEnabled(true),
+    catch: (cause) =>
+      new ModelAccessPreferenceFailed({
+        member: 'setEnabled',
+        subscription: plan.id,
+        message: `${plan.preferenceLabel} could not be enabled.`,
+        cause,
+      }),
+  });
   return {
     message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${formatCliModelAccessRouteInline('api-key')}.`,
   } satisfies CliModelAccessSelectionResult;

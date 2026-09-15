@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Data, Effect, Exit } from 'effect';
 
 // Local imports
 import {
@@ -11,7 +11,6 @@ import {
 } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
-import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -175,6 +174,17 @@ const cliPlatformLog: SupabaseSessionLog = {
  * before the flushes run, and a teardown path must not depend on the thing
  * it is tearing down.
  */
+/**
+ * One teardown step faulted. Every step below is best effort — the sequence
+ * ignores each failure so a stuck handler or a closed pipe cannot keep the
+ * process alive — so this exists to name which step it was rather than to be
+ * matched on.
+ */
+class CliShutdownStepFailed extends Data.TaggedError('CliShutdownStepFailed')<{
+  readonly step: 'runShutdown' | 'flushTextStderr' | 'flushNdjsonStdout';
+  readonly cause: unknown;
+}> {}
+
 export async function runCliPlatformShutdownSequence(
   lifecycle: LifecycleHost | undefined,
 ): Promise<void> {
@@ -182,12 +192,28 @@ export async function runCliPlatformShutdownSequence(
     Effect.gen(function* () {
       // Signal shutdown is best effort; output still gets one final flush.
       yield* Effect.ignoreCause(
-        hostPort(() => lifecycle?.runShutdown() ?? Promise.resolve()),
+        Effect.tryPromise({
+          try: () => lifecycle?.runShutdown() ?? Promise.resolve(),
+          catch: (cause) =>
+            new CliShutdownStepFailed({ step: 'runShutdown', cause }),
+        }),
       );
       // A closed stderr pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(hostPort(flushTextStderr));
+      yield* Effect.ignoreCause(
+        Effect.tryPromise({
+          try: () => flushTextStderr(),
+          catch: (cause) =>
+            new CliShutdownStepFailed({ step: 'flushTextStderr', cause }),
+        }),
+      );
       // A closed stdout pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(hostPort(flushNdjsonStdout));
+      yield* Effect.ignoreCause(
+        Effect.tryPromise({
+          try: () => flushNdjsonStdout(),
+          catch: (cause) =>
+            new CliShutdownStepFailed({ step: 'flushNdjsonStdout', cause }),
+        }),
+      );
     }),
   );
 }

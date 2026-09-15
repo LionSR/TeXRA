@@ -1,13 +1,12 @@
 // Node imports
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { hostPort } from '@common/hostPort';
 import {
   fileLocationDisplayPath,
   ToolError,
@@ -21,7 +20,6 @@ import {
   type WorkspacePathPorts,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { runStorageLocationFromAbsolutePath } from '@utils/files/runStorageFs';
 import { hasExtension } from '@utils/core/pathCore';
@@ -76,7 +74,19 @@ const openPdfProgram = Effect.fn('OpenPdfTool.execute')(function* (
       new ToolError(`open_pdf only opens PDF files: ${displayPath}`),
     );
   }
-  if (!(yield* hostPort(() => AbsoluteFS.isFile(location.absolutePath)))) {
+  // The path is already absolute — the resolution above produced it — so the
+  // read goes through the process filesystem. A missing path, or a path whose
+  // parent is not a directory, is "not found"; anything else (a permission
+  // denial) is the caller's to see, as the facade's own stat was.
+  const fs = yield* FileSystem.FileSystem;
+  const info = yield* fs.stat(location.absolutePath).pipe(
+    Effect.catchIf(
+      (error) =>
+        error.reason._tag === 'NotFound' || error.reason._tag === 'BadResource',
+      () => Effect.succeed(undefined),
+    ),
+  );
+  if (info?.type !== 'File') {
     return yield* Effect.fail(
       new ToolError(`PDF file not found: ${displayPath}`),
     );

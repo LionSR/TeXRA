@@ -175,9 +175,10 @@ describe('desktop preview host', () => {
           globalState,
           workspaceState: session.roots.workspaceState,
           inScope: (read) => read(),
-          fileOptions: () => files.fileOptions(),
-          readRecentCommits: async () => ({ commits: [], isGitRepo: false }),
-          isAuthenticated: async () => false,
+          fileOptions: () => Effect.promise(() => files.fileOptions()),
+          readRecentCommits: () =>
+            Effect.succeed({ commits: [], isGitRepo: false }),
+          isAuthenticated: () => Effect.succeed(false),
           publish: () => {},
           onError: () => {},
         }),

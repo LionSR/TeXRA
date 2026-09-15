@@ -13,7 +13,7 @@ import {
   shell,
 } from 'electron';
 
-import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
+import { Cause, Data, Effect, Exit, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 import { presentAgentFailure, runInSession } from '@agent/runtime';
 import {
@@ -24,7 +24,6 @@ import {
   refresh,
 } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { hostPort } from '@common/hostPort';
 import {
   classifyAgentError,
   primaryAgentError,
@@ -39,10 +38,17 @@ import {
   SessionBridge,
   type AttachedPort,
 } from '@controllers/session/SessionBridge';
-import { createHostSnapshotSource } from '@controllers/session/hostSnapshotSource';
+import {
+  createHostSnapshotSource,
+  HostSnapshotReadFailed,
+} from '@controllers/session/hostSnapshotSource';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
-import { PromptFailed } from '@hosts/uiHosts';
+import {
+  ExternalOpenFailed,
+  NotificationFailed,
+  PromptFailed,
+} from '@hosts/uiHosts';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { DisposableStore } from '@platform/disposable';
@@ -398,6 +404,16 @@ function createWindow(options: {
   const onboardingIpcRef: {
     current?: DesktopOnboardingIpc;
   } = {};
+  /**
+   * The onboarding funnel could not be recomputed. The funnel is host state
+   * every open project's snapshot carries, so a refresh that faults leaves
+   * the last state in place and is reported, not swallowed.
+   */
+  class OnboardingRefreshFailed extends Data.TaggedError(
+    'OnboardingRefreshFailed',
+  )<{
+    readonly cause: unknown;
+  }> {}
   const showMessageBoxOfType =
     (type: 'error' | 'info' | 'warning') => async (message: string) => {
       await dialog.showMessageBox(window, { type, message });
@@ -406,11 +422,18 @@ function createWindow(options: {
   const reportAsyncError = (error: unknown) => {
     console.error('Desktop asynchronous operation failed:', error);
     runtime.runFork(
-      hostPort(() =>
-        showErrorMessage(
-          `A desktop operation failed: ${toErrorMessage(error)}`,
-        ),
-      ).pipe(
+      Effect.tryPromise({
+        try: () =>
+          showErrorMessage(
+            `A desktop operation failed: ${toErrorMessage(error)}`,
+          ),
+        catch: (cause) =>
+          new NotificationFailed({
+            member: 'showErrorMessage',
+            message: 'The desktop failure dialog could not be shown.',
+            cause,
+          }),
+      }).pipe(
         Effect.catch((notificationError) =>
           Effect.sync(() => {
             console.error(
@@ -537,7 +560,16 @@ function createWindow(options: {
    *  never opening is reported, not swallowed. */
   const openExternalInBackground = (url: string): void => {
     runtime.runFork(
-      hostPort(() => previewHost.openExternal(url)).pipe(
+      Effect.tryPromise({
+        try: () => previewHost.openExternal(url),
+        catch: (cause) =>
+          new ExternalOpenFailed({
+            kind: 'url',
+            target: url,
+            message: 'The documentation URL could not be opened.',
+            cause,
+          }),
+      }).pipe(
         Effect.catch((error) =>
           Effect.sync(() => reportBackgroundError(error)),
         ),
@@ -749,7 +781,15 @@ function createWindow(options: {
    */
   const awaitOrReport = (started: Promise<void>): Promise<void> =>
     runtime.runPromise(
-      hostPort(() => started).pipe(
+      Effect.tryPromise({
+        try: () => started,
+        catch: (cause) =>
+          new NotificationFailed({
+            member: 'showInfoMessage',
+            message: 'A desktop dialog could not be shown.',
+            cause,
+          }),
+      }).pipe(
         Effect.catch((error) =>
           Effect.sync(() => reportBackgroundError(error)),
         ),
@@ -859,9 +899,36 @@ function createWindow(options: {
       workspaceState: project.session.roots.workspaceState,
       secrets: options.secrets,
       inScope: (read) => runInSession(project.session, read),
-      fileOptions: () => files.fileOptions(),
-      readRecentCommits: () => recentCommitsOf(project.root),
-      isAuthenticated: () => SupabaseClient.isAuthenticated(),
+      fileOptions: () =>
+        Effect.tryPromise({
+          try: () => files.fileOptions(),
+          catch: (cause) =>
+            new HostSnapshotReadFailed({
+              member: 'fileOptions',
+              message: 'The project file lists could not be read.',
+              cause,
+            }),
+        }),
+      readRecentCommits: () =>
+        Effect.tryPromise({
+          try: () => recentCommitsOf(project.root),
+          catch: (cause) =>
+            new HostSnapshotReadFailed({
+              member: 'readRecentCommits',
+              message: 'The recent commits could not be read.',
+              cause,
+            }),
+        }),
+      isAuthenticated: () =>
+        Effect.tryPromise({
+          try: () => SupabaseClient.isAuthenticated(),
+          catch: (cause) =>
+            new HostSnapshotReadFailed({
+              member: 'isAuthenticated',
+              message: 'The TeXRA sign-in state could not be read.',
+              cause,
+            }),
+        }),
       onError: reportBackgroundError,
       publish: (next) => {
         runtime.runFork(bridge.setHost(next));
@@ -1441,7 +1508,10 @@ function createWindow(options: {
     }),
   );
   runtime.runFork(
-    hostPort(() => onboardingIpc.refreshOnboardingFunnel()).pipe(
+    Effect.tryPromise({
+      try: () => onboardingIpc.refreshOnboardingFunnel(),
+      catch: (cause) => new OnboardingRefreshFailed({ cause }),
+    }).pipe(
       Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
     ),
   );
@@ -1767,7 +1837,10 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // reporter below prints `error.stack`, which a wrapper would replace
       // with the runtime's own trace.
       const startup = await runtime.runPromiseExit(
-        hostPort(async () => {
+        // `Effect.promise`, not a typed failure: a rejection here is a defect,
+        // and `Cause.squash` below hands the original error — with its own
+        // `stack` — to the fatal reporter, which a tagged wrapper would hide.
+        Effect.promise(async () => {
           const warn = (message: string) =>
             console.warn(`[desktop] ${message}`);
           const projectRecords = await runtime.runPromise(
@@ -1855,11 +1928,19 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           reopenMainWindow();
           if (unopenedProjects.length > 0) {
             runtime.runFork(
-              hostPort(() =>
-                showDesktopWarningDialog(
-                  `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
-                ),
-              ).pipe(
+              Effect.tryPromise({
+                try: () =>
+                  showDesktopWarningDialog(
+                    `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
+                  ),
+                catch: (cause) =>
+                  new NotificationFailed({
+                    member: 'showWarningMessage',
+                    message:
+                      'The unopened-projects warning could not be shown.',
+                    cause,
+                  }),
+              }).pipe(
                 Effect.catch((error) =>
                   Effect.sync(() => console.error(error)),
                 ),

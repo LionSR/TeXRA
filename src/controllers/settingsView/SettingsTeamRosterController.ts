@@ -1,5 +1,4 @@
-import { Effect } from 'effect';
-import { hostPort } from '@common/hostPort';
+import { Data, Effect } from 'effect';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import {
   formatTeamUnavailableMessage,
@@ -40,6 +39,46 @@ interface SettingsTeamRosterOptions extends Omit<
   readonly refreshAfterApply: (selectedToolUseAgent?: string) => Promise<void>;
 }
 
+/**
+ * The host's own post-apply refresh rejected. It is the settings view
+ * rebuilding itself, not a catalog operation, so it is its own answer: the
+ * team is already committed when this fails.
+ */
+class TeamRosterRefreshFailed extends Data.TaggedError(
+  'TeamRosterRefreshFailed',
+)<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/**
+ * A settings message never reached the user: the host's own dialog surface
+ * faulted. Declared beside the presentation bag it belongs to rather than
+ * beside `MessageHost`, because `src` keeps `controllers -> hosts` a
+ * type-only edge.
+ */
+class TeamRosterNotificationFailed extends Data.TaggedError(
+  'TeamRosterNotificationFailed',
+)<{
+  readonly member: 'showInfoMessage' | 'showErrorMessage';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/** Show one settings message, reporting a host that could not present it. */
+const notify = (
+  present: (message: string) => Promise<void> | void,
+  member: TeamRosterNotificationFailed['member'],
+  message: string,
+): Effect.Effect<void, TeamRosterNotificationFailed> =>
+  Effect.tryPromise({
+    try: async () => {
+      await present(message);
+    },
+    catch: (cause) =>
+      new TeamRosterNotificationFailed({ member, message, cause }),
+  });
+
 /** Apply a settings team and present its outcome consistently across hosts. */
 export function applySettingsTeamRoster(
   presetId: string,
@@ -56,22 +95,22 @@ export function applySettingsTeamRoster(
 
     switch (result.status) {
       case 'unknown':
-        yield* hostPort(() =>
-          options.presentation.showErrorMessage(
-            formatUnknownTeamMessage(presetId),
-          ),
+        yield* notify(
+          (text) => options.presentation.showErrorMessage(text),
+          'showErrorMessage',
+          formatUnknownTeamMessage(presetId),
         );
         return;
       case 'choice-required':
       case 'cancelled':
         return;
       case 'unavailable':
-        yield* hostPort(() =>
-          options.presentation.showErrorMessage(
-            formatTeamUnavailableMessage(
-              result.preset.name,
-              result.unavailableNames,
-            ),
+        yield* notify(
+          (text) => options.presentation.showErrorMessage(text),
+          'showErrorMessage',
+          formatTeamUnavailableMessage(
+            result.preset.name,
+            result.unavailableNames,
           ),
         );
         return;
@@ -80,15 +119,23 @@ export function applySettingsTeamRoster(
           result.preset.agents.toolUse,
           result.preset.id,
         );
-        yield* hostPort(() => options.refreshAfterApply(selectedToolUseAgent));
+        yield* Effect.tryPromise({
+          try: () => options.refreshAfterApply(selectedToolUseAgent),
+          catch: (cause) =>
+            new TeamRosterRefreshFailed({
+              message:
+                'The team was applied, but the settings view could not be refreshed.',
+              cause,
+            }),
+        });
 
         const unresolvedCount = result.resolution.unresolvedNames.length;
-        yield* hostPort(() =>
-          options.presentation.showInfoMessage(
-            unresolvedCount === 0
-              ? `Applied "${result.preset.name}" team`
-              : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
-          ),
+        yield* notify(
+          (text) => options.presentation.showInfoMessage(text),
+          'showInfoMessage',
+          unresolvedCount === 0
+            ? `Applied "${result.preset.name}" team`
+            : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
         );
         return;
       }

@@ -198,8 +198,13 @@ describe('createDesktopDiffHost', () => {
     const { host, openPath } = createHost();
     openPath.mockRejectedValue(failure);
 
-    // The original failure reaches the caller, not a cleanup artifact.
-    await expect(openDiffPair(host, 'Compare')).rejects.toBe(failure);
+    // The open failure reaches the caller, carrying the host's own rejection,
+    // and not a cleanup artifact.
+    await expect(openDiffPair(host, 'Compare')).rejects.toMatchObject({
+      _tag: 'ExternalOpenFailed',
+      kind: 'path',
+      cause: failure,
+    });
 
     expect(openPath).toHaveBeenCalledTimes(1);
     const diffDir = path.dirname(openPath.mock.calls[0][0]);

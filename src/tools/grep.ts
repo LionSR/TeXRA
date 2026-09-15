@@ -159,8 +159,8 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   // `exitCode`, `timedOut`, `outputLimitExceeded`) and never rejects, so the
   // spawn has no error channel of its own. `ports.signal` is the fiber's own
   // abort signal, and the region is interruptible now that the spawn is no
-  // longer behind `hostPort`: interrupting the tool tears the `rg` process
-  // down instead of abandoning it.
+  // longer behind an uninterruptible host-port wrap: interrupting the tool
+  // tears the `rg` process down instead of abandoning it.
   const result = yield* Effect.promise(() =>
     ports.inScope(() =>
       executeCommand(command, {

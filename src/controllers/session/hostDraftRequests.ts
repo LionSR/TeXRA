@@ -1,11 +1,10 @@
 /** Shared draft operations and the process recorder's originating request. */
-import { Deferred, Effect } from 'effect';
+import { Data, Deferred, Effect } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
-import { hostPort } from '@common/hostPort';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -19,6 +18,27 @@ import {
   transcribeRecording,
 } from '@tools/media/audio';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
+
+/**
+ * A draft operation this controller drives faulted rather than reporting an
+ * outcome. Every member below answers with a result object of its own —
+ * "the microphone would not start", "transcription failed" — so reaching
+ * here means the call itself threw.
+ *
+ * `savePastedImage` keeps its `Promise` shape deliberately: the write goes
+ * through `StorageFS`'s ambient-rooted statics, and the three-day cleanup it
+ * performs has no equivalent on the rooted `StorageFs` view yet, so moving it
+ * is #12421's consumer work on `pastedImageUtils`, not a call-site change.
+ */
+class DraftOperationFailed extends Data.TaggedError('DraftOperationFailed')<{
+  readonly member:
+    | 'savePastedImage'
+    | 'startRecording'
+    | 'stopRecording'
+    | 'transcribeRecording';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 type DraftRequest = Extract<
   HostRequest,
@@ -92,9 +112,15 @@ export class HostDraftRequests {
       case 'savePastedImage':
         return {
           kind: 'savedImage',
-          fileName: yield* hostPort(() =>
-            savePastedImageBase64(request.base64, request.fileName),
-          ),
+          fileName: yield* Effect.tryPromise({
+            try: () => savePastedImageBase64(request.base64, request.fileName),
+            catch: (cause) =>
+              new DraftOperationFailed({
+                member: 'savePastedImage',
+                message: 'The pasted image could not be saved.',
+                cause,
+              }),
+          }),
         };
       case 'record':
         if (request.action.kind === 'start') {
@@ -164,9 +190,15 @@ export class HostDraftRequests {
         // The recorder writes under the take's own session storage, so its
         // roots travel with the call instead of through a roots scope the
         // detached take fiber would have to stay inside.
-        const started = yield* hostPort(() =>
-          startRecording(take.session.roots),
-        );
+        const started = yield* Effect.tryPromise({
+          try: () => startRecording(take.session.roots),
+          catch: (cause) =>
+            new DraftOperationFailed({
+              member: 'startRecording',
+              message: 'The recorder could not be started.',
+              cause,
+            }),
+        });
         if (!started.success) {
           return yield* new Rejected({
             reason: started.error ?? 'Recording could not start.',
@@ -183,7 +215,15 @@ export class HostDraftRequests {
         // SIGTERM and the module's recording state resets here, so a slow,
         // denied or failing credential read below cannot delay the kill or
         // leave the microphone running when the take is rejected.
-        const stopped = yield* hostPort(() => stopRecording());
+        const stopped = yield* Effect.tryPromise({
+          try: () => stopRecording(),
+          catch: (cause) =>
+            new DraftOperationFailed({
+              member: 'stopRecording',
+              message: 'The recorder could not be stopped.',
+              cause,
+            }),
+        });
         const recordingPath = stopped.recordingPath;
         if (!stopped.success || recordingPath === undefined) {
           return yield* new Rejected({
@@ -207,9 +247,16 @@ export class HostDraftRequests {
         ).pipe(
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
-        const result = yield* hostPort(() =>
-          transcribeRecording(recordingPath, credential, take.session.roots),
-        );
+        const result = yield* Effect.tryPromise({
+          try: () =>
+            transcribeRecording(recordingPath, credential, take.session.roots),
+          catch: (cause) =>
+            new DraftOperationFailed({
+              member: 'transcribeRecording',
+              message: 'The recording could not be transcribed.',
+              cause,
+            }),
+        });
         if (!result.success) {
           return yield* new Rejected({
             reason: result.error ?? 'Transcription failed.',

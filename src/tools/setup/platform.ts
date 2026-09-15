@@ -15,7 +15,6 @@ import { Context, Data, Effect, Layer } from 'effect';
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { getCodexStatus } from '@auth/codex';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { hostPort } from '@common/hostPort';
 import type { TerminalRunner } from '@hosts/uiHosts';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
@@ -103,38 +102,96 @@ export class SetupPlatform extends Context.Service<
   }
 }
 
+/**
+ * The account probe itself could not run. `SupabaseClient` answers "not
+ * signed in" for an absent session and logs a refresh failure itself, so the
+ * only way here is the client never having been initialized — the reason its
+ * accessor raises. The client's reads stay `Promise`-shaped: the auth ring
+ * spans the three hosts' sign-in surfaces and the subscription probes, which
+ * the credential lane measured and left for their own cut.
+ */
+export class SetupAccountProbeFailed extends Data.TaggedError(
+  'SetupAccountProbeFailed',
+)<{
+  readonly member: 'isAuthenticated' | 'getUser';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 /** TeXRA account status shared by every host. */
 export const getSetupAuthStatus = Effect.fn('getSetupAuthStatus')(
   function* (): Effect.fn.Return<
     { authenticated: boolean; email?: string },
-    unknown
+    SetupAccountProbeFailed
   > {
-    const authenticated = yield* hostPort(() =>
-      SupabaseClient.isAuthenticated(),
-    );
+    const authenticated = yield* Effect.tryPromise({
+      try: () => SupabaseClient.isAuthenticated(),
+      catch: (cause) =>
+        new SetupAccountProbeFailed({
+          member: 'isAuthenticated',
+          message: 'The TeXRA account session could not be read.',
+          cause,
+        }),
+    });
     if (!authenticated) {
       return { authenticated: false };
     }
 
-    const user = yield* hostPort(() => SupabaseClient.getUser());
+    const user = yield* Effect.tryPromise({
+      try: () => SupabaseClient.getUser(),
+      catch: (cause) =>
+        new SetupAccountProbeFailed({
+          member: 'getUser',
+          message: 'The signed-in TeXRA account could not be read.',
+          cause,
+        }),
+    });
     return { authenticated: true, email: user?.email };
   },
 );
+
+/**
+ * The ChatGPT subscription probe could not answer. Both members read the
+ * stored OAuth session and the routing built from it; neither reports "no
+ * subscription" this way, which is a value. They stay `Promise`-shaped with
+ * the rest of the account group.
+ */
+export class SubscriptionProbeFailed extends Data.TaggedError(
+  'SubscriptionProbeFailed',
+)<{
+  readonly member: 'getCodexStatus' | 'isCodexSubscriptionActive';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 /** Subscription access reported separately from provider API keys. */
 export const getChatGptSubscriptionStatus = Effect.fn(
   'getChatGptSubscriptionStatus',
 )(function* (): Effect.fn.Return<
   { signedIn: boolean; enabled: boolean },
-  unknown,
+  SubscriptionProbeFailed,
   Secrets
 > {
   const secrets = yield* Secrets;
-  const status = yield* hostPort(() => getCodexStatus(secrets));
+  const status = yield* Effect.tryPromise({
+    try: () => getCodexStatus(secrets),
+    catch: (cause) =>
+      new SubscriptionProbeFailed({
+        member: 'getCodexStatus',
+        message: 'The ChatGPT subscription session could not be read.',
+        cause,
+      }),
+  });
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
-  const enabled = yield* hostPort(() =>
-    isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
-  );
+  const enabled = yield* Effect.tryPromise({
+    try: () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
+    catch: (cause) =>
+      new SubscriptionProbeFailed({
+        member: 'isCodexSubscriptionActive',
+        message: 'ChatGPT subscription routing could not be resolved.',
+        cause,
+      }),
+  });
   return { signedIn: true, enabled };
 });
