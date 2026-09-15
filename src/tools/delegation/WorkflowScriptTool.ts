@@ -1,6 +1,9 @@
+// Node imports
+import * as nodePath from 'node:path';
+
 // Third-party imports
 import { z } from 'zod';
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import { Cause, Effect, Exit, Fiber, FileSystem } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -17,6 +20,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { ToolServices } from '@agent/runtime/ToolServices';
+import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult, WorkflowAgentProposal } from '@shared/schemas';
 import {
   AgentCategory,
@@ -40,10 +44,15 @@ import {
 } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { entryExists } from '@utils/files/fsEntryExists';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 import { childRunDescription, createChildRun } from './childRun';
+
+// Local imports - errors
+
+// Local imports - platform
 
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
@@ -126,6 +135,27 @@ function workflowScriptDraftStem(id: string): string {
   return `draft-${slug || 'workflow'}`;
 }
 
+/**
+ * The view of a resolved tool path's own filesystem: a workspace-relative
+ * path (`fsPath` stays relative inside the session's folder) goes through the
+ * session's confined workspace view, and an absolute one — a path the caller
+ * chose outside the workspace — through the process filesystem, which is the
+ * split the old `WorkspaceFS` static made by passing absolute paths through.
+ */
+const fileSystemAt = (
+  fsPath: string,
+): Effect.Effect<
+  FileSystem.FileSystem,
+  never,
+  FileSystem.FileSystem | WorkspaceFs
+> =>
+  Effect.gen(function* () {
+    if (nodePath.isAbsolute(fsPath)) {
+      return yield* FileSystem.FileSystem;
+    }
+    return yield* WorkspaceFs;
+  });
+
 const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
   script: string,
   submissionId: string,
@@ -136,10 +166,10 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
     resolveWorkspaceRelativePath(WORKFLOW_SCRIPT_DIRECTORY, workingDirectory),
   );
   assertWritable(directory, WORKFLOW_SCRIPT_DIRECTORY);
-  yield* Effect.tryPromise({
-    try: () => inScope(() => WorkspaceFS.ensureDir(directory.fsPath)),
-    catch: ensureError,
-  });
+  const directoryFs = yield* fileSystemAt(directory.fsPath);
+  yield* directoryFs
+    .makeDirectory(directory.fsPath, { recursive: true })
+    .pipe(Effect.mapError(ensureError));
   const stem = workflowScriptDraftStem(submissionId);
   for (let suffix = 0; ; suffix += 1) {
     const filename = suffix === 0 ? `${stem}.mjs` : `${stem}-${suffix + 1}.mjs`;
@@ -150,24 +180,20 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
       ),
     );
     assertWritable(resolved, resolved.relative);
-    const exists = yield* Effect.tryPromise({
-      try: () => inScope(() => WorkspaceFS.exists(resolved.fsPath)),
-      catch: ensureError,
-    });
+    const fs = yield* fileSystemAt(resolved.fsPath);
+    const exists = yield* entryExists(fs, resolved.fsPath);
     if (exists) {
-      const existing = yield* Effect.tryPromise({
-        try: () => inScope(() => WorkspaceFS.read(resolved.fsPath)),
-        catch: ensureError,
-      });
+      const existing = yield* readNormalizedFile(fs, resolved.fsPath).pipe(
+        Effect.mapError(ensureError),
+      );
       if (existing === script) {
         return resolved.relative;
       }
       continue;
     }
-    yield* Effect.tryPromise({
-      try: () => inScope(() => WorkspaceFS.write(resolved.fsPath, script)),
-      catch: ensureError,
-    });
+    yield* fs
+      .writeFile(resolved.fsPath, Buffer.from(script, 'utf-8'))
+      .pipe(Effect.mapError(ensureError));
     return resolved.relative;
   }
 });
@@ -279,14 +305,16 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           resolveWorkspaceRelativePath(input.scriptPath!, workingDirectory),
         );
         scriptPath = resolved.relative;
-        script = yield* Effect.tryPromise({
-          try: () => parent.inScope(() => WorkspaceFS.read(resolved.fsPath)),
-          catch: (error) =>
-            new ToolError(
-              `Unable to read workflow script '${input.scriptPath}': ${toErrorMessage(error)}`,
-              { cause: error },
-            ),
-        });
+        const scriptFs = yield* fileSystemAt(resolved.fsPath);
+        script = yield* readNormalizedFile(scriptFs, resolved.fsPath).pipe(
+          Effect.mapError(
+            (error) =>
+              new ToolError(
+                `Unable to read workflow script '${input.scriptPath}': ${toErrorMessage(error)}`,
+                { cause: error },
+              ),
+          ),
+        );
       } else {
         // The schema's exactly-one refinement guarantees source here.
         script = input.script as string;
@@ -310,13 +338,6 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       const runSyncPhase = <T>(phase: () => T): Effect.Effect<T, ToolError> =>
         Effect.try({
           try: phase,
-          catch: (error) => workflowScriptToolError(error, scriptPath),
-        });
-      const runPromisePhase = <T>(
-        phase: () => PromiseLike<T>,
-      ): Effect.Effect<T, ToolError> =>
-        Effect.tryPromise({
-          try: () => parent.inScope(phase),
           catch: (error) => workflowScriptToolError(error, scriptPath),
         });
 
@@ -350,19 +371,25 @@ Durability: the journal is keyed by meta.name and the agent field within this se
               ),
             )
           : null;
-      const files = yield* runPromisePhase(async () => {
-        const parsedFiles = WorkflowScriptFilesSchema.parse(
+      const files = yield* runSyncPhase(() =>
+        WorkflowScriptFilesSchema.parse(
           input.files ?? priorCheckpoint?.files ?? {},
-        );
-        await assertWorkflowFilesExist([
-          { label: 'Workflow input file', files: parsedFiles.inputFiles },
-          { label: 'Workflow context file', files: parsedFiles.contextFiles },
-          { label: 'Workflow media file', files: parsedFiles.mediaFiles },
-        ]);
-        return parsedFiles;
-      });
-      const oversizedBibRejection = yield* runPromisePhase(() =>
-        rejectOversizedBibAttachments(files.contextFiles),
+        ),
+      );
+      // The owning session's workspace folder is handed in as data from
+      // `parent.roots`, not read from an ambient workspace scope.
+      yield* assertWorkflowFilesExist(parent.roots.workspace, [
+        { label: 'Workflow input file', files: files.inputFiles },
+        { label: 'Workflow context file', files: files.contextFiles },
+        { label: 'Workflow media file', files: files.mediaFiles },
+      ]).pipe(
+        Effect.mapError((error) => workflowScriptToolError(error, scriptPath)),
+      );
+      const oversizedBibRejection = yield* rejectOversizedBibAttachments(
+        parent.roots.workspace,
+        files.contextFiles,
+      ).pipe(
+        Effect.mapError((error) => workflowScriptToolError(error, scriptPath)),
       );
       if (oversizedBibRejection) {
         return withScriptReference(oversizedBibRejection, scriptPath);

@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, type Scope } from 'effect';
+import { Cause, Effect, Exit, FileSystem, type Scope } from 'effect';
 
 /**
  * Workflow-script child-run strategy over the shared `childRunLoop`.
@@ -99,11 +99,16 @@ function formatWorkflowResult(result: unknown): string {
 
 export interface WorkflowScriptStrategyParams {
   readonly session: SessionHandle;
+  /**
+   * The host's dependency fingerprint. It reads file bytes through the process
+   * `FileSystem` now that the `AbsoluteFS` facade is gone, so its `R` names
+   * that service rather than nothing.
+   */
   readonly fingerprintAgentDependencies: (
     options: Parameters<
       NonNullable<WorkflowScriptRunOptions['fingerprintAgentDependencies']>
     >[0],
-  ) => Effect.Effect<string, Error>;
+  ) => Effect.Effect<string, Error, FileSystem.FileSystem>;
   /** The detached run's run id — echoed on the delivery envelope. */
   readonly runId: RunId;
   /** The run's child-stream trace — where phase/log progress projects. */

@@ -29,7 +29,7 @@ import {
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import type { Effect } from 'effect';
+import type { Effect, FileSystem } from 'effect';
 
 const log = createLog('ToolEditApproval');
 
@@ -77,7 +77,9 @@ export interface ToolEditApprovalHost {
    * the host's process runtime. The controller holds no runtime of its own,
    * so every Effect it starts runs through here.
    */
-  runPreview(program: Effect.Effect<void>): Promise<void>;
+  runPreview(
+    program: Effect.Effect<void, unknown, FileSystem.FileSystem>,
+  ): Promise<void>;
   reportError(message: string): void;
   /**
    * Send the decision for a staged request: the host's `request.decide` on

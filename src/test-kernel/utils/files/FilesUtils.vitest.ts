@@ -28,6 +28,7 @@ import { pathToLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { RelativeFS } from '@utils/files/relativeFS';
 import { pastedImageFileName } from '@utils/files/pastedImageUtils';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { rootedFileSystem } from '@utils/files/rootedFileSystem';
 
 // ---------------------------------------------------------------------------
@@ -239,6 +240,40 @@ describe('rootedFileSystem confinement', () => {
         Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined,
       ).toMatchObject({ reason: { _tag: 'BadArgument' } });
       expect(yield* fs.readDirectory(parent)).toEqual(['root']);
+    }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer)),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// entryExists
+// ---------------------------------------------------------------------------
+
+describe('entryExists', () => {
+  effectIt.live('reads a dangling symlink as an entry', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({
+        prefix: 'texra-entry-exists-',
+      });
+      const gone = path.join(root, 'gone.tex');
+      const dangling = path.join(root, 'dangling.tex');
+      const cyclic = path.join(root, 'cyclic.tex');
+      const file = path.join(root, 'real.tex');
+      yield* fs.symlink(gone, dangling);
+      yield* fs.symlink(cyclic, cyclic);
+      yield* fs.writeFileString(file, 'body');
+
+      // The facade's lstat-backed probe named the link itself where the
+      // `access(2)` behind `FileSystem.exists` cannot resolve its target, so
+      // the readLink half is what keeps a caller from reading the dangling
+      // path as new and then writing through the link.
+      expect(yield* entryExists(fs, dangling)).toBe(true);
+      expect(yield* entryExists(fs, cyclic)).toBe(true);
+      expect(yield* entryExists(fs, file)).toBe(true);
+      // Absent, and a parent that is not a directory, still read as absent.
+      expect(yield* entryExists(fs, gone)).toBe(false);
+      expect(yield* entryExists(fs, path.join(file, 'child'))).toBe(false);
     }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer)),
   );
 });

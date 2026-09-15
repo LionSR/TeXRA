@@ -14,6 +14,7 @@
  *    are cached for the session.
  */
 
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
@@ -21,7 +22,6 @@ import { z } from 'zod';
 
 import { isModuleNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { executeCommand } from '@utils/system/execUtils';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
@@ -125,8 +125,12 @@ async function codexBinaryInPlatformPackage(
       path.join(vendorDir, 'bin', CODEX_BINARY_NAME),
       path.join(vendorDir, 'codex', CODEX_BINARY_NAME),
     ];
+    // A plain predicate on a path this module just built, over the real
+    // filesystem the packaged binary lives on. The static it replaces asked
+    // lstat, which counted a dangling symlink as present where `existsSync`'s
+    // access probe does not.
     for (const candidate of candidates) {
-      if (await AbsoluteFS.exists(candidate)) return candidate;
+      if (existsSync(candidate)) return candidate;
     }
     return undefined;
   };

@@ -152,23 +152,16 @@ Optional auto-attach from the input LaTeX:
         withScope: call.inScope,
       });
 
-      yield* Effect.tryPromise({
-        try: () =>
-          call.inScope(() =>
-            assertWorkflowFilesExist([
-              { label: 'Input file', files: input.inputFiles },
-              { label: 'Context file', files: input.contextFiles },
-              { label: 'Media file', files: input.mediaFiles },
-            ]),
-          ),
-        catch: ensureError,
-      });
+      yield* assertWorkflowFilesExist(call.roots.workspace, [
+        { label: 'Input file', files: input.inputFiles },
+        { label: 'Context file', files: input.contextFiles },
+        { label: 'Media file', files: input.mediaFiles },
+      ]).pipe(Effect.mapError(ensureError));
 
-      const oversizedBibRejection = yield* Effect.tryPromise({
-        try: () =>
-          call.inScope(() => rejectOversizedBibAttachments(input.contextFiles)),
-        catch: ensureError,
-      });
+      const oversizedBibRejection = yield* rejectOversizedBibAttachments(
+        call.roots.workspace,
+        input.contextFiles,
+      ).pipe(Effect.mapError(ensureError));
       if (oversizedBibRejection) return oversizedBibRejection;
 
       // Extraction flags map to toolConfig, flowing through the proposal UI and

@@ -1,3 +1,5 @@
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import { mkdir } from 'node:fs/promises';
 import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -8,9 +10,6 @@ import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { RelativeFS } from '@utils/files/relativeFS';
-import { THREE_DAYS_MS } from '@utils/config/constants';
 import { readConfig } from '@utils/config/configUtils';
 import {
   BinaryResolver,
@@ -28,7 +27,7 @@ const RECORDINGS_DIR = 'recordings';
  * storage root without the module entering (or reading) an ambient roots
  * scope — the desktop holds one session per open paper.
  */
-function recordingsDir(roots: WorkspaceRoots): string {
+export function recordingsDir(roots: WorkspaceRoots): string {
   return path.join(roots.storage, RECORDINGS_DIR);
 }
 
@@ -56,10 +55,20 @@ function resolveSoxCommand(
     roots.config,
     'texra.audio.soxPath',
   );
-  if (configuredPath && AbsoluteFS.existsSync(configuredPath)) {
-    return BinaryResolver.resolveOptionalCommand('sox', [], {
-      resolvedPath: configuredPath,
-    });
+  if (configuredPath) {
+    // `AbsoluteFS.existsSync` validated the path before probing it, so a
+    // non-absolute `soxPath` threw "Path must be absolute: ..." and the
+    // recording failed loudly instead of quietly auto-detecting whatever
+    // `sox` is on PATH. A relative path still resolves against the process
+    // cwd, never the workspace, so it cannot be the configured binary.
+    if (!path.isAbsolute(configuredPath)) {
+      throw new Error(`Path must be absolute: ${configuredPath}`);
+    }
+    if (existsSync(configuredPath)) {
+      return BinaryResolver.resolveOptionalCommand('sox', [], {
+        resolvedPath: configuredPath,
+      });
+    }
   }
   return BinaryResolver.resolveOptionalCommand('sox');
 }
@@ -84,7 +93,7 @@ export async function startRecording(roots: WorkspaceRoots): Promise<{
     }
 
     const directory = recordingsDir(roots);
-    await AbsoluteFS.ensureDir(directory);
+    await mkdir(directory, { recursive: true });
     const absPath = path.join(directory, `record_${Date.now()}.wav`);
 
     const soxArgs = [
@@ -196,11 +205,11 @@ export async function stopRecording(): Promise<{
       delay(SOX_SHUTDOWN_TIMEOUT_MS),
     ]);
 
-    if (!AbsoluteFS.existsSync(recordingPath)) {
+    if (!existsSync(recordingPath)) {
       return { success: false, error: 'Recording file not found' };
     }
 
-    const stats = AbsoluteFS.statSync(recordingPath);
+    const stats = statSync(recordingPath);
     if (stats.size === 0) {
       return { success: false, error: 'Recording file is empty' };
     }
@@ -218,15 +227,14 @@ export async function stopRecording(): Promise<{
  * Transcribe a stopped recording with OpenAI. `credential` is the OpenAI
  * route the caller resolved: the key read is an Effect program now, and this
  * function is a promise the host settles, so the credential arrives as data
- * rather than as a store this function would have to read from. `roots` are
- * the recording session's, and own the directory the finished takes are swept
- * from. The recorder is already terminated by the time this runs — it is
- * {@link stopRecording} that owns the microphone.
+ * rather than as a store this function would have to read from. The recorder
+ * is already terminated by the time this runs — it is {@link stopRecording}
+ * that owns the microphone. Stale takes under the session's recordings
+ * directory are swept by the host take fiber after a successful transcription.
  */
 export async function transcribeRecording(
   recordingPath: string,
   credential: ApiKeyRouteCredential,
-  roots: WorkspaceRoots,
 ): Promise<{
   success: boolean;
   text: string;
@@ -240,14 +248,10 @@ export async function transcribeRecording(
       baseURL: credential.endpoint,
     });
     const result = await client.audio.transcriptions.create({
-      file: AbsoluteFS.createReadStream(recordingPath),
+      file: createReadStream(recordingPath),
       model: 'gpt-4o-transcribe',
       response_format: 'json',
     });
-
-    // `RelativeFS` passes an absolute target through untouched, so the sweep
-    // is rooted by the caller's storage root rather than by an ambient read.
-    await RelativeFS.cleanupOldFiles(recordingsDir(roots), THREE_DAYS_MS);
 
     return { success: true, text: result.text };
   } catch (err) {

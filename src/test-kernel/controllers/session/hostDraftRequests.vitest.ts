@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer } from 'effect';
+import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
 import pDefer from 'p-defer';
 import { expect, vi } from 'vitest';
 
@@ -17,6 +17,9 @@ const audio = vi.hoisted(() => ({
   stopRecording: vi.fn(),
   transcribeRecording: vi.fn(),
   killActiveRecording: vi.fn(),
+  recordingsDir: vi.fn(
+    (roots: { storage: string }) => `${roots.storage}/recordings`,
+  ),
 }));
 
 vi.mock('@tools/media/audio', () => audio);
@@ -30,6 +33,7 @@ vi.mock('@agent/runtime/textEnhancement', () => ({
 const processStores = Layer.mergeAll(
   Secrets.layer(new FakeSecrets({ [apiKeySecretName('openai')]: 'sk-test' })),
   AppState.layer(new FakeStateStore()),
+  FileSystem.layerNoop({}),
 );
 
 /** The same pair with no saved OpenAI key, so the take's credential read
@@ -37,6 +41,7 @@ const processStores = Layer.mergeAll(
 const storesWithoutCredential = Layer.mergeAll(
   Secrets.layer(new FakeSecrets()),
   AppState.layer(new FakeStateStore()),
+  FileSystem.layerNoop({}),
 );
 
 it.effect(

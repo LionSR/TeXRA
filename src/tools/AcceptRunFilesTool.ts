@@ -11,7 +11,7 @@
 
 // Third-party imports
 import { z } from 'zod';
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -20,6 +20,7 @@ import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { appSignals } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
+import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import {
   RunIdSchema,
@@ -35,9 +36,10 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { locateInWorkspace } from '@utils/files/workspaceFS';
+import { entryExists, absentReason } from '@utils/files/fsEntryExists';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import {
   findExistingRunStoragePath,
@@ -45,6 +47,29 @@ import {
   inspectRunStorageEntry,
 } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
+
+/**
+ * `BaseFS.isFile` without the facade.
+ *
+ * The facade's `isFile` is the FileType bitmask after a lstat that, for a
+ * link, ORs in the target's type: a symlink to a file is a file, a circular
+ * link is not. `fs.stat` follows, so a symlink to a file answers `File`, a
+ * dangling target is `NotFound`/`ENOTDIR`, and a circular link raises `ELOOP`
+ * (`BadResource`) — those absences match `statIfExists`, and any other
+ * failure still propagates.
+ */
+const fileAt = (fs: FileSystem.FileSystem, target: string) =>
+  fs.stat(target).pipe(
+    Effect.map((stats) => stats.type === 'File'),
+    Effect.catchIf(
+      (error) =>
+        absentReason(error) ||
+        (error.reason._tag === 'BadResource' &&
+          (error.reason.cause as { code?: string } | undefined)?.code ===
+            'ELOOP'),
+      () => Effect.succeed(false),
+    ),
+  );
 
 // ============================================================================
 // Rejection bookkeeping
@@ -203,7 +228,11 @@ Parameters map directly to subagent-result delivery attributes:
       this: AcceptRunFilesTool,
       input: AcceptRunFilesInput,
       call: ToolCallShape,
-    ): Effect.fn.Return<ToolResult, unknown, ToolCall> {
+    ): Effect.fn.Return<
+      ToolResult,
+      unknown,
+      ToolCall | FileSystem.FileSystem | WorkspaceFs
+    > {
       const { execution_id: runId, files, strip_criticize } = input;
       const resolveSourceFile = (runId: RunId, runPath: string) =>
         this.resolveSourceFile(runId, runPath, call);
@@ -221,29 +250,29 @@ Parameters map directly to subagent-result delivery attributes:
             );
 
             const destPath = mapping.original ?? mapping.path;
-            const dest = call.inScope(() => WorkspaceFS.locatePath(destPath));
+            // The call's own workspace root, as data: the source may resolve
+            // under any root, but the destination is this session's.
+            const dest = locateInWorkspace(call.roots.workspace, destPath);
             if (dest.kind === 'external') {
               throw new ToolError(
                 `original must be inside the workspace: ${destPath}`,
               );
             }
+            const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
+            const processFs = yield* FileSystem.FileSystem;
 
-            const rawContent = yield* Effect.tryPromise({
-              try: () =>
-                call.inScope(() =>
-                  AbsoluteFS.read(sourceLocation.absolutePath),
-                ),
-              catch: ensureError,
-            });
+            const rawContent = yield* readNormalizedFile(
+              processFs,
+              sourceLocation.absolutePath,
+            ).pipe(Effect.mapError(ensureError));
             const { content: proposedContent, count: strippedCount } =
               strip_criticize
                 ? stripCriticizeAnnotations(rawContent)
                 : { content: rawContent, count: 0 };
-            const destExists = yield* Effect.tryPromise({
-              try: () =>
-                call.inScope(() => WorkspaceFS.exists(dest.relativePath)),
-              catch: ensureError,
-            });
+            const destExists = yield* entryExists(
+              workspaceFs,
+              dest.relativePath,
+            ).pipe(Effect.mapError(ensureError));
 
             // Determine original content for diff display. In-place workflow
             // outputs can make source and destination the same workspace file, so
@@ -251,15 +280,13 @@ Parameters map directly to subagent-result delivery attributes:
             const snapshotPath = call.inScope(() =>
               getOriginalSnapshotPath(runId, dest.relativePath),
             );
-            const snapshotExists = yield* Effect.tryPromise({
-              try: () => call.inScope(() => AbsoluteFS.isFile(snapshotPath)),
-              catch: ensureError,
-            });
+            const snapshotExists = yield* fileAt(processFs, snapshotPath).pipe(
+              Effect.mapError(ensureError),
+            );
             const snapshotContent = snapshotExists
-              ? yield* Effect.tryPromise({
-                  try: () => call.inScope(() => AbsoluteFS.read(snapshotPath)),
-                  catch: ensureError,
-                })
+              ? yield* readNormalizedFile(processFs, snapshotPath).pipe(
+                  Effect.mapError(ensureError),
+                )
               : undefined;
             const isSameFile =
               sourceLocation.kind === 'workspace' &&
@@ -270,11 +297,10 @@ Parameters map directly to subagent-result delivery attributes:
             } else if (isSameFile) {
               originalContent = rawContent;
             } else if (destExists) {
-              originalContent = yield* Effect.tryPromise({
-                try: () =>
-                  call.inScope(() => WorkspaceFS.read(dest.relativePath)),
-                catch: ensureError,
-              });
+              originalContent = yield* readNormalizedFile(
+                workspaceFs,
+                dest.relativePath,
+              ).pipe(Effect.mapError(ensureError));
             } else {
               originalContent = '';
             }
@@ -426,7 +452,11 @@ Parameters map directly to subagent-result delivery attributes:
     runId: RunId,
     runPath: string,
     call: ToolCallShape,
-  ): Effect.fn.Return<FileLocation, Error> {
+  ): Effect.fn.Return<
+    FileLocation,
+    Error,
+    FileSystem.FileSystem | WorkspaceFs
+  > {
     const entry = yield* Effect.tryPromise({
       try: () => call.inScope(() => inspectRunStorageEntry(runId, runPath)),
       catch: ensureError,
@@ -450,13 +480,13 @@ Parameters map directly to subagent-result delivery attributes:
     }
 
     // Fall back to workspace
-    const wsLoc = call.inScope(() => WorkspaceFS.locatePath(runPath));
+    const workspaceFs = yield* WorkspaceFs;
+    const wsLoc = locateInWorkspace(call.roots.workspace, runPath);
     if (
       wsLoc.kind !== 'external' &&
-      (yield* Effect.tryPromise({
-        try: () => call.inScope(() => WorkspaceFS.exists(wsLoc.relativePath)),
-        catch: ensureError,
-      }))
+      (yield* entryExists(workspaceFs, wsLoc.relativePath).pipe(
+        Effect.mapError(ensureError),
+      ))
     ) {
       return createWorkspaceLocation(wsLoc.absolutePath, wsLoc.relativePath);
     }

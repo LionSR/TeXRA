@@ -5,6 +5,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
 import { isTexFile } from '@common/files/fileTypeUtils';
+import { WorkspaceFs } from '@platform/rootedFs';
 import replacementEngine from '@replacement/engine';
 import type { ToolResult } from '@shared/schemas';
 import {
@@ -27,7 +28,11 @@ type WriteInput = z.infer<typeof WriteInputSchema>;
 
 const write = Effect.fn('WriteFileTool.execute')(function* (
   input: WriteInput,
-): Effect.fn.Return<ToolResult, unknown, ToolCall | FileSystem.FileSystem> {
+): Effect.fn.Return<
+  ToolResult,
+  unknown,
+  ToolCall | FileSystem.FileSystem | WorkspaceFs
+> {
   const prepared = yield* resolveWritableTarget(input.path, {
     missing: 'allow',
   });

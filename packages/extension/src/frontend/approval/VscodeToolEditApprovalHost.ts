@@ -33,7 +33,7 @@ import {
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { pluralize } from '@utils/text/stringUtils';
-import type { Effect } from 'effect';
+import type { Effect, FileSystem } from 'effect';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -79,7 +79,9 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     ).catch(() => {});
   }
 
-  runPreview(program: Effect.Effect<void>): Promise<void> {
+  runPreview(
+    program: Effect.Effect<void, unknown, FileSystem.FileSystem>,
+  ): Promise<void> {
     return this.runtime.runPromise(program);
   }
 

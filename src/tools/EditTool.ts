@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
+import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   applyApprovedFileEdit,
@@ -37,7 +38,11 @@ type EditInput = z.infer<typeof EditInputSchema>;
 
 const edit = Effect.fn('EditFileTool.execute')(function* (
   input: EditInput,
-): Effect.fn.Return<ToolResult, unknown, ToolCall | FileSystem.FileSystem> {
+): Effect.fn.Return<
+  ToolResult,
+  unknown,
+  ToolCall | FileSystem.FileSystem | WorkspaceFs
+> {
   const { old_str, new_str, replace_all } = input;
   const prepared = yield* resolveWritableTarget(input.path, {
     validate: ({ displayPath }) => {

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, type Scope } from 'effect';
+import { Cause, Effect, FileSystem, type Scope } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -103,7 +103,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
   ): Effect.fn.Return<
     { configPayload: AgentConfigPayload; agentName: string },
     Error,
-    Secrets | AppState
+    Secrets | AppState | FileSystem.FileSystem
   > {
     const { session } = parent.run;
     const sharedConfigFields = {
@@ -185,11 +185,10 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       const inputFiles = inputs.map(({ file }) => file);
       const contextFiles = context.map(({ file }) => file);
       const mediaFiles = media.map(({ file }) => file);
-      const oversizedBibRejection = yield* Effect.tryPromise({
-        try: () =>
-          parent.inScope(() => rejectOversizedBibAttachments(contextFiles)),
-        catch: ensureError,
-      });
+      const oversizedBibRejection = yield* rejectOversizedBibAttachments(
+        parent.roots.workspace,
+        contextFiles,
+      ).pipe(Effect.mapError(ensureError));
       if (oversizedBibRejection) {
         throw new WorkflowRunAbortError(oversizedBibRejection.error);
       }

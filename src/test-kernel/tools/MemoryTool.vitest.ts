@@ -5,7 +5,7 @@ import { Readable } from 'node:stream';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -217,6 +217,23 @@ describe('MemoryTool view with an omitted path', () => {
   );
 });
 
+/**
+ * The per-call storage root's directory creation runs on the process
+ * `FileSystem` now that the `AbsoluteFS` facade is gone, so a case stubs that
+ * one method of the real service rather than the deleted static.
+ */
+function withStubbedDirectories<A, E, R>(program: Effect.Effect<A, E, R>) {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* program.pipe(
+      Effect.provideService(FileSystem.FileSystem, {
+        ...fs,
+        makeDirectory: () => Effect.void,
+      }),
+    );
+  });
+}
+
 describe('MemoryTool invocation storage root', () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -230,7 +247,6 @@ describe('MemoryTool invocation storage root', () => {
         });
         const writes: string[] = [];
         vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(false);
-        vi.spyOn(AbsoluteFS, 'ensureDir').mockResolvedValue();
         vi.spyOn(AbsoluteFS, 'writeAtomic').mockImplementation(
           async (target) => {
             writes.push(target);
@@ -243,24 +259,24 @@ describe('MemoryTool invocation storage root', () => {
             [second, 'two.md'],
           ] as const,
           ([roots, file], index) =>
-            new MemoryTool()
-              .call({
+            withStubbedDirectories(
+              new MemoryTool().call({
                 command: 'create',
                 path: `/memories/${file}`,
                 file_text: file,
-              })
-              .pipe(
-                Effect.provide(
-                  nativeToolTestLayer({
-                    roots,
-                    inScope: (operation) =>
-                      runWithWorkspaceRoots(
-                        index === 0 ? second : first,
-                        operation,
-                      ),
-                  }),
-                ),
+              }),
+            ).pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  roots,
+                  inScope: (operation) =>
+                    runWithWorkspaceRoots(
+                      index === 0 ? second : first,
+                      operation,
+                    ),
+                }),
               ),
+            ),
           { concurrency: 'unbounded' },
         );
 

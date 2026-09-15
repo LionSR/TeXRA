@@ -24,7 +24,9 @@ import { pid } from 'node:process';
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
 import writeFileAtomicLib from 'write-file-atomic';
+
 import { createLog } from '@logger/logUtils';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const log = createLog('fsDurability');
 
@@ -281,3 +283,24 @@ export const copyDereferenced = Effect.fn('fsDurability.copyDereferenced')(
     });
   },
 );
+
+/**
+ * `AbsoluteFS.read`: the file's bytes decoded as UTF-8, with line endings
+ * normalized. `FileSystem.readFileString` is not this -- it decodes through a
+ * `TextDecoder`, which drops a leading UTF-8 BOM that the facade preserved,
+ * and the editor then writes its buffer back without it.
+ *
+ * The caller passes the filesystem it reads from, so a rooted view answers for
+ * the paths inside its root and the process filesystem answers for the rest.
+ */
+export const readNormalizedFile = (
+  fs: FileSystem.FileSystem,
+  target: string,
+): Effect.Effect<string, PlatformError.PlatformError> =>
+  fs
+    .readFile(target)
+    .pipe(
+      Effect.map((bytes) =>
+        normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
+      ),
+    );

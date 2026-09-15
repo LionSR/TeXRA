@@ -8,13 +8,14 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, FileSystem } from 'effect';
 import { describe, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { WorkspaceFs } from '@platform/rootedFs';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
@@ -33,7 +34,6 @@ import {
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { generateRunId } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 // Local file imports
 import { autoDecideRequests, decideRequest } from '../agent/progressTestUtils';
@@ -83,8 +83,46 @@ async function installPlatform(
   });
 }
 
+// The write side of both views the edit flow reaches now that the
+// `WorkspaceFS` facade is gone: an absolute path writes through the process
+// filesystem, a workspace-relative one through the session's rooted view. One
+// recorder serves both, so a case asserts on what was applied either way.
+const workspaceWrites = vi.fn<(target: string, content: string) => void>();
+// The workspace-relative half of the read side, which no real directory backs.
+const relativeFiles = new Map<string, { exists: boolean; content: string }>();
+
+/** Install the stubbed halves over the real services for one tool call. */
+function withStubbedEditFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
+  return Effect.gen(function* () {
+    const workspaceFs = yield* WorkspaceFs;
+    const processFs = yield* FileSystem.FileSystem;
+    return yield* program.pipe(
+      Effect.provideService(WorkspaceFs, {
+        ...workspaceFs,
+        exists: (target: string) =>
+          Effect.succeed(relativeFiles.get(target)?.exists ?? false),
+        readFile: (target: string) =>
+          Effect.succeed(
+            Buffer.from(relativeFiles.get(target)?.content ?? '', 'utf-8'),
+          ),
+        writeFile: (target: string, content: Uint8Array) => {
+          workspaceWrites(target, Buffer.from(content).toString('utf-8'));
+          return Effect.void;
+        },
+      }),
+      Effect.provideService(FileSystem.FileSystem, {
+        ...processFs,
+        writeFile: (target: string, content: Uint8Array) => {
+          workspaceWrites(target, Buffer.from(content).toString('utf-8'));
+          return Effect.void;
+        },
+      }),
+    );
+  });
+}
+
 // Seeds the file a tool reads before proposing an edit — on disk for the
-// edit flow's own read, and on the facade the approval step still re-reads
+// edit flow's own read, and in the rooted view a relative path resolves
 // through — and returns the write spy so a test can inspect what was applied.
 function stubWorkspaceFile(
   filePath: string,
@@ -96,14 +134,16 @@ function stubWorkspaceFile(
     writeFileSync(absolutePath, options.content);
     tracker.recordRead(absolutePath);
   }
-  vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(options.exists);
-  vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(options.content);
-  return vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
+  relativeFiles.set(filePath, {
+    exists: options.exists,
+    content: options.content,
+  });
+  return workspaceWrites;
 }
 
 /** Supply the exact per-call capabilities a dispatched tool receives. */
 function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
-  return effect.pipe(
+  return withStubbedEditFiles(effect).pipe(
     Effect.provide(
       nativeToolTestLayer({
         workingDirectory: WORKSPACE_PATH,
@@ -122,6 +162,8 @@ describe('Tool edit approval gating', () => {
     await installPlatform();
     defaultSession().setApprovalPolicy('ask');
     policyDenials = 0;
+    workspaceWrites.mockReset();
+    relativeFiles.clear();
     tracker = new FileInteractionState();
     defaultSession().approvals.clearAll();
     runId = publishTestRunStart(defaultSession(), generateRunId());
@@ -148,7 +190,7 @@ describe('Tool edit approval gating', () => {
         path.join(WORKSPACE_PATH, 'gone.txt'),
         path.join(WORKSPACE_PATH, 'dangling.txt'),
       );
-      const write = vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
+      const write = workspaceWrites;
 
       const result = yield* inRun(
         tool.call({ path: 'dangling.txt', old_str: 'a', new_str: 'b' }),
@@ -198,22 +240,21 @@ describe('Tool edit approval gating', () => {
       const projectPath = project.roots.workspace!;
       const filePath = path.join(projectPath, 'scoped.txt');
       tracker.recordRead('scoped.txt');
-      vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(true);
-      vi.spyOn(WorkspaceFS, 'read').mockResolvedValue('old content');
-      const write = vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
+      relativeFiles.set('scoped.txt', { exists: true, content: 'old content' });
+      const write = workspaceWrites;
 
-      const result = yield* tool
-        .call({ path: filePath, content: 'new content' })
-        .pipe(
-          Effect.provide(
-            nativeToolTestLayer({
-              tracker,
-              run: { runId, session: defaultSession(), toolPolicy: {} },
-              inScope: (operation) =>
-                runWithWorkspaceRoots(project.roots, operation),
-            }),
-          ),
-        );
+      const result = yield* withStubbedEditFiles(
+        tool.call({ path: filePath, content: 'new content' }),
+      ).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            tracker,
+            run: { runId, session: defaultSession(), toolPolicy: {} },
+            inScope: (operation) =>
+              runWithWorkspaceRoots(project.roots, operation),
+          }),
+        ),
+      );
 
       assert.strictEqual(result.status, 'executed');
       assert.strictEqual(approvalRequests[0]?.path, 'scoped.txt');
