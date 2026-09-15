@@ -44,6 +44,7 @@ import {
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
+import type { RunId } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
