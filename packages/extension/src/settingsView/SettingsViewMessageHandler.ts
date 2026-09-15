@@ -304,7 +304,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.profileKeyController.removeProviderKey(message.provider),
         ),
       openProviderKeyUrl: (message) =>
-        this.profileKeyController.openProviderKeyUrl(message.provider),
+        this.runtime.runPromise(
+          this.profileKeyController.openProviderKeyUrl(message.provider),
+        ),
       openExternalUrl: (message) => this.openExternalUrl(message.url),
       setModelEnabled: (message) =>
         this.setModelEnabled(message.modelName, message.enabled),

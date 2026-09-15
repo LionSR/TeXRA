@@ -266,9 +266,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           this.profileKeyController.removeProviderKey(message.provider),
         ),
       openProviderKeyUrl: (message) =>
-        this.profileKeyController.openProviderKeyUrl(message.provider),
+        options.runtime.runPromise(
+          this.profileKeyController.openProviderKeyUrl(message.provider),
+        ),
       openExternalUrl: (message) =>
-        options.externalOpener.openExternal(message.url),
+        options.runtime.runPromise(
+          options.externalOpener.openExternal(message.url),
+        ),
     };
     this.chatGptHandlers = {
       signInChatGpt: () => this.signInChatGpt(),

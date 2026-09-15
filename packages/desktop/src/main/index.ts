@@ -1278,7 +1278,19 @@ function createWindow(options: {
             }),
         },
         externalOpener: {
-          openExternal: previewHost.openExternal,
+          // The desktop's shell-facing openExternal stays Promise-shaped by
+          // ruling; this is the one adapter onto the Effect-typed port.
+          openExternal: (url) =>
+            Effect.tryPromise({
+              try: () => previewHost.openExternal(url),
+              catch: (cause) =>
+                new ExternalOpenFailed({
+                  kind: 'url',
+                  target: url,
+                  message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
+                  cause,
+                }),
+            }),
           openSubscriptionSignInUrl: (url) =>
             previewHost.openExternal(url, { reportFailure: false }),
           presentSubscriptionSignInUrl: async (url, productName) => {

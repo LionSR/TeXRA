@@ -5,7 +5,6 @@ import { Data, Effect } from 'effect';
 
 import { isFileNotFoundError } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import type { ExternalOpener } from '@hosts/uiHosts';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -28,7 +27,14 @@ interface DesktopShellAdapter {
   openPath(filePath: string): Promise<string>;
 }
 
-interface DesktopPreviewHost extends ExternalOpener {
+/**
+ * The desktop's shell-facing open surface. It deliberately stays
+ * `Promise`-shaped — this fan-out is bound across the desktop's browser-view,
+ * shell, settings, tooling and credential surfaces, a permanent face by owner
+ * ruling — and the composition root adapts `openExternal` onto the
+ * Effect-typed `ExternalOpener` port where an Effect-native caller needs it.
+ */
+interface DesktopPreviewHost {
   openExternal(
     url: string,
     options?: { readonly reportFailure?: boolean },

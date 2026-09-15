@@ -166,7 +166,7 @@ async function createFixture({
         }),
     },
     externalOpener: {
-      openExternal: async () => undefined,
+      openExternal: () => Effect.void,
       openSubscriptionSignInUrl: async () => undefined,
       presentSubscriptionSignInUrl: () => undefined,
       presentSubscriptionDeviceCode: () => undefined,
@@ -410,7 +410,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
   it('falls back without reporting the browser-open failure twice and logs its cause', async () => {
     const browserError = new Error('no browser handler');
-    const openExternal = vi.fn(async () => undefined);
+    const openExternal = vi.fn(() => Effect.void);
     const openSubscriptionSignInUrl = vi.fn(async () => {
       throw browserError;
     });
