@@ -29,7 +29,7 @@ import {
 } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-export interface OnboardingFunnelInputs {
+interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */
   hasCredential: boolean;
   /** The user saw the State 0 picker and chose "Skip for now". */
@@ -38,7 +38,7 @@ export interface OnboardingFunnelInputs {
   firstRunDone: boolean;
 }
 
-export function deriveOnboardingFunnelState(
+function deriveOnboardingFunnelState(
   inputs: OnboardingFunnelInputs,
 ): OnboardingFunnelState {
   if (inputs.firstRunDone) return 'done';
@@ -50,7 +50,7 @@ export function deriveOnboardingFunnelState(
 }
 
 /** What a host should do after recomputing the funnel. */
-export interface OnboardingFunnelTransition {
+interface OnboardingFunnelTransition {
   /** The newly derived funnel state (push to the webview). */
   state: OnboardingFunnelState;
   /** Select the setup agent in the launcher (entering State 1). */

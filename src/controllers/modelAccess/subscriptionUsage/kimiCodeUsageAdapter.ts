@@ -11,7 +11,7 @@ import {
   type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
 
-export const KIMI_CODE_USAGE_URL = 'https://api.kimi.com/coding/v1/usages';
+const KIMI_CODE_USAGE_URL = 'https://api.kimi.com/coding/v1/usages';
 
 function kimiWindow(
   name: string,

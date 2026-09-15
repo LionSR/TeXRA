@@ -141,7 +141,7 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
 // Run fact helpers
 // ============================================================================
 
-export function publishCodexTodos(todos: TodoItem[], logger: AgentTrace): void {
+function publishCodexTodos(todos: TodoItem[], logger: AgentTrace): void {
   emitRunFact(logger, 'updateTodos', { todos });
 }
 
