@@ -339,19 +339,23 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private async updateAgentEnabled(
     message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED>,
   ): Promise<void> {
-    await this.roster.setAgentEnabled({
-      category: message.category,
-      source: message.agentSource,
-      name: message.agentName,
-      enabled: message.enabled,
-    });
+    await this.runtime.runPromise(
+      this.roster.setAgentEnabled({
+        category: message.category,
+        source: message.agentSource,
+        name: message.agentName,
+        enabled: message.enabled,
+      }),
+    );
     await this.refreshCatalogData();
   }
 
   private async updateAllAgentsEnabled(
     message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED>,
   ): Promise<void> {
-    await this.catalogController.setAllAgentsEnabled(message);
+    await this.runtime.runPromise(
+      this.catalogController.setAllAgentsEnabled(message),
+    );
     await this.refreshCatalogData();
   }
 
@@ -359,7 +363,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     const selectedPath = await this.directory.selectCustomAgentDirectory();
     if (!selectedPath) return;
 
-    await this.directoryController.setCustomDir(selectedPath);
+    await this.runtime.runPromise(
+      this.directoryController.setCustomDir(selectedPath),
+    );
     await Promise.all([this.postCustomAgentDir(), this.refreshCatalogData()]);
   }
 
@@ -374,7 +380,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   private async resetCustomAgentDir(): Promise<void> {
-    await this.directoryController.resetCustomDir();
+    await this.runtime.runPromise(this.directoryController.resetCustomDir());
     await Promise.all([this.postCustomAgentDir(), this.refreshCatalogData()]);
   }
 
@@ -620,7 +626,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     });
     if (!confirmed) return;
 
-    await this.catalogController.deleteCustomPreset(presetId);
+    await this.runtime.runPromise(
+      this.catalogController.deleteCustomPreset(presetId),
+    );
     this.postAgentModePresets();
     await this.onCatalogChanged();
   }

@@ -565,7 +565,9 @@ export function createDesktopSettingsIpc(
     ...options.credentialSettingsController.profileHandlers,
     setModelEnabled: updateModelEnabled,
     setModelReasoningLevel: async (message) => {
-      await modelSelectionController.setReasoningLevel(message);
+      await runtime.runPromise(
+        modelSelectionController.setReasoningLevel(message),
+      );
       await postModelSelectionData();
     },
     requestModelAccess: unsupported('Copilot models require VS Code.'),

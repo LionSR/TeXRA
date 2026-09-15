@@ -1382,6 +1382,7 @@ function createWindow(options: {
         workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
         config: project.roots.config,
+        runtime,
         renderer: {
           postToRenderer: postForActiveProject,
         },
