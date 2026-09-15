@@ -196,7 +196,7 @@ describe('session isolation', () => {
   /**
    * #12433, pinned as a known failure until the ambient roots carrier retires
    * under #12421. The contract below is the one the desktop needs — two open
-   * papers, each its own session, its own storage root — and `main` does not
+   * projects, each its own session, its own storage root — and `main` does not
    * meet it: the run fiber's read after a contended commit resolves against
    * the PROCESS roots. `.fails` is the honest encoding, not `.skip`: the case
    * runs every time, states the contract rather than the defect, and turns red
@@ -207,11 +207,11 @@ describe('session isolation', () => {
   it.fails(
     'a run fiber keeps its session roots across a contended publisher commit',
     async () => {
-      const paper = createFakeWorkspaceRoots({
+      const project = createFakeWorkspaceRoots({
         workspacePath: fakePath('papers/contended'),
         storagePath: fakePath('storage/contended'),
       });
-      const session = createTestSession({ roots: paper });
+      const session = createTestSession({ roots: project });
       try {
         // Job 1: enqueued on the session's one publisher from the process
         // context, the shape the desktop has (the session opens before any

@@ -1188,44 +1188,50 @@ describe('an interrupted reflection run', () => {
    * different-length debris, but equal-length conflicting bytes are
    * indistinguishable from the completed write.
    */
-  it.effect(
-    'reconciles a reprocessed response by the recorded output byte length',
-    () =>
+  it.effect.each([
+    { name: 'missing file', seed: null, expected: 'round 0 output' },
+    {
+      name: 'completed write',
+      seed: 'round 0 output',
+      expected: 'round 0 output',
+    },
+    {
+      name: 'different-length debris',
+      seed: 'stale bytes from the crash',
+      expected: 'round 0 output',
+    },
+    {
+      name: 'same-length debris',
+      seed: 'stale 0 output',
+      expected: 'stale 0 output',
+    },
+  ])(
+    'reconciles a reprocessed response by the recorded output byte length ($name)',
+    ({ seed, expected }) =>
       Effect.gen(function* () {
-        const cases = [
-          { seed: null, expected: 'round 0 output' },
-          { seed: 'round 0 output', expected: ' round 0 output' },
-          {
-            seed: 'stale bytes from the crash',
-            expected: ' round 0 output',
-          },
-          { seed: ' stale 0 output', expected: ' stale 0 output' },
-        ];
-        for (const { seed, expected } of cases) {
-          const session = yield* createProcessSession();
-          const runId = startedRun(session);
-          const halted = yield* interruptedAt(
-            { runId, session, rounds: 1 },
-            0,
-            'afterResponse',
-          );
-          // The response row is committed and no snapshot has recorded a
-          // write: the offset resume reconciles against is zero.
-          expect(halted.lastTurn).not.toBeNull();
-          expect(flowOf(halted).rawOutputBytes).toBe(0);
-          const path = flowOf(halted).outputLocation?.absolutePath;
-          if (path === undefined) throw new Error('The round has no output.');
-          yield* Effect.promise(async () => {
-            if (seed === null) return;
-            await AbsoluteFS.ensureDir(dirname(path));
-            await AbsoluteFS.write(path, seed);
-          });
+        const session = yield* createProcessSession();
+        const runId = startedRun(session);
+        const halted = yield* interruptedAt(
+          { runId, session, rounds: 1 },
+          0,
+          'afterResponse',
+        );
+        // The response row is committed and no snapshot has recorded a
+        // write: the offset resume reconciles against is zero.
+        expect(halted.lastTurn).not.toBeNull();
+        expect(flowOf(halted).rawOutputBytes).toBe(0);
+        const path = flowOf(halted).outputLocation?.absolutePath;
+        if (path === undefined) throw new Error('The round has no output.');
+        yield* Effect.promise(async () => {
+          if (seed === null) return;
+          await AbsoluteFS.ensureDir(dirname(path));
+          await AbsoluteFS.write(path, seed);
+        });
 
-          yield* runLoop({ runId, session, rounds: 1, resume: true });
+        yield* runLoop({ runId, session, rounds: 1, resume: true });
 
-          const content = yield* Effect.promise(() => AbsoluteFS.read(path));
-          expect(content).toBe(expected);
-        }
+        const content = yield* Effect.promise(() => AbsoluteFS.read(path));
+        expect(content).toBe(expected);
       }),
   );
 });
