@@ -23,7 +23,7 @@ import * as tar from 'tar';
 import { isNotADirectoryError } from '@common/errors';
 import { withLogChannel, withLogData } from '@logger/effectLog';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
-import { readDirectoryTyped } from '@utils/files/fsDurability';
+import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
@@ -118,23 +118,44 @@ const permanentFs = <T, R>(
   );
 
 /**
- * Whether `target` exists. `BaseFS.exists` counted a path whose parent is not
- * a directory (ENOTDIR) as absent alongside ENOENT, and `FileSystem.exists`
- * reports that case as `BadResource`; the predicate names ENOTDIR
- * specifically so an operational failure (`ELOOP`) still propagates.
+ * Whether `target` names an entry -- the question `BaseFS.exists` asked.
+ *
+ * The facade probed with `stat`, whose provider is lstat-backed, so a dangling
+ * or circular symlink named an entry; the standard library's `exists` asks the
+ * stricter question of whether the path *resolves*, and answers `false` for
+ * such a link. `readLink` is that half of the old probe -- a path it names is
+ * a link, resolvable or not -- and the access question decides everything
+ * else, keeping the facade's other reading: a parent that is not a directory
+ * (ENOTDIR) counts as absent, and any other failure still propagates.
+ *
+ * The link half is what makes the clobber refusal below fire: a `main.tex`
+ * symlink whose target is gone names an entry, and `rename` must refuse it
+ * rather than replace the user's link with a regular file.
+ *
+ * The same predicate is `entryExists` in `@utils/files/fsEntryExists`, added
+ * by the tool-layer slice of this wave; the two collapse to one once both
+ * land.
  */
 const existsAt = (
   fs: FileSystem.FileSystem,
   target: string,
 ): Effect.Effect<boolean, PlatformError.PlatformError> =>
-  fs.exists(target).pipe(
-    Effect.catchIf(
-      (error) =>
-        error.reason._tag === 'BadResource' &&
-        isNotADirectoryError(error.reason.cause),
-      () => Effect.succeed(false),
-    ),
-  );
+  Effect.gen(function* () {
+    const named = yield* fs.readLink(target).pipe(
+      Effect.as(true),
+      // Not a link, or not there at all: the access question below decides.
+      Effect.catch(() => Effect.succeed(false)),
+    );
+    if (named) return true;
+    return yield* fs.exists(target).pipe(
+      Effect.catchIf(
+        (error) =>
+          error.reason._tag === 'BadResource' &&
+          isNotADirectoryError(error.reason.cause),
+        () => Effect.succeed(false),
+      ),
+    );
+  });
 
 /**
  * Abort foreign stream work on interruption, then join its actual promise.
@@ -578,7 +599,14 @@ class ArxivSourceProcessor {
       if (!(yield* permanentFs(existsAt(fs, paperDirFull)))) {
         return false;
       }
-      const entries = yield* permanentFs(readDirectoryTyped(paperDirFull));
+      // The tolerant listing is the facade's `readDir`: the provider took each
+      // entry's type from the `readdir` dirent and syscalled only for an
+      // unknown one, so a directory that is readable but not searchable still
+      // listed. The strict form lstats every entry, and its EACCES would abort
+      // the download -- turning "the source is already here" into a failure.
+      const entries = yield* permanentFs(
+        readDirectoryTypedTolerant(paperDirFull),
+      );
       const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
       if (hasTexFiles) {
         yield* Effect.logInfo(
