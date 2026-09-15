@@ -14,6 +14,7 @@
  */
 import { Context, Effect, Layer, LayerMap, ManagedRuntime } from 'effect';
 
+import { withForkFailureReporting } from '@platform/processRuntime';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { SessionFrames } from '@shared/session/sessionFrames';
 import { TranscriptSubscriptions } from './sessionSources';
@@ -74,8 +75,13 @@ type WebviewRuntime = ManagedRuntime.ManagedRuntime<WebviewSessions, never>;
 /**
  * Make the one Effect runtime of this webview over its session family (PRD
  * 7.7): called by the webview transport exactly once per module evaluation
- * and disposed by it, on the one shutdown path the entry drives.
+ * and disposed by it, on the one shutdown path the entry drives. Fork
+ * reporting applies here as it does to the process runtime: this runtime
+ * has no logger layer, so an unhandled forked failure lands on the default
+ * console logger of the webview's devtools.
  */
 export function installWebviewRuntime(): WebviewRuntime {
-  return ManagedRuntime.make(WebviewSessions.layerNoDeps);
+  return withForkFailureReporting(
+    ManagedRuntime.make(WebviewSessions.layerNoDeps),
+  );
 }

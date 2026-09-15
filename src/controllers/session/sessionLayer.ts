@@ -65,6 +65,7 @@ import {
   clearProcessRuntime,
   initProcessRuntime,
   tryProcessRuntime,
+  withForkFailureReporting,
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
@@ -1127,24 +1128,26 @@ export function installProcessRuntime({
   // fiber: the release settles when the entry has unwound.
   const release = (key: SessionKey): Effect.Effect<void> =>
     onThisRuntime(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
-  const runtime = ManagedRuntime.make(
-    Sessions.layer(held, release, services).pipe(
-      Layer.provideMerge(services),
-      // The Lean port beside `services`, not among them: `services` is also
-      // each session entry's identity layer, rebuilt fresh per root, and the
-      // Lean pool is one per process — its servers are shared across roots.
-      Layer.provideMerge(lean),
-      Layer.provideMerge(
-        Layer.mergeAll(
-          effectDiagnosticsLayer,
-          FetchHttpClient.layer,
-          // The standard library's filesystem and path services, provided
-          // once per process here rather than by each program that needs
-          // them: every root reaches this install, so a consumer (the Lean
-          // layer included) takes `FileSystem`/`Path` from context and
-          // builds no layer of its own.
-          NodeFileSystem.layer,
-          NodePath.layer,
+  const runtime = withForkFailureReporting(
+    ManagedRuntime.make(
+      Sessions.layer(held, release, services).pipe(
+        Layer.provideMerge(services),
+        // The Lean port beside `services`, not among them: `services` is also
+        // each session entry's identity layer, rebuilt fresh per root, and the
+        // Lean pool is one per process — its servers are shared across roots.
+        Layer.provideMerge(lean),
+        Layer.provideMerge(
+          Layer.mergeAll(
+            effectDiagnosticsLayer,
+            FetchHttpClient.layer,
+            // The standard library's filesystem and path services, provided
+            // once per process here rather than by each program that needs
+            // them: every root reaches this install, so a consumer (the Lean
+            // layer included) takes `FileSystem`/`Path` from context and
+            // builds no layer of its own.
+            NodeFileSystem.layer,
+            NodePath.layer,
+          ),
         ),
       ),
     ),
