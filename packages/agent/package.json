@@ -111,7 +111,7 @@
     "which": "^5.0.0",
     "write-file-atomic": "^7.0.1",
     "ws": "^8.21.3",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   },
   "peerDependencies": {
     "effect": "4.0.0-rc.115",
