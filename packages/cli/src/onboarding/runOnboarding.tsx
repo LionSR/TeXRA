@@ -131,7 +131,7 @@ type CliOnboardingServices = ModelOptionStores & {
 };
 
 /**
- * Gate for the two interactive entry points (orchestrate, chat). Renders the
+ * Gate for the interactive chat entry point. Renders the
  * first-run picker only when interactive, with no usable credentials, and not
  * previously declined. Otherwise returns immediately without rendering or
  * emitting anything.
@@ -169,10 +169,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
       ...flags,
     });
     if (transition.clearDeclined) {
-      yield* Effect.tryPromise({
-        try: () => setOnboardingDeclined(globalState, false),
-        catch: ensureError,
-      }).pipe(
+      yield* setOnboardingDeclined(globalState, false).pipe(
         Effect.catch((error) =>
           Effect.sync(() =>
             warnOnboardingFailure('Clearing the stale skip flag', error),
@@ -259,10 +256,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // Best-effort: persist the decline so we don't re-prompt next launch. If the
     // global-state write fails (read-only home, permissions), tell the user
     // rather than silently re-prompting later with no explanation.
-    yield* Effect.tryPromise({
-      try: () => setOnboardingDeclined(options.stores.globalState, true),
-      catch: ensureError,
-    }).pipe(
+    yield* setOnboardingDeclined(options.stores.globalState, true).pipe(
       Effect.catch(() =>
         Effect.sync(() =>
           writeTextStderr(
@@ -276,10 +270,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // skipped, then configured via `texra setup` (which bypasses the gate), then
     // signed out would have the stale flag suppress onboarding and land back on
     // the dead-end. Best-effort: a failed clear only re-surfaces that rare edge.
-    yield* Effect.tryPromise({
-      try: () => setOnboardingDeclined(options.stores.globalState, false),
-      catch: ensureError,
-    }).pipe(
+    yield* setOnboardingDeclined(options.stores.globalState, false).pipe(
       Effect.catch((error) =>
         Effect.sync(() =>
           warnOnboardingFailure('Clearing the stale skip flag', error),
@@ -289,7 +280,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
   }
   if (resolution.summary) writeTextStdout(resolution.summary);
   // No "what next" hint after configuring: every caller continues in the same
-  // process — orchestrate/chat into their session, `texra setup` into the
+  // process — chat into its session, `texra setup` into the
   // setup-agent chat.
   return { configured: resolution.configured, declined: resolution.declined };
 });
@@ -524,11 +515,9 @@ function ChatGptProgressStep(
               },
             },
           );
-          const update = yield* Effect.tryPromise({
-            try: () =>
-              subscriptionProvider('chatgpt').setPreferSubscription(true),
-            catch: ensureError,
-          });
+          const update = yield* subscriptionProvider('chatgpt')
+            .setPreferSubscription(true)
+            .pipe(Effect.mapError(ensureError));
           if (!update.effective) {
             if (!isCancelled())
               props.onError(

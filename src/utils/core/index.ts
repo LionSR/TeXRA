@@ -11,25 +11,13 @@
  * Anything needing real filesystem-path semantics (segment traversal,
  * `.`/`..` resolution) should import from '@utils/core/pathCore' instead.
  *
- * String validation/formatting primitives live in @utils/text/stringUtils
- * (the single home for generic string helpers) and are re-exported here for
- * existing @utils/core consumers.
+ * String validation/formatting primitives live in @utils/text/stringUtils;
+ * per-key async serialization lives in @utils/core/keyedMutex.
  */
 import { customAlphabet, nanoid } from 'nanoid';
 import { basename as pathBasename, extname as pathExtname } from 'pathe';
 
 import type { RunId } from '@shared/schemas';
-
-export {
-  isNonEmptyString,
-  isString,
-  formatCompactDuration,
-  formatCompactTokenCount,
-  formatDuration,
-  formatWallTimeSeconds,
-  serializeError,
-} from '@utils/text/stringUtils';
-export { KeyedMutex } from '@utils/core/keyedMutex';
 
 // ---------------------------------------------------------------------------
 // typeGuards
@@ -486,20 +474,6 @@ export function jitteredExponentialBackoffMs(
   );
   const jitter = 1 - jitterFraction + Math.random() * 2 * jitterFraction;
   return Math.min(maxMs, Math.round(exponential * jitter));
-}
-
-// ---------------------------------------------------------------------------
-// dateCore
-// ---------------------------------------------------------------------------
-
-/**
- * Start of the given UTC month as a `Date`, e.g. `utcMonthStart(2026, 0)` is
- * midnight UTC on 2026-01-01. `monthIndex` is 0-based and not clamped to
- * 0-11 — pass 12 to get the start of the following year's January, which is
- * how callers compute a month's exclusive end boundary.
- */
-export function utcMonthStart(year: number, monthIndex: number): Date {
-  return new Date(Date.UTC(year, monthIndex, 1));
 }
 
 // ---------------------------------------------------------------------------

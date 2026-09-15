@@ -28,11 +28,29 @@ import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
-import {
-  formatBytes,
-  formatResultCount,
-  formatShortDateTime,
-} from '@utils/text/stringUtils';
+import { formatBytes, formatResultCount } from '@utils/text/stringUtils';
+
+const shortDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/**
+ * Compact, locale-aware absolute timestamp (short month, no seconds) for the
+ * Memory list items. Returns `null` for missing/invalid input so the meta
+ * strip can fall back to its "Updated: unknown" copy.
+ */
+function formatShortDateTime(
+  value: string | number | Date | null | undefined,
+): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return shortDateTimeFormatter.format(date);
+}
 
 @customElement('memory-item')
 export class MemoryItem extends LitElement {

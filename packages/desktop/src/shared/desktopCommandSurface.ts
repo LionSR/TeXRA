@@ -247,15 +247,15 @@ export function getDesktopCommandMenuEntries(
 ): DesktopCommandMenuEntry[] {
   return DESKTOP_COMMAND_IDS.map((id) => {
     if (isDesktopLocalCommandId(id)) {
-      const localEntry = DESKTOP_LOCAL_COMMAND_ENTRIES[id];
-      const { keybinding, ...entry } = localEntry;
+      const { label, category, keybinding } = DESKTOP_LOCAL_COMMAND_ENTRIES[id];
+      const accelerator =
+        keybinding && toElectronAccelerator(keybinding, platform);
       return {
         id,
-        ...entry,
+        label,
+        category,
         icon: DESKTOP_COMMAND_ICONS[id],
-        ...(keybinding && {
-          accelerator: toElectronAccelerator(keybinding, platform),
-        }),
+        ...(accelerator && { accelerator }),
       };
     }
 

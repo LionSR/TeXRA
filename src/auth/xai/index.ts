@@ -14,10 +14,6 @@ export {
   formatXaiAuthUnavailableMessage,
   xaiAccountLabel,
 } from './xaiSessionTypes';
-export {
-  type XaiSessionStorage,
-  type XaiOAuthClient,
-} from './XaiSessionCoordinator';
 export { xaiCoordinator, getXaiStatus } from './xaiAuthAccess';
 export { loginWithLoopback } from './xaiLoopbackLogin';
 export { loginWithDeviceCode } from './xaiDeviceLogin';

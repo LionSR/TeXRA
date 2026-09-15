@@ -17,6 +17,7 @@ import {
   type DesktopAuthCoordinator,
   type DesktopSupabaseAuthHost,
 } from '@desktop/main/desktopSupabaseAuth';
+import { NotificationFailed } from '@hosts/uiHosts';
 import { effectRuntime } from '@platform/processRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
@@ -77,8 +78,8 @@ function createTestAuth(options: DesktopAuthTestOptions) {
     ),
     log = createLog(),
     openExternalUrl = vi.fn(async () => {}),
-    showInfoMessage = vi.fn(),
-    showErrorMessage = vi.fn(),
+    showInfoMessage = vi.fn(() => Effect.void),
+    showErrorMessage = vi.fn(() => Effect.void),
     onSessionChanged = vi.fn(),
   } = options;
   const auth = createDesktopSupabaseAuth({
@@ -351,7 +352,7 @@ describe('desktop Supabase auth', () => {
   });
 
   it('treats a denied system-browser callback as cancellation', async () => {
-    const showErrorMessage = vi.fn(async () => {});
+    const showErrorMessage = vi.fn(() => Effect.void);
     const log = createLog();
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
       showErrorMessage,
@@ -385,9 +386,15 @@ describe('desktop Supabase auth', () => {
   it('contains a failed cancellation notification without rejecting', async () => {
     const log = createLog();
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
-      showErrorMessage: vi.fn(async () => {
-        throw new Error('notification failure');
-      }),
+      showErrorMessage: vi.fn(() =>
+        Effect.fail(
+          new NotificationFailed({
+            member: 'showErrorMessage',
+            message: 'notification failure',
+            cause: new Error('notification failure'),
+          }),
+        ),
+      ),
       log,
     });
     coordinator.createSessionFromCallback.mockRejectedValueOnce(
@@ -544,11 +551,11 @@ describe('desktop Supabase auth', () => {
 
       const cleanup = createDeferred<void>();
       const update = stateStore.update.bind(stateStore);
-      vi.spyOn(stateStore, 'update').mockImplementationOnce(
-        async (key, value) => {
-          await cleanup.promise;
-          await update(key, value);
-        },
+      vi.spyOn(stateStore, 'update').mockImplementationOnce((key, value) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() => cleanup.promise);
+          yield* update(key, value);
+        }),
       );
 
       const recreatedState = createDesktopAuthCallbackState(
@@ -646,7 +653,7 @@ describe('desktop Supabase auth', () => {
 
   it('removes a callback session when sign-out begins during storage', async () => {
     const onSessionChanged = vi.fn(async () => {});
-    const showInfoMessage = vi.fn(async () => {});
+    const showInfoMessage = vi.fn(() => Effect.void);
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
       onSessionChanged,
       showInfoMessage,
@@ -785,7 +792,7 @@ describe('desktop Supabase auth', () => {
   });
 
   it('settles the waiter when starting the sign-in fails', async () => {
-    const showErrorMessage = vi.fn(async () => {});
+    const showErrorMessage = vi.fn(() => Effect.void);
     const { oauthClient, auth } = createAuthSetup({ showErrorMessage });
     oauthClient.auth.signInWithOAuth.mockResolvedValueOnce({
       data: { url: null },
@@ -807,7 +814,7 @@ describe('desktop Supabase auth', () => {
   });
 
   it('surfaces rejected routed callback processing failures', async () => {
-    const showErrorMessage = vi.fn(async () => {});
+    const showErrorMessage = vi.fn(() => Effect.void);
     const log = createLog();
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
       showErrorMessage,

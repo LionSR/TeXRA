@@ -8,13 +8,13 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
+import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readDirectoryTyped } from '@utils/files/fsDurability';
 import { toPosixPath } from '@utils/core/pathCore';
@@ -70,7 +70,7 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   input: ArxivDownloadInput,
 ) {
   const call = yield* ToolCall;
-  const workspaceRoot = call.inScope(() => WorkspaceFS.getPath()) ?? '';
+  const workspaceRoot = (yield* WorkspaceFs).root ?? '';
   const arxivId = input.id.trim();
   const validationError = ArxivProcessor.validateId(arxivId);
   if (validationError) {

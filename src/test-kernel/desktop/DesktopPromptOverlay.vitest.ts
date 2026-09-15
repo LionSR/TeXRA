@@ -5,7 +5,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
-import { loadSourceModule } from './loadSourceModule.ts';
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 type DesktopPromptOverlay = ReturnType<
@@ -15,7 +14,7 @@ type DesktopPromptOverlay = ReturnType<
 async function loadDesktopPromptOverlay(): Promise<
   typeof import('@desktop/renderer/promptOverlay')
 > {
-  return loadSourceModule('@desktop/renderer/promptOverlay');
+  return import('@desktop/renderer/promptOverlay');
 }
 
 async function flushDialogTicks(times = 5): Promise<void> {

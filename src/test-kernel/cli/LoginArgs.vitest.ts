@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertLoginTransportExclusive,
-  loginInitFromArgs,
   shouldPromptForLoginProvider,
 } from '@cli/commands/auth';
 import { CliUsageError } from '@cli/runtime/cliContext';
@@ -17,49 +16,6 @@ import { formatCliManualAuthUrlMessage } from '@cli/runtime/supabaseAuth';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 
 describe('CLI login arguments (texra login)', () => {
-  it('marks bare texra login as using the fallback provider', () => {
-    expect(loginInitFromArgs({})).toMatchObject({
-      provider: 'github',
-      providerExplicit: false,
-    });
-    expect(loginInitFromArgs({ providerArg: '  ' })).toMatchObject({
-      provider: 'github',
-      providerExplicit: false,
-    });
-  });
-
-  it('reads login flags from hyphenated argument keys', () => {
-    expect(
-      loginInitFromArgs({
-        providerArg: 'github',
-        'no-browser': true,
-        'select-account': true,
-        'login-hint': 'octocat',
-      }),
-    ).toEqual({
-      provider: 'github',
-      providerExplicit: true,
-      noBrowser: true,
-      device: false,
-      selectAccount: true,
-      loginHint: 'octocat',
-    });
-  });
-
-  it('reads the --device flag', () => {
-    expect(loginInitFromArgs({ device: true })).toMatchObject({
-      device: true,
-      providerExplicit: false,
-    });
-    expect(loginInitFromArgs({})).toMatchObject({ device: false });
-  });
-
-  it('treats citty negated browser output as --no-browser', () => {
-    expect(loginInitFromArgs({ browser: false })).toMatchObject({
-      noBrowser: true,
-    });
-  });
-
   it.each<{
     input: string;
     expected: NonNullable<ReturnType<typeof parseChatLoginSlashArgs>>;

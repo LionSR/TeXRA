@@ -40,9 +40,9 @@ const codexMocks = vi.hoisted(() => ({
     }): Effect.Effect<{ email: string }, unknown> =>
       Effect.succeed({ email: 'user@example.com' }),
   ),
-  setPreferSubscription: vi.fn(async (enabled: boolean) => ({
-    effective: enabled,
-  })),
+  setPreferSubscription: vi.fn((enabled: boolean) =>
+    Effect.succeed({ effective: enabled }),
+  ),
   signOut: vi.fn(async () => undefined),
 }));
 
@@ -166,21 +166,24 @@ async function createFixture({
         }),
     },
     externalOpener: {
-      openExternal: async () => undefined,
+      openExternal: () => Effect.void,
       openSubscriptionSignInUrl: async () => undefined,
       presentSubscriptionSignInUrl: () => undefined,
       presentSubscriptionDeviceCode: () => undefined,
     },
     notifications: {
-      showInfoMessage: async (message) => {
-        infos.push(message);
-      },
-      showWarningMessage: async (message) => {
-        warnings.push(message);
-      },
-      showErrorMessage: async (message) => {
-        errors.push(message);
-      },
+      showInfoMessage: (message) =>
+        Effect.sync(() => {
+          infos.push(message);
+        }),
+      showWarningMessage: (message) =>
+        Effect.sync(() => {
+          warnings.push(message);
+        }),
+      showErrorMessage: (message) =>
+        Effect.sync(() => {
+          errors.push(message);
+        }),
     },
     auth: {
       signIn,
@@ -223,9 +226,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     codexMocks.loginWithDeviceCode.mockReturnValue(
       Effect.succeed({ email: 'user@example.com' }),
     );
-    codexMocks.setPreferSubscription.mockImplementation(async (enabled) => ({
-      effective: enabled,
-    }));
+    codexMocks.setPreferSubscription.mockImplementation((enabled: boolean) =>
+      Effect.succeed({ effective: enabled }),
+    );
     codexMocks.signOut.mockResolvedValue(undefined);
   });
 
@@ -348,9 +351,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
   it('warns when a more specific setting overrides the requested subscription toggle', async () => {
     const fixture = await createFixture();
-    codexMocks.setPreferSubscription.mockResolvedValueOnce({
-      effective: false,
-    });
+    codexMocks.setPreferSubscription.mockReturnValueOnce(
+      Effect.succeed({ effective: false }),
+    );
 
     await assertSupported(
       fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
@@ -410,7 +413,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
   it('falls back without reporting the browser-open failure twice and logs its cause', async () => {
     const browserError = new Error('no browser handler');
-    const openExternal = vi.fn(async () => undefined);
+    const openExternal = vi.fn(() => Effect.void);
     const openSubscriptionSignInUrl = vi.fn(async () => {
       throw browserError;
     });

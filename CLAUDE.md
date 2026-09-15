@@ -74,7 +74,7 @@ Things the tree won't tell you:
   invariants with hardcoded allowlists rather than baseline JSON.
 - **`src/utils/` is host-agnostic, not universally browser-safe.** Only the
   `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`,
-  `@utils/core/keyedMutex`, `@utils/errors/errorMessage`,
+  `@utils/errors/errorMessage`,
   `@utils/files/pastedImageName`, `@utils/text/stringUtils`) is
   browser-reachable: ESLint lets the webview frontends import only those at
   runtime, and holds those to no Node built-ins and runtime imports of each

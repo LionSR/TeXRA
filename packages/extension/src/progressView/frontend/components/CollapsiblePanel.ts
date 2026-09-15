@@ -37,13 +37,11 @@ export abstract class CollapsiblePanel extends LitElement {
 
   /** The shared collapsible scaffold; `body` renders inside the details. */
   protected renderCollapsibleDetails(options: {
-    id: string;
     summary: string;
     body: TemplateResult;
   }): TemplateResult {
     return html`
       <wa-details
-        id=${options.id}
         class="panel-collapsible is-boxed"
         summary=${options.summary}
         ?open=${this.details.open}

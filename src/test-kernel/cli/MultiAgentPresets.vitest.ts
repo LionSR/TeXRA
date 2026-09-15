@@ -6,8 +6,6 @@ import type { AgentEntry } from '@agent/index';
 import {
   cliMultiAgentPresetListRecord,
   cliMultiAgentPresetNdjsonRecords,
-  formatCliMultiAgentPresetLauncherHints,
-  formatCliMultiAgentPresetLauncherSummary,
   formatCliMultiAgentTeamLaunchBlockMessage,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,

@@ -8,29 +8,18 @@ import writeFileAtomic from 'write-file-atomic';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
-import type { StateStore } from '../interfaces';
+import { StateWriteFailed, type StateStore } from '../interfaces';
 
 type JsonRecord = Record<string, unknown>;
 
 /**
- * Runs one durable store write to completion. `StateStore` and `ConfigStore`
- * mirror `vscode.Memento`, whose `update` is a Promise, and R1 puts that
- * conversion at a host entry: the entry that opens a store supplies the run.
- * A rejected write is the caller's failure, never a logged best-effort.
- */
-export type RunStateWrite = (
-  write: Effect.Effect<void, Error>,
-) => Promise<void>;
-
-/**
  * The filesystem services a `JsonStore` reads and writes over, as a layer a
- * caller can provide itself. A store opened for a port whose members are
- * requirement-free by contract (the secret stores, and this store's own
- * `update`) provides these rather than making every consumer of that port
- * carry `FileSystem | Path` in its type.
+ * caller can provide itself. This store provides them for its own write
+ * ({@link JsonStore.set}) and for `update`'s runner, so no consumer of a
+ * requirement-free port carries `FileSystem | Path` in its type.
  */
 export const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path> =
   Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
@@ -53,15 +42,6 @@ export interface JsonStoreOptions {
    * `JsonStore` behavior.
    */
   mode?: number;
-  /**
-   * How {@link JsonStore.update} runs its write: the host entry that opened
-   * this store supplies it. Only a store that backs a `ConfigStore` or
-   * `StateStore` target has that `vscode.Memento`-shaped Promise face, so a
-   * store opened for Effect-side writes alone (`set`) leaves this unset and
-   * `update` on it fails with that fact, exactly as a host with no editor
-   * fails an editor-model binding.
-   */
-  runWrite?: RunStateWrite;
 }
 
 /** `0o600` -> `0o700`: adds owner-execute wherever owner-read is set. */
@@ -180,12 +160,12 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * another one has changed nothing yet; they don't observe other writers'
  * changes.
  *
- * `set` is the store's own write and is an `Effect`. `update` exists only
- * because {@link StateStore} and `ConfigStore` mirror `vscode.Memento`, whose
- * shape the VS Code host cannot change: it is the port's method, and it
- * disappears with those two port shapes rather than with this class. This
- * module never runs an Effect: `update` hands `set` to the runner the opener
- * supplied ({@link JsonStoreOptions.runWrite}).
+ * `set` is the store's own write and is an `Effect`, requirement-free: it
+ * provides the Node filesystem services its flush reads and writes through, so
+ * a port that composes it (the config store; the secret stores) needs no
+ * filesystem in its own type. `update` is {@link StateStore}'s own method and
+ * composes that same write, raising the port's {@link StateWriteFailed} for
+ * the store's error.
  */
 export class JsonStore implements StateStore {
   private constructor(
@@ -241,7 +221,7 @@ export class JsonStore implements StateStore {
    * lives — this store owns the lane, so it owns the mask too, and a caller
    * must not wrap `set` in one of its own.
    */
-  set(key: string, value: unknown) {
+  set(key: string, value: unknown): Effect.Effect<void, Error> {
     return withPerKeyLane(
       writeLanes,
       this.filePath,
@@ -253,12 +233,15 @@ export class JsonStore implements StateStore {
           } else {
             this.data[key] = value;
           }
-          return flush(
-            this.filePath,
-            this.options.mode,
-            key,
-            value,
-            this.snapshot(),
+          return Effect.provide(
+            flush(
+              this.filePath,
+              this.options.mode,
+              key,
+              value,
+              this.snapshot(),
+            ),
+            nodeFileServices,
           );
         }),
       ),
@@ -266,20 +249,20 @@ export class JsonStore implements StateStore {
   }
 
   /**
-   * {@link StateStore} / `ConfigStore` conformance — the `vscode.Memento`
-   * shape both ports mirror. Same persistence semantics as {@link set},
-   * which is the Effect-side write every caller inside a program uses.
+   * {@link StateStore} conformance: same persistence semantics as {@link set},
+   * which a caller that already holds this store writes through.
    */
-  update(key: string, value: unknown): Promise<void> {
-    const { runWrite } = this.options;
-    if (!runWrite) {
-      return Promise.reject(
-        new Error(
-          `The JSON store at ${this.filePath} was opened without a write runner, so its Promise-shaped update() has nothing to run the write on. Open it with { runWrite } where it backs a ConfigStore or StateStore target, or write through set() from inside an Effect.`,
-        ),
-      );
-    }
-    return runWrite(Effect.provide(this.set(key, value), nodeFileServices));
+  update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed> {
+    return this.set(key, value).pipe(
+      Effect.mapError(
+        (cause) =>
+          new StateWriteFailed({
+            key,
+            message: `The JSON store at ${this.filePath} refused the write of "${key}": ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      ),
+    );
   }
 
   snapshot(): JsonRecord {

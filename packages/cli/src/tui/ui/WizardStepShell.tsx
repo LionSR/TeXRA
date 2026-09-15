@@ -15,7 +15,7 @@ interface WizardStepShellProps {
 
 /** Shared step scaffold for Ink wizards: a title/subtitle header, optional
  *  status and footer lines around the step's own content, and a key-hints
- *  footer. Used by both `texra init` and the orchestration launcher so a new
+ *  footer. Used by `texra init` so a new
  *  step only declares what it shows, not how it's framed. */
 export function WizardStepShell({
   children,

@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { createLog } from '@logger/logUtils';
 import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
@@ -39,14 +38,17 @@ export type IndentLatexResult =
 
 /**
  * Formats LaTeX files in a specific directory and its subdirectories
+ * @param workspaceRoot Root a relative `directory` resolves against and the cwd
+ * the formatter runs in, held by the caller as data. When `undefined`, a
+ * relative `directory` resolves against the process cwd.
  * @param directory The directory to process (relative to workspace). If not provided, uses the root.
  * @param progressCallback Optional callback for progress updates
  * @returns Promise<IndentLatexResult> The formatting outcome
  */
 export async function indentLatexFilesInDirectory(
+  workspaceRoot: string | undefined,
   directory: string = '.',
   progressCallback?: (message: string, increment?: number) => void,
-  workspaceRoot: string | undefined = WorkspaceFS.getPath(),
   formatter: LatexFormatter | null = resolveLatexFormatter(),
 ): Promise<IndentLatexResult> {
   log.debug(`Starting LaTeX indentation process for directory: ${directory}`);

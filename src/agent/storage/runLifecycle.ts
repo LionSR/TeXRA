@@ -90,15 +90,24 @@ export const registerRun = Effect.fn('registerRun')(function* (
       const prior = yield* records.exists();
       if (prior)
         releaseClaims = yield* session.acquireClaims(aggregateId('run', runId));
-      // The database refuses a parent that is closed or has no `run.start`;
-      // this read only words the refusal before the transaction opens.
-      if (
-        options.parentRunId !== undefined &&
-        !(yield* getRunRecords(session, options.parentRunId).exists())
-      )
-        return yield* Effect.fail(
-          new Error(`Parent run ${options.parentRunId} is unavailable.`),
-        );
+      if (options.parentRunId !== undefined) {
+        // A record read goes straight to the database; it never queues behind
+        // the publisher. A parent whose `run.start` is queued but uncommitted
+        // therefore reads as absent here, and the refusal below would be about
+        // a parent that is on its way in. This empty batch is the barrier: the
+        // publisher is the one order, whether a fact was published detached or
+        // awaited, so a job enqueued here runs after every publication queued
+        // before it — while answering for none of them, which a settle could
+        // not do without failing this child over some other fact its parent
+        // lost.
+        yield* session.commit([]);
+        // The database refuses a parent that is closed or has no `run.start`;
+        // this read only words the refusal before the transaction opens.
+        if (!(yield* getRunRecords(session, options.parentRunId).exists()))
+          return yield* Effect.fail(
+            new Error(`Parent run ${options.parentRunId} is unavailable.`),
+          );
+      }
       const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
       const target = aggregateId('run', runId);
       const category = isAgentRunRecord(pinned)

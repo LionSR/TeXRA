@@ -8,6 +8,8 @@
  *   - list_api_keys — enumerate stored secret key names for auditing
  *   - invoke_command — bridge to allowlisted VS Code commands
  *   - install_vscode_extension — install LaTeX Workshop / Lean 4
+ *   - read_config / update_config — read a TeXRA setting, or write an
+ *     allowlisted one
  *   - send_to_terminal — type into VS Code's integrated terminal for
  *     sudo / interactive prompts the captured-stdio bash tool can't handle
  *   - apply_team — apply a discipline roster + record the default team

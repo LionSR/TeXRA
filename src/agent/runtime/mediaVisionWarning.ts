@@ -22,9 +22,10 @@ export function mediaNeedsVisionWarning(
   if (count === 0) return undefined;
 
   const subject = modelName ? `Model "${modelName}"` : 'Model';
+  const single = count === 1;
   return (
     `${subject} has no vision support: ${count} ${kind} ` +
-    `${count === 1 ? 'media file is' : 'media files are'} not sent to the model. ` +
-    `Switch to a vision-capable model to use ${count === 1 ? 'it' : 'them'}.`
+    `${single ? 'media file is' : 'media files are'} not sent to the model. ` +
+    `Switch to a vision-capable model to use ${single ? 'it' : 'them'}.`
   );
 }

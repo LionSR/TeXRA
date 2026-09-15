@@ -56,7 +56,6 @@ const COMPOSITION_ROOT_FILES = new Set([
 // the set stays closed under its own imports.
 const BROWSER_SAFE_UTILS = [
   '@utils/core',
-  '@utils/core/keyedMutex',
   '@utils/errors/errorMessage',
   '@utils/files/pastedImageName',
   '@utils/text/stringUtils',

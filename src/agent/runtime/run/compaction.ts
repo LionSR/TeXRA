@@ -33,6 +33,8 @@ import { getValidatedConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { rowAggregate, type Message } from '../loop/rows';
+import { estimateInputTokensOrNull } from './estimateInputTokens';
+import { turnText } from './turnText';
 import type { BoundModel } from './modelBinding';
 
 /** Max tokens for the compaction summary response. */
@@ -143,17 +145,7 @@ function historyText(messages: readonly Message[]): string {
   return pieces.join('\n');
 }
 
-/** The assistant text of the summary turn, joined. */
-function summaryText(turn: TurnResult): string {
-  return turn.content
-    .flatMap((part) =>
-      part.kind === 'message' ? part.content.map((piece) => piece.text) : [],
-    )
-    .join('')
-    .trim();
-}
-
-export interface CompactionInput {
+interface CompactionInput {
   readonly runId: RunId;
   readonly ledger: RunLedger['Service'];
   readonly logger: AgentTrace;
@@ -217,20 +209,12 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
           data: Cause.squash(prepared.cause),
         });
       } else if (prepared.value.mode === 'foreground') {
-        const estimate = yield* Effect.exit(
-          bound.model.estimateInputTokens(prepared.value),
+        counted = yield* estimateInputTokensOrNull(
+          bound.model,
+          prepared.value,
+          logger,
+          'Token counting failed; the compaction threshold uses a text estimate.',
         );
-        if (Exit.isFailure(estimate)) {
-          if (Cause.hasInterrupts(estimate.cause)) {
-            return yield* Effect.interrupt;
-          }
-          logger.debug(
-            'Token counting failed; the compaction threshold uses a text estimate.',
-            { data: Cause.squash(estimate.cause) },
-          );
-        } else {
-          counted = estimate.value.inputTokens;
-        }
       }
     }
     if (counted === null) {
@@ -294,7 +278,8 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
     );
     return state;
   }
-  const summary = summaryText(summarized.value);
+  // The summary turn's own text, trimmed: an empty summary is skipped.
+  const summary = turnText(summarized.value).trim();
   if (!summary) {
     logger.warn('Compaction returned empty summary, skipping');
     activity.finish('skipped');

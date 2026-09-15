@@ -22,7 +22,6 @@ import {
   createStubDesktopAgentRunHost,
   disposeAfterTest,
 } from './desktopAgentRunTestHarness.ts';
-import { loadSourceModule } from './loadSourceModule.ts';
 
 const approvalTest = (
   name: string,
@@ -116,7 +115,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     await Promise.all([
       import('@tools/approval/toolEditApproval'),
       import('@controllers/approval/ToolEditApprovalController'),
-      loadSourceModule('@desktop/main/desktopToolEditApproval'),
+      import('@desktop/main/desktopToolEditApproval'),
     ]);
   return {
     requestToolEditApproval,
@@ -485,9 +484,10 @@ describe('desktop tool edit approval', () => {
               openPath: async (filePath) => {
                 opened.push(filePath);
               },
-              showErrorMessage: (message) => {
-                messages.push(message);
-              },
+              showErrorMessage: (message) =>
+                Effect.sync(() => {
+                  messages.push(message);
+                }),
             }),
           });
 
@@ -604,9 +604,10 @@ describe('desktop tool edit approval', () => {
                   options,
                 });
               },
-              showErrorMessage: (message) => {
-                messages.push(message);
-              },
+              showErrorMessage: (message) =>
+                Effect.sync(() => {
+                  messages.push(message);
+                }),
             }),
           });
 

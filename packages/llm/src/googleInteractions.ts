@@ -80,6 +80,8 @@ const WireInteractionSchema = z.object({
   steps: z.unknown().optional(),
   usage: WireUsageSchema.optional(),
 });
+/** Wire statuses that report an interaction still working, not a terminal outcome. */
+const IN_FLIGHT_STATUSES: readonly string[] = ['queued', 'in_progress'];
 const WireEventSchema = z.discriminatedUnion('event_type', [
   z.object({
     event_type: z.literal('interaction.created'),
@@ -537,10 +539,10 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
     const callIds = new Set<string>();
     for (const step of responseSteps) {
       if (step.type === 'thought') {
-        const summary: Array<{ kind: 'text'; text: string }> = [];
-        for (const item of step.summary ?? []) {
-          summary.push({ kind: 'text', text: item.text });
-        }
+        const summary = (step.summary ?? []).map(({ text }) => ({
+          kind: 'text' as const,
+          text,
+        }));
         content.push({
           kind: 'reasoning',
           summary,
@@ -1188,10 +1190,7 @@ export function googleInteractionsModel(
         store: turn.controls.store,
       });
       const interaction = yield* snapshot(raw, operation);
-      if (
-        interaction.status === 'queued' ||
-        interaction.status === 'in_progress'
-      ) {
+      if (IN_FLIGHT_STATUSES.includes(interaction.status)) {
         return BackgroundSubmissionSchema.parse({
           kind: 'accepted',
           operation,
@@ -1300,10 +1299,7 @@ export function googleInteractionsModel(
               }
               returnedModel = interaction.model;
             }
-            if (
-              interaction.status !== 'queued' &&
-              interaction.status !== 'in_progress'
-            ) {
+            if (!IN_FLIGHT_STATUSES.includes(interaction.status)) {
               const result = yield* completedSnapshot({
                 ...interaction,
                 model: returnedModel,
@@ -1389,10 +1385,7 @@ export function googleInteractionsModel(
           kind: 'observed-terminal',
           status: interaction.status,
         });
-      if (
-        interaction.status === 'queued' ||
-        interaction.status === 'in_progress'
-      )
+      if (IN_FLIGHT_STATUSES.includes(interaction.status))
         return CancellationEvidenceSchema.parse({
           ...identity,
           kind: 'unconfirmed',

@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { COMMIT_HASH_HEX_RANGE } from '@utils/git/commitHashPattern';
 
 type GeneratedLatexdiffArtifactKind =
@@ -129,10 +129,15 @@ export function parseVersionControlDiffFilename(
  * reproduce — but the fixer should know the file is a diff so it repairs the
  * markup in place, and should propagate source-rooted fixes to the source so
  * they survive regeneration.
+ *
+ * `workspaceRoot` is the root the source hint is made relative to — the
+ * caller's own session root, held as data. `undefined` (no folder open)
+ * leaves the hint on the path the caller already has.
  */
 export async function buildLatexdiffAwareFixInstruction(
   base: string,
   activeFilePath: string,
+  workspaceRoot: string | undefined,
 ): Promise<string> {
   const artifact = detectGeneratedLatexdiffArtifact(activeFilePath);
   if (!artifact) return base;
@@ -145,7 +150,7 @@ export async function buildLatexdiffAwareFixInstruction(
   }
 
   const sourceHint = sourceExists
-    ? ` generated from ${WorkspaceFS.relativePath(artifact.sourcePath)}`
+    ? ` generated from ${workspaceRelativePath(workspaceRoot, artifact.sourcePath)}`
     : '';
   return [
     base,

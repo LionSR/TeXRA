@@ -25,12 +25,12 @@ import {
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-import { formatDuration, unique } from '@utils/core';
+import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { getRunDir, ensureRunDir } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
-import { countLines } from '@utils/text/stringUtils';
+import { countLines, formatDuration } from '@utils/text/stringUtils';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
 import {
   formatChildRunDelivery,

@@ -1,5 +1,5 @@
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
-import { isNonEmptyString } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 /**
  * Validate a configured helper-model choice against a candidate list, falling
@@ -24,10 +24,7 @@ export function resolveEffectiveHelperModel(
   }
 
   const resolved = configuredModel.trim();
-  if (resolved === DEFAULT_HELPER_MODEL) return resolved;
-
-  if (candidateModels.includes(resolved)) {
-    return resolved;
-  }
-  return DEFAULT_HELPER_MODEL;
+  return resolved === DEFAULT_HELPER_MODEL || candidateModels.includes(resolved)
+    ? resolved
+    : DEFAULT_HELPER_MODEL;
 }

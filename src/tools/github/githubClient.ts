@@ -12,7 +12,7 @@ import { RequestError } from '@octokit/request-error';
 import { Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { Secrets } from '@platform/secrets';
-import { isNonEmptyString } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { getGitHubToken } from './githubAuth';
 

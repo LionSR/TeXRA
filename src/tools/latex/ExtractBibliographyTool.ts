@@ -1,7 +1,13 @@
+// Node imports
+import * as nodePath from 'node:path';
+
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
+
+// Local imports - errors
+import { isNotADirectoryError } from '@common/errors/errorPredicates';
 
 // Local imports - tools
 import {
@@ -9,13 +15,12 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
+import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
-import { ensureError } from '@utils/errors/errorMessage';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { readConfig } from '@utils/config/configUtils';
 import {
@@ -49,7 +54,11 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
   function* ({
     texPath,
     bibPath,
-  }: ExtractBibliographyInput): Effect.fn.Return<ToolResult, Error, ToolCall> {
+  }: ExtractBibliographyInput): Effect.fn.Return<
+    ToolResult,
+    Error,
+    ToolCall | WorkspaceFs | FileSystem.FileSystem
+  > {
     const call = yield* ToolCall;
     const { path, display } = yield* resolveLatexFile(texPath);
 
@@ -66,10 +75,29 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
       const { path: resolved } = call.inScope(() =>
         resolveAndFormat(effectiveBibPath, call.workingDirectory),
       );
-      const exists = yield* Effect.tryPromise({
-        try: () => call.inScope(() => WorkspaceFS.exists(resolved.fsPath)),
-        catch: ensureError,
-      });
+      // `fsPath` records where the bibliography landed: workspace-relative
+      // inside the session's folder, absolute for a path the caller chose
+      // outside it. So the confined view of this call's own workspace
+      // answers the first and the process filesystem the second, which is
+      // the split `WorkspaceFS` made by passing absolute paths through.
+      const fs: FileSystem.FileSystem = nodePath.isAbsolute(resolved.fsPath)
+        ? yield* FileSystem.FileSystem
+        : yield* WorkspaceFs;
+      // A path whose parent is not a directory is a missing bibliography, not
+      // a tool failure: `BaseFS.exists` counted ENOTDIR as absent alongside
+      // ENOENT, and `FileSystem.exists` reports it as `BadResource`. The
+      // predicate names ENOTDIR specifically so an operational failure
+      // (`ELOOP`) still propagates. One difference is deliberate: `exists`
+      // follows the link, so a dangling symlink now reads as missing where the
+      // old `lstat`-based check saw the entry itself.
+      const exists = yield* fs.exists(resolved.fsPath).pipe(
+        Effect.catchIf(
+          (error) =>
+            error.reason._tag === 'BadResource' &&
+            isNotADirectoryError(error.reason.cause),
+          () => Effect.succeed(false),
+        ),
+      );
       const target = exists ? bibliographyFiles : missingBibliographyFiles;
       if (!target.includes(resolved.absolute)) {
         target.push(resolved.absolute);
@@ -78,6 +106,11 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
         citationKeys = ['*'];
       }
     }
+
+    const missingBibliographyNote =
+      missingBibliographyFiles.length > 0
+        ? `Missing bibliography files: ${call.inScope(() => formatPathList(missingBibliographyFiles))}.`
+        : undefined;
 
     if (
       citationKeys.length === 0 &&
@@ -91,10 +124,9 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
     }
 
     if (citationKeys.length === 0) {
-      const missingNote =
-        missingBibliographyFiles.length > 0
-          ? `\n\nNote: Missing bibliography files: ${call.inScope(() => formatPathList(missingBibliographyFiles))}.`
-          : '';
+      const missingNote = missingBibliographyNote
+        ? `\n\nNote: ${missingBibliographyNote}`
+        : '';
       const result = emptyExtractionResult(
         `BibTeX entries in ${display}`,
         `No citation commands found in ${display}.`,
@@ -129,8 +161,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
         : `Resolved ${formatResultCount(entryCount, 'bibliography entry', 'bibliography entries')} for ${citationKeyCount} in ${display}.`;
 
     const instructions = [
-      missingBibliographyFiles.length > 0 &&
-        `Missing bibliography files: ${call.inScope(() => formatPathList(missingBibliographyFiles))}.`,
+      missingBibliographyNote,
       missingKeys.length > 0 &&
         `Missing citation keys: ${missingKeys.map((k) => `\`${k}\``).join(', ')}.`,
       entryCount > DEFAULT_MAX_ENTRIES &&

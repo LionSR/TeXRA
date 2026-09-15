@@ -41,8 +41,8 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
-import { formatDuration, groupBy } from '@utils/core';
-import { pluralize } from '@utils/text/stringUtils';
+import { groupBy } from '@utils/core';
+import { formatDuration, pluralize } from '@utils/text/stringUtils';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';

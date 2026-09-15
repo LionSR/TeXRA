@@ -198,7 +198,7 @@ type WorkflowCallLiveStatus = Exclude<
   WorkflowCallStatus,
   'completed' | 'cached' | 'cancelled' | 'skipped' | 'failed'
 >;
-export type WorkflowCallTerminalProgress = Exclude<
+type WorkflowCallTerminalProgress = Exclude<
   WorkflowCallProgress,
   { readonly status: WorkflowCallLiveStatus }
 >;

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
 import type { ElectronSecrets } from '@desktop/main/platform/electronSecrets';
+import { NotificationFailed } from '@hosts/uiHosts';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
@@ -247,9 +248,15 @@ describe('desktop platform adapters', () => {
           store,
           secrets,
         } = yield* loadSecrets({
-          showWarningMessage: vi.fn(async () => {
-            throw new Error('dialog failed');
-          }),
+          showWarningMessage: vi.fn(() =>
+            Effect.fail(
+              new NotificationFailed({
+                member: 'showWarningMessage',
+                message: 'dialog failed',
+                cause: new Error('dialog failed'),
+              }),
+            ),
+          ),
         });
 
         vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');

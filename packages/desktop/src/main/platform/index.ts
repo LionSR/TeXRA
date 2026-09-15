@@ -6,6 +6,7 @@ import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import { NotificationFailed } from '@hosts/uiHosts';
 import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
@@ -21,11 +22,7 @@ import type {
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import {
-  JsonStore,
-  nodeFileServices,
-  type RunStateWrite,
-} from '@platform/defaults/jsonStore';
+import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
@@ -48,6 +45,7 @@ import { UsageLogService } from '@telemetry/UsageLogService';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { desktopSetupPlatform } from '../desktopSetupAuth.js';
@@ -67,9 +65,6 @@ export interface ElectronPlatformInitResult {
    * setting changed from one project is what the others read.
    */
   globalConfigStore: ConfigStore;
-  /** Runs a project state store's durable writes on this process's runtime:
-   *  the store is below the boundary, so its Promise face is made here. */
-  runWrite: RunStateWrite;
   lifecycle: LifecycleHost;
   /**
    * The process-wide services the composition root builds and `initPlatform`
@@ -124,11 +119,6 @@ export async function initializeElectronPlatform(
   // layer build.
   const processStart = await nodeProcesses.selfIdentity();
   installLongRunningModelDispatcher();
-  // The Promise face of `StateStore.update`, run on this process's runtime:
-  // the store itself is below the boundary and never runs an Effect. The
-  // stores below hold it and call it only when something writes, which is
-  // after the runtime this closure names has been installed.
-  const runWrite: RunStateWrite = (write) => runtime.runPromise(write);
   // The stores this root serves as `Secrets` and `AppState` open before the
   // runtime that serves them, so both are threaded in as values rather than
   // resolved per call. Opening needs the filesystem and nothing else —
@@ -147,16 +137,10 @@ export async function initializeElectronPlatform(
               // Global state stays in the Electron profile, beside this
               // profile's update-check records and apart from the shared
               // `~/.texra` root the workspace scopes use.
-              openAppStateStore(
-                resolveGlobalStoragePath(userDataPath),
-                runWrite,
-              ),
-              openAppStateStore(storage.getStoragePath(), runWrite),
-              openTexraConfigStores(
-                storage,
-                undefined,
-                (message) => console.warn(`[desktop] ${message}`),
-                runWrite,
+              openAppStateStore(resolveGlobalStoragePath(userDataPath)),
+              openAppStateStore(storage.getStoragePath()),
+              openTexraConfigStores(storage, undefined, (message) =>
+                console.warn(`[desktop] ${message}`),
               ),
               JsonStore.open(join(userDataPath, 'secrets.json')),
             ],
@@ -171,7 +155,16 @@ export async function initializeElectronPlatform(
       }).pipe(Effect.provide(nodeFileServices)),
     );
   const secrets = new ElectronSecrets(secretsStore, {
-    showWarningMessage: showDesktopWarningDialog,
+    showWarningMessage: (message) =>
+      Effect.tryPromise({
+        try: () => showDesktopWarningDialog(message),
+        catch: (cause) =>
+          new NotificationFailed({
+            member: 'showWarningMessage',
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      }),
   });
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
@@ -242,7 +235,6 @@ export async function initializeElectronPlatform(
   return {
     processRoots,
     globalConfigStore: configStores.global,
-    runWrite,
     lifecycle,
     globalState: globalStateStore,
     ownerId: processOwnerId(processStart),

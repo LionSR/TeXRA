@@ -272,10 +272,7 @@ jobs:
           pnpm --filter @texra-ai/cli validate:tui -- \
             --snapshot-dir "$GITHUB_WORKSPACE/artifacts/tui-frames" \
             edit-approval subagent-list-focus-full-frame hidden-root-approval-tab-return \
-            orchestrate-launcher orchestrate-agent-submenu \
-            orchestrate-independent-subscription-preferences \
-            orchestrate-history orchestrate-resume-submenu \
-            compact-orchestrate-launcher single-run-liveness \
+            single-run-liveness \
             subagent-followup-summary \
             agent-proposal-approve-all workflow-running \
             root-transcript-reader-full-tool-output compact-api-form \

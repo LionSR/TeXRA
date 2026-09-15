@@ -12,7 +12,7 @@ import {
   type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
 
-export const CHATGPT_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
+const CHATGPT_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
 
 export interface ChatGptUsageCredential {
   readonly accessToken: string;

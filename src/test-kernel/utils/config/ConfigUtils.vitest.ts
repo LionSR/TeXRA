@@ -1,5 +1,6 @@
 // Suites for src/utils/config (configUtils + platformSettings + providerConfig).
 
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import * as logger from '@logger/logUtils';
@@ -37,7 +38,7 @@ describe('getConfig', () => {
       get<T>(_key: string, defaultValue?: T): T {
         return defaultValue as T;
       },
-      async update<T>(_key: string, _value: T): Promise<void> {},
+      update: () => Effect.void,
       inspect: () => undefined,
       isExplicitlySet: () => false,
     };

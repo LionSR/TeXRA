@@ -33,6 +33,7 @@ const EndpointSchema = z.url().refine(
   },
   { message: 'Endpoints carry no userinfo, query string or fragment.' },
 );
+const BackgroundCapabilitySchema = z.enum(['supported', 'unsupported']);
 const BindingSchema = z.strictObject({
   requestedModel: z.string().min(1),
   deployment: z
@@ -243,6 +244,7 @@ const MiniMaxDetectionSchema = z.strictObject({
   outputSensitiveType: z.int().optional(),
   outputSensitiveInt: z.int().optional(),
 });
+const EvidenceStatusSchema = z.enum(['completed', 'incomplete']);
 const MessagePartSchema = z.strictObject({
   kind: z.literal('message'),
   content: z
@@ -261,7 +263,7 @@ const MessagePartSchema = z.strictObject({
         .strictObject({
           kind: z.literal('openai-responses-message'),
           itemId: z.string().min(1),
-          status: z.enum(['completed', 'incomplete']),
+          status: EvidenceStatusSchema,
           phase: z.enum(['commentary', 'final_answer']).nullable().optional(),
         })
         .readonly(),
@@ -346,7 +348,7 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
               itemId: z.string().min(1),
               // Missing, null and exact opaque bytes have distinct wire meanings.
               encryptedContent: z.string().nullable().optional(),
-              status: z.enum(['completed', 'incomplete']).optional(),
+              status: EvidenceStatusSchema.optional(),
             })
             .readonly(),
           z
@@ -639,14 +641,15 @@ const ResponsesReasoningSchema = z
   .readonly()
   .nullable();
 const DisabledThinkingSchema = z.strictObject({ mode: z.literal('disabled') });
+const ThinkingDisplaySchema = z.enum(['summarized', 'omitted']);
 const AdaptiveThinkingSchema = z.strictObject({
   mode: z.literal('adaptive'),
-  display: z.enum(['summarized', 'omitted']),
+  display: ThinkingDisplaySchema,
 });
 const BudgetedThinkingSchema = z.strictObject({
   mode: z.literal('enabled'),
   budgetTokens: z.int().min(1024),
-  display: z.enum(['summarized', 'omitted']),
+  display: ThinkingDisplaySchema,
 });
 const AnthropicThinkingSchema = z.discriminatedUnion('mode', [
   DisabledThinkingSchema.readonly(),
@@ -665,6 +668,7 @@ const EffortSchema = ReasoningEffortSchema.unwrap()
   .exclude(['none', 'minimal'])
   .nullable();
 const CacheSchema = z.enum(['disabled', '5m', '1h']);
+const ThinkingLevelSchema = z.enum(['low', 'medium', 'high']);
 
 /** Materialized input; no SDK value, credential, file path or storage reference. */
 export const TurnRequestSchema = z
@@ -678,7 +682,7 @@ export const TurnRequestSchema = z
     temperature: z.number().min(0).max(2).optional(),
     maxOutputTokens: z.int().positive().optional(),
     store: z.boolean().optional(),
-    thinkingLevel: z.enum(['low', 'medium', 'high']).optional(),
+    thinkingLevel: ThinkingLevelSchema.optional(),
     reasoning: ResponsesReasoningSchema.optional(),
     serviceTier: z.literal('fast').nullable().optional(),
     thinking: AuthoredThinkingSchema.optional(),
@@ -703,7 +707,7 @@ const OpenAIChatControlsSchema = OpenAIControlsSchema.extend({
 const GoogleControlsSchema = z.strictObject({
   maxOutputTokens: z.int().positive(),
   store: z.boolean(),
-  thinkingLevel: z.enum(['low', 'medium', 'high']),
+  thinkingLevel: ThinkingLevelSchema,
   toolChoice: ToolChoiceSchema,
 });
 const ResponsesControlsSchema = z.strictObject({
@@ -852,7 +856,7 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     .readonly(),
   BindingSchema.extend({
     protocol: z.literal('google-interactions'),
-    background: z.enum(['supported', 'unsupported']),
+    background: BackgroundCapabilitySchema,
     supportsInputTokenEstimation: z.boolean(),
     defaults: GoogleControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
@@ -903,7 +907,7 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
   }).readonly(),
   BindingSchema.extend({
     protocol: z.literal('openai-responses'),
-    background: z.enum(['supported', 'unsupported']),
+    background: BackgroundCapabilitySchema,
     supportsInputTokenEstimation: z.boolean(),
     supportsTemperature: z.boolean(),
     supportsMaxOutputTokens: z.boolean(),
@@ -1887,7 +1891,6 @@ export const InputTokenEstimateSchema = z
   .readonly();
 export type InputTokenEstimate = z.infer<typeof InputTokenEstimateSchema>;
 
-/** A configured executable value; it owns neither conversation nor retry policy. */
 /** The bytes an upload takes. */
 export const FileUploadSchema = z
   .strictObject({
@@ -1915,6 +1918,7 @@ export interface UnreleasedUpload {
   readonly reason: string;
 }
 
+/** A configured executable value; it owns neither conversation nor retry policy. */
 export interface Model {
   prepareTurn(request: TurnRequest): Effect.Effect<ResolvedTurn, ModelError>;
   streamTurn(

@@ -1,5 +1,5 @@
 {
-  "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip\u2019s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
+  "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip’s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
   "findings": [
     {
       "file": "packages/cli/src/chat/tui/commands/SlashPalette.tsx",
@@ -440,34 +440,10 @@
       "name": "initWizardModelSelectItems"
     },
     {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationFooterHints"
-    },
-    {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationLauncherLayout"
-    },
-    {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationPreviousStep"
-    },
-    {
       "file": "packages/cli/src/runtime/apiStatus.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "formatPersonalApiKeysLine"
-    },
-    {
-      "file": "packages/cli/src/runtime/chatDefaults.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "__resetUserConfigWarningDedupeForTests"
     },
     {
       "file": "packages/cli/src/runtime/cliContext.ts",
@@ -788,24 +764,6 @@
       "name": "noopTrace"
     },
     {
-      "file": "src/auth/SupabaseSession.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DEFAULT_SUPABASE_SESSION_EXPIRY_MS"
-    },
-    {
-      "file": "src/auth/SupabaseSession.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "parseStoredSupabaseSession"
-    },
-    {
-      "file": "src/auth/SupabaseSession.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "SupabaseSessionStorage"
-    },
-    {
       "file": "src/auth/codex/CodexSessionCoordinator.ts",
       "category": "production-dead",
       "kind": "types",
@@ -813,18 +771,6 @@
     },
     {
       "file": "src/auth/codex/CodexSessionCoordinator.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CodexSessionStorage"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CodexOAuthClient"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
       "category": "production-dead",
       "kind": "types",
       "name": "CodexSessionStorage"
@@ -884,18 +830,6 @@
       "name": "XaiSessionStorage"
     },
     {
-      "file": "src/auth/xai/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "XaiOAuthClient"
-    },
-    {
-      "file": "src/auth/xai/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "XaiSessionStorage"
-    },
-    {
       "file": "src/auth/xai/xaiOAuthClient.ts",
       "category": "unused",
       "kind": "exports",
@@ -914,18 +848,6 @@
       "name": "buildTeamOptions"
     },
     {
-      "file": "src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DEFAULT_PLAN_NAMES"
-    },
-    {
-      "file": "src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CHATGPT_USAGE_URL"
-    },
-    {
       "file": "src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -941,43 +863,13 @@
       "file": "src/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "KIMI_CODE_USAGE_URL"
-    },
-    {
-      "file": "src/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "parseKimiCodeUsage"
-    },
-    {
-      "file": "src/controllers/onboarding/onboardingFunnel.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "deriveOnboardingFunnelState"
-    },
-    {
-      "file": "src/controllers/onboarding/setupLaunch.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "selectDesktopSetupModel"
     },
     {
       "file": "src/controllers/onboarding/setupLaunch.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "selectSetupCredentialModelExcludingOpenRouter"
-    },
-    {
-      "file": "src/controllers/settingsView/LatexToolingController.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "LatexPathTool"
-    },
-    {
-      "file": "src/eventBus/AppSignals.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "AppSignalPayloads"
     },
     {
       "file": "src/latex/acceptedFileTarget.ts",
@@ -996,24 +888,6 @@
       "category": "production-dead",
       "kind": "types",
       "name": "DownloadSourceOptions"
-    },
-    {
-      "file": "src/latex/texTools.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildKpathseaSearchPath"
-    },
-    {
-      "file": "src/latex/texTools.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildLatexInputEnv"
-    },
-    {
-      "file": "src/latex/texTools.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildLatexSearchParts"
     },
     {
       "file": "src/logger/redaction.ts",
@@ -1148,22 +1022,10 @@
       "name": "isUnsupported"
     },
     {
-      "file": "src/tools/DiagnosticsTool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DiagnosticsInputSchema"
-    },
-    {
       "file": "src/tools/claudeAgent.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "runStreamedTurn"
-    },
-    {
-      "file": "src/tools/codex.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "publishCodexTodos"
     },
     {
       "file": "src/tools/codex.ts",
@@ -1212,18 +1074,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "countPinnedMemories"
-    },
-    {
-      "file": "src/tools/timeouts.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isTransientHttpError"
-    },
-    {
-      "file": "src/tools/wolfram/WolframTool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "wolframApprovalCommand"
     },
     {
       "file": "src/utils/files/pastedImageUtils.ts",

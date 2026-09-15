@@ -90,8 +90,9 @@ export type StateSettingUpdateResult =
 
 /**
  * The write path's own failure. It never leaves this module: the program folds
- * it back into the `failed` result, carrying the original thrown value so the
- * hosts report exactly what they reported before.
+ * it back into the `failed` result, carrying what the write itself failed with
+ * — the store's own `ConfigWriteFailed`, or the state store's own error, or a
+ * thrown value from the approval-policy hook — so the hosts report one shape.
  */
 class StateSettingWriteFailed extends Data.TaggedError(
   'StateSettingWriteFailed',
@@ -147,13 +148,12 @@ export function applyStateSettingUpdate(
   ) {
     return Effect.succeed({ kind: 'workspace-required', entry: write.entry });
   }
-  return Effect.tryPromise({
-    try: () =>
-      write.kind === 'reset'
-        ? resetSetting(write.entry, ports.stores, ports.host)
-        : writeSetting(write.entry, write.value, ports.stores, ports.host),
-    catch: (cause) => new StateSettingWriteFailed({ cause }),
-  }).pipe(
+  const persist =
+    write.kind === 'reset'
+      ? resetSetting(write.entry, ports.stores, ports.host)
+      : writeSetting(write.entry, write.value, ports.stores, ports.host);
+  return persist.pipe(
+    Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
     Effect.andThen(
       Effect.try({
         try: () => {

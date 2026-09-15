@@ -6,7 +6,7 @@
  * mutation vocabulary.
  */
 import type { ToolFileAttachment, ToolResult } from '@shared/schemas';
-import { isNonEmptyString } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
 /** Max character length for tool result text (200KB ~ 50-66k tokens). */

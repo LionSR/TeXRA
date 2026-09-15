@@ -10,8 +10,13 @@ import {
   vi,
 } from 'vitest';
 import { Effect } from 'effect';
+import { NotificationFailed } from '@hosts/uiHosts';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { ConfigProvider, StateStore } from '@platform/interfaces';
+import {
+  StateWriteFailed,
+  type ConfigProvider,
+  type StateStore,
+} from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -45,7 +50,6 @@ import {
   createStubDesktopSettingsUiHost,
   createStubDesktopToolingSettingsController,
 } from './desktopSettingsTestSupport';
-import { loadSourceModule } from './loadSourceModule.ts';
 
 const readModelAvailabilityInputs = vi.hoisted(() =>
   vi.fn((_stores: ModelOptionStores, models: readonly string[] = []) =>
@@ -183,7 +187,7 @@ function findSnapshot(
 
 function createFailureReportingFixture(workspaceState: FakeStateStore) {
   const onError = vi.fn();
-  const showErrorMessage = vi.fn(async () => undefined);
+  const showErrorMessage = vi.fn(() => Effect.void);
   const postLatexConfigValues = vi.fn();
   const { settings } = createCapturedSettingsFixture({
     workspaceState,
@@ -210,9 +214,8 @@ function newStatePorts() {
 
 describe('desktop settings IPC', () => {
   beforeAll(async () => {
-    ({ createDesktopSettingsIpc } = await loadSourceModule(
-      '@desktop/main/desktopSettingsIpc',
-    ));
+    ({ createDesktopSettingsIpc } =
+      await import('@desktop/main/desktopSettingsIpc'));
   });
 
   afterEach(() => {
@@ -505,7 +508,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('shows unsupported-command reasons without reporting an error', async () => {
-    const showInfoMessage = vi.fn(async () => undefined);
+    const showInfoMessage = vi.fn(() => Effect.void);
     const onError = vi.fn();
     const { settings } = createSettingsFixture({
       ui: { showInfoMessage, onError },
@@ -526,7 +529,15 @@ describe('desktop settings IPC', () => {
 
   it('reports a failure to show an unsupported-command reason', async () => {
     const failure = new Error('notification failed');
-    const showInfoMessage = vi.fn(() => Promise.reject(failure));
+    const showInfoMessage = vi.fn(() =>
+      Effect.fail(
+        new NotificationFailed({
+          member: 'showInfoMessage',
+          message: 'notification failed',
+          cause: failure,
+        }),
+      ),
+    );
     const onError = vi.fn();
     const { settings } = createSettingsFixture({
       ui: { showInfoMessage, onError },
@@ -738,8 +749,16 @@ describe('desktop settings IPC', () => {
 
   it('reports failed setting writes and restores the authoritative snapshot', async () => {
     const workspaceState = new FakeStateStore();
-    const failure = new Error('workspace write failed');
-    vi.spyOn(workspaceState, 'update').mockRejectedValueOnce(failure);
+    // The store's own tagged refusal, which is what the IPC reports: the
+    // write is an Effect the IPC composes, so the double fails with one.
+    const failure = new StateWriteFailed({
+      key: WorkspaceStateKey.LATEX_FORMATTER,
+      message: 'workspace write failed',
+      cause: new Error('workspace write failed'),
+    });
+    vi.spyOn(workspaceState, 'update').mockReturnValueOnce(
+      Effect.fail(failure),
+    );
     const { settings, onError, showErrorMessage, postLatexConfigValues } =
       createFailureReportingFixture(workspaceState);
 

@@ -146,26 +146,20 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
       ? `LaTeX Workshop: ${summary.latexWorkshop.installed ? 'installed' : 'not installed'}`
       : 'LaTeX Workshop: not applicable',
   ];
-  const creds: string[] = [];
   const origins = new Set(summary.credentials.apiKeys.map((key) => key.origin));
-  if (origins.has('secret')) creds.push('provider API key saved');
-  if (origins.has('env')) creds.push('provider API key in environment');
-  if (origins.has('unknown')) {
-    creds.push('provider API key status unavailable');
-  }
-  if (summary.credentials.chatGptSubscription.enabled) {
-    creds.push('ChatGPT subscription enabled');
-  }
-  if (summary.credentials.researcherAccess.authenticated)
-    creds.push('signed in');
-  if (
-    summary.credentials.hasAnyUsableCredential &&
-    !summary.credentials.anyApiKeySet &&
-    !summary.credentials.researcherAccess.authenticated &&
-    !summary.credentials.chatGptSubscription.enabled
-  ) {
-    creds.push('usable credential');
-  }
+  const { credentials } = summary;
+  const creds = [
+    origins.has('secret') && 'provider API key saved',
+    origins.has('env') && 'provider API key in environment',
+    origins.has('unknown') && 'provider API key status unavailable',
+    credentials.chatGptSubscription.enabled && 'ChatGPT subscription enabled',
+    credentials.researcherAccess.authenticated && 'signed in',
+    credentials.hasAnyUsableCredential &&
+      !credentials.anyApiKeySet &&
+      !credentials.researcherAccess.authenticated &&
+      !credentials.chatGptSubscription.enabled &&
+      'usable credential',
+  ].filter((cred): cred is string => typeof cred === 'string');
   parts.push(`credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`);
   const headline = parts.join('; ');
 

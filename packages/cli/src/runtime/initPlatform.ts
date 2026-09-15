@@ -24,6 +24,7 @@ import type {
   AgentResumePort,
   LifecycleHost,
   StateStore,
+  StateWriteFailed,
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { DisposableStore } from '@platform/disposable';
@@ -40,7 +41,6 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
-import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import type { SessionOpenError } from '@shared/session/database';
@@ -118,7 +118,7 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> & {
   /**
    * The process session over the process roots: one CLI process, one
    * project, one persistent session, opened by the first entry point that
-   * runs this Effect (`chat`, `run`, `orchestrate`, `resume`, `history`) and
+   * runs this Effect (`chat`, `run`, `resume`, `history`) and
    * handed to every later one as the same handle. `auth`, `doctor`,
    * `models`, `skills`, `tools` and `init` never run it, so a storage root
    * nothing can write to fails a command only when it asks for a transcript.
@@ -246,7 +246,7 @@ export function installCliShutdownSignalHandlers(
  *
  * Call this right at the handoff point, not any earlier: everything between
  * `initInteractiveCliPlatform()` and this call (onboarding, model
- * resolution, the orchestration launcher) still needs a graceful handler, so
+ * resolution) still needs a graceful handler, so
  * the platform's stays live for that whole window instead of being
  * suppressed for the entire span up front.
  *
@@ -275,12 +275,19 @@ export function setCliAgentResumeHandler(
   };
 }
 
-export async function setCliHelperModel(
+/**
+ * Record the model the chat is running as the default helper model. Returns
+ * the write as the Effect it is: the callers that want a promise face own a
+ * runtime and run it, and the ones that are already inside a program compose
+ * it directly, so no runtime is threaded in here purely to keep the promise.
+ */
+export function setCliHelperModel(
   state: StateStore,
   model: string | undefined,
-): Promise<void> {
-  if (!model) return;
-  await state.update(GlobalStateKey.HELPER_MODEL, model);
+): Effect.Effect<void, StateWriteFailed> {
+  // Keep the write lazy: a refused write is the caller's failure to handle,
+  // not a rejection nobody reads.
+  return model ? state.update(GlobalStateKey.HELPER_MODEL, model) : Effect.void;
 }
 
 /**
@@ -304,15 +311,15 @@ export async function initLocalCliPlatform(
 /**
  * Init for the REAL interactive entry points that hand control to the chat
  * TUI once the terminal-capability gate has already confirmed a usable TTY:
- * `texra chat`, the default-command launcher (`texra`/`texra orchestrate`),
- * `texra setup`, and `texra resume`. All four eventually call
+ * `texra chat` (including the bare `texra` default), `texra setup`, and
+ * `texra resume`. All three eventually call
  * `runChatTui.tsx`'s `runChat()`, which installs its own SIGINT/SIGTERM/
  * SIGHUP handlers once Ink mounts and owns teardown (terminal-mode restore,
  * persistence drain, `runCliPlatformShutdownSequence`) from there.
  *
  * Unlike `initLocalCliPlatform`, this does *not* suppress the platform's own
- * signal handlers up front — every one of the four call sites still does
- * real async I/O (onboarding, model resolution, the orchestration launcher)
+ * signal handlers up front — every one of the three call sites still does
+ * real async I/O (onboarding, model resolution)
  * between this call and the moment Ink actually mounts, and that window
  * needs a graceful handler just as much as a headless command does. The
  * platform handler stays installed through that window; `runChat()` calls
@@ -376,13 +383,11 @@ export async function initCliPlatform(
     // platform. Keep the platform, roots, and lazy session private until the
     // fallible setup has succeeded: their ports have no reset operation.
     const install = async () => {
-      const runWrite: RunStateWrite = (write) => runtime.runPromise(write);
       const { stateStores, configStores } = await runtime.runPromise(
         Effect.gen(function* () {
           const stores = yield* openCliWorkspaceState({
             storageRoot: context.storageRoot,
             workspacePath: context.cwd,
-            runWrite,
           });
           return {
             stateStores: stores,
@@ -390,7 +395,6 @@ export async function initCliPlatform(
               stores.storage,
               context.cwd,
               showPersistentConfigWarning,
-              runWrite,
             ),
           };
         }),

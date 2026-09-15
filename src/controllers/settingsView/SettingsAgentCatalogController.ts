@@ -1,4 +1,9 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
+import type { InvalidAgentTeamError } from '@agent/roster/AgentRosterController';
+import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import {
   findTeamPreset,
   planTeamRun,
@@ -10,6 +15,7 @@ import {
   type TeamRosterCatalog,
   type TeamRosterPresetResolution,
 } from '@common/teams/TeamRoster';
+import type { StateWriteFailed } from '@platform/interfaces';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS_BY_ID,
@@ -27,8 +33,9 @@ import {
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName, isObject } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export interface SettingsAgentCatalogEntry {
+interface SettingsAgentCatalogEntry {
   name: string;
   source: AgentSource;
   category: AgentCategory;
@@ -42,13 +49,23 @@ export interface SettingsAgentCatalogState {
   setEnabledAgentKeys(
     category: AgentCategory,
     enabledKeys: string[],
-  ): Promise<void>;
-  setTeamRoster(preset: AgentModePreset): Promise<void>;
+  ): Effect.Effect<void, StateWriteFailed>;
+  /**
+   * The roster refuses an unknown team in its own right, so the port carries
+   * that failure beside the write's: `commitPreset` below maps every error it
+   * receives into `TeamCatalogPortFailed`, so nothing re-tags it here.
+   */
+  setTeamRoster(
+    preset: AgentModePreset,
+  ): Effect.Effect<void, StateWriteFailed | InvalidAgentTeamError>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getVisibleAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getCustomPresetsRaw(): unknown;
-  setCustomPresets(presets: unknown[]): Promise<void>;
-  removeCustomPreset(presetId: string, remaining: unknown[]): Promise<void>;
+  setCustomPresets(presets: unknown[]): Effect.Effect<void, StateWriteFailed>;
+  removeCustomPreset(
+    presetId: string,
+    remaining: unknown[],
+  ): Effect.Effect<void, StateWriteFailed>;
 }
 
 interface SettingsAgentCatalogControllerDeps {
@@ -148,11 +165,25 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
     };
   }
 
-  async commitPreset(preset: AgentModePreset): Promise<void> {
-    await this.deps.state.setTeamRoster(preset);
+  /** The team port's own failure: this is `TeamRosterCatalog.commitPreset`. */
+  commitPreset(
+    preset: AgentModePreset,
+  ): Effect.Effect<void, TeamCatalogPortFailed> {
+    return this.deps.state.setTeamRoster(preset).pipe(
+      Effect.mapError(
+        (cause) =>
+          new TeamCatalogPortFailed({
+            member: 'commitPreset',
+            message: `The applied team could not be stored: ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      ),
+    );
   }
 
-  async saveCurrentPreset(name: string): Promise<AgentModePreset> {
+  saveCurrentPreset(
+    name: string,
+  ): Effect.Effect<AgentModePreset, StateWriteFailed> {
     const trimmedName = name.trim();
     const visible = byCategory((category) =>
       this.deps.state.getVisibleAgents(category),
@@ -173,24 +204,25 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       ),
     };
 
-    await this.deps.state.setCustomPresets([
-      ...this.getCustomPresetRecords(),
-      preset,
-    ]);
-    return preset;
+    return this.deps.state
+      .setCustomPresets([...this.getCustomPresetRecords(), preset])
+      .pipe(Effect.as(preset));
   }
 
-  async deleteCustomPreset(presetId: string): Promise<AgentModePreset | null> {
+  deleteCustomPreset(
+    presetId: string,
+  ): Effect.Effect<AgentModePreset | null, StateWriteFailed> {
     const records = this.getCustomPresetRecords();
     const presets = parseAgentModePresets(records);
     const target = presets.find((preset) => preset.id === presetId);
-    if (!target) return null;
+    if (!target) return Effect.succeed(null);
 
-    await this.deps.state.removeCustomPreset(
-      presetId,
-      records.filter((record) => !isObject(record) || record.id !== presetId),
-    );
-    return target;
+    return this.deps.state
+      .removeCustomPreset(
+        presetId,
+        records.filter((record) => !isObject(record) || record.id !== presetId),
+      )
+      .pipe(Effect.as(target));
   }
 
   /**
@@ -200,11 +232,11 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
    * "enable all" click writes the same roster back and republishes the
    * catalog for no change.
    */
-  async setAllAgentsEnabled(input: {
+  setAllAgentsEnabled(input: {
     category: AgentCategory;
     source: AgentSource;
     enabled: boolean;
-  }): Promise<void> {
+  }): Effect.Effect<void, StateWriteFailed> {
     const allAgents = this.deps.state.getAgents(input.category);
     const targetKeys = new Set(
       allAgents
@@ -224,9 +256,9 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       updated.length === current.length &&
       updated.every((key, index) => key === current[index])
     ) {
-      return;
+      return Effect.void;
     }
-    await this.deps.state.setEnabledAgentKeys(input.category, updated);
+    return this.deps.state.setEnabledAgentKeys(input.category, updated);
   }
 
   private buildCategorySelectionItems(
@@ -255,8 +287,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       // A stored list holds resolved `source:name` keys, but older workspaces
       // persisted bare names, which `agentMatchesIdentifier` still matches.
       enabled:
-        enabledKeys === undefined ||
-        enabledKeys.some((key) => agentMatchesIdentifier(entry, key)),
+        enabledKeys?.some((key) => agentMatchesIdentifier(entry, key)) ?? true,
     };
   }
 

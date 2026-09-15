@@ -1,13 +1,14 @@
 import { Effect } from 'effect';
 import { safeStorage } from 'electron';
 
+import type { MessageHost } from '@hosts/uiHosts';
 import {
   SecretsFailed,
   secretsGet,
   type PlatformSecrets,
   type SecretsOperation,
 } from '@platform/secrets';
-import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
+import type { JsonStore } from '@platform/defaults/jsonStore';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -16,7 +17,7 @@ type StoredSecret = { encrypted: true; value: string };
 type SecretStorageMode = 'encrypted' | 'basic_text' | 'unavailable';
 
 interface ElectronSecretsOptions {
-  showWarningMessage?: (message: string) => Promise<void> | void;
+  showWarningMessage?: MessageHost['showWarningMessage'];
 }
 
 export const LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE =
@@ -122,7 +123,11 @@ export class ElectronSecrets implements PlatformSecrets {
           cause,
         }),
     }).pipe(
-      Effect.catch((failure) =>
+      // The handler's parameter is the whole error type this expression can
+      // carry, so a second failure added to this channel (another `mapError`,
+      // a joined step) fails to compile instead of being reported as a refused
+      // decrypt and answered with "no saved secret".
+      Effect.catch((failure: SecretsFailed) =>
         Effect.as(
           Effect.andThen(
             Effect.sync(() => {
@@ -224,9 +229,7 @@ export class ElectronSecrets implements PlatformSecrets {
       if (this.warnedOnce.has(kind)) return Effect.void;
       this.warnedOnce.add(kind);
       return Effect.ignore(
-        Effect.tryPromise(async () =>
-          this.options.showWarningMessage?.(message),
-        ),
+        this.options.showWarningMessage?.(message) ?? Effect.void,
       );
     });
   }
@@ -242,7 +245,7 @@ export class ElectronSecrets implements PlatformSecrets {
   ): Effect.Effect<void, SecretsFailed> {
     const operation: SecretsOperation = stored ? 'set' : 'delete';
     return Effect.mapError(
-      Effect.provide(this.store.set(key, stored), nodeFileServices),
+      this.store.set(key, stored),
       (cause) =>
         new SecretsFailed({
           reason: 'io',

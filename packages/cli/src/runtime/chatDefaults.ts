@@ -1,5 +1,7 @@
-import { Effect } from 'effect';
-import { isFileNotFoundError } from '@common/errors';
+import * as path from 'node:path';
+
+import { Data, Effect, FileSystem, PlatformError, Result } from 'effect';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   decideRunModel,
   type RunModelDecisionReason,
@@ -7,8 +9,6 @@ import {
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
 import { isObject } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
   commandConfigModel,
@@ -64,28 +64,22 @@ function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
  *  matching the wording the read-failure branch already used. */
 const USER_CONFIG_LABEL = `user config (${TEXRA_CONFIG_FILE_NAME})`;
 
-/** `orchestrate`'s `launcher: while (true)` loop re-resolves chat defaults
- *  on every return to the launcher, so an in-scope invalid field (a typo'd
- *  texra.agent/texra.model/texra.chat.*) would otherwise reprint its warning
- *  once per loop pass for as long as the session stays open. Deduped against
- *  only the *previous* call's warnings (not every warning ever seen this
- *  process): the message text carries just the field name, not the invalid
- *  value, so a field a user fixes and later breaks again the same way would
- *  otherwise never warn again if this stayed a monotonically-growing set. */
-let previousUserConfigWarnings = new Set<string>();
-
-/** Test-only: this module-level dedup state otherwise leaks across `it()`
- *  blocks in the same file (Vitest doesn't reset module state between tests
- *  by default), which would make one test's warnings spuriously suppress
- *  another's. Call from a `beforeEach` in any suite that asserts on
- *  `loadUserDefaults`/`resolveChatDefaults` warnings. */
-export function __resetUserConfigWarningDedupeForTests(): void {
-  previousUserConfigWarnings = new Set();
+/** The user `config.json` is absent — the normal case, not a failure. */
+function isAbsentUserConfig(
+  error: PlatformError.PlatformError | UserConfigUnreadable,
+): boolean {
+  return error._tag === 'PlatformError' && error.reason._tag === 'NotFound';
 }
+
+/** The user `config.json` was read but is not JSON. */
+class UserConfigUnreadable extends Data.TaggedError('UserConfigUnreadable')<{
+  readonly message: string;
+}> {}
 
 const loadUserDefaults = Effect.fn(function* (
   quiet: boolean,
-): Effect.fn.Return<PartialDefaults> {
+  globalStorageDir: string,
+): Effect.fn.Return<PartialDefaults, never, FileSystem.FileSystem> {
   // A missing user config means no user defaults (parseCliConfigValues maps
   // the undefined fallback to {}). A read failure — corrupt JSON, a
   // permission error — a top-level shape that isn't an object, and an
@@ -98,26 +92,35 @@ const loadUserDefaults = Effect.fn(function* (
   // other config warning is gated by contextFromArgs on context.quietLogs
   // before this function ever runs, so these warnings honor the same flag
   // instead of always printing.
-  const thisCallsWarnings = new Set<string>();
+  // One process resolves chat defaults once, so every warning here is
+  // printed on its only pass — a `--quiet` run keeps the same silence the
+  // flag gives every other config warning.
   const warn = (message: string): void => {
-    thisCallsWarnings.add(message);
     if (quiet) return;
-    if (previousUserConfigWarnings.has(message)) return;
     writeTextStderr(`WARN ${message}`);
   };
-  let raw: unknown = yield* Effect.tryPromise({
-    try: () => GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
-        if (!isFileNotFoundError(error)) {
-          warn(`Could not read ${USER_CONFIG_LABEL}: ${toErrorMessage(error)}`);
-        }
-        return undefined;
+  const fs = yield* FileSystem.FileSystem;
+  let raw: unknown = yield* fs
+    .readFileString(path.join(globalStorageDir, TEXRA_CONFIG_FILE_NAME))
+    .pipe(
+      Effect.flatMap((text): Effect.Effect<unknown, UserConfigUnreadable> => {
+        const parsed = safeParseJson(text);
+        return Result.isFailure(parsed)
+          ? Effect.fail(
+              new UserConfigUnreadable({
+                message: `Failed to parse JSON from ${TEXRA_CONFIG_FILE_NAME}: ${parsed.failure.message}`,
+              }),
+            )
+          : Effect.succeed(parsed.success);
       }),
-    ),
-  );
+      Effect.catchIf(isAbsentUserConfig, () => Effect.succeed(undefined)),
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          warn(`Could not read ${USER_CONFIG_LABEL}: ${error.message}`);
+          return undefined;
+        }),
+      ),
+    );
   if (raw !== undefined && !isObject(raw)) {
     warn(`Ignoring ${USER_CONFIG_LABEL}; expected a JSON object.`);
     raw = undefined;
@@ -127,19 +130,20 @@ const loadUserDefaults = Effect.fn(function* (
     // defaultsFromConfigValues only reads agent/model (top-level and
     // chat.*) — scoping to just those fields avoids re-validating
     // approvalPolicy (already warned about by loadUserApprovalPolicy) and
-    // outputFormat/run.* (unused here). Scoping alone doesn't stop an
-    // in-scope invalid field from reprinting every launcher-loop pass —
-    // that's what `previousUserConfigWarnings` is for, above.
+    // outputFormat/run.* (unused here).
     topLevelFields: new Set(['agent', 'model']),
     sections: new Set(['chat']),
   });
   for (const warning of warnings) warn(warning);
-  previousUserConfigWarnings = thisCallsWarnings;
   return defaultsFromConfigValues(values);
 });
 
 interface ResolveChatDefaultsInit {
   readonly cwd: string;
+  /** The process's cross-workspace storage root, holding the user
+   *  `config.json`. Passed as data by the entry that opened it, so this
+   *  reader never resolves a root of its own. */
+  readonly globalStorageDir: string;
   readonly agentOverride?: string;
   readonly modelOverride?: string;
   readonly envAgent?: string;
@@ -160,7 +164,7 @@ interface ResolveChatDefaultsInit {
  */
 export const resolveChatDefaults = Effect.fn(function* (
   init: ResolveChatDefaultsInit,
-): Effect.fn.Return<ChatDefaults, Error> {
+): Effect.fn.Return<ChatDefaults, Error, FileSystem.FileSystem> {
   const overrideAgent = init.agentOverride?.trim();
   const overrideModel = init.modelOverride?.trim();
   const envAgent = usableConfiguredAgent(init.envAgent);
@@ -181,7 +185,7 @@ export const resolveChatDefaults = Effect.fn(function* (
         loadWorkspaceCliConfig(init.cwd).pipe(
           Effect.map((loaded) => defaultsFromConfigValues(loaded.values)),
         ),
-        loadUserDefaults(init.quiet ?? false),
+        loadUserDefaults(init.quiet ?? false, init.globalStorageDir),
       ],
       { concurrency: 'unbounded' },
     );

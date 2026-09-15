@@ -41,7 +41,6 @@ import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
 import { runTabStyles } from './RunTab.styles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
-import { ELEMENT_IDS } from '../constants';
 import { getComposedPathElement } from '../utils';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
@@ -408,16 +407,13 @@ export class RunTabs extends LitElement {
   }
 
   private renderRows(
-    ids: readonly RunId[],
+    runs: readonly RunView[],
     selected: RunId | null,
   ): TemplateResult {
     return html`${repeat(
-      ids,
-      (id) => id,
-      (id) => {
-        const run = this.runOfEvent(id);
-        return run ? this.renderNode(run, selected) : nothing;
-      },
+      runs,
+      (run) => run.id,
+      (run) => this.renderNode(run, selected),
     )}`;
   }
 
@@ -435,10 +431,7 @@ export class RunTabs extends LitElement {
 
     let body: TemplateResult;
     if (!this.sections) {
-      body = this.renderRows(
-        top.map((run) => run.id),
-        selected,
-      );
+      body = this.renderRows(top, selected);
     } else {
       body = html`${RUN_GROUP_ORDER.map((group) => {
         const rows = top.filter((run) => run.group === group);
@@ -447,19 +440,14 @@ export class RunTabs extends LitElement {
             <span>${RUN_GROUP_LABELS[group]}</span>
             <span class="group-count">${rows.length}</span>
           </div>
-          ${this.renderRows(
-            rows.map((run) => run.id),
-            selected,
-          )}`;
+          ${this.renderRows(rows, selected)}`;
       })}`;
     }
 
     return html`
       <div class="tabs">
         <div class="tabs-content">
-          <div id=${ELEMENT_IDS.STREAM_TABS} @click=${this.handleTabClick}>
-            ${body}
-          </div>
+          <div @click=${this.handleTabClick}>${body}</div>
           ${when((view?.order.length ?? 0) === 0, () =>
             renderEmptyState({
               icon: 'terminal',

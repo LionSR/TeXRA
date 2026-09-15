@@ -35,7 +35,7 @@ interface MultiAgentPresetPlansLoadResult {
   readonly remoteCatalogRefreshAttempted: boolean;
 }
 
-export function planCurrentMultiAgentRun(
+function planCurrentMultiAgentRun(
   init: MultiAgentRunPlanInit,
 ): CliMultiAgentPresetRunPlan {
   const preset = findTeamPreset(readCliMultiAgentPresets(), init.preset);
@@ -59,9 +59,8 @@ function planLoadedCliMultiAgentPresets(
 /**
  * Resolve a preset plan, then when it still has gaps and the user is
  * authenticated, perform a remote load and replan. Account-served remote agents
- * are only visible after a remote load. Both headless `multi-agent run` and the
- * interactive `orchestrate` menu route through this runtime helper so command
- * entrypoints cannot drift.
+ * are only visible after a remote load. Headless `multi-agent run` routes
+ * through this runtime helper so command entrypoints cannot drift.
  */
 export async function loadCliMultiAgentRunPlan(
   runtime: ProcessRuntime,

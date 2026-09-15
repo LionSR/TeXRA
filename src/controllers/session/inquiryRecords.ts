@@ -219,9 +219,12 @@ function inquiryOperations(
     >[0],
   ) {
     return changeThread(params.threadId, (existing) => {
-      if (!existing) return null;
-      if (existing.status !== 'open') return null;
-      if (existing.turns.at(-1)?.turnIndex !== params.turnIndex) return null;
+      if (
+        !existing ||
+        existing.status !== 'open' ||
+        existing.turns.at(-1)?.turnIndex !== params.turnIndex
+      )
+        return null;
 
       const timestamp = new Date().toISOString();
       const nextManifest: InquiryThreadRecord = {

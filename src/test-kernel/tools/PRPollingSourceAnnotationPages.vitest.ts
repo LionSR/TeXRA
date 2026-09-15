@@ -4,7 +4,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace';
@@ -16,17 +16,32 @@ import { Secrets } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
 
 // Local imports - tools
-import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
+import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
+import { fetchAnnotations } from '@tools/github/checkRunsClient';
+import {
+  PRPollingSource,
+  type PRSubscriptionState,
+} from '@tools/github/PRPollingSource';
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 import type { PollHookRejected } from '@tools/github/PollingSourceBase';
-import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
 
 // Local imports - test fixtures
-import { mockGitHubClient } from '../support/githubClientMock';
 import {
   createPRCurrentShaState,
   createPRSubscriptionState,
 } from '../support/prPollingSourceState';
+
+const mocks = vi.hoisted(() => ({
+  ghGet: vi.fn(),
+}));
+
+// Stub the GitHub client at its module boundary. The importOriginal spread
+// keeps the real error classes, so the source's own instanceof checks run
+// against the classes production reaches, not against look-alikes.
+vi.mock('@tools/github/githubClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/github/githubClient')>()),
+  ghGet: mocks.ghGet,
+}));
 
 // ---------------------------------------------------------------------------
 // PRPollingSourceAnnotationPages
@@ -39,23 +54,6 @@ interface AnnotationDrainSource {
   ): Effect.Effect<void, PollHookRejected>;
   has(key: string): boolean;
 }
-
-interface PRPollingSourceClass {
-  new (): AnnotationDrainSource;
-  resetAnnotationFetchBudgetForTests(
-    remainingRequests?: number,
-    nowMs?: number,
-  ): Effect.Effect<void>;
-}
-
-type AnnotationFetchFn = (
-  owner: string,
-  repo: string,
-  checkRunId: number,
-  logger: AgentTrace,
-  budget: AnnotationFetchBudget,
-  now?: number,
-) => Effect.Effect<GhCheckAnnotation[], unknown, Secrets>;
 
 /**
  * The process secret store behind the GitHub client. The client itself is
@@ -89,23 +87,6 @@ function fullWarningPage(): GhCheckAnnotation[] {
   );
 }
 
-async function createHarness(): Promise<{
-  ghGet: Mock;
-  fetchAnnotations: AnnotationFetchFn;
-  PRPollingSource: PRPollingSourceClass;
-}> {
-  vi.resetModules();
-  const ghGet = vi.fn();
-  mockGitHubClient(ghGet);
-  const { PRPollingSource } = await import('@tools/github/PRPollingSource');
-  const { fetchAnnotations } = await import('@tools/github/checkRunsClient');
-  return {
-    ghGet,
-    fetchAnnotations,
-    PRPollingSource: PRPollingSource as unknown as PRPollingSourceClass,
-  };
-}
-
 function checkRun(id: number): GhCheckRun {
   return {
     id,
@@ -127,17 +108,13 @@ function drainState(runs: GhCheckRun[]): PRSubscriptionState {
 }
 
 describe('PRPollingSource annotation pagination', () => {
-  afterEach(() => {
-    vi.doUnmock('@tools/github/githubClient');
-    vi.resetModules();
+  beforeEach(() => {
+    mocks.ghGet.mockReset();
   });
 
   it.effect('fetches later annotation pages before level filtering runs', () =>
     Effect.gen(function* () {
-      const { ghGet, fetchAnnotations } = yield* Effect.promise(() =>
-        createHarness(),
-      );
-      ghGet
+      mocks.ghGet
         .mockReturnValueOnce(
           Effect.succeed({ status: 200, data: fullWarningPage() }),
         )
@@ -158,8 +135,8 @@ describe('PRPollingSource annotation pagination', () => {
 
       expect(annotations).toHaveLength(101);
       expect(annotations.at(-1)?.annotation_level).toBe('failure');
-      expect(ghGet).toHaveBeenCalledTimes(2);
-      expect(ghGet.mock.calls.map((call) => call[0])).toEqual([
+      expect(mocks.ghGet).toHaveBeenCalledTimes(2);
+      expect(mocks.ghGet.mock.calls.map((call) => call[0])).toEqual([
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=1',
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=2',
       ]);
@@ -168,10 +145,7 @@ describe('PRPollingSource annotation pagination', () => {
 
   it.effect('caps annotation pagination for malformed full pages', () =>
     Effect.gen(function* () {
-      const { ghGet, fetchAnnotations } = yield* Effect.promise(() =>
-        createHarness(),
-      );
-      ghGet.mockReturnValue(
+      mocks.ghGet.mockReturnValue(
         Effect.succeed({ status: 200, data: fullWarningPage() }),
       );
 
@@ -184,8 +158,8 @@ describe('PRPollingSource annotation pagination', () => {
       );
 
       expect(annotations).toHaveLength(5000);
-      expect(ghGet).toHaveBeenCalledTimes(50);
-      expect(ghGet.mock.calls.at(-1)?.[0]).toBe(
+      expect(mocks.ghGet).toHaveBeenCalledTimes(50);
+      expect(mocks.ghGet.mock.calls.at(-1)?.[0]).toBe(
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=50',
       );
     }).pipe(Effect.provide(secretsLayer)),
@@ -193,10 +167,7 @@ describe('PRPollingSource annotation pagination', () => {
 
   it.effect('counts annotation budget by endpoint page', () =>
     Effect.gen(function* () {
-      const { ghGet, fetchAnnotations } = yield* Effect.promise(() =>
-        createHarness(),
-      );
-      ghGet.mockReturnValue(
+      mocks.ghGet.mockReturnValue(
         Effect.succeed({ status: 200, data: fullWarningPage() }),
       );
 
@@ -213,7 +184,7 @@ describe('PRPollingSource annotation pagination', () => {
       expect(error).toMatchObject({
         message: expect.stringContaining('Annotation fetch budget exhausted'),
       });
-      expect(ghGet).toHaveBeenCalledTimes(1);
+      expect(mocks.ghGet).toHaveBeenCalledTimes(1);
     }).pipe(Effect.provide(secretsLayer)),
   );
 
@@ -221,10 +192,8 @@ describe('PRPollingSource annotation pagination', () => {
     'leaves queued annotation runs in place when the page budget is exhausted',
     () =>
       Effect.gen(function* () {
-        const { ghGet, PRPollingSource } = yield* Effect.promise(() =>
-          createHarness(),
-        );
-        const source = new PRPollingSource();
+        const source =
+          new PRPollingSource() as unknown as AnnotationDrainSource;
         source.has = vi.fn().mockReturnValue(true);
         yield* PRPollingSource.resetAnnotationFetchBudgetForTests(0);
         const runs = [checkRun(7), checkRun(8)];
@@ -232,7 +201,7 @@ describe('PRPollingSource annotation pagination', () => {
 
         yield* source.drainAnnotationQueues([['owner/repo#7', state]]);
 
-        expect(ghGet).not.toHaveBeenCalled();
+        expect(mocks.ghGet).not.toHaveBeenCalled();
         expect(state.currentShaState?.pendingAnnotationRuns).toEqual(runs);
       }),
   );

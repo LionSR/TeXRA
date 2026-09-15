@@ -244,10 +244,10 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     queueLease = options.recovery
       ? session.followUps.useRecovery(options.recovery)
       : session.followUps.claimRecovery(runId, true);
+    if (!queueLease) return REFUSED;
+  } else {
+    yield* abandonSupplied();
   }
-  if (config.agentCategory === AgentCategory.ToolUse && !queueLease)
-    return REFUSED;
-  if (config.agentCategory !== AgentCategory.ToolUse) yield* abandonSupplied();
   const releaseQueue = (): void => {
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
   };

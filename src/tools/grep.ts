@@ -7,15 +7,15 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
+import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
+  resolveAndFormat,
   workspacePathPorts,
   type WorkspacePathPorts,
 } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { resolveAndFormat } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { executeCommand } from '@utils/system/execUtils';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
@@ -118,6 +118,8 @@ function buildArguments(input: GrepInput, outputMode: OutputMode): string[] {
  */
 interface GrepPorts extends WorkspacePathPorts {
   readonly signal: AbortSignal | undefined;
+  /** The root of the call's own workspace view; `undefined` with no folder open. */
+  readonly workspaceRoot: string | undefined;
 }
 
 const runGrep = Effect.fn('GrepTool.execute')(function* (
@@ -129,9 +131,7 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   const { path, display } = ports.inScope(() =>
     resolveAndFormat(input.path ?? undefined, root),
   );
-  const gitignore = yield* getGitignoreMatcher(
-    ports.inScope(() => WorkspaceFS.getPath()),
-  );
+  const gitignore = yield* getGitignoreMatcher(ports.workspaceRoot);
   const args = buildArguments(input, outputMode);
   const applyWorkspaceIgnores = !nodePath.isAbsolute(path.relative);
   const ignoreArgs = applyWorkspaceIgnores
@@ -237,6 +237,7 @@ export const GrepTool = defineTool({
     const ports: GrepPorts = {
       ...workspacePathPorts(call),
       signal: yield* Effect.abortSignal,
+      workspaceRoot: (yield* WorkspaceFs).root,
     };
     return yield* runGrep(ports, input);
   }),

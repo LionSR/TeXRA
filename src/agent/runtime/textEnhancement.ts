@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { isNonEmptyString } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
 import { POLISH_PROMPT_PREFIX } from './bundledPrompts';

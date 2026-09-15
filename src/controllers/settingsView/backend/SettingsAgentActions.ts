@@ -1,6 +1,9 @@
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - controllers
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { MessageHost } from '@hosts/uiHosts';
@@ -14,6 +17,7 @@ import {
 // Local imports - utilities
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
+import { ensureError } from '@utils/errors/errorMessage';
 
 interface AgentFileHandlers {
   openAgentYaml(
@@ -63,9 +67,15 @@ interface SettingsAgentActionsOptions {
   readonly showInfoMessage: MessageHost['showInfoMessage'];
   readonly showErrorMessage: MessageHost['showErrorMessage'];
   readonly refreshAfterMutation: () => Promise<void>;
+  /**
+   * Run one command's program and report its failure through the host's own
+   * surface. The program is an Effect so the notifications above stay typed
+   * end to end; the Promise options it drives keep their raw rejections,
+   * wrapped as `Error` at the one boundary.
+   */
   readonly run: (
     failureMessage: string,
-    action: () => Promise<void>,
+    action: Effect.Effect<void, Error>,
   ) => Promise<void>;
 }
 
@@ -94,126 +104,181 @@ export function createSettingsAgentActions(
 ): AgentFileHandlers {
   const run = (
     command: AgentFileCommand,
-    action: () => Promise<void>,
+    action: Effect.Effect<void, Error>,
   ): Promise<void> => options.run(FAILURE_MESSAGES[command], action);
 
   return {
     openAgentYaml: (message) =>
-      run(message.command, async () => {
-        const result = options.directoryController.planOpenAgentYaml({
-          source: message.agentSource,
-          name: message.agentName,
-        });
-        if (!result.ok) {
-          await options.showErrorMessage(
-            openAgentYamlErrorMessage(result.reason, message.agentName),
-          );
-          return;
-        }
-        // A packaged definition lives inside the installed host bundle, so
-        // opening the file itself would let a save mutate the built-in agent
-        // every later scan and launch reads — and silently bypass the
-        // adjacent Customize action that makes the editable copy.
-        await (isPackagedAgentSource(message.agentSource)
-          ? options.openReadOnlyDocument(result.path)
-          : options.openDocument(result.path));
-      }),
+      run(
+        message.command,
+        Effect.gen(function* () {
+          const result = options.directoryController.planOpenAgentYaml({
+            source: message.agentSource,
+            name: message.agentName,
+          });
+          if (!result.ok) {
+            yield* options.showErrorMessage(
+              openAgentYamlErrorMessage(result.reason, message.agentName),
+            );
+            return;
+          }
+          // A packaged definition lives inside the installed host bundle, so
+          // opening the file itself would let a save mutate the built-in agent
+          // every later scan and launch reads — and silently bypass the
+          // adjacent Customize action that makes the editable copy.
+          yield* Effect.tryPromise({
+            try: () =>
+              isPackagedAgentSource(message.agentSource)
+                ? options.openReadOnlyDocument(result.path)
+                : options.openDocument(result.path),
+            catch: ensureError,
+          });
+        }),
+      ),
 
     revealAgentFile: (message) =>
-      run(message.command, async () => {
-        const result = options.directoryController.planRevealAgentFile({
-          source: message.agentSource,
-          name: message.agentName,
-        });
-        if (!result.ok) {
-          await options.showErrorMessage(
-            `Agent not found or has no file: ${message.agentName}`,
-          );
-          return;
-        }
-        await options.revealFile(result.path);
-      }),
+      run(
+        message.command,
+        Effect.gen(function* () {
+          const result = options.directoryController.planRevealAgentFile({
+            source: message.agentSource,
+            name: message.agentName,
+          });
+          if (!result.ok) {
+            yield* options.showErrorMessage(
+              `Agent not found or has no file: ${message.agentName}`,
+            );
+            return;
+          }
+          yield* Effect.tryPromise({
+            try: () => options.revealFile(result.path),
+            catch: ensureError,
+          });
+        }),
+      ),
 
     customizeAgent: (message) =>
-      run(message.command, async () => {
-        const entryPath = options.findAgent(
-          message.agentSource,
-          message.agentName,
-        )?.path;
-        if (!entryPath) {
-          await options.showErrorMessage(
-            `Agent not found or has no file: ${message.agentName}`,
+      run(
+        message.command,
+        Effect.gen(function* () {
+          const entryPath = options.findAgent(
+            message.agentSource,
+            message.agentName,
+          )?.path;
+          if (!entryPath) {
+            yield* options.showErrorMessage(
+              `Agent not found or has no file: ${message.agentName}`,
+            );
+            return;
+          }
+
+          const [customDir, sourceDir] = yield* Effect.tryPromise({
+            try: () =>
+              Promise.all([
+                options.getCustomAgentDirectory(),
+                options.getSourceDirectory(message.agentSource),
+              ]),
+            catch: ensureError,
+          });
+          const relativePath = sourceDir
+            ? path.relative(sourceDir, entryPath)
+            : path.basename(entryPath);
+          const targetPath = path.join(customDir, relativePath);
+          if (!isStrictlyWithin(customDir, targetPath)) {
+            yield* options.showErrorMessage(
+              'Refusing to copy: target path escapes the custom agents directory.',
+            );
+            return;
+          }
+
+          yield* Effect.tryPromise({
+            try: () => AbsoluteFS.ensureDir(path.dirname(targetPath)),
+            catch: ensureError,
+          });
+          const targetExists = yield* Effect.tryPromise({
+            try: () => AbsoluteFS.exists(targetPath),
+            catch: ensureError,
+          });
+          if (targetExists) {
+            const overwrite = yield* Effect.tryPromise({
+              try: () =>
+                options.confirmAction(
+                  `A custom copy already exists: ${path.basename(targetPath)}`,
+                  'Overwrite',
+                ),
+              catch: ensureError,
+            });
+            if (!overwrite) return;
+          }
+
+          yield* Effect.tryPromise({
+            try: () =>
+              AbsoluteFS.copy(entryPath, targetPath, { overwrite: true }),
+            catch: ensureError,
+          });
+          yield* Effect.tryPromise({
+            try: () => options.openDocument(targetPath),
+            catch: ensureError,
+          });
+          yield* options.showInfoMessage(
+            `Created custom copy: ${path.basename(targetPath)}`,
           );
-          return;
-        }
-
-        const [customDir, sourceDir] = await Promise.all([
-          options.getCustomAgentDirectory(),
-          options.getSourceDirectory(message.agentSource),
-        ]);
-        const relativePath = sourceDir
-          ? path.relative(sourceDir, entryPath)
-          : path.basename(entryPath);
-        const targetPath = path.join(customDir, relativePath);
-        if (!isStrictlyWithin(customDir, targetPath)) {
-          await options.showErrorMessage(
-            'Refusing to copy: target path escapes the custom agents directory.',
-          );
-          return;
-        }
-
-        await AbsoluteFS.ensureDir(path.dirname(targetPath));
-        if (
-          (await AbsoluteFS.exists(targetPath)) &&
-          !(await options.confirmAction(
-            `A custom copy already exists: ${path.basename(targetPath)}`,
-            'Overwrite',
-          ))
-        ) {
-          return;
-        }
-
-        await AbsoluteFS.copy(entryPath, targetPath, { overwrite: true });
-        await options.openDocument(targetPath);
-        await options.showInfoMessage(
-          `Created custom copy: ${path.basename(targetPath)}`,
-        );
-        await options.refreshAfterMutation();
-      }),
+          yield* Effect.tryPromise({
+            try: () => options.refreshAfterMutation(),
+            catch: ensureError,
+          });
+        }),
+      ),
 
     deleteCustomAgent: (message) =>
-      run(message.command, async () => {
-        const entryPath = options.findAgent('custom', message.agentName)?.path;
-        if (!entryPath) {
-          await options.showErrorMessage(
-            `Custom agent not found: ${message.agentName}`,
+      run(
+        message.command,
+        Effect.gen(function* () {
+          const entryPath = options.findAgent(
+            'custom',
+            message.agentName,
+          )?.path;
+          if (!entryPath) {
+            yield* options.showErrorMessage(
+              `Custom agent not found: ${message.agentName}`,
+            );
+            return;
+          }
+
+          const customDir = yield* Effect.tryPromise({
+            try: () => options.getCustomAgentDirectory(),
+            catch: ensureError,
+          });
+          if (!isStrictlyWithin(customDir, entryPath)) {
+            yield* options.showErrorMessage(
+              'Refusing to delete: file is not inside the custom agents directory.',
+            );
+            return;
+          }
+
+          const confirmed = yield* Effect.tryPromise({
+            try: () =>
+              options.confirmAction(
+                `Delete "${message.agentName}"? This cannot be undone.`,
+                'Delete',
+              ),
+            catch: ensureError,
+          });
+          if (!confirmed) return;
+
+          yield* Effect.tryPromise({
+            try: () => AbsoluteFS.delete(entryPath, { recursive: false }),
+            catch: ensureError,
+          });
+          yield* options.showInfoMessage(
+            `Deleted custom agent: ${message.agentName}`,
           );
-          return;
-        }
-
-        const customDir = await options.getCustomAgentDirectory();
-        if (!isStrictlyWithin(customDir, entryPath)) {
-          await options.showErrorMessage(
-            'Refusing to delete: file is not inside the custom agents directory.',
-          );
-          return;
-        }
-
-        if (
-          !(await options.confirmAction(
-            `Delete "${message.agentName}"? This cannot be undone.`,
-            'Delete',
-          ))
-        ) {
-          return;
-        }
-
-        await AbsoluteFS.delete(entryPath, { recursive: false });
-        await options.showInfoMessage(
-          `Deleted custom agent: ${message.agentName}`,
-        );
-        await options.refreshAfterMutation();
-      }),
+          yield* Effect.tryPromise({
+            try: () => options.refreshAfterMutation(),
+            catch: ensureError,
+          });
+        }),
+      ),
   };
 }
 

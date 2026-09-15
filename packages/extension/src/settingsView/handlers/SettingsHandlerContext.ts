@@ -1,11 +1,29 @@
-/**
- * Shared context for domain-specific settings handler delegates — the
- * shared {@link ViewSliceHost} bound by SettingsViewMessageHandler.
- */
-import type { ViewSliceHost } from '@common/webview';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import type { Log } from '@logger/logUtils';
+import type { ExtensionContext, Webview } from 'vscode';
 
-export type SettingsHandlerContext = ViewSliceHost;
+/**
+ * The slice-visible face of `SettingsViewMessageHandler`: the channel and log
+ * it reports through, the VS Code extension context, and the two accessors
+ * inbound command slices and handler delegates share.
+ *
+ * Posting is the awaited `postMessageToActiveWebview` path. Mutation
+ * follow-ups (a settings refresh after a write; hide-banner then credential
+ * refresh) depend on delivery having settled.
+ *
+ * `withActiveWebview` is the shared "run with the active webview" accessor
+ * (`vscode.Webview`). View-wrapper access (`vscode.WebviewView`) stays
+ * view-specific.
+ */
+export interface SettingsHandlerContext {
+  readonly channel: string;
+  readonly log: Log;
+  readonly extensionContext: ExtensionContext;
+  withActiveWebview(
+    fn: (webview: Webview) => Promise<void> | void,
+  ): Promise<void>;
+  postMessageToActiveWebview(message: unknown): Promise<void>;
+}
 
 /**
  * Run `fn`, logging and surfacing any thrown error as a settings-view error

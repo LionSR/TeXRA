@@ -5,17 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { Effect } from 'effect';
-import {
-  __resetUserConfigWarningDedupeForTests,
-  resolveChatDefaults as nativeResolveChatDefaults,
-} from '@cli/runtime/chatDefaults';
+import { resolveChatDefaults as nativeResolveChatDefaults } from '@cli/runtime/chatDefaults';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
   loadWorkspaceCliConfig,
 } from '@cli/runtime/cliConfig';
 import * as logSinks from '@cli/runtime/logSinks';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { GlobalStorageFS } from '@utils/files/storageFS';
 
 /** A cwd with no `.texra` directory, so the workspace tier finds nothing. */
 const NO_WORKSPACE = '/tmp/no-such-texra-workspace';
@@ -31,18 +28,32 @@ const CHAT_TIER_CONFIG = {
   'texra.chat': { agent: 'assistant', model: 'deepseekT' },
 };
 
-/** A missing user config, shaped like a genuine `fs` ENOENT rejection. */
-function enoentError(): NodeJS.ErrnoException {
-  const error = new Error(
-    'ENOENT: no such file or directory',
-  ) as NodeJS.ErrnoException;
-  error.code = 'ENOENT';
-  return error;
+/** The global-storage root of the test under way. Fresh per test, so the
+ *  default is a genuinely absent `config.json`. */
+let userConfigDir: string;
+
+/** Write the user tier's `config.json` as JSON. */
+function writeUserConfig(config: unknown): Promise<void> {
+  return writeUserConfigText(JSON.stringify(config));
+}
+
+/** Write the user tier's `config.json` verbatim — for the corrupt case. */
+function writeUserConfigText(text: string): Promise<void> {
+  return writeFile(join(userConfigDir, 'config.json'), text);
 }
 
 const resolveChatDefaults = (
-  options: Parameters<typeof nativeResolveChatDefaults>[0],
-) => Effect.runPromise(nativeResolveChatDefaults(options));
+  options: Omit<
+    Parameters<typeof nativeResolveChatDefaults>[0],
+    'globalStorageDir'
+  >,
+) =>
+  Effect.runPromise(
+    nativeResolveChatDefaults({
+      ...options,
+      globalStorageDir: userConfigDir,
+    }).pipe(Effect.provide(nodePlatformLayer)),
+  );
 
 // Spied, not stubbed: the workspace tiers below still read real `.texra`
 // config files, while the fast-path tests assert the loader is never reached.
@@ -57,25 +68,14 @@ vi.mock('@cli/runtime/cliConfig', async (importOriginal) => {
 
 const mockedLoadWorkspaceCliConfig = vi.mocked(loadWorkspaceCliConfig);
 
-vi.mock('@utils/files/storageFS', () => ({
-  GlobalStorageFS: {
-    readJson: vi.fn(async () => {
-      throw new Error('no user defaults');
-    }),
-  },
-}));
-
-const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
-
-beforeEach(() => {
-  mockedLoadWorkspaceCliConfig.mockClear();
-  mockedReadJson.mockReset();
-  // A missing user config (the common case) mirrors a real ENOENT rejection.
-  mockedReadJson.mockRejectedValue(enoentError());
-  __resetUserConfigWarningDedupeForTests();
-});
-
 const tempDirs = useTempDirs();
+
+beforeEach(async () => {
+  mockedLoadWorkspaceCliConfig.mockClear();
+  // A fresh root per test: the common case is a user config that is simply
+  // not there, which the reader must treat as "no user defaults".
+  userConfigDir = await makeTempDir('texra-chat-defaults-user-', tempDirs);
+});
 
 async function workspaceWithConfig(config: unknown): Promise<string> {
   const workspace = await makeTempDir('texra-chat-defaults-', tempDirs);
@@ -165,7 +165,7 @@ describe('CLI chat defaults', () => {
       },
     );
 
-    mockedReadJson.mockResolvedValueOnce({
+    await writeUserConfig({
       'texra.agent': 'simplifier',
       'texra.model': 'sonnet46T',
     });
@@ -205,6 +205,11 @@ describe('CLI chat defaults', () => {
     const workspace = await workspaceWithConfig({
       'texra.chat': { agent: 'assistant', model: 'sonnet46T' },
     });
+    // Both lower tiers hold values that would otherwise win; neither is read.
+    await writeUserConfig({
+      'texra.agent': 'assistant',
+      'texra.model': 'gpt55',
+    });
 
     await expectChatDefaults(
       {
@@ -219,7 +224,6 @@ describe('CLI chat defaults', () => {
       },
     );
     expect(mockedLoadWorkspaceCliConfig).not.toHaveBeenCalled();
-    expect(mockedReadJson).not.toHaveBeenCalled();
   });
 
   it('keeps default-tier loading when only the model is directly resolved', async () => {
@@ -239,6 +243,9 @@ describe('CLI chat defaults', () => {
   });
 
   it('skips workspace and user I/O when environment resolves agent and model', async () => {
+    // A user config that would otherwise win, left unread.
+    await writeUserConfig({ 'texra.agent': 'generic', 'texra.model': 'gpt55' });
+
     await expectChatDefaults(
       { cwd: NO_WORKSPACE, envAgent: 'assistant', envModel: 'sonnet46T' },
       {
@@ -248,7 +255,6 @@ describe('CLI chat defaults', () => {
       },
     );
     expect(mockedLoadWorkspaceCliConfig).not.toHaveBeenCalled();
-    expect(mockedReadJson).not.toHaveBeenCalled();
   });
 
   it('still loads the model tiers when only the agent is directly resolved', async () => {
@@ -280,7 +286,7 @@ describe('CLI chat defaults', () => {
   });
 
   it('uses the shared config parser for prefixed user chat defaults', async () => {
-    mockedReadJson.mockResolvedValueOnce(CHAT_TIER_CONFIG);
+    await writeUserConfig(CHAT_TIER_CONFIG);
 
     await expectChatDefaults(
       { cwd: NO_WORKSPACE },
@@ -293,11 +299,10 @@ describe('CLI chat defaults', () => {
   });
 
   it('warns instead of silently dropping defaults when the user config is corrupt', async () => {
-    // Not an ENOENT — e.g. truncated/hand-edited JSON, or a permission error.
-    // The old behavior caught every readJson failure alike and silently fell
-    // through to {}, indistinguishable from "no user config".
-    const corrupt = new Error('Failed to parse JSON from config.json');
-    mockedReadJson.mockRejectedValueOnce(corrupt);
+    // Not an absent file — e.g. truncated/hand-edited JSON. The old behavior
+    // caught every read failure alike and silently fell through to {},
+    // indistinguishable from "no user config".
+    await writeUserConfigText('{ "texra.agent": ');
     const warnSpy = vi
       .spyOn(logSinks, 'writeTextStderr')
       .mockImplementation(() => {});
@@ -320,8 +325,7 @@ describe('CLI chat defaults', () => {
     // These warnings are printed inside resolveChatDefaults itself, not
     // through contextFromArgs's gated configWarnings path, so they need
     // their own --quiet check to avoid always printing regardless of it.
-    const corrupt = new Error('Failed to parse JSON from config.json');
-    mockedReadJson.mockRejectedValueOnce(corrupt);
+    await writeUserConfigText('{ "texra.agent": ');
     const warnSpy = vi
       .spyOn(logSinks, 'writeTextStderr')
       .mockImplementation(() => {});
@@ -341,7 +345,7 @@ describe('CLI chat defaults', () => {
   it('warns instead of silently dropping defaults when the user config is not an object', async () => {
     // Valid JSON, wrong top-level shape (e.g. hand-edited to an array) —
     // distinct from the corrupt-JSON case above, and from a missing file.
-    mockedReadJson.mockResolvedValueOnce([]);
+    await writeUserConfig([]);
     const warnSpy = vi
       .spyOn(logSinks, 'writeTextStderr')
       .mockImplementation(() => {});
@@ -364,7 +368,7 @@ describe('CLI chat defaults', () => {
     // config.json is shared by all three hosts; a setting only the
     // extension or desktop honors is not "unknown" from the user's
     // perspective just because the CLI doesn't read it.
-    mockedReadJson.mockResolvedValueOnce({
+    await writeUserConfig({
       'agentReview.runOnCommit': true,
       'texra.agent': 'assistant',
     });
@@ -388,7 +392,7 @@ describe('CLI chat defaults', () => {
     // every host — nothing else reads or writes it — so a typo here (e.g.
     // "modle" for "model") is always worth a warning, not suppressed by the
     // same reportUnknownKeys: false that guards the shared top-level rows.
-    mockedReadJson.mockResolvedValueOnce({
+    await writeUserConfig({
       'texra.agent': 'assistant',
       'texra.chat': { modle: 'deepseekT' },
     });
@@ -417,7 +421,7 @@ describe('CLI chat defaults', () => {
     // Warning about them here would duplicate that other warning and, since
     // orchestrate's launcher loop calls resolveChatDefaults on every
     // iteration, would reprint on every pass through the loop.
-    mockedReadJson.mockResolvedValueOnce({
+    await writeUserConfig({
       'texra.agent': 'assistant',
       'texra.approvalPolicy': 'not-a-real-policy',
       'texra.outputFormat': 'not-a-real-format',
@@ -438,38 +442,18 @@ describe('CLI chat defaults', () => {
     warnSpy.mockRestore();
   });
 
-  it('reprints a warning once an intervening valid read clears the dedup state', async () => {
-    // The warning text carries only the field name, not the invalid value,
-    // so a field a user fixes and later breaks again the same way must
-    // still warn — deduping must not be "seen this message ever," only
-    // "seen this message on the immediately preceding read."
+  it('warns once for an invalid user-config field', async () => {
     const invalidModel = {
       'texra.agent': 'assistant',
       'texra.model': 'not-a-real-model-xyz',
     };
-    const validModel = { 'texra.agent': 'assistant', 'texra.model': 'gpt55' };
     const warnSpy = vi
       .spyOn(logSinks, 'writeTextStderr')
       .mockImplementation(() => {});
 
-    mockedReadJson.mockResolvedValueOnce(invalidModel);
+    await writeUserConfig(invalidModel);
     await resolveChatDefaults({ cwd: NO_WORKSPACE });
     expect(warnSpy).toHaveBeenCalledTimes(1);
-
-    // Same invalid config again: deduped against the previous read.
-    mockedReadJson.mockResolvedValueOnce(invalidModel);
-    await resolveChatDefaults({ cwd: NO_WORKSPACE });
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-
-    // Fixed: no warning, and the dedup state no longer carries the old one.
-    mockedReadJson.mockResolvedValueOnce(validModel);
-    await resolveChatDefaults({ cwd: NO_WORKSPACE });
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-
-    // Broken again: warns again, since the previous read had no warnings.
-    mockedReadJson.mockResolvedValueOnce(invalidModel);
-    await resolveChatDefaults({ cwd: NO_WORKSPACE });
-    expect(warnSpy).toHaveBeenCalledTimes(2);
 
     warnSpy.mockRestore();
   });

@@ -26,7 +26,6 @@ import {
   renderLabeledActionButtonParts,
 } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { byString } from '@utils/core';
 import { fileSelectLayoutStyles } from '../fileSelectStyles';
 
 type LatexDiffsAction = Extract<HostRequest, { kind: 'latexdiffs' }>['action'];
@@ -250,11 +249,10 @@ export class LatexDiffsSection extends LitElement {
   }
 
   private renderFileOptions(options: string[]): TemplateResult {
-    const sortedOptions = options.toSorted(byString);
     return html`
       <wa-option value="">None</wa-option>
       ${repeat(
-        sortedOptions,
+        options,
         (opt) => opt,
         (opt) => html` <wa-option value=${opt}> ${opt} </wa-option> `,
       )}

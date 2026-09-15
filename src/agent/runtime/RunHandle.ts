@@ -246,17 +246,10 @@ export class RunHandle<
 
   interrupt(): boolean {
     this.stopped = true;
-    const handler = this.interruptHandler;
-    if (handler) {
-      handler.interrupt();
-      return true;
-    }
-    const context = this.toolUseFlowContext;
-    if (context) {
-      context.interrupt();
-      return true;
-    }
-    return false;
+    const handler = this.interruptHandler ?? this.toolUseFlowContext;
+    if (handler === undefined) return false;
+    handler.interrupt();
+    return true;
   }
 
   /**

@@ -7,8 +7,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
-import { loadSourceModule } from './loadSourceModule.ts';
-
 const mocks = createModuleMocks();
 
 type DesktopShellIpcModule = typeof import('@desktop/main/desktopShellIpc');
@@ -44,7 +42,7 @@ async function createShellHarness(
   overrides: Partial<DesktopShellActionFactoryOptions> = {},
 ) {
   const { createDesktopShellActions, createDesktopShellIpc } =
-    await loadSourceModule('@desktop/main/desktopShellIpc');
+    await import('@desktop/main/desktopShellIpc');
   const postToRenderer = vi.fn();
   const actions = createDesktopShellActions(
     { postToRenderer },
@@ -77,8 +75,8 @@ async function createOnboardingHarness({
     { createDesktopOnboardingIpc },
     { DESKTOP_ONBOARDING_DISMISSED_STATE_KEY },
   ] = await Promise.all([
-    loadSourceModule('@desktop/main/desktopOnboardingIpc'),
-    loadSourceModule('@desktop/shared/desktopOnboardingMessages'),
+    import('@desktop/main/desktopOnboardingIpc'),
+    import('@desktop/shared/desktopOnboardingMessages'),
   ]);
   const state = new FakeStateStore({ ...seed });
   const update = vi.spyOn(state, 'update');

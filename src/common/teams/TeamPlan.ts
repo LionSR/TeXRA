@@ -137,7 +137,7 @@ export function teamPlanHasGaps(plan: TeamRunPlan): boolean {
 }
 
 /** TeXRA-hosted definitions missing from this plan, independent of models. */
-export function teamTexraHostedMissingNames(plan: TeamRunPlan): string[] {
+function teamTexraHostedMissingNames(plan: TeamRunPlan): string[] {
   return missingMemberNames(plan).filter((name) =>
     plan.preset.texraHostedAgents.includes(name),
   );

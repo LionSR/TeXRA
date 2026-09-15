@@ -57,12 +57,12 @@ import type {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { requestBashApproval } from '@tools/approval/bashApproval';
+import { linkAbortSignals } from '@utils/core';
 import {
   formatWallTimeSeconds,
   isNonEmptyString,
-  linkAbortSignals,
-} from '@utils/core';
-import { previewLabel } from '@utils/text/stringUtils';
+  previewLabel,
+} from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -394,7 +394,7 @@ function extractToolErrorMessage(content: unknown): string | undefined {
   if (!Array.isArray(content)) return undefined;
   for (const block of content) {
     if (block != null && typeof block === 'object' && 'text' in block) {
-      const text = (block as { text: unknown }).text;
+      const { text } = block;
       if (typeof text === 'string') return text;
     }
   }

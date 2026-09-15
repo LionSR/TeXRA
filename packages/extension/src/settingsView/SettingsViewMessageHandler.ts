@@ -10,12 +10,12 @@
  */
 import * as vscode from 'vscode';
 import { Cause, Effect, Exit } from 'effect';
+import { ZodError } from 'zod';
 import { ModelError } from '@texra-ai/llm/turn';
 
 // Shared schemas and dispatchers
 import { defaultSession } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
-import { BaseViewMessageHandler } from '@common/webview';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
@@ -42,6 +42,7 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
+import { createLog, type Log } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -57,6 +58,7 @@ import {
   refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
+import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { revealProgressRun } from '@progressView/progressNavigation';
@@ -83,7 +85,12 @@ import {
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
 
-import { unsupportedCommands } from '@shared/utils/dispatcher';
+import {
+  UnsupportedCommandError,
+  unsupportedCommands,
+  type DispatcherFn,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import {
@@ -91,7 +98,6 @@ import {
   refreshToolAvailability,
 } from '@tools/toolAvailability';
 import { goalList } from '@tools/goal';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { setToolEnabled } from '@utils/config/constants';
@@ -103,9 +109,29 @@ import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandler
 import { SubscriptionHandlers } from './handlers/subscriptionHandlers';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
-export class SettingsViewMessageHandler extends BaseViewMessageHandler<
-  vscode.WebviewView | vscode.WebviewPanel
-> {
+/** The webview shapes SettingsView dispatches for. */
+type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
+
+/** Type guard to check if a message has a command field. */
+function isCommandMessage(
+  message: unknown,
+): message is { command: string; [key: string]: unknown } {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'command' in message &&
+    typeof (message as Record<string, unknown>).command === 'string'
+  );
+}
+
+export class SettingsViewMessageHandler {
+  private readonly viewName = 'SettingsView';
+  private readonly channel = `${this.viewName}MessageHandler`;
+  private readonly log: Log = createLog(this.channel);
+
+  /** Active webview reference, tracked on every dispatch. */
+  private activeView: SettingsWebview | undefined;
+
   private readonly handlerRegistry: SettingsViewInboundHandlerRegistry;
 
   // Domain-specific handler delegates
@@ -123,14 +149,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   constructor(
     private readonly context: vscode.ExtensionContext,
+    private readonly globalState: StateStore,
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
   ) {
-    super('SettingsView');
+    const ctx: SettingsHandlerContext = this.handlerContext();
 
-    const ctx: SettingsHandlerContext = this.bindViewSliceHost(context);
-
-    const globalState = context.globalState;
     this.memoryController = new SettingsMemoryController({
       prompt: new VscodePromptHost(),
     });
@@ -305,15 +329,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.profileKeyController.removeProviderKey(message.provider),
         ),
       openProviderKeyUrl: (message) =>
-        this.profileKeyController.openProviderKeyUrl(message.provider),
+        this.runtime.runPromise(
+          this.profileKeyController.openProviderKeyUrl(message.provider),
+        ),
       openExternalUrl: (message) => this.openExternalUrl(message.url),
       setModelEnabled: (message) =>
         this.setModelEnabled(message.modelName, message.enabled),
       setModelReasoningLevel: async (message) => {
-        await this.modelSelectionController.setReasoningLevel({
-          modelName: message.modelName,
-          level: message.level,
-        });
+        await this.runtime.runPromise(
+          this.modelSelectionController.setReasoningLevel({
+            modelName: message.modelName,
+            level: message.level,
+          }),
+        );
         await this.postModelSelectionData();
       },
       requestModelAccess: (message) =>
@@ -376,10 +404,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       recheckToolStatus: () =>
         this.runtime.runPromise(refreshToolAvailability()),
       toggleTool: async (message) => {
-        await setToolEnabled(
-          message.toolId,
-          message.enabled,
-          this.context.globalState,
+        await this.runtime.runPromise(
+          setToolEnabled(message.toolId, message.enabled, this.globalState),
         );
         await this.withActiveWebview((w) =>
           this.sendToolDashboardData(w, { skipChecks: true }),
@@ -453,7 +479,106 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     terminal.sendText(action.command);
   }
 
-  public override async handleMessage(
+  // ============================================================
+  // Inbound dispatch — SettingsViewProvider's entry point
+  // ============================================================
+
+  /** Clear the tracked active view. */
+  public clearActiveView(): void {
+    this.activeView = undefined;
+  }
+
+  /**
+   * Bind the slice-visible subset of this handler for the command delegates.
+   */
+  private handlerContext(): SettingsHandlerContext {
+    return {
+      channel: this.channel,
+      log: this.log,
+      extensionContext: this.context,
+      withActiveWebview: (fn) => this.withActiveWebview(fn),
+      postMessageToActiveWebview: (message) =>
+        this.postMessageToActiveWebview(message),
+    };
+  }
+
+  /** Run a callback with the active view's webview, if available. */
+  private async withActiveWebview(
+    fn: (webview: vscode.Webview) => Promise<void> | void,
+  ): Promise<void> {
+    const view = this.activeView;
+    if (view) await fn(view.webview);
+  }
+
+  /**
+   * Post a message to the active view's webview, awaiting delivery. A `null`
+   * or `undefined` message posts nothing, so callers can forward an optional
+   * response payload without a guard of their own. This resolves only after
+   * the post settles — mutation paths that run a follow-up step depend on
+   * that ordering.
+   */
+  private async postMessageToActiveWebview(message: unknown): Promise<void> {
+    if (message == null) return;
+    await this.withActiveWebview(async (webview) => {
+      await webview.postMessage(message);
+    });
+  }
+
+  /** Keep a failed notification from becoming an unhandled host rejection. */
+  private reportNotificationFailure(notification: PromiseLike<unknown>): void {
+    void notification.then(undefined, (error: unknown) => {
+      this.log.error('Failed to display message notification', {
+        data: error,
+      });
+    });
+  }
+
+  /**
+   * Schema-driven dispatch through the view's typed {@link DispatcherFn}.
+   * Tracks the active view, runs the dispatcher, logs Zod validation failures
+   * at debug (expected, frequent) and handler exceptions at error (a real
+   * bug), and warns on commands with no handler.
+   */
+  private async dispatchInbound<TMessage extends { command: string }>(
+    message: unknown,
+    webviewView: SettingsWebview,
+    dispatcher: DispatcherFn<TMessage>,
+    handlers: HandlerRegistry<TMessage>,
+  ): Promise<void> {
+    this.activeView = webviewView;
+
+    let unsupported = false;
+    const handled = dispatcher(message, handlers, (error) => {
+      if (error instanceof ZodError) {
+        this.log.debug('Message validation failed', {
+          data: error,
+        });
+      } else if (error instanceof UnsupportedCommandError) {
+        // Declared `unsupported(...)` in this host's registry: visible
+        // feedback (toast), not a silent drop or an error-level log.
+        unsupported = true;
+        this.log.debug(error.message);
+        this.reportNotificationFailure(
+          vscode.window.showInformationMessage(error.reason),
+        );
+      } else {
+        this.log.error('Error handling message', {
+          data: error,
+        });
+        this.reportNotificationFailure(
+          vscode.window.showErrorMessage(
+            `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
+          ),
+        );
+      }
+    });
+
+    if (!handled && !unsupported && isCommandMessage(message)) {
+      this.log.warn(`Unhandled command: ${message.command}`);
+    }
+  }
+
+  public async handleMessage(
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
@@ -591,7 +716,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         stores: platformSettingsStores(),
         // The shared function already gates this hook on
         // `configTarget !== 'global'`; this checks only the workspace half.
-        requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
+        requiresOpenWorkspace: () => !defaultSession().roots.workspace,
         onApprovalPolicyChanged: (policy) => {
           defaultSession().setApprovalPolicy(policy);
           appSignals.emit('approvalPolicyChanged', undefined);
@@ -786,22 +911,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         );
       }
       if (Exit.isSuccess(result)) {
-        result = await this.runtime.runPromiseExit(
-          Effect.tryPromise({
-            try: (): Promise<unknown> =>
-              !route || route.access === 'unavailable'
-                ? showLoggedInfoMessage(
+        // Two different programs: the notice is a host dialog, the preference
+        // is a state write. The boundary composes whichever it chose.
+        const settle: Effect.Effect<unknown, unknown> =
+          !route || route.access === 'unavailable'
+            ? Effect.tryPromise({
+                try: () =>
+                  showLoggedInfoMessage(
                     this.channel,
                     'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
-                  )
-                : setCopilotRoutePreference(
-                    modelName,
-                    true,
-                    this.context.globalState,
                   ),
-            catch: (error) => error,
-          }),
-        );
+                catch: (error) => error,
+              })
+            : setCopilotRoutePreference(modelName, true, this.globalState);
+        result = await this.runtime.runPromiseExit(settle);
       }
       if (Exit.isFailure(result)) {
         const reason =
@@ -846,7 +969,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   /** Clear the per-model Copilot route preference (#9659), returning the
    * canonical model to direct-provider routing. */
   private async handleClearCopilotRoute(modelName: string): Promise<void> {
-    await setCopilotRoutePreference(modelName, false, this.context.globalState);
+    // The write is a program, not a promise: the boundary runs it, and a
+    // refused write reaches the caller as this method's rejection.
+    await this.runtime.runPromise(
+      setCopilotRoutePreference(modelName, false, this.globalState),
+    );
     await Promise.all([
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((webview) => this.sendModelSelectionData(webview)),
@@ -906,7 +1033,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     modelName: string,
     enabled: boolean,
   ): Promise<void> {
-    await this.modelSelectionController.setModelEnabled({ modelName, enabled });
+    await this.runtime.runPromise(
+      this.modelSelectionController.setModelEnabled({ modelName, enabled }),
+    );
     await this.postModelSelectionData();
     // The options cache is invalidated by the writer itself.
     await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);

@@ -26,13 +26,16 @@ import { runDirUnder } from '@utils/files/runStorageFs';
 import { type TaskRunFileService } from '@utils/files/taskRunStorage';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { fsCall } from '@utils/errors/fsCall';
 import { truncatedHexId } from '@utils/core/idHash';
 import { hasExtension } from '@utils/core/pathCore';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
-import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
-import { fsCall } from './outputOperations';
+import {
+  publishCompiledPdfArtifact,
+  publishCompiledPdfArtifactBestEffort,
+} from './compiledPdfArtifacts';
 import { getOutputFilesByRound, type OutputState } from './outputState';
 
 interface CompileCheckContext {
@@ -512,14 +515,21 @@ const tryPublishArtifact = ({
   never,
   FileSystem.FileSystem
 > =>
-  publishCompiledPdfArtifact({
-    runDirectory: opts.runDirectory,
-    runId,
-    round: currentRound,
-    displayName,
-    source: outputFile.location,
-    compiledPdfPath,
-  }).pipe(
+  publishCompiledPdfArtifactBestEffort(
+    publishCompiledPdfArtifact({
+      runDirectory: opts.runDirectory,
+      runId,
+      round: currentRound,
+      displayName,
+      source: outputFile.location,
+      compiledPdfPath,
+    }),
+    (err) =>
+      ctx.logger.warn(
+        `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
+        { data: err },
+      ),
+  ).pipe(
     Effect.tap((artifact) =>
       Effect.sync(() => {
         if (artifact) {
@@ -527,15 +537,6 @@ const tryPublishArtifact = ({
             data: artifact.relativePath,
           });
         }
-      }),
-    ),
-    Effect.catch((err) =>
-      Effect.sync((): RunStorageFileLocation | null => {
-        ctx.logger.warn(
-          `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
-          { data: err },
-        );
-        return null;
       }),
     ),
   );

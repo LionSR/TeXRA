@@ -36,7 +36,6 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
-import { ELEMENT_IDS } from '../constants';
 import { getComposedPathElement } from '../utils';
 
 // Local imports - styles
@@ -150,15 +149,9 @@ export class FileList extends LitElement {
     }
 
     return html`
-      <wa-details
-        id=${ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE}
-        class="panel-collapsible"
-        summary="Generated files"
-        open
-      >
+      <wa-details class="panel-collapsible" summary="Generated files" open>
         ${this.renderStorageHint()}
         <div
-          id=${ELEMENT_IDS.GENERATED_FILES}
           class="files-container"
           @click=${this.handleFileClick}
           @keydown=${this.handleFileKey}

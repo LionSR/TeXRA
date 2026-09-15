@@ -8,12 +8,12 @@ import pDefer from 'p-defer';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
+import { CodexAuthError } from '@auth/codex';
 import {
-  CodexAuthError,
+  CodexSessionCoordinator,
   type CodexOAuthClient,
   type CodexSessionStorage,
-} from '@auth/codex';
-import { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
+} from '@auth/codex/CodexSessionCoordinator';
 import type {
   CodexSession,
   CodexTokenResponse,

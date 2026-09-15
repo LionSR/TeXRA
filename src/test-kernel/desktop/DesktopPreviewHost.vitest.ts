@@ -20,8 +20,6 @@ import {
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 
-import { loadSourceModule } from './loadSourceModule.ts';
-
 const mocks = createModuleMocks();
 
 type FakeCompile = (location: { absolutePath: string }) => Effect.Effect<{
@@ -70,7 +68,7 @@ async function loadDesktopPreviewHost(
       access,
     }));
   }
-  return loadSourceModule('@desktop/main/desktopPreviewHost');
+  return import('@desktop/main/desktopPreviewHost');
 }
 
 function makeShell(openPathResult = '') {
@@ -136,8 +134,8 @@ describe('desktop preview host', () => {
         await import('@desktop/main/desktopFileSelection');
       const { HostDraftRequests } =
         await import('@controllers/session/hostDraftRequests');
-      const showErrorMessage = vi.fn<(message: string) => Promise<void>>(
-        async () => {},
+      const showErrorMessage = vi.fn<(message: string) => Effect.Effect<void>>(
+        () => Effect.void,
       );
       const shell = makeShell();
       shell.openExternal.mockRejectedValue(new Error('Browser unavailable'));
@@ -152,6 +150,7 @@ describe('desktop preview host', () => {
       const files = createDesktopFileSelection({
         workspacePath: undefined,
         showOpenFileDialog: async () => undefined,
+        runtime: effectRuntime(),
       });
       const handler = createDesktopHostRequests({
         runtime: effectRuntime(),
@@ -220,7 +219,7 @@ describe('desktop preview host', () => {
   it('reports missing files before calling shell.openPath', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
     const missingPath = path.join(await makeTempDir(), 'missing.pdf');
-    const showErrorMessage = vi.fn();
+    const showErrorMessage = vi.fn((message: string) => Effect.void);
     const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
@@ -246,7 +245,7 @@ describe('desktop preview host', () => {
       access,
     );
     const filePath = path.join(await makeTempDir(), 'blocked.pdf');
-    const showErrorMessage = vi.fn();
+    const showErrorMessage = vi.fn((message: string) => Effect.void);
     const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
@@ -265,7 +264,7 @@ describe('desktop preview host', () => {
     const dir = await makeTempDir();
     const filePath = path.join(dir, 'blocked.pdf');
     await writeFile(filePath, 'pdf');
-    const showErrorMessage = vi.fn();
+    const showErrorMessage = vi.fn((message: string) => Effect.void);
     const shell = makeShell('No associated application');
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
@@ -327,7 +326,7 @@ describe('desktop preview host', () => {
       checkToolInstalled,
     );
     const { texPath } = await makeTexFixture('preview', { withPdf: false });
-    const showErrorMessage = vi.fn();
+    const showErrorMessage = vi.fn(() => Effect.void);
     const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
@@ -349,7 +348,7 @@ describe('desktop preview host', () => {
     const { createDesktopPreviewHost } =
       await loadDesktopPreviewHost(compileLatex2Pdf);
     const { texPath } = await makeTexFixture('preview', { withPdf: false });
-    const showErrorMessage = vi.fn();
+    const showErrorMessage = vi.fn(() => Effect.void);
     const shell = makeShell();
     // Silence and inspect the console.error the full log tail is routed to
     // instead of the (short) dialog message -- see the desktop preview host's
@@ -380,7 +379,7 @@ describe('desktop preview host', () => {
     const browserError = new Error('no browser handler');
     const shell = makeShell();
     shell.openExternal.mockRejectedValueOnce(browserError);
-    const showErrorMessage = vi.fn();
+    const showErrorMessage = vi.fn(() => Effect.void);
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 

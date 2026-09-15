@@ -29,6 +29,7 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { AgentTrace } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
+import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   type DispatchFacts,
   type FileLocation,
@@ -47,7 +48,8 @@ import {
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
-import { generateShortId, getBasename, isNonEmptyString } from '@utils/core';
+import { generateShortId, getBasename, groupBy } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
@@ -66,6 +68,7 @@ import {
   toolUseFlowState,
   type Message,
 } from './rows';
+import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
 
 /** Max concurrently executing tool calls within one parallel-safe partition. */
@@ -86,7 +89,6 @@ type Settlement = Pick<
 >;
 
 type SettledAttachment = ToolResultPayload['attachments'][number];
-type InvokeError = RunLedgerRefused | DatabaseWriteFailed;
 
 export interface TurnContext {
   readonly workspace: AgentWorkspaceState;
@@ -242,7 +244,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
-  AgentRun | RunLedger | ProcessServices | Runs
+  AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -363,7 +365,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: DispatchFacts,
     call: LocalCall,
     attempt: number,
-  ): Effect.fn.Return<void, InvokeError, ProcessServices | Runs> {
+  ): Effect.fn.Return<
+    void,
+    InvokeError,
+    ProcessServices | Runs | WorkspaceFs | StorageFs
+  > {
     const tool: ITool | undefined = run.tools.get(fact.toolName);
     const parsedInput = parseCallArguments(call, logger);
     const stageId = fact.stageId ?? undefined;
@@ -725,7 +731,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const dispatchCall = Effect.fn('toolUse.dispatchCall')(function* (
     fact: DispatchFacts,
     afterEndTurn: boolean,
-  ): Effect.fn.Return<void, InvokeError, ProcessServices | Runs> {
+  ): Effect.fn.Return<
+    void,
+    InvokeError,
+    ProcessServices | Runs | WorkspaceFs | StorageFs
+  > {
     const current = yield* SynchronizedRef.get(stateRef);
     if (settledOf(current, fact.callId) !== null) return;
     const call = calls[fact.ordinal];
@@ -779,7 +789,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const deriveDuplicate = Effect.fn('toolUse.duplicate')(function* (
     fact: DispatchFacts,
     primaryId: string,
-  ): Effect.fn.Return<void, InvokeError, ProcessServices | Runs> {
+  ): Effect.fn.Return<
+    void,
+    InvokeError,
+    ProcessServices | Runs | WorkspaceFs | StorageFs
+  > {
     const current = yield* SynchronizedRef.get(stateRef);
     if (settledOf(current, fact.callId) !== null) return;
     const primary = settledOf(current, primaryId);
@@ -810,12 +824,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 
   // Partitions in order; each barrier is its own, each run of parallel-safe
   // calls shares one and executes under the window.
-  const partitions = new Map<number, DispatchFacts[]>();
-  for (const fact of pending.calls) {
-    const members = partitions.get(fact.partition) ?? [];
-    members.push(fact);
-    partitions.set(fact.partition, members);
-  }
+  const partitions = groupBy(pending.calls, (fact) => fact.partition);
   let endTurn = Object.values(pending.settled).some(endsTurn);
   for (const members of partitions.values()) {
     const primaries = members.filter((fact) => fact.duplicateOf === null);
@@ -899,7 +908,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     documents.length === 0 ? undefined : bound.model.uploadFile;
   if (uploadFile !== undefined) {
     // Settled uploads leave the set; the aggregate deadline names the rest.
-    const pending = new Set(documents.map(({ path }) => path));
+    const pendingUploads = new Set(documents.map(({ path }) => path));
     yield* Effect.forEach(
       documents,
       ({ path, part }) =>
@@ -915,7 +924,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               ),
             ),
           ),
-          Effect.tap(Effect.sync(() => pending.delete(path))),
+          Effect.tap(Effect.sync(() => pendingUploads.delete(path))),
         ),
       { concurrency: MAX_PARALLEL_TOOL_CALLS, discard: true },
     ).pipe(
@@ -928,7 +937,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         orElse: () =>
           Effect.sync(() =>
             logger.warn(
-              `Sending ${[...pending].map((path) => `"${path}"`).join(', ')} as bytes: their uploads did not finish within ${UPLOAD_DEADLINE} in all.`,
+              `Sending ${[...pendingUploads].map((path) => `"${path}"`).join(', ')} as bytes: their uploads did not finish within ${UPLOAD_DEADLINE} in all.`,
             ),
           ),
       }),

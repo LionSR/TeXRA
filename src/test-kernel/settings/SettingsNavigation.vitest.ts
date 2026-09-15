@@ -10,17 +10,12 @@ vi.mock('@shared/hostBridge', () => ({
 }));
 
 import type { SettingsNavGroup } from '@settingsView/frontend/settingsNav';
-import { postMessage } from '@shared/hostBridge';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_TAB_PANEL_BY_NAME } from '@shared/schemas';
 import type { SettingsTabPanelName } from '@shared/schemas';
 
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
-
-const MAX_TIMEOUT_MS = 2_147_483_647;
-const THIRTY_ONE_DAYS_MS = 31 * 24 * 60 * 60 * 1_000;
 
 let navGroups: readonly SettingsNavGroup[] = [];
 let settingsState: typeof import('@settingsView/frontend/settingsState');
@@ -42,19 +37,6 @@ async function mountSettingsApp(
   document.body.append(app);
   await app.updateComplete;
   return app;
-}
-
-async function withFakeTimers(
-  systemTime: string,
-  run: () => Promise<void>,
-): Promise<void> {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date(systemTime));
-  try {
-    await run();
-  } finally {
-    vi.useRealTimers();
-  }
 }
 
 function categoryButton(app: LitElementLike, label: string): HTMLElement {
@@ -91,62 +73,6 @@ describe('hierarchical settings navigation', () => {
 
   beforeEach(() => {
     setSelectedPanel(SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT);
-  });
-
-  it('refreshes settings at the UTC monthly quota rollover', async () => {
-    await withFakeTimers('2026-08-31T23:59:59.000Z', async () => {
-      const app = await mountSettingsApp();
-      vi.mocked(postMessage).mockClear();
-
-      await vi.advanceTimersByTimeAsync(1_000);
-
-      expect(postMessage).toHaveBeenCalledExactlyOnceWith(
-        SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-        { view: 'settings' },
-      );
-      app.remove();
-      vi.mocked(postMessage).mockClear();
-      await vi.advanceTimersByTimeAsync(THIRTY_ONE_DAYS_MS);
-      expect(postMessage).not.toHaveBeenCalled();
-    });
-  });
-
-  it('follows the max-delay clamp through a 31-day UTC month boundary', async () => {
-    await withFakeTimers('2026-07-01T00:00:00.000Z', async () => {
-      const app = await mountSettingsApp();
-      vi.mocked(postMessage).mockClear();
-
-      await vi.advanceTimersByTimeAsync(MAX_TIMEOUT_MS);
-      expect(postMessage).not.toHaveBeenCalled();
-
-      await vi.advanceTimersByTimeAsync(THIRTY_ONE_DAYS_MS - MAX_TIMEOUT_MS);
-      expect(postMessage).toHaveBeenCalledExactlyOnceWith(
-        SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-        { view: 'settings' },
-      );
-      app.remove();
-    });
-  });
-
-  it('refreshes exactly once at rollover after disconnecting and reconnecting', async () => {
-    await withFakeTimers('2026-08-31T23:59:58.000Z', async () => {
-      const app = await mountSettingsApp();
-      vi.mocked(postMessage).mockClear();
-
-      await vi.advanceTimersByTimeAsync(500);
-      app.remove();
-      await vi.advanceTimersByTimeAsync(500);
-      document.body.append(app);
-      await app.updateComplete;
-      vi.mocked(postMessage).mockClear();
-      await vi.advanceTimersByTimeAsync(1_000);
-
-      expect(postMessage).toHaveBeenCalledExactlyOnceWith(
-        SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-        { view: 'settings' },
-      );
-      app.remove();
-    });
   });
 
   it('selects the first page when changing category, then any page within it', async () => {

@@ -52,8 +52,7 @@ import {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { requestBashApproval } from '@tools/approval/bashApproval';
-import { formatWallTimeSeconds } from '@utils/core';
-import { previewLabel } from '@utils/text/stringUtils';
+import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -142,7 +141,7 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
 // Run fact helpers
 // ============================================================================
 
-export function publishCodexTodos(todos: TodoItem[], logger: AgentTrace): void {
+function publishCodexTodos(todos: TodoItem[], logger: AgentTrace): void {
   emitRunFact(logger, 'updateTodos', { todos });
 }
 

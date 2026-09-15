@@ -11,7 +11,7 @@ export const TEXFMT_CONFIG_KEY = 'texra.latex.texfmtConfig';
 
 export async function runTexFmt(
   filePath: string,
-  workspaceRoot?: string,
+  workspaceRoot: string | undefined,
   texfmtConfig: string | undefined = getConfig<string>(TEXFMT_CONFIG_KEY),
 ): Promise<boolean> {
   try {

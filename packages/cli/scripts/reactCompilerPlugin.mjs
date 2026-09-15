@@ -4,7 +4,7 @@
 // only, per .agents/docs/archived/feature/2026-05-14-cli-tui-ink/2026-05-14-20-implementation.md (Phase 0).
 // The latter is the shared Ink UI kit (Select, BorderedPanel, KeyHints,
 // LoadingIndicator, …) reused by chat and by other CLI entry points
-// (onboarding, config, orchestration, init wizard, login picker) — it must
+// (onboarding, config, init wizard, login picker) — it must
 // stay in scope alongside chat/tui or those components silently lose
 // compiler memoization on relocation. Limiting the pre-pass to these two
 // directories keeps risk R12 (toolchain bloat) bounded — the rest of the CLI

@@ -6,7 +6,7 @@
  */
 import * as path from 'node:path';
 
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import {
@@ -31,11 +31,13 @@ import type { SettingsAgentDirectoryController } from '@controllers/settingsView
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
 import {
   chooseTeamAvailabilityViaDialog,
   confirmModal,
 } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { NotificationFailed } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
@@ -50,24 +52,15 @@ import {
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
 
-/**
- * The team-apply error notification never reached the user: the host's own
- * error dialog faulted after the roster program had already handed the
- * message off. The team is applied either way, so this is reported and
- * dropped rather than surfaced.
- */
-class AgentTeamNotificationFailed extends Data.TaggedError(
-  'AgentTeamNotificationFailed',
-)<{
-  readonly message: string;
-}> {}
+/** The typed notification surface this host's settings actions present on. */
+const messages = new VscodeMessageHost();
 
 /** Agent selection, directory, and team handler delegate. */
 export class AgentHandlers {
@@ -108,7 +101,11 @@ export class AgentHandlers {
       // location instead of writing back into the packaged resources.
       openReadOnlyDocument: async (filePath) => {
         const doc = await vscode.workspace.openTextDocument({
-          content: await AbsoluteFS.read(filePath),
+          content: await this.runtime.runPromise(
+            Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+              Effect.map(fs.readFileString(filePath), normalizeLineEndings),
+            ),
+          ),
           language: 'yaml',
         });
         await vscode.window.showTextDocument(doc, { preview: false });
@@ -120,15 +117,23 @@ export class AgentHandlers {
         );
       },
       confirmAction: confirmModal,
-      showInfoMessage: async (message) => {
-        void vscode.window.showInformationMessage(message);
-      },
-      showErrorMessage: async (message) => {
-        await showLoggedMessage(this.ctx.channel, message);
-      },
+      showInfoMessage: (message) =>
+        this.forkInfoNotice(message, 'Agent settings'),
+      showErrorMessage: (message) =>
+        Effect.tryPromise({
+          try: () => showLoggedMessage(this.ctx.channel, message),
+          catch: (cause) =>
+            new NotificationFailed({
+              member: 'showErrorMessage',
+              message: toErrorMessage(cause),
+              cause,
+            }),
+        }),
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
       run: (failureMessage, action) =>
-        withHandlerErrorHandling(this.ctx, failureMessage, action),
+        withHandlerErrorHandling(this.ctx, failureMessage, () =>
+          this.runtime.runPromise(action),
+        ),
     });
   }
 
@@ -153,12 +158,14 @@ export class AgentHandlers {
       this.ctx,
       'Failed to update agent visibility',
       async () => {
-        await this.roster.setAgentEnabled({
-          category: data.category,
-          source: data.agentSource,
-          name: data.agentName,
-          enabled: data.enabled,
-        });
+        await this.runtime.runPromise(
+          this.roster.setAgentEnabled({
+            category: data.category,
+            source: data.agentSource,
+            name: data.agentName,
+            enabled: data.enabled,
+          }),
+        );
         await this.refreshAfterAgentMutation();
       },
     );
@@ -171,11 +178,13 @@ export class AgentHandlers {
       this.ctx,
       'Failed to update agent visibility',
       async () => {
-        await this.catalogController.setAllAgentsEnabled({
-          category: data.category,
-          source: data.source,
-          enabled: data.enabled,
-        });
+        await this.runtime.runPromise(
+          this.catalogController.setAllAgentsEnabled({
+            category: data.category,
+            source: data.source,
+            enabled: data.enabled,
+          }),
+        );
         await this.refreshAfterAgentMutation();
       },
     );
@@ -283,7 +292,9 @@ export class AgentHandlers {
       this.ctx,
       'Failed to reset custom agent directory',
       async () => {
-        await this.directoryController.resetCustomDir();
+        await this.runtime.runPromise(
+          this.directoryController.resetCustomDir(),
+        );
         await this.refreshAgentDirUI();
       },
     );
@@ -324,30 +335,32 @@ export class AgentHandlers {
               presentation: {
                 chooseTeamAvailability: (prompt) =>
                   this.chooseTeamAvailability(prompt),
-                showInfoMessage: async (message) => {
-                  void vscode.window.showInformationMessage(message);
-                },
-                showErrorMessage: async (message) => {
-                  this.runtime.runFork(
+                // Both notices ride detached fibers, as the voided toast and
+                // the forked error dialog did: the apply flow does not wait
+                // on a toast, and a dialog fault is logged rather than
+                // failing the apply that asked for the notice.
+                showInfoMessage: (message) =>
+                  this.forkInfoNotice(message, 'Team'),
+                showErrorMessage: (message) =>
+                  Effect.forkDetach(
                     Effect.tryPromise({
                       try: () => showLoggedMessage(this.ctx.channel, message),
                       catch: (cause) =>
-                        new AgentTeamNotificationFailed({
+                        new NotificationFailed({
+                          member: 'showErrorMessage',
                           message: toErrorMessage(cause),
+                          cause,
                         }),
                     }).pipe(
-                      Effect.catchTag(
-                        'AgentTeamNotificationFailed',
-                        (failure) =>
-                          Effect.sync(() => {
-                            this.ctx.log.warn(
-                              `Error notification failed after handoff: ${failure.message}`,
-                            );
-                          }),
+                      Effect.catchTag('NotificationFailed', (failure) =>
+                        Effect.sync(() => {
+                          this.ctx.log.warn(
+                            `Error notification failed after handoff: ${failure.message}`,
+                          );
+                        }),
                       ),
                     ),
-                  );
-                },
+                  ).pipe(Effect.asVoid),
               },
               refreshAfterApply: (selectedToolUseAgent) =>
                 this.refreshAfterAgentMutation(selectedToolUseAgent, true),
@@ -372,7 +385,9 @@ export class AgentHandlers {
 
         await this.runtime.runPromise(loadAgents());
 
-        await this.catalogController.saveCurrentPreset(name);
+        await this.runtime.runPromise(
+          this.catalogController.saveCurrentPreset(name),
+        );
 
         await this.refreshAfterAgentMutation(undefined, true);
 
@@ -399,7 +414,9 @@ export class AgentHandlers {
         );
         if (!confirmed) return;
 
-        await this.catalogController.deleteCustomPreset(data.presetId);
+        await this.runtime.runPromise(
+          this.catalogController.deleteCustomPreset(data.presetId),
+        );
 
         await this.refreshAfterAgentMutation(undefined, true);
       },
@@ -407,6 +424,23 @@ export class AgentHandlers {
   }
 
   // ── Private helpers ──
+
+  /**
+   * Show an info notice on a detached fiber, as the `void` toast was: the
+   * caller does not wait on it, and a notification fault is logged rather
+   * than failing the mutation that asked for the notice.
+   */
+  private forkInfoNotice(message: string, scope: string) {
+    return Effect.forkDetach(
+      messages.showInfoMessage(message).pipe(
+        Effect.catchTag('NotificationFailed', (failure) =>
+          Effect.sync(() => {
+            this.ctx.log.warn(`${scope} notice failed: ${failure.message}`);
+          }),
+        ),
+      ),
+    ).pipe(Effect.asVoid);
+  }
 
   private async chooseTeamAvailability(prompt: TeamAvailabilityPrompt) {
     return chooseTeamAvailabilityViaDialog(prompt, { modal: true });
@@ -428,7 +462,11 @@ export class AgentHandlers {
         if (!name) return;
 
         const customDir = await agentDirectories.custom();
-        await AbsoluteFS.ensureDir(customDir);
+        await this.runtime.runPromise(
+          Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+            fs.makeDirectory(customDir, { recursive: true }),
+          ),
+        );
 
         const templatePlan = this.directoryController.planTemplateAgent({
           category,

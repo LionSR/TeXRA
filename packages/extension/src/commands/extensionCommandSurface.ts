@@ -37,6 +37,7 @@ import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/g
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild } from '@housekeeping/clean';
+import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
   withSessionFs,
@@ -57,6 +58,7 @@ import type { Effect } from 'effect';
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
+  globalState: StateStore,
   settingsViewProvider: SettingsViewProvider,
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
@@ -103,7 +105,7 @@ export function createExtensionCommandActions(
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
     signOut: () => runtime.runPromise(authSignOut),
     runSetupAssistant: async () => {
-      await launchSetupAssistant(secrets, context.globalState, runtime);
+      await launchSetupAssistant(secrets, globalState, runtime);
     },
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () =>
@@ -134,7 +136,13 @@ export function createExtensionCommandActions(
     // from `activate`, settles it here at the command boundary.
     createAgentWithAI: (category) =>
       runtime.runPromise(
-        agentHandleCreateAgentWithAI(context, category, secrets, runtime),
+        agentHandleCreateAgentWithAI(
+          context,
+          globalState,
+          category,
+          secrets,
+          runtime,
+        ),
       ),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.
@@ -148,10 +156,13 @@ export function createExtensionCommandActions(
 /*
  * Duplicate-registration audit (#3787 follow-up):
  * Every command id in `EXTENSION_COMMAND_HANDLERS` has been verified to
- * have no stale `vscode.commands.registerCommand(...)` call elsewhere.
- * The remaining direct `registerCommand` call sites all register ids NOT
- * tagged `extensionRegistry` in `commandCatalog` — they're legitimate VS
- * Code-only handlers (git, file selection/opening, merge, and LaTeX tools).
+ * have no stale `vscode.commands.registerCommand(...)` call on the
+ * single-folder path that installs this registry, and every other direct
+ * `registerCommand` call site there registers an id NOT tagged
+ * `extensionRegistry` in `commandCatalog` — they're legitimate VS Code-only
+ * handlers (git, file selection/opening, merge, and LaTeX tools). The
+ * no-folder welcome path installs its own standalone variants of a few
+ * tagged ids, since this registry is not installed there.
  */
 
 /**

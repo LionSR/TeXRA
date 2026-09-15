@@ -571,7 +571,14 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           isGoogle: modelConfig.provider === ModelProvider.GOOGLE,
         },
         agentLogger,
-        { delegationAgentScope: runScope.delegationAgentScope, stageId },
+        {
+          // The session's own root, handed to prompt assembly as data: file
+          // names, readable-file reads and CWD resolve against this project's
+          // folder rather than whatever roots the calling fiber carries.
+          workspacePath: session.roots.workspace,
+          delegationAgentScope: runScope.delegationAgentScope,
+          stageId,
+        },
       );
 
     const baseVars = yield* Effect.tryPromise({
@@ -675,17 +682,19 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
             logger.warn('Failed to persist the launch failure', {
               data: finalization.error,
             });
-          const failures: unknown[] = [];
-          for (const dispose of resources.toReversed()) {
-            const disposed = yield* Effect.exit(
-              Effect.tryPromise({
-                try: async () => dispose(),
-                catch: ensureError,
-              }),
-            );
-            if (Exit.isFailure(disposed))
-              failures.push(Cause.squash(disposed.cause));
-          }
+          const disposals = yield* Effect.forEach(
+            resources.toReversed(),
+            (dispose) =>
+              Effect.exit(
+                Effect.tryPromise({
+                  try: async () => dispose(),
+                  catch: ensureError,
+                }),
+              ),
+          );
+          const failures = disposals.flatMap((disposed) =>
+            Exit.isFailure(disposed) ? [Cause.squash(disposed.cause)] : [],
+          );
           if (failures.length) {
             logger.warn(
               'Failed to release launch resources after a failed launch',

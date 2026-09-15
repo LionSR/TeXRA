@@ -154,17 +154,16 @@ function runCleanupDetached(
 
 /**
  * Best-effort host notifications: deliver, and warn with the surface's own
- * error when the dialog host is already gone.
+ * error when the dialog host is already gone. `notify` is the Effect-shaped
+ * host call (a `MessageHost` member, or a wrapped `onSessionChanged`).
  */
-async function warnOnNotificationFailure(
+async function warnOnNotificationFailure<E>(
   runtime: ProcessRuntime,
   log: DesktopAuthLog,
-  notify: () => unknown,
+  notify: Effect.Effect<unknown, E>,
   failureMessage: string,
 ): Promise<void> {
-  const notified = await runtime.runPromiseExit(
-    Effect.tryPromise({ try: async () => notify(), catch: (error) => error }),
-  );
+  const notified = await runtime.runPromiseExit(notify);
   if (Exit.isFailure(notified)) {
     log.warn(
       `${failureMessage}: ${toErrorMessage(Cause.squash(notified.cause))}`,
@@ -186,12 +185,13 @@ export function createDesktopAuthCallbackState(
       persistLanes,
       AUTH_PERSIST_LANE,
     )(
-      Effect.tryPromise({
-        try: () =>
-          store?.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state) ??
-          Promise.resolve(),
-        catch: (error) => error,
-      }),
+      // The store's write is already a program: with no store handed down
+      // there is nothing to persist, and its refusal is the caller's failure.
+      store
+        ? Effect.suspend(() =>
+            store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state),
+          )
+        : Effect.void,
     );
 
   const persistPendingState = async (
@@ -380,7 +380,7 @@ export function createDesktopSupabaseAuth(
     await warnOnNotificationFailure(
       runtime,
       log,
-      () => host.showErrorMessage(`Sign-in failed: ${message}`),
+      host.showErrorMessage(`Sign-in failed: ${message}`),
       'Desktop sign-in error notification failed',
     );
   };
@@ -454,8 +454,10 @@ export function createDesktopSupabaseAuth(
     if (!ownsAttempt(attempt)) return;
 
     await host.openExternalUrl(authUrl);
-    await host.showInfoMessage(
-      'Complete sign-in in your browser. TeXRA updates automatically when it finishes.',
+    await runtime.runPromise(
+      host.showInfoMessage(
+        'Complete sign-in in your browser. TeXRA updates automatically when it finishes.',
+      ),
     );
   };
 
@@ -580,7 +582,7 @@ async function processProtocolCallback(
       await warnOnNotificationFailure(
         runtime,
         log,
-        () => host.showErrorMessage(`Sign-in failed: ${result.error}`),
+        host.showErrorMessage(`Sign-in failed: ${result.error}`),
         'Desktop sign-in error notification failed',
       );
     } else {
@@ -605,8 +607,7 @@ async function processProtocolCallback(
     await warnOnNotificationFailure(
       runtime,
       log,
-      () =>
-        host.showInfoMessage(`Signed in as ${result.session.account.label}`),
+      host.showInfoMessage(`Signed in as ${result.session.account.label}`),
       'Desktop sign-in notification failed',
     );
     if (!(await stillOwned())) return false;
@@ -614,7 +615,12 @@ async function processProtocolCallback(
     await warnOnNotificationFailure(
       runtime,
       log,
-      () => host.onSessionChanged(),
+      Effect.tryPromise({
+        try: async () => {
+          await host.onSessionChanged();
+        },
+        catch: (cause) => cause,
+      }),
       'Desktop auth surface refresh failed',
     );
     return stillOwned();

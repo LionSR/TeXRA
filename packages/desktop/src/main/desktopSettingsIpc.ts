@@ -143,15 +143,10 @@ export function createDesktopSettingsIpc(
       return;
     }
     runtime.runFork(
-      Effect.tryPromise({
-        try: async () => {
-          await options.ui.showInfoMessage(error.reason);
-        },
-        catch: (cause) => cause,
-      }).pipe(
-        Effect.catch((cause) =>
+      options.ui.showInfoMessage(error.reason).pipe(
+        Effect.catchTag('NotificationFailed', (failure) =>
           Effect.sync(() => {
-            options.ui.onError(cause);
+            options.ui.onError(failure.cause);
           }),
         ),
       ),
@@ -175,19 +170,19 @@ export function createDesktopSettingsIpc(
             }),
         }),
       warning: (message) =>
-        Effect.tryPromise({
-          try: async () => {
-            await options.ui.showInfoMessage(message);
-            return undefined;
-          },
-          catch: (cause) =>
-            new PromptFailed({
-              reason: 'host-unavailable',
-              member: 'warning',
-              message: 'The desktop window would not show the warning.',
-              cause,
-            }),
-        }),
+        options.ui.showInfoMessage(message).pipe(
+          Effect.map(() => undefined),
+          Effect.catchTag('NotificationFailed', (failure) =>
+            Effect.fail(
+              new PromptFailed({
+                reason: 'host-unavailable',
+                member: 'warning',
+                message: 'The desktop window would not show the warning.',
+                cause: failure.cause,
+              }),
+            ),
+          ),
+        ),
     },
   });
   const modelSelectionController =
@@ -302,8 +297,8 @@ export function createDesktopSettingsIpc(
     if (Cause.hasInterrupts(listed.cause)) return;
     const error = Cause.squash(listed.cause);
     options.ui.onError(error);
-    await options.ui.showErrorMessage(
-      formatError('Failed to load goals', error),
+    await runtime.runPromise(
+      options.ui.showErrorMessage(formatError('Failed to load goals', error)),
     );
   }
 
@@ -334,7 +329,7 @@ export function createDesktopSettingsIpc(
     modelName: string;
     enabled: boolean;
   }): Promise<void> {
-    await modelSelectionController.setModelEnabled(input);
+    await runtime.runPromise(modelSelectionController.setModelEnabled(input));
     await postModelSelectionData();
     // The options cache is invalidated by the writer itself.
     await options.credentialSettingsController.refreshModelOptions();
@@ -384,8 +379,10 @@ export function createDesktopSettingsIpc(
       const label = result.entry.title ?? result.entry.key;
       const prefix =
         result.kind === 'rejected' ? 'Invalid value for' : 'Failed to update';
-      await options.ui.showErrorMessage(
-        formatError(`${prefix} "${label}"`, result.error),
+      await runtime.runPromise(
+        options.ui.showErrorMessage(
+          formatError(`${prefix} "${label}"`, result.error),
+        ),
       );
     }
     await stateSettingSnapshotPosters[result.entry.surfaces.settingsView]();
@@ -419,7 +416,7 @@ export function createDesktopSettingsIpc(
    * to that paper. Every refresh a signal triggers runs in this paper's session.
    */
   function runAsyncInPaper(work: () => Promise<void>): void {
-    runAsync(Promise.resolve(runInSession(options.session, work)));
+    runAsync(runInSession(options.session, work));
   }
 
   // Agent runs execute in this same main process and the settings panel shares
@@ -466,14 +463,18 @@ export function createDesktopSettingsIpc(
         kind: 'github',
       }),
     );
-    await options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
+    await runtime.runPromise(
+      options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE),
+    );
     await postGitHubTokenStatus();
     await runtime.runPromise(refreshToolAvailability());
   }
 
   async function removeGitHubToken(): Promise<void> {
     await runtime.runPromise(options.secrets.delete(GITHUB_TOKEN_STORAGE_KEY));
-    await options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
+    await runtime.runPromise(
+      options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE),
+    );
     await postGitHubTokenStatus();
     await runtime.runPromise(refreshToolAvailability());
   }
@@ -510,7 +511,7 @@ export function createDesktopSettingsIpc(
     // Marking a stored token as rejected would need a new status on the wire.
     appSignals.on('githubTokenInvalid', ({ message }) =>
       runAsync(
-        Promise.resolve(
+        runtime.runPromise(
           options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
         ),
       ),
@@ -525,15 +526,17 @@ export function createDesktopSettingsIpc(
   async function revealRun(runId: RunId): Promise<void> {
     const result = await options.ui.revealRun(runId);
     if (result === 'missing') {
-      await options.ui.showInfoMessage('The agent run is no longer available.');
+      await runtime.runPromise(
+        options.ui.showInfoMessage('The agent run is no longer available.'),
+      );
     }
   }
 
   async function unsubscribeGitHub(data: { key: string }): Promise<void> {
     const removed = unsubscribeGitHubKey(data.key);
     if (removed === 0) {
-      await options.ui.showInfoMessage(
-        noActiveGitHubSubscriptionMessage(data.key),
+      await runtime.runPromise(
+        options.ui.showInfoMessage(noActiveGitHubSubscriptionMessage(data.key)),
       );
       return;
     }
@@ -562,7 +565,9 @@ export function createDesktopSettingsIpc(
     ...options.credentialSettingsController.profileHandlers,
     setModelEnabled: updateModelEnabled,
     setModelReasoningLevel: async (message) => {
-      await modelSelectionController.setReasoningLevel(message);
+      await runtime.runPromise(
+        modelSelectionController.setReasoningLevel(message),
+      );
       await postModelSelectionData();
     },
     requestModelAccess: unsupported('Copilot models require VS Code.'),

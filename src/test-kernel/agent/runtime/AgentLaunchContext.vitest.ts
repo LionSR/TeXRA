@@ -485,7 +485,9 @@ describe('AgentLaunchContext', () => {
           expect(error).toBe(failure);
 
           expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
+            workspacePath: session.roots.workspace,
             delegationAgentScope,
+            stageId: undefined,
           });
           expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
           expect(session.runView(EXECUTION_ID)?.status).toBe(RUN_PHASE.FAILED);

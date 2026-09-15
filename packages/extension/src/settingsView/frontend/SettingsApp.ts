@@ -25,7 +25,6 @@ import {
   registerTeXRAWebAwesomeIcons,
   waIcon,
 } from '@shared/wa/webAwesomeIcons';
-import { utcMonthStart } from '@utils/core';
 
 // Local imports - settings view
 import {
@@ -118,13 +117,9 @@ import {
 
 registerTeXRAWebAwesomeIcons();
 
-const MAX_TIMEOUT_MS = 2_147_483_647;
-
 @customElement('settings-app')
 export class SettingsApp extends SignalWatcher(LitElement) {
   static override styles = [designTokens, commonViewStyles, settingsViewStyles];
-
-  private monthlyProfileRefreshTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
     super();
@@ -158,14 +153,9 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     installToolbarTooltips();
     window.addEventListener('message', this.messageListener);
     this.postReady();
-    this.scheduleMonthlyProfileRefresh();
   }
 
   override disconnectedCallback(): void {
-    if (this.monthlyProfileRefreshTimer !== undefined) {
-      clearTimeout(this.monthlyProfileRefreshTimer);
-      this.monthlyProfileRefreshTimer = undefined;
-    }
     window.removeEventListener('message', this.messageListener);
     super.disconnectedCallback();
   }
@@ -177,24 +167,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
       SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
       view == null ? {} : { view },
     );
-  }
-
-  private scheduleMonthlyProfileRefresh(): void {
-    if (this.monthlyProfileRefreshTimer !== undefined) {
-      clearTimeout(this.monthlyProfileRefreshTimer);
-    }
-    const now = new Date();
-    const nextMonthUtc = utcMonthStart(
-      now.getUTCFullYear(),
-      now.getUTCMonth() + 1,
-    ).getTime();
-    const delay = Math.min(nextMonthUtc - now.getTime(), MAX_TIMEOUT_MS);
-    this.monthlyProfileRefreshTimer = setTimeout(() => {
-      if (Date.now() >= nextMonthUtc) {
-        this.postReady();
-      }
-      this.scheduleMonthlyProfileRefresh();
-    }, delay);
   }
 
   private selectSettingsEntry(entry: SettingsNavEntry): void {

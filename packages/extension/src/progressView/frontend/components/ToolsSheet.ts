@@ -100,8 +100,9 @@ export class ToolsSheet extends LitElement {
     const editedFileOptions = host.fileOptions.editedFile.filter((file) =>
       matchesEditedFile(file, launch.baseFile),
     );
-    const editedFile = editedFileOptions.includes(launch.editedFile ?? '')
-      ? (launch.editedFile ?? '')
+    const editedFileSelection = launch.editedFile ?? '';
+    const editedFile = editedFileOptions.includes(editedFileSelection)
+      ? editedFileSelection
       : '';
     return html`
       <div class="scrim" @click=${this.close}></div>

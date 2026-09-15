@@ -57,11 +57,6 @@ class SignInPresentationFailed extends Data.TaggedError(
   readonly message: string;
 }> {}
 
-/** The error dialog that reports a presentation failure itself rejected. */
-class SignInNoticeFailed extends Data.TaggedError('SignInNoticeFailed')<{
-  readonly cause: unknown;
-}> {}
-
 /** A subscription-provider mutation (sign-in, sign-out, preference) failed. */
 class SubscriptionActionFailed extends Data.TaggedError(
   'SubscriptionActionFailed',
@@ -247,8 +242,10 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
       reportFailure: async (message, error) => {
-        await options.notifications.showErrorMessage(
-          `${message}: ${toErrorMessage(error)}`,
+        await options.runtime.runPromise(
+          options.notifications.showErrorMessage(
+            `${message}: ${toErrorMessage(error)}`,
+          ),
         );
         options.onError(error);
         await this.postProfileData();
@@ -266,9 +263,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           this.profileKeyController.removeProviderKey(message.provider),
         ),
       openProviderKeyUrl: (message) =>
-        this.profileKeyController.openProviderKeyUrl(message.provider),
+        options.runtime.runPromise(
+          this.profileKeyController.openProviderKeyUrl(message.provider),
+        ),
       openExternalUrl: (message) =>
-        options.externalOpener.openExternal(message.url),
+        options.runtime.runPromise(
+          options.externalOpener.openExternal(message.url),
+        ),
     };
     this.chatGptHandlers = {
       signInChatGpt: () => this.signInChatGpt(),
@@ -340,20 +341,17 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         Effect.catchTag('SignInPresentationFailed', (failure) =>
           Effect.gen(function* () {
             options.onError(failure.cause);
-            yield* Effect.tryPromise({
-              try: async () => {
-                await options.notifications.showErrorMessage(
-                  `Failed to display ${displayName} sign-in instructions: ${failure.message}`,
-                );
-              },
-              catch: (cause) => new SignInNoticeFailed({ cause }),
-            }).pipe(
-              Effect.catchTag('SignInNoticeFailed', (notice) =>
-                Effect.sync(() => {
-                  options.onError(notice.cause);
-                }),
-              ),
-            );
+            yield* options.notifications
+              .showErrorMessage(
+                `Failed to display ${displayName} sign-in instructions: ${failure.message}`,
+              )
+              .pipe(
+                Effect.catchTag('NotificationFailed', (notice) =>
+                  Effect.sync(() => {
+                    options.onError(notice.cause);
+                  }),
+                ),
+              );
           }),
         ),
       ),
@@ -428,21 +426,20 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       catch: (cause) => new SubscriptionActionFailed({ cause }),
     }).pipe(
       Effect.catchTag('SubscriptionActionFailed', (failure) =>
-        Effect.tryPromise({
-          try: async () => {
-            await options.notifications.showErrorMessage(
-              buildErrorMessage(provider, failure.cause),
-            );
-          },
-          // A dialog that fails reaches the caller, as the bare `await` did.
-          catch: (cause) => cause,
-        }).pipe(
-          Effect.flatMap(() =>
-            Effect.sync(() => {
-              options.onError(failure.cause);
-            }),
+        options.notifications
+          .showErrorMessage(buildErrorMessage(provider, failure.cause))
+          .pipe(
+            // A dialog that fails reaches the caller with the dialog's own
+            // rejection, as the bare `await` did.
+            Effect.catchTag('NotificationFailed', (notice) =>
+              Effect.fail(notice.cause),
+            ),
+            Effect.flatMap(() =>
+              Effect.sync(() => {
+                options.onError(failure.cause);
+              }),
+            ),
           ),
-        ),
       ),
     );
     return options.runtime.runPromise(
@@ -473,9 +470,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
             present: this.signInPresenter(provider.displayName),
           }),
         );
-        await provider.setPreferSubscription(true);
-        await this.options.notifications.showInfoMessage(
-          ACCOUNT_OUTCOME.signedInAs(provider.displayName, account.label),
+        await this.options.runtime.runPromise(
+          provider.setPreferSubscription(true),
+        );
+        await this.options.runtime.runPromise(
+          this.options.notifications.showInfoMessage(
+            ACCOUNT_OUTCOME.signedInAs(provider.displayName, account.label),
+          ),
         );
       },
     );
@@ -539,8 +540,10 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         ),
       async (provider) => {
         await provider.signOut(this.options.secrets);
-        await this.options.notifications.showInfoMessage(
-          ACCOUNT_OUTCOME.signedOut(provider.displayName),
+        await this.options.runtime.runPromise(
+          this.options.notifications.showInfoMessage(
+            ACCOUNT_OUTCOME.signedOut(provider.displayName),
+          ),
         );
       },
     );
@@ -555,10 +558,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       (provider, error) =>
         `${provider.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
       async (provider) => {
-        const update = await provider.setPreferSubscription(enabled);
+        const update = await this.options.runtime.runPromise(
+          provider.setPreferSubscription(enabled),
+        );
         if (update.effective !== enabled) {
-          await this.options.notifications.showWarningMessage(
-            `A more specific setting still keeps ${provider.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+          await this.options.runtime.runPromise(
+            this.options.notifications.showWarningMessage(
+              `A more specific setting still keeps ${provider.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+            ),
           );
         }
       },

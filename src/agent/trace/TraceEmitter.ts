@@ -19,7 +19,6 @@ import {
   type ToolCallStatus,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
-import { createListenerSet } from '@utils/core/listenerSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type {
@@ -44,7 +43,12 @@ import type {
 const log = createLog('TraceEmitter');
 
 export class TraceEmitter implements AgentTrace {
-  private readonly subscribers = createListenerSet<AgentTraceSubscriber>();
+  /**
+   * Subscribers in registration order. `emit` iterates the live Set, so a
+   * subscriber that unsubscribes during a dispatch (its own or a peer's) is
+   * not visited afterwards — the same semantics as iterating `values()`.
+   */
+  private readonly subscribers = new Set<AgentTraceSubscriber>();
 
   /**
    * Per-instance stage scope. Kept on the instance — NOT a module singleton —
@@ -64,7 +68,10 @@ export class TraceEmitter implements AgentTrace {
   // ─── SSoT primitives ───────────────────────────────────────────────
 
   subscribe(subscriber: AgentTraceSubscriber): () => void {
-    return this.subscribers.add(subscriber);
+    this.subscribers.add(subscriber);
+    return () => {
+      this.subscribers.delete(subscriber);
+    };
   }
 
   emit(event: AgentEvent): void {

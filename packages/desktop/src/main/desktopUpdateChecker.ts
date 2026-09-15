@@ -66,11 +66,11 @@ let desktopUpdateCheckNotify:
 /** One check owns the work; later windows supply the current dialog parent. */
 export const checkForDesktopUpdate = (options: CheckForDesktopUpdateOptions) =>
   Effect.suspend(() => {
-    if (desktopUpdateCheckNotify !== undefined) {
-      desktopUpdateCheckNotify = options.notify;
-      return Effect.void;
-    }
+    // A check already in flight owns it; either way this window supplies the
+    // dialog parent the next notification goes to.
+    const alreadyRunning = desktopUpdateCheckNotify !== undefined;
     desktopUpdateCheckNotify = options.notify;
+    if (alreadyRunning) return Effect.void;
     return runDesktopUpdateCheck({
       ...options,
       notify: (release) => desktopUpdateCheckNotify?.(release),

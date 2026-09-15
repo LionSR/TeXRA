@@ -40,9 +40,9 @@ import {
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
-import { formatDuration, generateRunId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
-import { previewLabel } from '@utils/text/stringUtils';
+import { formatDuration, previewLabel } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
@@ -530,7 +530,7 @@ export class BashTool extends defineTool({
             {
               identity: { kind: 'process', tool: 'bash' },
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-              parentRunId: parentRunId,
+              parentRunId,
               category: AgentCategory.ToolUse,
               description: childRunDescription(command),
             },

@@ -73,7 +73,7 @@ function withGlobWorkspace(
           yield* Effect.promise(() =>
             utimes(path.join(workspacePath, 'new.tex'), 2, 2),
           );
-          yield* run(workspacePath);
+          yield* run(workspacePath).pipe(Effect.provide(nativeToolTestLayer()));
         } finally {
           vi.restoreAllMocks();
           yield* Effect.promise(() => installPlatform());
@@ -101,7 +101,7 @@ describe('GlobTool match metadata', () => {
           );
         }),
       );
-    }).pipe(Effect.provide(nativeToolTestLayer())),
+    }),
   );
 
   it.live.each([
@@ -124,7 +124,7 @@ describe('GlobTool match metadata', () => {
             expect(result.output).toContain('(no matches)');
           }),
         );
-      }).pipe(Effect.provide(nativeToolTestLayer())),
+      }),
   );
 
   it.live('surfaces operational stat failures through the tool boundary', () =>
@@ -142,7 +142,7 @@ describe('GlobTool match metadata', () => {
           expect(result.error).toContain('match is unreadable');
         }),
       );
-    }).pipe(Effect.provide(nativeToolTestLayer())),
+    }),
   );
 
   it.live(
@@ -161,11 +161,9 @@ describe('GlobTool match metadata', () => {
                     'external',
                   ),
                 );
-                yield* Effect.promise(() =>
-                  workspaceRoots().workspaceState.update(
-                    WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-                    false,
-                  ),
+                yield* workspaceRoots().workspaceState.update(
+                  WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+                  false,
                 );
 
                 const result = yield* new GlobTool().call({
@@ -179,6 +177,6 @@ describe('GlobTool match metadata', () => {
             );
           }),
         );
-      }).pipe(Effect.provide(nativeToolTestLayer())),
+      }),
   );
 });

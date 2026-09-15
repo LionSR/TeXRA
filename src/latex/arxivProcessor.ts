@@ -292,13 +292,15 @@ class ArxivSourceProcessor {
     let destPath = destBasePath;
     return Effect.gen(function* () {
       const deadline = (yield* Clock.currentTimeMillis) + timeout;
-      const downloadError = (cause: unknown): ArxivSourceTransientError =>
-        new ArxivSourceTransientError({
-          message: Cause.isTimeoutError(cause)
+      const downloadError = (cause: unknown): ArxivSourceTransientError => {
+        const timedOut = Cause.isTimeoutError(cause);
+        return new ArxivSourceTransientError({
+          message: timedOut
             ? `Download timed out after ${timeout} ms`
             : toErrorMessage(cause),
-          cause: Cause.isTimeoutError(cause) ? undefined : cause,
+          cause: timedOut ? undefined : cause,
         });
+      };
       // The fiber's own signal aborts the in-flight fetch when the attempt is
       // interrupted — by the per-attempt deadline or by the
       // caller — covering connection establishment and body streaming.
@@ -483,9 +485,9 @@ class ArxivSourceProcessor {
 
         const indentResult = yield* permanent(() =>
           indentLatexFilesInDirectory(
+            workspaceRoot,
             paperDirFull,
             progressCallback,
-            workspaceRoot,
             formatter,
           ),
         );

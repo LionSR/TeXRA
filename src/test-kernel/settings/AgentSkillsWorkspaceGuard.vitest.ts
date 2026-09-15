@@ -2,12 +2,16 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   showLoggedErrorMessage: vi.fn(),
   showLoggedInfoMessage: vi.fn(),
-  writeSetting: vi.fn(),
+  // The module under test composes `writeSetting`'s Effect, so the standing
+  // double is a succeeding one; a test that wants a failure swaps in
+  // `Effect.fail` for that call.
+  writeSetting: vi.fn((): Effect.Effect<void, Error> => Effect.void),
 }));
 
 vi.mock('@shared/config/settingsAccess', async (original) => {
@@ -27,13 +31,35 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
 });
 
 // Local imports
+import {
+  initializeDefaultSession,
+  teardownDefaultSession,
+} from '@agent/runtime/SessionHandle';
 import { effectRuntime } from '@platform/processRuntime';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: undefined });
+
+// The guard asks the window's own session for its workspace folder, so the
+// default session has to be the one this suite's empty window opened — the
+// import above builds its process default before `setupPlatform` installs
+// the folderless roots, which would otherwise leave a workspace behind it.
+beforeEach(async () => {
+  await effectRuntime().runPromise(teardownDefaultSession());
+  await effectRuntime().runPromise(
+    initializeDefaultSession({
+      roots: processWorkspaceRoots(),
+      transcriptMode: {
+        kind: 'ephemeral',
+        reason: 'settings workspace guard suite',
+      },
+    }),
+  );
+});
 
 type AgentSkillsHarness = {
   updateStateSetting(key: string, value: unknown): Promise<void>;
@@ -93,7 +119,7 @@ describe('agent skills workspace guard', () => {
   it('surfaces write failures and restores the owning snapshot', async () => {
     const handler = createHarness();
     const error = new Error('write failed');
-    mocks.writeSetting.mockRejectedValueOnce(error);
+    mocks.writeSetting.mockReturnValueOnce(Effect.fail(error));
 
     await handler.updateStateSetting(
       GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,

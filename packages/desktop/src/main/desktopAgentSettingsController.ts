@@ -22,11 +22,7 @@ import {
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
-import {
-  ExternalOpenFailed,
-  NotificationFailed,
-  type MessageHost,
-} from '@hosts/uiHosts';
+import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -63,7 +59,6 @@ class AgentSettingsActionFailed extends Data.TaggedError(
   'AgentSettingsActionFailed',
 )<{
   readonly member:
-    | 'runAction'
     | 'getCustomAgentDirectory'
     | 'writeTemplateAgentFile'
     | 'createTempDir'
@@ -72,26 +67,6 @@ class AgentSettingsActionFailed extends Data.TaggedError(
   readonly message: string;
   readonly cause: unknown;
 }> {}
-
-/**
- * Show one settings notification, reporting a host that could not show it.
- * The failure carries the rejection's own text, not the text that was being
- * presented: the surrounding `catchCause` renders
- * `toErrorMessage(Cause.squash(cause))` behind its own prefix, so presenting
- * the announcement again there would hide the reason the host gave.
- */
-const notify = (
-  present: (message: string) => Promise<void> | void,
-  member: NotificationFailed['member'],
-  message: string,
-): Effect.Effect<void, NotificationFailed> =>
-  Effect.tryPromise({
-    try: async () => {
-      await present(message);
-    },
-    catch: (cause) =>
-      new NotificationFailed({ member, message: toErrorMessage(cause), cause }),
-  });
 
 type AgentCommand = SettingsViewInboundMessage['command'];
 type AgentMessage<C extends AgentCommand> = SettingsMessageFor<C>;
@@ -267,34 +242,18 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
       run: (failureMessage, action) =>
         this.runtime.runPromise(
-          Effect.tryPromise({
-            try: () => action(),
-            catch: (cause) =>
-              new AgentSettingsActionFailed({
-                member: 'runAction',
-                // The reporting `catchCause` below prefixes `failureMessage`
-                // itself, so the tag carries the rejection's own text only.
-                message: toErrorMessage(cause),
-                cause,
-              }),
-          }).pipe(
-            Effect.catchCause(
-              (
-                cause,
-              ): Effect.Effect<
-                void,
-                AgentSettingsActionFailed | NotificationFailed
-              > =>
-                // An interrupt (the runtime disposing at shutdown) is not an
-                // action failure: re-fail it instead of showing a
-                // notification.
-                Cause.hasInterruptsOnly(cause)
-                  ? Effect.failCause(cause)
-                  : notify(
-                      (text) => notifications.showErrorMessage(text),
-                      'showErrorMessage',
-                      `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
-                    ),
+          action.pipe(
+            Effect.catchCause((cause) =>
+              // An interrupt (the runtime disposing at shutdown) is not an
+              // action failure: re-fail it instead of showing a
+              // notification. The reporting notification prefixes
+              // `failureMessage` itself and carries the rejection's own
+              // text behind it, as the tag it replaces did.
+              Cause.hasInterruptsOnly(cause)
+                ? Effect.failCause(cause)
+                : notifications.showErrorMessage(
+                    `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
+                  ),
             ),
           ),
         ),
@@ -380,19 +339,23 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private async updateAgentEnabled(
     message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED>,
   ): Promise<void> {
-    await this.roster.setAgentEnabled({
-      category: message.category,
-      source: message.agentSource,
-      name: message.agentName,
-      enabled: message.enabled,
-    });
+    await this.runtime.runPromise(
+      this.roster.setAgentEnabled({
+        category: message.category,
+        source: message.agentSource,
+        name: message.agentName,
+        enabled: message.enabled,
+      }),
+    );
     await this.refreshCatalogData();
   }
 
   private async updateAllAgentsEnabled(
     message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED>,
   ): Promise<void> {
-    await this.catalogController.setAllAgentsEnabled(message);
+    await this.runtime.runPromise(
+      this.catalogController.setAllAgentsEnabled(message),
+    );
     await this.refreshCatalogData();
   }
 
@@ -400,7 +363,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     const selectedPath = await this.directory.selectCustomAgentDirectory();
     if (!selectedPath) return;
 
-    await this.directoryController.setCustomDir(selectedPath);
+    await this.runtime.runPromise(
+      this.directoryController.setCustomDir(selectedPath),
+    );
     await Promise.all([this.postCustomAgentDir(), this.refreshCatalogData()]);
   }
 
@@ -415,15 +380,17 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   private async resetCustomAgentDir(): Promise<void> {
-    await this.directoryController.resetCustomDir();
+    await this.runtime.runPromise(this.directoryController.resetCustomDir());
     await Promise.all([this.postCustomAgentDir(), this.refreshCatalogData()]);
   }
 
   private async openAgentFolder(): Promise<void> {
     const result = await this.directoryController.planOpenAgentFolder('custom');
     if (!result.ok) {
-      await this.notifications.showErrorMessage(
-        'No custom agent directory is available',
+      await this.runtime.runPromise(
+        this.notifications.showErrorMessage(
+          'No custom agent directory is available',
+        ),
       );
       return;
     }
@@ -440,8 +407,10 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.CREATE_AGENT>,
   ): Promise<void> {
     if (data.mode !== 'template') {
-      await this.notifications.showErrorMessage(
-        'Creating an agent with AI is not available in the desktop app yet. Choose "From template" instead.',
+      await this.runtime.runPromise(
+        this.notifications.showErrorMessage(
+          'Creating an agent with AI is not available in the desktop app yet. Choose "From template" instead.',
+        ),
       );
       return;
     }
@@ -454,7 +423,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
     const invalid = this.directoryController.validateTemplateName(name);
     if (invalid) {
-      await this.notifications.showErrorMessage(invalid);
+      await this.runtime.runPromise(
+        this.notifications.showErrorMessage(invalid),
+      );
       return;
     }
 
@@ -490,11 +461,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
             }),
         });
         if (!written.ok) {
-          yield* notify(
-            (text) => this.notifications.showErrorMessage(text),
-            'showErrorMessage',
-            written.message,
-          );
+          yield* this.notifications.showErrorMessage(written.message);
           return;
         }
 
@@ -508,9 +475,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
               cause,
             }),
         });
-        yield* notify(
-          (text) => this.notifications.showInfoMessage(text),
-          'showInfoMessage',
+        yield* this.notifications.showInfoMessage(
           `Created custom agent: ${plan.fileName}`,
         );
         yield* Effect.tryPromise({
@@ -526,9 +491,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.failCause(cause)
-            : notify(
-                (text) => this.notifications.showErrorMessage(text),
-                'showErrorMessage',
+            : this.notifications.showErrorMessage(
                 `Failed to create custom agent: ${toErrorMessage(Cause.squash(cause))}`,
               ),
         ),
@@ -556,11 +519,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
             }),
         });
         if (!result.ok) {
-          yield* notify(
-            (text) => this.notifications.showErrorMessage(text),
-            'showErrorMessage',
-            result.message,
-          );
+          yield* this.notifications.showErrorMessage(result.message);
           return;
         }
 
@@ -592,9 +551,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.failCause(cause)
-            : notify(
-                (text) => this.notifications.showErrorMessage(text),
-                'showErrorMessage',
+            : this.notifications.showErrorMessage(
                 `Failed to view remote agent prompt: ${toErrorMessage(Cause.squash(cause))}`,
               ),
         ),
@@ -639,10 +596,14 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     });
     if (!name?.trim()) return;
     await this.runtime.runPromise(this.registry.loadAgents());
-    const preset = await this.catalogController.saveCurrentPreset(name);
+    const preset = await this.runtime.runPromise(
+      this.catalogController.saveCurrentPreset(name),
+    );
     this.postAgentModePresets();
     await this.onCatalogChanged();
-    await this.notifications.showInfoMessage(`Saved team "${preset.name}"`);
+    await this.runtime.runPromise(
+      this.notifications.showInfoMessage(`Saved team "${preset.name}"`),
+    );
   }
 
   private async deleteAgentModePreset(
@@ -653,8 +614,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     const { presetId } = message;
     const target = this.catalogController.getCustomPreset(presetId);
     if (!target) {
-      await this.notifications.showErrorMessage(
-        `Unknown custom team: ${presetId}`,
+      await this.runtime.runPromise(
+        this.notifications.showErrorMessage(`Unknown custom team: ${presetId}`),
       );
       return;
     }
@@ -665,7 +626,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     });
     if (!confirmed) return;
 
-    await this.catalogController.deleteCustomPreset(presetId);
+    await this.runtime.runPromise(
+      this.catalogController.deleteCustomPreset(presetId),
+    );
     this.postAgentModePresets();
     await this.onCatalogChanged();
   }

@@ -95,7 +95,7 @@ const DiagnosticsAddSchema = z.looseObject({
     ),
 });
 
-export const DiagnosticsInputSchema = z.discriminatedUnion('command', [
+const DiagnosticsInputSchema = z.discriminatedUnion('command', [
   DiagnosticsListSchema,
   DiagnosticsCountSchema,
   DiagnosticsAddSchema,

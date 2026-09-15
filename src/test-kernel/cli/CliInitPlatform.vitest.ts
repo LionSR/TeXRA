@@ -8,6 +8,7 @@ import {
   initCliPlatform,
   setCliAgentResumeHandler,
 } from '@cli/runtime/initPlatform';
+import { StateWriteFailed } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -211,7 +212,7 @@ function cliContext(
 function stubGlobalState(
   get: (key: string, defaultValue: unknown) => unknown = (_key, def) => def,
 ) {
-  return { get: vi.fn(get), update: vi.fn() };
+  return { get: vi.fn(get), update: vi.fn(() => Effect.void) };
 }
 
 /**
@@ -248,6 +249,10 @@ describe('CLI platform init', () => {
       (_key, defaultValue) => defaultValue,
     );
     mocks.cliGlobalState.update.mockReset();
+    // The store's write is an Effect the callers compose, so the double's
+    // default is one too; a bare `vi.fn()` returns undefined and `yield*`
+    // fails on it.
+    mocks.cliGlobalState.update.mockReturnValue(Effect.void);
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.openTexraConfigStores.mockReturnValue(
@@ -288,7 +293,17 @@ describe('CLI platform init', () => {
       const storeFailure = new Error(
         'disabled-tool defaults could not be seeded',
       );
-      mocks.cliGlobalState.update.mockRejectedValueOnce(storeFailure);
+      // The store is the failure's author now, so the double fails with the
+      // store's own tagged error rather than a bare rejection.
+      mocks.cliGlobalState.update.mockReturnValueOnce(
+        Effect.fail(
+          new StateWriteFailed({
+            key: GlobalStateKey.DISABLED_TOOLS,
+            message: storeFailure.message,
+            cause: storeFailure,
+          }),
+        ),
+      );
 
       // The seed's own typed failure, carrying the store's rejection.
       await expect(
@@ -398,8 +413,8 @@ describe('CLI platform init', () => {
 });
 
 // Regression for the HIGH-severity chat TUI signal race: `texra chat`/
-// `orchestrate`/`setup`/`resume` are the REAL interactive entry points — all
-// four eventually hand control to runChatTui.tsx's `runChat()`, which installs
+// `setup`/`resume` are the REAL interactive entry points — all
+// three eventually hand control to runChatTui.tsx's `runChat()`, which installs
 // its own SIGINT/SIGTERM handlers once Ink mounts and owns teardown from
 // there (terminal-mode restore, persistence drain, then the same
 // runCliPlatformShutdownSequence the platform handler would have run). Before
@@ -410,8 +425,8 @@ describe('CLI platform init', () => {
 // whose `process.exit()` wins and leaving teardown order unspecified.
 //
 // `initInteractiveCliPlatform` does NOT suppress the platform handler up
-// front (a signal during onboarding/model-resolution/the orchestration
-// launcher still needs a graceful handler); instead
+// front (a signal during onboarding/model-resolution still needs a graceful
+// handler); instead
 // `handOffCliShutdownSignalHandlers()` removes it right at the point the TUI
 // installs its own pair, so the two sets are never simultaneously live.
 describe('CLI platform interactive signal ownership', () => {

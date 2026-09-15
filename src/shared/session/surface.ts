@@ -161,7 +161,7 @@ export const PersistedSurfaceSchema = z.object({
   storageHintDismissed: z.boolean().prefault(false),
   workbench: z.record(z.string(), z.unknown()).nullable().prefault(null),
 });
-export type PersistedSurface = z.infer<typeof PersistedSurfaceSchema>;
+type PersistedSurface = z.infer<typeof PersistedSurfaceSchema>;
 
 export function emptySurface(session: string): Surface {
   return loadSurface(session, PersistedSurfaceSchema.parse({}));
@@ -220,8 +220,8 @@ function retain<V>(
   map: ReadonlyMap<RunId, V>,
   view: SessionView,
 ): ReadonlyMap<RunId, V> {
-  if ([...map.keys()].every((id) => view.runs.has(id))) return map;
-  return new Map([...map].filter(([id]) => view.runs.has(id)));
+  const retained = [...map].filter(([id]) => view.runs.has(id));
+  return retained.length === map.size ? map : new Map(retained);
 }
 
 /**

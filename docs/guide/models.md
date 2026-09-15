@@ -195,7 +195,7 @@ plan-specific key instead of a full provider key. Read
 
 Choose which models appear in the extension picker from the **Dashboard → Providers & Models** tab: toggle them on or off per provider, no JSON required (the choice is saved in the extension).
 
-In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`. Startup also asks for a model when the launcher flow needs one after the agent or team choice.
+In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`. Before you send the first message, `/agent` chains straight into that same model picker, so choosing a root agent and its model stays one step.
 
 For headless CLI runs, list what is available with `texra models list` (or `texra models show <id>` for details), then pick a default for your project by setting the `model` key in `.texra/config.json`, or override per run with `--model <id>`:
 

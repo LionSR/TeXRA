@@ -1129,11 +1129,9 @@ export function openaiChatModel(
                   decoded = XaiChunkSchema.safeParse(raw);
                 else if (turn.protocol === 'dashscope-chat')
                   decoded = DashscopeChunkSchema.safeParse(raw);
-                else
-                  decoded =
-                    turn.protocol === 'openai-chat'
-                      ? ChunkSchema.safeParse(raw)
-                      : ReasoningChunkSchema.safeParse(raw);
+                else if (turn.protocol === 'openai-chat')
+                  decoded = ChunkSchema.safeParse(raw);
+                else decoded = ReasoningChunkSchema.safeParse(raw);
                 if (!decoded.success) {
                   return yield* new ModelError({
                     kind: 'malformed-output',

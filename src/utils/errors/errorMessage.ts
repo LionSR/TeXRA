@@ -1,4 +1,4 @@
-import { isNonEmptyString } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 /** Normalize any thrown value into a user-friendly error message string. */
 export function toErrorMessage(err: unknown): string {

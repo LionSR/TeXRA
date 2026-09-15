@@ -186,9 +186,9 @@ function describeToolInput(toolName: string, input: unknown): string {
       }
       break;
     case 'TaskUpdate': {
-      let task: string | undefined;
-      if (typeof record.subject === 'string') task = record.subject;
-      else if (typeof record.taskId === 'string') task = record.taskId;
+      const task = [record.subject, record.taskId].find(
+        (value): value is string => typeof value === 'string',
+      );
       if (task) {
         return typeof record.status === 'string'
           ? `Update task: ${task} → ${record.status}`

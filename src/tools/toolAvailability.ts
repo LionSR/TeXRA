@@ -20,7 +20,7 @@ import { Deferred, Effect } from 'effect';
 // Local imports
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
-import { StateWriteFailed, type StateStore } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 import {
@@ -60,12 +60,11 @@ export function getDisabledToolNames(
   globalState: StateStore,
 ): ReadonlySet<string> {
   const disabledIds = getDisabledToolIds(globalState);
-  const disabled = new Set<string>();
-  for (const def of EXTERNAL_TOOL_DEFS) {
-    if (!disabledIds.has(def.id)) continue;
-    for (const toolName of def.tools) disabled.add(toolName);
-  }
-  return disabled;
+  return new Set<string>(
+    EXTERNAL_TOOL_DEFS.filter((def) => disabledIds.has(def.id)).flatMap(
+      (def) => def.tools,
+    ),
+  );
 }
 
 /**
@@ -88,17 +87,7 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
     const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
       (def) => def.id,
     );
-    yield* Effect.tryPromise({
-      try: async () => {
-        await state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
-      },
-      catch: (cause) =>
-        new StateWriteFailed({
-          key: GlobalStateKey.DISABLED_TOOLS,
-          message: 'The default disabled-tool list could not be stored.',
-          cause,
-        }),
-    });
+    yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
     log.info(
       `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
     );
@@ -297,13 +286,11 @@ function resolveOptionalStatus(
 function buildUnavailableSet(
   results: ExternalToolCheckResult[],
 ): ReadonlySet<string> {
-  const unavailable = new Set<string>();
-  for (const { tools, status } of results) {
-    if (status === 'not-found') {
-      for (const t of tools) unavailable.add(t);
-    }
-  }
-  return unavailable;
+  return new Set<string>(
+    results
+      .filter((result) => result.status === 'not-found')
+      .flatMap((result) => result.tools),
+  );
 }
 
 /**

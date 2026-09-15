@@ -490,12 +490,10 @@ export function workbenchPanelDomId(
 
 /** Moves focus to a tab's activate button within its tab strip. */
 function focusTabButton(tablist: HTMLElement, tabId: string): void {
-  for (const tab of tablist.querySelectorAll('.task-workbench-tab')) {
-    if ((tab as HTMLElement).dataset.tabId === tabId) {
-      tab.querySelector<HTMLElement>('.task-workbench-tab-activate')?.focus();
-      return;
-    }
-  }
+  const tab = [
+    ...tablist.querySelectorAll<HTMLElement>('.task-workbench-tab'),
+  ].find((candidate) => candidate.dataset.tabId === tabId);
+  tab?.querySelector<HTMLElement>('.task-workbench-tab-activate')?.focus();
 }
 
 /**

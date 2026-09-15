@@ -85,8 +85,9 @@ describe('maybeRunCliOnboarding gate', () => {
 
   effectIt.effect('skips when onboarding was previously declined', () =>
     Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        services.globalState.update(GlobalStateKey.ONBOARDING_DECLINED, true),
+      yield* services.globalState.update(
+        GlobalStateKey.ONBOARDING_DECLINED,
+        true,
       );
       expect(yield* maybeRunCliOnboarding(services, INTERACTIVE)).toEqual(
         SKIPPED,
@@ -99,8 +100,9 @@ describe('maybeRunCliOnboarding gate', () => {
     'clears a stale declined flag when credentials now exist',
     () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          services.globalState.update(GlobalStateKey.ONBOARDING_DECLINED, true),
+        yield* services.globalState.update(
+          GlobalStateKey.ONBOARDING_DECLINED,
+          true,
         );
         mocks.hasUsableSetupCredential.mockReturnValue(Effect.succeed(true));
 
@@ -134,7 +136,7 @@ describe('maybeRunCliOnboarding gate', () => {
 });
 
 // State 1 continuation (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): after the gate
-// configures a credential on a true first run, chat/orchestrate start the
+// configures a credential on a true first run, chat starts the
 // session with the setup agent instead of the default agent / launcher.
 describe('firstRunSetupAgentOverride', () => {
   it.each([

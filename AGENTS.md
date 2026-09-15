@@ -257,11 +257,11 @@ frozen deep-import lists, not another lint rule.
   - `frontend/media/` - Image and audio handling
 - `src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
 - `packages/extension/src/common/` holds extension-only helpers (webview base classes, shared styles):
-  - `packages/extension/src/common/webview/` - Base classes (`BundledViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
-- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: exactly the five modules in the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`, `@utils/core/keyedMutex`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`). ESLint lets `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/` import only those at runtime, and holds the five to no Node built-ins and runtime imports of each other only. The rest of `src/utils/` is not browser-reachable and must not be assumed browser-safe.
+  - `packages/extension/src/common/webview/` - Webview content provider (`BundledViewContentProvider`), webview HTML builder (`buildWebviewHtml`), command constants
+- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: exactly the four modules in the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`). ESLint lets `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/` import only those at runtime, and holds the four to no Node built-ins and runtime imports of each other only. The rest of `src/utils/` is not browser-reachable and must not be assumed browser-safe.
 
-  Do not read this as "everything in `utils/` is shared with the webviews": it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the five browser-reachable modules, check that it stays browser-safe.
-  - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`); re-exports string primitives from `utils/text/stringUtils` for browser-safe barrel access
+  Do not read this as "everything in `utils/` is shared with the webviews": it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the four browser-reachable modules, check that it stays browser-safe.
+  - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`)
     - `utils/core/boundedIdSet.ts` - `createBoundedIdSet` (LRU-capped `Set<Id>` for "seen id" guards)
     - `utils/core/idHash.ts` - Node-only deterministic execution-ID derivation
     - `utils/core/keyedMutex.ts` - `KeyedMutex` for independently serialized asynchronous work by key
@@ -590,7 +590,7 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 
 **Webviews and UI**
 
-- Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`) and its `buildWebviewHtml` helper. Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
+- Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`) and its `buildWebviewHtml` helper. There is no shared message-handler base class: `settingsView` owns its inbound dispatch inside `SettingsViewMessageHandler` and `progressView` routes through typed host requests, so follow the pattern of the view you are touching (see "Webview Consistency Patterns").
 - Use Web Awesome (`<wa-icon>` via `waIcon()` from `@shared/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/core` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`) for consistent interactions.
 - Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`) and use Web Awesome icons (e.g., `${waIcon('chevron-down')}`) for toggle affordances.
 
@@ -618,15 +618,17 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 ### Webview Consistency Patterns
 
 Two message-passing architectures coexist for the extension's views. Match the
-one the view you're touching already uses — `BaseViewMessageHandler` is not a
-default to reach for, it's `settingsView`'s pattern specifically:
+one the view you're touching already uses:
 
 - **`settingsView`** is request/response: `SettingsViewMessageHandler`
-  (`packages/extension/src/settingsView/`) extends `BaseViewMessageHandler`
-  (`packages/extension/src/common/webview/`) for inbound dispatch through a
-  `HandlerRegistry`, delegating tab-shaped groups to focused handler classes in
-  `settingsView/handlers/` (`AgentHandlers`, `LatexSettingsHandlers`,
-  `MemoryHandlers`, `GitHubSubscriptionHandlers`, `SubscriptionHandlers`).
+  (`packages/extension/src/settingsView/`) owns its inbound dispatch directly —
+  active-webview tracking, the `HandlerRegistry` build, and the toast for an
+  unsupported command — and delegates tab-shaped groups to focused handler
+  classes in `settingsView/handlers/` behind `SettingsHandlerContext`
+  (`AgentHandlers`, `LatexSettingsHandlers`, `MemoryHandlers`,
+  `GitHubSubscriptionHandlers`, `SubscriptionHandlers`). There is no abstract
+  base: this is the only view on the pattern, so the machinery lives in the one
+  class that uses it.
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
   `SETTINGS_VIEW_CMD`, `SETTINGS_VIEW_COMMANDS`) — use those, not string
   literals. Frontend state lives in module-level reactive

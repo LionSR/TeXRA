@@ -23,6 +23,7 @@ import {
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { readConfig } from '@utils/config/configUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { fsCall } from '@utils/errors/fsCall';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { addCdataToTagsMultiple } from '@utils/text/xmlCdata';
 import {
@@ -41,7 +42,6 @@ import {
   extractFilenameHeaderDocuments,
   normalizeDocumentName,
 } from './extraction/filenameHeaders';
-import { fsCall } from './outputOperations';
 import { reportMissingOutputs, type OutputState } from './outputState';
 
 /** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */

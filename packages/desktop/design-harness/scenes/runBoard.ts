@@ -9,7 +9,6 @@ import type { SessionView } from '@shared/session/sessionView';
 import { applySurfaceAction, emptySurface } from '@shared/session/surface';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
-  BOARD_NOW,
   ROOT,
   withForeignOwner,
   withNoFailedCalls,
@@ -62,6 +61,5 @@ export function runBoardScene(
       .stream=${stream}
       .view=${view}
       .surface=${surface}
-      .nowMs=${BOARD_NOW}
     ></workflow-run-board>`;
 }

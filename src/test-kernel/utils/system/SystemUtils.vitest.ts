@@ -272,8 +272,8 @@ describe('executeCommand', () => {
     assert.equal(result.timedOut, false);
     assert.equal(result.exitCode, 130);
     assert.equal(result.stderr, 'Command aborted by user');
-    // The array form intentionally has no process-group semantics: the
-    // descendant must survive the abort. Reap it so the test doesn't leak.
+    // The default array form has no process-group semantics: the descendant
+    // must survive the abort. Reap it so the test doesn't leak.
     assert.doesNotThrow(() => process.kill(childPid, 0));
     process.kill(childPid, 'SIGKILL');
   }, 20_000);
@@ -293,6 +293,29 @@ describe('executeCommand', () => {
     assert.doesNotThrow(() => process.kill(childPid, 0));
     process.kill(childPid, 'SIGKILL');
   }, 20_000);
+
+  it(
+    'aborts array-form descendant trees when killProcessTree is set',
+    async () => {
+      if (process.platform === 'win32') return;
+
+      const controller = new AbortController();
+      const { promise, childPid } = await startSleeper(
+        ['bash', '-c', SLEEPER_SCRIPT],
+        { signal: controller.signal, timeout: 60_000, killProcessTree: true },
+      );
+
+      controller.abort();
+      const result = await promise;
+
+      assert.equal(result.success, false);
+      assert.equal(result.timedOut, false);
+      // Inverts the survival assertions above: the backgrounded sleep is
+      // signalled with the tracked process instead of outliving it.
+      await waitForProcessExit(childPid);
+    },
+    PROCESS_EXIT_TEST_TIMEOUT_MS,
+  );
 });
 
 // ---------------------------------------------------------------------------

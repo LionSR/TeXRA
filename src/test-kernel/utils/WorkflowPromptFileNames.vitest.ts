@@ -23,23 +23,25 @@ describe('workflow prompt file names', () => {
     },
   });
 
+  const root = fakePath('workspace');
+
   it('uses workspace-relative names and external basenames in prompt variables', async () => {
-    expect(getPromptFileName(fakePath('workspace/chapter/main.tex'))).toBe(
-      'chapter/main.tex',
-    );
-    expect(getPromptFileName(fakePath('outside/absolute.tex'))).toBe(
+    expect(
+      getPromptFileName(root, fakePath('workspace/chapter/main.tex')),
+    ).toBe('chapter/main.tex');
+    expect(getPromptFileName(root, fakePath('outside/absolute.tex'))).toBe(
       'absolute.tex',
     );
-    expect(getPromptFileName('local.tex')).toBe('local.tex');
+    expect(getPromptFileName(root, 'local.tex')).toBe('local.tex');
 
     expect(
-      getListOfFiles([
+      getListOfFiles(root, [
         fakePath('workspace/chapter/main.tex'),
         fakePath('outside/absolute.tex'),
       ]),
     ).toBe('chapter/main.tex, absolute.tex');
 
-    const { xml } = await getXmlFormatFromReadableFiles([
+    const { xml } = await getXmlFormatFromReadableFiles(root, [
       fakePath('workspace/chapter/main.tex'),
       fakePath('outside/absolute.tex'),
     ]);

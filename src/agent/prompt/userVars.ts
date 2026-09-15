@@ -29,13 +29,13 @@ import {
 } from '@tools/delegation/delegationAvailability';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
-import { filterNotNull, isNonEmptyString, unique } from '@utils/core';
+import { filterNotNull, unique } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 import {
   getListOfFiles,
   getPromptFileName,
   getXmlFormatFromReadableFiles,
 } from '@utils/prompt';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 import {
@@ -94,7 +94,13 @@ interface ModelProviderFlags {
 }
 
 export interface BuildUserVarsOptions {
-  workspacePath?: string;
+  /**
+   * Workspace root of the session this run belongs to, held as data: prompt
+   * file names, the readable-file reads and `CWD` all resolve against it, so
+   * a run never reads whichever roots the calling fiber happens to carry.
+   * `undefined` is a session with no folder open.
+   */
+  workspacePath: string | undefined;
   delegationAgentScope?: AgentDelegationScope | null;
   /** Explicit trace stage for diagnostics emitted while loading variables. */
   stageId?: string;
@@ -123,7 +129,7 @@ type AttachedMemoriesResult = {
 /**
  * Build all user variables needed for prompt rendering.
  *
- * @param options.workspacePath - Workspace root path override. Defaults to the active workspace.
+ * @param options.workspacePath - Workspace root of the run's session.
  * @param options.delegationAgentScope - Run-scoped delegation roster. Defaults to the workspace roster.
  */
 export async function buildUserVars(
@@ -133,7 +139,7 @@ export async function buildUserVars(
   agentPath: string,
   providerFlags: ModelProviderFlags,
   logger: AgentTrace,
-  options: BuildUserVarsOptions = {},
+  options: BuildUserVarsOptions,
 ): Promise<BuiltUserVars> {
   // Parallelize independent I/O: required files, memories, and skills
   const [
@@ -185,7 +191,13 @@ export async function buildUserVars(
   // (BuiltUserVars) and reach templates through the channel boundary.
   const userVars: BuiltUserVars = {
     ...getBasicVars(agentConfig, providerFlags, options),
-    ...(await getFileVars(agentConfig, agentSetting, logger, options.stageId)),
+    ...(await getFileVars(
+      agentConfig,
+      agentSetting,
+      logger,
+      options.workspacePath,
+      options.stageId,
+    )),
     ...requiredVars,
     ...outputFileVars,
     ...getToolFlags(agentSetting, agentPrompt),
@@ -251,7 +263,7 @@ function getBasicVars(
     IS_GOOGLE_MODEL: providerFlags.isGoogle,
     WORKFLOW_AGENTS: workflowAgentsList,
     TOOL_USE_AGENTS: toolUseAgentsList,
-    CWD: options.workspacePath ?? WorkspaceFS.getPath() ?? '.',
+    CWD: options.workspacePath ?? '.',
     DEFAULT_BIB_PATH: defaultBibPath,
     ...getAgentDirectoryVars(),
   };
@@ -356,6 +368,7 @@ async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   logger: AgentTrace,
+  workspaceRoot: string | undefined,
   stageId: string | undefined,
 ): Promise<FileVars> {
   // Compiler-checked completeness: every FileVars key starts at its
@@ -385,11 +398,13 @@ async function getFileVars(
     const allFiles = getCategoryFiles(agentConfig, prefix);
     const { xml, readableFiles, skipped } =
       allFiles.length > 0
-        ? await getXmlFormatFromReadableFiles(allFiles)
+        ? await getXmlFormatFromReadableFiles(workspaceRoot, allFiles)
         : { xml: null, readableFiles: [], skipped: [] };
     const primaryFile = readableFiles[0];
     const primaryFileResult =
-      primaryFile == null ? null : await setVarFromFile(primaryFile, prefix);
+      primaryFile == null
+        ? null
+        : await setVarFromFile(primaryFile, prefix, workspaceRoot);
     const primaryFileOk = primaryFileResult != null;
     if (primaryFile != null && !primaryFileOk) {
       logger.warn(
@@ -433,9 +448,12 @@ async function getFileVars(
 
     userVars[`ALL_${prefix}S`] = xml;
     userVars[`${prefix}_FILES`] = readableFiles.map((file) =>
-      getPromptFileName(file),
+      getPromptFileName(workspaceRoot, file),
     );
-    userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(readableFiles);
+    userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(
+      workspaceRoot,
+      readableFiles,
+    );
   }
 
   const mediaFiles = getCategoryFiles(agentConfig, 'MEDIA');
@@ -478,7 +496,9 @@ async function getRequiredFileVars(
 
     assertNoFixedVarCollision(varName);
     const fullPath = path.resolve(agentPath, filePath);
-    const result = await setVarFromFile(fullPath, varName, true);
+    // Resolved against the agent's own directory, so it is already absolute
+    // and needs no workspace root to resolve against.
+    const result = await setVarFromFile(fullPath, varName, undefined);
     if (result != null) {
       vars[`${varName}_FILE`] = result.file;
       vars[`${varName}_CONTENT`] = result.content;

@@ -152,14 +152,13 @@ export const listRuns = Effect.fn('listRuns')(function* (
           ...(run.description === null ? {} : { description: run.description }),
           checkpointPresent,
         };
-        const agentRecord = record && isAgentRunRecord(record) ? record : null;
         const identity = run.identity;
         if (!record) return { ...base, kind: 'incomplete' };
         if (identity.kind === 'agent') {
           // An agent row's record is always an AgentConfig; anything else is
           // corrupt and lists as incomplete rather than lying about shape.
-          if (!agentRecord) return { ...base, kind: 'incomplete' };
-          return { ...base, kind: 'run', identity, record: agentRecord };
+          if (!isAgentRunRecord(record)) return { ...base, kind: 'incomplete' };
+          return { ...base, kind: 'run', identity, record };
         }
         return { ...base, kind: 'run', identity, record };
       }).pipe(

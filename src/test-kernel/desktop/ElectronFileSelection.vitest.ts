@@ -5,8 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-import { loadSourceModule } from './loadSourceModule.ts';
-
 type DesktopFileSelectionModule =
   typeof import('@desktop/main/desktopFileSelection');
 
@@ -17,7 +15,7 @@ async function loadDesktopFileSelection(): Promise<DesktopFileSelectionModule> {
     import('@platform/defaults/nodeFilesystem'),
   ]);
   await installPlatform({}, { fs: nodeFilesystem });
-  return loadSourceModule('@desktop/main/desktopFileSelection');
+  return import('@desktop/main/desktopFileSelection');
 }
 
 const BASE_FILE_OPTIONS = [
@@ -63,9 +61,13 @@ describe('desktop file selection', () => {
     > = {},
   ) {
     const { createDesktopFileSelection } = await loadDesktopFileSelection();
+    // Read after the load: `loadDesktopFileSelection` resets the module
+    // registry and installs a fresh process runtime.
+    const { effectRuntime } = await import('@platform/processRuntime');
     return createDesktopFileSelection({
       workspacePath,
       showOpenFileDialog: vi.fn(async () => undefined),
+      runtime: effectRuntime(),
       ...overrides,
     });
   }

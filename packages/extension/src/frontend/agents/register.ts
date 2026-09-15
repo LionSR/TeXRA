@@ -38,12 +38,14 @@ export async function promptToAddAgentToConfig(
   );
   if (choice !== 'Add Agent') return;
 
-  await roster.setAgentEnabled({
-    category,
-    source,
-    name: agentName,
-    enabled: true,
-  });
+  await runtime.runPromise(
+    roster.setAgentEnabled({
+      category,
+      source,
+      name: agentName,
+      enabled: true,
+    }),
+  );
   // Reload the catalog here rather than leaning on `refreshAllOptions`:
   // that command returns early when the main webview is closed, so the
   // reload it performs is conditional on an unrelated view being open. The

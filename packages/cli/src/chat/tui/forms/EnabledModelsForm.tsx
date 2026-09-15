@@ -10,6 +10,7 @@ import {
   type CliEnabledModelRow,
 } from '@cli/runtime/enabledModels';
 import type { StateStore } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTransientNotice } from '../state/cliState';
@@ -18,11 +19,12 @@ import { AsyncListForm } from './_shared/ListForm';
 interface EnabledModelsFormProps {
   readonly availableRows?: number;
   /**
-   * The global state the enabled-model list reads and each toggle writes. Ink
-   * components run no Effect, so the process store arrives as a prop from the
-   * surface that opened the form.
+   * The global state the enabled-model list reads and each toggle writes, with
+   * the runtime that settles that write: Ink components own no runtime, so both
+   * arrive as props from the surface that opened the form.
    */
   readonly state: StateStore;
+  readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
 }
 
@@ -63,7 +65,8 @@ export function EnabledModelsForm(
       onSelect={(id, { data: models, reload }) => {
         const row = models.find((candidate) => candidate.id === id);
         if (!row) return;
-        void setCliModelEnabled(props.state, id, !row.enabled)
+        void props.runtime
+          .runPromise(setCliModelEnabled(props.state, id, !row.enabled))
           .then(reload)
           .catch((error: unknown) => {
             // e.g. disabling the last remaining model — keep the catalog as-is.

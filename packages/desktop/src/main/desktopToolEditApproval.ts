@@ -8,6 +8,10 @@
 
 import { readFile, rm } from 'node:fs/promises';
 
+// Third-party imports
+import { Effect } from 'effect';
+
+// Local imports - types
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
@@ -19,7 +23,6 @@ import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { createTexraTempDir } from '@utils/files/tempDir';
-import type { Effect } from 'effect';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
@@ -97,7 +100,19 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
   }
 
   reportError(message: string): void {
-    void this.options.ui.showErrorMessage(message);
+    // Fire-and-forget, as the voided promise was; a dialog that cannot show
+    // the report leaves a console trace instead of an unhandled rejection.
+    this.options.runtime.runFork(
+      this.options.ui.showErrorMessage(message).pipe(
+        Effect.catchTag('NotificationFailed', (failure) =>
+          Effect.sync(() => {
+            console.error(
+              `Tool-edit error report could not be shown: ${failure.message}`,
+            );
+          }),
+        ),
+      ),
+    );
   }
 }
 

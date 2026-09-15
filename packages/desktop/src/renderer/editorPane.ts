@@ -28,7 +28,7 @@ import {
   monacoThemeForHostTheme,
   type MonacoModule,
 } from '@shared/monaco/monacoLoader';
-import { KeyedMutex } from '@utils/core';
+import { KeyedMutex } from '@utils/core/keyedMutex';
 
 import { getDesktopChromeFontSize } from './desktopTypography';
 import {

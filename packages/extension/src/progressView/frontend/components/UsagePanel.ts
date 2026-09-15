@@ -22,11 +22,11 @@ import { focusRingStyles } from '@shared/styles/controlStyles';
 // Local imports - shared icons and utils
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { clamp, formatCompactTokenCount } from '@utils/core';
-import { formatCostUsd } from '@utils/text/stringUtils';
-
-// Local imports - progress view
-import { ELEMENT_IDS } from '../constants';
+import { clamp } from '@utils/core';
+import {
+  formatCompactTokenCount,
+  formatCostUsd,
+} from '@utils/text/stringUtils';
 
 /** One token counter in the usage strip: icon, count, and its tooltip. */
 type TokenStat = {
@@ -172,11 +172,8 @@ export class UsagePanel extends LitElement {
 
     return html`
       <div class="usage-summary-footer">
-        <span id=${ELEMENT_IDS.CONTEXT_STATE} class="context-state">
-          ${this.renderContext()}
-        </span>
+        <span class="context-state"> ${this.renderContext()} </span>
         <span
-          id=${ELEMENT_IDS.RUN_SUMMARY}
           class="run-summary focus-ring-inset"
           role=${this.usage ? 'group' : nothing}
           aria-label=${this.buildUsageLabel()}

@@ -41,14 +41,14 @@ const ANSWER_TRUNCATION = 2000;
 
 function formatStillOpen(threads: InquiryThreadSummary[]): string[] {
   if (!threads.length) return [];
-  const lines = ['', 'Still open on this run:'];
-  for (const t of threads) {
-    const since = formatRelativeTime(Date.parse(t.lastActivityIso));
-    lines.push(
-      `  - ${t.threadId}  "${previewLabel(t.lastQuestionPreview)}"  (dispatched ${since})`,
-    );
-  }
-  return lines;
+  return [
+    '',
+    'Still open on this run:',
+    ...threads.map(
+      (t) =>
+        `  - ${t.threadId}  "${previewLabel(t.lastQuestionPreview)}"  (dispatched ${formatRelativeTime(Date.parse(t.lastActivityIso))})`,
+    ),
+  ];
 }
 
 /** The `[inquiry]` follow-up the agent reads: the answer, or the drop. */

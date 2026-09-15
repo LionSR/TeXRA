@@ -15,7 +15,6 @@ import {
   teamPlanHasGaps,
   teamPlanStatus,
   teamPresets,
-  teamTexraHostedMissingNames,
   type TeamCatalogAgent,
   type TeamPreset,
   type TeamRunPlan,
@@ -222,7 +221,7 @@ describe('planTeamRun', () => {
 });
 
 describe('plan status and launchability', () => {
-  it('detects gaps and filters missing names to TeXRA-hosted members', () => {
+  it('detects gaps when TeXRA-hosted and local members are both missing', () => {
     const plan = manualPlan({
       preset: preset({
         texraHostedAgents: ['hosted-workflow', 'hosted-tool'],
@@ -234,10 +233,6 @@ describe('plan status and launchability', () => {
     });
 
     expect(teamPlanHasGaps(plan)).toBe(true);
-    expect(teamTexraHostedMissingNames(plan)).toEqual([
-      'hosted-workflow',
-      'hosted-tool',
-    ]);
   });
 
   it('returns all three launch-block reasons', () => {

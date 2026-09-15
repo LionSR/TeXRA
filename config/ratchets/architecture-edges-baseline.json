@@ -1,5 +1,5 @@
 {
-  "semantics": "Directed top-level src subsystem edges. The kind is value when any current import for the pair is a runtime import; otherwise it is type-only. The ratchet fails only for a new directed pair or for a type-only baseline pair that gains a value import.",
+  "semantics": "Directed top-level src subsystem edges. The kind is value when any current import for the pair is a runtime import; otherwise it is type-only. The ratchet fails on a new directed pair, on a type-only baseline pair that gains a value import, and on a baseline pair with no live import (stale headroom that could silently absorb a future new edge; remove it here, which shrinks this file).",
   "edges": [
     { "from": "agent", "to": "auth", "kind": "value" },
     { "from": "agent", "to": "common", "kind": "value" },
@@ -33,7 +33,6 @@
     { "from": "controllers", "to": "tools", "kind": "value" },
     { "from": "controllers", "to": "transcript", "kind": "value" },
     { "from": "controllers", "to": "utils", "kind": "value" },
-    { "from": "housekeeping", "to": "latex", "kind": "value" },
     { "from": "housekeeping", "to": "logger", "kind": "value" },
     { "from": "housekeeping", "to": "platform", "kind": "value" },
     { "from": "housekeeping", "to": "shared", "kind": "value" },
@@ -43,7 +42,6 @@
     { "from": "latex", "to": "platform", "kind": "value" },
     { "from": "latex", "to": "replacement", "kind": "value" },
     { "from": "latex", "to": "shared", "kind": "value" },
-    { "from": "latex", "to": "transcript", "kind": "value" },
     { "from": "latex", "to": "utils", "kind": "value" },
     { "from": "logger", "to": "shared", "kind": "value" },
     { "from": "logger", "to": "utils", "kind": "value" },
@@ -87,7 +85,6 @@
     { "from": "tools", "to": "transcript", "kind": "value" },
     { "from": "tools", "to": "utils", "kind": "value" },
     { "from": "transcript", "to": "agent", "kind": "value" },
-    { "from": "transcript", "to": "common", "kind": "value" },
     { "from": "transcript", "to": "logger", "kind": "value" },
     { "from": "transcript", "to": "shared", "kind": "value" },
     { "from": "transcript", "to": "utils", "kind": "value" },

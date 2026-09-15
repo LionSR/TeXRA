@@ -1,19 +1,30 @@
 /**
- * Generic run-scoped approval controller, owned per session.
+ * The session's requests: the run-scoped approval controllers and the
+ * {@link Requests} service they are reached through.
  *
- * Encapsulates the shared concerns of bash and tool-edit approvals:
+ * The controllers encapsulate the shared concerns of bash and tool-edit
+ * approvals:
  *   - serialized request queues (one prompt at a time per run)
  *   - per-run bypass state announced over a bound progress event
  *
- * Controller instances live on {@link SessionApprovals}, one per
- * `SessionHandle` (#8144) — there is no process-global controller, so two
- * sessions queue, resolve, and clean up approvals independently.
+ * Controller instances live on {@link SessionApprovals}, one per session
+ * (#8144) — there is no process-global controller, so two sessions queue,
+ * resolve, and clean up approvals independently. {@link Requests} is that
+ * per-session value as a Context service, so Effect code below a launch
+ * takes it from context instead of resolving a session.
  */
 
-import { Effect, Semaphore } from 'effect';
+import { Context, Effect, Semaphore } from 'effect';
 
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { ApprovalPolicySnapshot, RunId } from '@shared/schemas';
+import type {
+  ApprovalPolicySnapshot,
+  CommitOrdinal,
+  RunId,
+} from '@shared/schemas';
+import type { DeletionMode } from '@shared/session/database';
+import type { RequestError } from '@shared/session/requestErrors';
+import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 
 import type { SessionHostInteractions } from './HostInteractions';
 
@@ -182,9 +193,11 @@ function createRunApprovalController(
 
 /**
  * Session-owned approval state: the tool-edit and bash controllers plus the
- * delegation-proposal (super-YOLO) bypass. One instance per `SessionHandle`
- * (`session.approvals`); run-scoped code resolves it through
- * `currentSession()`, host code passes its own session explicitly.
+ * delegation-proposal (super-YOLO) bypass. One instance per session, built by
+ * the session layer as the `approvals` of its {@link Requests}; run-scoped
+ * code resolves it through `currentSession().approvals`, host code passes its
+ * own session explicitly, and Effect code below a launch takes
+ * {@link Requests} from context.
  */
 export interface SessionApprovals {
   readonly toolEdit: RunApprovalController;
@@ -261,7 +274,8 @@ export function createSessionApprovals(
   const resolveParent = (runId: RunId): RunId | undefined =>
     parentOf.get(runId);
   const resolveDescendants = (runId: RunId): readonly RunId[] => {
-    const descendants: RunId[] = [];
+    // Breadth-first from `runId`; every id discovered is appended after it,
+    // so the walk's own queue is the result minus the root.
     const pending = [runId];
     const seen = new Set(pending);
     for (let index = 0; index < pending.length; index += 1) {
@@ -269,11 +283,10 @@ export function createSessionApprovals(
       for (const [child, directParent] of parentOf) {
         if (directParent !== parent || seen.has(child)) continue;
         seen.add(child);
-        descendants.push(child);
         pending.push(child);
       }
     }
-    return descendants;
+    return pending.slice(1);
   };
 
   const toolEditBypass = createRunApprovalBypass(
@@ -378,3 +391,41 @@ export function createSessionApprovals(
     },
   };
 }
+
+/**
+ * Everything a surface asks of one session: its approval state and the one
+ * handler every request goes through (PRD one-fold-three-renderers, 7.6 and
+ * 8.2). Built by the session layer over that session's log and doors
+ * (`SessionRequests.ts`); one value per session, so two sessions admit,
+ * serialize and answer requests independently.
+ */
+export interface SessionRequests {
+  /** This session's approval queues, bypass state and run ancestry. */
+  readonly approvals: SessionApprovals;
+  /** Answer one request a surface issued: exactly once, an {@link Outcome}
+   *  the host renders or a request error. */
+  readonly request: (
+    req: RuntimeRequest,
+  ) => Effect.Effect<Outcome, RequestError>;
+  /** Internal deletion policies share the same admission and transaction as
+   *  a user's `run.delete`. */
+  readonly removeRun: (
+    runId: RunId,
+    mode: DeletionMode,
+    expectedStartCommit: CommitOrdinal,
+  ) => Effect.Effect<Outcome, RequestError>;
+}
+
+/**
+ * The session's requests (system design §2.1, §7.11), beside its `Runs`:
+ * the approval queues and the request protocol of one session. Built by the
+ * session layer in the session's scope and provided in the session entry
+ * (`sessionLayer.ts`); the session record carries the same value
+ * (`SessionHandle.requests`, `SessionHandle.approvals`) for a host that holds
+ * the session. Effect code below a launch takes it from context: the session
+ * layer's leftover-run sweep does, and the request handler provides it to
+ * itself nowhere — it *is* this value, closing over the state it owns.
+ */
+export class Requests extends Context.Service<Requests, SessionRequests>()(
+  '@texra/session/Requests',
+) {}

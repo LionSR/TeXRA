@@ -107,7 +107,8 @@ import { extractScratchpad } from '@utils/text/xmlExtraction';
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
-import { ModelInvoker, turnText } from '../ModelInvoker';
+import { turnText } from '../run/turnText';
+import { ModelInvoker } from '../ModelInvoker';
 import {
   appendRow,
   haltedStepRow,
@@ -420,8 +421,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     ) {
       const path = persisted.outputLocation.absolutePath;
       const content = yield* Effect.tryPromise({
-        try: async () =>
-          (await AbsoluteFS.exists(path)) ? AbsoluteFS.read(path) : '',
+        try: async () => {
+          if (!(await AbsoluteFS.exists(path))) return '';
+          const bytes = await AbsoluteFS.readBytes(path);
+          return bytes
+            .subarray(0, persisted.rawOutputBytes ?? 0)
+            .toString('utf8');
+        },
         catch: ensureError,
       });
       workspace.assembly.accumulatedOutput = content;
@@ -462,16 +468,14 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       }
     }
 
-    const prefixText: string[] = [];
     let requestText: string;
     if (round === 0) {
       const initialPrompts = yield* Effect.tryPromise({
         try: () => promptBuilder.buildInitialPrompts(),
         catch: ensureError,
       });
-      if (initialPrompts.userPrefix.trim()) {
-        prefixText.push(initialPrompts.userPrefix.trim());
-      }
+      const prefix = initialPrompts.userPrefix.trim();
+      if (prefix) content.push({ kind: 'text', text: prefix });
       requestText = initialPrompts.userRequest.trim();
     } else {
       const request = yield* Effect.tryPromise({
@@ -484,7 +488,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       ).trim();
       delete flow.compileFailureContext;
     }
-    for (const text of prefixText) content.push({ kind: 'text', text });
 
     // Media: figures and PDFs of the round's files, plus the configured media
     // on the first round. Best effort, never silent: a skipped extraction
@@ -942,20 +945,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       endTurn &&
       readSettingFrom<boolean>(roots, WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF)
     ) {
-      if (compileFailures.length > 0) {
-        for (const failure of compileFailures) {
-          interactions.emit('requestOpenFile', {
-            location: failure.log,
-            preserveFocus: true,
-          });
-        }
-      } else {
-        for (const artifact of result.compiledArtifacts) {
-          interactions.emit('requestOpenFile', {
-            location: artifact,
-            preserveFocus: true,
-          });
-        }
+      // A failed compile opens its log; a clean round opens what it produced.
+      const locationsToOpen =
+        compileFailures.length > 0
+          ? compileFailures.map((failure) => failure.log)
+          : result.compiledArtifacts;
+      for (const location of locationsToOpen) {
+        interactions.emit('requestOpenFile', { location, preserveFocus: true });
       }
     }
     if (endTurn) {

@@ -74,6 +74,11 @@ const NOT_YET_RUN_BUTTONS = new Set<string>([
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ]);
 
+/** Interrupted rows get the terminal set whatever their display key. */
+const INTERRUPTED_BUTTONS: ReadonlySet<string> = new Set(
+  TERMINAL_STATE_BUTTONS,
+);
+
 const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   RunStatusDisplayKey,
   Set<string>
@@ -114,7 +119,7 @@ function enabledToolbarButtons(
   displayKey: RunStatusDisplayKey,
 ): ReadonlySet<string> | undefined {
   if (run.readOnly) return READ_ONLY_BUTTONS;
-  if (run.group === 'interrupted') return new Set(TERMINAL_STATE_BUTTONS);
+  if (run.group === 'interrupted') return INTERRUPTED_BUTTONS;
   return ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey];
 }
 
@@ -560,10 +565,7 @@ export class RunHeader extends LitElement {
           ${this.renderProgressBadge(run.conversationProgress, run.flow)}
         </div>
         <div class="header-actions">
-          <wa-button-group
-            id=${ELEMENT_IDS.TOOLBAR_CONTAINER}
-            label="Run actions"
-          >
+          <wa-button-group label="Run actions">
             ${repeat(
               toolbarButtonViews,
               (view) => view.id,
@@ -634,10 +636,7 @@ export class RunHeader extends LitElement {
     if (run.runStartedAt === null || run.group === 'recent') {
       return nothing;
     }
-    return html`<tool-timer
-      id=${ELEMENT_IDS.RUN_ELAPSED}
-      .startTime=${run.runStartedAt}
-    ></tool-timer>`;
+    return html`<tool-timer .startTime=${run.runStartedAt}></tool-timer>`;
   }
 
   private renderProgressBadge(

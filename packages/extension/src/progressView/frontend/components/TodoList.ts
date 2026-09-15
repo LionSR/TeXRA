@@ -19,8 +19,6 @@ import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 
-import { ELEMENT_IDS } from '../constants';
-
 // Local imports - base class
 import { CollapsiblePanel } from './CollapsiblePanel';
 
@@ -118,10 +116,9 @@ export class TodoList extends CollapsiblePanel {
         }
       </div>
       ${this.renderCollapsibleDetails({
-        id: ELEMENT_IDS.TODO_LIST_CONTAINER,
         summary: `Tasks (${completed} of ${total} complete)`,
         body: html`
-          <ol id=${ELEMENT_IDS.TODO_LIST} class="todo-list" aria-label="Tasks">
+          <ol class="todo-list" aria-label="Tasks">
             ${repeat(
               this.todos,
               (_todo, index) => index,
@@ -144,7 +141,7 @@ export class TodoList extends CollapsiblePanel {
         class=${classMap({
           'todo-item': true,
           'todo-item--pending': status === TODO_STATUS.PENDING,
-          'todo-item--in-progress': status === TODO_STATUS.IN_PROGRESS,
+          'todo-item--in-progress': isInProgress,
           'todo-item--completed': status === TODO_STATUS.COMPLETED,
         })}
         aria-current=${isInProgress ? 'step' : nothing}

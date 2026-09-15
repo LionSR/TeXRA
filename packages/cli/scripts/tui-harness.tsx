@@ -20,14 +20,9 @@ import { Effect, Fiber, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
-import {
-  getAgentsByCategory,
-  getVisibleAgents,
-  loadAgents,
-} from '@agent/index';
+import { loadAgents } from '@agent/index';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
-import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
@@ -61,7 +56,6 @@ import {
   type RunPhase,
   type RunId,
   type UserQuestionPermission,
-  HISTORY_RUN_STATUS,
 } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import type { SessionEventDraft } from '@shared/schemas/sessionEvent';
@@ -82,7 +76,7 @@ import {
   PROCESS,
   tail,
 } from '@test/shared/session/fanOutScenario';
-import { clearGoal, startGoal } from '@tools/goal';
+import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
@@ -135,24 +129,11 @@ import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
-  resolveLocalTranscriptRunId,
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
-import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
-import {
-  formatCliModelAccessRouteInline,
-  resolveCliModelAccessRoute,
-} from '../src/runtime/modelAccessRoute';
+import { resolveCliModelAccessRoute } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
-import { formatCliAuthStatusLine } from '../src/runtime/apiStatus';
-import {
-  buildCliAccountAccessItems,
-  buildCliAgentItems,
-  buildCliOrchestrationItems,
-  buildCliResumeItems,
-  buildCliTeamItems,
-} from '../src/runtime/orchestration';
 import { initLocalCliPlatform } from '../src/runtime/initPlatform';
 import { saveProviderApiKey } from '../src/runtime/providerApiKey';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
@@ -161,7 +142,6 @@ import {
   type CliRuntimeHost,
 } from '../src/runtime/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
-import type { CliHistoryEntry } from '../src/runtime/history';
 import type { CliContext } from '../src/runtime/cliContext';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
@@ -216,17 +196,6 @@ const WIDE_TRANSCRIPT_SUFFIX =
   ' hidden-middle wide-column-A wide-column-B wide-column-C wide-column-D wide-column-E wide-column-F';
 const SHOW_REJECTED_BASH_TOOL = process.env.HARNESS_REJECTED_BASH_TOOL === '1';
 const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
-const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
-const SHOW_ORCHESTRATION_STATUS_LINES =
-  process.env.HARNESS_ORCHESTRATION_STATUS_LINES !== '0';
-const SHOW_BOTH_SUBSCRIPTION_PREFERENCES =
-  process.env.HARNESS_BOTH_SUBSCRIPTION_PREFERENCES === '1';
-const SHOW_KIMI_CODE_SUBSCRIPTION =
-  process.env.HARNESS_KIMI_CODE_SUBSCRIPTION === '1';
-const SHOW_ORCHESTRATION_HISTORY =
-  process.env.HARNESS_ORCHESTRATION_HISTORY === '1';
-const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
-  process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
@@ -362,6 +331,7 @@ if (RESET_WORKFLOW_SCRIPT_DISABLED) {
     HARNESS_PLATFORM_SERVICES.globalState,
     'workflow-script',
     false,
+    HARNESS_PLATFORM_SERVICES.runtime,
   );
 }
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
@@ -387,193 +357,36 @@ if (
   process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined ||
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
-  await workspaceRoots().workspaceState.update(
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    {
-      kind: 'custom',
-      agentKeys: {
-        workflow:
-          process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
-            ? HARNESS_VISIBLE_WORKFLOW_AGENTS
-            : 'all',
-        toolUse:
-          process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
-            ? HARNESS_VISIBLE_TOOL_USE_AGENTS
-            : 'all',
+  await effectRuntime().runPromise(
+    workspaceRoots().workspaceState.update(
+      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      {
+        kind: 'custom',
+        agentKeys: {
+          workflow:
+            process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
+              ? HARNESS_VISIBLE_WORKFLOW_AGENTS
+              : 'all',
+          toolUse:
+            process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
+              ? HARNESS_VISIBLE_TOOL_USE_AGENTS
+              : 'all',
+        },
       },
-    },
+    ),
   );
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
-  await workspaceRoots().globalState.update(GlobalStateKey.MODEL_SELECTION, {
-    enabledExtras: HARNESS_VISIBLE_MODELS,
-    disabledDefaults: DEFAULT_MODELS.filter(
-      (model) => !HARNESS_VISIBLE_MODELS.includes(model),
-    ),
-  });
+  await effectRuntime().runPromise(
+    workspaceRoots().globalState.update(GlobalStateKey.MODEL_SELECTION, {
+      enabledExtras: HARNESS_VISIBLE_MODELS,
+      disabledDefaults: DEFAULT_MODELS.filter(
+        (model) => !HARNESS_VISIBLE_MODELS.includes(model),
+      ),
+    }),
+  );
 }
 await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
-
-// Models the production boundary: `listCliHistoryEntries` already applies
-// `isUserVisibleRun`, so menu builders only ever see user-started rows.
-const HARNESS_ORCHESTRATION_HISTORY: readonly CliHistoryEntry[] =
-  SHOW_ORCHESTRATION_HISTORY
-    ? [
-        {
-          id: RunIdSchema.parse('cccccccccccc'),
-          timestamp: '2026-06-06T00:02:00Z',
-          agent: 'orchestrator',
-          model: HARNESS_MODEL,
-          status: HISTORY_RUN_STATUS.RESUMABLE,
-          resumable: true,
-          inputBasename: '-',
-          category: AgentCategory.ToolUse,
-        },
-      ]
-    : [];
-const HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES = getVisibleAgents(
-  AgentCategory.ToolUse,
-);
-const HARNESS_ALL_TOOL_USE_AGENTS = getAgentsByCategory(AgentCategory.ToolUse);
-const HARNESS_PRESET_PLANS = planTeamRuns(teamPresets(undefined), {
-  agents: {
-    workflow: getAgentsByCategory(AgentCategory.Workflow),
-    toolUse: HARNESS_ALL_TOOL_USE_AGENTS,
-  },
-});
-const HARNESS_MODEL_ACCESS =
-  SHOW_BOTH_SUBSCRIPTION_PREFERENCES || SHOW_KIMI_CODE_SUBSCRIPTION
-    ? {
-        preferences: {
-          chatGpt: SHOW_BOTH_SUBSCRIPTION_PREFERENCES
-            ? ('on' as const)
-            : ('off' as const),
-          // Grok stays off in the dual-subscription harness so ChatGPT + Kimi
-          // remain the visible "on" pair (Grok still appears as a row).
-          grok: 'off' as const,
-        },
-        codingPlans: {
-          kimiCode: { preferred: true, keySet: true },
-          glmCodingPlan: { preferred: false, keySet: true },
-        },
-        chatGptSignedIn: SHOW_BOTH_SUBSCRIPTION_PREFERENCES,
-        ...(SHOW_BOTH_SUBSCRIPTION_PREFERENCES
-          ? { chatGptAccountLabel: 'harness@example.edu' }
-          : {}),
-        grokSignedIn: false,
-        texraSignedIn: false,
-      }
-    : undefined;
-const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
-  presetPlans: HARNESS_PRESET_PLANS,
-  history: HARNESS_ORCHESTRATION_HISTORY,
-  toolUseAgents: HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
-  accountAccess: HARNESS_MODEL_ACCESS,
-});
-const HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS = HARNESS_MODEL_ACCESS
-  ? buildCliAccountAccessItems(HARNESS_MODEL_ACCESS)
-  : undefined;
-const HARNESS_ORCHESTRATION_RESUME_ITEMS = buildCliResumeItems(
-  HARNESS_ORCHESTRATION_HISTORY,
-);
-const HARNESS_ORCHESTRATION_AGENT_ITEMS = buildCliAgentItems(
-  HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
-);
-const HARNESS_ORCHESTRATION_TEAM_ITEMS = buildCliTeamItems(
-  HARNESS_PRESET_PLANS,
-  {
-    includeLoginHint: true,
-    remoteAgentCatalogAvailable: false,
-  },
-);
-
-type HarnessModelFixture = Readonly<{
-  value: string;
-  label: string;
-  availability: NonNullable<CliModelAccess['model']['availability']>;
-  provider?: string;
-}>;
-
-const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
-  {
-    value: 'sonnet46T',
-    label: 'Sonnet 4.6 (Thinking)',
-    availability: 'provider-key',
-  },
-  { value: 'gpt54', label: 'GPT-5.4', availability: 'provider-key' },
-  {
-    value: 'deepseekT',
-    label: 'DeepSeek V4 Flash',
-    availability: 'provider-key',
-  },
-  ...(SHOW_KIMI_CODE_SUBSCRIPTION
-    ? [
-        {
-          value: 'kimi3',
-          label: 'Kimi K3',
-          availability: 'provider-key' as const,
-          provider: 'kimiCode',
-        },
-      ]
-    : []),
-];
-
-function harnessModelStatus(
-  availability: HarnessModelFixture['availability'],
-): string {
-  switch (availability) {
-    case 'provider-key':
-      return 'api key set';
-    case 'openrouter-key':
-      return 'openrouter key set';
-    default:
-      return availability.replaceAll('-', ' ');
-  }
-}
-
-function harnessOrchestrationModels(): readonly CliModelAccess[] {
-  return HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) => ({
-    model: fixture,
-    available: SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS
-      ? false
-      : fixture.availability === 'provider-key' ||
-        fixture.availability === 'openrouter-key',
-    status: SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS
-      ? 'missing key'
-      : harnessModelStatus(fixture.availability),
-  }));
-}
-
-if (SHOW_ORCHESTRATION) {
-  const instance = render(
-    <OrchestrationApp
-      items={HARNESS_ORCHESTRATION_ITEMS}
-      resumeItems={HARNESS_ORCHESTRATION_RESUME_ITEMS}
-      agentItems={HARNESS_ORCHESTRATION_AGENT_ITEMS}
-      teamItems={HARNESS_ORCHESTRATION_TEAM_ITEMS}
-      models={process.env.HARNESS_API_MODE ? harnessOrchestrationModels() : []}
-      accountAccessItems={HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS}
-      version="0.0.0-harness"
-      statusLines={
-        SHOW_ORCHESTRATION_STATUS_LINES
-          ? [
-              `api: ${formatCliModelAccessRouteInline('api-key')}`,
-              formatCliAuthStatusLine({ authenticated: false }),
-            ]
-          : undefined
-      }
-      allowDefaultModelLaunch={false}
-      onResolve={() => undefined}
-    />,
-    {
-      stdout: HARNESS_STDOUT,
-      stderr: process.stderr,
-      stdin: process.stdin,
-    },
-  );
-  await instance.waitUntilExit();
-  process.exit(0);
-}
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact
@@ -628,7 +441,13 @@ HARNESS_DISPOSERS.push(
 );
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
-const harnessRuns = new Set<RunId>();
+/**
+ * The runs this harness has minted, and the category each was minted with.
+ * `publish` enqueues a job on the session's one publisher, so the fold — and
+ * the view every render reads — lands after the seeding that queued it. A
+ * seeder therefore reads what it published from here, never from the view.
+ */
+const harnessRuns = new Map<RunId, AgentCategory>();
 
 /** Mint a run: its `run.start` existence fact (PRD 6, item 2), then the
  *  `run.config` launch fact a real run publishes next, which names the model
@@ -650,7 +469,7 @@ function seedRun(
   } = {},
 ): void {
   if (harnessRuns.has(runId)) return;
-  harnessRuns.add(runId);
+  harnessRuns.set(runId, options.category ?? AgentCategory.ToolUse);
   const identity = options.identity ?? {
     kind: 'agent' as const,
     agent: options.agent ?? 'harness-agent',
@@ -720,17 +539,20 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
 }
 
 /** End a run the way a real session does: the terminal `run.end` fact the
- *  fold turns into the terminal phase and the durable outcome. */
+ *  fold turns into the terminal phase and the durable outcome. The run's
+ *  category comes from the mint record, not the view: a fixture that seeds a
+ *  terminal phase during boot does it before the publisher has folded the
+ *  `run.start` it just queued. */
 function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
-  const run = runViewOf(currentView(), runId);
-  if (!run) {
+  const category = harnessRuns.get(runId);
+  if (category === undefined) {
     throw new Error(`tui-harness: cannot end unknown run ${runId}`);
   }
   publish({
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
     outcome,
-    output: emptyRunEndOutput(run.category),
+    output: emptyRunEndOutput(category),
   });
 }
 
@@ -1242,6 +1064,14 @@ async function appendHarnessPlanDecision(
     await effectRuntime().runPromise(
       startGoal(defaultSession(), HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE),
     );
+    // The same grant `PlanTool.startGoalForPlan` applies next: approving a
+    // plan as a goal auto-approves commands, and nothing broader unless the
+    // user explicitly widened the scope.
+    setGoalSessionAutoApproval(
+      defaultSession(),
+      HARNESS_RUN_ID,
+      result.autoApproveAll ? 'allAgentWork' : 'commands',
+    );
     seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
@@ -1651,23 +1481,18 @@ function appendHarnessAssistantTranscript(text: string, runId?: RunId): void {
   appendHarnessTranscript('assistant', text, runId);
 }
 
+// Which run a local row belongs to is `transcript.ts`'s answer, not a second
+// one here: its fallback is the local-conversation id, the one id
+// `selectedRunId` keeps selected while no run of this session exists — which
+// is exactly the state `/clear` leaves behind.
 function appendHarnessTranscript(
   role: 'assistant' | 'error' | 'user',
   text: string,
   explicitRunId?: RunId,
 ): void {
-  const view = currentView();
-  const runId =
-    explicitRunId ??
-    resolveLocalTranscriptRunId({
-      activeRunId: activeRunIdSignal.get(),
-      fallbackRunId: HARNESS_RUN_ID,
-      parentOf: (id) => runViewOf(view, id)?.parentId ?? undefined,
-      rootRunId: rootRunId.get(),
-    });
   switch (role) {
     case 'assistant':
-      appendLocalAssistantTranscript(text, runId);
+      appendLocalAssistantTranscript(text, explicitRunId);
       return;
     case 'user':
       appendLocalUserTranscript(text);
@@ -1776,8 +1601,11 @@ function resetHarnessForClear(): void {
   for (const runId of [...currentView().runs.keys()]) {
     removeRun(runId);
   }
+  // `resetCliState` retires the focus the way the real `/clear` does, and
+  // nothing re-focuses a run this reset just removed: the next local row
+  // adopts the local-conversation id, which is what the surface renders
+  // until a new turn mints a run.
   resetCliState(meta);
-  activeRunIdSignal.set(HARNESS_RUN_ID);
   // Mirror the real /clear handler (runChatTui.tsx): erase the terminal
   // outside Ink, then notify the erase epoch so the transcript rebuilds
   // after the reset state commits and repaints the session header.
@@ -1936,7 +1764,12 @@ function renderHarnessApp(): React.JSX.Element {
   );
 }
 
-// The same recorded fan-out as the drawer, followed by waiting and interrupted roots.
+// The same recorded fan-out as the drawer, plus the session this terminal
+// resumed: `interrupted`, whose previous process is gone, with a `nested`
+// child of its own, and a `waiting` run this terminal still owns that is
+// parked on an approval. The CLI lists this conversation and the runs this
+// terminal owns (#12475), so the resumed root is what puts a foreign,
+// owner-less run in the list at all.
 if (process.env.HARNESS_SESSION_TREE === '1') {
   const { log, events } = buildScenario();
   const recordedCount = log.events.length;
@@ -1948,10 +1781,10 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     category: AgentCategory.ToolUse,
     isRemote: false,
   });
-  for (const [id, agent, owner, parent] of [
+  for (const [id, agent, owner, parentId] of [
     [waiting, 'waiting', OWNER, null],
     [interrupted, 'interrupted', OTHER_OWNER, null],
-    [nested, 'nested', OTHER_OWNER, { id: waiting, startCommit: 1 }],
+    [nested, 'nested', OTHER_OWNER, interrupted],
   ] as const) {
     log.emit(
       id,
@@ -1962,7 +1795,9 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
         category: AgentCategory.ToolUse,
         isRemote: false,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        parent,
+        // The creation commit the database stamps, not a guess: `Log.parent`
+        // refuses a parent that never started.
+        parent: parentId === null ? null : log.parent(parentId),
       },
       owner,
     );
@@ -1993,11 +1828,15 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   const view = foldAll([
     ...events,
     ...log.events.slice(recordedCount).map(tail),
-    local({ self: [OWNER] }),
+    // `buildScenario` stamped its existence snapshot before these runs
+    // existed, and a run with no claim has no owner: re-read the log so the
+    // three new aggregates carry the owner each was emitted under.
+    log.drained(),
+    local({ self: [OWNER], dead: [OTHER_OWNER] }),
   ]);
   const ref = await effectRuntime().runPromise(SubscriptionRef.make(view));
   HARNESS_DISPOSERS.push(bindSessionView(effectRuntime(), ref));
-  rootRunId.set(PROCESS);
+  rootRunId.set(interrupted);
   activeRunIdSignal.set(PROCESS);
 }
 

@@ -43,7 +43,7 @@ import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { AgentDelegationScope, RunId, RunPhase } from '@shared/schemas';
+import type { RunId, RunPhase } from '@shared/schemas';
 import { AgentCategory, RUN_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { descendantRuns } from '@shared/session/sessionView';
@@ -113,16 +113,16 @@ interface RunChatInit {
   readonly modelOverride?: string;
   /**
    * Display-only transcript notice shown at session start (never sent to the
-   * model). Callers that steer the session themselves, the first-run
-   * setup-agent handoff in `orchestrate`, use it to explain that steering.
+   * model). Used for the first-run setup-agent handoff, to explain that
+   * steering.
    */
   readonly startupNotice?: string;
-  /** Visible team identity when chat was launched from a multi-agent preset. */
-  readonly teamName?: string;
-  /** Multi-agent preset id when chat was launched from a team preset. */
-  readonly cliMultiAgentPresetId?: string;
-  readonly delegationAgentScope?: AgentDelegationScope;
-  /** Startup resume from `texra resume <id>`, with the run's persisted config. */
+  /**
+   * Startup resume from `texra resume <id>`, with the run's persisted config.
+   * A resumed multi-agent preset run carries its team identity and delegation
+   * scope in that config; those are the only fields below still sourced here,
+   * because a team run is started headlessly by `texra multi-agent run`.
+   */
   readonly initialResume?: {
     readonly id: RunId;
     readonly config: AgentConfig;
@@ -203,6 +203,7 @@ export async function runChat(
     Effect.flatMap(loadAgents(), () =>
       resolveChatDefaults({
         cwd: context.cwd,
+        globalStorageDir: services.globalStorage,
         agentOverride: explicitAgent ?? setupAgentOverride,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
@@ -234,10 +235,7 @@ export async function runChat(
       catch: (error: unknown) => error,
     }).pipe(
       Effect.tap((selection) =>
-        Effect.tryPromise({
-          try: () => setCliHelperModel(services.globalState, selection.model),
-          catch: (error: unknown) => error,
-        }),
+        setCliHelperModel(services.globalState, selection.model),
       ),
     ),
   );
@@ -279,25 +277,27 @@ export async function runChat(
     resetSession: resetSessionForClear,
     resumeRun: chatController.resume,
   });
+  // Both persisted team fields are `.nullish()` on the wire, so a resumed run
+  // that never carried a preset lands `null` where `SessionMeta` wants absent.
   const initialPresetId =
-    initialResume?.config.cli?.multiAgentPresetId ?? init.cliMultiAgentPresetId;
+    initialResume?.config.cli?.multiAgentPresetId ?? undefined;
   sessionMetaSignal.set({
     agent,
     model,
     modelSource: defaults.modelSource,
     cwd: context.cwd,
     approvalPolicy: runtimeSession.approvalPolicy,
-    teamName: init.teamName ?? readCliMultiAgentPresetName(initialPresetId),
+    teamName: readCliMultiAgentPresetName(initialPresetId),
     cliMultiAgentPresetId: initialPresetId,
     delegationAgentScope:
-      initialResume?.config.delegationAgentScope ?? init.delegationAgentScope,
+      initialResume?.config.delegationAgentScope ?? undefined,
     version,
   });
   if (modelSelection.notice) {
     appendLocalAssistantTranscript(modelSelection.notice);
   }
   // First-run handoff explanation: when the setup agent owns this session
-  // (decided here for `texra chat`, passed in by `orchestrate`), say so -
+  // (decided here for both the bare-`texra` and `texra chat` entries), say so -
   // display-only, so the agent waits for the user's first message.
   const startupNotice =
     init.startupNotice ??

@@ -21,7 +21,7 @@ import {
 } from '@shared/schemas';
 import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunView } from '@shared/session/sessionView';
-import { formatDuration } from '@utils/core';
+import { formatDuration } from '@utils/text/stringUtils';
 import {
   type RunHandle,
   type RunStatusInfo,
@@ -1015,13 +1015,7 @@ export class RunRegistry {
   }
 
   hasActiveChildren(parentRunId: RunId): boolean {
-    for (const activation of this.activeChildActivations(parentRunId)) {
-      return true;
-    }
-    for (const handle of this.handles.values()) {
-      if (handle.isOwnedBy(parentRunId)) return true;
-    }
-    return false;
+    return this.childRunIds(parentRunId).length > 0;
   }
 
   private terminate(

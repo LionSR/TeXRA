@@ -80,8 +80,12 @@ export class AgentSelectionPanel extends LitElement {
   @state() private groupedSources: Map<AgentSource, AgentSelectionItem[]> =
     new Map();
 
-  /** Flat list in visual display order, for keyboard navigation */
-  private displayOrder: AgentSelectionItem[] = [];
+  /** Flat list in visual display order, for keyboard navigation. */
+  private get displayOrder(): AgentSelectionItem[] {
+    return AgentSelectionPanel.SOURCE_ORDER.flatMap(
+      (source) => this.groupedSources.get(source) ?? [],
+    );
+  }
 
   private static readonly SOURCE_ORDER = [
     AGENT_SOURCE.CUSTOM,
@@ -92,17 +96,12 @@ export class AgentSelectionPanel extends LitElement {
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('agents')) {
-      const groups = groupBy(this.agents, (agent) => agent.source);
-      this.groupedSources = groups;
-      this.displayOrder = AgentSelectionPanel.SOURCE_ORDER.flatMap(
-        (source) => groups.get(source) ?? [],
-      );
+      this.groupedSources = groupBy(this.agents, (agent) => agent.source);
 
-      const stillValid = this.displayOrder.some(
-        (a) => agentKey(a) === this.selectedKey,
-      );
+      const order = this.displayOrder;
+      const stillValid = order.some((a) => agentKey(a) === this.selectedKey);
       if (!stillValid) {
-        const first = this.displayOrder[0];
+        const first = order[0];
         this.selectedKey = first ? agentKey(first) : null;
       }
     }

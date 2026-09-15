@@ -9,7 +9,6 @@ import {
   parseVersionControlDiffFilename,
 } from '@latex/latexdiff/diffFileNameManager';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 describe('detectGeneratedLatexdiffArtifact', () => {
   it.each([
@@ -87,18 +86,22 @@ describe('buildLatexdiffAwareFixInstruction', () => {
   it('leaves the base instruction untouched for a plain source file', async () => {
     const base = 'Fix the LaTeX compilation errors in main.tex.';
     expect(
-      await buildLatexdiffAwareFixInstruction(base, '/paper/main.tex'),
+      await buildLatexdiffAwareFixInstruction(
+        base,
+        '/paper/main.tex',
+        '/paper',
+      ),
     ).toBe(base);
   });
 
   it('adds latexdiff-artifact guidance when the inferred source exists', async () => {
     vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(true);
-    vi.spyOn(WorkspaceFS, 'relativePath').mockReturnValue('main.tex');
     const base = 'Fix the LaTeX compilation errors in main-diffea268c1.tex.';
 
     const instruction = await buildLatexdiffAwareFixInstruction(
       base,
       '/paper/main-diffea268c1.tex',
+      '/paper',
     );
 
     expect(instruction).toBe(
@@ -116,7 +119,11 @@ describe('buildLatexdiffAwareFixInstruction', () => {
     const base = 'Fix the LaTeX compilation errors in revised_diff.tex.';
 
     expect(
-      await buildLatexdiffAwareFixInstruction(base, '/paper/revised_diff.tex'),
+      await buildLatexdiffAwareFixInstruction(
+        base,
+        '/paper/revised_diff.tex',
+        '/paper',
+      ),
     ).toBe(base);
   });
 });

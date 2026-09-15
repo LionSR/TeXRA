@@ -499,8 +499,11 @@ describe('CliConfigForm API-key status lifecycle', () => {
 describe('/config slash command wiring', () => {
   it('wires the roster and reads through the injected CLI stores', async () => {
     const { stores, config } = makeFakeSettingsStores();
-    // Seed the git-author config slot the CLI reads from.
-    void config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
+    // Seed the git-author config slot the CLI reads from. Awaited, so the
+    // read below cannot race the write.
+    await Effect.runPromise(
+      config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false),
+    );
 
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
@@ -598,7 +601,9 @@ describe('/config slash command wiring', () => {
 
   it('turns OpenRouter off when Prefer Kimi Code is enabled', async () => {
     const { stores, globalState } = makeFakeSettingsStores();
-    await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+    await Effect.runPromise(
+      globalState.update(GlobalStateKey.USE_OPENROUTER, true),
+    );
     const props = await openConfigFormProps(stores);
     const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);
     await props.writeValue(preferKimiCode, true);
@@ -609,7 +614,9 @@ describe('/config slash command wiring', () => {
     );
 
     // Disabling the preference leaves the OpenRouter toggle untouched.
-    await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+    await Effect.runPromise(
+      globalState.update(GlobalStateKey.USE_OPENROUTER, true),
+    );
     await props.writeValue(preferKimiCode, false);
     expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
   });

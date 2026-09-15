@@ -246,18 +246,16 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   private pruneMissingSourceKeys(keys: readonly K[]): void {
     const active = new Set<string>(keys);
     const removedOwners = new Set<SessionHandle>();
-    let removed = false;
     for (const [runId, bound] of [...this.perRun]) {
       for (const key of [...bound.keys()]) {
         if (active.has(key)) continue;
         const binding = this.deleteBoundKey(runId, bound, key);
         if (!binding) continue;
         removedOwners.add(binding.owner);
-        removed = true;
       }
     }
     for (const owner of removedOwners) this.detachReleaseHookIfUnused(owner);
-    if (removed) this.emitBindingsChanged();
+    if (removedOwners.size > 0) this.emitBindingsChanged();
   }
 
   /**

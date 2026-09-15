@@ -88,10 +88,9 @@ export function buildEditorTree(
     for (const [index, name] of segments.entries()) {
       const lastSegment = index === segments.length - 1;
       const isDirectoryEntry = !lastSegment || entry.isDirectory;
-      const path = segments.slice(0, index + 1).join('/');
-      const existing = siblings.get(name);
 
       if (isDirectoryEntry) {
+        const existing = siblings.get(name);
         if (existing?.kind === 'directory') {
           siblings = existing.children;
           continue;
@@ -100,7 +99,7 @@ export function buildEditorTree(
         const directory: MutableEditorTreeDirectory = {
           kind: 'directory',
           name,
-          path,
+          path: segments.slice(0, index + 1).join('/'),
           children: new Map(),
         };
         siblings.set(name, directory);

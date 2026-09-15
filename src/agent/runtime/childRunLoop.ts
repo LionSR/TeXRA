@@ -53,7 +53,8 @@ import {
 import { foldRunState } from '@shared/session/runStateFold';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
-import { aggregateError, formatDuration, onAbort } from '@utils/core';
+import { aggregateError, onAbort } from '@utils/core';
+import { formatDuration } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Minimal token usage shape consumed by the loop's turn summary. */
@@ -1183,7 +1184,7 @@ export function startChildRunLoop<TTurn, R = never>(
               const turn = attempt.kind === 'completed' ? attempt.turn : null;
               const err = attempt.kind === 'failed' ? attempt.err : null;
               const turnIsError =
-                attempt.kind === 'completed' ? attempt.turnIsError : false;
+                attempt.kind === 'completed' && attempt.turnIsError;
               const wallTimeMs = Date.now() - startedAt;
               const turnFailed = err != null || turnIsError;
 

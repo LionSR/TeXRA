@@ -9,11 +9,10 @@ export class KeyedMutex<Key> {
     key: Key,
     operation: () => Promise<Result>,
   ): Promise<Result> {
-    let mutex = this.mutexes.get(key);
-    if (!mutex) {
-      mutex = new Mutex();
-      this.mutexes.set(key, mutex);
-    }
+    // Setting an existing key keeps its order and value, so this is a no-op
+    // for a mutex that already exists.
+    const mutex = this.mutexes.get(key) ?? new Mutex();
+    this.mutexes.set(key, mutex);
     try {
       return await mutex.runExclusive(operation);
     } finally {

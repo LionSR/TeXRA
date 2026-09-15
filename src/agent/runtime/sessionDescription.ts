@@ -15,8 +15,10 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
-import { isNonEmptyString } from '@utils/core';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import {
+  isNonEmptyString,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 
 const log = createLog('SessionDescription');
 const MAX_DESCRIPTION_LENGTH = 80;

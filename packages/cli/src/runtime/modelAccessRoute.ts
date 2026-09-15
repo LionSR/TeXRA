@@ -12,7 +12,7 @@ import {
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 
-// Kept to one rendered row: the /api form and the orchestration header both
+// Kept to one rendered row: the /api form and the account panel both
 // budget a single line for this description (75 columns at most).
 export const CLI_ACCOUNT_ACCESS_DESCRIPTION =
   'Sign in or out, set subscription preferences, and how the rest is paid for.';
@@ -307,25 +307,6 @@ export function buildCliModelAccessItems(
     };
   });
   return [...oauthPreferenceItems, ...codingPlanItems];
-}
-
-/** Compact configuration summary; observed per-request routes use UsageRoute. */
-function formatCliModelAccessSummary(status: CliModelAccessStatus): string {
-  const chatGpt = status.preferences.chatGpt === 'on' ? 'On' : 'Off';
-  const grok = status.preferences.grok === 'on' ? 'On' : 'Off';
-  const codingPlans = CODING_PLAN_SUBSCRIPTIONS.map((plan) => {
-    const label = plan.displayName.split(' ')[0];
-    return `${label} ${cliCodingPlanStatus(status, plan).preferred ? 'On' : 'Off'}`;
-  });
-  return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline('api-key')}`;
-}
-
-/** Launcher-row summary: TeXRA account ahead of the access summary. */
-export function formatCliAccountAccessSummary(
-  status: CliModelAccessStatus,
-): string {
-  const texra = status.texraSignedIn === true ? 'signed in' : 'signed out';
-  return `${RESEARCHER_ACCESS.label} ${texra} · ${formatCliModelAccessSummary(status)}`;
 }
 
 export interface CliAccountAccessRow {

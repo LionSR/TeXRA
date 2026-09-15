@@ -192,26 +192,23 @@ class AgentDirectoryManager {
    */
   private async ensureAgentWatchers(): Promise<void> {
     const lane = this.watcherRebuildLanes.get(AGENT_WATCHER_REBUILD_LANE);
+    const { runtime } = this.getHost();
+    const onRebuildLane = withPerKeyLane(
+      this.watcherRebuildLanes,
+      AGENT_WATCHER_REBUILD_LANE,
+    );
+
     if (lane && lane.fibers > 1) {
       // A rebuild is running and another is already waiting behind it, so the
       // waiting one answers this request too. Claim the lane with no work to
       // wait for both — what awaiting the queue's idle did.
-      await runSettledEffect(
-        this.getHost().runtime,
-        withPerKeyLane(
-          this.watcherRebuildLanes,
-          AGENT_WATCHER_REBUILD_LANE,
-        )(Effect.void),
-      );
+      await runSettledEffect(runtime, onRebuildLane(Effect.void));
       return;
     }
 
     await runSettledEffect(
-      this.getHost().runtime,
-      withPerKeyLane(
-        this.watcherRebuildLanes,
-        AGENT_WATCHER_REBUILD_LANE,
-      )(
+      runtime,
+      onRebuildLane(
         Effect.tryPromise({
           try: () => this.rebuildAgentWatchers(),
           catch: (error) => error,

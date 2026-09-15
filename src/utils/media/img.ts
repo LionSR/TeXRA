@@ -230,8 +230,16 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
     `${PDF_RASTER_MAX_SIZE[0]}x${PDF_RASTER_MAX_SIZE[1]}>`,
     outputPath,
   ];
+  // ImageMagick and GraphicsMagick hand the rasterization to a Ghostscript
+  // delegate, so signal the tree: an interrupted conversion must not leave the
+  // delegate running over the page it is still writing.
   const result = yield* Effect.tryPromise({
-    try: (signal) => executeCommand(convertArgs, { channel: CHANNEL, signal }),
+    try: (signal) =>
+      executeCommand(convertArgs, {
+        channel: CHANNEL,
+        signal,
+        killProcessTree: true,
+      }),
     catch: conversionFailure,
   });
   if (!result.success) {

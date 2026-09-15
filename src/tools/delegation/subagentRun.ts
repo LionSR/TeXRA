@@ -159,11 +159,10 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
           ? `Cancelled '${agentName}'`
           : `Completed '${agentName}'`,
       );
-    } else {
-      return errorResult(toErrorMessage(Cause.squash(deliveryExit.cause)), {
-        summary: `Subagent '${agentName}' failed`,
-      });
     }
+    return errorResult(toErrorMessage(Cause.squash(deliveryExit.cause)), {
+      summary: `Subagent '${agentName}' failed`,
+    });
   }
 
   const runId = generateRunId();

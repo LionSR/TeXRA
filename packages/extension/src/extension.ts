@@ -90,6 +90,7 @@ import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
+import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import {
   formatTexraApprovalPolicy,
@@ -117,8 +118,8 @@ import {
   readPlatformSetting,
 } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { StorageFS } from '@utils/files/storageFS';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { mementoStateStore } from './frontend/vscodeStateStore';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -174,12 +175,13 @@ async function initVscodePlatform(
   // Both process stores exist before the runtime here: VS Code hands the
   // extension its SecretStorage and Memento at activation.
   const secrets = new VscodeSecrets(context);
+  const globalState = mementoStateStore(context.globalState);
   const runtime = installProcessRuntime({
     processStart: await nodeProcesses.selfIdentity(),
     globalStorage: () => storage.getGlobalStoragePath(),
     updateCheckStorage: () => storage.getGlobalStoragePath(),
     secrets,
-    appState: context.globalState,
+    appState: globalState,
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`
     // models on this host (R2); consent was granted from the settings view.
@@ -189,7 +191,7 @@ async function initVscodePlatform(
     },
     // Lean through the Lean 4 extension, not a direct `lake` pool.
     lean: LeanLanguageServices.layer(
-      createVscodeLeanLanguageServices(context.globalState),
+      createVscodeLeanLanguageServices(globalState),
     ),
   });
   // The auth subsystem's run edge, installed here beside the runtime it
@@ -200,11 +202,8 @@ async function initVscodePlatform(
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(
     await runtime.runPromise(
-      openTexraConfigStores(
-        storage,
-        workspaceRoot,
-        (message) => log.warn(message),
-        (write) => runtime.runPromise(write),
+      openTexraConfigStores(storage, workspaceRoot, (message) =>
+        log.warn(message),
       ),
     ),
   );
@@ -226,7 +225,7 @@ async function initVscodePlatform(
       globalStorage: storage.getGlobalStoragePath(),
       config,
       workspaceState,
-      globalState: context.globalState,
+      globalState,
     }),
   );
   return { secrets, runtime };
@@ -447,6 +446,28 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   const hasSingleWorkspace = workspaceFolders?.length === 1;
 
+  const lifecycle = createLifecycleHost();
+  lifecycleHost = lifecycle;
+
+  /**
+   * The wiring both activation shapes settle once their platform exists, in
+   * the order they settle it. One owner, so the credential-only path and the
+   * workspace-backed path cannot drift apart.
+   */
+  const wirePostPlatform = (
+    secrets: PlatformSecrets,
+    runtime: ProcessRuntime,
+  ): void => {
+    // After the platform above, which built the runtime the manager settles
+    // its watcher rebuilds on.
+    agentDirectories.initialize(
+      context.globalState,
+      path.join(context.extensionPath, 'resources'),
+      runtime,
+    );
+    registerSupabaseAuth(context, secrets, runtime);
+  };
+
   if (!hasSingleWorkspace) {
     registerWelcomeView(context);
     // Credential-only platform. Every sign-in path stores into SecretStorage
@@ -454,20 +475,13 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
-    const lifecycle = createLifecycleHost();
-    lifecycleHost = lifecycle;
     const { secrets, runtime } = await initVscodePlatform(
       context,
       lifecycle,
       undefined,
-      context.workspaceState,
+      mementoStateStore(context.workspaceState),
     );
-    agentDirectories.initialize(
-      context.globalState,
-      path.join(context.extensionPath, 'resources'),
-      runtime,
-    );
-    registerSupabaseAuth(context, secrets, runtime);
+    wirePostPlatform(secrets, runtime);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
     // path below, so the welcome view registers its own standalone variant:
@@ -523,15 +537,13 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Deactivation releases the output channels with the sink, so a reload does
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
+  // The editor's Mementos behind the platform's `StateStore` port; the
+  // worktree store shares selected keys of the workspace one through global.
+  const globalState = mementoStateStore(context.globalState);
+  const workspaceMemento = mementoStateStore(context.workspaceState);
   const workspaceState = gitRepoRoot
-    ? new WorktreeStateStore(
-        context.workspaceState,
-        context.globalState,
-        gitRepoRoot,
-      )
-    : context.workspaceState;
-  const lifecycle = createLifecycleHost();
-  lifecycleHost = lifecycle;
+    ? new WorktreeStateStore(workspaceMemento, globalState, gitRepoRoot)
+    : workspaceMemento;
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearVscodeLeanServerEntries());
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
@@ -557,13 +569,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
       },
     },
   );
-  // After the platform above, which built the runtime the manager settles its
-  // watcher rebuilds on.
-  agentDirectories.initialize(
-    context.globalState,
-    path.join(context.extensionPath, 'resources'),
-    runtime,
-  );
+  wirePostPlatform(secrets, runtime);
+  // That registration precedes the fire-and-forget remote agent refresh below,
+  // which reads `SupabaseClient.getAccessToken()`: with the provider in place
+  // the refresh fetches the real catalog instead of short-circuiting on a null
+  // token, so activation now performs that one background fetch.
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes(secrets);
@@ -580,10 +590,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const runtimeSession = await runtime.runPromise(
     initializeDefaultSession({
       responseTextProcessing: createTexraResponseTextProcessing(
-        createAgentResponseTextConnector({
-          secrets,
-          globalState: context.globalState,
-        }),
+        createAgentResponseTextConnector({ secrets, globalState }),
       ),
     }),
   );
@@ -615,12 +622,21 @@ async function activateExtension(context: vscode.ExtensionContext) {
   initializeNodeRuntimeSkills({
     resourcesPath: path.join(context.extensionPath, 'resources'),
   });
-  await StorageFS.ensureDir(RUNS_STORAGE_DIR);
+  // The run-storage directory of the session just initialized, through that
+  // session's own storage view rather than a static that re-reads the root.
+  await runtime.runPromise(
+    withSessionFs(
+      runtimeSession.roots,
+      Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
+        storageFs.makeDirectory(RUNS_STORAGE_DIR, { recursive: true }),
+      ),
+    ),
+  );
   FileLister.initialize(context);
 
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
-  await runtime.runPromise(seedDisabledToolDefaults(context.globalState));
+  await runtime.runPromise(seedDisabledToolDefaults(globalState));
 
   // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
   // directories, and loadAgents scans them.
@@ -645,8 +661,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ),
     );
   }
-
-  registerSupabaseAuth(context, secrets, runtime);
 
   // Usage logging is a runtime service, not an authentication-provider
   // capability. Initialize it even when Supabase sign-in is not configured,
@@ -675,6 +689,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   const progressViewProvider = new ProgressViewProvider(
     context,
+    globalState,
     secrets,
     runtime,
   );
@@ -686,8 +701,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // synchronous glob probes of TeX install directories, which would
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
-  setTimeout(() => void initializeLatexSupport(context.globalState), 0);
-  registerCommands(context, progressViewProvider, secrets, runtime);
+  setTimeout(() => void initializeLatexSupport(globalState), 0);
+  registerCommands(
+    context,
+    globalState,
+    progressViewProvider,
+    secrets,
+    runtime,
+  );
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context, runtime);
 

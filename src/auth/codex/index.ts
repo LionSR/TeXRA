@@ -15,10 +15,6 @@ export {
   formatCodexAuthUnavailableMessage,
 } from './codexSessionTypes';
 export {
-  type CodexSessionStorage,
-  type CodexOAuthClient,
-} from './CodexSessionCoordinator';
-export {
   codexCoordinator,
   getCodexStatus,
   isCodexSessionRoutable,

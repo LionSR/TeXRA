@@ -27,11 +27,12 @@ export interface DiffViewHost {
  * The operating system would not open what it was handed: no handler for the
  * URL's scheme or the file's type, or the shell refusing the request.
  *
- * {@link ExternalOpener.openExternal} and the desktop's sibling `openPath`
- * keep their `Promise` shape — they are bound in the desktop's browser-view,
- * shell, settings, tooling and credential surfaces and in the VS Code opener,
- * more than one lane carries — so this is the tag their Effect-side callers
- * raise. `kind` says whether a URL or a local path was refused.
+ * This is the tag {@link ExternalOpener.openExternal} fails with. The
+ * desktop's sibling `openPath` keeps its `Promise` shape — it is bound in the
+ * desktop's browser-view, shell, settings, tooling and credential surfaces, a
+ * permanent face by owner ruling — so the Effect-side callers of that fan-out
+ * raise this tag from their own `Effect.tryPromise`. `kind` says whether a
+ * URL or a local path was refused.
  */
 export class ExternalOpenFailed extends Data.TaggedError('ExternalOpenFailed')<{
   readonly kind: 'url' | 'path';
@@ -40,8 +41,17 @@ export class ExternalOpenFailed extends Data.TaggedError('ExternalOpenFailed')<{
   readonly cause: unknown;
 }> {}
 
+/**
+ * Open a URL in the host's default browser. The member is an `Effect`, so a
+ * host that could not open it reaches the caller as {@link ExternalOpenFailed}
+ * rather than as `unknown`. Neither VS Code's `env.openExternal` nor
+ * Electron's `shell.openExternal` has a cancellation channel, so an
+ * interrupted fiber detaches from the wait — the foreign-API limitation the
+ * port retains. The desktop's shell-facing fan-out behind this port keeps
+ * its `Promise` shape by ruling; the desktop composition root adapts it here.
+ */
 export interface ExternalOpener {
-  openExternal(url: string): Promise<void>;
+  openExternal(url: string): Effect.Effect<void, ExternalOpenFailed>;
 }
 
 /**
@@ -74,12 +84,10 @@ export class PromptFailed extends Data.TaggedError('PromptFailed')<{
  * already gone. A user who ignores a notification is not a failure — these
  * members answer nothing.
  *
- * {@link MessageHost} itself stays `Promise`-shaped: its members are awaited
- * across the desktop settings, host-request and auth files and the shared
- * settings agent-action plane, which is more surface than one lane carries.
- * This is the tag its Effect-side callers raise in the meantime, so a
- * notification the host refused reaches them as a value they can match rather
- * than as `unknown`.
+ * This is the one tag every {@link MessageHost} member fails with, so a
+ * caller matches `NotificationFailed` rather than catching `unknown`.
+ * `message` is the rejection's own text, so it survives being shown through a
+ * reporting surface that renders only the message.
  */
 export class NotificationFailed extends Data.TaggedError('NotificationFailed')<{
   readonly member:
@@ -93,11 +101,18 @@ export class NotificationFailed extends Data.TaggedError('NotificationFailed')<{
  * user. Distinct from {@link PromptHost}, which additionally supports
  * action items and awaits the user's choice; this is fire-and-forget
  * status reporting (a saved credential, a failed operation, a caveat).
+ *
+ * Every member is an `Effect`: a host that could not present reaches the
+ * caller as {@link NotificationFailed} rather than as `unknown`, and a
+ * caller that does not want to wait for the dialog forks the member instead
+ * of `void`-ing a promise. Awaiting or forking is the caller's choice; the
+ * member itself never reports a dismissal as an error, because there is
+ * nothing to answer.
  */
 export interface MessageHost {
-  showInfoMessage(message: string): Promise<void> | void;
-  showWarningMessage(message: string): Promise<void> | void;
-  showErrorMessage(message: string): Promise<void> | void;
+  showInfoMessage(message: string): Effect.Effect<void, NotificationFailed>;
+  showWarningMessage(message: string): Effect.Effect<void, NotificationFailed>;
+  showErrorMessage(message: string): Effect.Effect<void, NotificationFailed>;
 }
 
 export type PromptMessageItem<T extends string = string> =
