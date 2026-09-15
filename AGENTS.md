@@ -618,15 +618,17 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 ### Webview Consistency Patterns
 
 Two message-passing architectures coexist for the extension's views. Match the
-one the view you're touching already uses — `BaseViewMessageHandler` is not a
-default to reach for, it's `settingsView`'s pattern specifically:
+one the view you're touching already uses:
 
 - **`settingsView`** is request/response: `SettingsViewMessageHandler`
-  (`packages/extension/src/settingsView/`) extends `BaseViewMessageHandler`
-  (`packages/extension/src/common/webview/`) for inbound dispatch through a
-  `HandlerRegistry`, delegating tab-shaped groups to focused handler classes in
-  `settingsView/handlers/` (`AgentHandlers`, `LatexSettingsHandlers`,
-  `MemoryHandlers`, `GitHubSubscriptionHandlers`, `SubscriptionHandlers`).
+  (`packages/extension/src/settingsView/`) owns its inbound dispatch directly —
+  active-webview tracking, the `HandlerRegistry` build, and the toast for an
+  unsupported command — and delegates tab-shaped groups to focused handler
+  classes in `settingsView/handlers/` behind `SettingsHandlerContext`
+  (`AgentHandlers`, `LatexSettingsHandlers`, `MemoryHandlers`,
+  `GitHubSubscriptionHandlers`, `SubscriptionHandlers`). There is no abstract
+  base: this is the only view on the pattern, so the machinery lives in the one
+  class that uses it.
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
   `SETTINGS_VIEW_CMD`, `SETTINGS_VIEW_COMMANDS`) — use those, not string
   literals. Frontend state lives in module-level reactive

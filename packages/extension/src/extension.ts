@@ -568,6 +568,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
     },
   );
   wirePostPlatform(secrets, runtime);
+  // That registration precedes the fire-and-forget remote agent refresh below,
+  // which reads `SupabaseClient.getAccessToken()`: with the provider in place
+  // the refresh fetches the real catalog instead of short-circuiting on a null
+  // token, so activation now performs that one background fetch.
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes(secrets);
