@@ -15,7 +15,13 @@ type DesktopDiffHostModule = typeof import('@desktop/main/desktopDiffHost');
 type DiffHostOptions = Parameters<
   DesktopDiffHostModule['createDesktopDiffHost']
 >[0];
-type DiffHost = ReturnType<DesktopDiffHostModule['createDesktopDiffHost']>;
+type DiffHost = ReturnType<
+  ReturnType<DesktopDiffHostModule['createDesktopDiffHost']>['inProject']
+>;
+
+// The Review pane a diff lands in is keyed by the project's storage root, which
+// the window binds per open project rather than reading off the caller.
+const REVIEW_ROOTS = { storage: '/projects/paper/.texra' };
 
 let createDesktopDiffHost: DesktopDiffHostModule['createDesktopDiffHost'];
 
@@ -35,7 +41,7 @@ function createHost(overrides: Partial<DiffHostOptions> = {}) {
       recordedPatchDirs.push(tempDir);
     },
     ...overrides,
-  });
+  }).inProject(REVIEW_ROOTS);
   return {
     host,
     openPath,
@@ -133,6 +139,7 @@ describe('createDesktopDiffHost', () => {
     expect(posted).toHaveLength(1);
     expect(posted[0]).toMatchObject({
       command: 'desktop:showDiff',
+      session: REVIEW_ROOTS.storage,
       // Minted by the host: a compare has no request to name its diff, and
       // the renderer needs every diff it holds named to close one by name.
       previewId: expect.stringMatching(/.+/),

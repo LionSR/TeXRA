@@ -19,6 +19,7 @@ import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
 import { appSignals } from '@eventBus/AppSignals';
+import { effectRuntime } from '@platform/processRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 let fixtureRoot = '';
@@ -63,6 +64,7 @@ function createIpc(
     getWorkspacePath: () => workspacePath,
     getEnvironmentSummary: async () => EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
     onAsyncError: vi.fn(),
+    runtime: effectRuntime(),
     ...overrides,
   };
   const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);
@@ -232,6 +234,33 @@ describe('desktop workspace IPC', () => {
     expect(existsSync(missingExternalPath)).toBe(false);
   });
 
+  it('keeps a UTF-8 byte-order mark when reading, so a save cannot delete it', async () => {
+    const postToRenderer = vi.fn();
+    const ipc = createIpc(postToRenderer);
+
+    writeFileSync(
+      join(workspacePath, 'bom.tex'),
+      Buffer.concat([
+        Buffer.from([0xef, 0xbb, 0xbf]),
+        Buffer.from('hi', 'utf8'),
+      ]),
+    );
+    ipc.handleMessage({
+      command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
+      requestId: REQUEST_ID,
+      path: 'bom.tex',
+    });
+    await vi.waitFor(() =>
+      expect(postToRenderer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
+          path: 'bom.tex',
+          contents: '\uFEFFhi',
+        }),
+      ),
+    );
+  });
+
   it('recreates a workspace file deleted after the editor loaded it', async () => {
     const postToRenderer = vi.fn();
     const ipc = createIpc(postToRenderer);
@@ -333,7 +362,15 @@ describe('desktop workspace IPC', () => {
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST,
     });
 
-    await vi.waitFor(() => expect(onAsyncError).toHaveBeenCalledWith(failure));
+    await vi.waitFor(() =>
+      expect(onAsyncError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          _tag: 'WorkspaceHostCallFailed',
+          member: 'getEnvironmentSummary',
+          cause: failure,
+        }),
+      ),
+    );
     expect(postToRenderer).toHaveBeenLastCalledWith({
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
       environment: EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,

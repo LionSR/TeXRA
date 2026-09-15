@@ -6,9 +6,18 @@
 // boundary and — for file I/O — confined to the workspace root before touching
 // disk: a path from the renderer is untrusted input, and `../` traversal would
 // otherwise read or overwrite anything the user can reach.
+//
+// Every disk operation below is a program over the standard library's
+// `FileSystem`, settled on the runtime the window handed this handler. The
+// paths they receive are the canonical ones the containment check above
+// already vouched for, which a workspace symlink can legitimately place
+// outside the lexical project root — so they go to the process filesystem, not
+// to a root-confined view that would refuse exactly those.
 
 import { basename, dirname, join } from 'node:path';
-import { isFileNotFoundError } from '@common/errors';
+
+import { Data, Effect, FileSystem, type PlatformError } from 'effect';
+
 import {
   passesFileFilters,
   prepareFileFilters,
@@ -17,13 +26,17 @@ import {
 import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { appSignals } from '@eventBus/AppSignals';
-import { platform } from '@platform/platform';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { normalizeFilePath } from '@utils/core';
-import { locateInWorkspace, WorkspaceFS } from '@utils/files/workspaceFS';
+import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
+import {
+  entryTypeAt,
+  readDirectoryTypedTolerant,
+} from '@utils/files/fsDurability';
 import { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
   DESKTOP_WORKSPACE_COMMANDS,
@@ -60,6 +73,9 @@ interface DesktopWorkspaceIpcOptions {
   getWorkspacePath(): string | undefined;
   getEnvironmentSummary(): Promise<DesktopEnvironmentSummary>;
   onAsyncError(error: unknown): void;
+  /** The process runtime the window was handed; every program below settles
+   *  on it. */
+  runtime: ProcessRuntime;
 }
 
 interface DesktopWorkspaceIpc extends DesktopMessageHandler {
@@ -80,119 +96,167 @@ interface DesktopWorkspaceIpc extends DesktopMessageHandler {
   dispose(): void;
 }
 
+/**
+ * A workspace request the editor refused, carrying the whole sentence the
+ * renderer shows for it — never a prefix over another message.
+ */
+class WorkspaceRequestRefused extends Data.TaggedError(
+  'WorkspaceRequestRefused',
+)<{
+  readonly message: string;
+}> {}
+
+/**
+ * A host promise this handler awaited rejected. `member` names which, so the
+ * report says what actually failed, and `message` is the rejection's own text
+ * so the sentence the renderer shows is unchanged.
+ */
+class WorkspaceHostCallFailed extends Data.TaggedError(
+  'WorkspaceHostCallFailed',
+)<{
+  readonly member: 'ptyHost.create' | 'getEnvironmentSummary';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/** Everything a file-I/O program here can fail with. */
+type WorkspaceFileFailure =
+  WorkspaceRequestRefused | PlatformError.PlatformError;
+
 /** The single workspace-boundary error every containment path reports. */
 const WORKSPACE_BOUNDARY_ERROR =
   'Only files inside the workspace folder can be opened.';
 
 /**
+ * Absent, and nothing else. A path that is not there is the write path's
+ * expected case; a permission or I/O failure on the same call is a real fault
+ * and must not read as "the file does not exist yet".
+ */
+const isAbsent = (error: WorkspaceFileFailure): boolean =>
+  error._tag === 'PlatformError' && error.reason._tag === 'NotFound';
+
+/**
  * Enforces that a canonical target lies within the canonical workspace root,
- * returning the target on success. Both inputs must already be canonicalized
+ * answering the target on success. Both inputs must already be canonicalized
  * (the write path synthesizes its target from a canonical parent plus
  * basename), so a symlink or `..` traversal cannot escape the project.
  */
 function assertWithinWorkspace(
   canonicalRoot: string,
   canonicalTarget: string,
-): string {
-  if (!isPathWithin(canonicalRoot, canonicalTarget)) {
-    throw new Error(WORKSPACE_BOUNDARY_ERROR);
-  }
-  return canonicalTarget;
+): Effect.Effect<string, WorkspaceRequestRefused> {
+  return isPathWithin(canonicalRoot, canonicalTarget)
+    ? Effect.succeed(canonicalTarget)
+    : Effect.fail(
+        new WorkspaceRequestRefused({ message: WORKSPACE_BOUNDARY_ERROR }),
+      );
 }
 
 /**
  * Lexical workspace containment check against `root`: rejects `..` traversal,
- * or throws. The root is the project this handler was built for, passed in
+ * or fails. The root is the project this handler was built for, passed in
  * rather than read from the calling context's roots scope, so a request can
  * only ever be resolved against its own project.
  */
 function locateWorkspaceTarget(
   root: string | undefined,
   inputPath: string,
-): {
-  absolutePath: string;
-  root: string;
-} {
+): Effect.Effect<
+  { absolutePath: string; root: string },
+  WorkspaceRequestRefused
+> {
   const located = locateInWorkspace(root, inputPath);
   if (located.kind !== 'workspace') {
-    throw new Error(WORKSPACE_BOUNDARY_ERROR);
+    return Effect.fail(
+      new WorkspaceRequestRefused({ message: WORKSPACE_BOUNDARY_ERROR }),
+    );
   }
-
   if (!root) {
-    throw new Error('Workspace path is not available.');
+    return Effect.fail(
+      new WorkspaceRequestRefused({
+        message: 'Workspace path is not available.',
+      }),
+    );
   }
-  return { absolutePath: located.absolutePath, root };
+  return Effect.succeed({ absolutePath: located.absolutePath, root });
 }
 
 /**
- * Resolves a renderer-supplied path inside the workspace, or throws.
+ * Resolves a renderer-supplied path inside the workspace, or fails.
  *
  * The lexical check rejects `..` traversal first. Canonical paths are then
  * compared so a workspace symlink cannot lead the editor outside the project.
  */
-async function resolveWorkspacePath(
-  workspaceRoot: string | undefined,
-  inputPath: string,
-): Promise<string> {
-  const { absolutePath, root } = locateWorkspaceTarget(
+const resolveWorkspacePath = Effect.fn(
+  'desktopWorkspaceIpc.resolveWorkspacePath',
+)(function* (workspaceRoot: string | undefined, inputPath: string) {
+  const { absolutePath, root } = yield* locateWorkspaceTarget(
     workspaceRoot,
     inputPath,
   );
-  const [canonicalRoot, canonicalTarget] = await Promise.all([
-    platform().fs.realPath(root),
-    platform().fs.realPath(absolutePath),
-  ]);
-  return assertWithinWorkspace(canonicalRoot, canonicalTarget);
-}
+  const fs = yield* FileSystem.FileSystem;
+  const [canonicalRoot, canonicalTarget] = yield* Effect.all(
+    [fs.realPath(root), fs.realPath(absolutePath)],
+    { concurrency: 2 },
+  );
+  return yield* assertWithinWorkspace(canonicalRoot, canonicalTarget);
+});
 
 /**
  * Resolves a write target without requiring the file itself to still exist.
  * The canonical parent remains mandatory, so recreating an externally deleted
  * file cannot bypass the workspace or symlink boundary.
  */
-async function resolveWorkspaceWritePath(
-  workspaceRoot: string | undefined,
-  inputPath: string,
-): Promise<string> {
-  try {
-    return await resolveWorkspacePath(workspaceRoot, inputPath);
-  } catch (error) {
-    if (!isFileNotFoundError(error)) throw error;
-  }
+const resolveWorkspaceWritePath = Effect.fn(
+  'desktopWorkspaceIpc.resolveWorkspaceWritePath',
+)(function* (workspaceRoot: string | undefined, inputPath: string) {
+  const existing = yield* resolveWorkspacePath(workspaceRoot, inputPath).pipe(
+    Effect.catchIf(isAbsent, () => Effect.succeed(undefined)),
+  );
+  if (existing !== undefined) return existing;
 
-  const { absolutePath, root } = locateWorkspaceTarget(
+  const { absolutePath, root } = yield* locateWorkspaceTarget(
     workspaceRoot,
     inputPath,
   );
+  const fs = yield* FileSystem.FileSystem;
+  const parent = dirname(absolutePath);
+  const name = basename(absolutePath);
 
   // A dangling symlink also makes realPath fail with ENOENT. It must remain
   // rejected: writing through it could create a target outside the workspace.
-  try {
-    if (await platform().fs.isSymlink(absolutePath)) {
-      throw new Error('Symbolic links cannot be recreated by the editor.');
-    }
-  } catch (error) {
-    if (!isFileNotFoundError(error)) throw error;
+  // One lstat on the target itself is what reports a link as itself — `stat`
+  // follows it — on case-insensitive volumes too, and any failure other than
+  // "not there" refuses the write instead of reading as "no link here".
+  const entryType = yield* entryTypeAt(absolutePath).pipe(
+    Effect.catchIf(isAbsent, () => Effect.succeed(undefined)),
+  );
+  if (entryType === 'SymbolicLink') {
+    return yield* Effect.fail(
+      new WorkspaceRequestRefused({
+        message: 'Symbolic links cannot be recreated by the editor.',
+      }),
+    );
   }
 
-  let canonicalRoot: string;
-  let canonicalParent: string;
-  try {
-    [canonicalRoot, canonicalParent] = await Promise.all([
-      platform().fs.realPath(root),
-      platform().fs.realPath(dirname(absolutePath)),
-    ]);
-  } catch (error) {
-    if (isFileNotFoundError(error)) {
-      throw new Error(
-        'The file cannot be recreated because its parent folder no longer exists.',
-      );
-    }
-    throw error;
-  }
-  const canonicalTarget = join(canonicalParent, basename(absolutePath));
-  return assertWithinWorkspace(canonicalRoot, canonicalTarget);
-}
+  const [canonicalRoot, canonicalParent] = yield* Effect.all(
+    [fs.realPath(root), fs.realPath(parent)],
+    { concurrency: 2 },
+  ).pipe(
+    Effect.catchIf(isAbsent, () =>
+      Effect.fail(
+        new WorkspaceRequestRefused({
+          message:
+            'The file cannot be recreated because its parent folder no longer exists.',
+        }),
+      ),
+    ),
+  );
+  return yield* assertWithinWorkspace(
+    canonicalRoot,
+    join(canonicalParent, name),
+  );
+});
 
 export function createDesktopWorkspaceIpc(
   renderer: DesktopRenderer,
@@ -218,33 +282,42 @@ export function createDesktopWorkspaceIpc(
     },
   );
 
-  function postFileError(
-    requestId: string,
-    path: string,
+  /**
+   * Report the failure and tell the renderer its request failed. Loud by
+   * construction: the window's own async-error reporter sees the cause and the
+   * request never settles in silence.
+   */
+  function reportRequestFailure(
     error: unknown,
-  ): void {
-    renderer.postToRenderer({
-      command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
-      requestId,
-      path,
-      message: toErrorMessage(error),
+    message: DesktopCommandMessage,
+  ): Effect.Effect<void> {
+    return Effect.sync(() => {
+      reportError(error);
+      renderer.postToRenderer(message);
     });
   }
 
-  async function listFiles(
+  function reportFileFailure(
     requestId: string,
-    directory: string,
-  ): Promise<void> {
-    const normalizedDirectory = normalizeFilePath(directory)
-      .replace(/^\.\//, '')
-      .replace(/\/$/, '');
-    try {
+    path: string,
+  ): (error: WorkspaceFileFailure) => Effect.Effect<void> {
+    return (error) =>
+      reportRequestFailure(error, {
+        command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
+        requestId,
+        path,
+        message: toErrorMessage(error),
+      });
+  }
+
+  const listDirectory = Effect.fn('desktopWorkspaceIpc.listDirectory')(
+    function* (requestId: string, directory: string) {
       const root = options.getWorkspacePath();
       if (!root) {
         renderer.postToRenderer({
           command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
           requestId,
-          directory: normalizedDirectory,
+          directory,
           files: [],
         });
         return;
@@ -267,10 +340,15 @@ export function createDesktopWorkspaceIpc(
         excludeKeywords: [],
         excludeFiles: [],
       });
-      const absoluteDirectory = normalizedDirectory
-        ? await resolveWorkspacePath(root, normalizedDirectory)
+      const absoluteDirectory = directory
+        ? yield* resolveWorkspacePath(root, directory)
         : root;
-      const entries = await platform().fs.readDirectory(absoluteDirectory);
+      // The typed listing reports a link as itself; `readDirectory` answers
+      // names alone and `stat` would follow a link to what it points at. The
+      // tolerant form drops an entry whose type cannot be read (warn-logged)
+      // rather than failing the tree: readdir already named every entry, so
+      // one unreadable row must not cost the directory.
+      const entries = yield* readDirectoryTypedTolerant(absoluteDirectory);
       const files = entries
         .toSorted(([left], [right]) =>
           left.localeCompare(right, undefined, {
@@ -279,40 +357,57 @@ export function createDesktopWorkspaceIpc(
           }),
         )
         .flatMap(([name, type]) => {
-          if (isSymlink(type)) return [];
+          if (type === 'SymbolicLink') return [];
           const path = normalizeFilePath(
-            normalizedDirectory ? join(normalizedDirectory, name) : name,
+            directory ? join(directory, name) : name,
           );
-          if (isDirectory(type)) {
+          if (type === 'Directory') {
             return shouldVisitDirectory(path, filters)
               ? [{ path, isDirectory: true }]
               : [];
           }
-          return isFile(type) && passesFileFilters(path, filters)
+          return type === 'File' && passesFileFilters(path, filters)
             ? [{ path, isDirectory: false }]
             : [];
         });
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
         requestId,
-        directory: normalizedDirectory,
+        directory,
         files,
       });
-    } catch (error) {
-      reportError(error);
-      renderer.postToRenderer({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR,
-        requestId,
-        directory: normalizedDirectory,
-        message: toErrorMessage(error),
-      });
-    }
+    },
+  );
+
+  function listFiles(requestId: string, directory: string) {
+    const normalizedDirectory = normalizeFilePath(directory)
+      .replace(/^\.\//, '')
+      .replace(/\/$/, '');
+    return listDirectory(requestId, normalizedDirectory).pipe(
+      Effect.catch((error) =>
+        reportRequestFailure(error, {
+          command: DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR,
+          requestId,
+          directory: normalizedDirectory,
+          message: toErrorMessage(error),
+        }),
+      ),
+    );
   }
 
-  async function readFile(requestId: string, path: string): Promise<void> {
-    try {
-      const contents = await WorkspaceFS.read(
-        await resolveWorkspacePath(options.getWorkspacePath(), path),
+  function readFile(requestId: string, path: string) {
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const absolutePath = yield* resolveWorkspacePath(
+        options.getWorkspacePath(),
+        path,
+      );
+      // The editor's buffers are LF-only, as every read of a workspace file
+      // through the shared facade this replaces already was. Decoding the
+      // bytes ourselves keeps a UTF-8 BOM, which `readFileString`'s decoder
+      // strips and the editor's verbatim save would otherwise delete.
+      const contents = normalizeLineEndings(
+        Buffer.from(yield* fs.readFile(absolutePath)).toString('utf8'),
       );
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
@@ -320,59 +415,83 @@ export function createDesktopWorkspaceIpc(
         path,
         contents,
       });
-    } catch (error) {
-      reportError(error);
-      postFileError(requestId, path, error);
-    }
+    }).pipe(Effect.catch(reportFileFailure(requestId, path)));
   }
 
-  async function writeFile(
-    requestId: string,
-    path: string,
-    contents: string,
-  ): Promise<void> {
-    try {
-      await WorkspaceFS.write(
-        await resolveWorkspaceWritePath(options.getWorkspacePath(), path),
-        contents,
+  function writeFile(requestId: string, path: string, contents: string) {
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const absolutePath = yield* resolveWorkspaceWritePath(
+        options.getWorkspacePath(),
+        path,
       );
+      yield* fs.writeFileString(absolutePath, contents);
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
         requestId,
         path,
       });
-    } catch (error) {
-      reportError(error);
-      postFileError(requestId, path, error);
-    }
+    }).pipe(Effect.catch(reportFileFailure(requestId, path)));
   }
 
-  async function startTerminal(
+  function startTerminal(
     sessionId: string,
     cols: number,
     rows: number,
     initialCommand?: string,
-  ): Promise<void> {
-    try {
-      const session = await options.ptyHost.create({
-        id: sessionId,
-        cols,
-        rows,
+  ) {
+    return Effect.gen(function* () {
+      const session = yield* Effect.tryPromise({
+        try: () => options.ptyHost.create({ id: sessionId, cols, rows }),
+        catch: (cause) =>
+          new WorkspaceHostCallFailed({
+            member: 'ptyHost.create',
+            message: toErrorMessage(cause),
+            cause,
+          }),
       });
       if (!session) return;
       if (initialCommand) {
         session.write(`${initialCommand}\r`);
       }
-    } catch (error) {
-      reportError(error);
-      // Surface in the terminal itself: a silent no-op looks like a shell that
-      // never printed a prompt.
-      renderer.postToRenderer({
-        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR,
-        sessionId,
-        message: `Could not start a terminal: ${toErrorMessage(error)}`,
-      });
-    }
+    }).pipe(
+      Effect.catch((error) =>
+        // Surface in the terminal itself: a silent no-op looks like a shell
+        // that never printed a prompt.
+        reportRequestFailure(error, {
+          command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR,
+          sessionId,
+          message: `Could not start a terminal: ${toErrorMessage(error)}`,
+        }),
+      ),
+    );
+  }
+
+  function postEnvironment() {
+    return Effect.tryPromise({
+      try: () => options.getEnvironmentSummary(),
+      catch: (cause) =>
+        new WorkspaceHostCallFailed({
+          member: 'getEnvironmentSummary',
+          message: toErrorMessage(cause),
+          cause,
+        }),
+    }).pipe(
+      // The renderer's loading state clears either way, but the failure still
+      // reaches the window's reporter instead of being swallowed.
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          reportError(error);
+          return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
+        }),
+      ),
+      Effect.map((environment) => {
+        renderer.postToRenderer({
+          command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
+          environment,
+        });
+      }),
+    );
   }
 
   return {
@@ -392,21 +511,25 @@ export function createDesktopWorkspaceIpc(
 
       switch (data.command) {
         case DESKTOP_WORKSPACE_COMMANDS.LIST_FILES:
-          void listFiles(data.requestId, data.directory);
+          options.runtime.runFork(listFiles(data.requestId, data.directory));
           return true;
         case DESKTOP_WORKSPACE_COMMANDS.READ_FILE:
-          void readFile(data.requestId, data.path);
+          options.runtime.runFork(readFile(data.requestId, data.path));
           return true;
         case DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE:
-          void writeFile(data.requestId, data.path, data.contents);
+          options.runtime.runFork(
+            writeFile(data.requestId, data.path, data.contents),
+          );
           return true;
 
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START:
-          void startTerminal(
-            data.sessionId,
-            data.cols,
-            data.rows,
-            data.initialCommand,
+          options.runtime.runFork(
+            startTerminal(
+              data.sessionId,
+              data.cols,
+              data.rows,
+              data.initialCommand,
+            ),
           );
           return true;
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT:
@@ -434,21 +557,9 @@ export function createDesktopWorkspaceIpc(
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE:
           options.browserViews.close(data.tabId);
           return true;
-        case DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST: {
-          const postEnvironment = (environment: DesktopEnvironmentSummary) =>
-            renderer.postToRenderer({
-              command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-              environment,
-            });
-          void options
-            .getEnvironmentSummary()
-            .then(postEnvironment)
-            .catch((error: unknown) => {
-              reportError(error);
-              postEnvironment(EMPTY_DESKTOP_ENVIRONMENT_SUMMARY);
-            });
+        case DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST:
+          options.runtime.runFork(postEnvironment());
           return true;
-        }
       }
     },
   };

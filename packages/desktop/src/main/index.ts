@@ -810,9 +810,11 @@ function createWindow(options: {
     },
     postToRenderer: postToRendererIfAlive,
   });
-  const agentRunHost: Omit<DesktopAgentRunHost, 'openBuildDisplay'> = {
+  const agentRunHost: Omit<
+    DesktopAgentRunHost,
+    'openBuildDisplay' | 'openDiff'
+  > = {
     openPath: previewHost.openPath,
-    openDiff: desktopDiffHost.openDiff,
     confirmAcceptFile: (message) =>
       confirmDialog({ message, confirmLabel: 'Replace file' }),
     chooseTeamAvailability: (unavailableNames) =>
@@ -891,7 +893,15 @@ function createWindow(options: {
     const files = createDesktopFileSelection({
       workspacePath: project.root,
       showOpenFileDialog: openFileDialog,
+      runtime,
     });
+    // Both diff hosts are built once per window, which shows several open
+    // projects at once; each project's Review pane is addressed by its own
+    // storage root, exactly as `openBuildDisplayIn` addresses its workbench.
+    const projectDiffHost = desktopDiffHost.inProject(project.session.roots);
+    const projectRequestDiffHost = requestDiffHost.inProject(
+      project.session.roots,
+    );
     // Install the recipient before host requests publish the recorder's state.
     const bridgeScope = Scope.makeUnsafe();
     const bridge = runtime.runSync(
@@ -949,6 +959,7 @@ function createWindow(options: {
       runtime,
       host: {
         ...agentRunHost,
+        openDiff: projectDiffHost.openDiff,
         openBuildDisplay: previewHost.openBuildDisplayIn(project.session.roots),
       },
       toolEditPreview: {
@@ -956,8 +967,8 @@ function createWindow(options: {
         openBuildDisplay: requestPreviewHost.openBuildDisplayIn(
           project.session.roots,
         ),
-        openDiff: requestDiffHost.openDiff,
-        closeDiff: requestDiffHost.closeDiff,
+        openDiff: projectRequestDiffHost.openDiff,
+        closeDiff: projectRequestDiffHost.closeDiff,
       },
       session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
@@ -980,7 +991,7 @@ function createWindow(options: {
         openBuildDisplay: requestPreviewHost.openBuildDisplayIn(
           project.session.roots,
         ),
-        openDiff: requestDiffHost.openDiff,
+        openDiff: projectRequestDiffHost.openDiff,
       },
       run,
       files,
@@ -1606,6 +1617,7 @@ function createWindow(options: {
             height: Math.round(bounds.height * zoom),
           };
         },
+        runtime,
         getWorkspacePath: () => project.root,
         getEnvironmentSummary: async () =>
           project.root
