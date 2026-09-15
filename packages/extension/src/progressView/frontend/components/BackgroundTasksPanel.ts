@@ -37,6 +37,7 @@ import {
 } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { TickerController } from '@shared/litControllers/TickerController';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
@@ -238,8 +239,9 @@ export class BackgroundTasksPanel extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   /** The card's open state lives here (`groups`, key `dispatch`). */
   @property({ attribute: false }) surface: Surface | null = null;
-  /** The host's clock, for a running row's elapsed time (G4). */
-  @property({ type: Number }) nowMs: number | null = null;
+
+  /** The clock a running row's elapsed time ticks on (G4). */
+  private readonly _ticker = new TickerController(this, 1000);
 
   /** The complete card, or only the inquiry threads (the workflow body,
    *  whose run board already lists every call). */
@@ -394,7 +396,7 @@ export class BackgroundTasksPanel extends LitElement {
         ${waIcon(glyph, { className: 'task-icon' })}
         <span class="task-name">${child.label}</span>
         ${latest ? html`<span class="task-latest">${latest}</span>` : nothing}
-        ${renderClock(child, pendingApproval, this.nowMs)}
+        ${renderClock(child, pendingApproval, this._ticker.now)}
         ${waIcon('chevron-right', { className: 'task-chevron' })}
       </button>
     `;
@@ -444,13 +446,13 @@ export class BackgroundTasksPanel extends LitElement {
 function renderClock(
   child: RunView,
   pendingApproval: boolean,
-  nowMs: number | null,
+  nowMs: number,
 ): TemplateResult | typeof nothing {
   if (pendingApproval) {
     return html`<span class="task-elapsed is-approval">approval</span>`;
   }
   const running = child.group === 'running' || child.group === 'waiting';
-  if (running && child.runStartedAt !== null && nowMs !== null) {
+  if (running && child.runStartedAt !== null) {
     return html`<span class="task-elapsed"
       >${formatCompactDuration(nowMs - child.runStartedAt)}</span
     >`;

@@ -428,7 +428,6 @@ function sceneDesktopRun(): TemplateResult {
             .run=${run}
             .view=${view}
             .surface=${co.surface}
-            .nowMs=${BOARD_NOW}
           ></workflow-run-board>`
         : nothing,
       { chip: false, dock: false },

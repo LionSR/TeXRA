@@ -21,8 +21,6 @@ export abstract class BaseRunContent extends LitElement {
   /** The app renders a conversation only once the first snapshot is in
    *  (`ProgressApp.render`), so there is no null arm here. */
   @property({ attribute: false }) host!: HostSnapshot;
-  /** The host's clock, for elapsed readings (G4). */
-  @property({ type: Number }) nowMs: number | null = null;
 
   /** The pending requests this run has open, in the fold's request order:
    *  oldest first, the newest last. */

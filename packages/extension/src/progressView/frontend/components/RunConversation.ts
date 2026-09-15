@@ -50,8 +50,6 @@ export class RunConversation extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
-  /** The host's clock, for elapsed readings (G4). */
-  @property({ type: Number }) nowMs: number | null = null;
 
   override render(): TemplateResult | typeof nothing {
     const { run, view, surface } = this;
@@ -73,7 +71,6 @@ export class RunConversation extends LitElement {
           .view=${view}
           .surface=${surface}
           .host=${this.host}
-          .nowMs=${this.nowMs}
         ></tool-use-run-content>`;
       case 'workflow':
         return html`<workflow-run-content
@@ -81,7 +78,6 @@ export class RunConversation extends LitElement {
           .view=${view}
           .surface=${surface}
           .host=${this.host}
-          .nowMs=${this.nowMs}
         ></workflow-run-content>`;
     }
   }

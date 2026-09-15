@@ -8,7 +8,8 @@
  * `durableOutcome` (a settled run keeps its rows but nothing acts), and the
  * surface's phase, groups, and focus. Dispatches `workflow.control` and `run.stop` runtime
  * requests and `phase`, `group`, `select`, and `focusRow` surface actions;
- * it holds no state of its own. The host passes its clock as `nowMs` (G4).
+ * it holds no state of its own except its 1 Hz clock (G4: a leaf
+ * `TickerController` drives the elapsed readings while it is connected).
  */
 
 // Third-party imports
@@ -45,6 +46,7 @@ import {
 } from '@shared/runs/workflowRunModel';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { TickerController } from '@shared/litControllers/TickerController';
 import { assertNever } from '@utils/core';
 import {
   formatCompactDuration,
@@ -167,11 +169,11 @@ export class WorkflowRunBoard extends LitElement {
   @property({ attribute: false }) run!: WorkflowRunView;
   @property({ attribute: false }) view!: SessionView;
   @property({ attribute: false }) surface!: Surface;
-  /** The host's clock; null shows no elapsed time. */
-  @property({ type: Number }) nowMs: number | null = null;
   /** The desktop's headline: the tally leads the strip instead of closing
    *  the board. */
   @property({ type: Boolean, reflect: true }) summary = false;
+  /** The clock the elapsed readings tick on (G4). */
+  private readonly _ticker = new TickerController(this, 1000);
   private get model(): WorkflowRunModel | null {
     return this.run.transcript.run;
   }
@@ -395,8 +397,8 @@ export class WorkflowRunBoard extends LitElement {
           })}${formatCompactTokenCount(usage.outputTokens)}`
         : undefined,
       usage.cost > 0 ? formatCostUsd(usage.cost) : undefined,
-      !this.summary && runStartedAt !== null && this.nowMs !== null
-        ? formatCompactDuration(this.nowMs - runStartedAt)
+      !this.summary && runStartedAt !== null
+        ? formatCompactDuration(this._ticker.now - runStartedAt)
         : undefined,
     ].filter((part) => part !== undefined);
     return html`<span class="quiet">${join(parts, ' · ')}</span>`;
@@ -513,10 +515,8 @@ export class WorkflowRunBoard extends LitElement {
       call.attemptNumber === undefined
         ? undefined
         : `attempt ${call.attemptNumber}`,
-      call.status === 'running' &&
-      live?.runStartedAt !== undefined &&
-      this.nowMs !== null
-        ? formatCompactDuration(this.nowMs - live.runStartedAt)
+      call.status === 'running' && live?.runStartedAt !== undefined
+        ? formatCompactDuration(this._ticker.now - live.runStartedAt)
         : undefined,
       live?.outputTokens !== undefined && live.outputTokens > 0
         ? html`${waIcon('arrow-down', {

@@ -81,8 +81,6 @@ export class ProgressApp extends LitElement {
   @property({ attribute: false }) host: HostSnapshot | null = null;
   /** Fixed by the document hosting this surface. */
   @property() placement: 'sidebar' | 'editor' | 'desktop' = 'sidebar';
-  /** The host's clock, for elapsed readings (G4). */
-  @property({ type: Number }) nowMs: number | null = null;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -167,7 +165,6 @@ export class ProgressApp extends LitElement {
                     .view=${view}
                     .surface=${surface}
                     .host=${host}
-                    .nowMs=${this.nowMs}
                   ></run-conversation>`
                 : this.renderEmptyState(view, surface, host)
             }

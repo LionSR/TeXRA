@@ -10,15 +10,14 @@
 import { hostBridge } from '@shared/hostBridge';
 import { resolveSelected } from '@shared/session/surface';
 import { createWebviewStorage } from '@shared/state/PersistedState';
-import { createTicker } from '@utils/core';
 
 import { createSessionSurfaces } from './sessionSurfaces';
 import type { ProgressApp } from './ProgressApp';
 
 /**
- * Mount the shell on `app`. Returns the unmount: the window's listener, the
- * clock, and the sessions released, as leaving the page does; a host that
- * remounts (the trace viewer's scrubber) calls it and mounts a fresh element.
+ * Mount the shell on `app`. Returns the unmount: the window's listener and
+ * the sessions released, as leaving the page does; a host that remounts (the
+ * trace viewer's scrubber) calls it and mounts a fresh element.
  */
 export function mountProgressWebview(app: ProgressApp): () => void {
   const sessionKey = app.dataset.session;
@@ -62,7 +61,6 @@ export function mountProgressWebview(app: ProgressApp): () => void {
     app.view = view;
     app.surface = surface;
     app.host = host;
-    app.nowMs = Date.now();
     if (app.placement !== 'sidebar') return;
     const shown = resolveSelected(view, surface) === null ? 'main' : 'progress';
     if (shown === reportedView) return;
@@ -70,15 +68,11 @@ export function mountProgressWebview(app: ProgressApp): () => void {
     sessions.hostRequest(sessionKey, { kind: 'setActiveView', view: shown });
   };
   const unsubscribe = sessions.onChange(assign);
-  const clock = createTicker(1000, () => {
-    app.nowMs = Date.now();
-  });
   assign();
 
   const dispose = (): void => {
     window.removeEventListener('pagehide', dispose);
     window.removeEventListener('message', receive);
-    clock.dispose();
     unsubscribe();
     sessions.dispose();
   };
