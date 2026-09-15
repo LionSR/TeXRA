@@ -804,9 +804,9 @@ product; everything around them was generic Promise runtime, and Effect owns it 
 
 #### Reconciled against the shipped rows, 2026-09-15 (#12427)
 
-The table above names the rows revision 4 proposed. Four of them shipped under
+The table above names the rows revision 4 proposed. Five of them shipped under
 different names or a different mechanism, and the table is wrong where it still
-says otherwise. Read this list, not the "Closed by" column, for those four:
+says otherwise. Read this list, not the "Closed by" column, for these five:
 
 | #   | What actually shipped                                                                                                                                                                                                                                                                                               |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

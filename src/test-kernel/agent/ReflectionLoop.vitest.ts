@@ -1184,17 +1184,25 @@ describe('an interrupted reflection run', () => {
   /**
    * C15: a crash between the committed response row and the round's raw
    * output write. The response is paid for and durable, so resume reprocesses
-   * it; the file it appends to is whatever the crash left on disk. The
-   * recorded byte offset is what keeps the reprocessed response from landing
-   * twice, whichever of the three states the file is in.
+   * it. The recorded byte offset prevents a duplicate append and repairs
+   * different-length debris, but equal-length conflicting bytes are
+   * indistinguishable from the completed write.
    */
   it.effect(
-    'writes a reprocessed response into the round output exactly once, whatever the crash left on disk',
+    'reconciles a reprocessed response by the recorded output byte length',
     () =>
       Effect.gen(function* () {
-        const session = yield* createProcessSession();
-        const seeds = [null, 'round 0 output', 'stale bytes from the crash'];
-        for (const seed of seeds) {
+        const cases = [
+          { seed: null, expected: 'round 0 output' },
+          { seed: 'round 0 output', expected: ' round 0 output' },
+          {
+            seed: 'stale bytes from the crash',
+            expected: ' round 0 output',
+          },
+          { seed: ' stale 0 output', expected: ' stale 0 output' },
+        ];
+        for (const { seed, expected } of cases) {
+          const session = yield* createProcessSession();
           const runId = startedRun(session);
           const halted = yield* interruptedAt(
             { runId, session, rounds: 1 },
@@ -1216,8 +1224,7 @@ describe('an interrupted reflection run', () => {
           yield* runLoop({ runId, session, rounds: 1, resume: true });
 
           const content = yield* Effect.promise(() => AbsoluteFS.read(path));
-          expect(content.split('round 0 output')).toHaveLength(2);
-          expect(content).not.toContain('stale bytes');
+          expect(content).toBe(expected);
         }
       }),
   );
