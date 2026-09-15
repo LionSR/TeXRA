@@ -530,7 +530,7 @@ export class BashTool extends defineTool({
             {
               identity: { kind: 'process', tool: 'bash' },
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-              parentRunId: parentRunId,
+              parentRunId,
               category: AgentCategory.ToolUse,
               description: childRunDescription(command),
             },

@@ -40,11 +40,11 @@ const GIT_UNSAFE_ENV_KEYS = new Set([
  * merges `process.env` back in and every stripped key returns.
  */
 export function makeMachineGitEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (GIT_UNSAFE_ENV_KEYS.has(key.toLowerCase())) continue;
-    env[key] = value;
-  }
+  const env: NodeJS.ProcessEnv = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) => !GIT_UNSAFE_ENV_KEYS.has(key.toLowerCase()),
+    ),
+  );
   env.GIT_TERMINAL_PROMPT = '0';
   env.PATH = extendEnvPath(env.PATH);
   return env;

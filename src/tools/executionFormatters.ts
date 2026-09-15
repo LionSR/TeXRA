@@ -98,8 +98,12 @@ function getAvailablePaths(
   category?: RunDisplayCategory,
   hasChildren?: boolean,
 ): string[] {
-  const common = ['config', 'report', 'result'];
-  if (hasChildren) common.push('children');
+  const common = [
+    'config',
+    'report',
+    'result',
+    ...(hasChildren ? ['children'] : []),
+  ];
   switch (category) {
     case 'toolUse':
       return [...common, 'conversation', 'todos', 'workspace-files'];

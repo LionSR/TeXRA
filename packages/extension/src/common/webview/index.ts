@@ -9,10 +9,6 @@
  */
 export { BundledViewContentProvider } from './BundledViewContentProvider';
 export {
-  BaseViewMessageHandler,
-  type ViewSliceHost,
-} from './BaseViewMessageHandler';
-export {
   SIDEBAR_VIEWS,
   getActiveSidebarView,
   setActiveSidebarView,

@@ -235,10 +235,7 @@ export async function runChat(
       catch: (error: unknown) => error,
     }).pipe(
       Effect.tap((selection) =>
-        Effect.tryPromise({
-          try: () => setCliHelperModel(services.globalState, selection.model),
-          catch: (error: unknown) => error,
-        }),
+        setCliHelperModel(services.globalState, selection.model),
       ),
     ),
   );

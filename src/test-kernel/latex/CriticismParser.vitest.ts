@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseCriticismAnnotations } from '@latex/criticismParser';
-import {
-  DiagnosticsInputSchema,
-  type DiagnosticsInput,
-} from '@tools/DiagnosticsTool';
+import type { DiagnosticsInput } from '@tools/DiagnosticsTool';
+import { getDefaultToolRegistry } from '@tools/registry';
 
 describe('parseCriticismAnnotations', () => {
   it('accepts whitespace before arguments and severity zero', () => {
@@ -47,10 +45,15 @@ describe('parseCriticismAnnotations', () => {
   });
 });
 
-describe('DiagnosticsInputSchema add command', () => {
+describe('DiagnosticsTool add-command input validation', () => {
   it('rejects empty paths and accepts severity zero', () => {
+    // The tool's own input schema, reached through its registered definition
+    // rather than its implementation module.
+    const schema =
+      getDefaultToolRegistry().get('diagnostics')!.definition.zodSchema!;
+
     expect(() =>
-      DiagnosticsInputSchema.parse({
+      schema.parse({
         command: 'add',
         path: '   ',
         line: 1,
@@ -60,7 +63,7 @@ describe('DiagnosticsInputSchema add command', () => {
       }),
     ).toThrow();
 
-    const parsed = DiagnosticsInputSchema.parse({
+    const parsed = schema.parse({
       command: 'add',
       path: 'paper.tex',
       line: 1,

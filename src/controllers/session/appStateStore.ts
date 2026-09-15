@@ -18,9 +18,8 @@
  * application records do, so nothing holds a connection open across a project
  * the desktop closes.
  *
- * The `vscode.Memento`-shaped `update` returns a Promise, and R1 puts that
- * conversion at a host entry: the entry that opens the store passes
- * {@link RunStateWrite}, and this file never runs an Effect itself.
+ * `update` is the port's own write and composes `set`, raising
+ * {@link StateWriteFailed}, so nothing here reaches for a runner.
  */
 import { Effect, Layer } from 'effect';
 
@@ -28,8 +27,7 @@ import {
   nodeProcesses,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
-import type { RunStateWrite } from '@platform/defaults/jsonStore';
-import type { StateStore } from '@platform/interfaces';
+import { StateWriteFailed, type StateStore } from '@platform/interfaces';
 import {
   JsonValueSchema,
   aggregateId,
@@ -39,7 +37,7 @@ import {
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { databaseLayer } from './Database';
 import { WorkspaceRoots } from './WorkspaceRoots';
@@ -73,7 +71,6 @@ class SqliteStateStore implements StateStore {
       key: string,
       value: PersistedJsonValue,
     ) => Effect.Effect<void, Error>,
-    private readonly runWrite: RunStateWrite,
   ) {}
 
   get<T>(key: string, defaultValue?: T): T {
@@ -104,8 +101,18 @@ class SqliteStateStore implements StateStore {
     );
   }
 
-  update(key: string, value: unknown): PromiseLike<void> {
-    return this.runWrite(this.set(key, value));
+  /** {@link StateStore} conformance; the store's own failure, re-tagged. */
+  update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed> {
+    return this.set(key, value).pipe(
+      Effect.mapError(
+        (cause) =>
+          new StateWriteFailed({
+            key,
+            message: `The app-state store at ${this.storage} refused the write of "${key}": ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      ),
+    );
   }
 }
 
@@ -115,7 +122,7 @@ class SqliteStateStore implements StateStore {
  * returning.
  */
 export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
-  function* (storage: string, runWrite: RunStateWrite) {
+  function* (storage: string) {
     // Memoized after the entry's own read: a cache hit on every host that
     // installed its process runtime before opening its stores.
     const ownerId = processOwnerId(
@@ -147,6 +154,6 @@ export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
           ]),
         ),
       ).pipe(Effect.asVoid, Effect.mapError(ensureError));
-    return new SqliteStateStore(storage, values, write, runWrite);
+    return new SqliteStateStore(storage, values, write);
   },
 );

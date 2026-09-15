@@ -171,9 +171,7 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
 
 /** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
-  if (!defaultRegistryInstance) {
-    defaultRegistryInstance = new MapToolRegistry(getDefaultTools());
-  }
+  defaultRegistryInstance ??= new MapToolRegistry(getDefaultTools());
   return defaultRegistryInstance;
 }
 

@@ -1,5 +1,5 @@
-import { Effect } from 'effect';
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Internal imports

@@ -481,6 +481,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     });
     const stage = logger.openStage('Tool-use turn', { kind: 'session' });
     let stageOutcome: RunOutcome = RUN_OUTCOME.FAILED;
+    /** The turn's completed exit; the stage closes with its own verdict. */
+    const completeTurn = (at: RunState): TurnExit => {
+      stageOutcome = RUN_OUTCOME.COMPLETED;
+      return { state: at, outcome: 'completed' };
+    };
     try {
       // A turn begins from a settled boundary; a resumed turn continues at
       // whatever phase its rows left.
@@ -588,10 +593,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (state.pendingResponse !== null) {
           const dispatched = yield* dispatchPendingResponse(state, turnContext);
           state = yield* commit(dispatched.state);
-          if (dispatched.endTurn) {
-            stageOutcome = RUN_OUTCOME.COMPLETED;
-            return { state, outcome: 'completed' };
-          }
+          if (dispatched.endTurn) return completeTurn(state);
           continue;
         }
         if (replayCommitted) {
@@ -611,10 +613,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             if (text) response = text;
             const replayed = yield* afterTextResponse(state, text, false);
             state = replayed.state;
-            if (replayed.done) {
-              stageOutcome = RUN_OUTCOME.COMPLETED;
-              return { state, outcome: 'completed' };
-            }
+            if (replayed.done) return completeTurn(state);
             continue;
           }
         }
@@ -683,8 +682,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         const processed = yield* afterTextResponse(state, outcome.text, true);
         state = processed.state;
         if (!processed.done) continue;
-        stageOutcome = RUN_OUTCOME.COMPLETED;
-        return { state, outcome: 'completed' };
+        return completeTurn(state);
       }
     } finally {
       stage.end(stageOutcome);

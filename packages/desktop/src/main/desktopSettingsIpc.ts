@@ -329,7 +329,7 @@ export function createDesktopSettingsIpc(
     modelName: string;
     enabled: boolean;
   }): Promise<void> {
-    await modelSelectionController.setModelEnabled(input);
+    await runtime.runPromise(modelSelectionController.setModelEnabled(input));
     await postModelSelectionData();
     // The options cache is invalidated by the writer itself.
     await options.credentialSettingsController.refreshModelOptions();
@@ -416,7 +416,7 @@ export function createDesktopSettingsIpc(
    * to that paper. Every refresh a signal triggers runs in this paper's session.
    */
   function runAsyncInPaper(work: () => Promise<void>): void {
-    runAsync(Promise.resolve(runInSession(options.session, work)));
+    runAsync(runInSession(options.session, work));
   }
 
   // Agent runs execute in this same main process and the settings panel shares
@@ -565,7 +565,9 @@ export function createDesktopSettingsIpc(
     ...options.credentialSettingsController.profileHandlers,
     setModelEnabled: updateModelEnabled,
     setModelReasoningLevel: async (message) => {
-      await modelSelectionController.setReasoningLevel(message);
+      await runtime.runPromise(
+        modelSelectionController.setReasoningLevel(message),
+      );
       await postModelSelectionData();
     },
     requestModelAccess: unsupported('Copilot models require VS Code.'),

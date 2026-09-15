@@ -104,7 +104,9 @@ async function loginToSubscription(
     }),
     { signal },
   );
-  const update = await setCliSubscriptionPreference(providerId, true);
+  const update = await runtime.runPromise(
+    setCliSubscriptionPreference(providerId, true),
+  );
   const auth = SUBSCRIPTION_AUTH_COPY[providerId];
   output.appendOutcome(
     update.effective

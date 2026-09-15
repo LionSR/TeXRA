@@ -147,30 +147,37 @@ async function configureAgentRoster(
     );
   }
 
-  if (input.inherit) await roster.setInherited();
-  if (input.all) await roster.setAll();
+  if (input.inherit) await runtime.runPromise(roster.setInherited());
+  if (input.all) await runtime.runPromise(roster.setAll());
   const teamId = input.team;
   if (teamId) {
-    await runAgentRosterTeamAction(() => roster.setTeam(teamId));
+    await runAgentRosterTeamAction(() =>
+      runtime.runPromise(roster.setTeam(teamId)),
+    );
   }
   if (input.workflow !== undefined && input.toolUse !== undefined) {
-    await roster.setCustom({
-      workflow: parseAgentKeys(input.workflow),
-      toolUse: parseAgentKeys(input.toolUse),
-    });
+    await runtime.runPromise(
+      roster.setCustom({
+        workflow: parseAgentKeys(input.workflow),
+        toolUse: parseAgentKeys(input.toolUse),
+      }),
+    );
   } else if (input.workflow !== undefined) {
-    await roster.setEnabledAgentKeys(
-      'workflow',
-      parseAgentKeys(input.workflow),
+    await runtime.runPromise(
+      roster.setEnabledAgentKeys('workflow', parseAgentKeys(input.workflow)),
     );
   } else if (input.toolUse !== undefined) {
-    await roster.setEnabledAgentKeys('toolUse', parseAgentKeys(input.toolUse));
+    await runtime.runPromise(
+      roster.setEnabledAgentKeys('toolUse', parseAgentKeys(input.toolUse)),
+    );
   }
   const defaultTeamId = input.defaultTeam;
   if (defaultTeamId) {
-    await runAgentRosterTeamAction(() => roster.setDefaultTeam(defaultTeamId));
+    await runAgentRosterTeamAction(() =>
+      runtime.runPromise(roster.setDefaultTeam(defaultTeamId)),
+    );
   }
-  if (input.clearDefault) await roster.clearDefaultTeam();
+  if (input.clearDefault) await runtime.runPromise(roster.clearDefaultTeam());
   if (input.defaultAgent) {
     const available = roster.getVisibleAgents('toolUse');
     const selected = available.find(

@@ -514,27 +514,23 @@ export function createDesktopHostRequests(
   async function latexdiffs(
     request: Extract<HostRequest, { kind: 'latexdiffs' }>,
   ): Promise<void> {
+    const { action } = request;
     const baseFile = request.baseFile ?? undefined;
     const editedFile = request.editedFile ?? undefined;
-    switch (request.action) {
-      case 'latexdiffvc':
-      case 'packLatexdiffvc':
-      case 'cleanLatexdiffvc':
-        await latexdiffAgainstCommit(
-          request.action,
-          baseFile,
-          request.commit ?? 'HEAD',
-        );
-        return;
-      default:
-        break;
+    if (
+      action === 'latexdiffvc' ||
+      action === 'packLatexdiffvc' ||
+      action === 'cleanLatexdiffvc'
+    ) {
+      await latexdiffAgainstCommit(action, baseFile, request.commit ?? 'HEAD');
+      return;
     }
     if (!baseFile || !editedFile) {
       throw new Rejected({
         reason: 'Choose a base file and an edited file first.',
       });
     }
-    switch (request.action) {
+    switch (action) {
       case 'compare':
         await workflowFileActions.compareOriginal(editedFile, baseFile);
         return;
@@ -751,7 +747,9 @@ export function createDesktopHostRequests(
         await options.signIn();
         return done;
       case 'dismissBanner':
-        options.snapshot.dismissBanner(request.banner);
+        await runtime.runPromise(
+          options.snapshot.dismissBanner(request.banner),
+        );
         return done;
       case 'gettingStarted':
         if (request.action === 'openWalkthrough') {

@@ -49,10 +49,9 @@ const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* (
 ) {
   const translator = format || 'biblatex';
 
-  const params: unknown[] = [citekeys, translator];
-  if (library) {
-    params.push(library);
-  }
+  const params: unknown[] = library
+    ? [citekeys, translator, library]
+    : [citekeys, translator];
 
   const result = yield* callBetterBibTeX(
     'item.export',

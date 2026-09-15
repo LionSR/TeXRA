@@ -26,7 +26,10 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { fsCall } from '@utils/errors/fsCall';
 
-import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
+import {
+  publishCompiledPdfArtifact,
+  publishCompiledPdfArtifactBestEffort,
+} from './compiledPdfArtifacts';
 import {
   getWorkflowAutoCompileTimeoutMs,
   resolveWorkspaceSourceDir,
@@ -79,10 +82,7 @@ export class LatexDiffManager {
     });
   }
 
-  private logLatexdiffResult(
-    result: LaTeXdiffResult,
-    operation = 'latexdiff',
-  ): void {
+  private logLatexdiffResult(result: LaTeXdiffResult, operation: string): void {
     if (result.success) {
       this.logger.debug('Successfully generated diff file', {
         data: { operation, diffPath: result.diffPath },
@@ -477,32 +477,29 @@ export class LatexDiffManager {
       }
 
       const { runId, runDirectory } = this.fileService;
-      const artifact = yield* publishCompiledPdfArtifact({
-        runDirectory,
-        runId,
-        round,
-        displayName: path.basename(diffLocation.absolutePath),
-        source: sourceLocation,
-        compiledPdfPath: compiled.pdfPath,
-        pdfStemSuffix,
-      }).pipe(
+      const artifact = yield* publishCompiledPdfArtifactBestEffort(
+        publishCompiledPdfArtifact({
+          runDirectory,
+          runId,
+          round,
+          displayName: path.basename(diffLocation.absolutePath),
+          source: sourceLocation,
+          compiledPdfPath: compiled.pdfPath,
+          pdfStemSuffix,
+        }),
         // Publishing the auxiliary PDF is best effort: a copy that failed is
         // reported here and leaves the diff `.tex` itself intact.
-        Effect.catch((error) =>
-          Effect.sync((): RunStorageFileLocation | null => {
-            this.logger.warn(
-              `Failed to publish latexdiff PDF: ${toErrorMessage(error)}`,
-              {
-                data: {
-                  diffFile: diffLocation.absolutePath,
-                  compiledPdfPath: compiled.pdfPath,
-                  error,
-                },
+        (error) =>
+          this.logger.warn(
+            `Failed to publish latexdiff PDF: ${toErrorMessage(error)}`,
+            {
+              data: {
+                diffFile: diffLocation.absolutePath,
+                compiledPdfPath: compiled.pdfPath,
+                error,
               },
-            );
-            return null;
-          }),
-        ),
+            },
+          ),
       );
       return { diffLocation, artifact };
     });

@@ -10,12 +10,20 @@ const mocks = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
   initLocalCliPlatform: vi.fn(),
   readCliAgentRoster: vi.fn(),
-  setAll: vi.fn(),
-  setCustom: vi.fn(),
-  setDefaultTeam: vi.fn(),
-  setEnabledAgentKeys: vi.fn(),
-  setInherited: vi.fn(),
-  setTeam: vi.fn(),
+  // Every roster mutation is a composed Effect now, so the doubles answer with
+  // one: a bare `vi.fn()` returns undefined, which `runPromise` cannot run.
+  setAll: vi.fn(() => Effect.void),
+  setCustom: vi.fn(() => Effect.void),
+  // The roster refuses an unknown team in its own right, so these two are
+  // typed for the refusal the tests below fail them with.
+  setDefaultTeam: vi.fn<() => Effect.Effect<void, InvalidAgentTeamError>>(
+    () => Effect.void,
+  ),
+  setEnabledAgentKeys: vi.fn(() => Effect.void),
+  setInherited: vi.fn(() => Effect.void),
+  setTeam: vi.fn<() => Effect.Effect<void, InvalidAgentTeamError>>(
+    () => Effect.void,
+  ),
   setWorkspaceCliChatAgent: vi.fn(() => Effect.void),
 }));
 
@@ -147,7 +155,9 @@ describe('CLI config command', () => {
   ])(
     'reports an invalid $name id as a usage error',
     async ({ flag, value, mock, message }) => {
-      mock().mockRejectedValueOnce(new InvalidAgentTeamError(message));
+      mock().mockReturnValueOnce(
+        Effect.fail(new InvalidAgentTeamError(message)),
+      );
 
       const result = await runCli([
         'config',

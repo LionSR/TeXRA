@@ -338,10 +338,11 @@ export class ProgressFollowUpController {
     compileFailures: CompileFailure[],
     runOutputs: ReadonlyRoundIndexed<OutputFileInfo>,
   ): string[] {
-    const outputByPath = new Map<string, OutputFileInfo>();
-    for (const output of Object.values(runOutputs).flat()) {
-      outputByPath.set(output.location.absolutePath, output);
-    }
+    const outputByPath = new Map(
+      Object.values(runOutputs)
+        .flat()
+        .map((output) => [output.location.absolutePath, output] as const),
+    );
 
     const generatedOutputSources = compileFailures
       .map((failure) => outputByPath.get(failure.output.absolutePath)?.source)

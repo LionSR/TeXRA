@@ -1296,12 +1296,9 @@ export function forEachLiveSession(
  */
 export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
   function* (signal: AbortSignal) {
-    const pending: { session: SessionHandle; runId: RunId }[] = [];
-    forEachLiveSession((session) => {
-      for (const runId of session.runs.getActiveIds()) {
-        pending.push({ session, runId });
-      }
-    });
+    const pending = heldSessions().flatMap((session) =>
+      session.runs.getActiveIds().map((runId) => ({ session, runId })),
+    );
     for (const { session, runId } of pending) {
       if (signal.aborted) {
         logger.warn(

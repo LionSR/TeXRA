@@ -392,21 +392,18 @@ function planCommand(
     case 'update':
       return executeUpdate(ports, { objective: input.objective });
     case 'pause':
-      return ports.call.run
-        ? executePause(
-            ports,
-            ports.call.run.runId,
-            requireNonEmptyString(input.reason, 'reason'),
-          )
-        : Effect.fail(new ToolError('plan(pause) requires an active run.'));
-    case 'complete':
-      return ports.call.run
-        ? executeComplete(
-            ports,
-            ports.call.run.runId,
-            requireNonEmptyString(input.reason, 'reason'),
-          )
-        : Effect.fail(new ToolError('plan(complete) requires an active run.'));
+    case 'complete': {
+      const { run } = ports.call;
+      if (!run) {
+        return Effect.fail(
+          new ToolError(`plan(${input.command}) requires an active run.`),
+        );
+      }
+      const reason = requireNonEmptyString(input.reason, 'reason');
+      return input.command === 'pause'
+        ? executePause(ports, run.runId, reason)
+        : executeComplete(ports, run.runId, reason);
+    }
   }
 }
 

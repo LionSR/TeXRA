@@ -682,17 +682,19 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
             logger.warn('Failed to persist the launch failure', {
               data: finalization.error,
             });
-          const failures: unknown[] = [];
-          for (const dispose of resources.toReversed()) {
-            const disposed = yield* Effect.exit(
-              Effect.tryPromise({
-                try: async () => dispose(),
-                catch: ensureError,
-              }),
-            );
-            if (Exit.isFailure(disposed))
-              failures.push(Cause.squash(disposed.cause));
-          }
+          const disposals = yield* Effect.forEach(
+            resources.toReversed(),
+            (dispose) =>
+              Effect.exit(
+                Effect.tryPromise({
+                  try: async () => dispose(),
+                  catch: ensureError,
+                }),
+              ),
+          );
+          const failures = disposals.flatMap((disposed) =>
+            Exit.isFailure(disposed) ? [Cause.squash(disposed.cause)] : [],
+          );
           if (failures.length) {
             logger.warn(
               'Failed to release launch resources after a failed launch',

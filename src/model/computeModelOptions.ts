@@ -6,6 +6,7 @@ import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
+import { StateWriteFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
@@ -687,14 +688,24 @@ export function getEnabledModels(
  * Two invariants: at least one model stays enabled, and a retired model is
  * never enabled. Throws on either violation; callers surface the message.
  */
-export async function setModelEnabled(input: {
+export function setModelEnabled(input: {
   readonly model: string;
   readonly enabled: boolean;
   readonly state: StateStore;
-}): Promise<readonly string[]> {
+}): Effect.Effect<readonly string[], StateWriteFailed> {
   const state = input.state;
   if (input.enabled && isRetiredModel(input.model)) {
-    throw new Error(`Model "${input.model}" is retired and cannot be enabled.`);
+    // The sibling refusal below is typed for the same reason: the guard runs
+    // when the method is called, and a throw here would escape the channel
+    // this signature declares.
+    const message = `Model "${input.model}" is retired and cannot be enabled.`;
+    return Effect.fail(
+      new StateWriteFailed({
+        key: GlobalStateKey.MODEL_SELECTION,
+        message,
+        cause: new Error(message),
+      }),
+    );
   }
 
   // Edit the list the picker shows — including the all-defaults fallback — and
@@ -718,26 +729,39 @@ export async function setModelEnabled(input: {
   };
   const nextEnabled = enabledModelsOf(next);
   if (nextEnabled.length === 0) {
-    throw new Error(
-      'At least one model must stay enabled. Enable another model before disabling this one.',
+    // A refusal, not a defect: the caller is told in the channel its signature
+    // declares, so a UI that disables the last model can surface it instead of
+    // crashing the program that composed this.
+    const message =
+      'At least one model must stay enabled. Enable another model before disabling this one.';
+    return Effect.fail(
+      new StateWriteFailed({
+        key: GlobalStateKey.MODEL_SELECTION,
+        message,
+        cause: new Error(message),
+      }),
     );
   }
-  await state.update(GlobalStateKey.MODEL_SELECTION, next);
-
   // If the helper model was just removed, pin the built-in default. Do not
   // fall back to the first remaining picker model — that is a premium default,
   // not the cheap auxiliary.
-  if (
+  const pinsHelper =
     !input.enabled &&
     resolveEffectiveHelperModel(
       state.get<string | undefined>(GlobalStateKey.HELPER_MODEL),
       current,
-    ) === input.model
-  ) {
-    await state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL);
-  }
+    ) === input.model;
 
-  return nextEnabled;
+  return state
+    .update(GlobalStateKey.MODEL_SELECTION, next)
+    .pipe(
+      Effect.andThen(
+        pinsHelper
+          ? state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL)
+          : Effect.void,
+      ),
+      Effect.as(nextEnabled),
+    );
 }
 
 /**

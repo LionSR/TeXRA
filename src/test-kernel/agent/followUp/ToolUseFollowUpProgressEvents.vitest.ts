@@ -94,7 +94,7 @@ describe('tool-use follow-up progress events', () => {
     const run = createRecordingHost();
     const session = trackSession();
     publishTestRunStart(session, runId);
-    await session.settlePublications();
+    await Effect.runPromise(session.settlePublications());
     const sent = recordFollowUpsSent(session);
     const lease = session.followUps.claimLive(runId, 'flow')!;
 

@@ -83,7 +83,9 @@ export async function applyCliModelSelection(
         CHAT_API_MODE_MODEL_RECOVERY,
       ),
     });
-    await setCliHelperModel(context.state, selection.model);
+    await context.runtime.runPromise(
+      setCliHelperModel(context.state, selection.model),
+    );
     setCliSessionModelOverride(selection.model);
     appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
     return;
@@ -109,7 +111,9 @@ export async function applyCliModelSelection(
   await activeFlow.switchModel(nextModel);
   setCliSessionModelOverride(nextModel);
   try {
-    await setCliHelperModel(context.state, nextModel);
+    await context.runtime.runPromise(
+      setCliHelperModel(context.state, nextModel),
+    );
   } catch (error: unknown) {
     appendLocalAssistantTranscript(
       `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(error)}`,

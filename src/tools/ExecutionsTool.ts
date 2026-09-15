@@ -108,8 +108,8 @@ import { workflowBoardView } from './executions/workflowSummaryView';
 /**
  * Bound on the durable reads one listing page or one children block fans
  * out at once: every row asks for its own metadata (and, when the row
- * recorded no outcome, its run lease and a checkpoint stat), so the
- * fan-out is bounded rather than page-wide.
+ * recorded no outcome, the run claim), so the fan-out is bounded rather
+ * than page-wide.
  */
 const DURABLE_READ_CONCURRENCY = 16;
 
@@ -189,25 +189,11 @@ function workflowBoardLines(
   view: SessionView | null,
   runId: RunId,
   board: ReturnType<typeof deriveWorkflowRunModel> | null,
-): Effect.Effect<string[]> {
-  if (board) {
-    return Effect.succeed([
-      '',
-      'Workflow:',
-      JSON.stringify(workflowBoardView(board), null, 2),
-    ]);
-  }
-  if (!view) return Effect.succeed([]);
-  const derivedBoard = deriveWorkflowRunModel(view, runId);
-  return Effect.succeed(
-    derivedBoard
-      ? [
-          '',
-          'Workflow:',
-          JSON.stringify(workflowBoardView(derivedBoard), null, 2),
-        ]
-      : [],
-  );
+): string[] {
+  const resolved = board ?? (view && deriveWorkflowRunModel(view, runId));
+  return resolved
+    ? ['', 'Workflow:', JSON.stringify(workflowBoardView(resolved), null, 2)]
+    : [];
 }
 
 function getRunningTodos(
@@ -509,9 +495,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           run,
         );
         if (run?.identity.kind === 'multiAgentWorkflow') {
-          lines.push(
-            ...(yield* workflowBoardLines(null, runId, run.transcript.run)),
-          );
+          lines.push(...workflowBoardLines(null, runId, run.transcript.run));
         }
 
         yield* this.appendSummaryTail(
@@ -583,11 +567,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
       if (identity?.kind === 'multiAgentWorkflow') {
         lines.push(
-          ...(yield* workflowBoardLines(
+          ...workflowBoardLines(
             durableView,
             runId,
             summaryRun?.transcript.run ?? null,
-          )),
+          ),
         );
       }
 
@@ -1095,20 +1079,21 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         return resolvedCandidate ? [resolvedCandidate.path] : [];
       }),
     );
+    /** The recorded workspace file `candidate` names, when it names one. */
+    const recordedFile = (candidate: string) => {
+      const candidateFile = resolveRunWorkspaceFilePath(record, candidate);
+      return candidateFile && recordedPaths.has(candidateFile.path)
+        ? candidateFile
+        : undefined;
+    };
     // The listing renders recorded paths under a `workspace/` display prefix,
     // so a read in that display form retries against the stripped path.
-    const direct = resolveRunWorkspaceFilePath(record, filePath);
-    let resolved =
-      direct && recordedPaths.has(direct.path) ? direct : undefined;
     const displayPrefix = 'workspace/';
-    if (!resolved && filePath.startsWith(displayPrefix)) {
-      const stripped = resolveRunWorkspaceFilePath(
-        record,
-        filePath.slice(displayPrefix.length),
-      );
-      resolved =
-        stripped && recordedPaths.has(stripped.path) ? stripped : undefined;
-    }
+    const resolved =
+      recordedFile(filePath) ??
+      (filePath.startsWith(displayPrefix)
+        ? recordedFile(filePath.slice(displayPrefix.length))
+        : undefined);
     if (!resolved) {
       return yield* Effect.fail(
         new ToolError(

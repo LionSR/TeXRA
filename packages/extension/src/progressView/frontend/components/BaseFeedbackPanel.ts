@@ -100,10 +100,11 @@ export abstract class BaseFeedbackPanel<
     // Both states keep the reject icon and name the consequence. Switching to
     // a checkmark labelled "Submit" made the confirm step of a rejection wear
     // the approval glyph, which is the one misreading this flow cannot afford.
+    const { showFeedback } = this;
     return renderLabeledActionButton({
       icon: 'xmark',
-      text: this.showFeedback ? 'Send rejection' : 'Reject',
-      title: this.showFeedback ? 'Send rejection (n)' : rejectTitle,
+      text: showFeedback ? 'Send rejection' : 'Reject',
+      title: showFeedback ? 'Send rejection (n)' : rejectTitle,
       action: 'reject',
       disabled: this.readOnly,
       onClick: () => this.handleRejectAction(),

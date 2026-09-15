@@ -1891,7 +1891,6 @@ export const InputTokenEstimateSchema = z
   .readonly();
 export type InputTokenEstimate = z.infer<typeof InputTokenEstimateSchema>;
 
-/** A configured executable value; it owns neither conversation nor retry policy. */
 /** The bytes an upload takes. */
 export const FileUploadSchema = z
   .strictObject({
@@ -1919,6 +1918,7 @@ export interface UnreleasedUpload {
   readonly reason: string;
 }
 
+/** A configured executable value; it owns neither conversation nor retry policy. */
 export interface Model {
   prepareTurn(request: TurnRequest): Effect.Effect<ResolvedTurn, ModelError>;
   streamTurn(

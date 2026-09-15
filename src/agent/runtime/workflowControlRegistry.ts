@@ -41,8 +41,10 @@ export class WorkflowControlRegistry {
    */
   control(grandchildId: RunId, action: WorkflowControlAction): boolean {
     let claimed = false;
+    // Every run is asked, so the loop never short-circuits: the one that owns
+    // the grandchild acts, the rest no-op.
     for (const control of this.runs) {
-      if (control(grandchildId, action)) claimed = true;
+      claimed = control(grandchildId, action) || claimed;
     }
     return claimed;
   }

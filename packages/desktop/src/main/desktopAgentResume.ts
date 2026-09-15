@@ -76,9 +76,7 @@ export class DesktopProcessResumeOwner {
   }
 
   private isOpen(session: SessionHandle): boolean {
-    for (const open of this.options.sessions())
-      if (open === session) return true;
-    return false;
+    return [...this.options.sessions()].includes(session);
   }
 
   private async resumeDesktopRun(

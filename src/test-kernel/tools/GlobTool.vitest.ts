@@ -161,11 +161,9 @@ describe('GlobTool match metadata', () => {
                     'external',
                   ),
                 );
-                yield* Effect.promise(() =>
-                  workspaceRoots().workspaceState.update(
-                    WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-                    false,
-                  ),
+                yield* workspaceRoots().workspaceState.update(
+                  WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+                  false,
                 );
 
                 const result = yield* new GlobTool().call({

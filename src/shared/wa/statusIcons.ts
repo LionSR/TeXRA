@@ -58,10 +58,11 @@ export function renderSetStatusIcon<Status extends string>({
   if (!fallback) {
     // `label` exposes the check's meaning to assistive technology; `title`
     // alone is a hover-only tooltip on an otherwise aria-hidden icon.
+    const label = title ?? 'Set';
     return waIcon('check', {
       className: 'status-check-icon',
-      label: title ?? 'Set',
-      title: title ?? 'Set',
+      label,
+      title: label,
     });
   }
   return html`<wa-tag variant=${fallback.variant ?? 'neutral'} size="s"

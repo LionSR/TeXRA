@@ -64,7 +64,12 @@ vi.mock('@latex/latexToolchain', () => ({
 
 vi.mock(
   '@agent/implementations/flows/reflection/output/compiledPdfArtifacts',
-  () => ({
+  async (importOriginal) => ({
+    // Only the publish is mocked; the best-effort recovery that wraps it in
+    // `LatexDiffManager` stays real, so the failure case exercises it.
+    ...(await importOriginal<
+      typeof import('@agent/implementations/flows/reflection/output/compiledPdfArtifacts')
+    >()),
     publishCompiledPdfArtifact: mocks.publishCompiledPdfArtifact,
   }),
 );

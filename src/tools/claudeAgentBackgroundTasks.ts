@@ -42,15 +42,12 @@ export class ClaudeBackgroundTaskTracker {
   constructor(private readonly logger: AgentTrace) {}
 
   replace(tasks: BackgroundTasks): void {
+    const log = buildBackgroundTaskLog(tasks);
     if (tasks.length === 0) {
-      this.settle(
-        buildBackgroundTaskLog(tasks),
-        'No Claude background tasks remain',
-      );
+      this.settle(log, 'No Claude background tasks remain');
       return;
     }
 
-    const log = buildBackgroundTaskLog(tasks);
     const ref =
       this.active?.ref ??
       startToolUseCard(

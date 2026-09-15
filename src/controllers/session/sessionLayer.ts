@@ -177,17 +177,14 @@ function heldSessionSync(
 
 /** The owner ids of the non-terminal runs another process wrote. */
 function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
-  const owners = new Set<OwnerId>();
-  for (const run of view.runs.values()) {
-    if (
-      run.ownerId !== null &&
-      run.ownerId !== self &&
-      !isTerminalOutcomePhase(run.status)
-    ) {
-      owners.add(run.ownerId);
-    }
-  }
-  return [...owners].sort();
+  const foreign = [...view.runs.values()].flatMap((run) =>
+    run.ownerId !== null &&
+    run.ownerId !== self &&
+    !isTerminalOutcomePhase(run.status)
+      ? [run.ownerId]
+      : [],
+  );
+  return [...new Set(foreign)].sort();
 }
 
 /**

@@ -17,6 +17,8 @@
  * constructor instead of the controller importing `@resources`.
  */
 
+import * as path from 'node:path';
+
 import { Effect, FileSystem } from 'effect';
 
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
@@ -194,12 +196,20 @@ export class ChatExportController {
       const { trace, record } = traceResult;
 
       // The bundle path is host-supplied and absolute, so it is the process
-      // filesystem's, not a rooted view's. A path whose parent is not a
-      // directory is a missing bundle, not a failure: `AbsoluteFS.exists`
-      // counted ENOTDIR as absent alongside ENOENT, and `FileSystem.exists`
-      // reports it as `BadResource`. The predicate names ENOTDIR specifically
-      // so an operational failure still propagates.
+      // filesystem's, not a rooted view's. Effect's `FileSystem.exists`
+      // resolves a relative path against cwd; the retired `AbsoluteFS.exists`
+      // refused that. Require an absolute path so a relative argument cannot
+      // silently retarget. A path whose parent is not a directory is a missing
+      // bundle, not a failure: `AbsoluteFS.exists` counted ENOTDIR as absent
+      // alongside ENOENT, and `FileSystem.exists` reports it as `BadResource`.
       const fs = yield* FileSystem.FileSystem;
+      if (!path.isAbsolute(standaloneTemplatePath)) {
+        return yield* Effect.fail(
+          new Error(
+            `Trace-viewer standalone bundle path must be absolute: ${standaloneTemplatePath}`,
+          ),
+        );
+      }
       const exists = yield* fs.exists(standaloneTemplatePath).pipe(
         Effect.catchIf(
           (error) =>

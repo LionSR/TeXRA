@@ -236,14 +236,14 @@ export const sessionEventsLayer = Layer.effect(
             ensureError(aggregateError(failures, 'Session publication failed')),
           );
         }
-        let highest: CommitOrdinal | null = null;
-        for (const exit of exits) {
-          if (Exit.isSuccess(exit) && exit.value !== null) {
-            highest =
-              highest === null ? exit.value : Math.max(highest, exit.value);
-          }
-        }
-        return Effect.succeed(highest);
+        const commits = exits.flatMap((exit) =>
+          Exit.isSuccess(exit) && exit.value !== null ? [exit.value] : [],
+        );
+        return Effect.succeed(
+          commits.length === 0
+            ? null
+            : commits.reduce((a, b) => Math.max(a, b)),
+        );
       }),
     );
     // THE tail (C7): the drain woken by the log's level.

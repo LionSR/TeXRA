@@ -144,7 +144,7 @@ export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
   '@texra/agent/AgentRun',
 ) {}
 
-export interface AgentRunLayerInput {
+interface AgentRunLayerInput {
   readonly setting: AgentSetting;
   readonly parentRunId: RunId | null;
   /** Caller-supplied tools available only to this run. */

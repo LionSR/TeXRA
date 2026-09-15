@@ -595,8 +595,8 @@ export class RequestPanels extends LitElement {
   protected override updated(): void {
     const previousKeys = this.seenPermissionKeys;
     this.seenPermissionKeys = new Set(this.permissions.map(getPermissionKey));
-    // Queue order is newest-first, so this is the newest request that just
-    // appeared.
+    // `permissions` is the fold's order, oldest first, so this is the
+    // earliest request that just appeared.
     const firstNew = this.permissions.find(
       (permission) => !previousKeys.has(getPermissionKey(permission)),
     );
