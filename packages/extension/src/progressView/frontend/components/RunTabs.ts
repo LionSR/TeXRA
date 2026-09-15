@@ -41,7 +41,6 @@ import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
 import { runTabStyles } from './RunTab.styles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
-import { ELEMENT_IDS } from '../constants';
 import { getComposedPathElement } from '../utils';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
@@ -457,9 +456,7 @@ export class RunTabs extends LitElement {
     return html`
       <div class="tabs">
         <div class="tabs-content">
-          <div id=${ELEMENT_IDS.STREAM_TABS} @click=${this.handleTabClick}>
-            ${body}
-          </div>
+          <div @click=${this.handleTabClick}>${body}</div>
           ${when((view?.order.length ?? 0) === 0, () =>
             renderEmptyState({
               icon: 'terminal',

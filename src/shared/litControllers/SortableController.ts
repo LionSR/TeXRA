@@ -26,7 +26,7 @@ type SortableReorderCallback = (result: SortableReorderResult) => void;
  * private sortableController = new SortableController(
  *   this,
  *   () => this.fileListElement,
- *   () => this.currentFiles,
+ *   () => this.files,
  *   (result) => this.dispatchEvent(
  *     SessionUiEvents.surface({
  *       kind: 'launch',
@@ -42,7 +42,7 @@ export class SortableController implements ReactiveController {
   constructor(
     private readonly host: ReactiveControllerHost,
     private readonly getElement: () => HTMLElement | undefined,
-    private readonly getItems: () => string[],
+    private readonly getItems: () => readonly string[],
     private readonly onReorder: SortableReorderCallback,
   ) {
     this.host.addController(this);

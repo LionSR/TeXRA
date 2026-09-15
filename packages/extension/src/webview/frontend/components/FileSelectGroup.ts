@@ -81,7 +81,7 @@ export class FileSelectGroup extends LitElement {
   private sortableController = new SortableController(
     this,
     () => this.fileListElement,
-    () => [...this.files],
+    () => this.files,
     (result) => this.patchLaunch({ [this.listId]: result.items }),
   );
 
@@ -116,46 +116,25 @@ export class FileSelectGroup extends LitElement {
     );
   }
 
-  private handleRemoveClick(button: HTMLElement): void {
-    const file = button.dataset.removeFile;
-    if (file) {
-      this.patchLaunch({
-        [this.listId]: this.files.filter((entry) => entry !== file),
-      });
-    }
+  private removeFile(file: string): void {
+    this.patchLaunch({
+      [this.listId]: this.files.filter((entry) => entry !== file),
+    });
   }
 
   /** Keyboard/touch counterpart to Sortable drag reordering (order is
    * semantic: the first input file is the primary input). Patches the same
    * launcher list as a drag. */
-  private handleMoveClick(button: HTMLElement): void {
-    const index = Number(button.dataset.moveIndex);
-    const direction = Number(button.dataset.moveDirection);
+  private moveFile(index: number, direction: -1 | 1): void {
     const files = this.files;
     const target = index + direction;
-    if (!Number.isInteger(index) || target < 0 || target >= files.length) {
+    if (target < 0 || target >= files.length) {
       return;
     }
     const reordered = [...files];
     const [moved] = reordered.splice(index, 1);
     reordered.splice(target, 0, moved);
     this.patchLaunch({ [this.listId]: reordered });
-  }
-
-  /** Single delegate for the file-list row: lit-html rejects two `@click`
-   * bindings on the same element, so remove and move share one dispatch,
-   * each matching its own `data-*` marker on a distinct button. */
-  private handleFileListClick(event: MouseEvent): void {
-    const target = event.target as HTMLElement;
-    const removeButton = target.closest<HTMLElement>('[data-remove-file]');
-    if (removeButton) {
-      this.handleRemoveClick(removeButton);
-      return;
-    }
-    const moveButton = target.closest<HTMLElement>('[data-move-index]');
-    if (moveButton) {
-      this.handleMoveClick(moveButton);
-    }
   }
 
   private get isFileInputDisabled(): boolean {
@@ -273,22 +252,12 @@ export class FileSelectGroup extends LitElement {
     }
 
     const movable = this.files.length > 1;
-    return html`<div
-      role="list"
-      aria-label=${`${this.config.label} files`}
-      @click=${this.handleFileListClick}
-    >
+    return html`<div role="list" aria-label=${`${this.config.label} files`}>
       ${repeat(
         this.files,
         (file) => file,
         (file, index) => {
           const display = this.formatFilePath(file);
-          // Per-row id so the sibling <wa-tooltip> anchors to the right row
-          // (this list renders in a single shadow root). The repeat index is
-          // unique and collision-proof, unlike a sanitized path.
-          const moveUpButtonId = `file-select-move-up-${index}`;
-          const moveDownButtonId = `file-select-move-down-${index}`;
-          const removeButtonId = `file-select-remove-${index}`;
           return html`
             <div
               class="file-item"
@@ -310,56 +279,35 @@ export class FileSelectGroup extends LitElement {
               ${
                 movable
                   ? html`
-                      <wa-button
-                        id=${moveUpButtonId}
-                        class="action-icon-button move-button"
-                        appearance="plain"
-                        variant="neutral"
-                        size="s"
-                        type="button"
-                        aria-label=${`Move ${file} up`}
-                        data-move-index=${index}
-                        data-move-direction="-1"
-                        ?disabled=${index === 0}
-                      >
-                        ${waIcon('arrow-up')}
-                      </wa-button>
-                      <wa-tooltip for=${moveUpButtonId}
-                        >Move up: ${file}</wa-tooltip
-                      >
-                      <wa-button
-                        id=${moveDownButtonId}
-                        class="action-icon-button move-button"
-                        appearance="plain"
-                        variant="neutral"
-                        size="s"
-                        type="button"
-                        aria-label=${`Move ${file} down`}
-                        data-move-index=${index}
-                        data-move-direction="1"
-                        ?disabled=${index === this.files.length - 1}
-                      >
-                        ${waIcon('arrow-down')}
-                      </wa-button>
-                      <wa-tooltip for=${moveDownButtonId}
-                        >Move down: ${file}</wa-tooltip
-                      >
+                      ${renderIconActionButton({
+                        id: `file-select-move-up-${index}`,
+                        icon: 'arrow-up',
+                        label: `Move ${file} up`,
+                        tooltip: `Move up: ${file}`,
+                        className: 'move-button',
+                        disabled: index === 0,
+                        onClick: () => this.moveFile(index, -1),
+                      })}
+                      ${renderIconActionButton({
+                        id: `file-select-move-down-${index}`,
+                        icon: 'arrow-down',
+                        label: `Move ${file} down`,
+                        tooltip: `Move down: ${file}`,
+                        className: 'move-button',
+                        disabled: index === this.files.length - 1,
+                        onClick: () => this.moveFile(index, 1),
+                      })}
                     `
                   : nothing
               }
-              <wa-button
-                id=${removeButtonId}
-                class="action-icon-button remove-button"
-                appearance="plain"
-                variant="neutral"
-                size="s"
-                type="button"
-                aria-label=${`Remove ${file}`}
-                data-remove-file=${file}
-              >
-                ${waIcon('trash')}
-              </wa-button>
-              <wa-tooltip for=${removeButtonId}>Remove: ${file}</wa-tooltip>
+              ${renderIconActionButton({
+                id: `file-select-remove-${index}`,
+                icon: 'trash',
+                label: `Remove ${file}`,
+                tooltip: `Remove: ${file}`,
+                className: 'remove-button',
+                onClick: () => this.removeFile(file),
+              })}
             </div>
           `;
         },
