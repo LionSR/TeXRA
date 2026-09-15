@@ -2,13 +2,13 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import type { Effect } from 'effect';
 
 // Local imports - platform
 import type { StateWriteFailed } from '@platform/interfaces';
 
 // Local imports - shared
 import type { AgentCategory, AgentSource } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 import type { TemplateAgentFilePlan } from './backend/templateAgentCreation';
 

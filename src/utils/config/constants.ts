@@ -1,8 +1,8 @@
 // Local imports
-import type { Effect } from 'effect';
 
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { Effect } from 'effect';
 
 // Time constants
 export const REFRESH_THRESHOLD_MS = 200;

@@ -6,11 +6,10 @@
  * owned by the onboarding controllers.
  */
 
-import type { Effect } from 'effect';
-
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/text/stringUtils';
+import type { Effect } from 'effect';
 
 export function setOnboardingDeclined(
   state: StateStore,

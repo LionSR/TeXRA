@@ -1,5 +1,3 @@
-import type { Effect } from 'effect';
-
 import type { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import {
   AGENT_CATEGORIES,
@@ -11,6 +9,7 @@ import {
   type AgentSource,
   type ByCategory,
 } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 interface TeamRosterAgentCatalog {
   getAgents(category: AgentCategory): { name: string; source: AgentSource }[];

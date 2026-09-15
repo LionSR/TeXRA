@@ -37,9 +37,9 @@ import {
   STARTER_AGENT_MODE_PRESET,
   ToolError,
 } from '@shared/schemas';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
 import { getSetupAuthStatus, SetupPlatform } from './platform';
 

@@ -14,11 +14,11 @@
 
 // Third-party imports
 import { Effect } from 'effect';
-import type * as vscode from 'vscode';
 
 // Local imports
 import { StateWriteFailed, type StateStore } from '@platform/interfaces';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type * as vscode from 'vscode';
 
 /** The port over one of VS Code's own `Memento`s (global or workspace). */
 export function mementoStateStore(memento: vscode.Memento): StateStore {

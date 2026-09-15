@@ -8,13 +8,12 @@
  * why a preferred route is unavailable.
  */
 
-import type { Effect } from 'effect';
-
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { isDeprecatedModel, isRetiredModel } from './modelOptionsBasic';
 import { copilotRouteForModel } from './runtimeModelRegistry';
+import type { Effect } from 'effect';
 
 /**
  * Copilot discovery never matches a retired or deprecated base model, so a

@@ -90,7 +90,6 @@ import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
-import { mementoStateStore } from './frontend/vscodeStateStore';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import {
@@ -120,6 +119,7 @@ import {
 } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { mementoStateStore } from './frontend/vscodeStateStore';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
