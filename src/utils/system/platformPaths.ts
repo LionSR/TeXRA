@@ -14,6 +14,21 @@ import { createLog } from '@logger/logUtils';
 import { normalizeFilePath, unique } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
 
+/**
+ * `AbsoluteFS.existsSync`'s contract without the facade: the probe asserts an
+ * absolute path and then asks `node:fs`. The facade refused a relative one
+ * with a thrown `Path must be absolute`, and three of the roots searched below
+ * come straight from the environment (`SCOOP`, `MSYS2_HOME`, `LOCALAPPDATA`),
+ * so a probe that quietly answered "absent" would drop those directories from
+ * PATH with nothing to show for it.
+ */
+function existsAtAbsolute(target: string): boolean {
+  if (!path.isAbsolute(target)) {
+    throw new Error(`Path must be absolute: ${target}`);
+  }
+  return existsSync(target);
+}
+
 /** Whether the current platform is Windows (cached at module load). */
 export const IS_WINDOWS = process.platform === 'win32';
 
@@ -137,7 +152,7 @@ function getExtraDirs(): string[] {
       (process.env.USERPROFILE
         ? path.join(process.env.USERPROFILE, 'scoop')
         : null);
-    if (scoopDir && existsSync(scoopDir)) {
+    if (scoopDir && existsAtAbsolute(scoopDir)) {
       dirs.push(path.join(scoopDir, 'shims'));
       dirs.push(...globDescending(path.join(scoopDir, 'apps', '*', 'current')));
     }
@@ -150,7 +165,7 @@ function getExtraDirs(): string[] {
     for (const root of msysRoots) {
       for (const sub of MSYS_SUBDIRS) {
         const dir = path.join(root, sub);
-        if (existsSync(path.join(dir, 'perl.exe'))) {
+        if (existsAtAbsolute(path.join(dir, 'perl.exe'))) {
           dirs.push(dir);
         }
       }
@@ -172,7 +187,7 @@ function getExtraDirs(): string[] {
     }
     for (const pattern of tlperlPatterns) {
       for (const dir of globDescending(pattern)) {
-        if (existsSync(path.join(dir, 'perl.exe'))) {
+        if (existsAtAbsolute(path.join(dir, 'perl.exe'))) {
           dirs.push(dir);
         }
       }
@@ -250,7 +265,7 @@ export function extendEnvPath(
   }
   const segments = basePath.split(path.delimiter).filter(Boolean);
   for (const dir of getExtraDirs()) {
-    if (!segments.includes(dir) && existsSync(dir)) {
+    if (!segments.includes(dir) && existsAtAbsolute(dir)) {
       segments.push(dir);
     }
   }
@@ -312,7 +327,7 @@ function findToolInCommonPathsUncached(tool: string): string | null {
   for (const dir of getExtraDirs()) {
     for (const name of candidates) {
       const candidate = path.join(dir, name);
-      if (existsSync(candidate)) {
+      if (existsAtAbsolute(candidate)) {
         return candidate;
       }
     }
