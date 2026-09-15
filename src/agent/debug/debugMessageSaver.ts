@@ -1,10 +1,17 @@
+import * as path from 'node:path';
+
+import { Effect, FileSystem } from 'effect';
+
 import type { AgentTrace } from '@agent/trace';
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
+import {
+  resolveRunStoragePath,
+  RUNS_STORAGE_DIR,
+} from '@platform/defaults/workspaceStorage';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
-import { StorageFS } from '@utils/files/storageFS';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
-import { ensureRunDir } from '@utils/files/runStorageFs';
+import { runDirUnder } from '@utils/files/runStorageFs';
+import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 interface DebugContext {
@@ -13,6 +20,13 @@ interface DebugContext {
   runId?: RunId;
   /** Remote agents skip saving to avoid leaking prompts. */
   isRemote?: boolean;
+  /**
+   * The run's session roots, passed as data. A save with a run id lands under
+   * the storage root, a save without one under the workspace root — the two
+   * roots the `StorageFS` / `WorkspaceFS` facades read from the ambient
+   * `workspaceRoots()` at call time.
+   */
+  roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>;
 }
 
 interface DebugSaveOptions {
@@ -34,19 +48,25 @@ interface SaveDebugParams {
  * Save debug objects (messages or responses) to a JSON file when
  * `texra.debug.saveModelIO` is enabled. Skips remote agents to avoid
  * leaking prompts.
+ *
+ * Takes the process filesystem from context: the target is an absolute path
+ * built from the run's own roots, exactly as `StorageFS` / `WorkspaceFS`
+ * resolved theirs, and the write is the same plain (non-atomic) one both
+ * facades made through `platform().fs`. A failure is caught and logged, as
+ * the old `try`/`catch` did, and never propagates into the run.
  */
-export async function maybeSaveDebugObject({
+export function maybeSaveDebugObject({
   object,
   objectType,
   context,
   fileOptions = {},
-}: SaveDebugParams): Promise<void> {
+}: SaveDebugParams): Effect.Effect<void, never, FileSystem.FileSystem> {
   // `texra.debug.saveModelIO` is the one setting covering request messages,
   // responses, and the final input prompt.
   if (!getConfig<boolean>('texra.debug.saveModelIO') || context.isRemote)
-    return;
+    return Effect.void;
 
-  const { logger, modelName, runId } = context;
+  const { logger, modelName, runId, roots } = context;
   const { baseName = objectType, continuationCount } = fileOptions;
 
   const cont = continuationCount ? `_cont${continuationCount}` : '';
@@ -55,18 +75,38 @@ export async function maybeSaveDebugObject({
     : '';
   const debugFileName = `${baseName}${modelPart}${cont}.json`;
 
-  try {
+  // The old `try`/`catch` covered a throw from any step — a filesystem
+  // failure, a non-serializable `object`, the no-workspace-folder throw
+  // `workspaceAbsolutePath` makes. A typed failure and a thrown defect are
+  // both reported here, and neither is left to kill the run.
+  const reportSaveFailure = (error: unknown) =>
+    Effect.sync(() => {
+      logger.error(`Failed to save ${objectType} object`, { data: error });
+    });
+
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     const filePath = runId
-      ? resolveRunStoragePath(runId, debugFileName)
-      : debugFileName;
-    const fs = runId ? StorageFS : WorkspaceFS;
+      ? path.join(roots.storage, resolveRunStoragePath(runId, debugFileName))
+      : // No run id: a workspace-relative name, and the same throw the
+        // `WorkspaceFS` facade made when no folder is open.
+        workspaceAbsolutePath(roots.workspace, debugFileName);
 
-    if (runId) await ensureRunDir(runId);
-    await fs.write(filePath, JSON.stringify(object, null, 2));
+    if (runId) {
+      // `ensureRunDir`: the runs directory and the run's own, both created
+      // tolerantly (a directory that already exists is the post-condition).
+      yield* fs.makeDirectory(path.join(roots.storage, RUNS_STORAGE_DIR), {
+        recursive: true,
+      });
+      yield* fs.makeDirectory(runDirUnder(roots.storage, runId), {
+        recursive: true,
+      });
+    }
+    yield* fs.writeFile(filePath, Buffer.from(JSON.stringify(object, null, 2)));
 
-    const debugFilePath = fs.fullPath(filePath);
-    logger.info(`Saved ${objectType} object to ${debugFilePath}`);
-  } catch (error) {
-    logger.error(`Failed to save ${objectType} object`, { data: error });
-  }
+    logger.info(`Saved ${objectType} object to ${filePath}`);
+  }).pipe(
+    Effect.catch(reportSaveFailure),
+    Effect.catchDefect(reportSaveFailure),
+  );
 }

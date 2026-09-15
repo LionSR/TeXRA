@@ -191,7 +191,7 @@ const exportHtml = Effect.fn('exportHtml')(function* (
   controller: ChatExportController,
   runId: RunId,
   ports: TranscriptExportPorts,
-): Effect.fn.Return<void, Error, StorageFs> {
+): Effect.fn.Return<void, Error, FileSystem.FileSystem | StorageFs> {
   const outcome = yield* controller.exportAsHtml(
     runId,
     ports.getTraceViewerTemplate(),

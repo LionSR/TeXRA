@@ -17,7 +17,7 @@
  * constructor instead of the controller importing `@resources`.
  */
 
-import { Effect, type FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import {
@@ -28,6 +28,7 @@ import {
 import type { ChatExportInput } from '@agent/export/schemas';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { isNotADirectoryError } from '@common/errors';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { StorageFs, type WorkspaceFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
@@ -37,8 +38,8 @@ import {
   type AssembleTraceResult,
 } from '@transcript';
 import { ensureError } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 /** Outcome of loading run data for export. */
 export type ExportInputStatus =
@@ -181,19 +182,33 @@ export class ChatExportController {
       this: ChatExportController,
       runId: RunId,
       standaloneTemplatePath: string,
-    ): Effect.fn.Return<HtmlExportOutcome, Error, StorageFs> {
+    ): Effect.fn.Return<
+      HtmlExportOutcome,
+      Error,
+      FileSystem.FileSystem | StorageFs
+    > {
       const traceResult = yield* assembleTrace(runId, this.deps.session);
       if (traceResult.status !== 'ok') {
         return { status: traceResult.status };
       }
       const { trace, record } = traceResult;
 
-      if (
-        !(yield* Effect.tryPromise({
-          try: () => AbsoluteFS.exists(standaloneTemplatePath),
-          catch: ensureError,
-        }))
-      ) {
+      // The bundle path is host-supplied and absolute, so it is the process
+      // filesystem's, not a rooted view's. A path whose parent is not a
+      // directory is a missing bundle, not a failure: `AbsoluteFS.exists`
+      // counted ENOTDIR as absent alongside ENOENT, and `FileSystem.exists`
+      // reports it as `BadResource`. The predicate names ENOTDIR specifically
+      // so an operational failure still propagates.
+      const fs = yield* FileSystem.FileSystem;
+      const exists = yield* fs.exists(standaloneTemplatePath).pipe(
+        Effect.catchIf(
+          (error) =>
+            error.reason._tag === 'BadResource' &&
+            isNotADirectoryError(error.reason.cause),
+          () => Effect.succeed(false),
+        ),
+      );
+      if (!exists) {
         return yield* Effect.fail(
           new Error(
             `Trace-viewer standalone bundle missing at ${standaloneTemplatePath}: ` +
@@ -201,10 +216,16 @@ export class ChatExportController {
           ),
         );
       }
-      const template = yield* Effect.tryPromise({
-        try: () => AbsoluteFS.read(standaloneTemplatePath),
-        catch: ensureError,
-      });
+      // The bytes are decoded here rather than by `readFileString`, whose
+      // UTF-8 `TextDecoder` strips a BOM the old read kept, and the line
+      // endings are normalized as `AbsoluteFS.read` did.
+      const bytes = yield* Effect.mapError(
+        fs.readFile(standaloneTemplatePath),
+        ensureError,
+      );
+      const template = normalizeLineEndings(
+        Buffer.from(bytes).toString('utf-8'),
+      );
       const html = injectStandaloneTrace(template, trace);
 
       const filename = generateExportFilename(

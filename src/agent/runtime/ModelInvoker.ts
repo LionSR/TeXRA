@@ -22,6 +22,7 @@ import {
   Context,
   Effect,
   Exit,
+  type FileSystem,
   Layer,
   Ref,
   Result,
@@ -196,7 +197,7 @@ export class ModelInvoker extends Context.Service<
     readonly invoke: (
       state: RunState,
       request: InvokeRequest,
-    ) => Effect.Effect<InvocationOutcome, InvokeError>;
+    ) => Effect.Effect<InvocationOutcome, InvokeError, FileSystem.FileSystem>;
   }
 >()('@texra/agent/ModelInvoker') {}
 
@@ -271,7 +272,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         round: number,
         baseName: string,
       ) =>
-        Effect.tryPromise({
+        // `Effect.try` for the same reason the old `Effect.tryPromise` was
+        // there: the guard inside `maybeSaveDebugObject` reads configuration
+        // synchronously, and a thrown error from it must be caught here, not
+        // become a defect.
+        Effect.try({
           try: () =>
             maybeSaveDebugObject({
               object,
@@ -281,11 +286,13 @@ export const modelInvokerLayer = (): Layer.Layer<
                 runId,
                 modelName: run.config.model,
                 isRemote: isRemoteAgent(run.config.agent),
+                roots: session.roots,
               },
               fileOptions: { continuationCount: round, baseName },
             }),
           catch: ensureError,
         }).pipe(
+          Effect.flatten,
           Effect.catch((error) =>
             Effect.sync(() =>
               logger.debug('Debug object save failed', { data: error }),
@@ -453,7 +460,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         started: number,
         streamed: Exit.Exit<void, unknown>,
         completed: AttemptOutcome,
-      ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
+      ): Effect.fn.Return<
+        InvocationResponse,
+        AttemptFailed | InvokeError,
+        FileSystem.FileSystem
+      > {
         if (Exit.isFailure(streamed)) {
           trace.thinking.finalize(undefined);
           trace.output.finalize();
@@ -624,7 +635,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         request: InvokeRequest,
         bound: BoundModel,
         operationId: string,
-      ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
+      ): Effect.fn.Return<
+        InvocationResponse,
+        AttemptFailed | InvokeError,
+        FileSystem.FileSystem
+      > {
         let state = initial;
         const turnRequest = turnRequestFor(
           state,
@@ -791,7 +806,11 @@ export const modelInvokerLayer = (): Layer.Layer<
           accepted: NonNullable<
             NonNullable<RunState['openAttempt']>['accepted']
           >,
-        ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
+        ): Effect.fn.Return<
+          InvocationResponse,
+          AttemptFailed | InvokeError,
+          FileSystem.FileSystem
+        > {
           const background = bound.model.background;
           if (background === undefined) {
             return yield* failAttempt(
@@ -887,7 +906,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         request: InvokeRequest,
         bound: BoundModel,
         operationId: string,
-      ): Effect.Effect<InvocationResponse, AttemptFailed | InvokeError> => {
+      ): Effect.Effect<
+        InvocationResponse,
+        AttemptFailed | InvokeError,
+        FileSystem.FileSystem
+      > => {
         const verdictFor = (error: Error) =>
           error instanceof AttemptFailed
             ? error.failure.verdict
@@ -1142,7 +1165,11 @@ export const modelInvokerLayer = (): Layer.Layer<
       const invoke = Effect.fn('ModelInvoker.invoke')(function* (
         initial: RunState,
         request: InvokeRequest,
-      ): Effect.fn.Return<InvocationOutcome, InvokeError> {
+      ): Effect.fn.Return<
+        InvocationOutcome,
+        InvokeError,
+        FileSystem.FileSystem
+      > {
         let state = initial;
         const operationId = `model-operation-${generateShortId()}`;
         const limit = automaticAttemptLimit();

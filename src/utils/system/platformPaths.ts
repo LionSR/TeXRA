@@ -1,4 +1,5 @@
 // Standard library imports
+import { existsSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -11,7 +12,6 @@ import which from 'which';
 // Local imports - log
 import { createLog } from '@logger/logUtils';
 import { normalizeFilePath, unique } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { hasExtension } from '@utils/core/pathCore';
 
 /** Whether the current platform is Windows (cached at module load). */
@@ -137,7 +137,7 @@ function getExtraDirs(): string[] {
       (process.env.USERPROFILE
         ? path.join(process.env.USERPROFILE, 'scoop')
         : null);
-    if (scoopDir && AbsoluteFS.existsSync(scoopDir)) {
+    if (scoopDir && existsSync(scoopDir)) {
       dirs.push(path.join(scoopDir, 'shims'));
       dirs.push(...globDescending(path.join(scoopDir, 'apps', '*', 'current')));
     }
@@ -150,7 +150,7 @@ function getExtraDirs(): string[] {
     for (const root of msysRoots) {
       for (const sub of MSYS_SUBDIRS) {
         const dir = path.join(root, sub);
-        if (AbsoluteFS.existsSync(path.join(dir, 'perl.exe'))) {
+        if (existsSync(path.join(dir, 'perl.exe'))) {
           dirs.push(dir);
         }
       }
@@ -172,7 +172,7 @@ function getExtraDirs(): string[] {
     }
     for (const pattern of tlperlPatterns) {
       for (const dir of globDescending(pattern)) {
-        if (AbsoluteFS.existsSync(path.join(dir, 'perl.exe'))) {
+        if (existsSync(path.join(dir, 'perl.exe'))) {
           dirs.push(dir);
         }
       }
@@ -250,7 +250,7 @@ export function extendEnvPath(
   }
   const segments = basePath.split(path.delimiter).filter(Boolean);
   for (const dir of getExtraDirs()) {
-    if (!segments.includes(dir) && AbsoluteFS.existsSync(dir)) {
+    if (!segments.includes(dir) && existsSync(dir)) {
       segments.push(dir);
     }
   }
@@ -312,7 +312,7 @@ function findToolInCommonPathsUncached(tool: string): string | null {
   for (const dir of getExtraDirs()) {
     for (const name of candidates) {
       const candidate = path.join(dir, name);
-      if (AbsoluteFS.existsSync(candidate)) {
+      if (existsSync(candidate)) {
         return candidate;
       }
     }

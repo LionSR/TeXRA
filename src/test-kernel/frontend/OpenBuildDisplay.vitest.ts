@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -18,7 +18,6 @@ vi.mock('node:timers/promises', () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
-  exists: vi.fn(async (_path: string) => true),
   isLatexFile: vi.fn((_path: string) => true),
   compileLatex2Pdf: vi.fn((): Effect.Effect<{ ok: boolean; logTail: string }> =>
     Effect.succeed({ ok: true, logTail: '' }),
@@ -38,10 +37,6 @@ const mocks = vi.hoisted(() => ({
   error: vi.fn(),
   info: vi.fn(),
   showLoggedMessage: vi.fn(async (_channel: string, _message: string) => ''),
-}));
-
-vi.mock('@utils/files/absoluteFS', () => ({
-  AbsoluteFS: { exists: mocks.exists },
 }));
 
 vi.mock('@common/files/fileTypeUtils', () => ({
@@ -64,8 +59,21 @@ vi.mock('@platform/rootedFs', () => ({
   withSessionFs: (_roots: unknown, program: unknown) => program,
 }));
 
-/** The host entry's runtime; the compile it settles is mocked. */
-const runtime = { runPromise: Effect.runPromise } as unknown as ProcessRuntime;
+/**
+ * The host entry's runtime; the compile it settles is mocked. Like the process
+ * runtime, it provides the `FileSystem` the display path reads: the suite's one
+ * filesystem question is whether the file exists (`AbsoluteFS.exists` before
+ * the conversion), and the answer is yes for every case here.
+ */
+const runtime = {
+  runPromise: <A, E>(effect: Effect.Effect<A, E, FileSystem.FileSystem>) =>
+    Effect.runPromise(
+      Effect.provide(
+        effect,
+        FileSystem.layerNoop({ exists: () => Effect.succeed(true) }),
+      ),
+    ),
+} as unknown as ProcessRuntime;
 
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedMessage: mocks.showLoggedMessage,
@@ -115,7 +123,6 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    mocks.exists.mockResolvedValue(true);
     mocks.isLatexFile.mockReturnValue(true);
     mocks.compileLatex2Pdf.mockReturnValue(
       Effect.succeed({ ok: true, logTail: '' }),
