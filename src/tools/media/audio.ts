@@ -71,11 +71,17 @@ async function cleanupOldRecordings(
     const entries = await readdir(directory, { withFileTypes: true });
     await Promise.all(
       entries
-        .filter((entry) => entry.isFile())
+        .filter((entry) => entry.isFile() || entry.isSymbolicLink())
         .map(async (entry) => {
           const filePath = path.join(directory, entry.name);
           try {
             const stats = await stat(filePath);
+            // The sweep it replaces filtered on the provider's type bits,
+            // where a symlink answers for its target and so counted as a file
+            // when it pointed at one. The follow above does the same job: a
+            // link to a file is swept by its target's age, a link to a
+            // directory is not swept at all.
+            if (!stats.isFile()) return;
             if (stats.mtimeMs <= cutoff) {
               await unlink(filePath);
             }

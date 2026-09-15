@@ -178,6 +178,23 @@ export const workingDirectoryField = z
   });
 
 /**
+ * `workspaceAbsolutePath` validates the path it resolved and throws when the
+ * session has no workspace folder and the target is relative. Under an
+ * `Effect.fn` body or an `Effect.forEach` mapper that throw is a defect, where
+ * the facade's async call turned it into a typed failure; `Effect.try` keeps
+ * the channel, so a no-workspace session still gets a tool error naming the
+ * path rather than an unexpected-error defect.
+ */
+const absoluteWorkspacePath = (
+  workspaceRoot: string | undefined,
+  target: string,
+): Effect.Effect<string, Error> =>
+  Effect.try({
+    try: () => workspaceAbsolutePath(workspaceRoot, target),
+    catch: ensureError,
+  });
+
+/**
  * Reject delegated workflow context that attaches oversized bibliography
  * files. `workspaceRoot` is the owning session's workspace folder, handed in
  * as data so a relative dependency resolves against its own session rather
@@ -199,7 +216,7 @@ export const rejectOversizedBibAttachments = Effect.fn(
     .filter((file) => hasExtension(file, '.bib'));
 
   for (const bibFile of bibFiles) {
-    const absolute = workspaceAbsolutePath(workspaceRoot, bibFile);
+    const absolute = yield* absoluteWorkspacePath(workspaceRoot, bibFile);
     // The facade's `stat` was lstat-backed: a link whose target does not
     // resolve still answered, with the link's own size, which never crossed
     // this limit. `FileSystem.stat` follows the link instead, so it fails
@@ -254,7 +271,8 @@ export const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
     const inspected = yield* Effect.forEach(
       entries,
       (entry) =>
-        entryExists(fs, workspaceAbsolutePath(workspaceRoot, entry.path)).pipe(
+        absoluteWorkspacePath(workspaceRoot, entry.path).pipe(
+          Effect.flatMap((absolute) => entryExists(fs, absolute)),
           Effect.map((exists) => ({ ...entry, exists })),
         ),
       { concurrency: 'unbounded' },

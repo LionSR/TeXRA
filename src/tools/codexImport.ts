@@ -126,8 +126,9 @@ async function codexBinaryInPlatformPackage(
       path.join(vendorDir, 'codex', CODEX_BINARY_NAME),
     ];
     // A plain predicate on a path this module just built, over the real
-    // filesystem the packaged binary lives on: the same call the static's
-    // own `existsSync` made.
+    // filesystem the packaged binary lives on. The static it replaces asked
+    // lstat, which counted a dangling symlink as present where `existsSync`'s
+    // access probe does not.
     for (const candidate of candidates) {
       if (existsSync(candidate)) return candidate;
     }

@@ -49,14 +49,24 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 
 /**
- * `BaseFS.isFile` without the facade: `ENOENT` and `ENOTDIR` read as "not a
- * file", and a symlink answers for its target, which is the type the provider's
- * `stat` resolved.
+ * `BaseFS.isFile` without the facade.
+ *
+ * The facade's `stat` was lstat-backed, so a path that *is* a link was never a
+ * file however its target resolved. `fs.stat` follows the link instead, so
+ * the question has to be asked in two parts, as `entryExists` does: a path
+ * `readLink` names is a link, and answers "not a file" whatever follows
+ * (dangling or circular alike, where the follow raises `ELOOP`); everything
+ * else answers from the follow, with `ENOENT` and `ENOTDIR` reading as absent.
  */
 const fileAt = (fs: FileSystem.FileSystem, target: string) =>
-  fs.stat(target).pipe(
-    Effect.map((stats) => stats.type === 'File'),
-    Effect.catchIf(absentReason, () => Effect.succeed(false)),
+  fs.readLink(target).pipe(
+    Effect.as(false),
+    Effect.catch(() =>
+      fs.stat(target).pipe(
+        Effect.map((stats) => stats.type === 'File'),
+        Effect.catchIf(absentReason, () => Effect.succeed(false)),
+      ),
+    ),
   );
 
 // ============================================================================

@@ -96,8 +96,10 @@ const CLAUDE_BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
  *
  * The probe is a plain predicate on a path this module just built, over the
  * real filesystem the packaged binary lives on, so it stays synchronous like
- * the sibling `which.sync` / `executeCommandSync` probes — the same call the
- * static's own `existsSync` made.
+ * the sibling `which.sync` / `executeCommandSync` probes. The static it
+ * replaces asked lstat, which counted a dangling symlink as present where
+ * `existsSync`'s access probe does not — a link no executable can be run
+ * through either way.
  */
 function claudeBinaryInPlatformPackage(
   platformPkgDir: string,
