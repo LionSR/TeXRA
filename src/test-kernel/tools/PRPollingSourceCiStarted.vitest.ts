@@ -1,18 +1,32 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports - tools
-import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
+import {
+  PRPollingSource,
+  type PRSubscriptionState,
+} from '@tools/github/PRPollingSource';
 import type { GhCheckRun, GhPullRequest } from '@tools/github/prTypes';
 
 // Local imports - test support
-import { mockGitHubClient } from '../support/githubClientMock';
 import {
   createPRCurrentShaState,
   createPRSubscriptionState,
 } from '../support/prPollingSourceState';
+
+const mocks = vi.hoisted(() => ({
+  ghGet: vi.fn(),
+}));
+
+// Stub the GitHub client at its module boundary. The importOriginal spread
+// keeps the real error classes, so the source's own instanceof checks run
+// against the classes production reaches, not against look-alikes.
+vi.mock('@tools/github/githubClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/github/githubClient')>()),
+  ghGet: mocks.ghGet,
+}));
 
 interface CiStartedSource {
   pollOne(
@@ -85,19 +99,9 @@ function checkRunsResponse(runs: GhCheckRun[]): {
   };
 }
 
-const createHarness: Effect.Effect<{
-  ghGet: Mock;
-  source: CiStartedSource;
-}> = Effect.promise(async () => {
-  vi.resetModules();
-  const ghGet = vi.fn();
-  mockGitHubClient(ghGet);
-  const { PRPollingSource } = await import('@tools/github/PRPollingSource');
-  return {
-    ghGet,
-    source: new PRPollingSource() as unknown as CiStartedSource,
-  };
-});
+function createSource(): CiStartedSource {
+  return new PRPollingSource() as unknown as CiStartedSource;
+}
 
 function queuePollResponses(
   ghGet: Mock,
@@ -113,23 +117,22 @@ function queuePollResponses(
 }
 
 describe('PRPollingSource CI-started events', () => {
-  afterEach(() => {
-    vi.doUnmock('@tools/github/githubClient');
-    vi.resetModules();
+  beforeEach(() => {
+    mocks.ghGet.mockReset();
   });
 
   it.effect(
     'seeds existing check runs without replaying a CI-started event',
     () =>
       Effect.gen(function* () {
-        const { ghGet, source } = yield* createHarness;
+        const source = createSource();
         const events: string[] = [];
         const state = createState(events, {
           initialized: false,
           currentShaState: undefined,
         });
 
-        queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
+        queuePollResponses(mocks.ghGet, SHA, [checkRun(1, 'lint')]);
 
         yield* source.pollOne('owner/repo/pulls/7', state);
 
@@ -141,12 +144,12 @@ describe('PRPollingSource CI-started events', () => {
 
   it.effect('emits a CI-started event once when check runs first appear', () =>
     Effect.gen(function* () {
-      const { ghGet, source } = yield* createHarness;
+      const source = createSource();
       const events: string[] = [];
       const state = createState(events);
       const runs = [checkRun(1, 'lint'), checkRun(2, 'test')];
 
-      queuePollResponses(ghGet, SHA, runs);
+      queuePollResponses(mocks.ghGet, SHA, runs);
 
       yield* source.pollOne('owner/repo/pulls/7', state);
 
@@ -156,7 +159,7 @@ describe('PRPollingSource CI-started events', () => {
       expect(events[0]).not.toContain('workflow');
       expect(state.currentShaState?.ciStarted).toBe(true);
 
-      queuePollResponses(ghGet, SHA, runs);
+      queuePollResponses(mocks.ghGet, SHA, runs);
 
       yield* source.pollOne('owner/repo/pulls/7', state);
 
@@ -166,13 +169,13 @@ describe('PRPollingSource CI-started events', () => {
 
   it.effect('resets CI-started state on a new head SHA', () =>
     Effect.gen(function* () {
-      const { ghGet, source } = yield* createHarness;
+      const source = createSource();
       const events: string[] = [];
       const state = createState(events, {
         currentShaState: createPRCurrentShaState(OLD_SHA, { ciStarted: true }),
       });
 
-      queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
+      queuePollResponses(mocks.ghGet, SHA, [checkRun(1, 'lint')]);
 
       yield* source.pollOne('owner/repo/pulls/7', state);
 

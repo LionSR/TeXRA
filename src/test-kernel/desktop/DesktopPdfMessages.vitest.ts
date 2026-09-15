@@ -1,7 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { loadSourceModule } from './loadSourceModule.ts';
-
 type DesktopPdfMessagesModule =
   typeof import('@desktop/shared/desktopPdfMessages');
 
@@ -11,7 +9,7 @@ describe('desktop PDF messages', () => {
 
   beforeAll(async () => {
     ({ DesktopShowPdfMessageSchema, isSafeAbsolutePdfPath } =
-      await loadSourceModule('@desktop/shared/desktopPdfMessages'));
+      await import('@desktop/shared/desktopPdfMessages'));
   });
 
   it.each<[string, boolean]>([
