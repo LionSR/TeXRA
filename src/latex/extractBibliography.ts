@@ -10,8 +10,8 @@ import { Effect, FileSystem } from 'effect';
 import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
-import { isNotADirectoryError } from '@common/errors';
 import { ensureError } from '@utils/errors/errorMessage';
+import { pathExists } from '@utils/files/fsDurability';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -49,27 +49,6 @@ interface BibliographyEntriesResult {
 
 /** Bibliography probes hit the filesystem, so bound the fan-out. */
 const PROBE_CONCURRENCY = 8;
-
-/**
- * Whether `target` exists. `BaseFS.exists` counted a path whose parent is not
- * a directory (ENOTDIR) as absent alongside ENOENT, and `FileSystem.exists`
- * reports that case as `BadResource`; the predicate names ENOTDIR
- * specifically so an operational failure (`ELOOP`) still propagates.
- */
-function pathExists(
-  fs: FileSystem.FileSystem,
-  target: string,
-): Effect.Effect<boolean, Error> {
-  return fs.exists(target).pipe(
-    Effect.catchIf(
-      (error) =>
-        error.reason._tag === 'BadResource' &&
-        isNotADirectoryError(error.reason.cause),
-      () => Effect.succeed(false),
-    ),
-    Effect.mapError(ensureError),
-  );
-}
 
 /** Read a bibliography file, surfacing the read failure as a typed error.
  *  Decoded from bytes rather than `readFileString`, whose `TextDecoder`

@@ -1,9 +1,9 @@
 import { Effect, FileSystem } from 'effect';
 
-import { isNotADirectoryError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
 import { pathToLocation } from '@utils/files/fileLocation';
+import { pathExists } from '@utils/files/fsDurability';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { hasExtension } from '@utils/core/pathCore';
@@ -65,16 +65,7 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
   filePath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  // `BaseFS.exists` counted a non-directory parent (ENOTDIR) as absent
-  // alongside ENOENT; `FileSystem.exists` reports it as `BadResource`, and
-  // the predicate names ENOTDIR so an operational failure still propagates.
-  const exists = yield* fs.exists(filePath).pipe(
-    Effect.catchIf(
-      (error) =>
-        error.reason._tag === 'BadResource' &&
-        isNotADirectoryError(error.reason.cause),
-      () => Effect.succeed(false),
-    ),
+  const exists = yield* pathExists(fs, filePath).pipe(
     Effect.mapError(ensureError),
   );
   if (!exists) {

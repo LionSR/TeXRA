@@ -20,10 +20,12 @@ import {
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
-import { isNotADirectoryError } from '@common/errors';
 import { withLogChannel, withLogData } from '@logger/effectLog';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
-import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
+import {
+  pathExists,
+  readDirectoryTypedTolerant,
+} from '@utils/files/fsDurability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
@@ -124,17 +126,12 @@ const permanentFs = <T, R>(
  * or circular symlink named an entry; the standard library's `exists` asks the
  * stricter question of whether the path *resolves*, and answers `false` for
  * such a link. `readLink` is that half of the old probe -- a path it names is
- * a link, resolvable or not -- and the access question decides everything
- * else, keeping the facade's other reading: a parent that is not a directory
- * (ENOTDIR) counts as absent, and any other failure still propagates.
+ * a link, resolvable or not -- and `pathExists` carries the facade's other
+ * reading for everything else.
  *
  * The link half is what makes the clobber refusal below fire: a `main.tex`
  * symlink whose target is gone names an entry, and `rename` must refuse it
  * rather than replace the user's link with a regular file.
- *
- * The same predicate is `entryExists` in `@utils/files/fsEntryExists`, added
- * by the tool-layer slice of this wave; the two collapse to one once both
- * land.
  */
 const existsAt = (
   fs: FileSystem.FileSystem,
@@ -143,18 +140,11 @@ const existsAt = (
   Effect.gen(function* () {
     const named = yield* fs.readLink(target).pipe(
       Effect.as(true),
-      // Not a link, or not there at all: the access question below decides.
+      // Not a link, or not there at all: the probe below decides.
       Effect.catch(() => Effect.succeed(false)),
     );
     if (named) return true;
-    return yield* fs.exists(target).pipe(
-      Effect.catchIf(
-        (error) =>
-          error.reason._tag === 'BadResource' &&
-          isNotADirectoryError(error.reason.cause),
-        () => Effect.succeed(false),
-      ),
-    );
+    return yield* pathExists(fs, target);
   });
 
 /**

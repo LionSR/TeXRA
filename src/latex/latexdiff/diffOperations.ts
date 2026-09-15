@@ -10,11 +10,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
-import { isNotADirectoryError } from '@common/errors';
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
 import { withLogChannel } from '@logger/effectLog';
 import { getEffectiveDiffBase, roundIndexedEntries } from '@shared/schemas';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
+import { pathExists } from '@utils/files/fsDurability';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -95,23 +95,15 @@ const executeDiffOperations = Effect.fn('latexdiff.executeDiffOperations')(
 );
 
 /**
- * Whether `absolutePath` exists. `BaseFS.exists` counted a path whose parent
- * is not a directory (ENOTDIR) as absent alongside ENOENT, and
- * `FileSystem.exists` reports that case as `BadResource`; the predicate names
- * ENOTDIR specifically so an operational failure still propagates.
+ * Whether `absolutePath` exists -- `pathExists`'s ENOTDIR reading, in this
+ * module's error channel.
  */
 const exists = (
   absolutePath: string,
 ): Effect.Effect<boolean, Error, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    return yield* fs.exists(absolutePath).pipe(
-      Effect.catchIf(
-        (error) =>
-          error.reason._tag === 'BadResource' &&
-          isNotADirectoryError(error.reason.cause),
-        () => Effect.succeed(false),
-      ),
+    return yield* pathExists(fs, absolutePath).pipe(
       Effect.mapError(ensureError),
     );
   });
