@@ -23,7 +23,6 @@ import {
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { readConfig } from '@utils/config/configUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { fsCall } from '@utils/errors/fsCall';
 import {
   formatResultCount,
   normalizeLineEndings,

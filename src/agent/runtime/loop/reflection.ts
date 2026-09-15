@@ -76,6 +76,7 @@ import {
 } from '@agent/prompt/PromptBuilder';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { logUserMessage, type StageHandle } from '@agent/trace';
+import { isNotADirectoryError } from '@common/errors';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import type { WorkspaceFs } from '@platform/rootedFs';
@@ -166,6 +167,17 @@ type RoundExit = {
   readonly state: RunState;
   readonly kind: 'completed' | 'failed' | 'cancelled';
 };
+
+/** ENOENT, or ENOTDIR on a parent, as `AbsoluteFS.exists`/`statIfExists` treated them. */
+function isAbsentFsPath(error: {
+  readonly reason: { readonly _tag: string; readonly cause: unknown };
+}): boolean {
+  return (
+    error.reason._tag === 'NotFound' ||
+    (error.reason._tag === 'BadResource' &&
+      isNotADirectoryError(error.reason.cause))
+  );
+}
 
 /** The finish reason of a completed turn; the editor arm reports none. */
 function finishReasonOf(
@@ -438,10 +450,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         // round rebuilds it from the rows that follow. Any other failure to
         // read it — permissions, a directory, I/O — still fails the resume
         // rather than quietly continuing without the earlier responses.
-        Effect.catchIf(
-          (error) => error.reason._tag === 'NotFound',
-          () => Effect.succeed(''),
-        ),
+        Effect.catchIf(isAbsentFsPath, () => Effect.succeed('')),
       );
       workspace.assembly.accumulatedOutput = content;
       workspace.assembly.lastResponse = content;
@@ -606,7 +615,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       const actual = yield* fs.stat(path).pipe(
         Effect.map((info) => ByteSize.toNumberUnsafe(info.size)),
         // No file yet is the same as an empty one: both mean "write it".
-        Effect.orElseSucceed(() => 0),
+        Effect.catchIf(isAbsentFsPath, () => Effect.succeed(0)),
       );
       if (actual === expected + fragmentBytes && expected + fragmentBytes > 0) {
         logger.debug(
@@ -626,7 +635,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         );
         const existing = yield* fs
           .readFile(path)
-          .pipe(Effect.orElseSucceed(() => Buffer.alloc(0)));
+          .pipe(
+            Effect.catchIf(isAbsentFsPath, () =>
+              Effect.succeed(Buffer.alloc(0)),
+            ),
+          );
         // The rewrite is byte-for-byte what the create and append paths above
         // would have left: the recorded offset counts bytes of the fragment, so
         // normalizing line endings here would put the file below its own count
