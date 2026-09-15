@@ -177,14 +177,6 @@ export interface FileSystemProvider {
    * files (where atomic rename would replace a user's symlink).
    */
   writeFileAtomic(path: string, content: Uint8Array): Promise<void>;
-  /**
-   * Make `path` appear complete and durable in one step: stage the content
-   * beside it, fsync, then rename into place. For names that belong to
-   * exactly one writer (a run-lease claim), where `writeFileAtomic`'s
-   * replace-existing semantics are not wanted and a torn file must never be
-   * observable.
-   */
-  publishFile(path: string, content: Uint8Array): Promise<void>;
   /** Remove a directory only if it is empty; rejects with `ENOTEMPTY`. */
   removeEmptyDirectory(path: string): Promise<void>;
   appendFile(path: string, content: Uint8Array): Promise<void>;

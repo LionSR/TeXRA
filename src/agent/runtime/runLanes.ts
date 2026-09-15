@@ -51,15 +51,6 @@ export class RunLanes {
    */
   private readonly waiting = new Set<Deferred.Deferred<never, Error>>();
 
-  /** Acquire an idle run slot, refusing competing local ownership. */
-  withInactiveStep<A, E, R>(
-    runId: string,
-    hasRetainedOwner: () => boolean,
-    operation: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E | Error, R> {
-    return this.onLane(runId, operation, hasRetainedOwner);
-  }
-
   /**
    * Whether a generation of `runId` is live in this process: a step holding or
    * waiting on its lane, or a generation still unwinding. A parked turn holds
@@ -71,12 +62,62 @@ export class RunLanes {
     return this.live.has(runId) || (lane !== undefined && lane.fibers > 0);
   }
 
-  /** Hold a generation's lane until its Effect and finalizers settle. */
+  /**
+   * Run `operation` on `runId`'s lane: claim the lane synchronously, wait for
+   * the predecessor and then for the live generations, and hold the lane
+   * until `operation` settles — including the finalizers it registered, since
+   * `withPerKeyLane` releases the lane only once the whole effect leaves.
+   *
+   * `refuseWhenOwned` makes the claim conditional, and it is `withPerKeyLane`
+   * that runs it: the check reads the retained owners, the generation gate and
+   * the lane's occupant in the same synchronous step as the tail swap, so no
+   * launch can claim the lane between the two, and refusing leaves the lane
+   * exactly as it was found — nothing was acquired and nothing is released.
+   *
+   * A step is refusable from the moment it is admitted until the moment it
+   * starts, and `waiting` holds its refusal for exactly that window. The race
+   * is therefore around the lane, not inside it: a step still waiting for its
+   * predecessor is refused where it stands, and its interruption hands the
+   * lane on the same way any other interrupted waiter does.
+   */
   launch<A, E, R>(
     runId: string,
     operation: Effect.Effect<A, E, R>,
+    refuseWhenOwned?: () => boolean,
   ): Effect.Effect<A, E | Error, R> {
-    return this.onLane(runId, operation);
+    return Effect.suspend(() => {
+      const refusal = Deferred.makeUnsafe<never, Error>();
+      this.waiting.add(refusal);
+      const step = Effect.gen({ self: this }, function* () {
+        // Read the gate after the predecessor left: a generation it started
+        // is exactly what this step must not overlap. One snapshot, as the
+        // predecessor's own wait took one — a generation opened after this
+        // read belongs to the step that opened it, not to this one.
+        const generations = this.live.get(runId);
+        if (generations !== undefined) {
+          yield* Effect.all(
+            [...generations].map((generation) => Deferred.await(generation)),
+            { concurrency: 'unbounded', discard: true },
+          );
+        }
+        this.waiting.delete(refusal);
+        return yield* operation;
+      });
+      return Effect.raceFirst(
+        Deferred.await(refusal),
+        withPerKeyLane(
+          this.lanes,
+          runId,
+          refuseWhenOwned &&
+            ((occupant) =>
+              refuseWhenOwned() ||
+              this.live.has(runId) ||
+              (occupant !== undefined && occupant.fibers > 0)
+                ? new RunBusy({ runId })
+                : undefined),
+        )(step),
+      ).pipe(Effect.ensuring(Effect.sync(() => this.waiting.delete(refusal))));
+    });
   }
 
   /**
@@ -103,7 +144,7 @@ export class RunLanes {
   /**
    * Hold `runId` against local ownership for the caller's scope, refusing
    * when a generation, a step, or a retained handle already owns it here —
-   * {@link withInactiveStep}'s admission, for a decision whose validity has
+   * {@link launch}'s refusal, for a decision whose validity has
    * to outlive the step that took it. The hold is a generation like any
    * other: {@link isHeld} reports it, so a resume refuses on it, a launch of
    * the same run waits for it, and a competing step is refused.
@@ -154,63 +195,5 @@ export class RunLanes {
     this.waiting.clear();
     this.lanes.clear();
     this.live.clear();
-  }
-
-  /**
-   * Run `operation` on `runId`'s lane: claim the lane synchronously, wait for
-   * the predecessor and then for the live generations, and hold the lane
-   * until `operation` settles — including the finalizers it registered, since
-   * `withPerKeyLane` releases the lane only once the whole effect leaves.
-   *
-   * `refuseWhenOwned` makes the claim conditional, and it is `withPerKeyLane`
-   * that runs it: the check reads the retained owners, the generation gate and
-   * the lane's occupant in the same synchronous step as the tail swap, so no
-   * launch can claim the lane between the two, and refusing leaves the lane
-   * exactly as it was found — nothing was acquired and nothing is released.
-   *
-   * A step is refusable from the moment it is admitted until the moment it
-   * starts, and `waiting` holds its refusal for exactly that window. The race
-   * is therefore around the lane, not inside it: a step still waiting for its
-   * predecessor is refused where it stands, and its interruption hands the
-   * lane on the same way any other interrupted waiter does.
-   */
-  private onLane<A, E, R>(
-    runId: string,
-    operation: Effect.Effect<A, E, R>,
-    refuseWhenOwned?: () => boolean,
-  ): Effect.Effect<A, E | Error, R> {
-    return Effect.suspend(() => {
-      const refusal = Deferred.makeUnsafe<never, Error>();
-      this.waiting.add(refusal);
-      const step = Effect.gen({ self: this }, function* () {
-        // Read the gate after the predecessor left: a generation it started
-        // is exactly what this step must not overlap. One snapshot, as the
-        // predecessor's own wait took one — a generation opened after this
-        // read belongs to the step that opened it, not to this one.
-        const generations = this.live.get(runId);
-        if (generations !== undefined) {
-          yield* Effect.all(
-            [...generations].map((generation) => Deferred.await(generation)),
-            { concurrency: 'unbounded', discard: true },
-          );
-        }
-        this.waiting.delete(refusal);
-        return yield* operation;
-      });
-      return Effect.raceFirst(
-        Deferred.await(refusal),
-        withPerKeyLane(
-          this.lanes,
-          runId,
-          refuseWhenOwned &&
-            ((occupant) =>
-              refuseWhenOwned() ||
-              this.live.has(runId) ||
-              (occupant !== undefined && occupant.fibers > 0)
-                ? new RunBusy({ runId })
-                : undefined),
-        )(step),
-      ).pipe(Effect.ensuring(Effect.sync(() => this.waiting.delete(refusal))));
-    });
   }
 }

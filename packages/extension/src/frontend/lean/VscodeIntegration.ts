@@ -31,6 +31,7 @@ import {
   type PlainTermGoal,
 } from '@tools/lean/leanTypes';
 import {
+  listLeanServers,
   registerLeanServer,
   unregisterLeanServer,
   updateLeanServer,
@@ -109,21 +110,21 @@ const LEAN_FEATURE_PROJECT_COMMANDS = new Set<LeanProjectCommand>([
   'fetch_file_cache',
 ]);
 
-const knownExtensionServers = new Set<string>();
-
 /**
  * Record a workspace folder as having an active VS Code-mediated Lean
  * server. Idempotent — called from every code path that successfully
  * reaches the leanprover.lean4 client provider, so the dashboard reflects
- * actual usage rather than a one-shot snapshot.
+ * actual usage rather than a one-shot snapshot. The registry is the one
+ * store of which servers exist: an entry already there is refreshed rather
+ * than registered again (registering restarts its uptime clock), and an
+ * entry dropped elsewhere is registered afresh.
  */
 function noteVscodeLeanServer(workspaceRoot: string): void {
   const id = `vscode:${workspaceRoot}`;
-  if (knownExtensionServers.has(id)) {
+  if (listLeanServers().some((server) => server.id === id)) {
     updateLeanServer(id, { status: 'running' });
     return;
   }
-  knownExtensionServers.add(id);
   registerLeanServer({
     id,
     workspaceRoot,
@@ -143,10 +144,9 @@ function workspaceRootForFile(absolutePath: string): string {
  * Clear all VS Code-mediated entries — called on extension deactivation.
  */
 export function clearVscodeLeanServerEntries(): void {
-  for (const id of knownExtensionServers) {
-    unregisterLeanServer(id);
+  for (const server of listLeanServers()) {
+    if (server.mode === 'vscode-extension') unregisterLeanServer(server.id);
   }
-  knownExtensionServers.clear();
 }
 
 /**
@@ -441,66 +441,6 @@ function sendPositionRequest<T>(
 }
 
 /**
- * Get the proof goal state at a specific position in a Lean file.
- * @param line - 0-indexed line number
- * @param column - 0-indexed column number
- */
-function getGoalState(
-  globalState: StateStore,
-  filePath: string,
-  line: number,
-  column: number,
-): Effect.Effect<LspResult<PlainGoal>> {
-  return sendPositionRequest<PlainGoal>(
-    globalState,
-    filePath,
-    line,
-    column,
-    '$/lean/plainGoal',
-  );
-}
-
-/**
- * Get the expected type (term goal) at a specific position in a Lean file.
- * @param line - 0-indexed line number
- * @param column - 0-indexed column number
- */
-function getTermGoal(
-  globalState: StateStore,
-  filePath: string,
-  line: number,
-  column: number,
-): Effect.Effect<LspResult<PlainTermGoal>> {
-  return sendPositionRequest<PlainTermGoal>(
-    globalState,
-    filePath,
-    line,
-    column,
-    '$/lean/plainTermGoal',
-  );
-}
-
-/**
- * Get hover information (type + docs) at a specific position in a Lean file.
- * @param line - 0-indexed line number
- * @param column - 0-indexed column number
- */
-function getHoverInfo(
-  globalState: StateStore,
-  filePath: string,
-  line: number,
-  column: number,
-): Effect.Effect<LspResult<LspHover>> {
-  return sendPositionRequest<LspHover>(
-    globalState,
-    filePath,
-    line,
-    column,
-    'textDocument/hover',
-  );
-}
-
-/**
  * Open a Lean file, wait for diagnostics, and return them.
  * The file that could not be opened is the `file_missing` answer; a rejected
  * host call fails the effect.
@@ -593,12 +533,32 @@ export function createVscodeLeanLanguageServices(
   return Object.freeze({
     executeFileCommand: (command, filePath) =>
       executeFileCommand(globalState, command, filePath),
+    // Positions are 0-indexed line and column; each of the three position
+    // queries below names the Lean 4 extension's own LSP method.
     getGoalState: (filePath, line, column) =>
-      getGoalState(globalState, filePath, line, column),
+      sendPositionRequest<PlainGoal>(
+        globalState,
+        filePath,
+        line,
+        column,
+        '$/lean/plainGoal',
+      ),
     getTermGoal: (filePath, line, column) =>
-      getTermGoal(globalState, filePath, line, column),
+      sendPositionRequest<PlainTermGoal>(
+        globalState,
+        filePath,
+        line,
+        column,
+        '$/lean/plainTermGoal',
+      ),
     getHoverInfo: (filePath, line, column) =>
-      getHoverInfo(globalState, filePath, line, column),
+      sendPositionRequest<LspHover>(
+        globalState,
+        filePath,
+        line,
+        column,
+        'textDocument/hover',
+      ),
     fetchDiagnosticsForFile,
     navigateToFirstError,
     executeProjectCommand: (command) =>

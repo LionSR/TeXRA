@@ -295,13 +295,6 @@ export function createWorkbenchController({
     updateShell(closeWorkbenchTab(getState(), tabId));
   }
 
-  function moveTabToPlacement(
-    tabId: string,
-    placement: WorkbenchPlacement,
-  ): void {
-    updateShell(moveWorkbenchTab(getState(), tabId, placement));
-  }
-
   function workbenchTemplate(placement: WorkbenchPlacement): TemplateResult {
     const state = getState();
     const tab = activeWorkbenchTab(state, placement);
@@ -333,7 +326,8 @@ export function createWorkbenchController({
               updateShell(focusWorkbenchTab(getState(), tabId)),
             onClose: disposeWorkbenchTab,
             onHide: () => updateShell(closeWorkbench(getState(), placement)),
-            onMove: moveTabToPlacement,
+            onMove: (tabId, placement) =>
+              updateShell(moveWorkbenchTab(getState(), tabId, placement)),
           },
           session,
         )}

@@ -17,8 +17,7 @@ import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { toNewestFirstByTimestamp, unique, hexId12 } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { WorkspaceRoots } from './WorkspaceRoots';
-import { databaseLayer } from './Database';
+import { withScopedDatabase } from './Database';
 
 const QUESTION_PREVIEW_CHARS = 200;
 
@@ -29,22 +28,13 @@ function inquiryOperations(
 ): Context.Service.Shape<typeof InquiryRecords> {
   /** Each operation owns its connection; SQLite serializes transitions across processes. */
   const inGlobalDatabase = <A, E>(operation: Effect.Effect<A, E, Database>) =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const storage = yield* Effect.try({
-          try: globalStorage,
-          catch: ensureError,
-        });
-        return yield* operation.pipe(
-          Effect.provide(
-            databaseLayer('persistent').pipe(
-              Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
-              Layer.provide(ProcessIdentity.layer(ownerId)),
-            ),
-          ),
-        );
-      }),
-    );
+    Effect.gen(function* () {
+      const storage = yield* Effect.try({
+        try: globalStorage,
+        catch: ensureError,
+      });
+      return yield* withScopedDatabase(storage, ownerId, operation);
+    });
 
   const changeThread = <A extends InquiryThreadRecord | null>(
     id: InquiryThreadId,

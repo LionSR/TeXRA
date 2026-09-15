@@ -34,10 +34,7 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { Secrets } from '@platform/secrets';
@@ -55,6 +52,7 @@ import type {
   ToolUseLog,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import { linkAbortSignals } from '@utils/core';
@@ -630,7 +628,15 @@ const launchClaudeAgentSession = Effect.fn(
   const pathToClaudeCodeExecutable = yield* agentCliCall(() =>
     findClaudeBinaryPath(),
   );
-  const agentConfig = config.buildClaudeAgentConfig(input.prompt);
+  // Synthetic run metadata for the child run: the Claude Code CLI runs outside
+  // the normal run loop, so the tool-use category and a stable model label are
+  // stated here rather than inherited from the generic AgentConfig defaults.
+  const agentConfig = buildSyntheticToolUseConfig({
+    agent: CLAUDE_AGENT_NAME,
+    // Fabricated label, not a routed model: Claude Code drives its own model.
+    model: 'claude',
+    instruction: input.prompt,
+  });
   const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({

@@ -13,7 +13,6 @@ import { z } from 'zod';
 // Local imports
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { warn } from '@logger/logUtils';
-import type { ToolResult } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { rateLimitedApiCall } from '@tools/support/rateLimiter';

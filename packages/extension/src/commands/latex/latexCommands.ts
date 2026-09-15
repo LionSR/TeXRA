@@ -18,27 +18,38 @@ import {
   type TexcountMode,
 } from '@latex/texcount';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
-import { runLatexFormatter } from '@latex/formatter/texFormatter';
+import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
 
-import {
-  getIndentTeXNotification,
-  showLatexHousekeepingNotification,
-} from './latexHousekeepingNotifications';
-
 const log = createLog(CHANNEL);
 
 export async function handleIndentTeX(): Promise<void> {
   try {
-    const notification = getIndentTeXNotification(
-      await indentLatexFilesInDirectory(defaultSession().roots.workspace),
+    const result = await indentLatexFilesInDirectory(
+      defaultSession().roots.workspace,
     );
-    if (!notification) return;
-    await showLatexHousekeepingNotification(CHANNEL, notification);
+    switch (result.status) {
+      case 'missing-config':
+        await showLoggedMessage(
+          CHANNEL,
+          `Formatter config file not found at ${result.configPath}`,
+        );
+        break;
+      case 'error':
+        await showLoggedErrorMessage(
+          CHANNEL,
+          'Error during indentation process',
+          result.error,
+        );
+        break;
+      case 'disabled':
+      case 'formatted':
+        break;
+    }
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error in indentTeX command', err);
   }
@@ -87,9 +98,22 @@ export async function handleIndentCurrentTeX(): Promise<void> {
     async ({ relativePath }) => {
       log.debug(`Indenting LaTeX file: ${relativePath}`);
 
-      const success = await runLatexFormatter(
+      // The directory indent command treats a disabled formatter as a silent
+      // no-op (`case 'disabled': break`). The single-file command is an
+      // explicit user action, so it notifies instead of succeeding quietly.
+      const formatter = resolveLatexFormatter();
+      if (!formatter) {
+        await showLoggedInfoMessage(
+          CHANNEL,
+          'LaTeX formatter is disabled; no file was indented',
+        );
+        return;
+      }
+
+      const success = await formatter.run(
         relativePath,
         defaultSession().roots.workspace,
+        formatter.configPath,
       );
 
       if (success) {

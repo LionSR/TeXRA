@@ -9,7 +9,7 @@ import {
 } from '@agent/review/reviewIssues';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { createLog } from '@logger/logUtils';
-import { type ToolResult, ToolError } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

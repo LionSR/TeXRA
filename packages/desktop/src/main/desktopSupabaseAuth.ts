@@ -3,7 +3,11 @@ import { randomBytes } from 'node:crypto';
 import { Cause, Deferred, Effect, Exit, Option } from 'effect';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
-import { installAuthProgramEdge, runAuthProgram } from '@auth/authProgram';
+import {
+  installAuthProgramEdge,
+  runAuthProgram,
+  settleFailure,
+} from '@auth/authProgram';
 import {
   AUTH_CALLBACK_TIMEOUT_MS,
   DEFAULT_OAUTH_PROVIDER,
@@ -118,9 +122,11 @@ export interface DesktopAuthCoordinator {
 }
 
 /**
- * Settle one lane Effect as this module's Promise surface: the `Exit` fold
- * re-throws the original error, so a caller sees the same rejection the
- * queued job produced before the lanes were Effect programs.
+ * Settle one lane Effect as this module's Promise surface over an explicitly
+ * passed runtime (the callback state is built with its runtime, not the
+ * process-wide edge). The failure fold is the auth subsystem's own
+ * `settleFailure`, so a caller sees the same rejection the queued job produced
+ * before the lanes were Effect programs, and the unwrap rule has one owner.
  */
 async function runSettled<A>(
   runtime: ProcessRuntime,
@@ -128,7 +134,7 @@ async function runSettled<A>(
 ): Promise<A> {
   const exit = await runtime.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
-  throw Cause.squash(exit.cause);
+  throw settleFailure(exit.cause);
 }
 
 /**

@@ -93,7 +93,6 @@ import {
   compactionActivityRow,
   isSettledRow,
   projectTranscriptRow,
-  promotesOnlyOnTypedTerminalState,
   type TranscriptRow,
   type TranscriptRowKind,
 } from '@shared/transcript';
@@ -1248,7 +1247,16 @@ function advanceSettledRows(
   while (index < rows.length) {
     const row = rows[index];
     if (!isSettledRow(row, index < rows.length - 1)) {
-      if (promotesOnlyOnTypedTerminalState(row) || !runFinal) break;
+      // Bridge cleanup can still replace a planned/running compaction or
+      // workflow call after a cancellation, so those two settle only on their
+      // own typed terminal state, never on the final stream status.
+      if (
+        row.kind === 'compactionActivity' ||
+        row.kind === 'workflowTask' ||
+        !runFinal
+      ) {
+        break;
+      }
     }
     index += 1;
   }

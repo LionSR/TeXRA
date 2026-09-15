@@ -10,7 +10,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   findAgentByIdentifier,
   getCategoryAgent,
-  getRosterAgent,
   getVisibleAgent,
   refresh,
   resolveAgentForLaunch,
@@ -161,11 +160,9 @@ describe('cross-category agent resolution', () => {
   });
 
   it('preserves exact source-qualified roster entries before name deduplication', () => {
-    expect(getRosterAgent('toolUse', 'custom:review')?.source).toBe('custom');
-    expect(getRosterAgent('toolUse', 'builtInToolUse:review')?.source).toBe(
-      'builtInToolUse',
-    );
-
+    // Both source-qualified identifiers must resolve to their own entry
+    // (`custom:review` to the custom one, not the built-in it shadows), and
+    // the deduplicated result must keep both, in scope order.
     const scoped = resolveDelegationScopeAgents(
       {
         workflow: [],

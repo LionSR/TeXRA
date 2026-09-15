@@ -181,32 +181,13 @@ export async function initializeLatexSupport(
   );
 }
 
+/** A failed search propagates: `initializeLatexSupport` logs it and skips the
+ *  recommendation, rather than reading "the query failed" as "no .tex files". */
 async function workspaceContainsLatexFiles(): Promise<boolean> {
-  const runtime = tryProcessRuntime();
-  if (runtime == null) {
-    log.warn(
-      'Could not scan the workspace for LaTeX files: the process runtime is not installed.',
-    );
-    return false;
-  }
-  return runtime.runPromise(
-    Effect.tryPromise({
-      try: async () =>
-        (await vscode.workspace.findFiles('**/*.tex', '**/node_modules/**', 1))
-          .length > 0,
-      catch: (err) => err,
-    }).pipe(
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          // Loud rather than silent: a scan that failed means the LaTeX
-          // Workshop recommendation is skipped, and that decision deserves a
-          // trace instead of looking like "this workspace has no TeX".
-          log.warn(
-            `Could not scan the workspace for LaTeX files: ${toErrorMessage(Cause.squash(cause))}`,
-          );
-          return false;
-        }),
-      ),
-    ),
+  const hits = await vscode.workspace.findFiles(
+    '**/*.tex',
+    '**/node_modules/**',
+    1,
   );
+  return hits.length > 0;
 }

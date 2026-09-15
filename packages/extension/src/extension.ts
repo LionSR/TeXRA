@@ -99,7 +99,6 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { CommandId } from '@shared/commands/catalog';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import {

@@ -7,9 +7,9 @@
  */
 import {
   AgentRosterController,
+  createWorkspaceAgentRosterController,
   getAgent,
   getAgentsByCategory,
-  getRosterAgent,
   getVisibleAgents as getVisibleRegistryAgents,
   type AgentEntry,
 } from '@agent/index';
@@ -20,7 +20,6 @@ import {
 } from '@controllers/settingsView/SettingsAgentCatalogController';
 import {
   agentKey,
-  parseAgentModePresets,
   type AgentCategory,
   type AgentSource,
 } from '@shared/schemas';
@@ -49,16 +48,10 @@ export function createSettingsAgentControllers(
   const { workspaceState, globalState } = options;
   const getAgents = options.getAgents ?? getAgentsByCategory;
   const getVisibleAgents = options.getVisibleAgents ?? getVisibleRegistryAgents;
-  const roster = new AgentRosterController({
-    workspaceState,
-    globalState,
+  const roster = createWorkspaceAgentRosterController(
+    { workspaceState, globalState },
     getAgents,
-    getPresets: () =>
-      parseAgentModePresets(
-        workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-      ),
-    resolveAgent: getRosterAgent,
-  });
+  );
 
   const state: SettingsAgentCatalogState = {
     getEnabledAgentKeys: (category) => roster.getEnabledAgentKeys(category),

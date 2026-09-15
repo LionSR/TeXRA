@@ -1,4 +1,3 @@
-import { createTicker, type Ticker } from '@utils/core';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 /**
@@ -17,7 +16,7 @@ import type { ReactiveController, ReactiveControllerHost } from 'lit';
  */
 export class TickerController implements ReactiveController {
   private _now = Date.now();
-  private _ticker: Ticker | undefined;
+  private _timer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     private readonly host: ReactiveControllerHost,
@@ -32,21 +31,17 @@ export class TickerController implements ReactiveController {
   }
 
   hostConnected(): void {
-    this._tick();
-    this._ticker = createTicker(this.intervalMs, () => this._tick());
+    this.refresh();
+    this._timer = setInterval(() => this.refresh(), this.intervalMs);
   }
 
   hostDisconnected(): void {
-    this._ticker?.dispose();
-    this._ticker = undefined;
+    if (this._timer !== undefined) clearInterval(this._timer);
+    this._timer = undefined;
   }
 
   /** Re-sync `now` immediately, outside the regular interval. */
   refresh(): void {
-    this._tick();
-  }
-
-  private _tick(): void {
     this._now = Date.now();
     this.host.requestUpdate();
   }

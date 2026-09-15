@@ -106,7 +106,11 @@ const deleteWithAuxFiles = (
 ): Effect.Effect<void, never, PreviewFs> =>
   Effect.suspend(() => {
     const ext = path.extname(filePath);
-    const basePathNoExt = filePath.slice(0, -ext.length);
+    // An extensionless file (extname returns '') has no suffix to strip:
+    // `slice(0, -0)` is `slice(0, 0)`, which would drop the path entirely and
+    // unlink bare relative names (and glob every `*.bak*`) in the process cwd.
+    const basePathNoExt =
+      ext === '' ? filePath : filePath.slice(0, -ext.length);
     const unlinkTargets = TEMP_EXTENSIONS.flatMap((tempExt) =>
       tempExt.includes('*')
         ? globSync(`${basePathNoExt}${tempExt}`, { nodir: true })

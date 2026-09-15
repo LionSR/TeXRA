@@ -11,6 +11,11 @@
  */
 // Third-party imports
 import safeStringify from 'safe-stable-stringify';
+// Serializes a thrown value (any value, not just an `Error`) into a plain
+// object. Unlike a naive `{ name, message, stack }` copy it keeps `cause`
+// chains and custom enumerable properties (e.g. `statusCode`, `requestId`),
+// and handles circular references.
+import { serializeError } from 'serialize-error';
 
 // Local imports
 import * as loggerSelf from '@logger/logUtils';
@@ -20,7 +25,6 @@ import { LOG_CHANNEL, writeLogEntry, type LogEntry } from '@logger/logSink';
 // the barrel would create an import cycle. Recorded in the shared-schemas
 // deep-import baseline as its documented cycle floor.
 import { LOG_LEVELS, type LogLevel } from '@shared/schemas/log';
-import { serializeError } from '@utils/text/stringUtils';
 import { getConfigBeforePlatformInit } from '@utils/config/configUtils';
 
 export interface LogUtilsOptions {

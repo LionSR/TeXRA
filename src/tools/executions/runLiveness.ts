@@ -34,13 +34,8 @@ import type { RunStatusInfo } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { createLog } from '@logger/logUtils';
-import {
-  ownerIdentity,
-  type OwnerId,
-  type RunId,
-  type RunOutcome,
-  type RunPhase,
-} from '@shared/schemas';
+import { type RunId, type RunOutcome, type RunPhase } from '@shared/schemas';
+import { runHeldClause } from '@shared/runs/runStatusDisplay';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunLiveness');
@@ -74,12 +69,6 @@ type LiveRunStatusInfo = RunStatusInfo & { status: RunPhase };
  * let two surfaces disagree about how one run ended.
  */
 export type KnownRunOutcome = RunOutcome | null;
-
-/** `runHeldByProcessMessage`'s copy, as a clause a sentence can continue with. */
-function heldElsewhereReason(ownerId: OwnerId): string {
-  const { pid, hostname } = ownerIdentity(ownerId);
-  return `held by another TeXRA process (pid ${pid} on ${hostname})`;
-}
 
 /**
  * This process holds the claim, tracks no run for it, and no outcome was ever
@@ -120,7 +109,7 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
       return { kind: 'unsettled', reason: OWNED_HERE_REASON };
     }
     if (claim.ownerId !== null && claim.liveness !== 'dead') {
-      return { kind: 'unsettled', reason: heldElsewhereReason(claim.ownerId) };
+      return { kind: 'unsettled', reason: runHeldClause(claim.ownerId) };
     }
     // Nobody owns the run and nothing recorded how it ended: it stopped
     // without finishing.

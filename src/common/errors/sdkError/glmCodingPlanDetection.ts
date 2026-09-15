@@ -77,8 +77,9 @@ function secondsUntilReset(timestamp: string): number | undefined {
 
 /**
  * Parse a GLM Coding Plan usage-limit error, returning the reset details or
- * `null` when the error is not a GLM Coding Plan quota exhaustion. Mirrors
- * {@link parseChatGptSubscriptionLimit}: pure body inspection, no clock reads.
+ * `null` when the error is not a GLM Coding Plan quota exhaustion. Body
+ * inspection like {@link parseChatGptSubscriptionLimit}, but not clock-free:
+ * a reset timestamp in the message is resolved against the wall clock.
  */
 export function parseGlmCodingPlanLimit(
   rawErrorBody: unknown,

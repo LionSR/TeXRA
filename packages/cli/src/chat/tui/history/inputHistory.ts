@@ -1,8 +1,7 @@
 /** Global, bounded CLI input history. Older entries are replaced, not archived. */
-import { Clock, Effect, Layer, Result, Semaphore } from 'effect';
+import { Clock, Effect, Result, Semaphore } from 'effect';
 
-import { databaseLayer } from '@controllers/session/Database';
-import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { withScopedDatabase } from '@controllers/session/Database';
 import {
   nodeProcesses,
   processOwnerId,
@@ -13,7 +12,6 @@ import {
   INPUT_HISTORY_LINE_LIMIT,
   type InputHistoryRecord,
 } from '@shared/session/database';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { ensureError } from '@utils/errors/errorMessage';
 
 export interface InputHistory {
@@ -33,29 +31,19 @@ export const loadInputHistory = (
 ): Effect.Effect<InputHistory, Error> =>
   Effect.gen(function* () {
     const access = <A, E>(operation: Effect.Effect<A, E, Database>) =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const ownerId = processOwnerId(
-            yield* Effect.tryPromise({
-              try: () => nodeProcesses.selfIdentity(),
-              catch: ensureError,
-            }),
-          );
-
-          const storage = yield* Effect.try({
-            try: globalStorage,
+      Effect.gen(function* () {
+        const ownerId = processOwnerId(
+          yield* Effect.tryPromise({
+            try: () => nodeProcesses.selfIdentity(),
             catch: ensureError,
-          });
-          return yield* operation.pipe(
-            Effect.provide(
-              databaseLayer('persistent').pipe(
-                Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
-                Layer.provide(ProcessIdentity.layer(ownerId)),
-              ),
-            ),
-          );
-        }),
-      );
+          }),
+        );
+        const storage = yield* Effect.try({
+          try: globalStorage,
+          catch: ensureError,
+        });
+        return yield* withScopedDatabase(storage, ownerId, operation);
+      });
     const read = Effect.flatMap(Database, (database) =>
       database.readInputHistory(),
     );

@@ -5,10 +5,9 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Internal imports
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { getCleanAgentName, type FileOpResult } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { copyFileExclusive } from '@utils/files/fsDurability';
 
 // Local file imports
@@ -19,18 +18,11 @@ import {
   CHANNEL,
 } from './constants';
 import {
+  asErrorResult,
   collectFilesFromPatterns,
   filesystemFor,
   generateTimestamp,
 } from './utils';
-
-/** Every pack failure reaches the host as the same result shape. */
-const asErrorResult = (error: unknown) =>
-  Effect.logError('Error during file operations').pipe(
-    withLogData(error),
-    withLogChannel(CHANNEL),
-    Effect.as<FileOpResult>({ status: 'error', error: toErrorMessage(error) }),
-  );
 
 /**
  * Pack the source document's own files (`<base>.<ext>`, e.g. its PDF) into a
@@ -139,7 +131,7 @@ export const runPackSingle = Effect.fn('housekeeping.runPackSingle')(function* (
       status: 'success',
       outputFolder: resolvedOutputFolder,
     } satisfies FileOpResult;
-  }).pipe(Effect.catch(asErrorResult));
+  }).pipe(Effect.catch(asErrorResult('Pack files')));
 });
 
 export const runPackMultiple = Effect.fn('housekeeping.runPackMultiple')(

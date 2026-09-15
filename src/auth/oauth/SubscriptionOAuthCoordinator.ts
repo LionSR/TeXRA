@@ -32,6 +32,7 @@ import {
   type ProviderAuthErrorCtor,
 } from './providerAuthBridge';
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
+import type { SubscriptionSessionBase } from './subscriptionSessionSchema';
 import type { HttpClient } from 'effect/unstable/http';
 import type { z } from 'zod';
 
@@ -52,15 +53,13 @@ export interface SubscriptionTokenResponse {
   expires_in: number;
 }
 
-/** Canonical stored session. Providers may add fields via intersection types. */
-export interface SubscriptionSession {
-  accessToken: string;
-  refreshToken: string;
-  idToken?: string;
-  expiresAtMs: number;
+/** Canonical stored session: the persisted base schema's shape (its single
+ *  source of truth) plus the two optional identity fields the status read
+ *  reports. Providers may add fields via intersection types. */
+export type SubscriptionSession = SubscriptionSessionBase & {
   email?: string;
   accountId?: string;
-}
+};
 
 export interface SubscriptionAuthorizeRequest {
   url: string;

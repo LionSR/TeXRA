@@ -93,7 +93,7 @@ export class MemoryList extends LitElement {
       });
     }
 
-    const { paged } = paginate(this.items, this.page, DEFAULT_PAGE_SIZE);
+    const paged = paginate(this.items, this.page, DEFAULT_PAGE_SIZE);
 
     return html`
       ${this.renderPagination()}

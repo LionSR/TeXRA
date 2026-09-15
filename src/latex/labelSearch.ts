@@ -1,11 +1,6 @@
 // Local imports - utilities
 import escapeRegExp from 'escape-string-regexp';
 
-/** Build a regex matching `\label{<label>}` for a literal label string. */
-function buildLabelPattern(label: string): RegExp {
-  return new RegExp(`\\\\label\\{${escapeRegExp(label)}\\}`, 'm');
-}
-
 /**
  * Scan candidate files for `\label{<label>}` and hand the first match to
  * `onMatch(file, index)`, where `index` is the character offset of the match
@@ -27,7 +22,8 @@ export async function openFirstLabelMatch(
   read: (file: string) => Promise<string>,
   onMatch: (file: string, index: number) => Promise<void>,
 ): Promise<boolean> {
-  const pattern = buildLabelPattern(label);
+  // A regex matching `\label{<label>}` for a literal label string.
+  const pattern = new RegExp(`\\\\label\\{${escapeRegExp(label)}\\}`, 'm');
   for (const file of files) {
     try {
       const content = await read(file);

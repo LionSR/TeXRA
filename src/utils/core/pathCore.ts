@@ -35,6 +35,19 @@ export function normalizeLatexPath(value: string): string {
 }
 
 /**
+ * True if a `path.relative` result climbs out of the base it was taken from.
+ *
+ * The `'..'` case must be matched as a whole segment: a plain
+ * `startsWith('..')` also matches a first segment that merely begins with two
+ * dots, so an in-root file honestly named `..notes.tex` reads as an escape and
+ * every containment check refuses it. Separators are the platform's, matching
+ * what `path.relative` returns.
+ */
+export function escapesRoot(relativePath: string): boolean {
+  return relativePath === '..' || relativePath.startsWith(`..${path.sep}`);
+}
+
+/**
  * True if `target` is `base` itself or a descendant of it.
  * Computed via path.relative — works for both absolute and relative inputs
  * as long as both are resolved the same way by the caller.
@@ -43,7 +56,7 @@ export function isPathWithin(base: string, target: string): boolean {
   const relativePath = path.relative(base, target);
   return (
     relativePath === '' ||
-    (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+    (!escapesRoot(relativePath) && !path.isAbsolute(relativePath))
   );
 }
 
@@ -54,7 +67,7 @@ export function isStrictlyWithin(base: string, target: string): boolean {
   const relativePath = path.relative(base, target);
   return (
     relativePath !== '' &&
-    !relativePath.startsWith('..') &&
+    !escapesRoot(relativePath) &&
     !path.isAbsolute(relativePath)
   );
 }

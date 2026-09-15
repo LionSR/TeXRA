@@ -13,11 +13,7 @@ import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 import type { SettingEnumChoice, StateSettingValue } from '@shared/schemas';
-import {
-  settingEnumChoices,
-  settingsViewSettingByKey,
-  stateSettingByKey,
-} from '@shared/schemas';
+import { settingEnumChoices, settingsViewSettingByKey } from '@shared/schemas';
 import { renderSettingsToggleRow } from '@shared/wa/settingsSection';
 
 // Third-party imports
@@ -38,13 +34,18 @@ export function postStateSetting(key: string, value: StateSettingValue): void {
 /**
  * Enum values for a catalog key, paired with the catalog's display metadata.
  * The allowed values come from the entry's `z.enum(...)` schema, so a settings
- * UI never hand-lists them. Non-enum or unknown keys yield an empty list.
+ * UI never hand-lists them. Non-enum keys yield an empty list; a key with no
+ * settings-view catalog row is a defect and throws, like
+ * {@link renderStateSettingToggleRow}.
  */
 export function catalogEnumChoices<T extends string>(
   key: string,
 ): readonly SettingEnumChoice<T>[] {
-  const entry = stateSettingByKey(key);
-  return entry ? (settingEnumChoices<T>(entry) ?? []) : [];
+  const entry = settingsViewSettingByKey(key);
+  if (!entry) {
+    throw new Error(`No settings-view catalog row for setting "${key}"`);
+  }
+  return settingEnumChoices<T>(entry) ?? [];
 }
 
 interface StateSettingToggleRowOptions {

@@ -331,8 +331,12 @@ export function resolveAgentKey(
   return agentKeyOf(entry);
 }
 
-/** Resolve one roster identifier without collapsing an exact source key. */
-export function getRosterAgent(
+/**
+ * Resolve one roster identifier without collapsing an exact source key.
+ * Module-local: the roster controller it exists for is built here, so no
+ * caller outside this file needs the resolution rule on its own.
+ */
+function getRosterAgent(
   category: AgentCategoryType,
   identifier: string,
 ): AgentEntry | undefined {
@@ -368,12 +372,13 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  */
 export function createWorkspaceAgentRosterController(
   roots: Pick<WorkspaceRoots, 'workspaceState' | 'globalState'>,
+  getAgents: (category: AgentCategory) => AgentEntry[] = getAgentsByCategory,
 ): AgentRosterController<AgentEntry> {
   const { workspaceState, globalState } = roots;
   return new AgentRosterController({
     workspaceState,
     globalState,
-    getAgents: getAgentsByCategory,
+    getAgents,
     getPresets: () =>
       parseAgentModePresets(
         workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),

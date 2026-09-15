@@ -3,8 +3,6 @@ export type GitHubCheckAnnotationLevel = 'notice' | 'warning' | 'failure';
 export const DEFAULT_CHECK_ANNOTATION_LEVEL: GitHubCheckAnnotationLevel =
   'failure';
 
-const ANNOTATION_LEVEL_ORDER = ['failure', 'warning', 'notice'] as const;
-
 const ANNOTATION_LEVEL_RANK: Readonly<
   Record<GitHubCheckAnnotationLevel, number>
 > = {
@@ -12,6 +10,11 @@ const ANNOTATION_LEVEL_RANK: Readonly<
   warning: 1,
   failure: 2,
 };
+
+/** Every level, most severe first: the one order RANK declares, read back. */
+const ANNOTATION_LEVELS_BY_SEVERITY: readonly GitHubCheckAnnotationLevel[] = (
+  Object.keys(ANNOTATION_LEVEL_RANK) as GitHubCheckAnnotationLevel[]
+).sort((a, b) => ANNOTATION_LEVEL_RANK[b] - ANNOTATION_LEVEL_RANK[a]);
 
 function normalizeCheckAnnotationLevel(
   level: string | null | undefined,
@@ -40,7 +43,7 @@ export function formatCheckAnnotationLevelList(
       normalizeCheckAnnotationLevel(annotation.annotation_level),
     ),
   );
-  return ANNOTATION_LEVEL_ORDER.filter((level) => levels.has(level))
+  return ANNOTATION_LEVELS_BY_SEVERITY.filter((level) => levels.has(level))
     .map((level) => `[${level.toUpperCase()}]`)
     .join(', ');
 }

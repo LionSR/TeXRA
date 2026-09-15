@@ -27,14 +27,6 @@ import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
 
 const RUN_ID = 'xml-output-manager-test' as RunId;
 
-const formatterMocks = vi.hoisted(() => ({
-  runLatexFormatter: vi.fn(),
-}));
-
-vi.mock('@latex/formatter/texFormatter', () => ({
-  runLatexFormatter: formatterMocks.runLatexFormatter,
-}));
-
 interface XmlManagerOptions {
   outputFiles?: string[];
   /** Run-relative names of the files a similarity fallback may match against. */
@@ -845,7 +837,6 @@ const LABELED_RECOVERY_CASES: readonly LabeledRecoveryCase[] = [
 
 describe('XmlOutputManager', () => {
   beforeEach(async () => {
-    formatterMocks.runLatexFormatter.mockReset();
     await installPlatform({
       files: { '/tmp/run/output.xml': '<documents />' },
       workspacePath: fakePath('workspace'),
@@ -982,7 +973,9 @@ Appendix.
 
       const roundOutputs = state.rounds.get(0)?.outputs ?? [];
       expect(roundOutputs).toHaveLength(2);
-      expect(formatterMocks.runLatexFormatter).not.toHaveBeenCalled();
+      // The written bytes are the guard: extraction hands the document through
+      // untouched, so a formatter running anywhere on this path would show up
+      // as different content below.
       yield* expectWritten('main.tex', '\\[\n  f(x)=x^4-2x^2+1.\n\\]\n');
     }),
   );

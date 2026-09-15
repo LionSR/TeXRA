@@ -1,6 +1,6 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { html, css, type TemplateResult } from 'lit';
+import { customElement } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
@@ -13,10 +13,11 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { VisibleBanner } from './StateVisibleBanner';
 
 /** Slim project-bootstrap row shown when the workspace has no LaTeX files. */
 @customElement('getting-started-banner')
-export class GettingStartedBanner extends LitElement {
+export class GettingStartedBanner extends VisibleBanner {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -66,8 +67,6 @@ export class GettingStartedBanner extends LitElement {
       }
     `,
   ];
-
-  @property({ type: Boolean, reflect: true }) visible = false;
 
   private handleDismiss(): void {
     this.dispatchEvent(

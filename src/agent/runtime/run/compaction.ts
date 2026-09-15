@@ -19,7 +19,7 @@ import {
   startCompactionActivity,
   type AgentTrace,
 } from '@agent/trace';
-import type { TurnRequest, TurnResult } from '@llm/turn';
+import type { TurnRequest } from '@llm/turn';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
