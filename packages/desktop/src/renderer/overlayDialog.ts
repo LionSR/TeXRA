@@ -1,6 +1,21 @@
-import { render } from 'lit';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { render, type TemplateResult } from 'lit';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+
+/**
+ * Renders a Lit template into a detached element for the desktop's
+ * imperative (non-Lit-component) DOM overlays — shared so the overlay
+ * chrome can build its buttons through the same `@shared/wa` helpers as the
+ * Lit-based renderer surfaces instead of hand-assembling `wa-button`
+ * attributes.
+ */
+export function renderElement(template: TemplateResult): HTMLElement {
+  const container = document.createElement('div');
+  render(template, container);
+  const element = container.firstElementChild;
+  if (!element) throw new Error('renderElement: template produced no element');
+  return element as HTMLElement;
+}
 
 /**
  * Small icon-only close button shared by the desktop's imperative dialog
@@ -12,22 +27,15 @@ function createDialogCloseButton(
   label: string,
   onClose: () => void,
 ): HTMLElement {
-  const close = document.createElement('wa-button');
-  close.classList.add(
-    className,
-    'desktop-overlay-close',
-    'icon-button',
-    'is-size-l',
-    'focus-ring-inset',
+  return renderElement(
+    renderIconActionButton({
+      icon: 'xmark',
+      label,
+      size: 'l',
+      className: `${className} desktop-overlay-close icon-button focus-ring-inset`,
+      onClick: onClose,
+    }),
   );
-  close.setAttribute('appearance', 'plain');
-  close.setAttribute('size', 's');
-  close.setAttribute('type', 'button');
-  close.setAttribute('aria-label', label);
-  close.setAttribute('title', label);
-  render(waIcon('xmark'), close);
-  close.addEventListener('click', onClose);
-  return close;
 }
 
 /**

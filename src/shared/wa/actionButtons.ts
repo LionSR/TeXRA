@@ -41,6 +41,12 @@ export interface IconActionButtonOptions {
   readonly title?: string;
   readonly action?: string;
   readonly className?: string;
+  /**
+   * Native `slot` attribute on the `<wa-button>` host. Needed when the
+   * button itself (not a wrapper) must be the slotted light-DOM child of a
+   * parent Web Awesome component (e.g. `<wa-input slot="end">`).
+   */
+  readonly slot?: string;
   readonly appearance?: ActionButtonAppearance;
   readonly variant?: ActionButtonVariant;
   /** Semantic skin. Prefer this over choosing appearance/variant directly. */
@@ -110,6 +116,7 @@ function renderActionButtonParts({
   title,
   action,
   className,
+  slot,
   appearance = 'plain',
   variant = 'neutral',
   kind,
@@ -156,6 +163,7 @@ function renderActionButtonParts({
   const button = html`
     <wa-button
       id=${ifDefined(id)}
+      slot=${ifDefined(slot)}
       class=${classes}
       appearance=${appearance}
       variant=${variant}

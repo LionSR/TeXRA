@@ -434,7 +434,7 @@ function taskConversationTemplate(): TemplateResult {
           ${
             sidebarCollapsedWithPendingApproval
               ? html`<span
-                  class="task-header-pending-approval-badge"
+                  class="status-dot task-header-pending-approval-badge"
                   aria-hidden="true"
                 ></span>`
               : nothing

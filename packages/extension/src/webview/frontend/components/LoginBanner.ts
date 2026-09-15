@@ -3,8 +3,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 
@@ -90,16 +89,13 @@ export class LoginBanner extends LitElement {
             >
               Sign in
             </wa-button>
-            <wa-button
-              id="loginBannerDismissButton"
-              appearance="plain"
-              size="s"
-              title="Dismiss (can be re-enabled in settings)"
-              aria-label="Dismiss login banner"
-              @click=${this.handleDismiss}
-            >
-              ${waIcon('xmark')}
-            </wa-button>
+            ${renderIconActionButton({
+              id: 'loginBannerDismissButton',
+              icon: 'xmark',
+              label: 'Dismiss login banner',
+              title: 'Dismiss (can be re-enabled in settings)',
+              onClick: this.handleDismiss,
+            })}
           </div>
         </div>
         <span class="banner-lead">

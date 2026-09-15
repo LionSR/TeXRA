@@ -15,6 +15,7 @@
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { join } from 'lit/directives/join.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared contracts
@@ -389,14 +390,16 @@ export class WorkflowRunBoard extends LitElement {
     const { runStartedAt } = this.run;
     const parts = [
       usage.outputTokens > 0
-        ? `↓${formatCompactTokenCount(usage.outputTokens)}`
+        ? html`${waIcon('arrow-down', {
+            label: 'Output tokens',
+          })}${formatCompactTokenCount(usage.outputTokens)}`
         : undefined,
       usage.cost > 0 ? formatCostUsd(usage.cost) : undefined,
       !this.summary && runStartedAt !== null && this.nowMs !== null
         ? formatCompactDuration(this.nowMs - runStartedAt)
         : undefined,
     ].filter((part) => part !== undefined);
-    return html`<span class="quiet">${parts.join(' · ')}</span>`;
+    return html`<span class="quiet">${join(parts, ' · ')}</span>`;
   }
 
   private renderSummary(model: WorkflowRunModel): TemplateResult {
@@ -503,7 +506,7 @@ export class WorkflowRunBoard extends LitElement {
   /** `attempt 2`, `6m · ↓4k`: what a row shows beside its last line. The
    *  card's kind, agent, and model stay in the child's header; the board
    *  keeps the attempt, the elapsed time while it runs, and its tokens. */
-  private rowMeta(row: WorkflowTaskRow): readonly string[] {
+  private rowMeta(row: WorkflowTaskRow): readonly (string | TemplateResult)[] {
     const { call } = row;
     const live = this.model?.liveOf.get(row.id);
     return [
@@ -516,7 +519,9 @@ export class WorkflowRunBoard extends LitElement {
         ? formatCompactDuration(this.nowMs - live.runStartedAt)
         : undefined,
       live?.outputTokens !== undefined && live.outputTokens > 0
-        ? `↓${formatCompactTokenCount(live.outputTokens)}`
+        ? html`${waIcon('arrow-down', {
+            label: 'Output tokens',
+          })}${formatCompactTokenCount(live.outputTokens)}`
         : undefined,
     ].filter((part) => part !== undefined);
   }
@@ -578,7 +583,7 @@ export class WorkflowRunBoard extends LitElement {
       }
       ${
         meta.length > 0
-          ? html`<span class="row-meta">${meta.join(' · ')}</span>`
+          ? html`<span class="row-meta">${join(meta, ' · ')}</span>`
           : nothing
       }
       ${actions}

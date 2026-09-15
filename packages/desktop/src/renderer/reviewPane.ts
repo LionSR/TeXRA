@@ -5,6 +5,7 @@ import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
 import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -164,22 +165,16 @@ export function createReviewPane(): ReviewPaneController {
               ${waIcon('magnifying-glass', { slot: 'start' })}
               ${
                 filter
-                  ? html`
-                      <wa-button
-                        slot="end"
-                        class="icon-button is-size-s"
-                        appearance="plain"
-                        size="s"
-                        aria-label="Clear file filter"
-                        title="Clear file filter"
-                        @click=${() => {
-                          filter = '';
-                          rerender();
-                        }}
-                      >
-                        ${waIcon('xmark')}
-                      </wa-button>
-                    `
+                  ? renderIconActionButton({
+                      icon: 'xmark',
+                      label: 'Clear file filter',
+                      className: 'icon-button is-size-s',
+                      slot: 'end',
+                      onClick: () => {
+                        filter = '';
+                        rerender();
+                      },
+                    })
                   : nothing
               }
             </wa-input>

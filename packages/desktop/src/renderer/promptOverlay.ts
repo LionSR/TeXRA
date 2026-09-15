@@ -1,12 +1,13 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import {
   DESKTOP_PROMPT_COMMANDS,
   type DesktopSettlePromptMessage,
   type DesktopShowPromptMessage,
 } from '../shared/desktopPromptMessages';
-import { createOverlayDialog } from './overlayDialog';
+import { createOverlayDialog, renderElement } from './overlayDialog';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 interface DesktopPromptOverlay {
@@ -29,18 +30,26 @@ export function createDesktopPromptOverlay(
   const actions = document.createElement('div');
   actions.classList.add('desktop-prompt-actions');
 
-  const cancelButton = document.createElement('wa-button');
-  cancelButton.classList.add('desktop-prompt-cancel', 'btn-secondary');
-  cancelButton.setAttribute('appearance', 'outlined');
-  cancelButton.setAttribute('type', 'button');
-  cancelButton.textContent = 'Cancel';
+  const cancelButton = renderElement(
+    renderLabeledActionButton({
+      text: 'Cancel',
+      appearance: 'outlined',
+      className: 'desktop-prompt-cancel btn-secondary',
+      onClick: () => settle(null),
+    }),
+  );
 
-  const submitButton = document.createElement('wa-button');
-  submitButton.classList.add('desktop-prompt-submit', 'btn-primary');
-  submitButton.setAttribute('appearance', 'filled');
-  submitButton.setAttribute('variant', 'brand');
-  submitButton.setAttribute('type', 'submit');
-  submitButton.textContent = 'Save';
+  const submitButton = renderElement(
+    renderLabeledActionButton({
+      text: 'Save',
+      appearance: 'filled',
+      variant: 'brand',
+      className: 'desktop-prompt-submit btn-primary',
+      // The shared button helper always renders type="button", so submit is
+      // driven explicitly rather than relying on native type="submit".
+      onClick: () => form.requestSubmit(),
+    }),
+  );
 
   actions.append(cancelButton, submitButton);
   form.append(input, actions);
@@ -91,7 +100,6 @@ export function createDesktopPromptOverlay(
     event.preventDefault();
     form.requestSubmit();
   });
-  cancelButton.addEventListener('click', () => settle(null));
   dialog.addEventListener('wa-hide', () => settle(null));
   dialog.addEventListener('wa-after-show', () => input.focus());
 

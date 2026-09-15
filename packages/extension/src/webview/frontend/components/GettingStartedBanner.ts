@@ -10,6 +10,7 @@ import {
 } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 
@@ -125,16 +126,13 @@ export class GettingStartedBanner extends LitElement {
               ${this.renderAction('openWalkthrough', 'outlined')}
             </div>
           </div>
-          <wa-button
-            class="dismiss-button"
-            appearance="plain"
-            size="s"
-            title="Dismiss for this session"
-            aria-label="Dismiss getting started for this session"
-            @click=${this.handleDismiss}
-          >
-            ${waIcon('xmark')}
-          </wa-button>
+          ${renderIconActionButton({
+            icon: 'xmark',
+            label: 'Dismiss getting started for this session',
+            title: 'Dismiss for this session',
+            className: 'dismiss-button',
+            onClick: this.handleDismiss,
+          })}
         </div>
       `,
     });

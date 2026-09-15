@@ -16,6 +16,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import { resolveSelected, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -226,17 +227,12 @@ function projectSection(
       >
         ${waIcon(collapsed ? 'chevron-right' : 'chevron-down')}
       </wa-button>
-      <wa-button
-        type="button"
-        class="task-project-close icon-button is-size-s"
-        appearance="plain"
-        size="s"
-        title="Close ${name}"
-        aria-label="Close ${name}"
-        @click=${() => callbacks.onCloseProject(key)}
-      >
-        ${waIcon('xmark')}
-      </wa-button>
+      ${renderIconActionButton({
+        icon: 'xmark',
+        label: `Close ${name}`,
+        className: 'task-project-close icon-button is-size-s',
+        onClick: () => callbacks.onCloseProject(key),
+      })}
     </div>
     ${
       collapsed
@@ -647,20 +643,16 @@ export function workbenchTabsTemplate(
                     : nothing
                 }
               </wa-button>
-              <wa-button
-                type="button"
-                class="task-workbench-tab-close icon-button is-size-s focus-ring-inset"
-                appearance="plain"
-                size="s"
-                aria-label=${`Close ${tab.title}`}
-                title=${`Close ${tab.title}`}
-                @click=${(event: MouseEvent) => {
+              ${renderIconActionButton({
+                icon: 'xmark',
+                label: `Close ${tab.title}`,
+                className:
+                  'task-workbench-tab-close icon-button is-size-s focus-ring-inset',
+                onClick: (event) => {
                   event.stopPropagation();
                   callbacks.onClose(tab.id);
-                }}
-              >
-                ${waIcon('xmark')}
-              </wa-button>
+                },
+              })}
               <wa-dropdown
                 class="task-workbench-tab-menu"
                 placement="bottom-start"
