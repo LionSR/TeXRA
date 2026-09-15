@@ -338,12 +338,11 @@ class AgentDirectoryManager {
 
   private async collectDirectoryUris(root: vscode.Uri): Promise<vscode.Uri[]> {
     const directories: vscode.Uri[] = [];
-    // Breadth-first from `root`: a directory discovered while walking is
-    // appended to the queue being iterated.
     const pending: vscode.Uri[] = [root];
     const visitedRealPaths = new Set<string>();
 
-    for (const uri of pending) {
+    for (let i = 0; i < pending.length; i++) {
+      const uri = pending[i];
       const realPath = await this.realDirectoryPath(uri);
       if (visitedRealPaths.has(realPath)) {
         continue;
