@@ -29,7 +29,6 @@ export {
   type TranscriptRowBase,
   type TranscriptRowKind,
   type UserRow,
-  type WebFetchRow,
   type WebSearchRow,
   type WorkflowTaskRow,
 } from './transcriptRow';

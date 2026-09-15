@@ -1158,7 +1158,6 @@ function rowHeadline(row: TranscriptRow): string {
     case 'scratchpad':
       return 'Scratchpad';
     case 'webSearch':
-    case 'webFetch':
     case 'statistics':
     case 'contextManagement':
     case 'compactionActivity':

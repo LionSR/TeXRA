@@ -452,6 +452,5 @@ const DOMAIN_MESSAGE_TYPE: Record<string, MessageType> = {
   scratchpad: MESSAGE_TYPES.SCRATCHPAD,
   missingOutputs: MESSAGE_TYPES.MISSING_OUTPUTS,
   webSearch: MESSAGE_TYPES.WEB_SEARCH,
-  webFetch: MESSAGE_TYPES.WEB_FETCH,
   contextManagement: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
 };

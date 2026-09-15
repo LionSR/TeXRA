@@ -86,7 +86,6 @@ const ROW_GEOMETRY = {
   thinking: DETAIL_GEOMETRY,
   scratchpad: DETAIL_GEOMETRY,
   webSearch: DETAIL_GEOMETRY,
-  webFetch: DETAIL_GEOMETRY,
   missingOutputs: DETAIL_GEOMETRY,
   latexdiff: DETAIL_GEOMETRY,
   statistics: DETAIL_GEOMETRY,

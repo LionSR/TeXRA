@@ -4,7 +4,7 @@ import { Cause, Clock, Effect, Exit, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
-import { prefixFingerprint } from './prefixFingerprint.js';
+import { admittedFingerprint, prefixFingerprint } from './prefixFingerprint.js';
 import {
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
@@ -34,7 +34,7 @@ import {
   completedTurn,
 } from './turn.js';
 
-const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
+export const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
 
 // SDK stream parsing does not validate the JSON values it returns.
 const WireTextSchema = z.strictObject({
@@ -472,28 +472,6 @@ function createInput(
 type ObservedStep = z.infer<typeof WireCompletedStepSchema> & {
   readonly argumentsText?: string;
 };
-
-/**
- * The digest a submission records on its accepted operation: origin, system
- * text and admitted history, hashed with the function a continuation's prefix
- * fingerprint uses. It covers the input half of that prefix, which is the half
- * a resume rebuilds and can therefore get wrong; the reply does not exist yet.
- */
-export function googleInteractionsAdmittedFingerprint(
-  turn: Extract<ResolvedTurn, { protocol: 'google-interactions' }>,
-): string {
-  return prefixFingerprint(
-    GOOGLE_PREFIX_DOMAIN,
-    {
-      protocol: turn.protocol,
-      codecVersion: turn.codecVersion,
-      requestedModel: turn.requestedModel,
-      deployment: turn.deployment,
-    },
-    turn.system,
-    turn.messages,
-  );
-}
 
 /**
  * Builds only the stored anchor a completed turn leaves for its next round.
@@ -1186,7 +1164,7 @@ export function googleInteractionsModel(
         origin,
         providerResponseId: identity.data.id,
         afterSequence: null,
-        admittedFingerprint: googleInteractionsAdmittedFingerprint(turn),
+        admittedFingerprint: admittedFingerprint(GOOGLE_PREFIX_DOMAIN, turn),
         store: turn.controls.store,
       });
       const interaction = yield* snapshot(raw, operation);
@@ -1244,7 +1222,7 @@ export function googleInteractionsModel(
         // turn re-derived stored for a temporary operation must not chain.
         const chains =
           turn.controls.store === operation.store &&
-          googleInteractionsAdmittedFingerprint(turn) ===
+          admittedFingerprint(GOOGLE_PREFIX_DOMAIN, turn) ===
             operation.admittedFingerprint;
         if (!chains) {
           yield* Effect.logWarning(

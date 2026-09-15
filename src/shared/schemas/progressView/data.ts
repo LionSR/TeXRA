@@ -125,16 +125,6 @@ export const WebSearchPayloadSchema = z.object({
   status: z.string().optional(),
 });
 
-export const WebFetchPayloadSchema = z.object({
-  url: SafeUrlSchema.optional(),
-  title: z.string().optional(),
-  provider: z.string().optional(),
-  status: z.string().optional(),
-  errorCode: z.string().optional(),
-  /** Fetched document text, size-capped at the source (#7508). */
-  content: z.string().optional(),
-});
-
 /** What a pending request shows (diff, command, question), never host
  *  handles: the payload of `request.opened`. */
 export const PermissionPayloadSchema = z.discriminatedUnion('kind', [

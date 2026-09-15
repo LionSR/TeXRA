@@ -113,7 +113,6 @@ function deriveTranscriptRowHeadline(row: TranscriptRow): string {
     case 'tool':
       return '';
     case 'webSearch':
-    case 'webFetch':
       return row.label;
     case 'fileList':
     case 'missingOutputs':
@@ -158,7 +157,6 @@ const ROW_KIND_IS_WIDGET = {
   statistics: true,
   thinking: true,
   tool: true,
-  webFetch: true,
   webSearch: true,
 } as const satisfies Record<TranscriptRowKind, boolean>;
 
