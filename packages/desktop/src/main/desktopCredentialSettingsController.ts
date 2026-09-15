@@ -1,5 +1,7 @@
+// Third-party imports
 import { Data, Effect } from 'effect';
 
+// Local imports
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
@@ -58,7 +60,6 @@ class SignInPresentationFailed extends Data.TaggedError(
 /** The error dialog that reports a presentation failure itself rejected. */
 class SignInNoticeFailed extends Data.TaggedError('SignInNoticeFailed')<{
   readonly cause: unknown;
-  readonly message: string;
 }> {}
 
 /** A subscription-provider mutation (sign-in, sign-out, preference) failed. */
@@ -66,7 +67,6 @@ class SubscriptionActionFailed extends Data.TaggedError(
   'SubscriptionActionFailed',
 )<{
   readonly cause: unknown;
-  readonly message: string;
 }> {}
 
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
@@ -314,6 +314,12 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
    * report a failure the way an awaited presentation would: the cause goes to
    * `onError`, then the dialog says which presentation could not be shown. A
    * dialog that itself fails is reported through the same `onError`.
+   *
+   * Containment is deliberate and covers a synchronous throw as well as a
+   * rejection: the presenter interface admits a synchronous `void` presenter,
+   * and neither kind of failure to *show* a notice should abort the sign-in
+   * the notice merely describes. The desktop presenters are async today, so
+   * only the rejection path runs in production.
    */
   private presentInBackground(
     displayName: string,
@@ -337,14 +343,10 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
             yield* Effect.tryPromise({
               try: async () => {
                 await options.notifications.showErrorMessage(
-                  `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure.cause)}`,
+                  `Failed to display ${displayName} sign-in instructions: ${failure.message}`,
                 );
               },
-              catch: (cause) =>
-                new SignInNoticeFailed({
-                  cause,
-                  message: toErrorMessage(cause),
-                }),
+              catch: (cause) => new SignInNoticeFailed({ cause }),
             }).pipe(
               Effect.catchTag('SignInNoticeFailed', (notice) =>
                 Effect.sync(() => {
@@ -367,7 +369,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   private signInPresenter(displayName: string): SubscriptionSignInPresenter {
     return {
       presentDeviceCode: (prompt) => {
-        // Informational only — awaiting would block the approval poll.
+        // Informational only — awaiting would block the approval poll, and a
+        // presenter failure is contained rather than failing the poll.
         this.presentInBackground(displayName, () =>
           this.options.externalOpener.presentSubscriptionDeviceCode(
             prompt,
@@ -391,7 +394,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
               ),
           }),
         );
-        // Informational only — awaiting would block the OAuth callback.
+        // Informational only — awaiting would block the OAuth callback, and a
+        // presenter failure is contained rather than failing the callback wait.
         this.presentInBackground(displayName, () =>
           this.options.externalOpener.presentSubscriptionSignInUrl(
             url,
@@ -421,11 +425,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     const refresh = () => this.refreshAfterSubscriptionAuthChange(providerId);
     const attempt = Effect.tryPromise({
       try: () => work(provider),
-      catch: (cause) =>
-        new SubscriptionActionFailed({
-          cause,
-          message: toErrorMessage(cause),
-        }),
+      catch: (cause) => new SubscriptionActionFailed({ cause }),
     }).pipe(
       Effect.catchTag('SubscriptionActionFailed', (failure) =>
         Effect.tryPromise({
