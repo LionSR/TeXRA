@@ -2,12 +2,12 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import type { FileLocation } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { joinLatexPath } from '@utils/core/pathCore';
 
 import {
@@ -80,10 +80,13 @@ export const extractFigurePathsFromLatex = Effect.fn(
     /\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}/g,
   ];
 
-  const content = yield* Effect.tryPromise({
-    try: () => AbsoluteFS.read(latexFileLocation.absolutePath),
-    catch: ensureError,
-  });
+  // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
+  // strips a leading UTF-8 BOM that the old `AbsoluteFS.read` preserved.
+  const fs = yield* FileSystem.FileSystem;
+  const bytes = yield* fs
+    .readFile(latexFileLocation.absolutePath)
+    .pipe(Effect.mapError(ensureError));
+  const content = normalizeLineEndings(Buffer.from(bytes).toString('utf-8'));
 
   // Pre-process content to remove commented-out text (including inline
   // comments and escaped `\%`, unlike a naive whole-line strip).

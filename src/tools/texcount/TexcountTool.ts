@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports - latex utilities
@@ -29,7 +29,7 @@ type TexcountInput = z.infer<typeof TexcountInputSchema>;
 
 const texcount = Effect.fn('TexcountTool.execute')(function* (
   input: TexcountInput,
-): Effect.fn.Return<ToolResult, ToolError> {
+): Effect.fn.Return<ToolResult, ToolError, FileSystem.FileSystem> {
   const files = ensureArray(input.files)
     .map((file) => file.trim())
     .filter((file) => file.length > 0);
