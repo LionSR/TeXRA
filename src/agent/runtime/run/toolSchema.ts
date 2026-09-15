@@ -11,7 +11,7 @@ import type { ToolDefinition } from '@shared/schemas';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
 import { isObject } from '@utils/core';
 
-export interface JSONSchemaObject {
+interface JSONSchemaObject {
   type?: string | string[];
   properties?: Record<string, JSONSchemaObject>;
   required?: string[];

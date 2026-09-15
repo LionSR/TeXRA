@@ -37,7 +37,7 @@ import {
 } from '@shared/constants/providers';
 import { byName } from '@utils/core';
 
-export interface SettingsModelSelectionControllerDeps {
+interface SettingsModelSelectionControllerDeps {
   /** Persisted picker state: enabled models, helper model, reasoning levels. */
   globalState: StateStore;
   /** Provider credentials behind the availability decoration on each option. */

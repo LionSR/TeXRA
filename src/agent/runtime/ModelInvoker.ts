@@ -179,7 +179,7 @@ interface InvocationResponse {
   readonly responseTimeMs: number;
 }
 
-export type InvocationOutcome =
+type InvocationOutcome =
   | InvocationResponse
   | {
       readonly kind: 'failed';
@@ -188,6 +188,11 @@ export type InvocationOutcome =
     }
   | { readonly kind: 'cancelled'; readonly state: RunState };
 
+/**
+ * The ledger failures `invoke` can hand back. One definition: the dispatch
+ * path in `loop/toolUseDispatch` branches on the same union, so it imports
+ * this rather than re-declaring the alias.
+ */
 export type InvokeError = RunLedgerRefused | DatabaseWriteFailed;
 
 export class ModelInvoker extends Context.Service<

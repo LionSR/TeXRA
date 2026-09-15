@@ -132,8 +132,8 @@ export interface BoundModel {
   readonly usageRoute: UsageRoute;
   readonly contextWindow: number;
   readonly supportsVision: boolean;
-  /** Structural {@link MediaCapabilities}: a bound model is passed as one to
-   *  the media-input pipeline, so these two mirror `config.capabilities`. */
+  /** The media-input pipeline takes a bound model structurally, so these two
+   *  mirror `config.capabilities`. */
   readonly supportsNativePdf: boolean;
   readonly supportsNativeAudio: boolean;
   readonly supportsForcedToolChoice: boolean;
@@ -147,7 +147,7 @@ export interface BoundModel {
   readonly backgroundCapable: boolean;
 }
 
-export interface BindModelInput {
+interface BindModelInput {
   readonly config: ModelConfig;
   /** The run's process secret store and global state, from the launch. */
   readonly stores: ModelOptionStores;
