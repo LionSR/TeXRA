@@ -780,16 +780,20 @@ function createWindow(options: {
   /**
    * Await a host promise the caller has already started, reporting rather than
    * raising its failure: a dialog that could not be shown must not fail the
-   * run behind it.
+   * run behind it. `member` is the port member whose promise this is, so the
+   * report names the dialog that actually rejected.
    */
-  const awaitOrReport = (started: Promise<void>): Promise<void> =>
+  const awaitOrReport = (
+    member: NotificationFailed['member'],
+    started: Promise<void>,
+  ): Promise<void> =>
     runtime.runPromise(
       Effect.tryPromise({
         try: () => started,
         catch: (cause) =>
           new NotificationFailed({
-            member: 'showInfoMessage',
-            message: 'A desktop dialog could not be shown.',
+            member,
+            message: `A desktop dialog could not be shown: ${toErrorMessage(cause)}`,
             cause,
           }),
       }).pipe(
@@ -817,11 +821,13 @@ function createWindow(options: {
     // Presentation failures are reported, never raised: a run must not
     // fail because a dialog could not be shown. The caller still awaits the
     // dialog, as it did before.
-    showInfoMessage: (message) => awaitOrReport(showInfoMessage(message)),
+    showInfoMessage: (message) =>
+      awaitOrReport('showInfoMessage', showInfoMessage(message)),
     showWarningMessage,
-    showErrorMessage: (message) => awaitOrReport(showErrorMessage(message)),
+    showErrorMessage: (message) =>
+      awaitOrReport('showErrorMessage', showErrorMessage(message)),
     showErrorDialog: (message, docsCommand) =>
-      awaitOrReport(showErrorDialog(message, docsCommand)),
+      awaitOrReport('showErrorMessage', showErrorDialog(message, docsCommand)),
     showInstructionDialog,
     pickTranscriptExportFormat: async () => {
       const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
