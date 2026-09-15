@@ -3,7 +3,6 @@ import { Data, Effect } from 'effect';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
@@ -26,7 +25,6 @@ import type {
 /** A shell action's host call rejected. The window reports it and stays up. */
 class ShellActionFailed extends Data.TaggedError('ShellActionFailed')<{
   readonly cause: unknown;
-  readonly message: string;
 }> {}
 
 /** One host call as a program: its rejection becomes the tagged failure. */
@@ -35,8 +33,7 @@ function hostCall<A>(
 ): Effect.Effect<A, ShellActionFailed> {
   return Effect.tryPromise({
     try: call,
-    catch: (cause) =>
-      new ShellActionFailed({ cause, message: toErrorMessage(cause) }),
+    catch: (cause) => new ShellActionFailed({ cause }),
   });
 }
 
