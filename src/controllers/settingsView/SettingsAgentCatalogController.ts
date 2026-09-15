@@ -33,6 +33,7 @@ import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName, isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { InvalidAgentTeamError } from '@agent/roster/AgentRosterController';
 
 interface SettingsAgentCatalogEntry {
   name: string;
@@ -49,7 +50,14 @@ export interface SettingsAgentCatalogState {
     category: AgentCategory,
     enabledKeys: string[],
   ): Effect.Effect<void, StateWriteFailed>;
-  setTeamRoster(preset: AgentModePreset): Effect.Effect<void, StateWriteFailed>;
+  /**
+   * The roster refuses an unknown team in its own right, so the port carries
+   * that failure beside the write's: `commitPreset` below maps every error it
+   * receives into `TeamCatalogPortFailed`, so nothing re-tags it here.
+   */
+  setTeamRoster(
+    preset: AgentModePreset,
+  ): Effect.Effect<void, StateWriteFailed | InvalidAgentTeamError>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getVisibleAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getCustomPresetsRaw(): unknown;

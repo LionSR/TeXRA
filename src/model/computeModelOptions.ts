@@ -695,7 +695,17 @@ export function setModelEnabled(input: {
 }): Effect.Effect<readonly string[], StateWriteFailed> {
   const state = input.state;
   if (input.enabled && isRetiredModel(input.model)) {
-    throw new Error(`Model "${input.model}" is retired and cannot be enabled.`);
+    // The sibling refusal below is typed for the same reason: the guard runs
+    // when the method is called, and a throw here would escape the channel
+    // this signature declares.
+    const message = `Model "${input.model}" is retired and cannot be enabled.`;
+    return Effect.fail(
+      new StateWriteFailed({
+        key: GlobalStateKey.MODEL_SELECTION,
+        message,
+        cause: new Error(message),
+      }),
+    );
   }
 
   // Edit the list the picker shows — including the all-defaults fallback — and

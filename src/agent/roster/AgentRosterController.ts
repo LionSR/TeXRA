@@ -308,12 +308,22 @@ export class AgentRosterController<
     );
   }
 
-  setTeam(teamId: string): Effect.Effect<void, StateWriteFailed> {
+  setTeam(
+    teamId: string,
+  ): Effect.Effect<void, StateWriteFailed | InvalidAgentTeamError> {
     const preset = this.allPresets().find(
       (candidate) => candidate.id === teamId,
     );
-    if (!preset)
-      throw new InvalidAgentTeamError(`Unknown agent team: ${teamId}`);
+    if (!preset) {
+      // A refusal in the declared channel, not a synchronous throw. This
+      // method's two production callers are a synchronous TUI select handler
+      // (which would otherwise let the throw escape its Effect recovery) and a
+      // CLI `await` that matches on `instanceof InvalidAgentTeamError` against
+      // the rejection — a defect would break the second one's message.
+      return Effect.fail(
+        new InvalidAgentTeamError(`Unknown agent team: ${teamId}`),
+      );
+    }
     return this.setSelection({ kind: 'team', teamId: preset.id });
   }
 
@@ -414,10 +424,14 @@ export class AgentRosterController<
     );
   }
 
-  setDefaultTeam(teamId: string): Effect.Effect<void, StateWriteFailed> {
+  setDefaultTeam(
+    teamId: string,
+  ): Effect.Effect<void, StateWriteFailed | InvalidAgentTeamError> {
     if (!allPresets().some((preset) => preset.id === teamId)) {
-      throw new InvalidAgentTeamError(
-        `Only a built-in team can be the user default: ${teamId}`,
+      return Effect.fail(
+        new InvalidAgentTeamError(
+          `Only a built-in team can be the user default: ${teamId}`,
+        ),
       );
     }
     return setDefaultTeamId(this.deps.globalState, teamId);
