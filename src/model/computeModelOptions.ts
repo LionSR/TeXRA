@@ -687,11 +687,11 @@ export function getEnabledModels(
  * Two invariants: at least one model stays enabled, and a retired model is
  * never enabled. Throws on either violation; callers surface the message.
  */
-export async function setModelEnabled(input: {
+export function setModelEnabled(input: {
   readonly model: string;
   readonly enabled: boolean;
   readonly state: StateStore;
-}): Promise<readonly string[]> {
+}): Effect.Effect<readonly string[], StateWriteFailed> {
   const state = input.state;
   if (input.enabled && isRetiredModel(input.model)) {
     throw new Error(`Model "${input.model}" is retired and cannot be enabled.`);
@@ -722,22 +722,26 @@ export async function setModelEnabled(input: {
       'At least one model must stay enabled. Enable another model before disabling this one.',
     );
   }
-  await state.update(GlobalStateKey.MODEL_SELECTION, next);
-
   // If the helper model was just removed, pin the built-in default. Do not
   // fall back to the first remaining picker model — that is a premium default,
   // not the cheap auxiliary.
-  if (
+  const pinsHelper =
     !input.enabled &&
     resolveEffectiveHelperModel(
       state.get<string | undefined>(GlobalStateKey.HELPER_MODEL),
       current,
-    ) === input.model
-  ) {
-    await state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL);
-  }
+    ) === input.model;
 
-  return nextEnabled;
+  return state
+    .update(GlobalStateKey.MODEL_SELECTION, next)
+    .pipe(
+      Effect.zipRight(
+        pinsHelper
+          ? state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL)
+          : Effect.void,
+      ),
+      Effect.as(nextEnabled),
+    );
 }
 
 /**
