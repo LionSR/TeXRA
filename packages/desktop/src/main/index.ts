@@ -1287,8 +1287,7 @@ function createWindow(options: {
                 new ExternalOpenFailed({
                   kind: 'url',
                   target: url,
-                  message:
-                    'The desktop could not open the URL in the default browser.',
+                  message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
                   cause,
                 }),
             }),
