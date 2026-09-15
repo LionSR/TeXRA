@@ -746,7 +746,10 @@ describe('desktop settings IPC', () => {
   it('reports failed setting writes and restores the authoritative snapshot', async () => {
     const workspaceState = new FakeStateStore();
     const failure = new Error('workspace write failed');
-    vi.spyOn(workspaceState, 'update').mockRejectedValueOnce(failure);
+    // The store's write is an Effect the IPC composes, so the refusal is one.
+    vi.spyOn(workspaceState, 'update').mockReturnValueOnce(
+      Effect.fail(failure),
+    );
     const { settings, onError, showErrorMessage, postLatexConfigValues } =
       createFailureReportingFixture(workspaceState);
 

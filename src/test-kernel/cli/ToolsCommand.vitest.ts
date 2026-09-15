@@ -81,10 +81,13 @@ describe('CLI tools command', () => {
 
     expect(result.exitCode).toBe(0);
     expect(stderr).toBe('');
+    // The toggle is settled on the runtime its caller holds, so the call
+    // carries it beside the store.
     expect(mocks.setCliToolEnabled).toHaveBeenCalledWith(
       globalState,
       'codex',
       false,
+      expect.anything(),
     );
     expect(JSON.parse(stdout)).toEqual({
       id: 'codex',
