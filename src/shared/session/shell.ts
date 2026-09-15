@@ -17,7 +17,7 @@ export interface Shell {
   readonly collapsed: readonly string[];
 }
 
-export type ShellAction = {
+type ShellAction = {
   readonly kind: 'collapse';
   readonly session: string;
   readonly collapsed: boolean;

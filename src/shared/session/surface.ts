@@ -161,7 +161,7 @@ export const PersistedSurfaceSchema = z.object({
   storageHintDismissed: z.boolean().prefault(false),
   workbench: z.record(z.string(), z.unknown()).nullable().prefault(null),
 });
-export type PersistedSurface = z.infer<typeof PersistedSurfaceSchema>;
+type PersistedSurface = z.infer<typeof PersistedSurfaceSchema>;
 
 export function emptySurface(session: string): Surface {
   return loadSurface(session, PersistedSurfaceSchema.parse({}));

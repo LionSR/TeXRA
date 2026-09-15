@@ -38,13 +38,17 @@ const ActiveChildInfoSchema = z.object({
   finishedAt: z.int().positive().optional(),
   /**
    * Workflow-script phase that owns this child, when its parent is a
-   * workflow-script run. This is the only join key between a grandchild's
-   * roster row (which knows tokens/elapsed) and the run's task cards (which
-   * know `phase`) — `WorkflowCallIdentity` carries no run id.
-   * Immutable per attempt: it is stamped on the handle before the first
-   * `RunRegistry.onChildActivity` notification, so retained (finished)
-   * rows keep it. Optional because only a workflow-script run's children have
-   * an owning phase.
+   * workflow-script run. Immutable per attempt: it is stamped on the handle
+   * before the first `RunRegistry.onChildActivity` notification, so retained
+   * (finished) rows keep it. Optional because only a workflow-script run's
+   * children have an owning phase.
+   *
+   * A wire field: the roster rides verbatim onto the CLI NDJSON
+   * `run.children` record, and no in-repo reader consumes this off a roster
+   * row. It is not a join key. The run's task cards join their phase by the
+   * card's own `groupId` (`src/shared/runs/workflowRunModel.ts`), and a card
+   * joins the child that opened it by `call.childRunId`, so neither needs
+   * this field.
    */
   workflowPhase: z.string().optional(),
 });

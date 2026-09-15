@@ -175,7 +175,7 @@ type SettingWrittenBy = {
 };
 
 /** One provider's control group in the Models tab. */
-export interface ModelsTabSurface {
+interface ModelsTabSurface {
   /** Canonical provider id whose expanded settings show this control. */
   readonly provider: string;
   readonly label: string;

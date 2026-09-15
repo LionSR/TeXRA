@@ -62,7 +62,7 @@ export type SurfaceDecision =
  * preview the host staged and a retry's own-key switch stores a credential,
  * so those two kinds are the only ones that name a host arm.
  */
-export type ApprovalArm =
+type ApprovalArm =
   { readonly runtime: RuntimeRequest } | { readonly host: HostRequest };
 
 /** Enable a session-wide bypass on one run: the field-level mutation the
