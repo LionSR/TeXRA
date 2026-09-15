@@ -16,7 +16,7 @@
 
 // Node imports
 import { randomBytes } from 'node:crypto';
-import { constants as fsConstants, type Stats } from 'node:fs';
+import { constants as fsConstants } from 'node:fs';
 import * as nodeFs from 'node:fs/promises';
 import { pid } from 'node:process';
 
@@ -122,15 +122,25 @@ export const removeEmptyDirectory = Effect.fn(
   });
 });
 
-/** An `lstat` result as `FileSystem`'s entry type: a link is itself. */
-function entryTypeOf(stats: Stats): FileSystem.File.Type {
-  if (stats.isSymbolicLink()) return 'SymbolicLink';
-  if (stats.isFile()) return 'File';
-  if (stats.isDirectory()) return 'Directory';
-  if (stats.isBlockDevice()) return 'BlockDevice';
-  if (stats.isCharacterDevice()) return 'CharacterDevice';
-  if (stats.isFIFO()) return 'FIFO';
-  if (stats.isSocket()) return 'Socket';
+/** An `lstat` result or a `readdir` dirent as `FileSystem`'s entry type: a
+ *  link is itself. Both carry the same predicate set, so one mapping serves
+ *  the probed and the listed case. */
+function entryTypeOf(entry: {
+  isSymbolicLink(): boolean;
+  isFile(): boolean;
+  isDirectory(): boolean;
+  isBlockDevice(): boolean;
+  isCharacterDevice(): boolean;
+  isFIFO(): boolean;
+  isSocket(): boolean;
+}): FileSystem.File.Type {
+  if (entry.isSymbolicLink()) return 'SymbolicLink';
+  if (entry.isFile()) return 'File';
+  if (entry.isDirectory()) return 'Directory';
+  if (entry.isBlockDevice()) return 'BlockDevice';
+  if (entry.isCharacterDevice()) return 'CharacterDevice';
+  if (entry.isFIFO()) return 'FIFO';
+  if (entry.isSocket()) return 'Socket';
   return 'Unknown';
 }
 
@@ -175,28 +185,44 @@ export const readDirectoryTyped = Effect.fn('fsDurability.readDirectoryTyped')(
 );
 
 /**
- * `readDirectoryTyped` for listings that must survive one bad entry: an
- * entry whose `lstat` fails is dropped with a warning naming it and the
- * reason, instead of failing the whole directory. The readdir answer is the
- * fact the listing stands on; an entry that vanishes or turns unreadable
- * between the two calls costs one row, not the directory. The strict form
- * stays with the containment and deletion walkers, where a refused answer is
- * the safe one.
+ * `readDirectoryTyped` for listings that must survive one bad entry: an entry
+ * whose type cannot be read is dropped with a warning naming it and the
+ * reason, instead of failing the whole directory.
+ *
+ * The listing comes from `readdir(..., { withFileTypes: true })`, so each
+ * entry brings its own type and needs no second syscall. That is also what
+ * keeps a directory that is readable but not searchable (`r--` on Unix)
+ * listed: a probe would fail `EACCES` on every entry, and the tree would
+ * render empty where the pre-migration listing showed it. Only an entry whose
+ * dirent type the platform left `Unknown` is probed, and only that probe's
+ * failure costs a row. The strict form stays with the containment and
+ * deletion walkers, where a refused answer is the safe one.
+ *
+ * The Node call is the one `FileSystem` cannot make: `readDirectory` returns
+ * names alone, and the pre-`readdir` answer is what carries the types.
  */
 export const readDirectoryTypedTolerant = Effect.fn(
   'fsDurability.readDirectoryTypedTolerant',
 )(function* (target: string) {
-  const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const names = yield* fs.readDirectory(target);
+  const dirents = yield* Effect.tryPromise({
+    try: () => nodeFs.readdir(target, { withFileTypes: true }),
+    catch: (cause) =>
+      systemErrorFrom('readDirectoryTypedTolerant', target, cause),
+  });
   const rows = yield* Effect.forEach(
-    names,
-    (name) => {
-      const entry = path.join(target, name);
+    dirents,
+    (dirent) => {
+      const known = entryTypeOf(dirent);
+      if (known !== 'Unknown') {
+        return Effect.succeed([dirent.name, known] as const);
+      }
+      const entry = path.join(target, dirent.name);
       return Effect.tryPromise({
         try: async () =>
-          [name, entryTypeOf(await nodeFs.lstat(entry))] as const,
-        catch: (cause) => systemErrorFrom('readDirectoryTyped', entry, cause),
+          [dirent.name, entryTypeOf(await nodeFs.lstat(entry))] as const,
+        catch: (cause) =>
+          systemErrorFrom('readDirectoryTypedTolerant', entry, cause),
       }).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
