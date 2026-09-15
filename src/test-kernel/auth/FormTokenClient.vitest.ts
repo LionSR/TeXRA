@@ -119,10 +119,6 @@ describe('form token endpoint (declarative)', () => {
 });
 
 describe('postOAuth', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   // Live clock: the 20ms `Effect.timeoutOrElse` deadline must really elapse so
   // the stalled body read loses the race and the fetch signal is aborted.
   it.live('times out a response whose body stalls after the headers', () =>
