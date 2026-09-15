@@ -18,8 +18,7 @@ import {
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
-import { platform } from '@platform/platform';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   RUN_OUTCOME,
@@ -79,6 +78,10 @@ interface CliExecuteOptions {
    *  lease drain and the workflow-output handler below are Promise-shaped
    *  callbacks the agent runtime calls, so each runs its program on this. */
   readonly runtime: ProcessRuntime;
+  /** The host's shutdown registry, from the same services: the run's
+   *  shutdown-status handler registers here instead of re-reading the ambient
+   *  platform singleton the composition root already holds. */
+  readonly lifecycle: LifecycleHost;
   /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
    *  `expectedCategory`, never set by a command handler. */
   readonly enforceCategory?: boolean;
@@ -424,7 +427,7 @@ export function executeCliRequest(
       );
       return shutdownStatusFinalized;
     };
-    const disposeShutdownStatus = platform().lifecycle.onShutdown(
+    const disposeShutdownStatus = options.lifecycle.onShutdown(
       SHUTDOWN_PHASE.BEFORE,
       async (shutdownDeadline) => {
         shutdownRequested = true;
