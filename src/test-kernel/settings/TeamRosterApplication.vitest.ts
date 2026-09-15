@@ -46,7 +46,7 @@ function makeDeps(
   return {
     catalog: {
       resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
-      commitPreset: vi.fn(async () => {}),
+      commitPreset: vi.fn(() => Effect.void),
       ...catalog,
     },
     loadLocalCatalog: () => Effect.void,
@@ -63,9 +63,11 @@ describe('team roster application', () => {
     Effect.gen(function* () {
       const calls: string[] = [];
       let refreshed = false;
-      const commitPreset = vi.fn(async () => {
-        calls.push('commit');
-      });
+      const commitPreset = vi.fn(() =>
+        Effect.sync(() => {
+          calls.push('commit');
+        }),
+      );
 
       const result = yield* applyTeamRosterWithPreflight(
         'research',
@@ -117,7 +119,7 @@ describe('team roster application', () => {
 
   it.effect('cancels before refresh or roster writes', () =>
     Effect.gen(function* () {
-      const commitPreset = vi.fn(async () => {});
+      const commitPreset = vi.fn(() => Effect.void);
       let forcedRefresh = false;
       const signIn = vi.fn();
 
@@ -150,9 +152,10 @@ describe('team roster application', () => {
         yield* applySettingsTeamRoster('research', {
           catalog: {
             resolvePreset: () => ({ ok: true, preset, resolution: resolved }),
-            commitPreset: async () => {
-              calls.push('apply');
-            },
+            commitPreset: () =>
+              Effect.sync(() => {
+                calls.push('apply');
+              }),
             getPresetToolUseRoot,
           },
           loadLocalCatalog: () => Effect.void,
@@ -192,7 +195,7 @@ describe('team roster application', () => {
       yield* applySettingsTeamRoster('research', {
         catalog: {
           resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
-          commitPreset: vi.fn(async () => {}),
+          commitPreset: vi.fn(() => Effect.void),
           getPresetToolUseRoot: vi.fn(),
         },
         loadLocalCatalog: () => Effect.void,
@@ -238,7 +241,7 @@ describe('team roster application', () => {
       Effect.gen(function* () {
         const choose = vi.fn();
         const signIn = vi.fn();
-        const commitPreset = vi.fn(async () => {});
+        const commitPreset = vi.fn(() => Effect.void);
 
         const result = yield* applyTeamRosterWithPreflight(
           'research',

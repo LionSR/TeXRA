@@ -195,7 +195,9 @@ async function setModelEnabled(
   const services = await initCliPlatformOrReport(context);
   if ('exitCode' in services) return services.exitCode;
   try {
-    const result = await setCliModelEnabled(services.globalState, id, enabled);
+    const result = await services.runtime.runPromise(
+      setCliModelEnabled(services.globalState, id, enabled),
+    );
     emitCliResult(context, {
       json: result,
       ndjson: {

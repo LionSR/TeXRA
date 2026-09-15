@@ -9,12 +9,15 @@ import type { StateStore } from '@platform/interfaces';
 
 const CHANNEL = 'MergeCommands';
 
-export function registerMergeCommands(context: vscode.ExtensionContext): void {
+export function registerMergeCommands(
+  context: vscode.ExtensionContext,
+  globalState: StateStore,
+): void {
   registerCommandEntries(context, [
     {
       id: 'texra.merge',
       handler: (baseFile: string, editedFile: string) =>
-        handleMerge(context.globalState, baseFile, editedFile),
+        handleMerge(globalState, baseFile, editedFile),
     },
   ]);
 }

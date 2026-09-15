@@ -601,7 +601,9 @@ describe('/config slash command wiring', () => {
 
   it('turns OpenRouter off when Prefer Kimi Code is enabled', async () => {
     const { stores, globalState } = makeFakeSettingsStores();
-    await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+    await Effect.runPromise(
+      globalState.update(GlobalStateKey.USE_OPENROUTER, true),
+    );
     const props = await openConfigFormProps(stores);
     const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);
     await props.writeValue(preferKimiCode, true);
@@ -612,7 +614,9 @@ describe('/config slash command wiring', () => {
     );
 
     // Disabling the preference leaves the OpenRouter toggle untouched.
-    await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+    await Effect.runPromise(
+      globalState.update(GlobalStateKey.USE_OPENROUTER, true),
+    );
     await props.writeValue(preferKimiCode, false);
     expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
   });

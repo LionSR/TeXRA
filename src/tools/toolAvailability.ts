@@ -20,7 +20,7 @@ import { Deferred, Effect } from 'effect';
 // Local imports
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
-import { StateWriteFailed, type StateStore } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 import {
@@ -87,17 +87,7 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
     const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
       (def) => def.id,
     );
-    yield* Effect.tryPromise({
-      try: async () => {
-        await state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
-      },
-      catch: (cause) =>
-        new StateWriteFailed({
-          key: GlobalStateKey.DISABLED_TOOLS,
-          message: 'The default disabled-tool list could not be stored.',
-          cause,
-        }),
-    });
+    yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
     log.info(
       `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
     );

@@ -747,7 +747,9 @@ export function createDesktopHostRequests(
         await options.signIn();
         return done;
       case 'dismissBanner':
-        options.snapshot.dismissBanner(request.banner);
+        await runtime.runPromise(
+          options.snapshot.dismissBanner(request.banner),
+        );
         return done;
       case 'gettingStarted':
         if (request.action === 'openWalkthrough') {

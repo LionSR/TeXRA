@@ -61,6 +61,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
+import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -130,7 +131,7 @@ const MULTIPLE_FILE_PICKERS: Record<
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
   readonly extensionPath: string;
-  readonly globalState: vscode.Memento;
+  readonly globalState: StateStore;
   /** The process secret store the extension root holds (model availability). */
   readonly secrets: PlatformSecrets;
   readonly snapshot: HostSnapshotSource;
@@ -697,7 +698,9 @@ export function createExtensionHostRequests(
         await options.refreshOnboardingFunnel();
         return;
       case 'skip':
-        await setOnboardingDeclined(options.globalState, true);
+        await runtime.runPromise(
+          setOnboardingDeclined(options.globalState, true),
+        );
         await options.refreshOnboardingFunnel();
         return;
       case 'runSetup':
@@ -705,7 +708,7 @@ export function createExtensionHostRequests(
         await options.refreshOnboardingFunnel();
         return;
       case 'skipSetup':
-        await setFirstRunDone(options.globalState, true);
+        await runtime.runPromise(setFirstRunDone(options.globalState, true));
         await options.refreshOnboardingFunnel();
         return;
       case 'openGettingStarted':
@@ -902,7 +905,7 @@ export function createExtensionHostRequests(
         return done;
       }
       case 'dismissBanner':
-        snapshot.dismissBanner(request.banner);
+        await runtime.runPromise(snapshot.dismissBanner(request.banner));
         return done;
       case 'gettingStarted':
         await runCommand(GETTING_STARTED_COMMANDS[request.action]);

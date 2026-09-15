@@ -20,7 +20,6 @@ import {
   type ResponseTextProcessing,
 } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
@@ -64,9 +63,6 @@ interface DesktopProjectRegistryOptions {
    */
   readonly globalConfigStore: ConfigStore;
   readonly records: DesktopProjectRecords;
-  /** Runs each project state store's durable writes on the process runtime,
-   *  the one Promise boundary those stores have. */
-  readonly runWrite: RunStateWrite;
   /**
    * The process secret store and global state the helper model behind the
    * latex text-connector resolves against, threaded from the composition root
@@ -287,7 +283,7 @@ export function openDesktopProjectRegistry(
           const storage = storageProvider.getStoragePath();
           const [workspaceState, workspaceConfig] = yield* Effect.all(
             [
-              openAppStateStore(storage, options.runWrite),
+              openAppStateStore(storage),
               openTexraWorkspaceConfigStore(storage, root, options.warn),
             ],
             { concurrency: 'unbounded' },

@@ -83,9 +83,10 @@ export interface ConfigProvider {
  * extension, and the shared `JsonStore`'s filesystem or not-JSON failure on
  * the desktop, the CLI and the agent package.
  *
- * {@link StateStore.update} keeps `vscode.Memento`'s `PromiseLike` shape for
+ * {@link StateStore.update} raises it as the failure of the write itself, for
  * the same reason {@link ConfigWriteFailed} exists: the writes travel with the
- * config slots beside them. This is the tag its Effect-side callers raise.
+ * config slots beside them, so a caller inside a program composes the write
+ * rather than adopting a rejection it cannot type.
  */
 export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
   readonly key: string;
@@ -95,18 +96,22 @@ export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
 
 /**
  * Platform key-value state store interface.
- * Matches the vscode.Memento surface for compatibility.
+ *
+ * `get` keeps `vscode.Memento`'s synchronous shape. `update` does not: it is
+ * an `Effect` so it composes directly into the caller's program, for the same
+ * reason {@link ConfigProvider.update} is one. An implementation wrapping a
+ * host `Memento`, whose own `update` is a `PromiseLike`, is the one place that
+ * adopts the promise and raises {@link StateWriteFailed} for it.
  */
 export interface StateStore {
   get<T>(key: string, defaultValue?: T): T;
-  update(key: string, value: unknown): PromiseLike<void>;
+  update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
 }
 
 /**
  * The process's global state store as an Effect service
  * (`@texra/platform/AppState`, injection plan §5 row 2), provided once by the
- * composition root through `installProcessRuntime`. The shape stays the
- * synchronous `StateStore`; Effect-typing it is its own step.
+ * composition root through `installProcessRuntime`.
  *
  * `layer` takes the store itself, for the same reason `Secrets.layer` does:
  * every root opens its state store before installing the runtime that serves

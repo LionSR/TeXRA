@@ -58,6 +58,7 @@ import {
   refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
+import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { revealProgressRun } from '@progressView/progressNavigation';
@@ -148,12 +149,12 @@ export class SettingsViewMessageHandler {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
+    private readonly globalState: StateStore,
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
   ) {
     const ctx: SettingsHandlerContext = this.handlerContext();
 
-    const globalState = context.globalState;
     this.memoryController = new SettingsMemoryController({
       prompt: new VscodePromptHost(),
     });
@@ -335,10 +336,12 @@ export class SettingsViewMessageHandler {
       setModelEnabled: (message) =>
         this.setModelEnabled(message.modelName, message.enabled),
       setModelReasoningLevel: async (message) => {
-        await this.modelSelectionController.setReasoningLevel({
-          modelName: message.modelName,
-          level: message.level,
-        });
+        await this.runtime.runPromise(
+          this.modelSelectionController.setReasoningLevel({
+            modelName: message.modelName,
+            level: message.level,
+          }),
+        );
         await this.postModelSelectionData();
       },
       requestModelAccess: (message) =>
@@ -401,10 +404,8 @@ export class SettingsViewMessageHandler {
       recheckToolStatus: () =>
         this.runtime.runPromise(refreshToolAvailability()),
       toggleTool: async (message) => {
-        await setToolEnabled(
-          message.toolId,
-          message.enabled,
-          this.context.globalState,
+        await this.runtime.runPromise(
+          setToolEnabled(message.toolId, message.enabled, this.globalState),
         );
         await this.withActiveWebview((w) =>
           this.sendToolDashboardData(w, { skipChecks: true }),
@@ -910,22 +911,20 @@ export class SettingsViewMessageHandler {
         );
       }
       if (Exit.isSuccess(result)) {
-        result = await this.runtime.runPromiseExit(
-          Effect.tryPromise({
-            try: (): Promise<unknown> =>
-              !route || route.access === 'unavailable'
-                ? showLoggedInfoMessage(
+        // Two different programs: the notice is a host dialog, the preference
+        // is a state write. The boundary composes whichever it chose.
+        const settle: Effect.Effect<unknown, unknown> =
+          !route || route.access === 'unavailable'
+            ? Effect.tryPromise({
+                try: () =>
+                  showLoggedInfoMessage(
                     this.channel,
                     'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
-                  )
-                : setCopilotRoutePreference(
-                    modelName,
-                    true,
-                    this.context.globalState,
                   ),
-            catch: (error) => error,
-          }),
-        );
+                catch: (error) => error,
+              })
+            : setCopilotRoutePreference(modelName, true, this.globalState);
+        result = await this.runtime.runPromiseExit(settle);
       }
       if (Exit.isFailure(result)) {
         const reason =
@@ -970,7 +969,11 @@ export class SettingsViewMessageHandler {
   /** Clear the per-model Copilot route preference (#9659), returning the
    * canonical model to direct-provider routing. */
   private async handleClearCopilotRoute(modelName: string): Promise<void> {
-    await setCopilotRoutePreference(modelName, false, this.context.globalState);
+    // The write is a program, not a promise: the boundary runs it, and a
+    // refused write reaches the caller as this method's rejection.
+    await this.runtime.runPromise(
+      setCopilotRoutePreference(modelName, false, this.globalState),
+    );
     await Promise.all([
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((webview) => this.sendModelSelectionData(webview)),
@@ -1030,7 +1033,9 @@ export class SettingsViewMessageHandler {
     modelName: string,
     enabled: boolean,
   ): Promise<void> {
-    await this.modelSelectionController.setModelEnabled({ modelName, enabled });
+    await this.runtime.runPromise(
+      this.modelSelectionController.setModelEnabled({ modelName, enabled }),
+    );
     await this.postModelSelectionData();
     // The options cache is invalidated by the writer itself.
     await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);

@@ -14,7 +14,7 @@ describe('extension team auth catalog refresh scope', () => {
   it('defers auth listeners and fetches the remote catalog exactly once', async () => {
     let refreshed = false;
     let remoteFetches = 0;
-    const commitPreset = vi.fn(async () => {});
+    const commitPreset = vi.fn(() => Effect.void);
     const preset = {
       id: 'remote-team',
       name: 'Remote team',

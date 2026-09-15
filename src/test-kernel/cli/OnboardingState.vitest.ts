@@ -23,7 +23,7 @@ const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
 describe('onboarding decline flag', () => {
   it('treats a non-boolean stored value as not-declined', async () => {
     const state = new MemoryStateStore();
-    await state.update(ONBOARDING_DECLINED_KEY, 'yes');
+    await Effect.runPromise(state.update(ONBOARDING_DECLINED_KEY, 'yes'));
 
     expect(readOnboardingFlags(state).declined).toBe(false);
   });

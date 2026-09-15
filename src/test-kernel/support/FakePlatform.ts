@@ -21,6 +21,7 @@ import {
   type ConfigTarget,
   ConfigWriteFailed,
   type StateStore,
+  type StateWriteFailed,
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
@@ -355,12 +356,23 @@ export class FakeStateStore implements StateStore {
     return this.values.get(key) as T;
   }
 
-  async update(key: string, value: unknown): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-      return;
-    }
-    this.values.set(key, value);
+  /**
+   * A map write cannot fail, so the port's error channel stays empty.
+   *
+   * The write happens INSIDE the returned Effect, like the real `JsonStore`.
+   * A double that applied it eagerly would let a caller which awaits or
+   * discards the effect look correct here while silently writing nothing
+   * against the real store — the exact class this port's conversion exists to
+   * expose.
+   */
+  update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed> {
+    return Effect.sync(() => {
+      if (value === undefined) {
+        this.values.delete(key);
+      } else {
+        this.values.set(key, value);
+      }
+    });
   }
 }
 

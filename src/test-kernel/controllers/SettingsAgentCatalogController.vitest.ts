@@ -1,5 +1,7 @@
 import { strict as assert } from 'node:assert';
 
+import { Effect } from 'effect';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -85,12 +87,14 @@ function createController(options?: {
       now: () => options?.now ?? 123,
       state: {
         getEnabledAgentKeys: (category) => enabled[category],
-        setEnabledAgentKeys: async (category, enabledKeys) => {
-          enabled[category] = enabledKeys;
-        },
-        setTeamRoster: async (preset) => {
-          committedTeams.push(preset.id);
-        },
+        setEnabledAgentKeys: (category, enabledKeys) =>
+          Effect.sync(() => {
+            enabled[category] = enabledKeys;
+          }),
+        setTeamRoster: (preset) =>
+          Effect.sync(() => {
+            committedTeams.push(preset.id);
+          }),
         getAgents: (category) =>
           options?.agents?.[category] ?? AGENTS[category],
         getVisibleAgents: (category) =>
@@ -98,12 +102,14 @@ function createController(options?: {
           options?.agents?.[category] ??
           AGENTS[category],
         getCustomPresetsRaw: () => customPresetsRaw,
-        setCustomPresets: async (presets) => {
-          customPresetsRaw = presets;
-        },
-        removeCustomPreset: async (_presetId, remaining) => {
-          customPresetsRaw = remaining;
-        },
+        setCustomPresets: (presets) =>
+          Effect.sync(() => {
+            customPresetsRaw = presets;
+          }),
+        removeCustomPreset: (_presetId, remaining) =>
+          Effect.sync(() => {
+            customPresetsRaw = remaining;
+          }),
       },
     }),
     enabled,
@@ -199,7 +205,7 @@ describe('SettingsAgentCatalogController', () => {
       'builtInToolUse:review',
     ]);
 
-    await controller.commitPreset(resolved.preset);
+    await Effect.runPromise(controller.commitPreset(resolved.preset));
 
     // The commit stores the team reference, not a frozen key snapshot: the
     // roster re-resolves it against the catalog on every read.
@@ -211,7 +217,9 @@ describe('SettingsAgentCatalogController', () => {
   it('records hosted-definition ownership when saving a custom team', async () => {
     const { controller } = createController();
 
-    const preset = await controller.saveCurrentPreset('Current Team');
+    const preset = await Effect.runPromise(
+      controller.saveCurrentPreset('Current Team'),
+    );
 
     assert.deepEqual(preset.texraHostedAgents, ['writer']);
   });
@@ -387,17 +395,22 @@ describe('SettingsAgentCatalogController', () => {
       },
     });
 
-    assert.deepEqual(await state.controller.saveCurrentPreset('  My Team  '), {
-      id: 'custom-456',
-      name: 'My Team',
-      description: 'Custom team: review, correct',
-      icon: 'bookmark',
-      agents: {
-        workflow: ['correct'],
-        toolUse: ['review'],
+    assert.deepEqual(
+      await Effect.runPromise(
+        state.controller.saveCurrentPreset('  My Team  '),
+      ),
+      {
+        id: 'custom-456',
+        name: 'My Team',
+        description: 'Custom team: review, correct',
+        icon: 'bookmark',
+        agents: {
+          workflow: ['correct'],
+          toolUse: ['review'],
+        },
+        texraHostedAgents: [],
       },
-      texraHostedAgents: [],
-    });
+    );
     assert.equal(state.customPresets.length, 1);
   });
 
@@ -406,7 +419,7 @@ describe('SettingsAgentCatalogController', () => {
       customPresets: [LEGACY_ICON_PRESET, MALFORMED_PRESET],
     });
 
-    await state.controller.saveCurrentPreset('New Team');
+    await Effect.runPromise(state.controller.saveCurrentPreset('New Team'));
 
     assert.deepEqual(state.customPresets.slice(0, 2), [
       LEGACY_ICON_PRESET,
@@ -433,11 +446,16 @@ describe('SettingsAgentCatalogController', () => {
     const state = createController({ customPresets: [preset] });
 
     assert.deepEqual(
-      await state.controller.deleteCustomPreset('custom-team'),
+      await Effect.runPromise(
+        state.controller.deleteCustomPreset('custom-team'),
+      ),
       preset,
     );
     assert.deepEqual(state.customPresets, []);
-    assert.equal(await state.controller.deleteCustomPreset('missing'), null);
+    assert.equal(
+      await Effect.runPromise(state.controller.deleteCustomPreset('missing')),
+      null,
+    );
   });
 
   it('preserves other raw records when deleting a preset', async () => {
@@ -457,7 +475,7 @@ describe('SettingsAgentCatalogController', () => {
     });
 
     assert.deepEqual(
-      await state.controller.deleteCustomPreset(target.id),
+      await Effect.runPromise(state.controller.deleteCustomPreset(target.id)),
       target,
     );
     assert.deepEqual(state.customPresets, [

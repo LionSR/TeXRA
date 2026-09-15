@@ -1382,6 +1382,7 @@ function createWindow(options: {
         workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
         config: project.roots.config,
+        runtime,
         renderer: {
           postToRenderer: postForActiveProject,
         },
@@ -1914,7 +1915,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               processRoots: platformInit.processRoots,
               globalConfigStore: platformInit.globalConfigStore,
               records: projectRecords,
-              runWrite: platformInit.runWrite,
               warn,
               stores: {
                 secrets: platformInit.secrets,
