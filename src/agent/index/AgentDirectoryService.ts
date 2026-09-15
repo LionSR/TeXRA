@@ -1,9 +1,13 @@
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
+import { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { AgentSource } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { GlobalStorageFS } from '@utils/files/storageFS';
@@ -48,24 +52,30 @@ export class AgentDirectoryService {
     this.log = createLog(options.channel);
   }
 
-  async builtIn(): Promise<string> {
-    return this.packagedDir(BUILTIN_WORKFLOW_AGENTS_DIR);
+  builtIn(): Effect.Effect<string, AgentDirectoriesFailed> {
+    return Effect.sync(() => this.packagedDir(BUILTIN_WORKFLOW_AGENTS_DIR));
   }
 
-  async builtInToolUse(): Promise<string> {
-    return this.packagedDir(BUILTIN_TOOL_USE_AGENTS_DIR);
+  builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed> {
+    return Effect.sync(() => this.packagedDir(BUILTIN_TOOL_USE_AGENTS_DIR));
   }
 
-  async custom(): Promise<string> {
-    const configuredPath = (
-      this.options.customDirectoryStore.get() ?? ''
-    ).trim();
+  custom(): Effect.Effect<string, AgentDirectoriesFailed> {
+    return Effect.gen({ self: this }, function* () {
+      const configuredPath = (
+        this.options.customDirectoryStore.get() ?? ''
+      ).trim();
 
-    const resolvedPath = await this.resolveConfiguredCustomDir(configuredPath);
-    return resolvedPath ?? this.ensureDefaultCustomDir();
+      const resolvedPath =
+        yield* this.resolveConfiguredCustomDir(configuredPath);
+      if (resolvedPath != null) return resolvedPath;
+      return yield* this.ensureDefaultCustomDir();
+    });
   }
 
-  async getDirectory(source: AgentSource): Promise<string | undefined> {
+  getDirectory(
+    source: AgentSource,
+  ): Effect.Effect<string | undefined, AgentDirectoriesFailed> {
     switch (source) {
       case 'custom':
         return this.custom();
@@ -75,22 +85,24 @@ export class AgentDirectoryService {
         return this.builtInToolUse();
       // No local directory: a remote agent lives in Supabase.
       case 'remote':
-        return undefined;
+        return Effect.succeed(undefined);
     }
   }
 
-  async getAllLocal(): Promise<AgentDirectoryEntry[]> {
-    const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
-      this.custom(),
-      this.builtIn(),
-      this.builtInToolUse(),
-    ]);
+  getAllLocal(): Effect.Effect<AgentDirectoryEntry[], AgentDirectoriesFailed> {
+    return Effect.gen({ self: this }, function* () {
+      const [customDir, builtInDir, builtInToolUseDir] = yield* Effect.all(
+        [this.custom(), this.builtIn(), this.builtInToolUse()],
+        { concurrency: 'unbounded' },
+      );
 
-    return [
-      { directory: customDir, source: 'custom' },
-      { directory: builtInDir, source: 'builtInWorkflow' },
-      { directory: builtInToolUseDir, source: 'builtInToolUse' },
-    ];
+      const entries: AgentDirectoryEntry[] = [
+        { directory: customDir, source: 'custom' },
+        { directory: builtInDir, source: 'builtInWorkflow' },
+        { directory: builtInToolUseDir, source: 'builtInToolUse' },
+      ];
+      return entries;
+    });
   }
 
   /**
@@ -103,59 +115,109 @@ export class AgentDirectoryService {
     return basePath;
   }
 
-  private async ensureDefaultCustomDir(): Promise<string> {
-    try {
-      await GlobalStorageFS.ensureDir(CUSTOM_AGENTS_STORAGE_DIR);
-    } catch (error) {
-      this.log.error('Failed to create default custom agents directory', {
-        data: error,
-      });
-      throw new Error(
-        'Unable to create custom agents directory. Please check permissions.',
-      );
-    }
-
-    const defaultPath = GlobalStorageFS.fullPath(CUSTOM_AGENTS_STORAGE_DIR);
-    this.log.debug(`Using default custom agents directory: ${defaultPath}`);
-    return defaultPath;
+  private ensureDefaultCustomDir(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed
+  > {
+    return Effect.tryPromise({
+      try: () => GlobalStorageFS.ensureDir(CUSTOM_AGENTS_STORAGE_DIR),
+      catch: (cause) => {
+        this.log.error('Failed to create default custom agents directory', {
+          data: cause,
+        });
+        return new AgentDirectoriesFailed({
+          source: 'custom',
+          message:
+            'Unable to create custom agents directory. Please check permissions.',
+          cause,
+        });
+      },
+    }).pipe(
+      Effect.as(GlobalStorageFS.fullPath(CUSTOM_AGENTS_STORAGE_DIR)),
+      Effect.tap((defaultPath) =>
+        Effect.sync(() => {
+          this.log.debug(
+            `Using default custom agents directory: ${defaultPath}`,
+          );
+        }),
+      ),
+    );
   }
 
-  private async resolveConfiguredCustomDir(
+  private resolveConfiguredCustomDir(
     configuredPath: string,
-  ): Promise<string | undefined> {
+  ): Effect.Effect<string | undefined, AgentDirectoriesFailed> {
     if (!configuredPath) {
-      return undefined;
+      return Effect.succeed(undefined);
     }
 
-    if (!path.isAbsolute(configuredPath)) {
-      this.log.error(
-        `Custom agents directory must be an absolute path: ${configuredPath}`,
-      );
-      await this.options.issueReporter.report(
-        'Custom agents directory must be an absolute path',
-        'custom-agents',
-      );
-      return undefined;
-    }
+    return Effect.gen({ self: this }, function* () {
+      if (!path.isAbsolute(configuredPath)) {
+        this.log.error(
+          `Custom agents directory must be an absolute path: ${configuredPath}`,
+        );
+        yield* this.reportIssue(
+          'Custom agents directory must be an absolute path',
+          'custom-agents',
+        );
+        return undefined;
+      }
 
-    const parentDir = path.dirname(configuredPath);
-    if (!(await AbsoluteFS.exists(parentDir))) {
-      this.log.error(
-        `Parent directory does not exist for custom agents directory: ${parentDir}`,
+      const parentDir = path.dirname(configuredPath);
+      const parentExists = yield* this.portCall(
+        () => AbsoluteFS.exists(parentDir),
+        `Could not inspect the parent of the custom agents directory: ${parentDir}`,
       );
-      await this.options.issueReporter.report(
-        'Parent directory for custom agents directory does not exist',
-        'custom-agents',
-      );
-      return undefined;
-    }
+      if (!parentExists) {
+        this.log.error(
+          `Parent directory does not exist for custom agents directory: ${parentDir}`,
+        );
+        yield* this.reportIssue(
+          'Parent directory for custom agents directory does not exist',
+          'custom-agents',
+        );
+        return undefined;
+      }
 
-    // createDir, not ensureDir: a regular file at the configured path must
-    // still reject here rather than be handed back as a directory.
-    await AbsoluteFS.createDir(configuredPath);
-    this.log.debug(
-      `Using custom agents directory from setting: ${configuredPath}`,
+      // createDir, not ensureDir: a regular file at the configured path must
+      // still reject here rather than be handed back as a directory.
+      yield* this.portCall(
+        () => AbsoluteFS.createDir(configuredPath),
+        `Unable to create the custom agents directory: ${configuredPath}`,
+      );
+      this.log.debug(
+        `Using custom agents directory from setting: ${configuredPath}`,
+      );
+      return configuredPath;
+    });
+  }
+
+  /** The issue reporter is a host push; its own failure is still a failed
+   *  resolution, as the awaited report was. */
+  private reportIssue(
+    message: string,
+    docsId: AgentDirectoryDocsId,
+  ): Effect.Effect<void, AgentDirectoriesFailed> {
+    return this.portCall(
+      () => this.options.issueReporter.report(message, docsId),
+      message,
     );
-    return configuredPath;
+  }
+
+  /**
+   * One conversion for this file's two promise-shaped dependencies (the
+   * filesystem helpers and the host's issue reporter): the promise is adopted
+   * here and raised as the port's failure, so the readers above compose
+   * instead of catching a rejection they cannot name.
+   */
+  private portCall<A>(
+    call: () => Promise<A>,
+    message: string,
+  ): Effect.Effect<A, AgentDirectoriesFailed> {
+    return Effect.tryPromise({
+      try: call,
+      catch: (cause) =>
+        new AgentDirectoriesFailed({ source: 'custom', message, cause }),
+    });
   }
 }

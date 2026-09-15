@@ -82,8 +82,10 @@ export class AgentHandlers {
     const controllers = createSettingsAgentControllers({
       workspaceState: workspaceRoots().workspaceState,
       globalState,
-      getCustomAgentDirectory: () => agentDirectories.custom(),
-      getSourceDirectory: (source) => agentDirectories.getDirectory(source),
+      getCustomAgentDirectory: () =>
+        this.runtime.runPromise(agentDirectories.custom()),
+      getSourceDirectory: (source) =>
+        this.runtime.runPromise(agentDirectories.getDirectory(source)),
     });
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
@@ -91,8 +93,10 @@ export class AgentHandlers {
     this.agentActions = createSettingsAgentActions({
       directoryController: this.directoryController,
       findAgent: (source, name) => getAgent(agentKey(source, name)),
-      getCustomAgentDirectory: () => agentDirectories.custom(),
-      getSourceDirectory: (source) => agentDirectories.getDirectory(source),
+      getCustomAgentDirectory: () =>
+        this.runtime.runPromise(agentDirectories.custom()),
+      getSourceDirectory: (source) =>
+        this.runtime.runPromise(agentDirectories.getDirectory(source)),
       openDocument: async (filePath) => {
         const doc = await vscode.workspace.openTextDocument(filePath);
         await vscode.window.showTextDocument(doc, { preview: false });
@@ -461,7 +465,9 @@ export class AgentHandlers {
         });
         if (!name) return;
 
-        const customDir = await agentDirectories.custom();
+        const customDir = await this.runtime.runPromise(
+          agentDirectories.custom(),
+        );
         await this.runtime.runPromise(
           Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
             fs.makeDirectory(customDir, { recursive: true }),
@@ -495,7 +501,7 @@ export class AgentHandlers {
   private async refreshAgentDirUI(): Promise<void> {
     await agentDirectories.refreshAfterDirChange();
     const { refreshCustomAgentRoot } = await import('@frontend/setup');
-    await refreshCustomAgentRoot();
+    await this.runtime.runPromise(refreshCustomAgentRoot());
     await Promise.all([
       this.ctx.withActiveWebview(async (w) => {
         await Promise.all([

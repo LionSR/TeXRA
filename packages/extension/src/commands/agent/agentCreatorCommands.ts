@@ -224,15 +224,16 @@ function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
     },
 
     getCustomAgentDir() {
-      return Effect.tryPromise({
-        try: () => agentDirectories.custom(),
-        catch: (cause) =>
-          new AgentCreatorUiFailed({
-            reason: 'directory-unavailable',
-            message: 'The custom agents directory could not be resolved.',
-            cause,
-          }),
-      });
+      return agentDirectories.custom().pipe(
+        Effect.mapError(
+          (cause) =>
+            new AgentCreatorUiFailed({
+              reason: 'directory-unavailable',
+              message: 'The custom agents directory could not be resolved.',
+              cause,
+            }),
+        ),
+      );
     },
 
     showCreatedInfo(filePath) {

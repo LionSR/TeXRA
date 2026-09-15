@@ -1,11 +1,12 @@
 import * as path from 'node:path';
 
+import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { createLog } from '@logger/logUtils';
-import type { StateStore } from '@platform/interfaces';
+import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
@@ -28,31 +29,34 @@ const CUSTOM_AGENT_ROOT_OPTIONS = {
  * The built-in directories are the packaged ones, so this only needs the
  * extension's resources path to be resolvable.
  */
-export async function registerAgentDirectoryRoots(
+export function registerAgentDirectoryRoots(
   context: vscode.ExtensionContext,
-): Promise<void> {
-  // Register each root independently so one failing directory resolution
-  // (e.g. a misconfigured custom agents path) does not take out the others —
-  // the creator agent still needs its reference docs and built-in examples.
-  const registrations: Array<() => Promise<void> | void> = [
-    async () =>
-      registerExternalRoot(await agentDirectories.builtIn(), {
-        kind: 'builtInWorkflow',
-        writable: false,
-        label: 'Built-in workflow agents',
-      }),
-    async () =>
-      registerExternalRoot(await agentDirectories.builtInToolUse(), {
-        kind: 'builtInToolUse',
-        writable: false,
-        label: 'Built-in tool-use agents',
-      }),
-    async () =>
-      registerExternalRoot(
-        await agentDirectories.custom(),
-        CUSTOM_AGENT_ROOT_OPTIONS,
+): Effect.Effect<void> {
+  const registrations: Array<Effect.Effect<void, AgentDirectoriesFailed>> = [
+    Effect.flatMap(agentDirectories.builtIn(), (directory) =>
+      Effect.sync(() =>
+        registerExternalRoot(directory, {
+          kind: 'builtInWorkflow',
+          writable: false,
+          label: 'Built-in workflow agents',
+        }),
       ),
-    () =>
+    ),
+    Effect.flatMap(agentDirectories.builtInToolUse(), (directory) =>
+      Effect.sync(() =>
+        registerExternalRoot(directory, {
+          kind: 'builtInToolUse',
+          writable: false,
+          label: 'Built-in tool-use agents',
+        }),
+      ),
+    ),
+    Effect.flatMap(agentDirectories.custom(), (directory) =>
+      Effect.sync(() =>
+        registerExternalRoot(directory, CUSTOM_AGENT_ROOT_OPTIONS),
+      ),
+    ),
+    Effect.sync(() =>
       registerExternalRoot(
         path.join(context.extensionPath, 'resources', 'docs', 'agent-creation'),
         {
@@ -61,18 +65,25 @@ export async function registerAgentDirectoryRoots(
           label: 'Agent creation docs',
         },
       ),
+    ),
   ];
 
-  await Promise.all(
-    registrations.map(async (register) => {
-      try {
-        await register();
-      } catch (err) {
-        log.error(
-          `Failed to register agent directory root: ${toErrorMessage(err)}`,
-        );
-      }
-    }),
+  // Register each root independently so one failing directory resolution
+  // (e.g. a misconfigured custom agents path) does not take out the others —
+  // the creator agent still needs its reference docs and built-in examples.
+  return Effect.forEach(
+    registrations,
+    (register) =>
+      register.pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            log.error(
+              `Failed to register agent directory root: ${toErrorMessage(Cause.squash(cause))}`,
+            );
+          }),
+        ),
+      ),
+    { discard: true },
   );
 }
 
@@ -81,13 +92,21 @@ export async function registerAgentDirectoryRoots(
  * location via Settings. Registering the same `kind` overwrites the
  * previous slot, so no separate unregister step is needed.
  */
-export async function refreshCustomAgentRoot(): Promise<void> {
-  try {
-    const custom = await agentDirectories.custom();
-    registerExternalRoot(custom, CUSTOM_AGENT_ROOT_OPTIONS);
-  } catch (err) {
-    log.error(`Failed to refresh custom agents root: ${toErrorMessage(err)}`);
-  }
+export function refreshCustomAgentRoot(): Effect.Effect<void> {
+  return agentDirectories.custom().pipe(
+    Effect.andThen((custom) =>
+      Effect.sync(() =>
+        registerExternalRoot(custom, CUSTOM_AGENT_ROOT_OPTIONS),
+      ),
+    ),
+    Effect.catchCause((cause) =>
+      Effect.sync(() => {
+        log.error(
+          `Failed to refresh custom agents root: ${toErrorMessage(Cause.squash(cause))}`,
+        );
+      }),
+    ),
+  );
 }
 
 /** Prepare the host environment and recommend LaTeX Workshop when useful. */
