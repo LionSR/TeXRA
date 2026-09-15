@@ -116,6 +116,31 @@ describe('listRunGeneratedFiles', () => {
       }),
   );
 
+  // The run directory's own probe: a storage failure there is a fault, not
+  // "this run produced nothing", so it reaches the caller's handler.
+  it.effect('propagates a storage failure from the run-directory probe', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const failure = PlatformError.systemError({
+        _tag: 'PermissionDenied',
+        module: 'FileSystem',
+        method: 'access',
+        pathOrDescriptor: RUN_PATH,
+      });
+
+      expect(
+        yield* Effect.flip(
+          listRunGeneratedFiles(EXECUTION_ID, session).pipe(
+            Effect.provideService(FileSystem.FileSystem, {
+              ...fs,
+              exists: () => Effect.fail(failure),
+            }),
+          ),
+        ),
+      ).toBe(failure);
+    }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+
   it.effect('propagates operational stat failures', () =>
     Effect.gen(function* () {
       const unreadable = path.join(RUN_PATH, 'unreadable.tex');
