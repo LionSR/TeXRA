@@ -390,9 +390,9 @@ export class WorkflowRunBoard extends LitElement {
     const { runStartedAt } = this.run;
     const parts = [
       usage.outputTokens > 0
-        ? html`${waIcon('arrow-down')}${formatCompactTokenCount(
-            usage.outputTokens,
-          )}`
+        ? html`${waIcon('arrow-down', {
+            label: 'Output tokens',
+          })}${formatCompactTokenCount(usage.outputTokens)}`
         : undefined,
       usage.cost > 0 ? formatCostUsd(usage.cost) : undefined,
       !this.summary && runStartedAt !== null && this.nowMs !== null
