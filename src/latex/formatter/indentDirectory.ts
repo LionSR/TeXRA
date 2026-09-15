@@ -39,8 +39,8 @@ export type IndentLatexResult =
 /**
  * Formats LaTeX files in a specific directory and its subdirectories
  * @param workspaceRoot Root a relative `directory` resolves against and the cwd
- * the formatter runs in, held by the caller as data — `undefined` is a session
- * with no folder open, where only an absolute `directory` can be walked.
+ * the formatter runs in, held by the caller as data. When `undefined`, a
+ * relative `directory` resolves against the process cwd.
  * @param directory The directory to process (relative to workspace). If not provided, uses the root.
  * @param progressCallback Optional callback for progress updates
  * @returns Promise<IndentLatexResult> The formatting outcome
