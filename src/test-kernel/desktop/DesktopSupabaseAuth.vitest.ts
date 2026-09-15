@@ -551,11 +551,11 @@ describe('desktop Supabase auth', () => {
 
       const cleanup = createDeferred<void>();
       const update = stateStore.update.bind(stateStore);
-      vi.spyOn(stateStore, 'update').mockImplementationOnce(
-        async (key, value) => {
-          await cleanup.promise;
-          await update(key, value);
-        },
+      vi.spyOn(stateStore, 'update').mockImplementationOnce((key, value) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() => cleanup.promise);
+          yield* update(key, value);
+        }),
       );
 
       const recreatedState = createDesktopAuthCallbackState(

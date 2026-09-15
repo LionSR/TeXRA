@@ -191,8 +191,8 @@ import {
 setupPlatform(
   {},
   {
-    globalState: { get: mocks.globalGet, update: async () => {} },
-    workspaceState: { get: mocks.workspaceGet, update: async () => {} },
+    globalState: { get: mocks.globalGet, update: () => Effect.void },
+    workspaceState: { get: mocks.workspaceGet, update: () => Effect.void },
   },
 );
 

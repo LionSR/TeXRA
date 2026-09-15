@@ -533,14 +533,18 @@ function startedRun(session: SessionHandle): RunId {
   return runId;
 }
 
-/** Flip the compile-rejection policy under a run already in flight. */
+/**
+ * Flip the compile-rejection policy under a run already in flight. The fake
+ * host's store is an in-memory map, whose write cannot fail, so the hook the
+ * invoker awaits stays an infallible program and a refusal would be a defect.
+ */
 const setRejectOnCompileFailure = (enabled: boolean) =>
-  Effect.promise(() =>
-    installedHost().roots.workspaceState.update(
+  installedHost()
+    .roots.workspaceState.update(
       WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
       enabled,
-    ),
-  );
+    )
+    .pipe(Effect.orDie);
 
 /** The verdict each round stage closed with, in transcript order. */
 function roundStageOutcomes(store: StreamLog): unknown[] {

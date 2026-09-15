@@ -148,11 +148,9 @@ describe('GrepTool run', () => {
             timedOut: false,
             exitCode: 0,
           });
-        yield* Effect.promise(() =>
-          workspaceRoots().workspaceState.update(
-            WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-            false,
-          ),
+        yield* workspaceRoots().workspaceState.update(
+          WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+          false,
         );
 
         try {
@@ -166,11 +164,9 @@ describe('GrepTool run', () => {
           expect(executeSpy).toHaveBeenCalledOnce();
           expect(executeSpy.mock.calls[0]?.[0]).not.toContain('--ignore-file');
         } finally {
-          yield* Effect.promise(() =>
-            workspaceRoots().workspaceState.update(
-              WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-              true,
-            ),
+          yield* workspaceRoots().workspaceState.update(
+            WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+            true,
           );
         }
       }).pipe(Effect.provide(nativeToolTestLayer())),

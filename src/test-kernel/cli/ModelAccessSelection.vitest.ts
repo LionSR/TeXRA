@@ -14,7 +14,7 @@ import {
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
-import { AppState } from '@platform/interfaces';
+import { AppState, type StateWriteFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -44,9 +44,12 @@ const updateGlobalState = vi.fn();
 
 /** A global state store whose writes the suite observes. */
 class ObservedStateStore extends FakeStateStore {
-  override async update(key: string, value: unknown): Promise<void> {
+  override update(
+    key: string,
+    value: unknown,
+  ): Effect.Effect<void, StateWriteFailed> {
     mocks.updateGlobalState(key, value);
-    await super.update(key, value);
+    return super.update(key, value);
   }
 }
 

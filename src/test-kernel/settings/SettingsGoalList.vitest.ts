@@ -43,6 +43,7 @@ function createHandler(): SettingsViewMessageHandler {
       extensionPath: '/ext',
       globalState,
     } as unknown as vscode.ExtensionContext,
+    globalState,
     secrets,
     effectRuntime(),
   );

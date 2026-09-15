@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -108,7 +109,7 @@ describe('AgentRosterController', () => {
     const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState);
 
-    await roster.setTeam('test-team');
+    await Effect.runPromise(roster.setTeam('test-team'));
 
     expect(
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
@@ -121,14 +122,16 @@ describe('AgentRosterController', () => {
   it('turns an individual toggle into an exact custom roster', async () => {
     const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState);
-    await roster.setAll();
+    await Effect.runPromise(roster.setAll());
 
-    await roster.setAgentEnabled({
-      category: 'toolUse',
-      source: 'custom',
-      name: 'search',
-      enabled: false,
-    });
+    await Effect.runPromise(
+      roster.setAgentEnabled({
+        category: 'toolUse',
+        source: 'custom',
+        name: 'search',
+        enabled: false,
+      }),
+    );
 
     expect(roster.snapshot().selection).toEqual({
       kind: 'custom',
@@ -191,19 +194,21 @@ describe('AgentRosterController', () => {
     const roster = controller(workspaceState, {
       getPresets: () => [unavailablePreset],
     });
-    await roster.setTeam(unavailablePreset.id);
+    await Effect.runPromise(roster.setTeam(unavailablePreset.id));
 
     expect(roster.getEnabledAgentKeys('workflow')).toEqual([
       'builtInWorkflow:write',
       'future-reviewer',
     ]);
 
-    await roster.setAgentEnabled({
-      category: 'toolUse',
-      source: 'custom',
-      name: 'search',
-      enabled: true,
-    });
+    await Effect.runPromise(
+      roster.setAgentEnabled({
+        category: 'toolUse',
+        source: 'custom',
+        name: 'search',
+        enabled: true,
+      }),
+    );
 
     expect(roster.snapshot().selection).toEqual({
       kind: 'custom',
@@ -232,11 +237,15 @@ describe('AgentRosterController', () => {
     let presets: AgentModePreset[] = [preset];
     const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState, { getPresets: () => presets });
-    await roster.setTeam(preset.id);
+    await Effect.runPromise(roster.setTeam(preset.id));
 
-    await roster.removeTeamPreset(preset.id, async () => {
-      presets = [];
-    });
+    await Effect.runPromise(
+      roster.removeTeamPreset(preset.id, () =>
+        Effect.sync(() => {
+          presets = [];
+        }),
+      ),
+    );
 
     expect(roster.snapshot().selection).toEqual({
       kind: 'custom',

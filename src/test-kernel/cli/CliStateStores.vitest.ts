@@ -34,10 +34,9 @@ describe('CLI state stores', () => {
         runWrite: (write: Effect.Effect<void, Error>) =>
           Effect.runPromise(write),
       });
-      yield* Effect.promise(() =>
-        first.workspaceState.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
-          preset,
-        ]),
+      yield* first.workspaceState.update(
+        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+        [preset],
       );
 
       const second = yield* openCliWorkspaceState({
