@@ -330,25 +330,32 @@ describe('submitFollowUp', () => {
         const runId = generateRunId();
         const session = fakeSession({ kind: 'queue' });
         const resumed = createDeferred<boolean>();
+        const started = yield* Deferred.make<void>();
         const admitted = yield* Deferred.make<void>();
         const fiber = yield* Effect.forkChild(
           submitFollowUp(runId, 'keep this input', {
             session,
             resumePort: {
-              tryResumeRun: () => Effect.promise(() => resumed.promise),
+              tryResumeRun: () => {
+                Deferred.doneUnsafe(started, Effect.void);
+                return Effect.promise(() => resumed.promise);
+              },
             },
             onAdmitted: () => {
               Deferred.doneUnsafe(admitted, Effect.void);
             },
           }),
         );
+        // The host is asked before the submitter is told it was admitted, so
+        // the interrupt below lands on a wake already in flight.
+        yield* Deferred.await(started);
         yield* Deferred.await(admitted);
         yield* Fiber.interrupt(fiber);
         expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
         resumed.resolve(false);
-        // The production `.then` that releases the lease was registered on this
-        // Promise first, so it has run once the test's await resumes.
-        yield* Effect.promise(() => resumed.promise);
+        // The wake is detached: it answers the decline and settles the lease
+        // even though the fiber that dispatched it is gone.
+        yield* settle;
 
         const successor = session.followUps.claimLive(runId, 'child');
         expect(successor).toBeDefined();

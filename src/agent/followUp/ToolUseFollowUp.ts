@@ -1,4 +1,4 @@
-import { Effect, Exit } from 'effect';
+import { Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import {
@@ -118,11 +118,10 @@ export function notifyFollowUpSent(
 
 /**
  * Wake a recovery lease whose follow-up row is already durable. The wake
- * owns its settlement even if the submitting fiber stops waiting: a declined,
- * faulted, or abandoned wake releases the lease so the next attempt can
- * claim it. `onExit` is what carries that: it runs on an interrupt as well
- * as on the attempt's own exit, where `tap`/`catch` would leave the lease
- * claimed behind an interrupted submitter.
+ * owns its settlement: a declined or faulted attempt releases the lease here,
+ * so whoever starts it — a submitter that stays to collect the answer, or one
+ * that does not — the next attempt can claim it. {@link submitFollowUp}
+ * dispatches it detached for exactly that.
  */
 export function startFollowUpWake(
   runId: RunId,
@@ -130,18 +129,22 @@ export function startFollowUpWake(
   session: SessionHandle,
   resumePort?: Pick<AgentResumePort, 'tryResumeRun'>,
 ): Effect.Effect<boolean> {
-  const release = Effect.sync(() =>
-    session.followUps.release(recovery, 'recoverable'),
-  );
   return Effect.suspend(() =>
     (resumePort ?? platform().agentResume).tryResumeRun(runId, recovery),
   ).pipe(
-    Effect.onExit((exit) =>
-      Exit.isSuccess(exit) && exit.value ? Effect.void : release,
+    Effect.tap((resumed) =>
+      Effect.sync(() => {
+        if (!resumed) session.followUps.release(recovery, 'recoverable');
+      }),
     ),
     // A faulted attempt is `false` to this caller: the retry decision is what
     // it asked for, and the failure has already settled the lease above.
-    Effect.catch(() => Effect.succeed(false)),
+    Effect.catch(() =>
+      Effect.sync(() => {
+        session.followUps.release(recovery, 'recoverable');
+        return false;
+      }),
+    ),
   );
 }
 
@@ -343,8 +346,14 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     ownerSession,
   ).pipe(Effect.tapError(() => notifyAdmitted(false)));
   if ('resume' in dispatch) {
+    // Dispatch before announcing: the wake starts in the same step that
+    // admitted it, the order the promise it replaces had, so an interrupt
+    // between the two cannot leave the durable row behind a claimed lease
+    // with no host ever asked. Detached, so the wake settles that lease on
+    // its own whether or not this fiber stays to collect the answer.
+    const wake = yield* Effect.forkDetach(dispatch.resume);
     yield* notifyAdmitted(true);
-    const resumed = yield* dispatch.resume;
+    const resumed = yield* Fiber.join(wake);
     if (resumed) return { status: 'queued' };
     return { status: 'queued', wake: 'failed' };
   }
