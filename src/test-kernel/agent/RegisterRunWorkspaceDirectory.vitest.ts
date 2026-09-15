@@ -66,48 +66,32 @@ describe('run registration and finalization', () => {
       }),
   );
 
-  it.effect('reads a parent only after its queued rows have settled', () =>
-    Effect.gen(function* () {
-      // A record read goes straight to the database, so a parent published
-      // on this fiber is still uncommitted when the child's admission check
-      // runs: the settle is the whole order between the two paths, and this
-      // pins that it happens — and that it happens before the read — rather
-      // than the scheduler leaving the publisher enough room to win the race.
-      const order: string[] = [];
-      const parentRunId = publishTestRunStart(session);
-      const settle = session.settlePublications.bind(session);
-      vi.spyOn(session, 'settlePublications').mockImplementation(
-        (id, settleOptions) => {
-          order.push(`settle:${id ?? 'session'}`);
-          return settle(id, settleOptions);
-        },
-      );
-      const read = session.readRunRecords.bind(session);
-      vi.spyOn(session, 'readRunRecords').mockImplementation((id) => {
-        order.push(`read:${id}`);
-        return read(id);
-      });
-      yield* registerRun(session, runId, baseConfig, 'chat', {
-        ...options,
-        parentRunId,
-      });
-      expect(order).toContain(`settle:${parentRunId}`);
-      expect(order.indexOf(`settle:${parentRunId}`)).toBeLessThan(
-        order.indexOf(`read:${parentRunId}`),
-      );
-      // A parent nothing ever published must still refuse its child rather
-      // than wait on the barrier for a row that is not coming.
-      const absentParentId = 'def456' as RunId;
-      const refusal = yield* Effect.flip(
-        registerRun(session, 'fed789' as RunId, baseConfig, 'chat', {
+  it.effect(
+    'admits a child whose parent is still queued on the publisher',
+    () =>
+      Effect.gen(function* () {
+        // The parent's `run.start` is published and left uncommitted, which is
+        // what a record read sees: without the barrier ahead of it, this child is
+        // refused as if its parent did not exist.
+        const parentRunId = publishTestRunStart(session);
+        yield* registerRun(session, runId, baseConfig, 'chat', {
           ...options,
-          parentRunId: absentParentId,
-        }),
-      );
-      expect(refusal.message).toBe(
-        `Parent run ${absentParentId} is unavailable.`,
-      );
-    }),
+          parentRunId,
+        });
+        expect(yield* getRunRecords(session, runId).exists()).toBe(true);
+        // A parent nothing ever published must still refuse its child rather
+        // than wait on the barrier for a row that is not coming.
+        const absentParentId = 'def456' as RunId;
+        const refusal = yield* Effect.flip(
+          registerRun(session, 'fed789' as RunId, baseConfig, 'chat', {
+            ...options,
+            parentRunId: absentParentId,
+          }),
+        );
+        expect(refusal.message).toBe(
+          `Parent run ${absentParentId} is unavailable.`,
+        );
+      }),
   );
 
   it.effect(

@@ -92,19 +92,15 @@ export const registerRun = Effect.fn('registerRun')(function* (
         releaseClaims = yield* session.acquireClaims(aggregateId('run', runId));
       if (options.parentRunId !== undefined) {
         // A record read goes straight to the database; it never queues behind
-        // the publisher. A parent whose `run.start` this fiber just published
-        // is therefore still uncommitted here, and the read below would call it
-        // absent. Settling first is the order between the two paths.
-        //
-        // Run-tagged rather than session-wide: this child's admission depends
-        // on this one parent, so the barrier waits for everything queued but
-        // answers for this parent's facts alone — a session-wide settle would
-        // fail a sound launch over someone else's session-scoped publication
-        // (`createChildRun` notes the same). `consume: false` leaves a parent's
-        // lost fact tracked, for that parent's own drain to report.
-        yield* session.settlePublications(options.parentRunId, {
-          consume: false,
-        });
+        // the publisher. A parent whose `run.start` is queued but uncommitted
+        // therefore reads as absent here, and the refusal below would be about
+        // a parent that is on its way in. This empty batch is the barrier: the
+        // publisher is the one order, whether a fact was published detached or
+        // awaited, so a job enqueued here runs after every publication queued
+        // before it — while answering for none of them, which a settle could
+        // not do without failing this child over some other fact its parent
+        // lost.
+        yield* session.commit([]);
         // The database refuses a parent that is closed or has no `run.start`;
         // this read only words the refusal before the transaction opens.
         if (!(yield* getRunRecords(session, options.parentRunId).exists()))
