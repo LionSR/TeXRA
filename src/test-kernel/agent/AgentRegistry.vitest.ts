@@ -136,9 +136,11 @@ describe('agent registry', () => {
 
   it('skips root registration when called before agent directory initialization', async () => {
     await expect(
-      registerAgentDirectoryRoots({
-        extensionPath,
-      } as vscode.ExtensionContext),
+      Effect.runPromise(
+        registerAgentDirectoryRoots({
+          extensionPath,
+        } as vscode.ExtensionContext),
+      ),
     ).resolves.toBeUndefined();
 
     expect(registerExternalRoot).toHaveBeenCalledTimes(1);
@@ -152,9 +154,11 @@ describe('agent registry', () => {
     agentDirectories.initialize(globalState, resourcesPath, effectRuntime());
 
     await expect(
-      registerAgentDirectoryRoots({
-        extensionPath,
-      } as vscode.ExtensionContext),
+      Effect.runPromise(
+        registerAgentDirectoryRoots({
+          extensionPath,
+        } as vscode.ExtensionContext),
+      ),
     ).resolves.toBeUndefined();
     await expect(
       Effect.runPromise(loadAgents({ includeRemote: false })),
