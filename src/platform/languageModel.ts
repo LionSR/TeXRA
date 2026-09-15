@@ -28,76 +28,10 @@ export interface LanguageModelReference {
   readonly id: string;
 }
 
-interface LanguageModelTextPart {
-  readonly kind: 'text';
-  readonly text: string;
-}
-
-/** Binary image input passed to an editor-supplied language model. */
-interface LanguageModelDataPart {
-  readonly kind: 'data';
-  readonly data: Uint8Array;
-  readonly mimeType: string;
-}
-
-interface LanguageModelToolCallPart {
-  readonly kind: 'toolCall';
-  readonly callId: string;
-  readonly name: string;
-  readonly input: object;
-}
-
-interface LanguageModelToolResultPart {
-  readonly kind: 'toolResult';
-  readonly callId: string;
-  readonly text: string;
-}
-
-export type LanguageModelMessage =
-  | {
-      readonly role: 'user';
-      readonly content: readonly (
-        | LanguageModelTextPart
-        | LanguageModelDataPart
-        | LanguageModelToolResultPart
-      )[];
-    }
-  | {
-      readonly role: 'assistant';
-      readonly content: readonly (
-        LanguageModelTextPart | LanguageModelToolCallPart
-      )[];
-    };
-
-interface LanguageModelToolDefinition {
-  readonly name: string;
-  readonly description: string;
-  readonly inputSchema?: object;
-}
-
-export interface LanguageModelRequestOptions {
-  /** Shown in the host's first-use consent prompt. */
-  readonly justification?: string;
-  readonly tools?: readonly LanguageModelToolDefinition[];
-  readonly toolMode?: 'auto' | 'required';
-  /**
-   * Max completion tokens. Mapped to the editor API's `modelOptions.max_tokens`,
-   * which Copilot accepts as a number.
-   */
-  readonly maxTokens?: number;
-}
-
-export type LanguageModelResponsePart =
-  LanguageModelTextPart | LanguageModelToolCallPart;
-
-type LanguageModelTokenCountInput = string | LanguageModelMessage;
-
 export const LANGUAGE_MODEL_PORT_ERROR_CODE = {
-  HOST_UNAVAILABLE: 'host_unavailable',
   MODEL_UNAVAILABLE: 'model_unavailable',
   NO_PERMISSIONS: 'no_permissions',
   QUOTA_EXCEEDED: 'quota_exceeded',
-  CANCELLED: 'cancelled',
   UNKNOWN: 'unknown',
 } as const;
 
@@ -134,21 +68,7 @@ export interface LanguageModelPort {
    * `LanguageModelInfo.access` folds access into each catalogue entry.
    */
   onDidChange(listener: () => void): Disposable;
-  sendRequest(
-    model: LanguageModelReference,
-    messages: readonly LanguageModelMessage[],
-    options: LanguageModelRequestOptions,
-    signal: AbortSignal,
-  ): AsyncIterable<LanguageModelResponsePart>;
-  countTokens(
-    model: LanguageModelReference,
-    input: LanguageModelTokenCountInput,
-    signal?: AbortSignal,
-  ): Promise<number>;
 }
-
-const UNAVAILABLE_MESSAGE =
-  'Language models supplied by the editor are unavailable in this host.';
 
 /** Shared implementation for CLI, desktop, tests, and unsupported editors. */
 export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
@@ -156,22 +76,5 @@ export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
     isAvailable: () => false,
     selectModels: async () => [],
     onDidChange: () => ({ dispose() {} }),
-    sendRequest: (): AsyncIterable<LanguageModelResponsePart> => ({
-      [Symbol.asyncIterator]: () => ({
-        next: (): Promise<IteratorResult<LanguageModelResponsePart>> =>
-          Promise.reject(
-            new LanguageModelPortError(
-              LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
-              UNAVAILABLE_MESSAGE,
-            ),
-          ),
-      }),
-    }),
-    countTokens: async () => {
-      throw new LanguageModelPortError(
-        LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
-        UNAVAILABLE_MESSAGE,
-      );
-    },
   },
 );

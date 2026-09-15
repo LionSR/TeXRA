@@ -105,10 +105,6 @@ function languageModelPort(
     isAvailable: () => true,
     selectModels: vi.fn(async () => models),
     onDidChange: () => ({ dispose() {} }),
-    sendRequest: vi.fn(() => {
-      throw new Error('Grant must not use the retired request grammar.');
-    }),
-    countTokens: async () => 0,
   };
 }
 
@@ -203,7 +199,6 @@ describe('Copilot route preference handler', () => {
         true,
         installedHost().roots.globalState,
       );
-      expect(port.sendRequest).not.toHaveBeenCalled();
       expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
       if (access === 'allowed') {
         expect(mocks.selectChatModels).not.toHaveBeenCalled();

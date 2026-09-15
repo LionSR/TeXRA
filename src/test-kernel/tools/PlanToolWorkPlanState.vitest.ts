@@ -154,7 +154,7 @@ describe('PlanTool — update (plan approval)', () => {
           expect(outcome.status).toBe('executed');
           expect(outcome.output).toContain('todo tool');
           expect(workPlanState.plan).toEqual(plan);
-          expect(workPlanState.planSummary).toBe(
+          expect(workPlanState.toSnapshot().planSummary).toBe(
             planSummaryLine(plan.objective),
           );
         }),
@@ -216,7 +216,7 @@ describe('PlanTool — update (plan approval)', () => {
         const outcome = yield* result;
         expect(outcome.status).toBe('error');
         expect(workPlanState.plan).toBeNull();
-        expect(workPlanState.planSummary).toBeNull();
+        expect(workPlanState.toSnapshot().planSummary).toBeNull();
       }),
     ),
   );

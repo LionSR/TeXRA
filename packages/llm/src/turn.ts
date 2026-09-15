@@ -368,7 +368,7 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
   LocalCallPartSchema.readonly(),
 ]);
 
-export const ContentSchema = z.array(OutputPartSchema).readonly();
+const ContentSchema = z.array(OutputPartSchema).readonly();
 const EditorContentSchema = z
   .array(
     z.discriminatedUnion('kind', [
@@ -472,7 +472,7 @@ function validateAssistantContent(
   }
 }
 
-export const AssistantMessageSchema = z
+const AssistantMessageSchema = z
   .strictObject({
     role: z.literal('assistant'),
     origin: ModelOriginSchema,
@@ -490,7 +490,7 @@ export const AssistantMessageSchema = z
     validateAssistantContent(message.origin, message.content, ctx);
   })
   .readonly();
-export type AssistantMessage = z.infer<typeof AssistantMessageSchema>;
+type AssistantMessage = z.infer<typeof AssistantMessageSchema>;
 
 export const MessageSchema = z.discriminatedUnion('role', [
   z

@@ -173,7 +173,6 @@ function emptyServerToolContent(): ServerToolContentState {
 export class WorkPlanState {
   private _todos: TodoItem[] = [];
   private _plan: Plan | null = null;
-  private _planSummary: string | null = null;
   private _onTodosUpdate?: (todos: TodoItem[]) => void;
   private _onPlanUpdate?: (plan: Plan | null) => void;
 
@@ -182,7 +181,6 @@ export class WorkPlanState {
     const state = new WorkPlanState();
     state._todos = [...parsed.todos];
     state._plan = parsed.plan;
-    state._planSummary = parsed.planSummary;
     return state;
   }
 
@@ -190,7 +188,7 @@ export class WorkPlanState {
     return WorkPlanSnapshotSchema.parse({
       todos: [...this._todos],
       plan: this._plan ? { ...this._plan } : null,
-      planSummary: this._planSummary,
+      planSummary: this._plan ? planSummaryLine(this._plan.objective) : null,
     });
   }
 
@@ -200,10 +198,6 @@ export class WorkPlanState {
 
   get plan(): Plan | null {
     return this._plan;
-  }
-
-  get planSummary(): string | null {
-    return this._planSummary;
   }
 
   setOnUpdate(callbacks: {
@@ -226,15 +220,8 @@ export class WorkPlanState {
   }
 
   updatePlan(plan: Plan | null): void {
-    const nextPlanSummary = plan ? planSummaryLine(plan.objective) : null;
-    if (
-      this._planEqual(this._plan, plan) &&
-      this._planSummary === nextPlanSummary
-    ) {
-      return;
-    }
+    if (this._planEqual(this._plan, plan)) return;
     this._plan = plan;
-    this._planSummary = nextPlanSummary;
     this._onPlanUpdate?.(plan);
   }
 
