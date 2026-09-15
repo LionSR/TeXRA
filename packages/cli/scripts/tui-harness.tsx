@@ -82,7 +82,7 @@ import {
   PROCESS,
   tail,
 } from '@test/shared/session/fanOutScenario';
-import { clearGoal, startGoal } from '@tools/goal';
+import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
@@ -135,7 +135,6 @@ import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
-  resolveLocalTranscriptRunId,
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
@@ -628,7 +627,13 @@ HARNESS_DISPOSERS.push(
 );
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
-const harnessRuns = new Set<RunId>();
+/**
+ * The runs this harness has minted, and the category each was minted with.
+ * `publish` enqueues a job on the session's one publisher, so the fold — and
+ * the view every render reads — lands after the seeding that queued it. A
+ * seeder therefore reads what it published from here, never from the view.
+ */
+const harnessRuns = new Map<RunId, AgentCategory>();
 
 /** Mint a run: its `run.start` existence fact (PRD 6, item 2), then the
  *  `run.config` launch fact a real run publishes next, which names the model
@@ -650,7 +655,7 @@ function seedRun(
   } = {},
 ): void {
   if (harnessRuns.has(runId)) return;
-  harnessRuns.add(runId);
+  harnessRuns.set(runId, options.category ?? AgentCategory.ToolUse);
   const identity = options.identity ?? {
     kind: 'agent' as const,
     agent: options.agent ?? 'harness-agent',
@@ -720,17 +725,20 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
 }
 
 /** End a run the way a real session does: the terminal `run.end` fact the
- *  fold turns into the terminal phase and the durable outcome. */
+ *  fold turns into the terminal phase and the durable outcome. The run's
+ *  category comes from the mint record, not the view: a fixture that seeds a
+ *  terminal phase during boot does it before the publisher has folded the
+ *  `run.start` it just queued. */
 function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
-  const run = runViewOf(currentView(), runId);
-  if (!run) {
+  const category = harnessRuns.get(runId);
+  if (category === undefined) {
     throw new Error(`tui-harness: cannot end unknown run ${runId}`);
   }
   publish({
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
     outcome,
-    output: emptyRunEndOutput(run.category),
+    output: emptyRunEndOutput(category),
   });
 }
 
@@ -1242,6 +1250,14 @@ async function appendHarnessPlanDecision(
     await effectRuntime().runPromise(
       startGoal(defaultSession(), HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE),
     );
+    // The same grant `PlanTool.startGoalForPlan` applies next: approving a
+    // plan as a goal auto-approves commands, and nothing broader unless the
+    // user explicitly widened the scope.
+    setGoalSessionAutoApproval(
+      defaultSession(),
+      HARNESS_RUN_ID,
+      result.autoApproveAll ? 'allAgentWork' : 'commands',
+    );
     seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
@@ -1651,23 +1667,18 @@ function appendHarnessAssistantTranscript(text: string, runId?: RunId): void {
   appendHarnessTranscript('assistant', text, runId);
 }
 
+// Which run a local row belongs to is `transcript.ts`'s answer, not a second
+// one here: its fallback is the local-conversation id, the one id
+// `selectedRunId` keeps selected while no run of this session exists — which
+// is exactly the state `/clear` leaves behind.
 function appendHarnessTranscript(
   role: 'assistant' | 'error' | 'user',
   text: string,
   explicitRunId?: RunId,
 ): void {
-  const view = currentView();
-  const runId =
-    explicitRunId ??
-    resolveLocalTranscriptRunId({
-      activeRunId: activeRunIdSignal.get(),
-      fallbackRunId: HARNESS_RUN_ID,
-      parentOf: (id) => runViewOf(view, id)?.parentId ?? undefined,
-      rootRunId: rootRunId.get(),
-    });
   switch (role) {
     case 'assistant':
-      appendLocalAssistantTranscript(text, runId);
+      appendLocalAssistantTranscript(text, explicitRunId);
       return;
     case 'user':
       appendLocalUserTranscript(text);
@@ -1776,8 +1787,11 @@ function resetHarnessForClear(): void {
   for (const runId of [...currentView().runs.keys()]) {
     removeRun(runId);
   }
+  // `resetCliState` retires the focus the way the real `/clear` does, and
+  // nothing re-focuses a run this reset just removed: the next local row
+  // adopts the local-conversation id, which is what the surface renders
+  // until a new turn mints a run.
   resetCliState(meta);
-  activeRunIdSignal.set(HARNESS_RUN_ID);
   // Mirror the real /clear handler (runChatTui.tsx): erase the terminal
   // outside Ink, then notify the erase epoch so the transcript rebuilds
   // after the reset state commits and repaints the session header.
@@ -1936,7 +1950,12 @@ function renderHarnessApp(): React.JSX.Element {
   );
 }
 
-// The same recorded fan-out as the drawer, followed by waiting and interrupted roots.
+// The same recorded fan-out as the drawer, plus the session this terminal
+// resumed: `interrupted`, whose previous process is gone, with a `nested`
+// child of its own, and a `waiting` run this terminal still owns that is
+// parked on an approval. The CLI lists this conversation and the runs this
+// terminal owns (#12475), so the resumed root is what puts a foreign,
+// owner-less run in the list at all.
 if (process.env.HARNESS_SESSION_TREE === '1') {
   const { log, events } = buildScenario();
   const recordedCount = log.events.length;
@@ -1948,10 +1967,10 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     category: AgentCategory.ToolUse,
     isRemote: false,
   });
-  for (const [id, agent, owner, parent] of [
+  for (const [id, agent, owner, parentId] of [
     [waiting, 'waiting', OWNER, null],
     [interrupted, 'interrupted', OTHER_OWNER, null],
-    [nested, 'nested', OTHER_OWNER, { id: waiting, startCommit: 1 }],
+    [nested, 'nested', OTHER_OWNER, interrupted],
   ] as const) {
     log.emit(
       id,
@@ -1962,7 +1981,9 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
         category: AgentCategory.ToolUse,
         isRemote: false,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        parent,
+        // The creation commit the database stamps, not a guess: `Log.parent`
+        // refuses a parent that never started.
+        parent: parentId === null ? null : log.parent(parentId),
       },
       owner,
     );
@@ -1993,11 +2014,15 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   const view = foldAll([
     ...events,
     ...log.events.slice(recordedCount).map(tail),
-    local({ self: [OWNER] }),
+    // `buildScenario` stamped its existence snapshot before these runs
+    // existed, and a run with no claim has no owner: re-read the log so the
+    // three new aggregates carry the owner each was emitted under.
+    log.drained(),
+    local({ self: [OWNER], dead: [OTHER_OWNER] }),
   ]);
   const ref = await effectRuntime().runPromise(SubscriptionRef.make(view));
   HARNESS_DISPOSERS.push(bindSessionView(effectRuntime(), ref));
-  rootRunId.set(PROCESS);
+  rootRunId.set(interrupted);
   activeRunIdSignal.set(PROCESS);
 }
 
