@@ -34,13 +34,13 @@ export type InputPart = Extract<
   { role: 'user' }
 >['content'][number];
 
-export interface MediaCapabilities {
+interface MediaCapabilities {
   readonly supportsVision: boolean;
   readonly supportsNativePdf: boolean;
   readonly supportsNativeAudio: boolean;
 }
 
-export interface MediaInputParts {
+interface MediaInputParts {
   readonly parts: readonly InputPart[];
   /** What was inserted, for the transcript's attachment badges. */
   readonly kinds: readonly MediaAttachmentKind[];

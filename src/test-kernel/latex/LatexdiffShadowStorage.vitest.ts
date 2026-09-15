@@ -170,16 +170,14 @@ describe('LaTeXdiffService shadow output', () => {
           ...workspaceRoots(),
           workspaceState: new MemoryStateStore(),
         };
-        yield* Effect.promise(async () => {
-          await workspaceRoots().workspaceState.update(
-            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-            'coarse',
-          );
-          await sessionRoots.workspaceState.update(
-            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-            'off',
-          );
-        });
+        yield* workspaceRoots().workspaceState.update(
+          WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          'coarse',
+        );
+        yield* sessionRoots.workspaceState.update(
+          WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          'off',
+        );
         const { LaTeXdiffService } = yield* Effect.promise(
           () => import('@latex/latexdiff'),
         );

@@ -136,10 +136,11 @@ export async function setCliToolEnabled(
   state: StateStore,
   id: string,
   enabled: boolean,
+  runtime: ProcessRuntime,
 ): Promise<boolean> {
   const def = findCliToolDef(id);
   if (!def?.toggleable) return false;
-  await setToolEnabled(id, enabled, state);
+  await runtime.runPromise(setToolEnabled(id, enabled, state));
   return true;
 }
 

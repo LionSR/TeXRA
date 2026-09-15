@@ -1,8 +1,11 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - shared
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - platform
-import type { StateStore } from '../interfaces';
+import type { StateStore, StateWriteFailed } from '../interfaces';
 
 /**
  * WorkspaceStateKeys that represent repository-level configuration rather
@@ -52,13 +55,13 @@ export class WorktreeStateStore implements StateStore {
     );
   }
 
-  async update(key: string, value: unknown): Promise<void> {
+  /** The target store's own write, so its failure is what the caller reads. */
+  update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed> {
     if (!this.sharedKeys.has(key)) {
-      await this.workspaceState.update(key, value);
-      return;
+      return this.workspaceState.update(key, value);
     }
 
-    await this.globalState.update(this.namespacedKey(key), value);
+    return this.globalState.update(this.namespacedKey(key), value);
   }
 
   private namespacedKey(key: string): string {

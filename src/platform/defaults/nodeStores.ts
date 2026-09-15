@@ -24,7 +24,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { JsonStore, type RunStateWrite } from './jsonStore';
+import { JsonStore } from './jsonStore';
 import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
@@ -77,9 +77,8 @@ const canCreateOrWrite = Effect.fn('nodeStores.canCreateOrWrite')(function* (
  * malformed JSON) fall back to the internal workspace store so settings stay
  * readable and writable — degraded, never fatal.
  *
- * `runWrite` is the caller's own: a config store is a `ConfigStore`, whose
- * `update` is a Promise, so the host that opens it runs that write rather
- * than leaving the store to find a runtime for itself.
+ * No write runner is supplied: a config store is written through the store's
+ * own Effect `set`, which composes into the writer's program.
  */
 export const openTexraWorkspaceConfigStore = Effect.fn(
   'nodeStores.openTexraWorkspaceConfigStore',
@@ -87,13 +86,10 @@ export const openTexraWorkspaceConfigStore = Effect.fn(
   workspaceStoragePath: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
-  runWrite: RunStateWrite,
 ) {
   if (workspaceRoot) {
     const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
-    const projectStore = yield* JsonStore.open(projectConfigPath, {
-      runWrite,
-    }).pipe(
+    const projectStore = yield* JsonStore.open(projectConfigPath).pipe(
       Effect.catch((error) =>
         Effect.sync(() => {
           warn(
@@ -117,7 +113,6 @@ export const openTexraWorkspaceConfigStore = Effect.fn(
   }
   return yield* JsonStore.open(
     path.join(workspaceStoragePath, TEXRA_CONFIG_FILE_NAME),
-    { runWrite },
   );
 });
 
@@ -128,7 +123,6 @@ export const openTexraConfigStores = Effect.fn(
   storage: WorkspaceStorageProvider,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
-  runWrite: RunStateWrite,
 ) {
   const [workspace, global] = yield* Effect.all(
     [
@@ -136,11 +130,9 @@ export const openTexraConfigStores = Effect.fn(
         storage.getStoragePath(),
         workspaceRoot,
         warn,
-        runWrite,
       ),
       JsonStore.open(
         path.join(storage.getGlobalStoragePath(), TEXRA_CONFIG_FILE_NAME),
-        { runWrite },
       ),
     ],
     { concurrency: 'unbounded' },

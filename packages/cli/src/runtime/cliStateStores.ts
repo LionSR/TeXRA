@@ -1,15 +1,11 @@
 import { Effect } from 'effect';
 
 import { openAppStateStore } from '@controllers/session/appStateStore';
-import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 
 interface CliWorkspaceStateInit {
   readonly storageRoot?: string;
   readonly workspacePath: string | undefined;
-  /** The entry's run of a durable state write: the store is below the
-   *  boundary and never runs an Effect of its own. */
-  readonly runWrite: RunStateWrite;
 }
 
 /**
@@ -26,9 +22,6 @@ export const openCliWorkspaceState = Effect.fn(
     storageRoot: init.storageRoot,
     workspacePath: init.workspacePath,
   });
-  const workspaceState = yield* openAppStateStore(
-    storage.getStoragePath(),
-    init.runWrite,
-  );
+  const workspaceState = yield* openAppStateStore(storage.getStoragePath());
   return { storage, workspaceState };
 });

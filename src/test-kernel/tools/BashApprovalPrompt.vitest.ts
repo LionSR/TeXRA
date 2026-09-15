@@ -76,16 +76,14 @@ describe('requestBashApproval queueing', () => {
           const processConfig = installedHost().roots.config;
           const previous = keys.map((key) => processConfig.get(key));
           yield* Effect.addFinalizer(() =>
-            Effect.promise(() =>
-              Promise.all(
-                keys.map((key, index) =>
-                  processConfig.update(key, previous[index]),
-                ),
+            Effect.all(
+              keys.map((key, index) =>
+                processConfig.update(key, previous[index]),
               ),
-            ),
+            ).pipe(Effect.orDie, Effect.asVoid),
           );
-          yield* Effect.promise(() =>
-            Promise.all(keys.map((key) => processConfig.update(key, false))),
+          yield* Effect.all(
+            keys.map((key) => processConfig.update(key, false)),
           );
           const project = createFakeHost({
             config: Object.fromEntries(keys.map((key) => [key, true])),

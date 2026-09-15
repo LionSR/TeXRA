@@ -31,7 +31,7 @@ interface ProgressWorkflowFileActionsHost {
   logError?(message: string, error: unknown): void;
 }
 
-export interface ProgressWorkflowFileActionsControllerDeps {
+interface ProgressWorkflowFileActionsControllerDeps {
   state: ProgressWorkflowFileActionsState;
   host: ProgressWorkflowFileActionsHost;
   sendFollowUp(stream: RunId, text: string): Promise<void>;

@@ -130,6 +130,7 @@ function createHandler(): SettingsViewMessageHandler {
       globalState,
       languageModelAccessInformation: { canSendRequest: mocks.canSendRequest },
     } as unknown as vscode.ExtensionContext,
+    globalState,
     secrets,
     effectRuntime(),
   );

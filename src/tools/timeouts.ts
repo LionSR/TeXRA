@@ -49,7 +49,7 @@ function isTimeoutError(error: unknown): boolean {
  * Only safe to use for idempotent requests (GET / read-only RPC); retrying
  * a non-idempotent write risks duplicate side effects.
  */
-export function isTransientHttpError(error: unknown): boolean {
+function isTransientHttpError(error: unknown): boolean {
   if (isTimeoutError(error)) return true;
   if (error instanceof HTTPError) {
     return isTransientHttpStatus(error.response.status);

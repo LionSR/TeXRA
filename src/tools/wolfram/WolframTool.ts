@@ -35,7 +35,7 @@ function wolframRunSummary(code: string): string {
   return preview ? `Executed: ${preview}` : 'Executed';
 }
 
-export function wolframApprovalCommand(code: string): string {
+function wolframApprovalCommand(code: string): string {
   return `wolframscript -code ${JSON.stringify(code)}`;
 }
 

@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, it, vi } from 'vitest';
 
 // Local imports
@@ -323,16 +324,24 @@ describe('catalog-derived settings snapshots', () => {
     }
   });
 
-  it('builds the LaTeX message from validated catalog values and defaults', () => {
+  it('builds the LaTeX message from validated catalog values and defaults', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const { stores, workspaceState } = makeFakeSettingsStores();
-    void workspaceState.update(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, false);
-    void workspaceState.update(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, 25000);
-    void workspaceState.update(
-      WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-      'stale-bogus-value',
+    await Effect.runPromise(
+      workspaceState.update(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, false),
     );
-    void workspaceState.update(WorkspaceStateKey.LATEX_FORMATTER, 'tex-fmt');
+    await Effect.runPromise(
+      workspaceState.update(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, 25000),
+    );
+    await Effect.runPromise(
+      workspaceState.update(
+        WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+        'stale-bogus-value',
+      ),
+    );
+    await Effect.runPromise(
+      workspaceState.update(WorkspaceStateKey.LATEX_FORMATTER, 'tex-fmt'),
+    );
 
     try {
       const message = buildSettingsSnapshotMessage('latex', stores, 'desktop');
@@ -412,9 +421,11 @@ describe('settingsAccess', () => {
     const fake = makeFakeSettingsStores();
     const entry = entryByKey(options.key);
     const store = fake[options.storeName];
-    await writeSetting(entry, false, fake.stores, options.host);
+    await Effect.runPromise(
+      writeSetting(entry, false, fake.stores, options.host),
+    );
     assert.equal(isStored(store, entry.key), true);
-    await resetSetting(entry, fake.stores, options.host);
+    await Effect.runPromise(resetSetting(entry, fake.stores, options.host));
     assert.equal(isStored(store, entry.key), false);
     assert.equal(
       readSetting(entry, fake.stores, options.host),
@@ -431,7 +442,7 @@ describe('settingsAccess', () => {
   it('routes extension writes to the canonical store', async () => {
     const { stores, config, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await writeSetting(entry, false, stores, 'vscode');
+    await Effect.runPromise(writeSetting(entry, false, stores, 'vscode'));
     assert.equal(isStored(workspaceState, entry.key), true);
     assert.equal(isStored(config, entry.key), false);
     assert.equal(readSetting(entry, stores, 'vscode'), false);
@@ -440,7 +451,7 @@ describe('settingsAccess', () => {
   it('routes CLI writes to the CLI slot (config)', async () => {
     const { stores, config, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await writeSetting(entry, false, stores, 'cli');
+    await Effect.runPromise(writeSetting(entry, false, stores, 'cli'));
     assert.equal(isStored(config, entry.key), true);
     assert.equal(isStored(workspaceState, entry.key), false);
     // The config write used the default 'workspace' target.
@@ -456,7 +467,7 @@ describe('settingsAccess', () => {
     const entry = settingsViewSettingByKey('texra.telemetry.enabled');
     assert.ok(entry);
 
-    await writeSetting(entry, false, stores, 'vscode');
+    await Effect.runPromise(writeSetting(entry, false, stores, 'vscode'));
 
     assert.deepEqual(config.inspect(entry.key), {
       globalValue: false,
@@ -467,7 +478,9 @@ describe('settingsAccess', () => {
   it('routes CLI endpoint writes to global state', async () => {
     const { stores, config, globalState } = makeFakeSettingsStores();
     const entry = entryByKey(GlobalStateKey.ENDPOINT_GOOGLE);
-    await writeSetting(entry, 'https://example.invalid/v1', stores, 'cli');
+    await Effect.runPromise(
+      writeSetting(entry, 'https://example.invalid/v1', stores, 'cli'),
+    );
     assert.equal(isStored(globalState, entry.key), true);
     assert.equal(isStored(config, entry.key), false);
     assert.equal(
@@ -480,7 +493,9 @@ describe('settingsAccess', () => {
     const { stores } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
     await assert.rejects(() =>
-      writeSetting(entry, 'not-a-formatter', stores, 'vscode'),
+      Effect.runPromise(
+        writeSetting(entry, 'not-a-formatter', stores, 'vscode'),
+      ),
     );
   });
 
@@ -552,11 +567,13 @@ describe('settingsAccess', () => {
     }
   });
 
-  it('falls back to the default for a stored value that no longer validates', () => {
+  it('falls back to the default for a stored value that no longer validates', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const { stores, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
-    void workspaceState.update(entry.key, 'stale-bogus-value');
+    await Effect.runPromise(
+      workspaceState.update(entry.key, 'stale-bogus-value'),
+    );
     try {
       assert.equal(
         readSetting(entry, stores, 'vscode'),

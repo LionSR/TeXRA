@@ -38,7 +38,7 @@ import { createFakeSetupPlatform } from './fixtures';
 const approvalSkippingConfig: ConfigProvider = {
   get: <T>(key: string, defaultValue?: T): T =>
     key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
-  update: async () => {},
+  update: () => Effect.void,
   inspect: () => undefined,
   isExplicitlySet: () => false,
 };

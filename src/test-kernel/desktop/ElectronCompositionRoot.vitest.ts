@@ -121,7 +121,6 @@ describe('desktop composition root and launch environment', () => {
             globalConfigStore: config,
             records,
             runtime: effectRuntime(),
-            runWrite: (write) => Effect.runPromise(write),
             stores: {
               secrets: host.secrets,
               globalState: host.roots.globalState,
@@ -197,7 +196,6 @@ describe('desktop composition root and launch environment', () => {
           globalConfigStore: config,
           records,
           runtime: effectRuntime(),
-          runWrite: (write) => Effect.runPromise(write),
           stores: {
             secrets: host.secrets,
             globalState: host.roots.globalState,

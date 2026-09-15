@@ -37,6 +37,7 @@ import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/g
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild } from '@housekeeping/clean';
+import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
   withSessionFs,
@@ -57,6 +58,7 @@ import type { Effect } from 'effect';
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
+  globalState: StateStore,
   settingsViewProvider: SettingsViewProvider,
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
@@ -103,7 +105,7 @@ export function createExtensionCommandActions(
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
     signOut: () => runtime.runPromise(authSignOut),
     runSetupAssistant: async () => {
-      await launchSetupAssistant(secrets, context.globalState, runtime);
+      await launchSetupAssistant(secrets, globalState, runtime);
     },
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () =>
@@ -134,7 +136,13 @@ export function createExtensionCommandActions(
     // from `activate`, settles it here at the command boundary.
     createAgentWithAI: (category) =>
       runtime.runPromise(
-        agentHandleCreateAgentWithAI(context, category, secrets, runtime),
+        agentHandleCreateAgentWithAI(
+          context,
+          globalState,
+          category,
+          secrets,
+          runtime,
+        ),
       ),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.

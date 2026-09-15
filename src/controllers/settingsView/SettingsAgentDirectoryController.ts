@@ -1,8 +1,14 @@
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+
+// Local imports - platform
+import type { StateWriteFailed } from '@platform/interfaces';
+
 // Local imports - shared
 import type { AgentCategory, AgentSource } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 import type { TemplateAgentFilePlan } from './backend/templateAgentCreation';
 
@@ -12,7 +18,7 @@ interface SettingsAgentDirectoryEntry {
 
 interface SettingsAgentDirectoryState {
   getConfiguredCustomDir(): string | undefined;
-  setConfiguredCustomDir(path: string): Promise<void>;
+  setConfiguredCustomDir(path: string): Effect.Effect<void, StateWriteFailed>;
   getCustomDir(): Promise<string>;
   getSourceDir(source: AgentSource): Promise<string | undefined>;
   getAgent(
@@ -52,12 +58,12 @@ export class SettingsAgentDirectoryController {
     };
   }
 
-  async resetCustomDir(): Promise<void> {
-    await this.deps.state.setConfiguredCustomDir('');
+  resetCustomDir(): Effect.Effect<void, StateWriteFailed> {
+    return this.deps.state.setConfiguredCustomDir('');
   }
 
-  async setCustomDir(path: string): Promise<void> {
-    await this.deps.state.setConfiguredCustomDir(path);
+  setCustomDir(path: string): Effect.Effect<void, StateWriteFailed> {
+    return this.deps.state.setConfiguredCustomDir(path);
   }
 
   planOpenAgentYaml(input: {
