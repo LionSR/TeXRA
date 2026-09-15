@@ -113,29 +113,6 @@ export abstract class BaseFS {
     );
   }
 
-  /**
-   * Publish a file that belongs to exactly one writer: staged, fsynced, then
-   * renamed into place, so it is either absent or complete and durable.
-   */
-  public static async publish(
-    this: typeof BaseFS,
-    target: string,
-    content: string | Uint8Array,
-  ): Promise<void> {
-    await platform().fs.publishFile(
-      this.preparePath(target),
-      toBuffer(content),
-    );
-  }
-
-  /** Remove `target` only if it is an empty directory (`ENOTEMPTY` otherwise). */
-  public static async removeEmptyDir(
-    this: typeof BaseFS,
-    target: string,
-  ): Promise<void> {
-    await platform().fs.removeEmptyDirectory(this.preparePath(target));
-  }
-
   public static async appendFile(
     this: typeof BaseFS,
     target: string,

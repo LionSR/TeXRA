@@ -10,7 +10,10 @@ import {
   registerRun,
 } from '@agent/storage/runLifecycle';
 import { aggregateId, type RunId } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace/root' });
@@ -60,6 +63,34 @@ describe('run registration and finalization', () => {
           identity: options.identity,
           followUpSupport: 'nativeInteractive',
         });
+      }),
+  );
+
+  it.effect(
+    'admits a child whose parent is still queued on the publisher',
+    () =>
+      Effect.gen(function* () {
+        // The parent's `run.start` is published and left uncommitted, which is
+        // what a record read sees: without the barrier ahead of it, this child is
+        // refused as if its parent did not exist.
+        const parentRunId = publishTestRunStart(session);
+        yield* registerRun(session, runId, baseConfig, 'chat', {
+          ...options,
+          parentRunId,
+        });
+        expect(yield* getRunRecords(session, runId).exists()).toBe(true);
+        // A parent nothing ever published must still refuse its child rather
+        // than wait on the barrier for a row that is not coming.
+        const absentParentId = 'def456' as RunId;
+        const refusal = yield* Effect.flip(
+          registerRun(session, 'fed789' as RunId, baseConfig, 'chat', {
+            ...options,
+            parentRunId: absentParentId,
+          }),
+        );
+        expect(refusal.message).toBe(
+          `Parent run ${absentParentId} is unavailable.`,
+        );
       }),
   );
 
