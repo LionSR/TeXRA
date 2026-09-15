@@ -240,6 +240,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
         const run = yield* executeCliToolUseConfig(config, runContext, {
           session: services.session,
           runtime: services.runtime,
+          lifecycle: services.lifecycle,
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
