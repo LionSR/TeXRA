@@ -121,11 +121,7 @@ export class CliSecrets implements PlatformSecrets {
     return withPerKeyLane(
       mutationLanes,
       this.filePath,
-    )(
-      Effect.flatMap(this.openStore(), (store) =>
-        Effect.provide(store.set(key, value), nodeFileServices),
-      ),
-    ).pipe(
+    )(Effect.flatMap(this.openStore(), (store) => store.set(key, value))).pipe(
       Effect.mapError(
         (cause) =>
           new SecretsFailed({

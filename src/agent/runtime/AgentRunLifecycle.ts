@@ -655,14 +655,13 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         baseAgentName(agentIdentifier) !== SETUP_AGENT_NAME
       ) {
         const globalState = yield* AppState;
-        yield* Effect.tryPromise({
-          try: async () => {
-            if (!getFirstRunDone(globalState)) {
-              await setFirstRunDone(globalState, true);
-            }
-          },
-          catch: ensureError,
-        }).pipe(
+        // Best-effort by contract: the flag is a funnel input, so a refused
+        // write is logged and the run still completes.
+        yield* (
+          getFirstRunDone(globalState)
+            ? Effect.void
+            : setFirstRunDone(globalState, true)
+        ).pipe(
           Effect.catch((error) =>
             Effect.sync(() =>
               logger.warn('Failed to record the first completed run', {

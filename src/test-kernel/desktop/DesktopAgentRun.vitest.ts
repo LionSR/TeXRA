@@ -68,9 +68,9 @@ describe('desktop agent run completion hook', () => {
       showAgentConfigBanner: () => undefined,
       onRunCompleted,
     });
-    onTestFinished(() => {
+    onTestFinished(async () => {
       run.dispose();
-      session.dispose();
+      await effectRuntime().runPromise(session.dispose());
     });
 
     const settled = run.runValidated({
@@ -82,7 +82,7 @@ describe('desktop agent run completion hook', () => {
     });
     const completedRun = publishTestRunStart(session, generateRunId());
     session.publish([completedRunEnd(completedRun)]);
-    await session.settlePublications();
+    await effectRuntime().runPromise(session.settlePublications());
     expect(onRunCompleted).not.toHaveBeenCalled();
 
     resolveLaunch();

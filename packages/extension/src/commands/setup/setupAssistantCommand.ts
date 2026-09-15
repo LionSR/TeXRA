@@ -85,18 +85,14 @@ function withOpenRouterFlagOn<A, E, R>(
   if (prior) return program;
 
   return Effect.acquireUseRelease(
-    Effect.promise(() =>
-      Promise.resolve(globalState.update(GlobalStateKey.USE_OPENROUTER, true)),
-    ),
+    // The acquisition's failure is the launch's own, and it is uninterruptible
+    // here — so it dies with the program that could not start rather than
+    // joining an error channel the caller does not carry.
+    globalState.update(GlobalStateKey.USE_OPENROUTER, true).pipe(Effect.orDie),
     () => program,
     () =>
-      Effect.tryPromise({
-        try: () =>
-          Promise.resolve(
-            globalState.update(GlobalStateKey.USE_OPENROUTER, false),
-          ),
-        catch: (cause) => new OpenRouterFlagRestoreFailed({ cause }),
-      }).pipe(
+      globalState.update(GlobalStateKey.USE_OPENROUTER, false).pipe(
+        Effect.mapError((cause) => new OpenRouterFlagRestoreFailed({ cause })),
         Effect.catchTag('OpenRouterFlagRestoreFailed', (failure) =>
           Effect.sync(() => {
             log.error('Failed to restore useOpenRouter flag.', {

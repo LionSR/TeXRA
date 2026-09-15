@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   openRouter: false,
   setCliSubscriptionPreference: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
-  setGLMCodingPlan: vi.fn(),
+  setGLMCodingPlan: vi.fn((_enabled: boolean) => Effect.void),
   updateGlobalState: vi.fn(),
 }));
 
@@ -387,14 +387,13 @@ beforeEach(() => {
       }
     },
   );
-  mocks.setCliSubscriptionPreference.mockImplementation(
-    async (_id, enabled) => {
-      mocks.preferSubscription = enabled;
-      return { effective: enabled, target: 'global' };
-    },
-  );
-  mocks.setGLMCodingPlan.mockImplementation(async (enabled) => {
+  mocks.setCliSubscriptionPreference.mockImplementation((_id, enabled) => {
+    mocks.preferSubscription = enabled;
+    return Effect.succeed({ effective: enabled, target: 'global' });
+  });
+  mocks.setGLMCodingPlan.mockImplementation((enabled) => {
     mocks.glmCodingPlan = enabled;
+    return Effect.void;
   });
 });
 

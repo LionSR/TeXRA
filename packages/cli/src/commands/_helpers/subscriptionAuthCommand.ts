@@ -68,7 +68,9 @@ export function defineSubscriptionAuthCommand(
     );
     if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
 
-    const update = await provider.setPreferSubscription(true);
+    const update = await runtime.runPromise(
+      provider.setPreferSubscription(true),
+    );
     const account = signInResult.value;
     const payload = {
       authenticated: true,

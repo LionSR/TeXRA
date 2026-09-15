@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
+import { tryProcessRuntime } from '@platform/processRuntime';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 
 const NEVER_REMIND = 'Never remind again';
@@ -21,7 +22,18 @@ async function handleInstructionChoice(
   if (!choice) return;
 
   if (showSuppress && choice === NEVER_REMIND) {
-    await store.update(stateKey, true);
+    // These prompts are async host UX rather than a run program, so there is
+    // no caller-supplied runtime to settle the dismissal on: it is the one
+    // `installProcessRuntime` installed. Without it the choice cannot be
+    // persisted, and a prompt that will fire again has to say so rather than
+    // look settled.
+    const runtime = tryProcessRuntime();
+    if (!runtime) {
+      throw new Error(
+        `Cannot persist the "${stateKey}" dismissal: no process runtime is installed`,
+      );
+    }
+    await runtime.runPromise(store.update(stateKey, true));
     return;
   }
 

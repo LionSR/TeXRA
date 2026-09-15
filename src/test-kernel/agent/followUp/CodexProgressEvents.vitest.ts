@@ -2,14 +2,13 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { emitRunFact } from '@agent/runtime/runFactEvents';
-import { type AgentTrace, TraceEmitter } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import {
   MESSAGE_TYPES,
   CODEX_THREAD_TOOL,
   CODEX_TURN_TOOL,
 } from '@shared/schemas';
-import type { RunId, TodoItem } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@tools/codex';
@@ -23,14 +22,6 @@ import type {
 } from '@openai/codex-sdk';
 
 const runId = 'run:codex-child' as RunId;
-
-const todos: TodoItem[] = [
-  {
-    content: 'Route Codex progress through the runtime host',
-    status: 'pending',
-    activeForm: 'Routing Codex progress through the runtime host',
-  },
-];
 
 async function* streamEvents(
   events: ThreadEvent[],
@@ -74,14 +65,38 @@ function toolLogs(store: StreamLog): Record<string, unknown>[] {
 }
 
 describe('codex progress events', () => {
-  it('publishes todos as run facts', () => {
-    const trace = new TraceEmitter();
-    const recorded = recordTraceEvents(trace);
+  it('publishes a todo_list item as run facts', async () => {
+    const { logger } = await createLogger();
+    const recorded = recordTraceEvents(logger);
+    const thread = threadOf([
+      {
+        type: 'item.completed',
+        item: {
+          id: 'todo-1',
+          type: 'todo_list',
+          items: [
+            {
+              text: 'Route Codex progress through the runtime host',
+              completed: false,
+            },
+          ],
+        },
+      },
+      turnCompleted(1, 1),
+    ]);
 
-    emitRunFact(trace, 'updateTodos', { todos });
+    await runStreamedTurn(thread, 'Do the thing', runId, logger);
 
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
-      { todos },
+      {
+        todos: [
+          {
+            content: 'Route Codex progress through the runtime host',
+            status: 'pending',
+            activeForm: 'Route Codex progress through the runtime host',
+          },
+        ],
+      },
     ]);
   });
 

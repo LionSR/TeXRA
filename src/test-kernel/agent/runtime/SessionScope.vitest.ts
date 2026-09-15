@@ -115,7 +115,7 @@ describe('sendFollowUp host-path session routing', () => {
   it('resolves the follow-up target against the passed session, not the process default', async () => {
     const processSession = createTestSession();
     const parentRun = publishTestRunStart(processSession);
-    await processSession.settlePublications();
+    await Effect.runPromise(processSession.settlePublications());
 
     try {
       // A child run is tracked in the explicit process session, as desktop

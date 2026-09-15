@@ -567,6 +567,7 @@ export function registerBuiltinSlashCommands(options: {
   ): React.JSX.Element => (
     <EnabledModelsForm
       state={state}
+      runtime={runtime}
       availableRows={props.availableRows}
       onClose={() => props.onDone(undefined)}
     />

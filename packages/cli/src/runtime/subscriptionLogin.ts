@@ -143,10 +143,8 @@ export const signOutCliSubscription = Effect.fn(
     try: () => provider.signOut(secrets),
     catch: (cause) => ensureError(cause),
   });
-  return yield* Effect.tryPromise({
-    try: () => provider.setPreferSubscription(false),
-    catch: (cause) => ensureError(cause),
-  }).pipe(
+  return yield* provider.setPreferSubscription(false).pipe(
+    Effect.mapError(ensureError),
     Effect.match({
       onFailure: (error): CliSubscriptionSignOutResult => ({
         preferenceError: toErrorMessage(error),

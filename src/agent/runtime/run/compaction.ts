@@ -145,7 +145,7 @@ function historyText(messages: readonly Message[]): string {
   return pieces.join('\n');
 }
 
-export interface CompactionInput {
+interface CompactionInput {
   readonly runId: RunId;
   readonly ledger: RunLedger['Service'];
   readonly logger: AgentTrace;

@@ -731,8 +731,8 @@ describe('Sessions owner', () => {
     Effect.gen(function* () {
       // Each root's entry is built fresh over the process services; the Lean
       // pool must stay outside that identity so its servers stay shared.
-      open('/workspace/owner/lean-once-a');
-      open('/workspace/owner/lean-once-b');
+      yield* open('/workspace/owner/lean-once-a');
+      yield* open('/workspace/owner/lean-once-b');
       yield* closeSession('/workspace/owner/lean-once-a');
       yield* closeSession('/workspace/owner/lean-once-b');
       expect(leanBuilds.count).toBe(1);

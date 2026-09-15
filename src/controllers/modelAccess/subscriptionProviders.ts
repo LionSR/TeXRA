@@ -42,6 +42,7 @@ import {
   isPreferXaiSubscription,
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
+import type { ConfigWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/unstable/http';
@@ -125,9 +126,14 @@ export interface SubscriptionProvider {
   signOut(secrets: PlatformSecrets): Promise<void>;
   getStatus(secrets: PlatformSecrets): Promise<SubscriptionAccount>;
   isPreferSubscription(): boolean;
+  /**
+   * Persist the preference and report the scope it landed in. An `Effect`, like
+   * every other write of a catalog-backed setting, so a host runs it at its own
+   * edge and owns the failure.
+   */
   setPreferSubscription(
     enabled: boolean,
-  ): Promise<SubscriptionPreferenceUpdate>;
+  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed>;
 }
 
 /** Fields the flow reads off a provider session; providers carry more. */
@@ -165,7 +171,7 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   readonly isPrefer: () => boolean;
   readonly setPrefer: (
     enabled: boolean,
-  ) => Promise<SubscriptionPreferenceUpdate>;
+  ) => Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed>;
 }
 
 /**

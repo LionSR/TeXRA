@@ -14,7 +14,7 @@ import {
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
-import { AppState } from '@platform/interfaces';
+import { AppState, type StateWriteFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -44,9 +44,12 @@ const updateGlobalState = vi.fn();
 
 /** A global state store whose writes the suite observes. */
 class ObservedStateStore extends FakeStateStore {
-  override async update(key: string, value: unknown): Promise<void> {
+  override update(
+    key: string,
+    value: unknown,
+  ): Effect.Effect<void, StateWriteFailed> {
     mocks.updateGlobalState(key, value);
-    await super.update(key, value);
+    return super.update(key, value);
   }
 }
 
@@ -187,21 +190,19 @@ beforeEach(() => {
   mocks.getXaiStatus.mockResolvedValue({ signedIn: false });
   mocks.isPreferCodexSubscription.mockReturnValue(false);
   mocks.isPreferXaiSubscription.mockReturnValue(false);
-  mocks.setPreferCodexSubscription.mockResolvedValue({
-    effective: false,
-    target: 'global',
-  });
-  mocks.setPreferXaiSubscription.mockResolvedValue({
-    effective: false,
-    target: 'global',
-  });
+  mocks.setPreferCodexSubscription.mockReturnValue(
+    Effect.succeed({ effective: false, target: 'global' }),
+  );
+  mocks.setPreferXaiSubscription.mockReturnValue(
+    Effect.succeed({ effective: false, target: 'global' }),
+  );
   mocks.shouldUseSubscriptionDeviceCode.mockReturnValue(false);
   mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
   mocks.lookupApiKeyOrigin.mockReturnValue(Effect.succeed('none'));
   mocks.getPreferKimiCode.mockReturnValue(false);
-  mocks.writePlatformSetting.mockResolvedValue(undefined);
+  mocks.writePlatformSetting.mockReturnValue(Effect.void);
   mocks.getGLMCodingPlan.mockReturnValue(false);
-  mocks.setGLMCodingPlan.mockResolvedValue(undefined);
+  mocks.setGLMCodingPlan.mockReturnValue(Effect.void);
 });
 
 describe('CLI model access routes', () => {
@@ -408,10 +409,9 @@ describe('CLI model access routes', () => {
           label: 'user@example.com',
         }),
       );
-      mocks.setPreferCodexSubscription.mockResolvedValue({
-        effective: true,
-        target: 'global',
-      });
+      mocks.setPreferCodexSubscription.mockReturnValue(
+        Effect.succeed({ effective: true, target: 'global' }),
+      );
       const writeProgress = vi.fn();
 
       const result = yield* updateCliModelAccess(
@@ -443,10 +443,9 @@ describe('CLI model access routes', () => {
         email: 'user@example.com',
       });
       mocks.isPreferCodexSubscription.mockReturnValue(true);
-      mocks.setPreferCodexSubscription.mockResolvedValue({
-        effective: false,
-        target: 'global',
-      });
+      mocks.setPreferCodexSubscription.mockReturnValue(
+        Effect.succeed({ effective: false, target: 'global' }),
+      );
 
       const result = yield* updateCliModelAccess(
         context,
@@ -515,10 +514,9 @@ describe('CLI model access routes', () => {
           email: 'user@example.com',
         });
         mocks.isPreferCodexSubscription.mockReturnValue(true);
-        mocks.setPreferCodexSubscription.mockResolvedValue({
-          effective: false,
-          target: 'global',
-        });
+        mocks.setPreferCodexSubscription.mockReturnValue(
+          Effect.succeed({ effective: false, target: 'global' }),
+        );
         yield* updateCliModelAccess(
           context,
           subscriptionPreference('chatgpt', 'off'),
@@ -533,10 +531,9 @@ describe('CLI model access routes', () => {
   it.effect('turns off a stale signed-out preference without signing in', () =>
     Effect.gen(function* () {
       mocks.isPreferCodexSubscription.mockReturnValue(true);
-      mocks.setPreferCodexSubscription.mockResolvedValue({
-        effective: false,
-        target: 'global',
-      });
+      mocks.setPreferCodexSubscription.mockReturnValue(
+        Effect.succeed({ effective: false, target: 'global' }),
+      );
 
       const status = yield* readCliModelAccessStatus(secrets);
       const selection = buildCliModelAccessItems({

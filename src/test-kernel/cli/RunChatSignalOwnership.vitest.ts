@@ -288,7 +288,7 @@ describe('runChat signal ownership wiring', () => {
       mocks.callOrder.push('handOffCliShutdownSignalHandlers');
     });
     mocks.runCliPlatformShutdownSequence.mockResolvedValue(undefined);
-    mocks.setCliHelperModel.mockResolvedValue(undefined);
+    mocks.setCliHelperModel.mockReturnValue(Effect.void);
     mocks.maybeRunCliOnboarding.mockReturnValue(
       Effect.succeed({
         configured: false,

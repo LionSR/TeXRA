@@ -85,8 +85,9 @@ describe('maybeRunCliOnboarding gate', () => {
 
   effectIt.effect('skips when onboarding was previously declined', () =>
     Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        services.globalState.update(GlobalStateKey.ONBOARDING_DECLINED, true),
+      yield* services.globalState.update(
+        GlobalStateKey.ONBOARDING_DECLINED,
+        true,
       );
       expect(yield* maybeRunCliOnboarding(services, INTERACTIVE)).toEqual(
         SKIPPED,
@@ -99,8 +100,9 @@ describe('maybeRunCliOnboarding gate', () => {
     'clears a stale declined flag when credentials now exist',
     () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          services.globalState.update(GlobalStateKey.ONBOARDING_DECLINED, true),
+        yield* services.globalState.update(
+          GlobalStateKey.ONBOARDING_DECLINED,
+          true,
         );
         mocks.hasUsableSetupCredential.mockReturnValue(Effect.succeed(true));
 

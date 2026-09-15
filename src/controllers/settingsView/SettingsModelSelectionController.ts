@@ -1,3 +1,5 @@
+// Third-party imports
+import { Effect } from 'effect';
 import {
   MODEL_CONFIGS,
   ModelProvider,
@@ -5,6 +7,7 @@ import {
   type ReasoningEffort,
 } from 'llm-zoo';
 
+// Local imports
 import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
@@ -21,7 +24,7 @@ import {
   setModelEnabled,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import type { StateStore } from '@platform/interfaces';
+import { StateWriteFailed, type StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -37,7 +40,7 @@ import {
 } from '@shared/constants/providers';
 import { byName } from '@utils/core';
 
-export interface SettingsModelSelectionControllerDeps {
+interface SettingsModelSelectionControllerDeps {
   /** Persisted picker state: enabled models, helper model, reasoning levels. */
   globalState: StateStore;
   /** Provider credentials behind the availability decoration on each option. */
@@ -123,21 +126,21 @@ export class SettingsModelSelectionController {
     }));
   }
 
-  async setModelEnabled(input: {
+  setModelEnabled(input: {
     modelName: string;
     enabled: boolean;
-  }): Promise<void> {
-    await setModelEnabled({
+  }): Effect.Effect<void, StateWriteFailed> {
+    return setModelEnabled({
       model: input.modelName,
       enabled: input.enabled,
       state: this.deps.globalState,
-    });
+    }).pipe(Effect.asVoid);
   }
 
-  async setReasoningLevel(input: {
+  setReasoningLevel(input: {
     modelName: string;
     level: ReasoningEffort | null;
-  }): Promise<void> {
+  }): Effect.Effect<void, StateWriteFailed> {
     // The stored override record as written, so a rewrite carries every entry
     // back to storage. Reads that need the effort go through
     // `reasoningEffortOverrides`.
@@ -152,7 +155,7 @@ export class SettingsModelSelectionController {
     } else {
       overrides[input.modelName] = input.level;
     }
-    await this.deps.globalState.update(
+    return this.deps.globalState.update(
       GlobalStateKey.REASONING_LEVELS,
       overrides,
     );

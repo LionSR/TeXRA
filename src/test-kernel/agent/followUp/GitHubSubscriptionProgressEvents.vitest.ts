@@ -16,7 +16,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { appSignals, type AppSignalPayloads } from '@eventBus/AppSignals';
+import { appSignals } from '@eventBus/AppSignals';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 
@@ -48,6 +48,16 @@ function createTestRegistry(
     ...overrides,
   });
 }
+
+/**
+ * The payload each signal carries, derived from the emitter's own `on`
+ * signature so the suite needs no private payload map from the bus module.
+ */
+type AppSignalPayloads = {
+  [K in Parameters<typeof appSignals.on>[0]]: Parameters<
+    Parameters<typeof appSignals.on<K>>[1]
+  >[0];
+};
 
 function recordAppSignal<K extends keyof AppSignalPayloads>(
   event: K,

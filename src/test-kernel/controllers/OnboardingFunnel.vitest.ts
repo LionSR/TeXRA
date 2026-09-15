@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  deriveOnboardingFunnelState,
-  planOnboardingFunnelTransition,
-  type OnboardingFunnelInputs,
-  type OnboardingFunnelTransition,
-} from '@controllers/onboarding/onboardingFunnel';
+import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
-describe('deriveOnboardingFunnelState', () => {
+type OnboardingFunnelInputs = Parameters<
+  typeof planOnboardingFunnelTransition
+>[1];
+type OnboardingFunnelTransition = ReturnType<
+  typeof planOnboardingFunnelTransition
+>;
+
+describe('derived funnel state', () => {
   it.each<[string, OnboardingFunnelInputs, OnboardingFunnelState]>([
     [
       'is needs-credential only without a credential and without a decline',
@@ -44,7 +46,11 @@ describe('deriveOnboardingFunnelState', () => {
       'done',
     ],
   ])('%s', (_name, inputs, expected) => {
-    expect(deriveOnboardingFunnelState(inputs)).toBe(expected);
+    // The state arm of the planner is the derived funnel state, for any
+    // previous state.
+    expect(planOnboardingFunnelTransition(undefined, inputs).state).toBe(
+      expected,
+    );
   });
 });
 

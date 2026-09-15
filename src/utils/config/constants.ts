@@ -1,6 +1,8 @@
 // Local imports
-import type { StateStore } from '@platform/interfaces';
+
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { Effect } from 'effect';
 
 // Time constants
 export const REFRESH_THRESHOLD_MS = 200;
@@ -31,16 +33,16 @@ export function getDisabledToolIds(store: StateStore): ReadonlySet<string> {
 }
 
 /** Toggle a tool group's enabled/disabled state. */
-export async function setToolEnabled(
+export function setToolEnabled(
   toolId: string,
   enabled: boolean,
   store: StateStore,
-): Promise<void> {
+): Effect.Effect<void, StateWriteFailed> {
   const set = new Set(getDisabledToolIds(store));
   if (enabled) {
     set.delete(toolId);
   } else {
     set.add(toolId);
   }
-  await store.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
+  return store.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
 }

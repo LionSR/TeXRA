@@ -11,6 +11,7 @@
  * has no catalog entry should be catalogued, not given another read path.
  */
 
+import type { ConfigWriteFailed } from '@platform/interfaces';
 import {
   PROVIDER_STATE_ENTRIES,
   PROVIDER_URLS,
@@ -18,6 +19,7 @@ import {
 } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting, writePlatformSetting } from './platformSettings';
+import type { Effect } from 'effect';
 
 const PROVIDERS: ReadonlyMap<string, ProviderStateEntry> = new Map(
   PROVIDER_STATE_ENTRIES.map((provider) => [provider.id, provider]),
@@ -84,7 +86,9 @@ export function getGLMCodingPlan(): boolean {
   return readPlatformSetting<boolean>(GlobalStateKey.GLM_CODING_PLAN);
 }
 
-export function setGLMCodingPlan(enabled: boolean): Promise<void> {
+export function setGLMCodingPlan(
+  enabled: boolean,
+): Effect.Effect<void, ConfigWriteFailed | Error> {
   return writePlatformSetting(GlobalStateKey.GLM_CODING_PLAN, enabled);
 }
 

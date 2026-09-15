@@ -28,7 +28,7 @@ interface EdgeBaseline {
 
 interface EdgeViolation {
   edge: string;
-  reason: 'new-edge' | 'value-escalation';
+  reason: 'new-edge' | 'value-escalation' | 'value-overstated';
   baselineKind?: EdgeKind;
   currentKind: EdgeKind;
 }
@@ -322,10 +322,17 @@ function findRatchetViolations(
       });
       continue;
     }
-    if (baselineEdge.kind === 'type-only' && edge.kind === 'value') {
+    // A kind mismatch is a violation in BOTH directions, not just the widening
+    // one. A row that over-states itself as `value` while every live import is
+    // `type-only` is not itself a widening, but it is permanent headroom in the
+    // one direction this ratchet does police: the baseline already claims
+    // `value`, so a later type-only -> value escalation compares equal to it
+    // and is silently allowed. Recording the live kind shrinks the baseline,
+    // which is the direction it is allowed to move.
+    if (baselineEdge.kind !== edge.kind) {
       violations.push({
         edge: edgeKey(edge),
-        reason: 'value-escalation',
+        reason: edge.kind === 'value' ? 'value-escalation' : 'value-overstated',
         baselineKind: baselineEdge.kind,
         currentKind: edge.kind,
       });
@@ -340,6 +347,13 @@ function formatViolations(violations: EdgeViolation[]): string {
     .map((violation) => {
       if (violation.reason === 'new-edge') {
         return `${violation.edge}: new ${violation.currentKind} edge`;
+      }
+      if (violation.reason === 'value-overstated') {
+        return (
+          `${violation.edge}: baseline records ${violation.baselineKind} but ` +
+          `every live import is ${violation.currentKind}; record it as ` +
+          `${violation.currentKind} so the row cannot absorb a later escalation`
+        );
       }
       return `${violation.edge}: ${violation.baselineKind} baseline gained a ${violation.currentKind} import`;
     })
@@ -370,6 +384,36 @@ describe('LAY-1 subsystem edge ratchet', () => {
         stale.map((edge) => `  - ${edgeKey(edge)} (${edge.kind})`).join('\n') +
         '\n\nRemove them from the baseline so they cannot absorb a future new edge.',
     ).toEqual([]);
+  });
+
+  it('rejects a baseline value row whose live import is type-only (value-overstated)', () => {
+    const baseline = readBaseline();
+    const valueRow = baseline.edges.find((edge) => edge.kind === 'value');
+    if (valueRow == null) {
+      throw new Error(
+        `${BASELINE_PATH} has no value row to exercise the mirror arm against.`,
+      );
+    }
+
+    // Deriving the row from the baseline keeps this assertion honest as the
+    // baseline shrinks: it exercises the mirror arm on whatever value row the
+    // ratchet currently claims, rather than on a hardcoded pair.
+    const violations = findRatchetViolations(
+      [{ ...valueRow, kind: 'type-only' }],
+      baseline.edges,
+    );
+
+    expect(violations).toEqual([
+      {
+        edge: edgeKey(valueRow),
+        reason: 'value-overstated',
+        baselineKind: 'value',
+        currentKind: 'type-only',
+      },
+    ]);
+    expect(formatViolations(violations)).toContain(
+      'every live import is type-only',
+    );
   });
 
   it('keeps the baseline non-empty and ordered', () => {
