@@ -131,7 +131,7 @@ type CliOnboardingServices = ModelOptionStores & {
 };
 
 /**
- * Gate for the two interactive entry points (orchestrate, chat). Renders the
+ * Gate for the interactive chat entry point. Renders the
  * first-run picker only when interactive, with no usable credentials, and not
  * previously declined. Otherwise returns immediately without rendering or
  * emitting anything.
@@ -289,7 +289,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
   }
   if (resolution.summary) writeTextStdout(resolution.summary);
   // No "what next" hint after configuring: every caller continues in the same
-  // process — orchestrate/chat into their session, `texra setup` into the
+  // process — chat into its session, `texra setup` into the
   // setup-agent chat.
   return { configured: resolution.configured, declined: resolution.declined };
 });

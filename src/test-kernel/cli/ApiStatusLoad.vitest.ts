@@ -53,11 +53,8 @@ vi.mock('@model/apiProviders', () => ({
     ),
 }));
 
-const {
-  loadCliApiStatus,
-  loadCliDetailedAccountStatusLines,
-  loadCliModelAccessOverview,
-} = await import('@cli/runtime/apiStatus');
+const { loadCliDetailedAccountStatusLines, loadCliModelAccessOverview } =
+  await import('@cli/runtime/apiStatus');
 
 const secrets = new FakeSecrets();
 
@@ -90,16 +87,6 @@ function accountStatusLines(): Promise<string[]> {
   return Effect.runPromise(loadCliDetailedAccountStatusLines(secrets));
 }
 
-function launcherStatus(
-  profile: {
-    authenticated: boolean;
-    accountLabel?: string;
-    note?: string;
-  } = { authenticated: false },
-): Promise<readonly string[]> {
-  return Effect.runPromise(loadCliApiStatus(secrets, profile));
-}
-
 function renderPreferenceRoute(
   route: 'chatGpt' | 'kimiCode' | 'glmCode',
   preference: 'on' | 'off',
@@ -126,7 +113,7 @@ function renderPreferenceRoute(
   return accountStatusLines();
 }
 
-describe('loadCliApiStatus', () => {
+describe('CLI model-access status lines', () => {
   beforeEach(() => {
     mocks.getCliAuthProfile.mockReset().mockResolvedValue({
       authenticated: false,
@@ -156,36 +143,6 @@ describe('loadCliApiStatus', () => {
         windows: [],
         reason: 'missing_credentials',
       }));
-  });
-
-  it('groups personal keys with their route', async () => {
-    const profile = {
-      authenticated: true,
-      accountLabel: 'researcher@example.com',
-      note: 'Account metadata may be stale.',
-    };
-    setPersonalKeys('deepseek');
-
-    await expect(launcherStatus(profile)).resolves.toEqual([
-      'api: your own API keys',
-      'your own API keys: DeepSeek',
-      'auth: signed in as researcher@example.com',
-      'Account metadata may be stale.',
-    ]);
-  });
-
-  it('does not couple compact launcher status to model-access reads', async () => {
-    mocks.readCliModelAccessStatus.mockReturnValue(
-      Effect.fail(new Error('preference store offline')),
-    );
-
-    await expect(launcherStatus()).resolves.toEqual([
-      'api: your own API keys',
-      'auth: signed out',
-    ]);
-    expect(mocks.readCliModelAccessStatus).not.toHaveBeenCalled();
-    expect(mocks.getCliAuthProfile).not.toHaveBeenCalled();
-    expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(3);
   });
 
   it('renders preferred Kimi and ChatGPT routes with their owned credentials', async () => {

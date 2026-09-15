@@ -111,7 +111,7 @@ export interface CliNoAvailableModelsRecoveryOptions {
   readonly configureKeyAction?: string;
 }
 
-export const NO_RUNNABLE_MODEL_ACCESS_COPY = 'No models are available';
+const NO_RUNNABLE_MODEL_ACCESS_COPY = 'No models are available';
 
 // Point shell users at the guided setup picker rather than leaving them to
 // figure out key storage on their own; TUI contexts override this with

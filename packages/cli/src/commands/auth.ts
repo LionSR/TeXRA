@@ -46,7 +46,7 @@ type LoginCommandArgs = {
   readonly 'login-hint'?: string;
 };
 
-export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
+function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
   const provider = optString(args.providerArg)?.trim();
   const providerExplicit = isNonEmptyString(provider);
   return {
@@ -210,7 +210,7 @@ export const loginCommand = withUsageSections(
   ],
 );
 
-export async function runLoginCommand(
+async function runLoginCommand(
   context: CliContext,
   init: CliLoginInit,
 ): Promise<number> {

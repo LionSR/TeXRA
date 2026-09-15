@@ -133,8 +133,8 @@ type HeadlessOnlyGlobalArgName =
 
 /**
  * Flags that are meaningful for commands which necessarily own the terminal.
- * In particular, `chat` and `orchestrate` cannot honor the headless-only
- * globals above; scripts should use a concrete headless command instead.
+ * In particular, `chat` cannot honor the headless-only globals above;
+ * scripts should use a concrete headless command instead.
  * `--no-color` still applies — a terminal session may legitimately want plain
  * output.
  */
@@ -159,11 +159,7 @@ export const INTERACTIVE_AGENT_GLOBAL_ARGS = {
  * (see {@link rejectHeadlessOnlyFlags} and dispatch's flag-spec handling)
  * instead of reporting them as unknown flags.
  */
-export const INTERACTIVE_COMMAND_NAMES: readonly string[] = [
-  'chat',
-  'orchestrate',
-  'setup',
-];
+export const INTERACTIVE_COMMAND_NAMES: readonly string[] = ['chat', 'setup'];
 
 // The long flag plus any single-character alias for a routable global flag.
 function flagSpellings(

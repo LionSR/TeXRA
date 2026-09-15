@@ -457,11 +457,6 @@ describe('CLI root argument routing', () => {
         'texra chat is interactive and does not support --print.',
       ],
       [
-        ['--output-format=json'],
-        'orchestrate',
-        'texra orchestrate is interactive and does not support --output-format.',
-      ],
-      [
         ['--no-input'],
         'chat',
         'texra chat is interactive and does not support --no-input.',

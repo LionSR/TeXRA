@@ -82,7 +82,7 @@ function currentModulePath(): string {
   // A bundled or otherwise non-file module has no `file:` URL to convert.
   // `fileURLToPath` can still fail on a `file:` URL with a non-local host
   // or a malformed path; fold that into the entrypoint fallback so this
-  // check stays best-effort and never blocks `chat`/`orchestrate` startup.
+  // check stays best-effort and never blocks `chat` startup.
   if (!import.meta.url.startsWith('file:')) return readCliEntrypointPath();
   return Result.getOrElse(
     Result.try(() => fileURLToPath(import.meta.url)),
@@ -144,7 +144,7 @@ async function readCommandStdout(
   timeoutMs: number,
   cwd?: string,
 ): Promise<string | undefined> {
-  // Runs before platform init (chat/orchestrate startup), so pass an
+  // Runs before platform init (chat startup), so pass an
   // explicit cwd — the wrapper's WorkspaceFS default would throw — and
   // quiet: true so wrapper debug lines can't leak to the console sink.
   const result = await executeCommand([command, ...args], {
@@ -284,8 +284,8 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   let confirmed = false;
   // `installCliProcessRuntime` is the pre-runtime edge: until it resolves
   // there is no process runtime to run the check program on. Its failure is
-  // NOT absorbed here. Both callers reach `initCliPlatform` moments later
-  // (`orchestrate` directly, `chat` through `runChat`), and that awaits the
+  // NOT absorbed here. Every caller reaches `initCliPlatform` moments later
+  // (`chat` through `runChat`), and that awaits the
   // same install with no handler at all, so swallowing the rejection here
   // would only move the identical crash a few statements down while hiding
   // why. The check's own best-effort silence is the `Effect.ignoreCause`

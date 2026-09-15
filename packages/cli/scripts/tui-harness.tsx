@@ -20,14 +20,9 @@ import { Effect, Fiber, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
-import {
-  getAgentsByCategory,
-  getVisibleAgents,
-  loadAgents,
-} from '@agent/index';
+import { loadAgents } from '@agent/index';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
-import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
@@ -61,7 +56,6 @@ import {
   type RunPhase,
   type RunId,
   type UserQuestionPermission,
-  HISTORY_RUN_STATUS,
 } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import type { SessionEventDraft } from '@shared/schemas/sessionEvent';
@@ -138,20 +132,8 @@ import {
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
-import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
-import {
-  formatCliModelAccessRouteInline,
-  resolveCliModelAccessRoute,
-} from '../src/runtime/modelAccessRoute';
+import { resolveCliModelAccessRoute } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
-import { formatCliAuthStatusLine } from '../src/runtime/apiStatus';
-import {
-  buildCliAccountAccessItems,
-  buildCliAgentItems,
-  buildCliOrchestrationItems,
-  buildCliResumeItems,
-  buildCliTeamItems,
-} from '../src/runtime/orchestration';
 import { initLocalCliPlatform } from '../src/runtime/initPlatform';
 import { saveProviderApiKey } from '../src/runtime/providerApiKey';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
@@ -160,7 +142,6 @@ import {
   type CliRuntimeHost,
 } from '../src/runtime/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
-import type { CliHistoryEntry } from '../src/runtime/history';
 import type { CliContext } from '../src/runtime/cliContext';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
@@ -215,17 +196,6 @@ const WIDE_TRANSCRIPT_SUFFIX =
   ' hidden-middle wide-column-A wide-column-B wide-column-C wide-column-D wide-column-E wide-column-F';
 const SHOW_REJECTED_BASH_TOOL = process.env.HARNESS_REJECTED_BASH_TOOL === '1';
 const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
-const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
-const SHOW_ORCHESTRATION_STATUS_LINES =
-  process.env.HARNESS_ORCHESTRATION_STATUS_LINES !== '0';
-const SHOW_BOTH_SUBSCRIPTION_PREFERENCES =
-  process.env.HARNESS_BOTH_SUBSCRIPTION_PREFERENCES === '1';
-const SHOW_KIMI_CODE_SUBSCRIPTION =
-  process.env.HARNESS_KIMI_CODE_SUBSCRIPTION === '1';
-const SHOW_ORCHESTRATION_HISTORY =
-  process.env.HARNESS_ORCHESTRATION_HISTORY === '1';
-const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
-  process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
@@ -412,167 +382,6 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
   });
 }
 await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
-
-// Models the production boundary: `listCliHistoryEntries` already applies
-// `isUserVisibleRun`, so menu builders only ever see user-started rows.
-const HARNESS_ORCHESTRATION_HISTORY: readonly CliHistoryEntry[] =
-  SHOW_ORCHESTRATION_HISTORY
-    ? [
-        {
-          id: RunIdSchema.parse('cccccccccccc'),
-          timestamp: '2026-06-06T00:02:00Z',
-          agent: 'orchestrator',
-          model: HARNESS_MODEL,
-          status: HISTORY_RUN_STATUS.RESUMABLE,
-          resumable: true,
-          inputBasename: '-',
-          category: AgentCategory.ToolUse,
-        },
-      ]
-    : [];
-const HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES = getVisibleAgents(
-  AgentCategory.ToolUse,
-);
-const HARNESS_ALL_TOOL_USE_AGENTS = getAgentsByCategory(AgentCategory.ToolUse);
-const HARNESS_PRESET_PLANS = planTeamRuns(teamPresets(undefined), {
-  agents: {
-    workflow: getAgentsByCategory(AgentCategory.Workflow),
-    toolUse: HARNESS_ALL_TOOL_USE_AGENTS,
-  },
-});
-const HARNESS_MODEL_ACCESS =
-  SHOW_BOTH_SUBSCRIPTION_PREFERENCES || SHOW_KIMI_CODE_SUBSCRIPTION
-    ? {
-        preferences: {
-          chatGpt: SHOW_BOTH_SUBSCRIPTION_PREFERENCES
-            ? ('on' as const)
-            : ('off' as const),
-          // Grok stays off in the dual-subscription harness so ChatGPT + Kimi
-          // remain the visible "on" pair (Grok still appears as a row).
-          grok: 'off' as const,
-        },
-        codingPlans: {
-          kimiCode: { preferred: true, keySet: true },
-          glmCodingPlan: { preferred: false, keySet: true },
-        },
-        chatGptSignedIn: SHOW_BOTH_SUBSCRIPTION_PREFERENCES,
-        ...(SHOW_BOTH_SUBSCRIPTION_PREFERENCES
-          ? { chatGptAccountLabel: 'harness@example.edu' }
-          : {}),
-        grokSignedIn: false,
-        texraSignedIn: false,
-      }
-    : undefined;
-const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
-  presetPlans: HARNESS_PRESET_PLANS,
-  history: HARNESS_ORCHESTRATION_HISTORY,
-  toolUseAgents: HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
-  accountAccess: HARNESS_MODEL_ACCESS,
-});
-const HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS = HARNESS_MODEL_ACCESS
-  ? buildCliAccountAccessItems(HARNESS_MODEL_ACCESS)
-  : undefined;
-const HARNESS_ORCHESTRATION_RESUME_ITEMS = buildCliResumeItems(
-  HARNESS_ORCHESTRATION_HISTORY,
-);
-const HARNESS_ORCHESTRATION_AGENT_ITEMS = buildCliAgentItems(
-  HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
-);
-const HARNESS_ORCHESTRATION_TEAM_ITEMS = buildCliTeamItems(
-  HARNESS_PRESET_PLANS,
-  {
-    includeLoginHint: true,
-    remoteAgentCatalogAvailable: false,
-  },
-);
-
-type HarnessModelFixture = Readonly<{
-  value: string;
-  label: string;
-  availability: NonNullable<CliModelAccess['model']['availability']>;
-  provider?: string;
-}>;
-
-const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
-  {
-    value: 'sonnet46T',
-    label: 'Sonnet 4.6 (Thinking)',
-    availability: 'provider-key',
-  },
-  { value: 'gpt54', label: 'GPT-5.4', availability: 'provider-key' },
-  {
-    value: 'deepseekT',
-    label: 'DeepSeek V4 Flash',
-    availability: 'provider-key',
-  },
-  ...(SHOW_KIMI_CODE_SUBSCRIPTION
-    ? [
-        {
-          value: 'kimi3',
-          label: 'Kimi K3',
-          availability: 'provider-key' as const,
-          provider: 'kimiCode',
-        },
-      ]
-    : []),
-];
-
-function harnessModelStatus(
-  availability: HarnessModelFixture['availability'],
-): string {
-  switch (availability) {
-    case 'provider-key':
-      return 'api key set';
-    case 'openrouter-key':
-      return 'openrouter key set';
-    default:
-      return availability.replaceAll('-', ' ');
-  }
-}
-
-function harnessOrchestrationModels(): readonly CliModelAccess[] {
-  return HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) => ({
-    model: fixture,
-    available: SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS
-      ? false
-      : fixture.availability === 'provider-key' ||
-        fixture.availability === 'openrouter-key',
-    status: SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS
-      ? 'missing key'
-      : harnessModelStatus(fixture.availability),
-  }));
-}
-
-if (SHOW_ORCHESTRATION) {
-  const instance = render(
-    <OrchestrationApp
-      items={HARNESS_ORCHESTRATION_ITEMS}
-      resumeItems={HARNESS_ORCHESTRATION_RESUME_ITEMS}
-      agentItems={HARNESS_ORCHESTRATION_AGENT_ITEMS}
-      teamItems={HARNESS_ORCHESTRATION_TEAM_ITEMS}
-      models={process.env.HARNESS_API_MODE ? harnessOrchestrationModels() : []}
-      accountAccessItems={HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS}
-      version="0.0.0-harness"
-      statusLines={
-        SHOW_ORCHESTRATION_STATUS_LINES
-          ? [
-              `api: ${formatCliModelAccessRouteInline('api-key')}`,
-              formatCliAuthStatusLine({ authenticated: false }),
-            ]
-          : undefined
-      }
-      allowDefaultModelLaunch={false}
-      onResolve={() => undefined}
-    />,
-    {
-      stdout: HARNESS_STDOUT,
-      stderr: process.stderr,
-      stdin: process.stdin,
-    },
-  );
-  await instance.waitUntilExit();
-  process.exit(0);
-}
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact

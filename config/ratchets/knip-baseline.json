@@ -440,34 +440,10 @@
       "name": "initWizardModelSelectItems"
     },
     {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationFooterHints"
-    },
-    {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationLauncherLayout"
-    },
-    {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationPreviousStep"
-    },
-    {
       "file": "packages/cli/src/runtime/apiStatus.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "formatPersonalApiKeysLine"
-    },
-    {
-      "file": "packages/cli/src/runtime/chatDefaults.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "__resetUserConfigWarningDedupeForTests"
     },
     {
       "file": "packages/cli/src/runtime/cliContext.ts",
@@ -1008,24 +984,6 @@
       "category": "production-dead",
       "kind": "types",
       "name": "DownloadSourceOptions"
-    },
-    {
-      "file": "src/latex/texTools.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildKpathseaSearchPath"
-    },
-    {
-      "file": "src/latex/texTools.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildLatexInputEnv"
-    },
-    {
-      "file": "src/latex/texTools.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildLatexSearchParts"
     },
     {
       "file": "src/logger/redaction.ts",

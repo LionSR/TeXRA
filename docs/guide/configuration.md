@@ -9,8 +9,7 @@ view; TeXRA does not contribute product settings to VS Code's Settings editor.
 - **VS Code extension:** run **TeXRA: Show Settings Dashboard** from the
   Command Palette.
 - **Desktop app:** open **Settings**.
-- **CLI:** choose **Settings** in the launcher, run `texra config`, or enter
-  `/config` during a chat.
+- **CLI:** run `texra config`, or enter `/config` during a chat.
 
 The Dashboard groups the current controls by subject:
 
@@ -94,8 +93,8 @@ are available to any TeXRA host launched with that environment.
 ## Skills, tools, and privacy
 
 The **Tools** view contains the skills switch, tool availability, and approval
-controls. The CLI exposes the same skills switch from its launcher and settings
-view. Tools that are disabled globally are removed from an agent's available
+controls. The CLI exposes the same skills switch from `/config` during a chat.
+Tools that are disabled globally are removed from an agent's available
 tool list even when its definition names them.
 
 The **Account & Usage** view contains the telemetry switch. The environment

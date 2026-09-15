@@ -37,6 +37,17 @@ All notable changes to this project will be documented in this file.
 #### Breaking Changes
 
 - Node.js 22.19.0 or later in 22.x, or Node.js 24 or later is required.
+- **`texra orchestrate` is gone, and bare `texra` now opens chat** — the
+  launcher menu that sat in front of every interactive command is retired.
+  Bare `texra` starts a chat session when stdin and stdout are both terminals,
+  and prints help when either is not. What the launcher offered lives in that
+  session: `/agent` for the root agent, `/model` for its model, `/resume` for
+  history, `/api` for sign-in and keys, `/config` for settings. Start a
+  **multi-agent team** with `texra multi-agent run <preset>`; a resumed team
+  session still carries its scoped roster. The launcher's team step was the one
+  way to start a preset-scoped team in the interactive TUI, and that path is
+  removed rather than replaced — use `texra multi-agent run`, or `/agent` in a
+  chat for an unscoped session with the team's lead.
 - **`texra history show --export html` no longer takes `--assets-dir`** — the
   shared-assets export mode, which staged the trace viewer into a directory and
   wrote only the trace JSON to stdout, is gone. The default single-file HTML
