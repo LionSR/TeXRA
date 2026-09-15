@@ -62,10 +62,18 @@ class PreviewUnavailable extends Data.TaggedError('PreviewUnavailable')<{
 export function createDesktopPreviewHost(
   options: DesktopPreviewHostOptions,
 ): DesktopPreviewHost {
-  /** Show the failure, then carry it out through the error channel. */
+  /**
+   * Show the failure, then carry it out through the error channel. The dialog
+   * is host I/O like every other call here, so a rejection from it is a typed
+   * failure carrying that rejection's own text, never a fiber defect.
+   */
   function fail(message: string): Effect.Effect<never, PreviewUnavailable> {
-    return Effect.promise(async () => {
-      await options.showErrorMessage?.(message);
+    return Effect.tryPromise({
+      try: async () => {
+        await options.showErrorMessage?.(message);
+      },
+      catch: (error) =>
+        new PreviewUnavailable({ message: toErrorMessage(error) }),
     }).pipe(
       Effect.flatMap(() => Effect.fail(new PreviewUnavailable({ message }))),
     );
