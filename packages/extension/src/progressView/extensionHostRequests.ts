@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
+import { Data, Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import {
@@ -92,6 +93,21 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';
 const log = createLog(CHANNEL);
+
+/** A dropped `file:` path Node could not read as a URL. */
+class DropPathUndecodable extends Data.TaggedError('DropPathUndecodable')<{
+  readonly message: string;
+}> {}
+
+/** A dropped path the workspace file system could not stat. */
+class DropFileUnreadable extends Data.TaggedError('DropFileUnreadable')<{
+  readonly message: string;
+}> {}
+
+/** A native file picker that failed instead of answering. */
+class FilePickerFailed extends Data.TaggedError('FilePickerFailed')<{
+  readonly message: string;
+}> {}
 
 /** The native picker of each multi-file launcher list. */
 const MULTIPLE_FILE_PICKERS: Record<
@@ -429,52 +445,77 @@ export function createExtensionHostRequests(
     ];
   }
 
-  async function resolveWorkspaceDropFile(
+  /** One dropped path as a workspace-relative file, or `null` when it is
+   *  not one. A path that does not decode as a URL stands as its raw text,
+   *  and a file the workspace cannot stat is not a file here; both say so
+   *  in the debug log. */
+  function resolveWorkspaceDropFile(
     rawPath: string,
-  ): Promise<string | null> {
-    const trimmed = rawPath.trim();
-    let decodedPath = trimmed;
-    if (trimmed.startsWith('file:')) {
-      try {
-        decodedPath = fileURLToPath(trimmed);
-      } catch (error) {
-        log.debug(
-          `Dropped path is not a file URL: ${trimmed}: ${toErrorMessage(error)}`,
-        );
-      }
-    }
-    const resolved = WorkspaceFS.locatePath(decodedPath);
-    if (resolved.kind !== 'workspace') return null;
-    try {
-      const stat = await vscode.workspace.fs.stat(
-        vscode.Uri.file(resolved.absolutePath),
+  ): Effect.Effect<string | null> {
+    return Effect.gen(function* () {
+      const trimmed = rawPath.trim();
+      const decodedPath = trimmed.startsWith('file:')
+        ? yield* Effect.try({
+            try: () => fileURLToPath(trimmed),
+            catch: (cause) =>
+              new DropPathUndecodable({ message: toErrorMessage(cause) }),
+          }).pipe(
+            Effect.catchTag('DropPathUndecodable', (error) =>
+              Effect.sync(() => {
+                log.debug(
+                  `Dropped path is not a file URL: ${trimmed}: ${error.message}`,
+                );
+                return trimmed;
+              }),
+            ),
+          )
+        : trimmed;
+      const resolved = WorkspaceFS.locatePath(decodedPath);
+      if (resolved.kind !== 'workspace') return null;
+      return yield* Effect.tryPromise({
+        try: () =>
+          vscode.workspace.fs.stat(vscode.Uri.file(resolved.absolutePath)),
+        catch: (cause) =>
+          new DropFileUnreadable({ message: toErrorMessage(cause) }),
+      }).pipe(
+        Effect.map((stat) =>
+          (stat.type & vscode.FileType.File) === 0
+            ? null
+            : resolved.relativePath,
+        ),
+        Effect.catchTag('DropFileUnreadable', (error) =>
+          Effect.sync(() => {
+            log.debug(
+              `Dropped file could not be read: ${decodedPath}: ${error.message}`,
+            );
+            return null;
+          }),
+        ),
       );
-      if ((stat.type & vscode.FileType.File) === 0) return null;
-      return resolved.relativePath;
-    } catch (error) {
-      log.debug(
-        `Dropped file could not be read: ${decodedPath}: ${toErrorMessage(error)}`,
-      );
-      return null;
-    }
+    });
   }
 
-  async function attachDroppedFiles(
+  function attachDroppedFiles(
     request: Extract<HostRequest, { kind: 'attachDroppedFiles' }>,
-  ): Promise<HostOutcome> {
-    const paths = await Promise.all(
-      request.paths.map((rawPath) => resolveWorkspaceDropFile(rawPath)),
+  ): Effect.Effect<HostOutcome> {
+    return Effect.forEach(
+      request.paths,
+      (rawPath) => resolveWorkspaceDropFile(rawPath),
+      { concurrency: 'unbounded' },
+    ).pipe(
+      Effect.map((paths): HostOutcome => {
+        const attached = attachDroppedPaths(
+          paths,
+          getIncludedExtensions(request.category),
+        );
+        if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
+          void showInfo(
+            `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+          );
+        }
+        return { kind: 'files', paths: attached.paths };
+      }),
     );
-    const attached = attachDroppedPaths(
-      paths,
-      getIncludedExtensions(request.category),
-    );
-    if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
-      void showInfo(
-        `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
-      );
-    }
-    return { kind: 'files', paths: attached.paths };
   }
 
   /** The editor's current file into a launcher field. */
@@ -520,31 +561,41 @@ export function createExtensionHostRequests(
     return { kind: 'files', paths: [currentOpenFile] };
   }
 
-  async function pickFiles(
+  function pickFiles(
     request: Extract<HostRequest, { kind: 'pickFiles' }>,
-  ): Promise<HostOutcome> {
+  ): Effect.Effect<HostOutcome, Rejected | Cancelled> {
     const { fileType } = request;
     const pick = isMultipleDocumentFileType(fileType)
       ? MULTIPLE_FILE_PICKERS[fileType]
       : undefined;
     if (!pick) {
-      throw new Rejected({
-        reason: `A picker for ${fileType} files is not available; choose one from the list.`,
-      });
-    }
-    let selected: string[] | null;
-    try {
-      selected = await pick();
-    } catch (error) {
-      await showLoggedErrorMessage(
-        CHANNEL,
-        `Error selecting ${fileType}`,
-        error,
+      return Effect.fail(
+        new Rejected({
+          reason: `A picker for ${fileType} files is not available; choose one from the list.`,
+        }),
       );
-      throw new Rejected({ reason: toErrorMessage(error) });
     }
-    if (!selected) throw new Cancelled();
-    return { kind: 'files', paths: selected };
+    return Effect.tryPromise({
+      try: () => pick(),
+      catch: (cause) =>
+        new FilePickerFailed({ message: toErrorMessage(cause) }),
+    }).pipe(
+      // The picker's failure is shown where it happened, then refused with
+      // the text it carried. The notice itself is the window's, so a window
+      // that cannot show it is a defect here, as it was before.
+      Effect.catchTag('FilePickerFailed', (error) =>
+        Effect.promise(() =>
+          showLoggedErrorMessage(CHANNEL, `Error selecting ${fileType}`, error),
+        ).pipe(
+          Effect.andThen(Effect.fail(new Rejected({ reason: error.message }))),
+        ),
+      ),
+      Effect.flatMap((selected) =>
+        selected
+          ? Effect.succeed<HostOutcome>({ kind: 'files', paths: selected })
+          : Effect.fail(new Cancelled()),
+      ),
+    );
   }
 
   async function agentConfigBanner(
@@ -722,7 +773,7 @@ export function createExtensionHostRequests(
         }
         return done;
       case 'pickFiles':
-        return pickFiles(request);
+        return runtime.runPromise(pickFiles(request));
       case 'useCurrentFile':
         return useCurrentFile(request);
       case 'addOpenedFiles': {
@@ -743,7 +794,7 @@ export function createExtensionHostRequests(
         };
       }
       case 'attachDroppedFiles':
-        return attachDroppedFiles(request);
+        return runtime.runPromise(attachDroppedFiles(request));
       case 'launch':
         await launch(request);
         return done;
