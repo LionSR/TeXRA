@@ -1,11 +1,11 @@
 // Third-party imports
-import { Effect, type FileSystem, type Path } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
+import type { WorkspaceFs } from '@platform/rootedFs';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
@@ -37,7 +37,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   }: ExtractTikzInput): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolCall | FileSystem.FileSystem | Path.Path | WorkspaceFs | StorageFs
+    ToolCall | FileSystem.FileSystem | WorkspaceFs
   > {
     const call = yield* ToolCall;
     const { path, display } = yield* resolveLatexFile(texPath);

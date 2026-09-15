@@ -6,6 +6,9 @@ import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
+// Local imports - errors
+import { isNotADirectoryError } from '@common/errors/errorPredicates';
+
 // Local imports - tools
 import {
   extractBibliographyContext,
@@ -85,7 +88,9 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
       // ENOENT, and `FileSystem.exists` reports it as `BadResource`.
       const exists = yield* fs.exists(resolved.fsPath).pipe(
         Effect.catchIf(
-          (error) => error.reason._tag === 'BadResource',
+          (error) =>
+            error.reason._tag === 'BadResource' &&
+            isNotADirectoryError(error.reason.cause),
           () => Effect.succeed(false),
         ),
       );

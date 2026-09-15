@@ -115,7 +115,7 @@ export function registerLanguageModelTools(
                   inScope: (operation) => operation(),
                 }),
                 Effect.provideService(Runs, session.runs),
-                // The call works on this session's folders, as a run's would.
+                // Rooted filesystem service reads use this session's folders.
                 Effect.provide(sessionFsLayer(session.roots)),
               );
             }),
