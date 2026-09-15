@@ -34,7 +34,12 @@ describe('child subagent stream approval inheritance', () => {
       silent: true,
     });
 
-    configureDelegatedChildApprovals(child, parent);
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      undefined,
+      defaultSession(),
+    );
 
     expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
       true,
@@ -48,7 +53,12 @@ describe('child subagent stream approval inheritance', () => {
   it('leaves the child gated when the parent still prompts', () => {
     const { parent, child } = runPair();
 
-    configureDelegatedChildApprovals(child, parent);
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      undefined,
+      defaultSession(),
+    );
 
     expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(
       false,
@@ -67,7 +77,12 @@ describe('child subagent stream approval inheritance', () => {
       silent: true,
     });
 
-    configureDelegatedChildApprovals(child, parent);
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      undefined,
+      defaultSession(),
+    );
 
     expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
     // The parent's edits are gated, so the child's stay gated too.
@@ -83,7 +98,12 @@ describe('child subagent stream approval inheritance', () => {
     // child. It must now resolve live off the ancestry link.
     const { parent, child } = runPair();
 
-    configureDelegatedChildApprovals(child, parent);
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      undefined,
+      defaultSession(),
+    );
     expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(
       false,
     );
@@ -103,7 +123,12 @@ describe('child subagent stream approval inheritance', () => {
     // prompting for every edit.
     const { parent, child } = runPair();
 
-    configureDelegatedChildApprovals(child, parent);
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      undefined,
+      defaultSession(),
+    );
     expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
       false,
     );
@@ -134,9 +159,24 @@ describe('child subagent stream approval inheritance', () => {
     currentSession().approvals.toolEdit.bypass.setBypass(parent, true, {
       silent: true,
     });
-    configureDelegatedChildApprovals(child, parent);
-    configureDelegatedChildApprovals(grandchild, child);
-    configureDelegatedChildApprovals(pinnedChild, parent);
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      undefined,
+      defaultSession(),
+    );
+    configureDelegatedChildApprovals(
+      grandchild,
+      child,
+      undefined,
+      defaultSession(),
+    );
+    configureDelegatedChildApprovals(
+      pinnedChild,
+      parent,
+      undefined,
+      defaultSession(),
+    );
     currentSession().approvals.toolEdit.bypass.setBypass(pinnedChild, true, {
       silent: true,
     });
@@ -191,7 +231,7 @@ describe('child subagent stream approval inheritance', () => {
     currentSession().approvals.setDelegatedWorkBypasses(roundOne, true);
     currentSession().approvals.registerRunParent(roundTwo, roundOne);
 
-    expect(proposalApprovals().isBypassed(roundTwo)).toBe(true);
+    expect(proposalApprovals(defaultSession()).isBypassed(roundTwo)).toBe(true);
     expect(
       currentSession().approvals.toolEdit.bypass.isBypassed(roundTwo),
     ).toBe(true);
@@ -209,7 +249,7 @@ describe('child subagent stream approval inheritance', () => {
     expect(currentSession().approvals.bash.bypass.isBypassed(roundOne)).toBe(
       true,
     );
-    expect(proposalApprovals().isBypassed(roundTwo)).toBe(true);
+    expect(proposalApprovals(defaultSession()).isBypassed(roundTwo)).toBe(true);
     expect(
       currentSession().approvals.toolEdit.bypass.isBypassed(roundTwo),
     ).toBe(true);
@@ -220,7 +260,12 @@ describe('child subagent stream approval inheritance', () => {
     currentSession().approvals.bash.bypass.setBypass(parent, true, {
       silent: true,
     });
-    configureDelegatedChildApprovals(child, parent);
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      undefined,
+      defaultSession(),
+    );
     expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
 
     currentSession().approvals.bash.bypass.setBypass(child, false);
@@ -238,10 +283,15 @@ describe('child subagent stream approval inheritance', () => {
     currentSession().approvals.bash.bypass.setBypass(parent, true, {
       silent: true,
     });
-    configureDelegatedChildApprovals(child, parent);
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      undefined,
+      defaultSession(),
+    );
     expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
 
-    releaseRunResources(parent);
+    releaseRunResources(parent, defaultSession());
 
     expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
     currentSession().approvals.bash.bypass.setBypass(parent, false, {
@@ -253,7 +303,12 @@ describe('child subagent stream approval inheritance', () => {
   it('pins edit approval for an auto-approved delegation', () => {
     const { parent, child } = runPair();
 
-    configureDelegatedChildApprovals(child, parent, 'auto-approved');
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      'auto-approved',
+      defaultSession(),
+    );
 
     expect(currentSession().approvals.toolEdit.bypass.isBypassed(parent)).toBe(
       false,
@@ -272,7 +327,12 @@ describe('child subagent stream approval inheritance', () => {
     currentSession().approvals.toolEdit.bypass.setBypass(parent, true, {
       silent: true,
     });
-    configureDelegatedChildApprovals(child, parent);
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      undefined,
+      defaultSession(),
+    );
     expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
       true,
     );
@@ -293,13 +353,25 @@ describe('child subagent stream approval inheritance', () => {
   it('propagates delegated-task approval through nested orchestrators', () => {
     const { parent, child } = runPair();
     const grandchild = generateRunId();
-    proposalApprovals().setBypass(parent, true);
+    proposalApprovals(defaultSession()).setBypass(parent, true);
 
-    configureDelegatedChildApprovals(child, parent);
-    configureDelegatedChildApprovals(grandchild, child);
+    configureDelegatedChildApprovals(
+      child,
+      parent,
+      undefined,
+      defaultSession(),
+    );
+    configureDelegatedChildApprovals(
+      grandchild,
+      child,
+      undefined,
+      defaultSession(),
+    );
 
-    expect(proposalApprovals().isBypassed(parent)).toBe(true);
-    expect(proposalApprovals().isBypassed(child)).toBe(true);
-    expect(proposalApprovals().isBypassed(grandchild)).toBe(true);
+    expect(proposalApprovals(defaultSession()).isBypassed(parent)).toBe(true);
+    expect(proposalApprovals(defaultSession()).isBypassed(child)).toBe(true);
+    expect(proposalApprovals(defaultSession()).isBypassed(grandchild)).toBe(
+      true,
+    );
   });
 });
