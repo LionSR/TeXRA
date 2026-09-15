@@ -193,6 +193,62 @@ describe('session isolation', () => {
       }),
   );
 
+  /**
+   * #12433, pinned as a known failure until the ambient roots carrier retires
+   * under #12421. The contract below is the one the desktop needs — two open
+   * projects, each its own session, its own storage root — and `main` does not
+   * meet it: the run fiber's read after a contended commit resolves against
+   * the PROCESS roots. `.fails` is the honest encoding, not `.skip`: the case
+   * runs every time, states the contract rather than the defect, and turns red
+   * the day the carrier is gone, which is when its marker comes off. Do not
+   * "fix" it with a `runInSession` / `run.inScope` wrap around the read — that
+   * is the repair the issue rules out; roots have to arrive as data.
+   */
+  it.fails(
+    'a run fiber keeps its session roots across a contended publisher commit',
+    async () => {
+      const project = createFakeWorkspaceRoots({
+        workspacePath: fakePath('papers/contended'),
+        storagePath: fakePath('storage/contended'),
+      });
+      const session = createTestSession({ roots: project });
+      try {
+        // Job 1: enqueued on the session's one publisher from the process
+        // context, the shape the desktop has (the session opens before any
+        // `runInSession`, so its publisher consumer is woken outside every
+        // session scope).
+        publishTestRunStart(session, 'c0c001' as RunId);
+        // Job 2: the run fiber's own awaited commit, enqueued in the same
+        // synchronous turn, so the publisher is already contended when it runs.
+        const seen = await runInSession(session, () =>
+          Effect.runPromise(
+            Effect.gen(function* () {
+              yield* session.commit([
+                {
+                  type: 'run.start',
+                  aggregateId: aggregateId('run', 'c0c002' as RunId),
+                  identity: { kind: 'agent', agent: 'chat' },
+                  userFollowUpSupport: 'unsupported',
+                  category: 'toolUse',
+                  isRemote: false,
+                  parent: null,
+                },
+              ]);
+              return {
+                workspace: workspaceRoots().workspace,
+                storage: workspaceRoots().storage,
+              };
+            }),
+          ),
+        );
+        expect(seen.workspace).toBe(fakePath('papers/contended'));
+        expect(seen.storage).toBe(fakePath('storage/contended'));
+      } finally {
+        await Effect.runPromise(session.dispose());
+      }
+    },
+  );
+
   it('a handle interrupt target lands in the run session only', async () => {
     const sessionB = createTestSession();
     const runId = generateRunId();

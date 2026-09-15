@@ -802,6 +802,49 @@ product; everything around them was generic Promise runtime, and Effect owns it 
 | C14 | stale lease file blocks resume                      | the lease is deleted; `owner_id` + pid liveness only                                |
 | C15 | partial output file can double-append               | `output.pending.byteOffset`/`digest` reconciliation                                 |
 
+#### Reconciled against the shipped rows, 2026-09-15 (#12427)
+
+The table above names the rows revision 4 proposed. Five of them shipped under
+different names or a different mechanism, and the table is wrong where it still
+says otherwise. Read this list, not the "Closed by" column, for these five:
+
+| #   | What actually shipped                                                                                                                                                                                                                                                                                               |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | There is no `model.attempt` row. The vocabulary is `model.message` with `kind: 'attempt' \| 'identified' \| 'response'`; the `attempt` row is still committed before the billed request (`ModelInvoker`, "the durable fact before the billed request (F1)").                                                        |
+| C5  | There is no `model.turn.usage` row. The turn's priced usage is a field the writer stamps on the `model.message` `response` row beside `calls`, and the run total is derived from those rows plus `tool.result` `add` operations (D12) — no accumulator anywhere.                                                    |
+| C6  | There is no `model.turn.continuation` row. The anchor is `turn.continuation` on the same `response` row, plus `continuation` / `continuationDropped` on `model.compaction`, which is the only row that shortens history.                                                                                            |
+| C7  | Not one batch across two aggregates. The parent delivery is admitted **before** the child's terminal commit, under a prompt-anchored delivery id (`turnDeliveryId`), so a crash between the two re-executes the prompt and admission judges the second delivery a replay.                                           |
+| C15 | Not `byteOffset`/`digest`. The row is a `flow.snapshot` at phase `output.pending`, and reconciliation is `rawOutputBytes` — a byte **length**, no digest. Equal length is read as "already holds this response", so a same-length different-content file is indistinguishable and is skipped rather than rewritten. |
+
+C3's rows exist (#12446), so the earlier "rows do not exist yet" note is spent.
+C8 is closed by absence: no turn-state record survives anywhere in the tree.
+
+Where each window is driven, as of this revision. `sessionFold` is
+`src/test-kernel/shared/session/sessionFold.vitest.ts`, `sessionEvents` is
+`src/test-kernel/controllers/session/sessionEvents.vitest.ts`.
+
+| #   | Driven by                                                                                                                                                        |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | `sessionFold` — "during generation, before the response row" and "after a paid response, before the turn-end snapshot"                                           |
+| C2  | `sessionEvents` — "live state equals reloaded state", "commits rows another connection reads back"                                                               |
+| C3  | `sessionFold` — "lists a queued follow-up once…"; `ToolUseFollowUp` — "suppresses a replayed delivery id"                                                        |
+| C4  | `sessionEvents` — "folds a pending request to waiting only while its owner is live"; `RetryState` — "admits a manual retry…"                                     |
+| C5  | `sessionFold` — "delivers the paid assistant turn once and derives usage from the rows"                                                                          |
+| C6  | `sessionFold` — "the provider continuation anchor is row data…" (added here)                                                                                     |
+| C7  | `ToolUseFollowUp` — "admits a replayed child delivery at most once and wakes at most once"                                                                       |
+| C8  | nothing to drive: the record does not exist                                                                                                                      |
+| C9  | `WorkflowScriptAgentRunner` — "refuses a completed child a host resumed after it delivered"                                                                      |
+| C10 | `sessionFold` — the view folds; `flow.snapshot` is the one derived row                                                                                           |
+| C11 | `sessionEvents` — "assigns a dense seq per aggregate…", "reopens at the committed ordinal and never reuses one"                                                  |
+| C12 | `WorkflowScriptAgentRunner` — "recovers an older attempt below the mark"; `WorkflowScriptEngine` — "never registers a recovered child id as a skip/retry target" |
+| C13 | `Resumability`; `resumeRun` — "refuses with `finished` when no checkpoint remains"                                                                               |
+| C14 | `sessionEvents` — "reclaims a run whose recorded owner is provably dead" (added here) and "fences a second writer…"                                              |
+| C15 | `ReflectionLoop` — "writes a reprocessed response into the round output exactly once…" (added here)                                                              |
+
+`RunLease.vitest.ts`, the suite the earlier status called C14's one verified
+window, is gone with the lease it tested; the row above is its replacement.
+Performance budgets remain unmeasured and stay open under #12427.
+
 ### 6.7 Re-execution replay and the two-permission rule
 
 The third replay stays: `runLayer` with `ModelInvoker.layerReplay(ledger)` and

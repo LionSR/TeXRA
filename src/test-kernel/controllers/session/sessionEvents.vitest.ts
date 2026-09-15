@@ -2026,6 +2026,48 @@ describe('the C1 event table and the C6 publisher', () => {
     },
   );
 
+  /**
+   * C14: the lease file is gone, so the only thing that frees a crashed
+   * process's claim is proving its recorded owner dead. A restart that meets
+   * a stale claim it cannot disprove never resumes the run, for the life of
+   * the store, so this is the one window whose regression costs every run
+   * that was live at the crash. The recorded owner here is this pid under a
+   * start identity from before the crash: the pid resolves, its identity
+   * differs, and that is `proveOwnerLiveness`'s pid-reuse verdict.
+   */
+  it.live('reclaims a run whose recorded owner is provably dead', () => {
+    const storage = workspace();
+    const CRASHED = JSON.stringify([
+      os.hostname().toLowerCase(),
+      process.pid,
+      'an-earlier-process',
+    ]);
+    const target = qualifyAggregateId('run', RUN);
+    return Effect.gen(function* () {
+      yield* Database.pipe(
+        Effect.flatMap((crashed) => crashed.appendAll([runStart])),
+        Effect.provide(substrate(storage, CRASHED)),
+      );
+      yield* Effect.gen(function* () {
+        const restarted = yield* Database;
+        expect(yield* restarted.claimOwner(target)).toEqual({
+          ownerId: CRASHED,
+          liveness: 'dead',
+        });
+        // Fenced until the claim moves: the run is another owner's.
+        expect((yield* Effect.flip(restarted.appendAll([waiting])))._tag).toBe(
+          'DatabaseNotOwner',
+        );
+        yield* restarted.acquireClaims([target]);
+        expect((yield* restarted.aggregateState([target]))[0]?.ownerId).toBe(
+          SELF,
+        );
+        // The resumed run appends onto the rows the crash left behind.
+        expect((yield* restarted.appendAll([waiting]))[0]?.commit).toBe(2);
+      }).pipe(Effect.provide(substrate(storage)));
+    });
+  });
+
   it.effect(
     'fences a second writer and transfers only released claims together',
     () => {

@@ -420,8 +420,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     ) {
       const path = persisted.outputLocation.absolutePath;
       const content = yield* Effect.tryPromise({
-        try: async () =>
-          (await AbsoluteFS.exists(path)) ? AbsoluteFS.read(path) : '',
+        try: async () => {
+          if (!(await AbsoluteFS.exists(path))) return '';
+          const bytes = await AbsoluteFS.readBytes(path);
+          return bytes
+            .subarray(0, persisted.rawOutputBytes ?? 0)
+            .toString('utf8');
+        },
         catch: ensureError,
       });
       workspace.assembly.accumulatedOutput = content;
