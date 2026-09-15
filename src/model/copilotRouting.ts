@@ -8,7 +8,12 @@
  * why a preferred route is unavailable.
  */
 
-import type { StateStore } from '@platform/interfaces';
+import type { Effect } from 'effect';
+
+import type {
+  StateStore,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { isDeprecatedModel, isRetiredModel } from './modelOptionsBasic';
@@ -47,16 +52,16 @@ export function prefersCopilotRoute(
 }
 
 /** Persist (or clear) the Copilot route preference for one base model. */
-export async function setCopilotRoutePreference(
+export function setCopilotRoutePreference(
   model: string,
   preferred: boolean,
   state: StateStore,
-): Promise<void> {
+): Effect.Effect<void, StateWriteFailed> {
   const current = copilotRouteModels(state);
   const next = preferred
     ? [...new Set([...current, model])]
     : current.filter((entry) => entry !== model);
-  await state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, next);
+  return state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, next);
 }
 
 /**

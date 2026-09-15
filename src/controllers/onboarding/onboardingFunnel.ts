@@ -21,13 +21,12 @@
 
 import { Effect, Semaphore } from 'effect';
 
-import { StateWriteFailed, type StateStore } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */
@@ -151,15 +150,7 @@ export class OnboardingFunnelRefresher {
       this.current = transition.state;
       this.host.apply({ ...transition, changed });
       if (transition.clearDeclined) {
-        yield* Effect.tryPromise({
-          try: () => setOnboardingDeclined(this.host.flags, false),
-          catch: (cause) =>
-            new StateWriteFailed({
-              key: GlobalStateKey.ONBOARDING_DECLINED,
-              message: 'The stale onboarding skip flag could not be cleared.',
-              cause,
-            }),
-        });
+        yield* setOnboardingDeclined(this.host.flags, false);
       }
     },
   );

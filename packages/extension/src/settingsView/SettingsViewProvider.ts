@@ -14,6 +14,7 @@ import {
 } from '@frontend/auth/agentCatalogRefreshScope';
 import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
@@ -30,6 +31,7 @@ export class SettingsViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
+    globalState: StateStore,
     secrets: PlatformSecrets,
     runtime: ProcessRuntime,
   ) {
@@ -41,6 +43,7 @@ export class SettingsViewProvider {
     );
     this.messageHandler = new SettingsViewMessageHandler(
       context,
+      globalState,
       secrets,
       runtime,
     );

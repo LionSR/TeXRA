@@ -58,6 +58,7 @@ import {
   refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
+import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { revealProgressRun } from '@progressView/progressNavigation';
@@ -148,12 +149,12 @@ export class SettingsViewMessageHandler {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
+    private readonly globalState: StateStore,
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
   ) {
     const ctx: SettingsHandlerContext = this.handlerContext();
 
-    const globalState = context.globalState;
     this.memoryController = new SettingsMemoryController({
       prompt: new VscodePromptHost(),
     });
@@ -404,7 +405,7 @@ export class SettingsViewMessageHandler {
         await setToolEnabled(
           message.toolId,
           message.enabled,
-          this.context.globalState,
+          this.globalState,
         );
         await this.withActiveWebview((w) =>
           this.sendToolDashboardData(w, { skipChecks: true }),
@@ -918,11 +919,7 @@ export class SettingsViewMessageHandler {
                     this.channel,
                     'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
                   )
-                : setCopilotRoutePreference(
-                    modelName,
-                    true,
-                    this.context.globalState,
-                  ),
+                : setCopilotRoutePreference(modelName, true, this.globalState),
             catch: (error) => error,
           }),
         );
@@ -970,7 +967,7 @@ export class SettingsViewMessageHandler {
   /** Clear the per-model Copilot route preference (#9659), returning the
    * canonical model to direct-provider routing. */
   private async handleClearCopilotRoute(modelName: string): Promise<void> {
-    await setCopilotRoutePreference(modelName, false, this.context.globalState);
+    await setCopilotRoutePreference(modelName, false, this.globalState);
     await Promise.all([
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((webview) => this.sendModelSelectionData(webview)),

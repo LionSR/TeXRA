@@ -130,7 +130,7 @@ const MULTIPLE_FILE_PICKERS: Record<
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
   readonly extensionPath: string;
-  readonly globalState: vscode.Memento;
+  readonly globalState: StateStore;
   /** The process secret store the extension root holds (model availability). */
   readonly secrets: PlatformSecrets;
   readonly snapshot: HostSnapshotSource;

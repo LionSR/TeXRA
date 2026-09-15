@@ -687,6 +687,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   const progressViewProvider = new ProgressViewProvider(
     context,
+    globalState,
     secrets,
     runtime,
   );
@@ -699,7 +700,13 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(globalState), 0);
-  registerCommands(context, progressViewProvider, secrets, runtime);
+  registerCommands(
+    context,
+    globalState,
+    progressViewProvider,
+    secrets,
+    runtime,
+  );
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context, runtime);
 
