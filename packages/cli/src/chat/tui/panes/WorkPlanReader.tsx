@@ -2,7 +2,7 @@
 
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
-import { tryDefaultSession } from '@agent/runtime';
+import { type SessionHandle } from '@agent/runtime';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
@@ -105,16 +105,19 @@ export function WorkPlanReader({
   loading = false,
   onClose,
   runId,
+  session,
   title,
 }: {
   readonly availableRows: number;
   readonly loading?: boolean;
   readonly onClose: () => void;
   readonly runId: RunId;
+  /** The chat's session the plan is read from, threaded from the App. */
+  readonly session: SessionHandle;
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
-  const run = loading ? undefined : tryDefaultSession()?.runView(runId);
+  const run = loading ? undefined : session.runView(runId);
   const workPlan =
     run?.category === AgentCategory.ToolUse
       ? { plan: run.plan, todos: run.todos }

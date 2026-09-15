@@ -264,6 +264,7 @@ export async function runChat(
   const slashCommandContext = (): SlashCommandContext => ({
     cliContext: context,
     session,
+    runtimeSession,
     secrets: services.secrets,
     state: services.globalState,
     runtime: services.runtime,
@@ -519,6 +520,7 @@ export async function runChat(
     <App
       secrets={services.secrets}
       runtime={runtime}
+      session={runtimeSession}
       onSubmit={(line, mediaFiles, images) =>
         void chatController.submit(line, mediaFiles, images)
       }

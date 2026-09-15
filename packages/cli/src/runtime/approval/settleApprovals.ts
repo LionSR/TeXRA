@@ -7,7 +7,7 @@
  * settle helpers in the adapters.
  */
 
-import { defaultSession } from '@agent/runtime';
+import { type SessionHandle } from '@agent/runtime';
 import {
   decideHumanInputRequest,
   decideRetryApproval,
@@ -30,10 +30,6 @@ import { type CliContext } from '../cliContext';
 
 import { warnApprovalDenied } from './approvalPrompts';
 
-function livePolicy(): TexraApprovalPolicy {
-  return defaultSession().approvalPolicy;
-}
-
 function canPresent(context: CliContext): boolean {
   return context.mode === 'interactive';
 }
@@ -45,7 +41,7 @@ function canPresent(context: CliContext): boolean {
  */
 function executableDecision(
   context: CliContext,
-  policy: TexraApprovalPolicy = livePolicy(),
+  policy: TexraApprovalPolicy,
 ): TexraApprovalPolicyDecision {
   return decideTexraApproval({
     policy,
@@ -70,13 +66,14 @@ export function cliApprovalPromptsUnavailable(
 /** The policy's answer for a gated executable request, or `undefined` to
  *  prompt: one arm of the request vocabulary, decided on the spot. */
 export function settleExecutable(
+  session: SessionHandle,
   context: CliContext,
   runId?: RunId | '',
 ): RequestDecision | undefined {
-  const decision = executableDecision(context);
+  const decision = executableDecision(context, session.approvalPolicy);
   if (decision === 'allow') return { action: 'approve' };
   if (decision === 'present') return undefined;
-  warnApprovalDenied(context, 'Approval policy', runId);
+  warnApprovalDenied(session, context, 'Approval policy', runId);
   return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
 }
 
@@ -89,17 +86,19 @@ function isCredentialRetryFailure(payload: RetryPermission): boolean {
 
 /** Settle a retry decision, or `undefined` to prompt. */
 export function settleRetry(
+  session: SessionHandle,
   payload: RetryPermission,
   context: CliContext,
 ): RequestDecision | undefined {
   const retryDecision = decideRetryApproval({
-    policy: livePolicy(),
+    policy: session.approvalPolicy,
     canPresent: canPresent(context),
     isCredentialFailure: isCredentialRetryFailure(payload),
   });
   if (retryDecision === 'present') return undefined;
   if (retryDecision.deny !== 'yolo-retry') {
     warnApprovalDenied(
+      session,
       context,
       retryDecision.deny === 'credential'
         ? 'Credential-exhausted retry'
@@ -118,16 +117,17 @@ export function settleRetry(
  * Callers wrap `reason` into their host-specific settlement shape.
  */
 export function settleHumanInputDenial(
+  session: SessionHandle,
   context: CliContext,
   runId?: RunId | '',
 ): { readonly reason: string } | undefined {
   const decision = decideHumanInputRequest({
-    policy: livePolicy(),
+    policy: session.approvalPolicy,
     canPresent: canPresent(context),
   });
   if (decision === 'present') return undefined;
   if (decision.deny !== 'yolo-no-human') {
-    warnApprovalDenied(context, 'Human-input request', runId);
+    warnApprovalDenied(session, context, 'Human-input request', runId);
   }
   return {
     reason: texraHumanInputDenialMessage(decision.deny),
