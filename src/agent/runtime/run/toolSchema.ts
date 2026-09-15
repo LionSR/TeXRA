@@ -3,8 +3,7 @@
  * pre-built JSON Schema, normalized to the object shape every function-calling
  * API accepts (top-level discriminated unions flattened, the dialect URI
  * stripped). The run's `Tools` service builds the package's uniform tool
- * definitions from it; the provider converters of the handler tree share it
- * until that tree is deleted.
+ * definitions from it; the structured-output tool builder shares it.
  */
 import { toJSONSchema } from 'zod';
 
