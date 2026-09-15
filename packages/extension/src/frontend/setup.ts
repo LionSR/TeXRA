@@ -115,7 +115,7 @@ export async function initializeLatexSupport(
   globalState: StateStore,
 ): Promise<void> {
   const runtime = tryProcessRuntime();
-  if (runtime === undefined) {
+  if (runtime == null) {
     log.warn(
       'Skipped LaTeX support setup: the process runtime is not installed.',
     );
@@ -183,7 +183,7 @@ export async function initializeLatexSupport(
 
 async function workspaceContainsLatexFiles(): Promise<boolean> {
   const runtime = tryProcessRuntime();
-  if (runtime === undefined) {
+  if (runtime == null) {
     log.warn(
       'Could not scan the workspace for LaTeX files: the process runtime is not installed.',
     );
