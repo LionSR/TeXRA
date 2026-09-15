@@ -16,20 +16,6 @@ import { StateWriteFailed, type StateStore } from '../interfaces';
 type JsonRecord = Record<string, unknown>;
 
 /**
- * Runs one durable store write to completion. R1 puts that conversion at a
- * host entry: the entry that opens a @texra/platform/AppState store supplies
- * the run. A rejected write is the caller's failure, never a logged
- * best-effort.
- *
- * Still exported from here for the host entries that thread it through
- * `openAppStateStore`, whose own `StateStore` port no longer needs it; a
- * follow-up removes this type with the last of that threading.
- */
-export type RunStateWrite = (
-  write: Effect.Effect<void, Error>,
-) => Promise<void>;
-
-/**
  * The filesystem services a `JsonStore` reads and writes over, as a layer a
  * caller can provide itself. This store provides them for its own write
  * ({@link JsonStore.set}) and for `update`'s runner, so no consumer of a

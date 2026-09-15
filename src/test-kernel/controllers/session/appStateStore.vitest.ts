@@ -11,12 +11,9 @@ import { describe, expect } from 'vitest';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-const runWrite = (write: Effect.Effect<void, Error>) =>
-  Effect.runPromise(write);
-
 describe('application state on SQLite', () => {
   const tempDirs = useTempDirs();
-  const openStore = (storage: string) => openAppStateStore(storage, runWrite);
+  const openStore = (storage: string) => openAppStateStore(storage);
 
   it.effect('reads back the latest value of each key after reopening', () =>
     Effect.gen(function* () {

@@ -27,7 +27,6 @@ import {
   nodeProcesses,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
-import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import { StateWriteFailed, type StateStore } from '@platform/interfaces';
 import {
   JsonValueSchema,
@@ -123,7 +122,7 @@ class SqliteStateStore implements StateStore {
  * returning.
  */
 export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
-  function* (storage: string, _runWrite: RunStateWrite) {
+  function* (storage: string) {
     // Memoized after the entry's own read: a cache hit on every host that
     // installed its process runtime before opening its stores.
     const ownerId = processOwnerId(

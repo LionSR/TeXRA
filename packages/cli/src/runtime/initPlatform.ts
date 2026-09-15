@@ -24,6 +24,7 @@ import type {
   AgentResumePort,
   LifecycleHost,
   StateStore,
+  StateWriteFailed,
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { DisposableStore } from '@platform/disposable';
@@ -40,7 +41,6 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
-import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import type { SessionOpenError } from '@shared/session/database';
@@ -275,13 +275,19 @@ export function setCliAgentResumeHandler(
   };
 }
 
-export async function setCliHelperModel(
+/**
+ * Record the model the chat is running as the default helper model. Returns
+ * the write as the Effect it is: the callers that want a promise face own a
+ * runtime and run it, and the ones that are already inside a program compose
+ * it directly, so no runtime is threaded in here purely to keep the promise.
+ */
+export function setCliHelperModel(
   state: StateStore,
   model: string | undefined,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  if (!model) return;
-  await runtime.runPromise(state.update(GlobalStateKey.HELPER_MODEL, model));
+): Effect.Effect<void, StateWriteFailed> {
+  // Keep the write lazy: a refused write is the caller's failure to handle,
+  // not a rejection nobody reads.
+  return model ? state.update(GlobalStateKey.HELPER_MODEL, model) : Effect.void;
 }
 
 /**
@@ -377,13 +383,11 @@ export async function initCliPlatform(
     // platform. Keep the platform, roots, and lazy session private until the
     // fallible setup has succeeded: their ports have no reset operation.
     const install = async () => {
-      const runWrite: RunStateWrite = (write) => runtime.runPromise(write);
       const { stateStores, configStores } = await runtime.runPromise(
         Effect.gen(function* () {
           const stores = yield* openCliWorkspaceState({
             storageRoot: context.storageRoot,
             workspacePath: context.cwd,
-            runWrite,
           });
           return {
             stateStores: stores,
