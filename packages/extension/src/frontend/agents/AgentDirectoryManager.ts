@@ -261,23 +261,18 @@ class AgentDirectoryManager {
 
     for (const entry of directories) {
       const directoryUri = vscode.Uri.file(entry.directory);
-      const workspaceFolder = vscode.workspace.getWorkspaceFolder(directoryUri);
 
-      if (workspaceFolder) {
+      if (vscode.workspace.getWorkspaceFolder(directoryUri)) {
         this.watchDirectoryTree(directoryUri, '**/*');
-        watchedDirectories.push(entry.directory);
-        continue;
-      }
-
-      if (entry.source !== AGENT_SOURCE.CUSTOM) {
+      } else if (entry.source !== AGENT_SOURCE.CUSTOM) {
         skippedDirectories.push(entry.directory);
         continue;
+      } else {
+        await this.watchExternalCustomDirectory(
+          directoryUri,
+          previousExternalWatcherDirectoryPaths,
+        );
       }
-
-      await this.watchExternalCustomDirectory(
-        directoryUri,
-        previousExternalWatcherDirectoryPaths,
-      );
       watchedDirectories.push(entry.directory);
     }
 

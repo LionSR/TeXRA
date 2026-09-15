@@ -95,22 +95,18 @@ function sidebarAction(options: {
  */
 function projectBadge(view: SessionView): TemplateResult | typeof nothing {
   const { waiting, interrupted, running } = view.rollup;
-  if (waiting > 0) {
-    return html`<wa-badge class="task-project-badge" variant="warning" pill
-      >${waiting}</wa-badge
-    >`;
-  }
-  if (interrupted > 0) {
-    return html`<wa-badge class="task-project-badge" variant="danger" pill
-      >${interrupted}</wa-badge
-    >`;
-  }
-  if (running > 0) {
-    return html`<wa-badge class="task-project-badge" variant="success" pill
-      >${running}</wa-badge
-    >`;
-  }
-  return nothing;
+  const badge = (
+    [
+      ['warning', waiting],
+      ['danger', interrupted],
+      ['success', running],
+    ] as const
+  ).find(([, count]) => count > 0);
+  if (!badge) return nothing;
+  const [variant, count] = badge;
+  return html`<wa-badge class="task-project-badge" variant=${variant} pill
+    >${count}</wa-badge
+  >`;
 }
 
 function runTabsTemplate(

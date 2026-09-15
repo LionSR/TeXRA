@@ -1,10 +1,9 @@
 // Local imports
-import type { ToolHost } from '@agent/core/tools/ToolTypes';
+import { MapToolRegistry, type ToolHost } from '@agent/core/tools/ToolTypes';
 import type {
   RuntimeTool as ITool,
   RuntimeToolRegistry as IToolRegistry,
 } from '@agent/runtime/ToolServices';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,

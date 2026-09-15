@@ -61,7 +61,6 @@ interface WorkflowStageRecord {
  */
 export class WorkflowRunState {
   readonly #emit: (event: WorkflowScriptEvent) => void;
-  readonly #hasDeclaredStages: boolean;
   readonly #declaredStageCount: number;
   readonly #stages: WorkflowStageRecord[];
   readonly #calls = new Map<string, WorkflowCallRecord>();
@@ -75,7 +74,6 @@ export class WorkflowRunState {
     readonly emit: (event: WorkflowScriptEvent) => void;
   }) {
     this.#emit = options.emit;
-    this.#hasDeclaredStages = options.phases.length > 0;
     this.#declaredStageCount = options.phases.length;
     this.#stages = options.phases.map((phase) => ({
       title: phase.title,
@@ -126,7 +124,7 @@ export class WorkflowRunState {
   enterStage(title: string): void {
     if (this.#sealed) throw new Error('Workflow run state is sealed.');
     let nextIndex = this.#stages.findIndex((stage) => stage.title === title);
-    if (nextIndex < 0 && this.#hasDeclaredStages) {
+    if (nextIndex < 0 && this.#declaredStageCount > 0) {
       throw new Error(`phase() references undeclared stage "${title}".`);
     }
     if (nextIndex < 0) {

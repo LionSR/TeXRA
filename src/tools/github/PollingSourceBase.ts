@@ -28,8 +28,7 @@ import {
   Schedule,
 } from 'effect';
 
-import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
+import { createChannelTrace, type AgentTrace } from '@agent/trace';
 import { appSignals } from '@eventBus/AppSignals';
 
 import {

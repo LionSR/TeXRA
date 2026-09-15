@@ -376,8 +376,7 @@ export class SessionComposer extends LitElement {
   private get recording(): boolean {
     const recording = this.host?.recording;
     return (
-      recording !== null &&
-      recording !== undefined &&
+      recording != null &&
       recording.session === this.surface?.session &&
       recording.target === this.recordingTarget
     );

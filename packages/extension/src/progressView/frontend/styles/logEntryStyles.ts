@@ -312,7 +312,7 @@ export const logEntryStyles = css`
      markdown-rendered content this class normally wraps), so preserve them.
      Unlike .log-line, this text is actively being read while it grows, so
      prefer breaking at word boundaries (break-word) over .log-line's
-     break-all — mid-word breaks are more disruptive mid-stream.
+     overflow-wrap: anywhere — mid-word breaks are more disruptive mid-stream.
      Double-class selector on purpose: .banner-content--model (shared
      markdown sheet, adopted later) sets white-space: normal at the same
      0,1,0 specificity, and stylesheet order handed it the tie - collapsing

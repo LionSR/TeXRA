@@ -564,14 +564,13 @@ export class RunRegistry {
       return { kind: 'no_session', runStatus: status };
     }
 
-    const hasActiveChildren = this.hasActiveChildren(runId);
     const context = this.getToolUseFlowContext(runId);
     if (context) return { kind: 'active', context };
 
     if (
       run?.substate === RUN_SUBSTATE.RESUMING ||
       status === RUN_PHASE.WAITING ||
-      hasActiveChildren
+      this.hasActiveChildren(runId)
     ) {
       return { kind: 'queue' };
     }

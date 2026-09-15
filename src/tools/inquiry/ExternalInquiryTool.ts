@@ -18,10 +18,7 @@
 
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
 import {

@@ -118,20 +118,6 @@ const ATTACHMENT_COPY: Record<
   },
 };
 
-/**
- * The per-call context this tool reads from the caller's turn: the batch's
- * abort signal, the working directory, and the read tracker that gates
- * later edits.
- */
-interface ReadPorts {
-  readonly signal: AbortSignal;
-  readonly resolve: (targetPath: string) => {
-    path: WorkspacePathResolution;
-    display: string;
-  };
-  readonly recordRead: (path: string) => Effect.Effect<void, never, ToolCall>;
-}
-
 export class ReadFileTool extends defineTool({
   name: 'read_file',
   parallelSafe: true,
@@ -140,38 +126,27 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected execute(input: ReadInput) {
-    return Effect.scoped(
-      Effect.gen({ self: this }, function* () {
-        const call = yield* ToolCall;
-        const signal = yield* Effect.abortSignal;
-        const ports: ReadPorts = {
-          signal,
-          resolve: (targetPath) =>
-            call.inScope(() =>
-              resolveAndFormat(targetPath, call.workingDirectory),
-            ),
-          recordRead: recordToolFileRead,
-        };
-        return yield* this.read(ports, input);
-      }),
-    );
+    return Effect.scoped(this.read(input));
   }
 
   private readonly read = Effect.fn('ReadFileTool.execute')(function* (
     this: ReadFileTool,
-    ports: ReadPorts,
     input: ReadInput,
   ): Effect.fn.Return<
     ToolResult,
     unknown,
     ToolCall | Scope.Scope | FileSystem.FileSystem
   > {
+    const call = yield* ToolCall;
     // Local reads finish in milliseconds, so no mid-read cancellation is
     // needed — but a queued call must not start after the batch aborted.
-    if (ports.signal.aborted) {
+    const signal = yield* Effect.abortSignal;
+    if (signal.aborted) {
       return yield* Effect.fail(new ToolError('Cancelled before execution.'));
     }
-    const { path: resolved, display: displayPath } = ports.resolve(input.path);
+    const { path: resolved, display: displayPath } = call.inScope(() =>
+      resolveAndFormat(input.path, call.workingDirectory),
+    );
     const filePath = resolved.fsPath;
 
     const attachmentKind = this.getAttachmentConfig(resolved.absolute);
@@ -181,7 +156,7 @@ export class ReadFileTool extends defineTool({
         attachmentKind,
         resolved,
       );
-      yield* ports.recordRead(filePath);
+      yield* recordToolFileRead(filePath);
       return result;
     }
 
@@ -219,7 +194,7 @@ export class ReadFileTool extends defineTool({
       );
     }
 
-    yield* ports.recordRead(filePath);
+    yield* recordToolFileRead(filePath);
 
     const range = input.range;
     const totalLines = lines.length;

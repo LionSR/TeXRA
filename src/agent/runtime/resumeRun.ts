@@ -344,25 +344,24 @@ const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
     provisional: boolean,
   ) {
     if (!session.followUps.useRecovery(recovery)) return;
+    const warnUnreadable = (failure: unknown): void =>
+      log.warn(
+        `Run ${recovery.runId}: its queued follow-ups could not be read; keeping it recoverable`,
+        { data: failure },
+      );
     let queued = true;
     if (provisional) {
       const rows = yield* Effect.result(
         session.readAggregate(aggregateId('run', recovery.runId)),
       );
       if (Result.isFailure(rows)) {
-        log.warn(
-          `Run ${recovery.runId}: its queued follow-ups could not be read; keeping it recoverable`,
-          { data: rows.failure },
-        );
+        warnUnreadable(rows.failure);
       } else {
         const folded = foldRunState(null, rows.success);
         if (Result.isSuccess(folded)) {
           queued = (folded.success?.followUps.length ?? 0) > 0;
         } else {
-          log.warn(
-            `Run ${recovery.runId}: its queued follow-ups could not be read; keeping it recoverable`,
-            { data: folded.failure },
-          );
+          warnUnreadable(folded.failure);
         }
       }
     }

@@ -269,7 +269,9 @@ export class ProgressFollowUpController {
       compileFailures,
       runOutputs,
     );
-    const targets: CompileFixerTarget[] = [];
+    // The map is the target list: insertion order is the order targets are
+    // named in, and a path seen twice keeps its first target, enriched by the
+    // second.
     const targetByPath = new Map<string, CompileFixerTarget>();
     for (const candidate of preferred) {
       const location = this.deps.workspace.locatePath(candidate);
@@ -285,10 +287,9 @@ export class ProgressFollowUpController {
           continue;
         }
         targetByPath.set(target.path, target);
-        targets.push(target);
       }
     }
-    return targets;
+    return [...targetByPath.values()];
   }
 
   private async compileFixerTargetsForCandidate(

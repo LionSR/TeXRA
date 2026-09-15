@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, Exit, Stream } from 'effect';
+import { Effect, Stream } from 'effect';
 import OpenAI from 'openai';
 import { z } from 'zod';
 
@@ -1642,32 +1642,7 @@ export function openaiChatModel(
           let reader: ReadableStreamDefaultReader<Uint8Array> | undefined =
             undefined;
           // The request signal must abort before cancellation joins a pending read.
-          yield* Effect.addFinalizer((exit) => {
-            if (reader === undefined) return Effect.void;
-            const body = reader;
-            return Effect.tryPromise({
-              try: () => body.cancel(),
-              catch: (cause) => cause,
-            }).pipe(
-              Effect.catch((cause) => {
-                if (
-                  (signal.aborted && cause === signal.reason) ||
-                  (Exit.isFailure(exit) &&
-                    exit.cause.reasons.some(
-                      (reason) =>
-                        Cause.isFailReason(reason) &&
-                        reason.error instanceof ModelError &&
-                        reason.error.kind === 'transport' &&
-                        reason.error.cause === cause,
-                    ))
-                )
-                  return Effect.void;
-                return Effect.die(cause);
-              }),
-              Effect.ensuring(Effect.sync(() => body.releaseLock())),
-            );
-          });
-          const signal = yield* Effect.abortSignal;
+          const signal = yield* readerAbortSignal(() => reader);
           const response = yield* Effect.tryPromise({
             try: () =>
               client

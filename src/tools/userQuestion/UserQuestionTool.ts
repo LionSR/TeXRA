@@ -8,7 +8,7 @@ import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
 } from '@shared/schemas';
-import type { ToolResult, UserQuestionPermission } from '@shared/schemas';
+import type { UserQuestionPermission } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
