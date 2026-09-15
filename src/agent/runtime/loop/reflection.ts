@@ -712,6 +712,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             ledger,
             logger,
             bound,
+            config: session.roots.config,
             system: undefined,
             tools: [],
             force: true,
