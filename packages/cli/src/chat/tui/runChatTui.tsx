@@ -280,8 +280,8 @@ export async function runChat(
     resetSession: resetSessionForClear,
     resumeRun: chatController.resume,
   });
-  // Both persisted fields are `.nullish()` on the wire, so a resumed run that
-  // never carried them lands `null` where `SessionMeta` wants absent.
+  // Both persisted team fields are `.nullish()` on the wire, so a resumed run
+  // that never carried a preset lands `null` where `SessionMeta` wants absent.
   const initialPresetId =
     initialResume?.config.cli?.multiAgentPresetId ?? undefined;
   sessionMetaSignal.set({

@@ -5,9 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { Effect } from 'effect';
-import {
-  resolveChatDefaults as nativeResolveChatDefaults,
-} from '@cli/runtime/chatDefaults';
+import { resolveChatDefaults as nativeResolveChatDefaults } from '@cli/runtime/chatDefaults';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
   loadWorkspaceCliConfig,
