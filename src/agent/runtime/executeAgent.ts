@@ -7,7 +7,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
-import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
+import { persistedParentRunId } from '@agent/storage/runRecords';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';

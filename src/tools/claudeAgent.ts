@@ -34,10 +34,7 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { Secrets } from '@platform/secrets';

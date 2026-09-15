@@ -12,10 +12,7 @@ import {
 } from '@agent/runtime/run/toolResultText';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,

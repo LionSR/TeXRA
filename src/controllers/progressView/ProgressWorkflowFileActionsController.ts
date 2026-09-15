@@ -201,14 +201,6 @@ export class ProgressWorkflowFileActionsController {
     }
   }
 
-  clearRunBackups(stream: RunId): void {
-    this.modelOutputBackups.delete(stream);
-  }
-
-  clearAllBackups(): void {
-    this.modelOutputBackups.clear();
-  }
-
   private async executeWithBaseFile(
     file: string,
     base: string | undefined,

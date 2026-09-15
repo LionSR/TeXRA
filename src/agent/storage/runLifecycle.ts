@@ -16,10 +16,7 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import {
-  RUN_OUTCOME,
   AgentCategory,
-  RUN_PHASE,
-  RUN_SUBSTATE,
   aggregateId,
   aggregateTarget,
   type SessionEventDraft,

@@ -6,7 +6,7 @@
  */
 import * as path from 'node:path';
 
-import { Data, Effect, FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import {

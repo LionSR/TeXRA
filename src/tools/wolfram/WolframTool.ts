@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { ToolResult, ToolError } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import {
   buildBashApprovalRejectedResult,
