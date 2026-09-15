@@ -36,12 +36,9 @@ import type {
   AggregateClaim,
   DatabaseReadFailed,
   DatabaseWriteFailed,
-  DeletionMode,
   SessionOpenError,
   SessionStoreCleared,
 } from '@shared/session/database';
-import type { RequestError } from '@shared/session/requestErrors';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RunLedger } from '@shared/session/runLedger';
 import type {
@@ -49,6 +46,7 @@ import type {
   SessionEventsShape,
 } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
+import type { Requests } from './runApprovalQueue';
 import type { Runs } from './runRegistry';
 import type { SessionHandle, SessionHandleInit } from './SessionHandle';
 
@@ -147,19 +145,10 @@ export interface SessionGraph {
   /** The session's runs (`Runs`): built by the session layer over the
    *  session's doors, disposed when the session's scope closes. */
   readonly runs: Context.Service.Shape<typeof Runs>;
-  /** The one handler of every request a surface issues to this session
-   *  (PRD 7.6, 8.2): answered exactly once, an outcome or a request error. */
-  readonly requests: {
-    /** Internal deletion policies share the same admission and transaction as user requests. */
-    readonly removeRun: (
-      runId: RunId,
-      mode: DeletionMode,
-      expectedStartCommit: CommitOrdinal,
-    ) => Effect.Effect<Outcome, RequestError>;
-    readonly request: (
-      req: RuntimeRequest,
-    ) => Effect.Effect<Outcome, RequestError>;
-  };
+  /** The session's requests (`Requests`): its approval state and the one
+   *  handler of every request a surface issues to it (PRD 7.6, 8.2), built
+   *  by the session layer over this graph. */
+  readonly requests: Context.Service.Shape<typeof Requests>;
   /** The session's current commit ordinal: where a reader attaching now
    *  starts its `all` read (PRD 10.3). */
   readonly now: () => CommitOrdinal;
@@ -188,6 +177,10 @@ export interface SessionOwner {
   current(root: string): SessionHandle | undefined;
   /** Every session the owner holds, in no particular order. */
   list(): Effect.Effect<readonly SessionHandle[]>;
+  /** The owner's synchronous face on the same set as {@link current}: every
+   *  session whose handle exists and whose release has not begun. Builds
+   *  nothing and waits for nothing, so an entry still building is absent. */
+  held(): readonly SessionHandle[];
   /** Close the session of a storage root, settling what it owns inside
    *  `signal`'s budget, or the runtime's own when the caller passes none. */
   close(root: string, signal?: AbortSignal): Effect.Effect<SessionCloseReport>;
@@ -255,6 +248,16 @@ export function openSessionEffect(
  */
 export function listSessions(): Effect.Effect<readonly SessionHandle[]> {
   return Effect.suspend(() => owner?.list() ?? Effect.succeed([]));
+}
+
+/**
+ * Every session the process's owner holds right now, read synchronously: the
+ * enumeration a process-shutdown sweep needs, which has no fiber to wait on a
+ * build with. A process with no owner installed holds none. This is the one
+ * list of live sessions — no module keeps a second one.
+ */
+export function heldSessions(): readonly SessionHandle[] {
+  return owner?.held() ?? [];
 }
 
 function resolveRoots(init: SessionHandleInit): SessionOpen {

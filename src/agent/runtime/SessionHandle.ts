@@ -7,9 +7,9 @@
  * readiness gate: a restored session is usable the moment it is constructed,
  * and what a stream with no live flow context in this process is gets decided
  * by the fold's `readOnly` and `group` rules over the session's view, never
- * by a boot pass. It carries the session's `Runs` as the session layer built
- * it, and composes {@link SessionHostInteractions} and the other
- * session-scoped owners.
+ * by a boot pass. It carries the session's `Runs` and `Requests` as the
+ * session layer built them, and composes {@link SessionHostInteractions} and
+ * the other session-scoped owners.
  *
  * A session is one per workspace storage root, built and held by the
  * process's session owner (the `Sessions` map behind `openSessionEffect`): the
@@ -24,8 +24,7 @@
  * Fresh construction is in FORCED dependency order with every cross-reference
  * explicit: no member is ever allowed to default to a neighboring module
  * singleton (the "silent state split" trap — a fresh member quietly sharing a
- * singleton would leak cross-session `clearAll` sweeps). The
- * fresh-ctor test in `SessionHandle.vitest.ts` locks this.
+ * singleton would leak cross-session `clearAll` sweeps).
  *
  * It is deliberately NOT a conversation/session API (send/stream/resume/history):
  * Anthropic shipped and then deleted exactly that shape in the Agent SDK.
@@ -107,15 +106,13 @@ import { redactedForFact } from './loop/rows';
 import { runEventDraft } from './SessionEvents';
 import {
   defaultRootSession,
+  heldSessions,
   openSessionEffect,
   type SessionGraph,
 } from './sessionGraph';
-import {
-  createSessionApprovals,
-  type SessionApprovals,
-} from './runApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
+import type { SessionApprovals } from './runApprovalQueue';
 import type { RunRegistry } from './runRegistry';
 import type { ModelRetryGate } from './ModelRetryGate';
 
@@ -234,9 +231,13 @@ export class SessionHandle {
    */
   readonly events: SessionEventReads;
   /**
-   * The one handler of every request a surface issues to this session (PRD
-   * 7.6, 8.2): an in-process surface runs it on the runtime its own
+   * The session's `Requests` service, as the session layer built it in the
+   * session's scope (`SessionGraph.requests`): its approval state and the one
+   * handler of every request a surface issues to this session (PRD 7.6, 8.2).
+   * An in-process surface runs that handler on the runtime its own
    * composition root owns and reads the Effect's own result as the response.
+   * The record carries the built value for a host that holds the session;
+   * Effect code below a launch takes it from context.
    */
   readonly requests: SessionGraph['requests'];
   /** The run ledger over this session's event plane, provided to each run's
@@ -275,7 +276,12 @@ export class SessionHandle {
   private readonly publications = new Set<TrackedPublication>();
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
-  /** Session-owned approval queues, pending registries, and bypass state. */
+  /**
+   * This session's approval queues, pending registries and bypass state: the
+   * `approvals` of its {@link requests}, carried here because run-scoped host
+   * code (the approval gates, the goal and plan tools) reaches it through the
+   * session record. Not a second instance — the session layer builds one.
+   */
   readonly approvals: SessionApprovals;
   private texraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
   /**
@@ -312,18 +318,12 @@ export class SessionHandle {
     // member fall back to a neighboring module singleton (silent-state-split).
     this.transcripts = init.transcripts;
     this.roots = init.roots;
-    const interactions = new SessionHostInteractions();
-    // The approval authority publishes a stream's full policy snapshot on
-    // every effective bypass change; `setApprovalPolicy` below publishes the
-    // same snapshot when the policy half moves. Built before the graph: the
-    // session's runs are built over it.
-    const approvals = createSessionApprovals(interactions, (runId) =>
-      this.publishApprovalPolicy(runId),
-    );
-    this.interactions = interactions;
-    this.approvals = approvals;
+    // Built before the graph: the session's approvals are built over it, and
+    // announce every effective bypass change through it.
+    this.interactions = new SessionHostInteractions();
     const graph = init.graph(this);
     this.graph = graph;
+    this.approvals = graph.requests.approvals;
     this.events = graph.events;
     this.ledger = graph.ledger;
     this.view = graph.view;
@@ -346,13 +346,9 @@ export class SessionHandle {
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
     this.workflowControls = new WorkflowControlRegistry();
     if (init.interactions) this.interactions.use(init.interactions);
-    liveSessions.add(this);
     // Register teardown in reverse LIFO order so `teardown.dispose()` runs the
     // session's shutdown sequence top-to-bottom: drain traces, then unwind
-    // each owner in dependency order, finally leaving `liveSessions`.
-    this.teardown.add(() => {
-      liveSessions.delete(this);
-    });
+    // each owner in dependency order.
     // The graph outlives every publisher above it: the owner releases it
     // after this store has run, so a late fact still lands in the log until
     // the last owner has unwound.
@@ -397,9 +393,11 @@ export class SessionHandle {
 
   /**
    * The one emitter of `approval.policy` (PRD one-fold-three-renderers,
-   * section 6, item 2), for a change after the run's `run.start`.
+   * section 6, item 2), for a change after the run's `run.start`. The session
+   * layer binds it as the approval state's `onPolicyChanged` when it builds
+   * this session's {@link requests}, which is the other caller.
    */
-  private publishApprovalPolicy(runId: RunId): void {
+  publishApprovalPolicy(runId: RunId): void {
     if (this.disposed) return;
     const snapshot = this.approvalPolicySnapshotFor(runId);
     this.detachPublication(runId, (append) =>
@@ -1259,25 +1257,26 @@ export class SessionHandle {
   /**
    * Tear down everything this session owns through the constructor-registered
    * LIFO store, once: the store aggregates each disposer's failure and still
-   * runs the remaining disposers, including the final `liveSessions`
-   * removal. The session owner calls it, after disposing the session's
-   * runs, whenever it releases the session (a `closeSession`, the runtime's
-   * disposal, {@link dispose}).
+   * runs the remaining disposers. The session owner calls it, after disposing
+   * the session's runs, whenever it releases the session (a `closeSession`,
+   * the runtime's disposal, {@link dispose}). On owner-release paths
+   * (`closeSession`, runtime disposal) the owner has already dropped the
+   * session from the set {@link forEachLiveSession} reads by then;
+   * {@link dispose} unwinds first and drops the session afterwards.
    */
   unwind(): void {
     this.teardown.dispose();
   }
 }
 
-/** Live sessions whose background processes must be stopped at shutdown. */
-const liveSessions = new Set<SessionHandle>();
-
-/** Visit every live session — for process-shutdown sweeps that must reach
- * session-keyed registries (e.g. the agent-CLI session stores). */
+/** Visit every session the process's owner holds — for process-shutdown
+ * sweeps that must reach session-keyed registries (e.g. the agent-CLI session
+ * stores). The owner's held set is the only list of live sessions; no module
+ * keeps a second one. */
 export function forEachLiveSession(
   callback: (session: SessionHandle) => void,
 ): void {
-  for (const session of liveSessions) callback(session);
+  for (const session of heldSessions()) callback(session);
 }
 
 /**
@@ -1492,7 +1491,7 @@ export function defaultSession(): SessionHandle {
   }
   if (
     !defaultSessionFallbackWarned &&
-    [...liveSessions].some((session) => session !== processDefault)
+    heldSessions().some((session) => session !== processDefault)
   ) {
     defaultSessionFallbackWarned = true;
     logger.warn(

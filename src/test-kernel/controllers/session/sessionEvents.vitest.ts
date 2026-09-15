@@ -66,6 +66,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { closeSession, openSessionEffect } from '@agent/runtime/sessionGraph';
+import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import { databaseLayer } from '@controllers/session/Database';
@@ -675,6 +676,7 @@ describe('Sessions owner', () => {
         } as unknown as SessionHandle;
         const requests = sessionRequests(
           session,
+          createSessionApprovals({ setApprovalBypassState() {} }),
           db,
           local,
           yield* InquiryRecords,
