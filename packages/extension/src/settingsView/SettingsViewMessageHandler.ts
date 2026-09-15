@@ -91,7 +91,6 @@ import {
   refreshToolAvailability,
 } from '@tools/toolAvailability';
 import { goalList } from '@tools/goal';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { setToolEnabled } from '@utils/config/constants';
@@ -591,7 +590,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         stores: platformSettingsStores(),
         // The shared function already gates this hook on
         // `configTarget !== 'global'`; this checks only the workspace half.
-        requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
+        requiresOpenWorkspace: () => !defaultSession().roots.workspace,
         onApprovalPolicyChanged: (policy) => {
           defaultSession().setApprovalPolicy(policy);
           appSignals.emit('approvalPolicyChanged', undefined);
