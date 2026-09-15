@@ -134,10 +134,13 @@ function writeSlot(
 
 /**
  * Validate and persist a state-backed setting, then apply the row's declared
- * write effects. Throws if `value` fails the entry's schema, or if the row
- * excludes a setting the catalog does not have: both are catalog defects, and
- * both stay defects of the program rather than joining the write's error
- * channel. Config-backed settings use the target declared by their catalog
+ * write effects. A value the entry's schema rejects, and a row that excludes a
+ * setting the catalog does not have, are both defects of the program rather
+ * than members of the write's error channel — the failure is thrown, not
+ * constructed, because `src/shared` may not take a value import from
+ * `src/platform` (the subsystem edge ratchet pins that edge to type-only).
+ * Callers that hand this an unvalidated `unknown` must therefore validate
+ * first. Config-backed settings use the target declared by their catalog
  * row, falling back to `'workspace'`; an explicit caller target wins.
  * State-store slots ignore target.
  *

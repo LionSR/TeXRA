@@ -19,7 +19,7 @@ import {
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
-  type ConfigWriteFailed,
+  ConfigWriteFailed,
   type StateStore,
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
@@ -265,10 +265,18 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     value: T,
     target?: ConfigTarget,
   ): Effect.Effect<void, ConfigWriteFailed> {
+    if (target !== undefined && target === this.failUpdatesForTarget) {
+      const message = `simulated ${target}-scope update failure for ${key}`;
+      return Effect.fail(
+        new ConfigWriteFailed({
+          key,
+          target,
+          message,
+          cause: new Error(message),
+        }),
+      );
+    }
     return Effect.sync(() => {
-      if (target !== undefined && target === this.failUpdatesForTarget) {
-        throw new Error(`simulated ${target}-scope update failure for ${key}`);
-      }
       this.updateCalls.push({ key, value, target });
       if (target === undefined) {
         this.lastTargets.delete(key);
