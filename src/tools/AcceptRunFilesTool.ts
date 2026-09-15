@@ -51,21 +51,23 @@ import { ensureError } from '@utils/errors/errorMessage';
 /**
  * `BaseFS.isFile` without the facade.
  *
- * The facade's `stat` was lstat-backed, so a path that *is* a link was never a
- * file however its target resolved. `fs.stat` follows the link instead, so
- * the question has to be asked in two parts, as `entryExists` does: a path
- * `readLink` names is a link, and answers "not a file" whatever follows
- * (dangling or circular alike, where the follow raises `ELOOP`); everything
- * else answers from the follow, with `ENOENT` and `ENOTDIR` reading as absent.
+ * The facade's `isFile` is the FileType bitmask after a lstat that, for a
+ * link, ORs in the target's type: a symlink to a file is a file, a circular
+ * link is not. `fs.stat` follows, so a symlink to a file answers `File`, a
+ * dangling target is `NotFound`/`ENOTDIR`, and a circular link raises `ELOOP`
+ * (`BadResource`) — those absences match `statIfExists`, and any other
+ * failure still propagates.
  */
 const fileAt = (fs: FileSystem.FileSystem, target: string) =>
-  fs.readLink(target).pipe(
-    Effect.as(false),
-    Effect.catch(() =>
-      fs.stat(target).pipe(
-        Effect.map((stats) => stats.type === 'File'),
-        Effect.catchIf(absentReason, () => Effect.succeed(false)),
-      ),
+  fs.stat(target).pipe(
+    Effect.map((stats) => stats.type === 'File'),
+    Effect.catchIf(
+      (error) =>
+        absentReason(error) ||
+        (error.reason._tag === 'BadResource' &&
+          (error.reason.cause as { code?: string } | undefined)?.code ===
+            'ELOOP'),
+      () => Effect.succeed(false),
     ),
   );
 
