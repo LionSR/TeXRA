@@ -44,13 +44,13 @@ export function themeIsDark(theme: Theme): boolean {
   return theme === 'dark' || theme === 'high-contrast';
 }
 
-const DARK_BODY_CLASSES: readonly string[] = THEME_KINDS.flatMap((kind) =>
-  themeIsDark(kind) ? [`vscode-${kind}`] : [],
-);
+const DARK_BODY_CLASSES: readonly string[] = THEME_KINDS.filter(
+  themeIsDark,
+).map((kind) => `vscode-${kind}`);
 
 const LIGHT_BODY_CLASSES: readonly string[] = [
-  ...THEME_KINDS.flatMap((kind) =>
-    themeIsDark(kind) ? [] : [`vscode-${kind}`],
+  ...THEME_KINDS.filter((kind) => !themeIsDark(kind)).map(
+    (kind) => `vscode-${kind}`,
   ),
   // VS Code's special light high-contrast class, not derivable from
   // THEME_KINDS (it is a theme variant, not a kind).

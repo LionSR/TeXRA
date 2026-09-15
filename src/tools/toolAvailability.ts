@@ -60,12 +60,11 @@ export function getDisabledToolNames(
   globalState: StateStore,
 ): ReadonlySet<string> {
   const disabledIds = getDisabledToolIds(globalState);
-  const disabled = new Set<string>();
-  for (const def of EXTERNAL_TOOL_DEFS) {
-    if (!disabledIds.has(def.id)) continue;
-    for (const toolName of def.tools) disabled.add(toolName);
-  }
-  return disabled;
+  return new Set<string>(
+    EXTERNAL_TOOL_DEFS.filter((def) => disabledIds.has(def.id)).flatMap(
+      (def) => def.tools,
+    ),
+  );
 }
 
 /**
@@ -297,13 +296,11 @@ function resolveOptionalStatus(
 function buildUnavailableSet(
   results: ExternalToolCheckResult[],
 ): ReadonlySet<string> {
-  const unavailable = new Set<string>();
-  for (const { tools, status } of results) {
-    if (status === 'not-found') {
-      for (const t of tools) unavailable.add(t);
-    }
-  }
-  return unavailable;
+  return new Set<string>(
+    results
+      .filter((result) => result.status === 'not-found')
+      .flatMap((result) => result.tools),
+  );
 }
 
 /**

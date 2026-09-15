@@ -6,7 +6,7 @@ import { FILE_HANDLING_RULES } from './fileHandlingRules';
 /**
  * File categories for the product's fixed file-handling rules.
  *
- * Note: This is distinct from DocumentFileType in utils/config/constants.ts
+ * Note: This is distinct from DocumentFileType in @shared/schemas/fileTypes.ts
  * which defines UI file input field types.
  */
 export type ExtensionCategory = 'input' | 'context' | 'media' | 'edited';

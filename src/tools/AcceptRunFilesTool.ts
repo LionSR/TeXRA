@@ -300,7 +300,6 @@ Parameters map directly to subagent-result delivery attributes:
         originalPath: string;
         destAbsolutePath: string;
       }[] = [];
-      let rejected = 0;
       let unchanged = 0;
       const rejections: RecordedRejection[] = [];
 
@@ -324,7 +323,6 @@ Parameters map directly to subagent-result delivery attributes:
         });
 
         if (approval.action !== 'apply') {
-          rejected++;
           rejections.push({ path: entry.original, refusal: approval });
           results.push(`rejected: ${entry.original}${mappingNote}`);
           continue;
@@ -380,7 +378,7 @@ Parameters map directly to subagent-result delivery attributes:
 
       // All changed files rejected: one rejection result, worded by the
       // refusal that outranks the others.
-      if (rejected === changed && acceptedEntries.length === 0) {
+      if (rejections.length === changed && acceptedEntries.length === 0) {
         const { path, refusal } = summarizeRefusals(rejections);
         return buildApprovalRejectedResult(path, 'accept_run_files', refusal);
       }

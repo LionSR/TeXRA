@@ -213,6 +213,7 @@ function makeUniquePercentHeaderName(
   roundDir: string,
 ): string {
   const safeName = getSafeDocumentRelativePath(source);
+  const parsed = path.posix.parse(safeName);
   let candidate = safeName;
   let suffix = 2;
 
@@ -220,7 +221,6 @@ function makeUniquePercentHeaderName(
     getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/');
 
   while (reservedFinalPaths.has(finalPathKey(candidate))) {
-    const parsed = path.posix.parse(safeName);
     candidate = path.posix.join(
       parsed.dir,
       `${parsed.name}-${suffix}${parsed.ext}`,

@@ -115,9 +115,6 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         delegationAgentScope: parent.delegationAgentScope,
       }),
     };
-    let configPayload: AgentConfigPayload;
-    let agentName: string;
-
     if (call.options.schema !== undefined) {
       const requestedAgentName = call.options.agentName;
       if (requestedAgentName === undefined) {
@@ -133,14 +130,16 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         ),
       );
       const model = yield* workflowScriptModelSelection(call, parent);
-      agentName = agent.name;
-      configPayload = {
-        ...sharedConfigFields,
-        agent: agent.name,
-        agentSource: agent.source,
-        model,
-        agentCategory: AgentCategory.ToolUse,
-        outputSchema: call.options.schema,
+      return {
+        configPayload: {
+          ...sharedConfigFields,
+          agent: agent.name,
+          agentSource: agent.source,
+          model,
+          agentCategory: AgentCategory.ToolUse,
+          outputSchema: call.options.schema,
+        },
+        agentName: agent.name,
       };
     } else {
       const requestedAgentName = call.options.agentName;
@@ -194,19 +193,20 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       if (oversizedBibRejection) {
         throw new WorkflowRunAbortError(oversizedBibRejection.error);
       }
-      agentName = agent.name;
-      configPayload = {
-        ...sharedConfigFields,
-        agent: agent.name,
-        agentSource: agent.source,
-        model,
-        inputFiles,
-        contextFiles,
-        mediaFiles,
-        agentCategory: AgentCategory.Workflow,
+      return {
+        configPayload: {
+          ...sharedConfigFields,
+          agent: agent.name,
+          agentSource: agent.source,
+          model,
+          inputFiles,
+          contextFiles,
+          mediaFiles,
+          agentCategory: AgentCategory.Workflow,
+        },
+        agentName: agent.name,
       };
     }
-    return { configPayload, agentName };
   },
 );
 
@@ -857,7 +857,7 @@ export function createWorkflowScriptAgentRunner(
                 // failed/cancelled/retried attempt still shows what it consumed
                 // even when run never reaches the success path below.
                 if (costUsd !== undefined) {
-                  invocation.report({ costUsd: costUsd });
+                  invocation.report({ costUsd });
                 }
               },
             };

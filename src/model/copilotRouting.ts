@@ -35,7 +35,7 @@ function copilotRouteModels(state: Pick<StateStore, 'get'>): readonly string[] {
 export function preferredCopilotRouteModels(
   state: Pick<StateStore, 'get'>,
 ): readonly string[] {
-  return [...copilotRouteModels(state)];
+  return copilotRouteModels(state);
 }
 
 /** Whether the user prefers the Copilot route for this canonical base model. */

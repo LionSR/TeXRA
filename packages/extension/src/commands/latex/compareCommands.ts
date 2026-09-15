@@ -135,20 +135,18 @@ const validateFilesExist = Effect.fnUntraced(function* (
   editedLocation: FileLocation,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  if (!(yield* fs.exists(baseLocation.absolutePath))) {
-    void showLoggedMessage(
-      CHANNEL,
-      `Base file not found: ${baseLocation.absolutePath}`,
-    );
-    return false;
-  }
-
-  if (!(yield* fs.exists(editedLocation.absolutePath))) {
-    void showLoggedMessage(
-      CHANNEL,
-      `Edited file not found: ${editedLocation.absolutePath}`,
-    );
-    return false;
+  const required: ReadonlyArray<readonly [string, FileLocation]> = [
+    ['Base', baseLocation],
+    ['Edited', editedLocation],
+  ];
+  for (const [label, location] of required) {
+    if (!(yield* fs.exists(location.absolutePath))) {
+      void showLoggedMessage(
+        CHANNEL,
+        `${label} file not found: ${location.absolutePath}`,
+      );
+      return false;
+    }
   }
 
   return true;

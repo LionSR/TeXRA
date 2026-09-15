@@ -30,7 +30,8 @@ export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
  * `data.status: 'running'`, either still streaming or orphaned
  * because its stream never got a `stream.end` (run cancelled, crashed, or
  * the host reloaded mid-stream). Its consumers are `SessionHandle`'s
- * host-exit settlement and its status sweep.
+ * host-exit settlement and its status sweep, and the session fold's
+ * live-text holder (`sessionFold.ts`, `applyEntry`).
  */
 export function isRunningStreamingTextEntry(entry: StreamLogEntry): boolean {
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) return false;

@@ -109,10 +109,11 @@ function commonRunContextFields<T extends CreateRunContextCommon>(
  */
 export function createRunContext(options: CreateRunContextOptions): RunContext {
   const { config } = options;
+  const common = commonRunContextFields(options);
   if (options.runScope) {
     return Object.freeze({
       kind: 'launch',
-      ...commonRunContextFields(options),
+      ...common,
       runScope: options.runScope,
       get model() {
         return config?.model;
@@ -122,7 +123,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
 
   return Object.freeze({
     kind: 'bare',
-    ...commonRunContextFields(options),
+    ...common,
     runId: options.runId,
     workingDirectory: options.workingDirectory,
     session: options.session,

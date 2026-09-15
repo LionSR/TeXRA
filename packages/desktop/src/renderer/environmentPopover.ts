@@ -8,6 +8,9 @@ import {
   type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages';
 
+/** Sources listed by name; the rest collapse into one "+N more" count. */
+const MAX_VISIBLE_SOURCES = 3;
+
 interface EnvironmentPopoverDeps {
   getWorkbenchTabs(): readonly WorkbenchTab[];
   getChildRunCount(): number;
@@ -148,7 +151,7 @@ export function createEnvironmentPopover({
                     <span>No open sources</span>
                   </div>
                 `
-              : sources.slice(0, 3).map(
+              : sources.slice(0, MAX_VISIBLE_SOURCES).map(
                   (source) => html`
                     <div class="task-environment-row">
                       <span class="task-environment-row-icon">
@@ -160,10 +163,10 @@ export function createEnvironmentPopover({
                 )
           }
           ${
-            sources.length > 3
+            sources.length > MAX_VISIBLE_SOURCES
               ? html`
                   <div class="task-environment-more">
-                    +${sources.length - 3} more
+                    +${sources.length - MAX_VISIBLE_SOURCES} more
                   </div>
                 `
               : nothing

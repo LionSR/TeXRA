@@ -143,11 +143,11 @@ export function readRememberedDesktopProjects(
       }).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
-            if (isFileNotFoundError(error) || isNotADirectoryError(error))
-              return undefined;
-            warn(
-              `Cannot read the remembered project ${root}; forgetting it: ${toErrorMessage(error)}`,
-            );
+            if (!isFileNotFoundError(error) && !isNotADirectoryError(error)) {
+              warn(
+                `Cannot read the remembered project ${root}; forgetting it: ${toErrorMessage(error)}`,
+              );
+            }
             return undefined;
           }),
         ),

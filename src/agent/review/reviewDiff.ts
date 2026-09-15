@@ -75,6 +75,15 @@ function makeGit(cwd: string): SimpleGit {
   );
 }
 
+/** `makeGit(cwd)`, or null when that path cannot be opened as a working tree. */
+function tryMakeGit(cwd: string): SimpleGit | null {
+  try {
+    return makeGit(cwd);
+  } catch {
+    return null;
+  }
+}
+
 /** Run a git command, returning stdout on success and null on error. */
 async function rawGit(sg: SimpleGit, args: string[]): Promise<string | null> {
   try {
@@ -196,12 +205,8 @@ interface BaseBranchCandidate {
 export async function listBaseBranchCandidates(
   cwd: string,
 ): Promise<BaseBranchCandidate[]> {
-  let sg: SimpleGit;
-  try {
-    sg = makeGit(cwd);
-  } catch {
-    return [];
-  }
+  const sg = tryMakeGit(cwd);
+  if (!sg) return [];
   const repoRoot = (await rawGit(sg, ['rev-parse', '--show-toplevel']))?.trim();
   if (!repoRoot) return [];
   const sgRoot = makeGit(repoRoot);
@@ -221,7 +226,8 @@ export async function listBaseBranchCandidates(
       ...splitOutputLines(remotesOut ?? ''),
     ])
       // `origin/HEAD` is a symbolic alias, not a real branch to diff against.
-      .filter((ref) => ref && ref !== 'origin/HEAD')
+      // (`splitOutputLines` already drops empty lines.)
+      .filter((ref) => ref !== 'origin/HEAD')
       .map((ref) => ({ ref, current: ref === current }))
   );
 }
@@ -275,10 +281,8 @@ async function resolveOnBaseBranch(
 export async function collectReviewDiff(
   options: CollectReviewDiffOptions,
 ): Promise<CollectReviewDiffResult> {
-  let sg: SimpleGit;
-  try {
-    sg = makeGit(options.cwd);
-  } catch {
+  const sg = tryMakeGit(options.cwd);
+  if (!sg) {
     return { ok: false, reason: 'The workspace is not a git repository.' };
   }
 
@@ -348,13 +352,11 @@ export async function collectReviewDiff(
     return { ok: false, reason: `git diff against ${baseRef} failed.` };
   }
   const changedFiles = splitOutputLines(nameOnly);
-  let combined = diffText;
 
-  let truncated = false;
-  if (combined.length > MAX_REVIEW_DIFF_CHARS) {
-    combined = `${combined.slice(0, MAX_REVIEW_DIFF_CHARS)}\n[... diff truncated for review]`;
-    truncated = true;
-  }
+  const truncated = diffText.length > MAX_REVIEW_DIFF_CHARS;
+  const combined = truncated
+    ? `${diffText.slice(0, MAX_REVIEW_DIFF_CHARS)}\n[... diff truncated for review]`
+    : diffText;
 
   return {
     ok: true,

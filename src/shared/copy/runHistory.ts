@@ -6,18 +6,15 @@ export function formatCliHistoryDeletionSummary(counts: {
   readonly active: number;
   readonly failed: number;
 }): string {
-  const sentences = [
+  return [
     `Deleted ${formatResultCount(counts.deleted, 'stored run')}.`,
-  ];
-  if (counts.active > 0) {
-    sentences.push(
-      `Retained ${formatResultCount(counts.active, 'active run')}.`,
-    );
-  }
-  if (counts.failed > 0) {
-    sentences.push(
-      `Failed to delete ${formatResultCount(counts.failed, 'run')}.`,
-    );
-  }
-  return sentences.join(' ');
+    counts.active > 0
+      ? `Retained ${formatResultCount(counts.active, 'active run')}.`
+      : undefined,
+    counts.failed > 0
+      ? `Failed to delete ${formatResultCount(counts.failed, 'run')}.`
+      : undefined,
+  ]
+    .filter(filterNotNullish)
+    .join(' ');
 }

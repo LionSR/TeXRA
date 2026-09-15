@@ -81,12 +81,12 @@ export function parseFrontmatter(raw: string): {
 function buildFrontmatter(meta: MemoryFileMeta): string {
   // Build the object explicitly so only set fields are serialized, in a
   // stable key order.
-  const fields: Record<string, string | boolean> = {
+  const fields = {
     modifiedBy: meta.modifiedBy,
+    ...(meta.runId ? { runId: meta.runId } : {}),
+    modifiedAt: meta.modifiedAt,
+    ...(meta.pinned ? { pinned: true } : {}),
   };
-  if (meta.runId) fields.runId = meta.runId;
-  fields.modifiedAt = meta.modifiedAt;
-  if (meta.pinned) fields.pinned = true;
 
   // yaml.stringify ends with a trailing newline, so the closing fence sits on
   // its own line: "---\n<fields>---".

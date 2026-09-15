@@ -1121,22 +1121,21 @@ export const modelInvokerLayer = (): Layer.Layer<
           );
           return { kind: 'retry', state };
         }
-        if (decision.action === 'deny') {
-          logProgressStatus(logger, decision.reason);
-          state = yield* Effect.uninterruptible(
-            ledger.appendBatch(runId, state, [
-              retrySnapshot(state, { pendingRetry: null, lastError: info }),
-            ]),
-          );
-          return { kind: 'deny', state };
-        }
-        logProgressStatus(logger, 'Retry cancelled by user');
+        logProgressStatus(
+          logger,
+          decision.action === 'deny'
+            ? decision.reason
+            : 'Retry cancelled by user',
+        );
+        // Either answer clears the gate, keeping the failure it recorded.
         state = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
             retrySnapshot(state, { pendingRetry: null, lastError: info }),
           ]),
         );
-        return { kind: 'cancel', state };
+        return decision.action === 'deny'
+          ? { kind: 'deny', state }
+          : { kind: 'cancel', state };
       });
 
       const invoke = Effect.fn('ModelInvoker.invoke')(function* (

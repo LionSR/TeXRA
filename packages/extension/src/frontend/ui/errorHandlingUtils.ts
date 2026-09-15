@@ -7,24 +7,15 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 /** Valid documentation identifiers for error messages. */
 type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
 
-function logErrorMessage(
-  channel: string,
-  prefix: string,
-  err: unknown,
-): string {
-  const log = createLog(channel);
-  const message = formatError(prefix, err);
-  log.error(message);
-  return message;
-}
-
 /** Log a formatted error message and display it to the user. */
 export async function showLoggedErrorMessage(
   channel: string,
   prefix: string,
   err: unknown,
 ): Promise<string> {
-  const message = logErrorMessage(channel, prefix, err);
+  const log = createLog(channel);
+  const message = formatError(prefix, err);
+  log.error(message);
   await vscode.window.showErrorMessage(message);
   return message;
 }

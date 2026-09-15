@@ -231,11 +231,11 @@ export class WorkflowRunBoard extends LitElement {
 
   private expandedGroups(phaseKey: string): ReadonlySet<WorkflowRowGroup> {
     const groups = this.surface.groups.get(this.run.id);
-    const expanded = new Set<WorkflowRowGroup>();
-    for (const group of ['finished', 'queued', 'declared'] as const) {
-      if (groups?.get(groupKey(phaseKey, group)) === true) expanded.add(group);
-    }
-    return expanded;
+    return new Set(
+      (['finished', 'queued', 'declared'] as const).filter(
+        (group) => groups?.get(groupKey(phaseKey, group)) === true,
+      ),
+    );
   }
 
   private rowsOf(phase: WorkflowPhaseModel): readonly WorkflowPhaseRow[] {

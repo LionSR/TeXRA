@@ -34,19 +34,16 @@ function parseProgram(source: string): Program {
 }
 
 function rejectsModuleLoading(program: Program): boolean {
+  const isRequire = (node: AnyNode): boolean =>
+    node.type === 'Identifier' && node.name === 'require';
+
   let rejected = false;
   walkAst(program, (node: AnyNode) => {
-    if (node.type === 'ImportDeclaration' || node.type === 'ImportExpression') {
-      rejected = true;
-      return;
-    }
     if (
-      (node.type === 'CallExpression' &&
-        node.callee.type === 'Identifier' &&
-        node.callee.name === 'require') ||
-      (node.type === 'TaggedTemplateExpression' &&
-        node.tag.type === 'Identifier' &&
-        node.tag.name === 'require')
+      node.type === 'ImportDeclaration' ||
+      node.type === 'ImportExpression' ||
+      (node.type === 'CallExpression' && isRequire(node.callee)) ||
+      (node.type === 'TaggedTemplateExpression' && isRequire(node.tag))
     ) {
       rejected = true;
     }

@@ -27,10 +27,9 @@ function formatWorkflowCallFiles(
   if (!files) return undefined;
   const visible = files.input.slice(0, CALL_FILE_PREVIEW_LIMIT);
   const hiddenInputs = files.input.length - visible.length;
+  const hiddenSuffix = hiddenInputs > 0 ? ` +${hiddenInputs}` : '';
   const parts = [
-    visible.length > 0
-      ? `${visible.join(', ')}${hiddenInputs > 0 ? ` +${hiddenInputs}` : ''}`
-      : undefined,
+    visible.length > 0 ? `${visible.join(', ')}${hiddenSuffix}` : undefined,
     files.context.length > 0 ? `${files.context.length} context` : undefined,
     files.media.length > 0 ? `${files.media.length} media` : undefined,
   ].filter(filterNotNullish);

@@ -547,6 +547,21 @@ export const databaseLayer = (
             ])).map((row) => AggregateIdSchema.parse(row.aggregate_id)),
           );
         });
+      /** Claim every observed row in the caller's transaction, refusing the
+       *  first whose claim moved since it was read. */
+      const claimObserved = (rows: readonly AggregateState[], moved: string) =>
+        Effect.gen(function* () {
+          for (const row of rows) {
+            const claimed = yield* sql.unsafe<Record<string, unknown>>(claim, [
+              identity.ownerId,
+              row.aggregateId,
+              row.ownerId,
+            ]);
+            if (claimed.length !== 1) {
+              throw new Error(`${moved}: ${row.aggregateId}`);
+            }
+          }
+        });
       const proveReclaimable = (
         observed: readonly AggregateState[],
         mode?: DeletionMode,
@@ -582,13 +597,7 @@ export const databaseLayer = (
       ) =>
         Effect.forEach(prepared, ({ draft, payload }) =>
           Effect.gen(function* () {
-            if (
-              draft.type === 'desktop.projects.changed' ||
-              draft.type === 'inquiry.recorded' ||
-              draft.type === 'update.check.recorded' ||
-              draft.type === 'state.value.set'
-            ) {
-              // Profile-state writes own their aggregate only during this transaction.
+            if (borrowsClaim(draft)) {
               yield* sql.unsafe<Record<string, unknown>>(claim, [
                 identity.ownerId,
                 draft.aggregateId,
@@ -763,12 +772,7 @@ export const databaseLayer = (
                 `No commit assigned for aggregate ${draft.aggregateId}`,
               );
             }
-            if (
-              draft.type === 'desktop.projects.changed' ||
-              draft.type === 'inquiry.recorded' ||
-              draft.type === 'update.check.recorded' ||
-              draft.type === 'state.value.set'
-            ) {
+            if (borrowsClaim(draft)) {
               yield* sql.unsafe<Record<string, unknown>>(release, [
                 JSON.stringify([draft.aggregateId]),
                 identity.ownerId,
@@ -1059,19 +1063,10 @@ export const databaseLayer = (
             yield* proveReclaimable(observed);
             return yield* transact(
               Effect.gen(function* () {
-                for (const row of observed) {
-                  if (
-                    (yield* sql.unsafe<Record<string, unknown>>(claim, [
-                      identity.ownerId,
-                      row.aggregateId,
-                      row.ownerId,
-                    ])).length !== 1
-                  ) {
-                    throw new Error(
-                      `Claim changed before acquisition: ${row.aggregateId}`,
-                    );
-                  }
-                }
+                yield* claimObserved(
+                  observed,
+                  'Claim changed before acquisition',
+                );
                 return observed
                   .filter((row) => row.ownerId !== identity.ownerId)
                   .map((row) => row.aggregateId);
@@ -1135,19 +1130,10 @@ export const databaseLayer = (
                     `Deletion dependents changed before acquisition: ${id}`,
                   );
                 }
-                for (const row of observed) {
-                  if (
-                    (yield* sql.unsafe<Record<string, unknown>>(claim, [
-                      identity.ownerId,
-                      row.aggregateId,
-                      row.ownerId,
-                    ])).length !== 1
-                  ) {
-                    throw new Error(
-                      `Deletion claim changed before acquisition: ${row.aggregateId}`,
-                    );
-                  }
-                }
+                yield* claimObserved(
+                  observed,
+                  'Deletion claim changed before acquisition',
+                );
                 return yield* appendPrepared([removal], at);
               }),
             );
@@ -1294,6 +1280,18 @@ export const databaseLayer = (
 function prepareEventDraft(input: SessionEventDraft) {
   const draft = redactTraceDraft(SessionEventDraftSchema.parse(input));
   return { draft, payload: payloadOf(draft) };
+}
+/**
+ * Profile-state writes hold their aggregate's claim only for the transaction
+ * that carries them; a run's claim, by contrast, its sequence row keeps.
+ */
+function borrowsClaim(draft: SessionEventDraft): boolean {
+  return (
+    draft.type === 'desktop.projects.changed' ||
+    draft.type === 'inquiry.recorded' ||
+    draft.type === 'update.check.recorded' ||
+    draft.type === 'state.value.set'
+  );
 }
 /**
  * Serialize the validated draft before opening the transaction. Draft parsing

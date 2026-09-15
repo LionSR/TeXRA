@@ -117,21 +117,8 @@ export class AgentHandlers {
         );
       },
       confirmAction: confirmModal,
-      // The info notice stays non-blocking, as the `void` toast was; a
-      // dialog fault is logged on its own fiber rather than failing the
-      // mutation that asked for the notice.
       showInfoMessage: (message) =>
-        Effect.forkDetach(
-          messages.showInfoMessage(message).pipe(
-            Effect.catchTag('NotificationFailed', (failure) =>
-              Effect.sync(() => {
-                this.ctx.log.warn(
-                  `Agent settings notice failed: ${failure.message}`,
-                );
-              }),
-            ),
-          ),
-        ).pipe(Effect.asVoid),
+        this.forkInfoNotice(message, 'Agent settings'),
       showErrorMessage: (message) =>
         Effect.tryPromise({
           try: () => showLoggedMessage(this.ctx.channel, message),
@@ -347,17 +334,7 @@ export class AgentHandlers {
                 // on a toast, and a dialog fault is logged rather than
                 // failing the apply that asked for the notice.
                 showInfoMessage: (message) =>
-                  Effect.forkDetach(
-                    messages.showInfoMessage(message).pipe(
-                      Effect.catchTag('NotificationFailed', (failure) =>
-                        Effect.sync(() => {
-                          this.ctx.log.warn(
-                            `Team notice failed: ${failure.message}`,
-                          );
-                        }),
-                      ),
-                    ),
-                  ).pipe(Effect.asVoid),
+                  this.forkInfoNotice(message, 'Team'),
                 showErrorMessage: (message) =>
                   Effect.forkDetach(
                     Effect.tryPromise({
@@ -437,6 +414,23 @@ export class AgentHandlers {
   }
 
   // ── Private helpers ──
+
+  /**
+   * Show an info notice on a detached fiber, as the `void` toast was: the
+   * caller does not wait on it, and a notification fault is logged rather
+   * than failing the mutation that asked for the notice.
+   */
+  private forkInfoNotice(message: string, scope: string) {
+    return Effect.forkDetach(
+      messages.showInfoMessage(message).pipe(
+        Effect.catchTag('NotificationFailed', (failure) =>
+          Effect.sync(() => {
+            this.ctx.log.warn(`${scope} notice failed: ${failure.message}`);
+          }),
+        ),
+      ),
+    ).pipe(Effect.asVoid);
+  }
 
   private async chooseTeamAvailability(prompt: TeamAvailabilityPrompt) {
     return chooseTeamAvailabilityViaDialog(prompt, { modal: true });

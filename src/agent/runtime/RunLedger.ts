@@ -270,7 +270,8 @@ export const runLedgerLayer: Layer.Layer<
     // cause), which is the one write failure that means `not-owner`; every
     // other database failure passes through unconverted (F3).
     const acquire = Effect.fn('RunLedger.acquire')(function* (run: RunId) {
-      yield* log.acquireClaims([qualifyAggregateId('run', run)]).pipe(
+      const aggregate = qualifyAggregateId('run', run);
+      yield* log.acquireClaims([aggregate]).pipe(
         Effect.mapError((error) =>
           error instanceof DatabaseWriteFailed &&
           error.cause instanceof DatabaseClaimRefused
@@ -289,7 +290,6 @@ export const runLedgerLayer: Layer.Layer<
       // as cancelled, so the surfaces still offering them settle and the
       // next snapshot this run authors is not refused over them. Rows that
       // do not fold are `load`'s refusal, one call below every caller.
-      const aggregate = qualifyAggregateId('run', run);
       const folded = foldRunState(null, yield* log.readAggregate(aggregate, 1));
       if (Result.isFailure(folded) || folded.success === null) return;
       const unbound = unboundRequests(folded.success);

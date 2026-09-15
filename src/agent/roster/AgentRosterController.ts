@@ -241,9 +241,7 @@ export class AgentRosterController<
   }
 
   private hasPreset(teamId: string): boolean {
-    return allPresets(this.extraPresets()).some(
-      (preset) => preset.id === teamId,
-    );
+    return this.allPresets().some((preset) => preset.id === teamId);
   }
 
   /**
@@ -298,7 +296,7 @@ export class AgentRosterController<
   }
 
   async setTeam(teamId: string): Promise<void> {
-    const preset = allPresets(this.extraPresets()).find(
+    const preset = this.allPresets().find(
       (candidate) => candidate.id === teamId,
     );
     if (!preset)

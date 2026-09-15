@@ -6,7 +6,7 @@ import { detectRawErrorBody, getErrorClassNames } from './errorInspection';
 /** True if `err` is an SDK or AbortController user-abort error. */
 export function isUserAbort(err: unknown): boolean {
   if (getErrorClassNames(err).includes('APIUserAbortError')) return true;
-  return isObject(err) && (err as { name?: unknown }).name === 'AbortError';
+  return isObject(err) && err.name === 'AbortError';
 }
 
 /**
@@ -22,7 +22,7 @@ function hasNativeErrorField(
   expected: string,
 ): boolean {
   const read = (source: unknown): unknown =>
-    isObject(source) ? (source as Record<string, unknown>)[field] : undefined;
+    isObject(source) ? source[field] : undefined;
 
   if (!isObject(err)) return false;
   return read(err) === expected || read(detectRawErrorBody(err)) === expected;

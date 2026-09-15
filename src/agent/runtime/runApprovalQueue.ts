@@ -274,7 +274,8 @@ export function createSessionApprovals(
   const resolveParent = (runId: RunId): RunId | undefined =>
     parentOf.get(runId);
   const resolveDescendants = (runId: RunId): readonly RunId[] => {
-    const descendants: RunId[] = [];
+    // Breadth-first from `runId`; every id discovered is appended after it,
+    // so the walk's own queue is the result minus the root.
     const pending = [runId];
     const seen = new Set(pending);
     for (let index = 0; index < pending.length; index += 1) {
@@ -282,11 +283,10 @@ export function createSessionApprovals(
       for (const [child, directParent] of parentOf) {
         if (directParent !== parent || seen.has(child)) continue;
         seen.add(child);
-        descendants.push(child);
         pending.push(child);
       }
     }
-    return descendants;
+    return pending.slice(1);
   };
 
   const toolEditBypass = createRunApprovalBypass(

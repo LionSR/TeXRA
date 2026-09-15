@@ -427,12 +427,7 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
     ResolvedTurn['messages'][number],
     { role: 'user' }
   >['content'][number],
-  documents: {
-    /** The route takes input files at all. */
-    readonly accepted: boolean;
-    /** The live file id this binding holds for some bytes, or `null`. */
-    readonly fileIdFor: (base64: string) => string | null;
-  },
+  documents: DocumentAccess,
 ): Effect.fn.Return<OpenAI.Responses.ResponseInputContent, ModelError> {
   switch (part.kind) {
     case 'text':
