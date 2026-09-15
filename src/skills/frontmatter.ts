@@ -3,7 +3,7 @@ import { Result } from 'effect';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
-export interface ExtractedFrontmatter {
+interface ExtractedFrontmatter {
   frontmatter: unknown;
   body: string;
 }

@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { ZodError } from 'zod';
 
 // Local imports - common
+import { SkillNameSchema } from '@shared/schemas';
 import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -13,7 +14,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import {
   SKILL_DESCRIPTION_MAX_LENGTH,
-  SkillNameSchema,
   SkillSchema,
   type Skill,
 } from './SkillSchema';

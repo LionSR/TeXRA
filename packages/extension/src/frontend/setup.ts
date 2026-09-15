@@ -133,15 +133,13 @@ export async function initializeLatexSupport(
   }
 }
 
+/** A failed search propagates: `initializeLatexSupport` logs it and skips the
+ *  recommendation, rather than reading "the query failed" as "no .tex files". */
 async function workspaceContainsLatexFiles(): Promise<boolean> {
-  try {
-    const hits = await vscode.workspace.findFiles(
-      '**/*.tex',
-      '**/node_modules/**',
-      1,
-    );
-    return hits.length > 0;
-  } catch {
-    return false;
-  }
+  const hits = await vscode.workspace.findFiles(
+    '**/*.tex',
+    '**/node_modules/**',
+    1,
+  );
+  return hits.length > 0;
 }

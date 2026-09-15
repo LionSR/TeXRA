@@ -47,6 +47,7 @@ import {
   ToolError,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
@@ -76,6 +77,7 @@ import {
   toDeliveryUsage,
 } from './delegation/deliveryEnvelope';
 import {
+  CODEX_AGENT_NAME,
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
   buildCodexMcpToolLog,
@@ -101,9 +103,9 @@ import type {
 
 // The sandbox-mode schema is imported eagerly from `@shared` (a light,
 // dependency-free leaf) since it is used at module level by the input schema.
-// All other config (model, reasoning, buildCodexConfig, sandbox getter) is
-// lazy-imported from codexConfig.ts at runtime to avoid pulling the heavy
-// platform/SDK graph into the tool-registration path.
+// All other config (model, reasoning, sandbox getter) is lazy-imported from
+// codexConfig.ts at runtime to avoid pulling the heavy platform/SDK graph into
+// the tool-registration path.
 
 /** Lazy accessor for codexConfig.ts exports (loaded once, cached). */
 let _configModule: typeof import('./codexConfig.js') | null = null;
@@ -137,10 +139,6 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
 // ============================================================================
 // Run fact helpers
 // ============================================================================
-
-export function publishCodexTodos(todos: TodoItem[], logger: AgentTrace): void {
-  emitRunFact(logger, 'updateTodos', { todos });
-}
 
 function toProgressTodos(item: TodoListItem): TodoItem[] {
   return item.items.map((t) => ({
@@ -228,7 +226,7 @@ function publishCodexItemProgress(params: {
   const { item, status, logger, refs } = params;
 
   if (item.type === 'todo_list') {
-    publishCodexTodos(toProgressTodos(item), logger);
+    emitRunFact(logger, 'updateTodos', { todos: toProgressTodos(item) });
   }
 
   const toolLog = buildCodexLiveToolLog(item, status);
@@ -541,9 +539,15 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   const thread = yield* agentCliCall(() =>
     createCodexThread(input, sandboxMode, roots, workingDir),
   );
-  const config = (yield* agentCliCall(getCodexConfig)).buildCodexConfig(
-    input.prompt,
-  );
+  // Synthetic run metadata for the child run: Codex runs outside the normal
+  // run loop, so the tool-use category and a stable Codex model label are
+  // stated here rather than inherited from the generic AgentConfig defaults.
+  const config = buildSyntheticToolUseConfig({
+    agent: CODEX_AGENT_NAME,
+    // Fabricated label, not a routed model: Codex drives its own model.
+    model: 'gpt55',
+    instruction: input.prompt,
+  });
   const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({

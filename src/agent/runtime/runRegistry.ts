@@ -278,10 +278,8 @@ export class RunRegistry {
   ): Effect.Effect<A, E | Error, R> {
     return Effect.suspend(() => {
       this.assertActive();
-      return this.lanes.withInactiveStep(
-        runId,
-        () => this.hasRetainedOwner(runId),
-        operation,
+      return this.lanes.launch(runId, operation, () =>
+        this.hasRetainedOwner(runId),
       );
     });
   }

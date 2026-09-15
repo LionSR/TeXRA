@@ -10,7 +10,7 @@ import { Effect } from 'effect';
 import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
-import { ensureError } from '@utils/errors/errorMessage';
+import { fsCall } from '@utils/errors/fsCall';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
@@ -49,33 +49,22 @@ interface BibliographyEntriesResult {
 /** Bibliography probes hit the filesystem, so bound the fan-out. */
 const PROBE_CONCURRENCY = 8;
 
-/** Read a workspace-relative file, surfacing the read failure as a typed error. */
-const readBibliographyFile = Effect.fn('latex.readBibliographyFile')(function* (
-  filePath: string,
-) {
-  return yield* Effect.tryPromise({
-    try: () => AbsoluteFS.read(filePath),
-    catch: ensureError,
-  });
-});
-
 export const extractBibliographyContext = Effect.fn(
   'latex.extractBibliographyContext',
 )(function* (
   texPath: string,
 ): Effect.fn.Return<BibliographyReferenceResult, Error> {
   const texDir = path.dirname(texPath);
-  const content = yield* readBibliographyFile(texPath);
+  const content = yield* fsCall(() => AbsoluteFS.read(texPath));
   const uncommented = stripLatexComments(content);
 
   const referencedPaths = collectBibliographyPaths(texDir, uncommented);
   const probed = yield* Effect.forEach(
     referencedPaths,
     (candidate) =>
-      Effect.tryPromise({
-        try: () => AbsoluteFS.exists(candidate),
-        catch: ensureError,
-      }).pipe(Effect.map((exists) => ({ candidate, exists }))),
+      fsCall(() => AbsoluteFS.exists(candidate)).pipe(
+        Effect.map((exists) => ({ candidate, exists })),
+      ),
     { concurrency: PROBE_CONCURRENCY },
   );
   const pathsWhere = (exists: boolean): string[] =>
@@ -172,7 +161,7 @@ export const loadBibliographyEntries = Effect.fn(
   // bounded fan-out and folded back in their declared order.
   const contents = yield* Effect.forEach(
     bibliographyFiles,
-    readBibliographyFile,
+    (filePath) => fsCall(() => AbsoluteFS.read(filePath)),
     {
       concurrency: PROBE_CONCURRENCY,
     },

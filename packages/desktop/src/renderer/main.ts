@@ -122,20 +122,15 @@ const startupTeamPanel = createStartupTeamPanel({
   onVisibilityChanged: rerenderShell,
   showLauncher: returnToLauncher,
   openMultiAgent: () => openSettingsTab('multi-agent'),
-  // Lazy by necessity: the panel is constructed above the shortcut bootstrap's
+  // Lazy by necessity: the panel is constructed above the accelerator map's
   // declaration (which lands much later at module scope), so an eager or
-  // captured read is a TDZ throw, and a bootstrap failure leaves its registry
-  // absent until a recovery installs it. Reading at render time is also what
-  // lets a user override (registry `localStorage`) reach the hint; the
-  // construction-time default only ever printed cmd/ctrl+K.
+  // captured read is a TDZ throw. Reading at render time is also what lets a
+  // user override (registry `localStorage`) reach the hint: the registry
+  // re-seeds the map on every change, and an explicitly removed shortcut
+  // arrives as an absent accelerator, which prints no hint.
   commandsHint: () => {
-    const entry = shortcutBootstrap
-      .entries()
-      ?.find((entry) => entry.id === DESKTOP_COMMAND_PALETTE_ID);
     const accelerator = formatDesktopAccelerator(
-      entry
-        ? entry.accelerator
-        : desktopCommandPaletteShortcut(rendererPlatform).accelerator,
+      shortcutAcceleratorsById.get(DESKTOP_COMMAND_PALETTE_ID),
       rendererPlatform,
     );
     return accelerator ? ` (${accelerator})` : '';

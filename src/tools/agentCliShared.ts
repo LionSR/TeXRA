@@ -100,22 +100,6 @@ export const reraiseAgentCliCallFailure = <A, R>(
     Effect.catchTag('AgentCliCallFailed', (error) => Effect.die(error.cause)),
   );
 
-/**
- * Publish the child run's token usage to the progress UI. Shared by the codex
- * and claudeAgent session strategies.
- *
- * `usage` is the child run's cumulative total, never one turn's delta: the
- * session's `usage` row is a latest-only listing key, so a cold read delivers
- * one row per run and the fold replaces the run's total with it.
- */
-function publishAgentCliUsage(
-  runId: RunId,
-  usage: TokenUsageStats,
-  logger: AgentTrace,
-): void {
-  logger.usage({ runId, usage }, { recordTranscript: false });
-}
-
 interface AgentCliResumeLabels {
   notActiveLabel: string;
   idParamName: string;
@@ -302,6 +286,12 @@ export const launchAgentCliSession = Effect.fn(
         params.session,
         runId,
         Effect.gen(function* () {
+          // Deliberate interruption checkpoint, not dead code: everything from
+          // here to the started loop is uninterruptible, so without this the
+          // pending interrupt would only be observed after the loop has been
+          // launched. `ChildRunProgressEvents.vitest.ts` pins the behavior — a
+          // cancel arriving while the record is committed but the detached work
+          // has not started must leave the run CANCELLED with no loop behind it.
           yield* restore(Effect.void);
           const stream = yield* createChildRun(
             params.session,
@@ -634,9 +624,13 @@ export function startAgentCliLoop<TTurn>(
         const usage = buildUsageStats(turn);
         if (!usage) return;
         // Each provider reports only the turn it just ran, so the loop holds
-        // the child run's running total and publishes that.
+        // the child run's running total and publishes that. Not a transcript
+        // event: the session's `usage` row is a latest-only listing key.
         cumulativeUsage = sumUsageStats([cumulativeUsage, usage]);
-        publishAgentCliUsage(runId, cumulativeUsage, logger);
+        logger.usage(
+          { runId, usage: cumulativeUsage },
+          { recordTranscript: false },
+        );
       },
       formatDelivery: (turn, wallTimeMs) =>
         formatDelivery(turn, wallTimeMs, lastPrompt),

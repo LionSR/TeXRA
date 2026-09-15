@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
+import { fsCall } from '@utils/errors/fsCall';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -24,10 +25,7 @@ const COUNT_CONCURRENCY = 4;
 const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
   absolutePath: string,
 ) {
-  return yield* Effect.tryPromise({
-    try: () => AbsoluteFS.read(absolutePath),
-    catch: ensureError,
-  }).pipe(
+  return yield* fsCall(() => AbsoluteFS.read(absolutePath)).pipe(
     Effect.map((content) =>
       CHINESE_PACKAGES.some(
         (pkg) =>
@@ -59,10 +57,7 @@ interface TexcountResult {
 const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
   filePath: string,
 ) {
-  const exists = yield* Effect.tryPromise({
-    try: () => AbsoluteFS.exists(filePath),
-    catch: ensureError,
-  });
+  const exists = yield* fsCall(() => AbsoluteFS.exists(filePath));
   if (!exists) {
     const reason = `File ${filePath} does not exist.`;
     yield* Effect.logWarning(reason);

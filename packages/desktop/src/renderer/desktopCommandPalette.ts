@@ -38,11 +38,6 @@ interface CommandPaletteEntry {
   readonly category?: string;
 }
 
-interface CommandPaletteGroup {
-  readonly category: string;
-  readonly entries: readonly CommandPaletteEntry[];
-}
-
 export interface CommandPaletteController {
   element: HTMLElement;
   open(): void;
@@ -205,7 +200,9 @@ export function createDesktopCommandPalette({
   };
 
   const renderTemplate = (): void => {
-    const groups = groupCommandPaletteEntries(visibleEntries);
+    const groups = [
+      ...groupBy(visibleEntries, (entry) => entry.category ?? 'Other'),
+    ];
     const activeEntry =
       activeIndex >= 0 ? visibleEntries[activeIndex] : undefined;
     render(
@@ -248,19 +245,19 @@ export function createDesktopCommandPalette({
               : nothing
           }
           ${groups.map(
-            (group) => html`
+            ([category, categoryEntries]) => html`
               <section
                 class="desktop-command-palette-group"
-                aria-labelledby=${`command-group-${slugify(group.category)}`}
+                aria-labelledby=${`command-group-${slugify(category)}`}
               >
                 <h2
-                  id=${`command-group-${slugify(group.category)}`}
+                  id=${`command-group-${slugify(category)}`}
                   class="desktop-command-palette-group-label"
                 >
-                  ${group.category}
+                  ${category}
                 </h2>
                 ${repeat(
-                  group.entries,
+                  categoryEntries,
                   (entry) => entry.id,
                   (entry) => {
                     const index = visibleEntries.indexOf(entry);
@@ -381,16 +378,6 @@ function toPaletteEntry(
     ),
     category: entry.category,
   };
-}
-
-function groupCommandPaletteEntries(
-  entries: readonly CommandPaletteEntry[],
-): CommandPaletteGroup[] {
-  const grouped = groupBy(entries, (entry) => entry.category ?? 'Other');
-  return [...grouped].map(([category, groupEntries]) => ({
-    category,
-    entries: groupEntries,
-  }));
 }
 
 function slugify(value: string): string {

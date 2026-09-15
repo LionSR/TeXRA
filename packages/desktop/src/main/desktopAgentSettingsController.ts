@@ -23,7 +23,7 @@ import { createSettingsAgentControllers } from '@controllers/settingsView/Settin
 import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   agentKey,
@@ -115,6 +115,11 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
    * The agent and team catalogs changed: the `host` snapshot of every open
    * paper reloads them (PRD 8.1). A team that was just applied names the
    * tool-use root the launcher should select.
+   *
+   * Every catalog-refresh path reloads agent and team options together: team
+   * availability depends on the same catalog (sign-in, remote load, roster,
+   * and custom-dir changes), so refreshing one without the other would leave
+   * the launcher's team picker stale.
    */
   readonly onCatalogChanged: (selectedToolUseAgent?: string) => Promise<void>;
   readonly prompts: {
@@ -240,23 +245,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       showInfoMessage: notifications.showInfoMessage,
       showErrorMessage: notifications.showErrorMessage,
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
-      run: (failureMessage, action) =>
-        this.runtime.runPromise(
-          action.pipe(
-            Effect.catchCause((cause) =>
-              // An interrupt (the runtime disposing at shutdown) is not an
-              // action failure: re-fail it instead of showing a
-              // notification. The reporting notification prefixes
-              // `failureMessage` itself and carries the rejection's own
-              // text behind it, as the tag it replaces did.
-              Cause.hasInterruptsOnly(cause)
-                ? Effect.failCause(cause)
-                : notifications.showErrorMessage(
-                    `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
-                  ),
-            ),
-          ),
-        ),
+      run: (failureMessage, action) => this.runReported(failureMessage, action),
     });
     this.handlers = {
       setAgentEnabled: (message) => this.updateAgentEnabled(message),
@@ -276,6 +265,33 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     };
   }
 
+  /**
+   * Run one of this controller's programs, reporting its failure through the
+   * host's own surface. The one home for the fold: the settings actions this
+   * controller injects and the two flows it runs itself all report through it.
+   *
+   * An interrupt (the runtime disposing at shutdown) is not an action failure:
+   * re-fail it instead of showing a notification. The reporting notification
+   * prefixes `failureMessage` itself and carries the rejection's own text
+   * behind it, as the tag it replaces did.
+   */
+  private runReported(
+    failureMessage: string,
+    action: Effect.Effect<void, Error, ProcessServices>,
+  ): Promise<void> {
+    return this.runtime.runPromise(
+      action.pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause)
+            : this.notifications.showErrorMessage(
+                `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
+              ),
+        ),
+      ),
+    );
+  }
+
   async postStartupData(): Promise<void> {
     this.postAgentModePresets();
     await Promise.all([
@@ -289,10 +305,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     // team: enabling one agent rewrites the selection as `custom`, which
     // retires whatever team was applied.
     this.postAgentModePresets();
-    await Promise.all([
-      this.postAgentSelectionData(),
-      this.postMainAgentAndTeamOptionsData(),
-    ]);
+    await Promise.all([this.postAgentSelectionData(), this.onCatalogChanged()]);
   }
 
   private async postAgentSelectionData(): Promise<void> {
@@ -303,18 +316,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         getCustomAgentScanIssues,
       }),
     );
-  }
-
-  /**
-   * Every catalog-refresh path reloads agent and team options together:
-   * team availability depends on the same catalog (sign-in, remote load,
-   * roster, and custom-dir changes), so refreshing one without the other
-   * would leave the launcher's team picker stale.
-   */
-  private postMainAgentAndTeamOptionsData(
-    selectedToolUseAgent?: string,
-  ): Promise<void> {
-    return this.onCatalogChanged(selectedToolUseAgent);
   }
 
   private async postCustomAgentDir(): Promise<void> {
@@ -425,7 +426,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
     // The custom agent directory is the user's choice, outside every root,
     // so it is created through the process filesystem.
-    await this.runtime.runPromise(
+    await this.runReported(
+      'Failed to create custom agent',
       Effect.gen({ self: this }, function* () {
         const customDir = yield* Effect.tryPromise({
           try: () => this.directory.getCustomAgentDirectory(),
@@ -481,15 +483,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
               cause,
             }),
         });
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.failCause(cause)
-            : this.notifications.showErrorMessage(
-                `Failed to create custom agent: ${toErrorMessage(Cause.squash(cause))}`,
-              ),
-        ),
-      ),
+      }),
     );
   }
 
@@ -501,7 +495,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private async viewRemoteAgentPrompt(
     data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT>,
   ): Promise<void> {
-    await this.runtime.runPromise(
+    await this.runReported(
+      'Failed to view remote agent prompt',
       Effect.gen({ self: this }, function* () {
         const result = yield* Effect.tryPromise({
           try: () => getRemoteAgentPromptConfig(data.agentName),
@@ -541,15 +536,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
               cause,
             }),
         });
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.failCause(cause)
-            : this.notifications.showErrorMessage(
-                `Failed to view remote agent prompt: ${toErrorMessage(Cause.squash(cause))}`,
-              ),
-        ),
-      ),
+      }),
     );
   }
 
@@ -576,7 +563,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           this.postAgentModePresets();
           await Promise.all([
             this.postAgentSelectionData(),
-            this.postMainAgentAndTeamOptionsData(selectedToolUseAgent),
+            this.onCatalogChanged(selectedToolUseAgent),
           ]);
         },
       }),

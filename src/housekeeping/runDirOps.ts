@@ -5,18 +5,17 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileOpResult } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas';
 import { copyDereferenced } from '@utils/files/fsDurability';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { CHANNEL, HISTORY_DIR } from './constants';
-import { generateTimestamp } from './utils';
+import { asErrorResult, generateTimestamp } from './utils';
 
 /**
  * Whether the run directory exists, by a `stat` whose only absent answer is
@@ -31,14 +30,6 @@ const runDirExists = (storageFs: RootedFileSystem, runDirRelative: string) =>
       (error) => error.reason._tag === 'NotFound',
       () => Effect.succeed(false),
     ),
-  );
-
-/** Every run-directory failure reaches the host as the same result shape. */
-const asErrorResult = (operation: string) => (error: unknown) =>
-  Effect.logError(`${operation} failed`).pipe(
-    withLogData(error),
-    withLogChannel(CHANNEL),
-    Effect.as<FileOpResult>({ status: 'error', error: toErrorMessage(error) }),
   );
 
 /**

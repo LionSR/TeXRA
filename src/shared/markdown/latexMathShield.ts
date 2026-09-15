@@ -1,6 +1,6 @@
 // LaTeX math shields: the bounded inline-dollar scanner, the combined
-// environment + span shield, and the two exported shields the HTML normalizer
-// runs before rendering.
+// environment + span shield, and the exported shield the HTML normalizer runs
+// between its structural passes.
 
 import {
   applyEnvironmentShields,
@@ -11,7 +11,6 @@ import {
 } from './begEndEnvironmentProbe';
 import {
   MATH_SPAN_PATTERNS,
-  protectByPatterns,
   protectPatternsInto,
   restorePlaceholders,
   selectPlaceholderTag,
@@ -164,18 +163,6 @@ export function protectLatexMathSpansWithEnvironment(
 }
 
 let normalizeEnvironmentProbe: BegEndEnvironmentProbe | undefined;
-
-/**
- * Inline/display math shield for the HTML normalizer's first pass. It keeps
- * the lax inline `$…$` contract but leaves environments for the second,
- * structural pass so HTML block containers can be unwrapped in between.
- */
-export function protectLatexMathSpansForNormalizeInline(content: string): {
-  content: string;
-  restore: (value: string) => string;
-} {
-  return protectByPatterns(content, MATH_SPAN_PATTERNS, 'LATEX-MATH', true);
-}
 
 /**
  * `htmlMarkdownNormalize`'s math shield: the lax inline `$…$` set plus the

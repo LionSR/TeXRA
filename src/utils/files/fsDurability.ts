@@ -1,8 +1,8 @@
 /**
  * The filesystem primitives the repo must keep that the standard library's
- * `FileSystem` does not provide: crash-safe replace, single-writer publish,
- * empty-directory removal, a directory listing carrying each entry's own
- * (unfollowed) type, and exclusive or symlink-dereferencing copies.
+ * `FileSystem` does not provide: crash-safe replace, empty-directory removal,
+ * a directory listing carrying each entry's own (unfollowed) type, and
+ * exclusive or symlink-dereferencing copies.
  *
  * These are the Effect form of what `baseFS.ts` reached `platform().fs` for.
  * Nothing here re-implements an operation `FileSystem` already has — an
@@ -15,10 +15,8 @@
  */
 
 // Node imports
-import { randomBytes } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import * as nodeFs from 'node:fs/promises';
-import { pid } from 'node:process';
 
 // Third-party imports
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
@@ -80,32 +78,6 @@ export const writeFileAtomic = Effect.fn('fsDurability.writeFileAtomic')(
     });
   },
 );
-
-/**
- * Publish a name that belongs to exactly one writer (a run-lease claim):
- * staged, fsynced, then renamed into place, so it is either absent or
- * complete and durable. The staging name carries the process id and random
- * bytes and is created exclusively, so two processes racing for the same
- * name never write through one staging file: each rename installs one
- * complete file. A failed write takes its staging file with it.
- */
-export const publishFile = Effect.fn('fsDurability.publishFile')(function* (
-  target: string,
-  data: Uint8Array,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const staging = `${target}.${pid}.${randomBytes(6).toString('hex')}.tmp`;
-  yield* Effect.scoped(
-    Effect.gen(function* () {
-      const file = yield* fs.open(staging, { flag: 'wx' });
-      yield* file.writeAll(data);
-      yield* file.sync;
-    }),
-  ).pipe(
-    Effect.onError(() => Effect.ignore(fs.remove(staging, { force: true }))),
-  );
-  yield* fs.rename(staging, target);
-});
 
 /**
  * Remove `target` only if it is an empty directory — `rmdir`, which

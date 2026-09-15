@@ -371,7 +371,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             ),
             bound,
             logger,
-            run.inScope,
           )
         : Effect.succeed({ parts: [], kinds: [] }),
     );

@@ -16,6 +16,7 @@ import treeKill from 'tree-kill';
 
 // Internal imports
 import { createLog } from '@logger/logUtils';
+import { tryWorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecResult } from '@shared/schemas';
 import { onAbort as onAbortSignal } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -162,12 +163,17 @@ function logCommandStderr(
   log.debug(`Command stderr: ${stderrForLog}`);
 }
 
+/**
+ * The workspace root, or the process cwd when there is no workspace to name.
+ *
+ * A caller that runs before any roots are installed (the pre-platform
+ * `git --version` probe `executeCommandSync` documents above) has no workspace
+ * at all, so the cwd is the honest answer rather than a retargeted one.
+ * `tryWorkspaceRoots` reports that state instead of throwing, the same read
+ * `tryWorkspaceRoots()?.config.get(...)` does in `configUtils`.
+ */
 function workspacePathOrProcessCwd(): string {
-  try {
-    return WorkspaceFS.getPath() ?? process.cwd();
-  } catch {
-    return process.cwd();
-  }
+  return tryWorkspaceRoots()?.workspace ?? process.cwd();
 }
 
 /**

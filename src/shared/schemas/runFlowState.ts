@@ -283,12 +283,10 @@ const UserVariableValueSchemas = {
  * is validated with its per-key type when present, and the custom keys pass
  * through untouched.
  */
-const UserVariableChannelRecordSchema = z
+export const UserVariableChannelsSchema = z
   .looseObject(UserVariableValueSchemas)
   .partial();
 
-/** User variables for template rendering: one mutable record. */
-export const UserVariableChannelsSchema = UserVariableChannelRecordSchema;
 /** Derived from UserVariableChannelsSchema - single source of truth. */
 export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;
 

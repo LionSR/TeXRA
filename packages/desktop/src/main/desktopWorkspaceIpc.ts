@@ -262,8 +262,6 @@ export function createDesktopWorkspaceIpc(
   renderer: DesktopRenderer,
   options: DesktopWorkspaceIpcOptions,
 ): DesktopWorkspaceIpc {
-  const reportError = (error: unknown) => options.onAsyncError(error);
-
   // Accepted run outputs and accepted LaTeX diffs write straight to disk, past
   // the editor's own write path, and the file tree caches its listing — so
   // before this the newly written files stayed invisible until the user hit
@@ -292,7 +290,7 @@ export function createDesktopWorkspaceIpc(
     message: DesktopCommandMessage,
   ): Effect.Effect<void> {
     return Effect.sync(() => {
-      reportError(error);
+      options.onAsyncError(error);
       renderer.postToRenderer(message);
     });
   }
@@ -490,7 +488,7 @@ export function createDesktopWorkspaceIpc(
       // whatever it is handed.
       Effect.catchTag('WorkspaceHostCallFailed', (error) =>
         Effect.sync(() => {
-          reportError(error);
+          options.onAsyncError(error);
           return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
         }),
       ),

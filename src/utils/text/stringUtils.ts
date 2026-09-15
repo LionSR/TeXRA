@@ -2,7 +2,6 @@ import { intlFormatDistance } from 'date-fns';
 import prettyBytes from 'pretty-bytes';
 import prettyMilliseconds from 'pretty-ms';
 import pluralizeWord from 'pluralize';
-import { serializeError } from 'serialize-error';
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: 'grapheme',
@@ -12,17 +11,6 @@ const graphemeSegmenter = new Intl.Segmenter(undefined, {
 export function toGraphemes(text: string): string[] {
   return [...graphemeSegmenter.segment(text)].map((s) => s.segment);
 }
-
-/**
- * Serialize a thrown value into a plain object for logging or transport.
- *
- * Typically called with an `Error`, but any thrown value is accepted —
- * `serialize-error` passes non-`Error` values through and wraps them as
- * needed. Unlike a naive `{ name, message, stack }` copy it also preserves
- * `cause` chains, custom enumerable properties (e.g. `statusCode`,
- * `requestId`), and handles circular references.
- */
-export { serializeError };
 
 /** Check if value is a non-empty string after trimming. */
 export function isNonEmptyString(value: unknown): value is string {

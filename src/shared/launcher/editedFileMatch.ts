@@ -8,17 +8,13 @@ import { getFileStem } from '@utils/core';
 
 /**
  * Trailing/embedded `_r{N}` round token (`<base>_r{round}`), owned here for
- * both uses below.
+ * both uses below. Both patterns are compiled once at module load.
  */
 const ROUND_TOKEN_SOURCE = '_r\\d+';
 const TRAILING_ROUND_TOKEN_REGEX = new RegExp(
   `^(.+?)(?:${ROUND_TOKEN_SOURCE})?$`,
 );
 const ROUND_TOKEN_REGEX = new RegExp(ROUND_TOKEN_SOURCE);
-
-function getBaseNameWithoutRound(baseName: string): string {
-  return baseName.match(TRAILING_ROUND_TOKEN_REGEX)?.[1] ?? baseName;
-}
 
 export function matchesEditedFile(
   filePath: string,
@@ -27,7 +23,8 @@ export function matchesEditedFile(
   const baseName = getFileStem(baseFileName);
   const fileBase = getFileStem(filePath);
   if (fileBase === baseName) return false;
-  const baseNameWithoutRound = getBaseNameWithoutRound(baseName);
+  const baseNameWithoutRound =
+    baseName.match(TRAILING_ROUND_TOKEN_REGEX)?.[1] ?? baseName;
   return (
     fileBase.startsWith(baseName) ||
     (fileBase.startsWith(baseNameWithoutRound) &&

@@ -81,7 +81,12 @@ export class SettingsModelSelectionController {
     );
     return {
       models: await this.buildSelectionItems(routes, preferredModels),
-      helperModel: this.getEffectiveHelperModel(visibleModels),
+      helperModel: resolveEffectiveHelperModel(
+        this.deps.globalState.get<string | undefined>(
+          GlobalStateKey.HELPER_MODEL,
+        ),
+        visibleModels,
+      ),
       preferShortModelNames: this.deps.globalState.get<boolean>(
         GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
         false,
@@ -133,7 +138,15 @@ export class SettingsModelSelectionController {
     modelName: string;
     level: ReasoningEffort | null;
   }): Promise<void> {
-    const overrides = { ...this.getStoredReasoningLevels() };
+    // The stored override record as written, so a rewrite carries every entry
+    // back to storage. Reads that need the effort go through
+    // `reasoningEffortOverrides`.
+    const overrides = {
+      ...this.deps.globalState.get<Record<string, string>>(
+        GlobalStateKey.REASONING_LEVELS,
+        {},
+      ),
+    };
     if (input.level == null) {
       delete overrides[input.modelName];
     } else {
@@ -142,18 +155,6 @@ export class SettingsModelSelectionController {
     await this.deps.globalState.update(
       GlobalStateKey.REASONING_LEVELS,
       overrides,
-    );
-  }
-
-  /**
-   * The stored override record as written, so a rewrite carries every entry
-   * back to storage. Reads that need the effort go through
-   * `reasoningEffortOverrides`.
-   */
-  private getStoredReasoningLevels(): Record<string, string> {
-    return this.deps.globalState.get<Record<string, string>>(
-      GlobalStateKey.REASONING_LEVELS,
-      {},
     );
   }
 
@@ -224,15 +225,6 @@ export class SettingsModelSelectionController {
     }
 
     return items.sort(byName);
-  }
-
-  private getEffectiveHelperModel(visibleModels: readonly string[]): string {
-    return resolveEffectiveHelperModel(
-      this.deps.globalState.get<string | undefined>(
-        GlobalStateKey.HELPER_MODEL,
-      ),
-      visibleModels,
-    );
   }
 
   private addReasoningLevelData(

@@ -21,7 +21,7 @@ import {
   PdfOpenFailed,
   type SessionHandle,
 } from '@agent/runtime';
-import { getAuthStatus } from '@commands/auth/authCommands';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import {
   BundledViewContentProvider,
@@ -218,9 +218,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               cause,
             }),
         }),
+      // Only the authenticated flag feeds the login banner, so this
+      // deliberately skips the profile and tier round-trips the settings view's
+      // profile message makes.
       isAuthenticated: () =>
         Effect.tryPromise({
-          try: async () => (await getAuthStatus()).authenticated,
+          try: () => SupabaseClient.isAuthenticated(),
           catch: (cause) =>
             new HostSnapshotReadFailed({
               member: 'isAuthenticated',

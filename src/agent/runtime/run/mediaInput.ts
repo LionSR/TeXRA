@@ -56,7 +56,6 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
   location: FileLocation,
   capabilities: MediaCapabilities,
   logger: AgentTrace,
-  inScope: <A>(operation: () => A) => A,
 ): Effect.fn.Return<MediaInputParts, Error, FileSystem.FileSystem> {
   const path = location.absolutePath;
   const display = fileLocationDisplayPath(location);
@@ -67,18 +66,22 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
       logger.warn(`Skipping ${display}: the model does not accept documents.`);
       return { parts: [], kinds: [] };
     }
-    const pageCount = yield* countPdfPages(path);
-    if (pageCount === 0) {
-      return yield* Effect.fail(
-        new Error(`Failed to process PDF file as image: ${display}`),
-      );
-    }
+    // A model that takes a PDF natively is handed the file's bytes as they
+    // are, so the local page count is only needed to rasterize: it is read
+    // after this branch, never before, so a PDF pdf-lib cannot parse still
+    // reaches a model that could read it.
     if (capabilities.supportsNativePdf) {
       const base64 = yield* getBase64EncodedMedia(path);
       return {
         parts: [{ kind: 'document', mimeType: 'application/pdf', base64 }],
         kinds: ['document'],
       };
+    }
+    const pageCount = yield* countPdfPages(path);
+    if (pageCount === 0) {
+      return yield* Effect.fail(
+        new Error(`Failed to process PDF file as image: ${display}`),
+      );
     }
     const pages = yield* processPdf2Png(path);
     if (pages === null) {
@@ -128,12 +131,11 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
   locations: readonly FileLocation[],
   capabilities: MediaCapabilities,
   logger: AgentTrace,
-  inScope: <A>(operation: () => A) => A,
 ): Effect.fn.Return<MediaInputParts, Error, FileSystem.FileSystem> {
   const parts: InputPart[] = [];
   const kinds: MediaAttachmentKind[] = [];
   for (const location of locations) {
-    const loaded = yield* partsForFile(location, capabilities, logger, inScope);
+    const loaded = yield* partsForFile(location, capabilities, logger);
     parts.push(...loaded.parts);
     kinds.push(...loaded.kinds);
   }

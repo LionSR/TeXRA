@@ -83,11 +83,17 @@ export function probeSetupCredential(
   );
 }
 
-/** Each failed credential probe resolves to false after being reported. */
-export function hasUsableSetupCredential(
-  secrets: PlatformSecrets,
+/**
+ * The signed-in setup subscription's model, in host-shared priority order:
+ * ChatGPT/Codex first, then Grok. The one ladder both the setup gate below and
+ * the setup model picker read, so the priority order and the probe wiring
+ * cannot come to disagree about which subscription the user has. A probe
+ * failure is treated as no subscription of that kind and reported through
+ * `onProbeFailure`; `null` when neither subscription is signed in.
+ */
+export function setupSubscriptionModel(
   onProbeFailure: (message: string) => void,
-): Effect.Effect<boolean> {
+): Effect.Effect<string | null> {
   return Effect.gen(function* () {
     const hasChatGptSubscription = yield* probeSetupCredential(
       Effect.tryPromise({
@@ -96,7 +102,7 @@ export function hasUsableSetupCredential(
       }),
       onProbeFailure,
     );
-    if (hasChatGptSubscription) return true;
+    if (hasChatGptSubscription) return CHATGPT_SETUP_MODEL;
     const hasGrokSubscription = yield* probeSetupCredential(
       Effect.tryPromise({
         try: () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
@@ -104,7 +110,22 @@ export function hasUsableSetupCredential(
       }),
       onProbeFailure,
     );
-    if (hasGrokSubscription) return true;
+    return hasGrokSubscription ? XAI_SETUP_MODEL : null;
+  });
+}
+
+/**
+ * True when any setup credential is usable: a signed-in subscription, or an
+ * API key of any provider. Each failed credential probe resolves to false
+ * after being reported through `onProbeFailure`.
+ */
+export function hasUsableSetupCredential(
+  secrets: PlatformSecrets,
+  onProbeFailure: (message: string) => void,
+): Effect.Effect<boolean> {
+  return Effect.gen(function* () {
+    const subscriptionModel = yield* setupSubscriptionModel(onProbeFailure);
+    if (subscriptionModel !== null) return true;
     return yield* hasAnyUsableProviderApiKey(secrets, onProbeFailure);
   });
 }

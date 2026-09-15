@@ -18,6 +18,16 @@ export function generateCodeVerifier(): string {
   return randomBytes(32).toString('base64url');
 }
 
+/**
+ * Random CSRF state or OIDC nonce (base64url). Deliberately a second
+ * declaration rather than an alias of {@link generateCodeVerifier}: the two
+ * roles are named separately so a call site reads as what it generates, and
+ * an alias would read to knip as a duplicate export.
+ */
+export function generateOAuthState(): string {
+  return randomBytes(32).toString('base64url');
+}
+
 /** base64url(SHA-256(verifier)), no padding. */
 export function computeCodeChallenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
@@ -31,9 +41,4 @@ export function generatePkcePair(): PkcePair {
     challenge: computeCodeChallenge(verifier),
     method: 'S256',
   };
-}
-
-/** Random CSRF state or OIDC nonce (base64url). */
-export function generateOAuthState(): string {
-  return randomBytes(32).toString('base64url');
 }

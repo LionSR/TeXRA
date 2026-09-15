@@ -22,7 +22,7 @@
  * conversion at a host entry: the entry that opens the store passes
  * {@link RunStateWrite}, and this file never runs an Effect itself.
  */
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 
 import {
   nodeProcesses,
@@ -37,12 +37,10 @@ import {
   type PersistedJsonValue,
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { databaseLayer } from './Database';
-import { WorkspaceRoots } from './WorkspaceRoots';
+import { withScopedDatabase } from './Database';
 
 /**
  * One write at a time per key and database, module-wide so two stores over
@@ -121,22 +119,17 @@ export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
     const ownerId = processOwnerId(
       yield* Effect.promise(() => nodeProcesses.selfIdentity()),
     );
-    const withDatabase = <A, E>(operation: Effect.Effect<A, E, Database>) =>
-      Effect.scoped(
-        operation.pipe(
-          Effect.provide(
-            databaseLayer('persistent').pipe(
-              Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
-              Layer.provide(ProcessIdentity.layer(ownerId)),
-            ),
-          ),
-        ),
-      );
     const values = new Map(
-      yield* withDatabase(Effect.flatMap(Database, (db) => db.readAppState())),
+      yield* withScopedDatabase(
+        storage,
+        ownerId,
+        Effect.flatMap(Database, (db) => db.readAppState()),
+      ),
     );
     const write = (key: string, value: PersistedJsonValue) =>
-      withDatabase(
+      withScopedDatabase(
+        storage,
+        ownerId,
         Effect.flatMap(Database, (db) =>
           db.appendAll([
             {

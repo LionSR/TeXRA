@@ -27,11 +27,8 @@ import {
   renderSplitButtonMenuParts,
   splitButtonTriggerStyles,
 } from '@shared/wa/splitButton';
-import {
-  approvalDecisionArms,
-  type SurfaceDecision,
-} from '@shared/session/approvalDecision';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class
@@ -60,34 +57,26 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
    * names stays the runtime arm it is; a host without a diff view (the TUI)
    * decides from the payload alone and never reaches this override.
    */
-  protected override emitAction(decision: SurfaceDecision): void {
-    if (this.readOnly) return;
-    for (const arm of approvalDecisionArms(this.permission, decision)) {
-      if ('host' in arm) {
-        this.dispatchEvent(SessionUiEvents.host(arm.host));
-        continue;
-      }
-      const { runtime } = arm;
-      if (
-        runtime.kind === 'request.decide' &&
-        (runtime.decision.action === 'approve' ||
-          runtime.decision.action === 'reject')
-      ) {
-        this.dispatchEvent(
-          SessionUiEvents.host({
-            kind: 'toolEdit',
-            requestId: runtime.requestId,
-            action: runtime.decision.action,
-            feedback:
-              runtime.decision.action === 'reject'
-                ? (runtime.decision.feedback ?? null)
-                : null,
-          }),
-        );
-        continue;
-      }
-      this.dispatchEvent(SessionUiEvents.runtime(runtime));
+  protected override emitRuntimeArm(runtime: RuntimeRequest): void {
+    if (
+      runtime.kind === 'request.decide' &&
+      (runtime.decision.action === 'approve' ||
+        runtime.decision.action === 'reject')
+    ) {
+      this.dispatchEvent(
+        SessionUiEvents.host({
+          kind: 'toolEdit',
+          requestId: runtime.requestId,
+          action: runtime.decision.action,
+          feedback:
+            runtime.decision.action === 'reject'
+              ? (runtime.decision.feedback ?? null)
+              : null,
+        }),
+      );
+      return;
     }
+    super.emitRuntimeArm(runtime);
   }
 
   protected override handleExtraKey(key: string): boolean {

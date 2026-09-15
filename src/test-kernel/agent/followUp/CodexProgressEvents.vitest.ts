@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { type AgentTrace, TraceEmitter } from '@agent/trace';
 import {
   MESSAGE_TYPES,
@@ -11,7 +12,7 @@ import {
 import type { RunId, TodoItem } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
+import { runStreamedTurn } from '@tools/codex';
 
 // Local file imports
 import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
@@ -77,7 +78,7 @@ describe('codex progress events', () => {
     const trace = new TraceEmitter();
     const recorded = recordTraceEvents(trace);
 
-    publishCodexTodos(todos, trace);
+    emitRunFact(trace, 'updateTodos', { todos });
 
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
       { todos },

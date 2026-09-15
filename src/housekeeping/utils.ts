@@ -6,14 +6,29 @@ import { Data, Effect, FileSystem } from 'effect';
 import { globIterate } from 'glob';
 
 // Local imports
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
-import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+import type { FileOpResult } from '@shared/schemas';
+import { type RootedFileSystem } from '@utils/files/rootedFileSystem';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 
 import { CHANNEL } from './constants';
 
 const log = createLog(CHANNEL);
+
+/**
+ * Every housekeeping failure reaches the host as the same result shape: the
+ * operation is logged at the shared channel with the error attached, and the
+ * caller sees `{status: 'error'}` instead of a rejection.
+ */
+export const asErrorResult = (operation: string) => (error: unknown) =>
+  Effect.logError(`${operation} failed`).pipe(
+    withLogData(error),
+    withLogChannel(CHANNEL),
+    Effect.as<FileOpResult>({ status: 'error', error: toErrorMessage(error) }),
+  );
 
 /**
  * A workspace listing that did not complete. The `glob` package rejects, and

@@ -136,13 +136,6 @@ export function teamPlanHasGaps(plan: TeamRunPlan): boolean {
   );
 }
 
-/** TeXRA-hosted definitions missing from this plan, independent of models. */
-function teamTexraHostedMissingNames(plan: TeamRunPlan): string[] {
-  return missingMemberNames(plan).filter((name) =>
-    plan.preset.texraHostedAgents.includes(name),
-  );
-}
-
 export function teamLaunchBlockReason(plan: TeamRunPlan): string | undefined {
   if (!plan.rootAgent) return 'no runnable team root';
   if (!hasDelegationTool(plan.rootAgent.tools)) {
@@ -332,7 +325,8 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
     );
     const preflight = yield* preflightTeamAvailability({
       initial: refreshed.value,
-      unresolvedNames: teamTexraHostedMissingNames,
+      // The preflight owns the hosted-member filter; hand it the raw gaps.
+      unresolvedNames: missingMemberNames,
       texraHostedNames: new Set(preset.texraHostedAgents),
       canAccessRemoteCatalog: args.canAccessRemoteCatalog,
       providedChoice: args.providedChoice,
