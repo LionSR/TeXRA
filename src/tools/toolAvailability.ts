@@ -55,9 +55,6 @@ export interface ExternalToolCheckResult {
 // Check execution + cache
 // ============================================================
 
-/** Last check results — the only source for availability answers. */
-let lastResults: ExternalToolCheckResult[] | null = null;
-
 /** The disabled tool names, from the process global state the caller holds. */
 export function getDisabledToolNames(
   globalState: StateStore,
@@ -109,58 +106,109 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
 );
 
 /**
- * Run all external tool checks in parallel.
- * Always returns fresh `check` + `detailCheck` probes and updates the
- * availability cache.
- *
- * Concurrent calls are coalesced: while a probe is in flight, additional
- * callers join the same deferred and receive its results. If any caller
- * arrives AFTER the active probe started reading inputs, a follow-up probe
- * is scheduled so the cache ultimately reflects the most recent state and
- * a stale probe can't overwrite a fresh one by finishing last.
- *
- * Called by the tool dashboard (needs per-group results) and
- * {@link refreshToolAvailability}. Also populates the cache read by
- * `getUnavailableToolNamesCached()`.
- *
- * @returns Per-group results with availability status and an optional
- *   human-readable `statusDetail`.
+ * Coalescing cache of the last probe results — the only source for
+ * availability answers. Encapsulated as a class with a `resetForTests`
+ * method, not bare module-level `let`s, per AGENTS.md "No bare module-level
+ * mutable singletons in tested code"; same shape as `AnnotationFetchBudget`
+ * in `@tools/github/annotationFetchBudget`.
  */
-let inflightProbe: Deferred.Deferred<ExternalToolCheckResult[]> | null = null;
-let pendingRerun = false;
+class ToolAvailabilityCache {
+  private lastResults: ExternalToolCheckResult[] | null = null;
+  private inflightProbe: Deferred.Deferred<ExternalToolCheckResult[]> | null =
+    null;
+  private pendingRerun = false;
+
+  /**
+   * Run all external tool checks in parallel.
+   * Always returns fresh `check` + `detailCheck` probes and updates the
+   * availability cache.
+   *
+   * Concurrent calls are coalesced: while a probe is in flight, additional
+   * callers join the same deferred and receive its results. If any caller
+   * arrives AFTER the active probe started reading inputs, a follow-up probe
+   * is scheduled so the cache ultimately reflects the most recent state and
+   * a stale probe can't overwrite a fresh one by finishing last.
+   *
+   * Called by the tool dashboard (needs per-group results) and
+   * {@link refreshToolAvailability}. Also populates the cache read by
+   * `getUnavailableToolNamesCached()`.
+   *
+   * @returns Per-group results with availability status and an optional
+   *   human-readable `statusDetail`.
+   */
+  runChecks(): Effect.Effect<
+    ExternalToolCheckResult[],
+    never,
+    ToolProbeServices
+  > {
+    return Effect.suspend(() => {
+      if (this.inflightProbe) {
+        this.pendingRerun = true;
+        return Deferred.await(this.inflightProbe);
+      }
+      // The deferred is claimed here, synchronously, before the first
+      // suspension point: a caller that arrives while this probe runs must
+      // find the slot taken and join it rather than start a second probe.
+      const deferred = Deferred.makeUnsafe<ExternalToolCheckResult[]>();
+      this.inflightProbe = deferred;
+      return this.probeUntilSettled().pipe(
+        Effect.onExit((exit) => {
+          this.inflightProbe = null;
+          return Deferred.done(deferred, exit);
+        }),
+      );
+    });
+  }
+
+  /** Recurses instead of looping: a caller joining mid-probe can set
+   *  `pendingRerun` again before this settles, same as the `do...while` it
+   *  replaces. */
+  private probeUntilSettled(): Effect.Effect<
+    ExternalToolCheckResult[],
+    never,
+    ToolProbeServices
+  > {
+    this.pendingRerun = false;
+    return runProbes.pipe(
+      Effect.flatMap((results) => {
+        this.lastResults = results;
+        return this.pendingRerun
+          ? this.probeUntilSettled()
+          : Effect.succeed(results);
+      }),
+    );
+  }
+
+  /** Read the last check results without re-probing. */
+  getLastResults(): ExternalToolCheckResult[] | null {
+    return this.lastResults;
+  }
+
+  /** Test-only: clear cached results and any in-flight coalescing state,
+   *  as an injectable, resettable handle in place of `vi.resetModules()`. */
+  resetForTests(): void {
+    this.lastResults = null;
+    this.inflightProbe = null;
+    this.pendingRerun = false;
+  }
+}
+
+/** Process-wide: one cache per host process, same lifetime as the module. */
+const toolAvailabilityCache = new ToolAvailabilityCache();
+
 export function runExternalToolChecks(): Effect.Effect<
   ExternalToolCheckResult[],
   never,
   ToolProbeServices
 > {
-  return Effect.suspend(() => {
-    if (inflightProbe) {
-      pendingRerun = true;
-      return Deferred.await(inflightProbe);
-    }
-    // The deferred is claimed here, synchronously, before the first suspension
-    // point: a caller that arrives while this probe runs must find the slot
-    // taken and join it rather than start a second probe.
-    const deferred = Deferred.makeUnsafe<ExternalToolCheckResult[]>();
-    inflightProbe = deferred;
-    return probeUntilSettled.pipe(
-      Effect.onExit((exit) => {
-        inflightProbe = null;
-        return Deferred.done(deferred, exit);
-      }),
-    );
-  });
+  return toolAvailabilityCache.runChecks();
 }
 
-const probeUntilSettled = Effect.gen(function* () {
-  let results: ExternalToolCheckResult[] = [];
-  do {
-    pendingRerun = false;
-    results = yield* runProbes;
-    lastResults = results;
-  } while (pendingRerun);
-  return results;
-});
+/** Test-only: reset the process-wide tool-availability cache between suites
+ *  that need isolation. */
+export function resetToolAvailabilityCacheForTests(): void {
+  toolAvailabilityCache.resetForTests();
+}
 
 const runProbes: Effect.Effect<
   ExternalToolCheckResult[],
@@ -273,7 +321,7 @@ function buildUnavailableSet(
  * checks haven't been run yet.
  */
 export function getLastCheckResults(): ExternalToolCheckResult[] | null {
-  return lastResults;
+  return toolAvailabilityCache.getLastResults();
 }
 
 /**
@@ -307,5 +355,6 @@ export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
  * fail at call time with a clear error — same as pre-dashboard behavior.
  */
 export function getUnavailableToolNamesCached(): ReadonlySet<string> {
+  const lastResults = toolAvailabilityCache.getLastResults();
   return lastResults ? buildUnavailableSet(lastResults) : new Set();
 }
