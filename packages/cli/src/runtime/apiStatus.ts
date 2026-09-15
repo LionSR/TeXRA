@@ -16,7 +16,6 @@ import {
   formatCliGrokPreference,
   formatCliCodingPlanPreference,
   formatCliModelAccessRoute,
-  formatCliModelAccessRouteInline,
   cliCodingPlanStatus,
   type CliAccountStatus,
 } from './modelAccessRoute';
@@ -24,7 +23,7 @@ import {
   mergeCliTexraAccountStatus,
   readCliModelAccessStatus,
 } from './modelAccessSelection';
-import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
+import { getCliAuthProfile } from './supabaseAuth';
 
 /** The one method this module needs, derived from the service that owns it —
  *  the same narrowing the desktop credential controller uses. */
@@ -35,16 +34,6 @@ const readCliAuthProfile = Effect.tryPromise({
   try: () => getCliAuthProfile(),
   catch: ensureError,
 });
-
-function formatCliAuthStatusLine(
-  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
-): string {
-  return formatAccountStatusLine(
-    'auth',
-    profile.authenticated,
-    profile.accountLabel,
-  );
-}
 
 function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
   if (!signedIn) return 'signed out';
@@ -111,29 +100,6 @@ export function formatPersonalApiKeysLine(
     .join(', ');
   return `${label}: ${providers}`;
 }
-
-/** Compact status lines used by the launcher. */
-export const loadCliApiStatus = Effect.fn('apiStatus.loadCliApiStatus')(
-  function* (
-    secrets: PlatformSecrets,
-    profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel' | 'note'>,
-  ) {
-    const configuredPersonalKeyProviders =
-      yield* configuredApiKeyProviders(secrets);
-    const authLine = formatCliAuthStatusLine(profile);
-
-    const personalKeysLine = formatPersonalApiKeysLine(
-      configuredPersonalKeyProviders,
-    );
-
-    return [
-      `api: ${formatCliModelAccessRouteInline('api-key')}`,
-      ...(personalKeysLine ? [personalKeysLine] : []),
-      authLine,
-      ...(profile.note ? [profile.note] : []),
-    ] as readonly string[];
-  },
-);
 
 /**
  * Build one model-preference status line, or undefined when there is nothing

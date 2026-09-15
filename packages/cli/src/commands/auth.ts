@@ -46,7 +46,7 @@ type LoginCommandArgs = {
   readonly 'login-hint'?: string;
 };
 
-export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
+function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
   const provider = optString(args.providerArg)?.trim();
   const providerExplicit = isNonEmptyString(provider);
   return {
