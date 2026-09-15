@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem } from 'effect';
 import nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
@@ -13,14 +13,12 @@ import {
 import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { buildUserVarPassthrough } from '@agent/prompt/userVars';
-import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { RegisteredToolName } from '@tools/registry';
 import { createTexraNunjucksEnvironment } from '@utils/prompt';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
@@ -489,7 +487,7 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   category: AgentCategory,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Effect.fn.Return<void, unknown> {
+): Effect.fn.Return<void, unknown, FileSystem.FileSystem> {
   const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
   const agentName = yield* ui.promptAgentName(categoryLabel);
   if (!agentName) return;
@@ -510,7 +508,10 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   if (!blueprint) return;
 
   const yamlContent = yield* generateAgentYaml(config, blueprint, ui, stores);
-  yield* hostPort(() => AbsoluteFS.write(blueprint.filePath, yamlContent));
+  // The blueprint's path is absolute and its directory is the one the UI
+  // just answered with, so the write goes through the process filesystem.
+  const fs = yield* FileSystem.FileSystem;
+  yield* fs.writeFileString(blueprint.filePath, yamlContent);
   ui.showCreatedInfo(blueprint.filePath);
   yield* ui.promptAddToConfig(agentName, category);
   yield* ui.openCreatedFile(blueprint.filePath);

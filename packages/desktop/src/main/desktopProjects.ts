@@ -5,7 +5,7 @@
 
 import { stat } from 'node:fs/promises';
 
-import { Effect, type FileSystem, type Path } from 'effect';
+import { Data, Effect, type FileSystem, type Path } from 'effect';
 
 import {
   createAgentResponseTextConnector,
@@ -13,7 +13,6 @@ import {
   runInSession,
   type SessionHandle,
 } from '@agent/runtime';
-import { hostPort } from '@common/hostPort';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import {
@@ -170,6 +169,17 @@ export function readRememberedDesktopProjects(
  * tool that ignores its kill is the same problem the process exit drain has,
  * and the project stays open, stoppable and visible in the log, until it ends.
  */
+/**
+ * Stopping a closing project's runs faulted. The stop is uninterruptible and
+ * its failure leaves the project's owner with the host, so the close reports
+ * this rather than dropping the project from the registry.
+ */
+class ProjectRunsNotStopped extends Data.TaggedError('ProjectRunsNotStopped')<{
+  readonly root: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 async function stopProjectRuns(
   session: SessionHandle,
   runtime: ProcessRuntime,
@@ -324,9 +334,15 @@ export function openDesktopProjectRegistry(
           // persistence operation leaves that owner available to the host.
           yield* Effect.uninterruptible(
             Effect.gen(function* () {
-              yield* hostPort(() =>
-                stopProjectRuns(project.session, options.runtime),
-              );
+              yield* Effect.tryPromise({
+                try: () => stopProjectRuns(project.session, options.runtime),
+                catch: (cause) =>
+                  new ProjectRunsNotStopped({
+                    root,
+                    message: `The project's runs could not be stopped: ${toErrorMessage(cause)}`,
+                    cause,
+                  }),
+              });
               yield* Effect.gen(function* () {
                 const remembered = yield* options.records.read;
                 const next =

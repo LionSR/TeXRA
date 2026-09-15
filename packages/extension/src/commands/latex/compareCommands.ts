@@ -2,11 +2,10 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Data, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import { appSignals } from '@eventBus/AppSignals';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
@@ -32,6 +31,58 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'CompareCommands';
 const log = createLog(CHANNEL);
+
+/**
+ * A VS Code command this file dispatched and VS Code refused.
+ *
+ * `not-registered` is the host saying the id does not exist — the only way a
+ * caller here tolerates a failure, and the only place the reading happens:
+ * VS Code reports an unregistered id in the message text and nowhere else, so
+ * the text is read once, beside the dispatch, and callers match `reason`.
+ */
+class VscodeCommandRefused extends Data.TaggedError('VscodeCommandRefused')<{
+  readonly reason: 'not-registered' | 'failed';
+  readonly commandId: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/** Dispatch one VS Code command, naming an unregistered id as its own reason. */
+function executeVscodeCommand<T = void>(
+  commandId: string,
+  ...args: unknown[]
+): Effect.Effect<T | undefined, VscodeCommandRefused> {
+  return Effect.tryPromise({
+    try: () =>
+      Promise.resolve(vscode.commands.executeCommand<T>(commandId, ...args)),
+    catch: (cause) => {
+      const message = toErrorMessage(cause);
+      return new VscodeCommandRefused({
+        reason: message.includes(`command '${commandId}' not found`)
+          ? 'not-registered'
+          : 'failed',
+        commandId,
+        message,
+        cause,
+      });
+    },
+  });
+}
+
+/**
+ * The host-neutral accept sequence, or the quick pick in front of it, faulted.
+ * Both sides answer their ordinary outcomes as values — a cancelled pick is
+ * `undefined`, a refused replace is `false` — so reaching here is a fault.
+ *
+ * `message` names the step and ends with the rejection's own text, because
+ * the reporting tail shows `toErrorMessage` of this failure and the reason
+ * the call gave is the part the user can act on.
+ */
+class AcceptEditedFailed extends Data.TaggedError('AcceptEditedFailed')<{
+  readonly step: 'pick-target' | 'replace' | 'commit';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 /**
  * VS Code bindings for the host-neutral accept-edited sequence, shared by
@@ -116,35 +167,29 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
     const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
 
     const contextKeyCommandId = 'vscode.getContextKeyValue';
-    yield* hostPort(async () => {
-      const location: string | undefined = await vscode.commands.executeCommand(
-        contextKeyCommandId,
-        'viewContainerLocation:texra',
-      );
-
-      if (location === 'secondarySideBar') {
-        await vscode.commands.executeCommand('workbench.action.closePanel');
-      }
-    }).pipe(
-      // A host without the context-key command cannot report where the view
-      // lives; the diff still opens. Every other failure fails the compare.
+    // A host without the context-key command cannot report where the view
+    // lives; the diff still opens. Every other failure fails the compare.
+    const location = yield* executeVscodeCommand<string>(
+      contextKeyCommandId,
+      'viewContainerLocation:texra',
+    ).pipe(
       Effect.catchIf(
-        (error) =>
-          toErrorMessage(error).includes(
-            `command '${contextKeyCommandId}' not found`,
-          ),
+        (error) => error.reason === 'not-registered',
         () =>
           Effect.sync(() => {
             log.warn(
               `Could not check Progress view location: command '${contextKeyCommandId}' not found`,
             );
+            return undefined;
           }),
       ),
     );
 
-    yield* hostPort(() =>
-      vscode.commands.executeCommand('vscode.diff', editedUri, baseUri, title),
-    );
+    if (location === 'secondarySideBar') {
+      yield* executeVscodeCommand('workbench.action.closePanel');
+    }
+
+    yield* executeVscodeCommand('vscode.diff', editedUri, baseUri, title);
 
     setTimeout(() => {
       registerDiffRefresh(editedUri, baseUri, title);
@@ -242,38 +287,60 @@ export const handleAcceptEdited = Effect.fn(
 
     // No run metadata: single-confirm replace flow shared with the desktop host.
     if (!copyMeta) {
-      return yield* hostPort(() =>
-        acceptEditedFileReplace(baseLocation, editedLocation, {
-          ...ports,
-          confirm: (message) => confirmModal(message, 'Replace file', 'Cancel'),
-        }),
-      );
+      return yield* Effect.tryPromise({
+        try: () =>
+          acceptEditedFileReplace(baseLocation, editedLocation, {
+            ...ports,
+            confirm: (message) =>
+              confirmModal(message, 'Replace file', 'Cancel'),
+          }),
+        catch: (cause) =>
+          new AcceptEditedFailed({
+            step: 'replace',
+            message: `The edited file could not replace the original: ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      });
     }
 
     // Run metadata present: let the user replace the original or save a
     // postfixed copy, then commit the chosen target.
-    const resolved = yield* hostPort(() =>
-      pickReplaceOrCopyTarget(
-        baseLocation,
-        editedLocation.absolutePath,
-        copyMeta,
-      ),
-    );
+    const resolved = yield* Effect.tryPromise({
+      try: () =>
+        pickReplaceOrCopyTarget(
+          baseLocation,
+          editedLocation.absolutePath,
+          copyMeta,
+        ),
+      catch: (cause) =>
+        new AcceptEditedFailed({
+          step: 'pick-target',
+          message: `The accept target could not be chosen: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    });
     if (!resolved) return false;
 
     const targetExisted = yield* fs.exists(
       resolved.targetLocation.absolutePath,
     );
 
-    yield* hostPort(() =>
-      commitAcceptedFile(
-        baseLocation,
-        editedLocation,
-        resolved,
-        targetExisted,
-        ports,
-      ),
-    );
+    yield* Effect.tryPromise({
+      try: () =>
+        commitAcceptedFile(
+          baseLocation,
+          editedLocation,
+          resolved,
+          targetExisted,
+          ports,
+        ),
+      catch: (cause) =>
+        new AcceptEditedFailed({
+          step: 'commit',
+          message: `The accepted file could not be committed: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    });
     return true;
   },
   Effect.catchCause((cause) =>

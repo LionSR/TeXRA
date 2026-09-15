@@ -19,12 +19,10 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { signIn as authSignIn } from '@commands/auth/authCommands';
-import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { isFileNotFoundError } from '@common/errors';
-import { hostPort } from '@common/hostPort';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import {
   disposeProcessRuntime,
@@ -32,6 +30,7 @@ import {
 } from '@controllers/session/sessionLayer';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
+import { refreshApiKeyStatusBar } from '@frontend/statusBar/apiKeyStatusBar';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import {
   initializeLatexSupport,
@@ -272,35 +271,6 @@ function installUnhandledRejectionSurface(
   subscriptions.push({
     dispose: () => process.off('unhandledRejection', report),
   });
-}
-
-async function refreshApiKeyStatus(
-  secrets: PlatformSecrets,
-  runtime: ProcessRuntime,
-) {
-  if (!apiKeyStatusBarItem) {
-    return;
-  }
-
-  // Use the same credential predicate as the setup assistant and onboarding
-  // funnel, so ChatGPT subscription and direct API keys agree about whether the
-  // first-run CTA should remain visible. Account sign-in is deliberately not in
-  // that set: it serves the remote-agent catalog, not model access.
-  const exists = await runtime.runPromise(hasAnyUsableSetupCredential(secrets));
-  if (!exists) {
-    statusBarItem?.hide();
-    apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
-    apiKeyStatusBarItem.tooltip =
-      'Click to run the setup assistant — use ChatGPT or add a provider key';
-    apiKeyStatusBarItem.command = EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT;
-    apiKeyStatusBarItem.accessibilityInformation = {
-      label: 'TeXRA setup, get started',
-    };
-    apiKeyStatusBarItem.show();
-  } else {
-    apiKeyStatusBarItem.hide();
-    statusBarItem?.show();
-  }
 }
 
 /**
@@ -745,7 +715,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
       withPerKeyLane(
         apiKeyStatusRefreshLanes,
         'refresh',
-      )(hostPort(() => refreshApiKeyStatus(secrets, runtime))),
+      )(
+        refreshApiKeyStatusBar(secrets, {
+          setup: apiKeyStatusBarItem,
+          tasks: statusBarItem,
+        }),
+      ),
     );
   const safeRefreshApiKeyStatus = () =>
     queueApiKeyStatusRefresh().catch((err) =>

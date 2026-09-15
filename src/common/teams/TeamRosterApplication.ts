@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
-import { hostPort } from '@common/hostPort';
 import {
   preflightTeamAvailability,
+  TeamCatalogPortFailed,
   type TeamAvailabilityChoice,
 } from '@common/teams/TeamAvailabilityPreflight';
 import type {
@@ -9,6 +9,7 @@ import type {
   TeamRosterResolution,
 } from '@common/teams/TeamRoster';
 import type { AgentModePreset } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface ResolvedTeam {
   readonly ok: true;
@@ -95,7 +96,15 @@ export function applyTeamRosterWithPreflight(
       };
     }
 
-    yield* hostPort(() => deps.catalog.commitPreset(preflight.value.preset));
+    yield* Effect.tryPromise({
+      try: () => deps.catalog.commitPreset(preflight.value.preset),
+      catch: (cause) =>
+        new TeamCatalogPortFailed({
+          member: 'commitPreset',
+          message: `The applied team could not be stored: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    });
     return {
       status: 'applied' as const,
       preset: preflight.value.preset,

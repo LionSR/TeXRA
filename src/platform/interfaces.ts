@@ -2,7 +2,7 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
-import { Context, Layer } from 'effect';
+import { Context, Data, Layer } from 'effect';
 import type { RunId } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
@@ -31,6 +31,25 @@ export interface ConfigInspection<T = unknown> {
 }
 
 /**
+ * A configuration write the store refused. Every implementation bottoms out in
+ * the same `JsonStore` as the secret and state stores, so the reasons are that
+ * store's: a filesystem error under the config path, or a config file whose
+ * contents are no longer a JSON object.
+ *
+ * {@link ConfigProvider.update} itself is still `Promise`-shaped, because a
+ * settings slot write travels with the state slot beside it
+ * (`settingsAccess.writeSlot`) and with the provider routing that reads it —
+ * the same fifty-file plane the credential lane measured and stopped at. This
+ * is the tag its Effect-side callers raise until that plane moves.
+ */
+export class ConfigWriteFailed extends Data.TaggedError('ConfigWriteFailed')<{
+  readonly key: string;
+  readonly target: ConfigTarget | undefined;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/**
  * Platform configuration provider interface.
  */
 export interface ConfigProvider {
@@ -50,6 +69,21 @@ export interface ConfigProvider {
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
+
+/**
+ * A state write the store refused: the host's own `Memento` rejection on the
+ * extension, and the shared `JsonStore`'s filesystem or not-JSON failure on
+ * the desktop, the CLI and the agent package.
+ *
+ * {@link StateStore.update} keeps `vscode.Memento`'s `PromiseLike` shape for
+ * the same reason {@link ConfigWriteFailed} exists: the writes travel with the
+ * config slots beside them. This is the tag its Effect-side callers raise.
+ */
+export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
+  readonly key: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 /**
  * Platform key-value state store interface.

@@ -1,6 +1,28 @@
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 
-import { hostPort } from '@common/hostPort';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+/**
+ * A team-catalog port the host would not answer.
+ *
+ * The bag below is bound seven times across the three hosts and the setup
+ * tool, and `canAccessRemoteCatalog` bottoms out in `SupabaseClient`, whose
+ * reads the credential lane deliberately left `Promise`-shaped. So the
+ * members keep that shape and their callers raise this instead of the
+ * identity-caught `unknown` they used to propagate; `member` says which port
+ * refused, which is the only distinction any caller here draws.
+ *
+ * A user's own answer is never this: `choose` reporting `undefined` and
+ * `signIn` reporting `false` are values the preflight already reads.
+ */
+export class TeamCatalogPortFailed extends Data.TaggedError(
+  'TeamCatalogPortFailed',
+)<{
+  readonly member:
+    'canAccessRemoteCatalog' | 'choose' | 'signIn' | 'commitPreset';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 export type TeamAvailabilityChoice = 'sign-in' | 'continue' | 'cancel';
 
@@ -86,9 +108,15 @@ export function preflightTeamAvailability<T>(
       return { status: 'proceed', value: options.initial, partial: true };
     }
 
-    const canAccessRemoteCatalog = yield* hostPort(() =>
-      options.canAccessRemoteCatalog(),
-    );
+    const canAccessRemoteCatalog = yield* Effect.tryPromise({
+      try: () => options.canAccessRemoteCatalog(),
+      catch: (cause) =>
+        new TeamCatalogPortFailed({
+          member: 'canAccessRemoteCatalog',
+          message: `Remote agent catalog access could not be checked: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    });
     if (canAccessRemoteCatalog) {
       if (options.remoteCatalogRefreshAttempted) {
         return {
@@ -102,7 +130,15 @@ export function preflightTeamAvailability<T>(
 
     const choice =
       options.providedChoice ??
-      (yield* hostPort(() => options.choose(initialUnavailable)));
+      (yield* Effect.tryPromise({
+        try: () => options.choose(initialUnavailable),
+        catch: (cause) =>
+          new TeamCatalogPortFailed({
+            member: 'choose',
+            message: `The host could not ask about the unavailable members: ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      }));
     if (choice === undefined) {
       return {
         status: 'choice-required',
@@ -117,7 +153,16 @@ export function preflightTeamAvailability<T>(
       return { status: 'proceed', value: options.initial, partial: true };
     }
 
-    if (!(yield* hostPort(() => options.signIn()))) {
+    const signedIn = yield* Effect.tryPromise({
+      try: () => options.signIn(),
+      catch: (cause) =>
+        new TeamCatalogPortFailed({
+          member: 'signIn',
+          message: `The host could not run the TeXRA sign-in: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    });
+    if (!signedIn) {
       return { status: 'cancelled', value: options.initial };
     }
 

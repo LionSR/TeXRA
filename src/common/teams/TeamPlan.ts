@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { hostPort } from '@common/hostPort';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS,
@@ -20,10 +19,12 @@ import {
   implicitDefaultToolUseAgents,
 } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { capitalize } from '@utils/text/stringUtils';
 
 import {
   preflightTeamAvailability,
+  TeamCatalogPortFailed,
   type TeamAvailabilityChoice,
 } from './TeamAvailabilityPreflight';
 import { resolvePresetAgents } from './TeamRoster';
@@ -389,7 +390,15 @@ export function refreshRemoteCatalogForGaps<T>(
     // `hasGaps` first, as in the Promise original: a gapless plan must not
     // even probe remote access.
     if (hasGaps(value)) {
-      const canAccess = yield* hostPort(() => ports.canAccessRemoteCatalog());
+      const canAccess = yield* Effect.tryPromise({
+        try: () => ports.canAccessRemoteCatalog(),
+        catch: (cause) =>
+          new TeamCatalogPortFailed({
+            member: 'canAccessRemoteCatalog',
+            message: `Remote agent catalog access could not be checked: ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      });
       if (canAccess) {
         yield* ports.refreshRemote();
         return { value: replan(), remoteCatalogRefreshAttempted: true };

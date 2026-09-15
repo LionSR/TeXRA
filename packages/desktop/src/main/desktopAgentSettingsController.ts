@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Data, Effect, FileSystem } from 'effect';
 
 import {
   type AgentEntry,
@@ -11,7 +11,6 @@ import {
   type loadAgents,
   type refresh,
 } from '@agent/index';
-import { hostPort } from '@common/hostPort';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { type TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
@@ -23,7 +22,11 @@ import {
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
-import type { MessageHost } from '@hosts/uiHosts';
+import {
+  ExternalOpenFailed,
+  NotificationFailed,
+  type MessageHost,
+} from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -42,6 +45,46 @@ import {
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { createTexraTempDir } from '@utils/files/tempDir';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+/**
+ * One of the desktop-local calls this controller drives rejected. The members
+ * are the agent-directory reads and writes, the temp-file copy the desktop
+ * shows a packaged definition through, the hosted-prompt fetch, and the
+ * catalog refresh that follows a mutation. Each is reported to the user by
+ * the surrounding `catchCause`, which is why one tag with a member name is
+ * the whole vocabulary any caller here reads.
+ *
+ * `message` always ends with the rejection's own text, and never repeats what
+ * the reporting `catchCause` already prefixes: the surrounding notification
+ * renders `toErrorMessage(Cause.squash(cause))`, so a message that named only
+ * the step would drop the reason the call actually gave.
+ */
+class AgentSettingsActionFailed extends Data.TaggedError(
+  'AgentSettingsActionFailed',
+)<{
+  readonly member:
+    | 'runAction'
+    | 'getCustomAgentDirectory'
+    | 'writeTemplateAgentFile'
+    | 'createTempDir'
+    | 'getRemoteAgentPrompt'
+    | 'refreshAfterMutation';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/** Show one settings notification, reporting a host that could not show it. */
+const notify = (
+  present: (message: string) => Promise<void> | void,
+  member: NotificationFailed['member'],
+  message: string,
+): Effect.Effect<void, NotificationFailed> =>
+  Effect.tryPromise({
+    try: async () => {
+      await present(message);
+    },
+    catch: (cause) => new NotificationFailed({ member, message, cause }),
+  });
 
 type AgentCommand = SettingsViewInboundMessage['command'];
 type AgentMessage<C extends AgentCommand> = SettingsMessageFor<C>;
@@ -217,17 +260,34 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
       run: (failureMessage, action) =>
         this.runtime.runPromise(
-          hostPort(action).pipe(
-            Effect.catchCause((cause) =>
-              // An interrupt (the runtime disposing at shutdown) is not an
-              // action failure: re-fail it instead of showing a notification.
-              Cause.hasInterruptsOnly(cause)
-                ? Effect.failCause(cause)
-                : hostPort(() =>
-                    notifications.showErrorMessage(
+          Effect.tryPromise({
+            try: () => action(),
+            catch: (cause) =>
+              new AgentSettingsActionFailed({
+                member: 'runAction',
+                // The reporting `catchCause` below prefixes `failureMessage`
+                // itself, so the tag carries the rejection's own text only.
+                message: toErrorMessage(cause),
+                cause,
+              }),
+          }).pipe(
+            Effect.catchCause(
+              (
+                cause,
+              ): Effect.Effect<
+                void,
+                AgentSettingsActionFailed | NotificationFailed
+              > =>
+                // An interrupt (the runtime disposing at shutdown) is not an
+                // action failure: re-fail it instead of showing a
+                // notification.
+                Cause.hasInterruptsOnly(cause)
+                  ? Effect.failCause(cause)
+                  : notify(
+                      (text) => notifications.showErrorMessage(text),
+                      'showErrorMessage',
                       `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
                     ),
-                  ),
             ),
           ),
         ),
@@ -395,9 +455,15 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     // so it is created through the process filesystem.
     await this.runtime.runPromise(
       Effect.gen({ self: this }, function* () {
-        const customDir = yield* hostPort(() =>
-          this.directory.getCustomAgentDirectory(),
-        );
+        const customDir = yield* Effect.tryPromise({
+          try: () => this.directory.getCustomAgentDirectory(),
+          catch: (cause) =>
+            new AgentSettingsActionFailed({
+              member: 'getCustomAgentDirectory',
+              message: `The custom agent directory could not be resolved: ${toErrorMessage(cause)}`,
+              cause,
+            }),
+        });
         const fs = yield* FileSystem.FileSystem;
         yield* fs.makeDirectory(customDir, { recursive: true });
 
@@ -407,31 +473,56 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           customDir,
         });
 
-        const written = yield* hostPort(() =>
-          writeTemplateAgentFile(plan, this.resourcesPath),
-        );
+        const written = yield* Effect.tryPromise({
+          try: () => writeTemplateAgentFile(plan, this.resourcesPath),
+          catch: (cause) =>
+            new AgentSettingsActionFailed({
+              member: 'writeTemplateAgentFile',
+              message: `The agent template could not be written: ${toErrorMessage(cause)}`,
+              cause,
+            }),
+        });
         if (!written.ok) {
-          yield* hostPort(() =>
-            this.notifications.showErrorMessage(written.message),
+          yield* notify(
+            (text) => this.notifications.showErrorMessage(text),
+            'showErrorMessage',
+            written.message,
           );
           return;
         }
 
-        yield* hostPort(() => this.directory.openPath(plan.filePath));
-        yield* hostPort(() =>
-          this.notifications.showInfoMessage(
-            `Created custom agent: ${plan.fileName}`,
-          ),
+        yield* Effect.tryPromise({
+          try: () => this.directory.openPath(plan.filePath),
+          catch: (cause) =>
+            new ExternalOpenFailed({
+              kind: 'path',
+              target: plan.filePath,
+              message: `The new agent definition could not be opened: ${toErrorMessage(cause)}`,
+              cause,
+            }),
+        });
+        yield* notify(
+          (text) => this.notifications.showInfoMessage(text),
+          'showInfoMessage',
+          `Created custom agent: ${plan.fileName}`,
         );
-        yield* hostPort(() => this.refreshAfterAgentMutation());
+        yield* Effect.tryPromise({
+          try: () => this.refreshAfterAgentMutation(),
+          catch: (cause) =>
+            new AgentSettingsActionFailed({
+              member: 'refreshAfterMutation',
+              message: `The agent catalog could not be reloaded: ${toErrorMessage(cause)}`,
+              cause,
+            }),
+        });
       }).pipe(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.failCause(cause)
-            : hostPort(() =>
-                this.notifications.showErrorMessage(
-                  `Failed to create custom agent: ${toErrorMessage(Cause.squash(cause))}`,
-                ),
+            : notify(
+                (text) => this.notifications.showErrorMessage(text),
+                'showErrorMessage',
+                `Failed to create custom agent: ${toErrorMessage(Cause.squash(cause))}`,
               ),
         ),
       ),
@@ -448,31 +539,56 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   ): Promise<void> {
     await this.runtime.runPromise(
       Effect.gen({ self: this }, function* () {
-        const result = yield* hostPort(() =>
-          getRemoteAgentPromptConfig(data.agentName),
-        );
+        const result = yield* Effect.tryPromise({
+          try: () => getRemoteAgentPromptConfig(data.agentName),
+          catch: (cause) =>
+            new AgentSettingsActionFailed({
+              member: 'getRemoteAgentPrompt',
+              message: `The hosted agent prompt could not be fetched: ${toErrorMessage(cause)}`,
+              cause,
+            }),
+        });
         if (!result.ok) {
-          yield* hostPort(() =>
-            this.notifications.showErrorMessage(result.message),
+          yield* notify(
+            (text) => this.notifications.showErrorMessage(text),
+            'showErrorMessage',
+            result.message,
           );
           return;
         }
 
         const target = path.join(
-          yield* hostPort(() => createTexraTempDir('texra-agent-prompt-')),
+          yield* Effect.tryPromise({
+            try: () => createTexraTempDir('texra-agent-prompt-'),
+            catch: (cause) =>
+              new AgentSettingsActionFailed({
+                member: 'createTempDir',
+                message: `A temporary directory could not be created: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          }),
           `${data.agentName}.yaml`,
         );
         const fs = yield* FileSystem.FileSystem;
         yield* fs.writeFileString(target, result.config);
-        yield* hostPort(() => this.directory.openPath(target));
+        yield* Effect.tryPromise({
+          try: () => this.directory.openPath(target),
+          catch: (cause) =>
+            new ExternalOpenFailed({
+              kind: 'path',
+              target,
+              message: `The hosted agent prompt could not be opened: ${toErrorMessage(cause)}`,
+              cause,
+            }),
+        });
       }).pipe(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.failCause(cause)
-            : hostPort(() =>
-                this.notifications.showErrorMessage(
-                  `Failed to view remote agent prompt: ${toErrorMessage(Cause.squash(cause))}`,
-                ),
+            : notify(
+                (text) => this.notifications.showErrorMessage(text),
+                'showErrorMessage',
+                `Failed to view remote agent prompt: ${toErrorMessage(Cause.squash(cause))}`,
               ),
         ),
       ),

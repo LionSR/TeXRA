@@ -9,9 +9,8 @@
  * banners only it can answer (a VS Code host knows its API-key status and
  * its missing tools; the desktop keeps both in Settings).
  */
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Data, Effect, Exit } from 'effect';
 import { computeAgentOptionsData } from '@agent/index';
-import { hostPort } from '@common/hostPort';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import {
@@ -30,6 +29,26 @@ import type {
 } from '@shared/session/hostSnapshot';
 
 type Banners = HostSnapshot['banners'];
+
+/**
+ * One of the host's own snapshot reads failed. The five members below are the
+ * reads only a host can answer — its file lists, its git probe, its sign-in
+ * probe, and the two banners it alone knows about — so the failure is the
+ * host's and carries it. `member` says which producer kept its last value:
+ * every read here is guarded, so a failure never blanks the shell.
+ */
+export class HostSnapshotReadFailed extends Data.TaggedError(
+  'HostSnapshotReadFailed',
+)<{
+  readonly member:
+    | 'fileOptions'
+    | 'readRecentCommits'
+    | 'isAuthenticated'
+    | 'apiKeyBanner'
+    | 'dependencyBanner';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
@@ -53,17 +72,23 @@ interface HostSnapshotSourceOptions {
    */
   inScope: ModelAvailabilityScope;
   /** The launcher's single-slot catalogs: base and edited candidates. */
-  fileOptions(): Promise<FileOptions>;
-  readRecentCommits(): Promise<{ commits: string[]; isGitRepo: boolean }>;
+  fileOptions(): Effect.Effect<FileOptions, HostSnapshotReadFailed>;
+  readRecentCommits(): Effect.Effect<
+    { commits: string[]; isGitRepo: boolean },
+    HostSnapshotReadFailed
+  >;
   /** Whether the user is signed in; the login banner is its negation. */
-  isAuthenticated(): Promise<boolean>;
+  isAuthenticated(): Effect.Effect<boolean, HostSnapshotReadFailed>;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots?: () => HostSnapshot['workspaceRoots'];
   debugMode?: () => boolean;
   /** Hosts that surface these outside Settings answer them; absent means
    *  never shown. */
-  apiKeyBanner?: () => Promise<Banners['apiKey']>;
-  dependencyBanner?: () => Promise<Banners['dependency']>;
+  apiKeyBanner?: () => Effect.Effect<Banners['apiKey'], HostSnapshotReadFailed>;
+  dependencyBanner?: () => Effect.Effect<
+    Banners['dependency'],
+    HostSnapshotReadFailed
+  >;
   /** Write directly to the bridge's host snapshot, which its runs replay. */
   publish(snapshot: HostSnapshot): void;
   onError(error: unknown): void;
@@ -177,26 +202,26 @@ export function createHostSnapshotSource(
   });
 
   const loadFiles = Effect.gen(function* () {
-    fileOptions = yield* hostPort(() => options.fileOptions());
+    fileOptions = yield* options.fileOptions();
     hasInputFiles = fileOptions.baseFile.length > 0;
   });
 
   const loadCommits = Effect.gen(function* () {
-    commits = yield* hostPort(() => options.readRecentCommits());
+    commits = yield* options.readRecentCommits();
   });
 
   const loadAuth = Effect.gen(function* () {
-    authenticated = yield* hostPort(() => options.isAuthenticated());
+    authenticated = yield* options.isAuthenticated();
   });
 
   const loadHostBanners = Effect.gen(function* () {
     const [key, tools] = yield* Effect.all(
       [
         options.apiKeyBanner
-          ? hostPort(() => options.apiKeyBanner!())
+          ? options.apiKeyBanner()
           : Effect.succeed(undefined),
         options.dependencyBanner
-          ? hostPort(() => options.dependencyBanner!())
+          ? options.dependencyBanner()
           : Effect.succeed(undefined),
       ],
       { concurrency: 'unbounded' },

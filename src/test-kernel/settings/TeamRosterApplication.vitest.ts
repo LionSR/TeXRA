@@ -46,7 +46,7 @@ function makeDeps(
   return {
     catalog: {
       resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
-      commitPreset: vi.fn(),
+      commitPreset: vi.fn(async () => {}),
       ...catalog,
     },
     loadLocalCatalog: () => Effect.void,
@@ -117,7 +117,7 @@ describe('team roster application', () => {
 
   it.effect('cancels before refresh or roster writes', () =>
     Effect.gen(function* () {
-      const commitPreset = vi.fn();
+      const commitPreset = vi.fn(async () => {});
       let forcedRefresh = false;
       const signIn = vi.fn();
 
@@ -191,7 +191,7 @@ describe('team roster application', () => {
       yield* applySettingsTeamRoster('research', {
         catalog: {
           resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
-          commitPreset: vi.fn(),
+          commitPreset: vi.fn(async () => {}),
           getPresetToolUseRoot: vi.fn(),
         },
         loadLocalCatalog: () => Effect.void,
@@ -236,7 +236,7 @@ describe('team roster application', () => {
       Effect.gen(function* () {
         const choose = vi.fn();
         const signIn = vi.fn();
-        const commitPreset = vi.fn();
+        const commitPreset = vi.fn(async () => {});
 
         const result = yield* applyTeamRosterWithPreflight(
           'research',

@@ -1,9 +1,8 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 import PostalMime from 'postal-mime';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
 
 import type { Address, Attachment, Email } from 'postal-mime';
@@ -42,10 +41,27 @@ const turndownService = createHtmlToMarkdown();
  * When no plain-text part exists, falls back to a Markdown conversion of the HTML body.
  * Non-image attachment filenames are listed at the end of the text.
  */
+/**
+ * `postal-mime` rejected the message. It is a parser over a string this
+ * process already holds, not a host port, so there is one reason and it
+ * carries the library's own error.
+ */
+class EmlParseFailed extends Data.TaggedError('EmlParseFailed')<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 export const parseEml = Effect.fn('parseEml')(function* (
   rawEml: string,
-): Effect.fn.Return<EmlParseResult, unknown> {
-  const email = yield* hostPort(() => PostalMime.parse(rawEml));
+): Effect.fn.Return<EmlParseResult, EmlParseFailed> {
+  const email = yield* Effect.tryPromise({
+    try: () => PostalMime.parse(rawEml),
+    catch: (cause) =>
+      new EmlParseFailed({
+        message: 'The .eml message could not be parsed.',
+        cause,
+      }),
+  });
   const partition = partitionAttachments(email.attachments);
   const text = formatEmail(email, partition);
   return { text, images: partition.images };

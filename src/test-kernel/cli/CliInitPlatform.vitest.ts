@@ -279,13 +279,19 @@ describe('CLI platform init', () => {
         .mockReturnValueOnce(undefined)
         .mockReturnValueOnce(undefined)
         .mockReturnValue({ globalState: stubGlobalState() });
-      mocks.cliGlobalState.update.mockRejectedValueOnce(
-        new Error('disabled-tool defaults could not be seeded'),
-      );
-
-      await expect(initPlatform.initCliPlatform(cliContext())).rejects.toThrow(
+      const storeFailure = new Error(
         'disabled-tool defaults could not be seeded',
       );
+      mocks.cliGlobalState.update.mockRejectedValueOnce(storeFailure);
+
+      // The seed's own typed failure, carrying the store's rejection.
+      await expect(
+        initPlatform.initCliPlatform(cliContext()),
+      ).rejects.toMatchObject({
+        _tag: 'StateWriteFailed',
+        key: GlobalStateKey.DISABLED_TOOLS,
+        cause: storeFailure,
+      });
 
       const { tryDefaultSession } = await import('@agent/runtime');
       expect(mocks.publishPlatform).not.toHaveBeenCalled();

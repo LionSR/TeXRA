@@ -23,6 +23,23 @@ export interface DiffViewHost {
   readProposedContent(session: DiffSession): Promise<string>;
 }
 
+/**
+ * The operating system would not open what it was handed: no handler for the
+ * URL's scheme or the file's type, or the shell refusing the request.
+ *
+ * {@link ExternalOpener.openExternal} and the desktop's sibling `openPath`
+ * keep their `Promise` shape — they are bound in the desktop's browser-view,
+ * shell, settings, tooling and credential surfaces and in the VS Code opener,
+ * more than one lane carries — so this is the tag their Effect-side callers
+ * raise. `kind` says whether a URL or a local path was refused.
+ */
+export class ExternalOpenFailed extends Data.TaggedError('ExternalOpenFailed')<{
+  readonly kind: 'url' | 'path';
+  readonly target: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 export interface ExternalOpener {
   openExternal(url: string): Promise<void>;
 }
@@ -48,6 +65,27 @@ export class PromptFailed extends Data.TaggedError('PromptFailed')<{
   readonly member: 'info' | 'warning' | 'error' | 'confirm' | 'input';
   readonly message: string;
   readonly cause?: unknown;
+}> {}
+
+/**
+ * A notification never reached the user: VS Code's `window.show*Message` or
+ * the desktop's `dialog.showMessageBox` rejected, which they do only when the
+ * host's own dialog machinery faults or the window a box is anchored to is
+ * already gone. A user who ignores a notification is not a failure — these
+ * members answer nothing.
+ *
+ * {@link MessageHost} itself stays `Promise`-shaped: its members are awaited
+ * across the desktop settings, host-request and auth files and the shared
+ * settings agent-action plane, which is more surface than one lane carries.
+ * This is the tag its Effect-side callers raise in the meantime, so a
+ * notification the host refused reaches them as a value they can match rather
+ * than as `unknown`.
+ */
+export class NotificationFailed extends Data.TaggedError('NotificationFailed')<{
+  readonly member:
+    'showInfoMessage' | 'showWarningMessage' | 'showErrorMessage';
+  readonly message: string;
+  readonly cause: unknown;
 }> {}
 
 /**
