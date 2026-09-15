@@ -1,3 +1,4 @@
+import { Data, Effect } from 'effect';
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
@@ -11,12 +12,32 @@ import {
   DESKTOP_ONBOARDING_COMMANDS,
   DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
 } from '../shared/desktopOnboardingMessages.js';
-import type { Effect } from 'effect';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
   DesktopRenderer,
 } from './desktopIpcTypes.js';
+
+/**
+ * The setup conversation the "Run Setup" card launched would not start, or
+ * started and failed. The kickoff handler has already told the user, so this
+ * only exists to carry the rejection out of the fiber and to release the
+ * in-flight guard.
+ */
+class SetupKickoffFailed extends Data.TaggedError('SetupKickoffFailed')<{
+  readonly cause: unknown;
+}> {}
+
+/**
+ * The welcome card's dismissal did not land: either the flag write rejected or
+ * the renderer refused the follow-up state message. Both are reported the same
+ * way, through the host's asynchronous-error reporter, so they share one tag.
+ */
+class OnboardingDismissFailed extends Data.TaggedError(
+  'OnboardingDismissFailed',
+)<{
+  readonly cause: unknown;
+}> {}
 
 interface DesktopOnboardingIpcOptions {
   /** The process global store, handed down by the composition root. */
@@ -98,29 +119,42 @@ export function createDesktopOnboardingIpc(
     // completion, which must NOT block the serialized funnel-refresh chain —
     // otherwise a later "skip setup" / sign-out / credential-removal refresh
     // would queue behind the entire setup run, leaving the card stuck on 'setup'.
-    void options
-      .kickoffSetup()
-      .catch(() => {
+    options.runtime.runFork(
+      Effect.tryPromise({
+        try: () => options.kickoffSetup(),
+        catch: (cause) => new SetupKickoffFailed({ cause }),
+      }).pipe(
         // Swallow — the kickoff handler already surfaced the error to the user.
-      })
-      .finally(() => {
+        Effect.catchTag('SetupKickoffFailed', () => Effect.void),
         // Clear the guard once the run settles (success or failure), not only on
         // error: while it's in flight the guard blocks a concurrent second run,
         // but afterwards another manual "Run Setup" click must be able to launch
         // setup again (otherwise the guard would stay stuck for the window's
         // lifetime after the first kickoff).
-        setupKickoffStarted = false;
-      });
+        Effect.ensuring(
+          Effect.sync(() => {
+            setupKickoffStarted = false;
+          }),
+        ),
+      ),
+    );
   }
 
   function refreshOnboardingFunnel(): Promise<void> {
     return options.runtime.runPromise(funnel.run());
   }
 
-  async function dismiss(): Promise<void> {
-    await state.update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true);
-    renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(false));
-  }
+  const dismiss = Effect.gen(function* () {
+    yield* Effect.tryPromise({
+      try: () => state.update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true),
+      catch: (cause) => new OnboardingDismissFailed({ cause }),
+    });
+    yield* Effect.try({
+      try: () =>
+        renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(false)),
+      catch: (cause) => new OnboardingDismissFailed({ cause }),
+    });
+  });
 
   async function skipMainOnboarding(): Promise<void> {
     await setOnboardingDeclined(state, true);
@@ -151,7 +185,15 @@ export function createDesktopOnboardingIpc(
           postCurrentState();
           return true;
         case DESKTOP_ONBOARDING_COMMANDS.DISMISS:
-          dismiss().catch(options.onAsyncError);
+          options.runtime.runFork(
+            dismiss.pipe(
+              // The reporter receives the rejection itself, exactly as the
+              // promise-side handler on this call used to hand it over.
+              Effect.catchTag('OnboardingDismissFailed', (failure) =>
+                Effect.sync(() => options.onAsyncError(failure.cause)),
+              ),
+            ),
+          );
           return true;
         default:
           return false;
