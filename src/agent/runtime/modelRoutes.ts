@@ -208,10 +208,9 @@ export const resolveSubscriptionCredential = Effect.fn(
       catch: ensureError,
     });
     if (profile === null) return null;
-    const routable = yield* Effect.tryPromise({
-      try: () => inScope(() => isCodexSessionRoutable(secrets)),
-      catch: codexAuthFailure,
-    });
+    const routable = yield* isCodexSessionRoutable(secrets, inScope).pipe(
+      Effect.mapError(codexAuthFailure),
+    );
     if (!routable) {
       log.warn(
         `Prefer ChatGPT subscription is on but no ChatGPT session is signed in: model ${config.name} bills the OpenAI API key.`,
