@@ -155,34 +155,4 @@ describe('tool availability app signals', () => {
         ]);
       }).pipe(Effect.provide(probeServices)),
   );
-
-  it.effect(
-    'resetToolAvailabilityCacheForTests clears the cached results',
-    () =>
-      Effect.gen(function* () {
-        vi.doMock('@tools/externalToolDefs', () => ({
-          EXTERNAL_TOOL_DEFS: [
-            {
-              id: 'test-tool',
-              tools: [],
-              name: 'Test tool',
-              category: 'ai-agents',
-              check: vi.fn(() => Effect.succeed(true)),
-            },
-          ],
-        }));
-        const {
-          getLastCheckResults,
-          runExternalToolChecks,
-          resetToolAvailabilityCacheForTests,
-        } = yield* Effect.promise(() => import('@tools/toolAvailability'));
-
-        yield* runExternalToolChecks();
-        expect(getLastCheckResults()).not.toBeNull();
-
-        resetToolAvailabilityCacheForTests();
-
-        expect(getLastCheckResults()).toBeNull();
-      }).pipe(Effect.provide(probeServices)),
-  );
 });

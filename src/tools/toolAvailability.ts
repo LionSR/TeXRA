@@ -107,10 +107,10 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
 
 /**
  * Coalescing cache of the last probe results — the only source for
- * availability answers. Encapsulated as a class with a `resetForTests`
- * method, not bare module-level `let`s, per AGENTS.md "No bare module-level
- * mutable singletons in tested code"; same shape as `AnnotationFetchBudget`
- * in `@tools/github/annotationFetchBudget`.
+ * availability answers. Encapsulated as a class, not bare module-level
+ * `let`s, per AGENTS.md "No bare module-level mutable singletons in tested
+ * code"; same shape as `AnnotationFetchBudget` in
+ * `@tools/github/annotationFetchBudget`.
  */
 class ToolAvailabilityCache {
   private lastResults: ExternalToolCheckResult[] | null = null;
@@ -119,22 +119,8 @@ class ToolAvailabilityCache {
   private pendingRerun = false;
 
   /**
-   * Run all external tool checks in parallel.
-   * Always returns fresh `check` + `detailCheck` probes and updates the
-   * availability cache.
-   *
-   * Concurrent calls are coalesced: while a probe is in flight, additional
-   * callers join the same deferred and receive its results. If any caller
-   * arrives AFTER the active probe started reading inputs, a follow-up probe
-   * is scheduled so the cache ultimately reflects the most recent state and
-   * a stale probe can't overwrite a fresh one by finishing last.
-   *
-   * Called by the tool dashboard (needs per-group results) and
-   * {@link refreshToolAvailability}. Also populates the cache read by
-   * `getUnavailableToolNamesCached()`.
-   *
-   * @returns Per-group results with availability status and an optional
-   *   human-readable `statusDetail`.
+   * Run all external tool checks in parallel. See {@link runExternalToolChecks}
+   * for the full coalescing contract this implements.
    */
   runChecks(): Effect.Effect<
     ExternalToolCheckResult[],
@@ -183,31 +169,35 @@ class ToolAvailabilityCache {
   getLastResults(): ExternalToolCheckResult[] | null {
     return this.lastResults;
   }
-
-  /** Test-only: clear cached results and any in-flight coalescing state,
-   *  as an injectable, resettable handle in place of `vi.resetModules()`. */
-  resetForTests(): void {
-    this.lastResults = null;
-    this.inflightProbe = null;
-    this.pendingRerun = false;
-  }
 }
 
 /** Process-wide: one cache per host process, same lifetime as the module. */
 const toolAvailabilityCache = new ToolAvailabilityCache();
 
+/**
+ * Run all external tool checks in parallel.
+ * Always returns fresh `check` + `detailCheck` probes and updates the
+ * availability cache.
+ *
+ * Concurrent calls are coalesced: while a probe is in flight, additional
+ * callers join the same deferred and receive its results. If any caller
+ * arrives AFTER the active probe started reading inputs, a follow-up probe
+ * is scheduled so the cache ultimately reflects the most recent state and
+ * a stale probe can't overwrite a fresh one by finishing last.
+ *
+ * Called by the tool dashboard (needs per-group results) and
+ * {@link refreshToolAvailability}. Also populates the cache read by
+ * `getUnavailableToolNamesCached()`.
+ *
+ * @returns Per-group results with availability status and an optional
+ *   human-readable `statusDetail`.
+ */
 export function runExternalToolChecks(): Effect.Effect<
   ExternalToolCheckResult[],
   never,
   ToolProbeServices
 > {
   return toolAvailabilityCache.runChecks();
-}
-
-/** Test-only: reset the process-wide tool-availability cache between suites
- *  that need isolation. */
-export function resetToolAvailabilityCacheForTests(): void {
-  toolAvailabilityCache.resetForTests();
 }
 
 const runProbes: Effect.Effect<
