@@ -234,10 +234,26 @@ export interface ExecuteCommandBaseOptions {
   maxBuffer?: number;
   stdout?: ExecOutput;
   stderr?: ExecOutput;
-  /** Abort signal used to terminate the subprocess and any shell children. */
+  /**
+   * Abort signal used to terminate the subprocess and any shell children;
+   * `killProcessTree` extends array-form signalling to the whole tree.
+   */
   signal?: AbortSignal;
   /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
   quiet?: boolean;
+  /**
+   * Terminate the whole process tree on abort or timeout instead of only the
+   * tracked process. Array form only: the shell form already signals its whole
+   * group. Opt in for tools that hand the work to a delegate (ImageMagick and
+   * GraphicsMagick rasterize PDF pages through Ghostscript) so the delegate is
+   * signalled as part of the same teardown.
+   *
+   * Maps to execa's `killDescendants`: a new process group on POSIX,
+   * `taskkill /T` on Windows. Termination is initiated, not joined: the call
+   * still settles from the tracked process, and nothing waits for the
+   * descendants to exit.
+   */
+  killProcessTree?: boolean;
 }
 
 /**
@@ -245,10 +261,13 @@ export interface ExecuteCommandBaseOptions {
  *
  * The command form picks the teardown strategy:
  *
- * - the array form spawns a single non-detached process and leaves
- *   abort/timeout signalling to execa's native `cancelSignal` /
- *   `forceKillAfterDelay`, plus a stream-destroy backstop. No process-group
- *   semantics: a descendant that inherited stdio is intentionally left alone.
+ * - the array form spawns one process and leaves abort/timeout signalling to
+ *   execa's native `cancelSignal` / `forceKillAfterDelay`, plus a
+ *   stream-destroy backstop. By default it has no process-group semantics: a
+ *   descendant that inherited stdio is intentionally left alone.
+ *   `killProcessTree` opts a call into whole-tree signalling (a process group
+ *   on POSIX, `taskkill /T` on Windows); even then the await tracks only the
+ *   spawned process, so the tree is signalled, not joined.
  * - the string form spawns a detached shell and hand-rolls SIGTERM/SIGKILL via
  *   `signalProcessGroup` on the negative PID so piped children and
  *   backgrounded jobs are torn down as a unit. Orphan risk on hard host kill,
@@ -298,10 +317,11 @@ export async function executeCommand(
     // Only the shell/string form needs this hand-rolled abort + force-kill
     // machinery: it terminates via `signalProcessGroup` (negative-PID /
     // tree-kill) so piped children don't outlive the shell. The array form
-    // spawns a single non-detached process and leaves all signalling to
-    // execa's own `cancelSignal` / `forceKillAfterDelay` natives below; its
-    // only hand-rolled piece is the signal-free stream-destroy backstop
-    // armed for abort and timeout teardown.
+    // leaves all signalling to execa's own `cancelSignal` /
+    // `forceKillAfterDelay` natives below, extended to the whole tree when the
+    // caller sets `killProcessTree`; its only hand-rolled piece is the
+    // signal-free stream-destroy backstop armed for abort and timeout
+    // teardown.
     const terminateSubprocess = (signal: NodeJS.Signals): void => {
       const pid = subprocess.pid;
       if (!pid) return;
@@ -339,6 +359,10 @@ export async function executeCommand(
         ...execaOptions,
         cancelSignal: options.signal,
         forceKillAfterDelay: FORCE_KILL_DELAY_MS,
+        // Passed through to execa: a process group on POSIX, `taskkill /T`
+        // on Windows, so the signal reaches the Ghostscript delegate a
+        // tracked-pid kill would leave behind.
+        killDescendants: options.killProcessTree,
       });
     } else {
       if (!options.quiet) {
@@ -379,13 +403,13 @@ export async function executeCommand(
     if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
     if (Array.isArray(command)) {
       // Array-form abort/force-kill is execa's (`cancelSignal` /
-      // `forceKillAfterDelay` above), but execa only signals the tracked
-      // pid: a descendant that inherited stdio (e.g. `bash -c 'work &
-      // wait'`) can keep the pipes open after the tracked process dies,
-      // hanging `await subprocess` forever. Destroy the runs once
-      // execa's force-kill delay has elapsed so the await always unblocks.
-      // No signal is sent here — the array form intentionally keeps no
-      // process-group semantics, so the descendant itself is left alone.
+      // `forceKillAfterDelay` above), and execa signals only the tracked pid
+      // unless `killProcessTree` asked for the whole tree: a descendant that
+      // inherited stdio (e.g. `bash -c 'work & wait'`) can keep the pipes open
+      // after the tracked process dies, hanging `await subprocess` forever.
+      // Destroy the runs once execa's force-kill delay has elapsed so the
+      // await always unblocks. No signal is sent from here; the tree signal is
+      // execa's own kill path.
       installAbortListener(() => {
         if (forceKillTimeoutId !== undefined) return;
         forceKillTimeoutId = setTimeout(() => {
