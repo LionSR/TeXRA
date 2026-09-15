@@ -20,7 +20,6 @@ export {
 } from './CodexSessionCoordinator';
 export {
   codexCoordinator,
-  resetCodexCoordinator,
   getCodexStatus,
   isCodexSessionRoutable,
 } from './codexAuthAccess';

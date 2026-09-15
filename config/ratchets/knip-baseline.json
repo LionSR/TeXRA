@@ -818,18 +818,6 @@
       "name": "CodexSessionStorage"
     },
     {
-      "file": "src/auth/codex/codexAuthAccess.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resetCodexCoordinator"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resetCodexCoordinator"
-    },
-    {
       "file": "src/auth/codex/index.ts",
       "category": "production-dead",
       "kind": "types",

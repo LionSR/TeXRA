@@ -7,7 +7,6 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { resetCodexCoordinator } from '@auth/codex';
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
@@ -157,10 +156,6 @@ describe('provider capabilities', () => {
 });
 
 describe('ChatGPT subscription model routing', () => {
-  afterEach(() => {
-    resetCodexCoordinator();
-  });
-
   function subscriptionCapabilities(useOpenRouter: boolean) {
     return resolveCodexSubscriptionCapabilities(
       MODEL_CONFIGS.gpt55,
