@@ -255,7 +255,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     const context: RunToolContext = {
       session: toolCall.run.session,
-      runId: toolCall.run?.runId,
+      runId: toolCall.run.runId,
       inRunScope: toolCall.inScope,
     };
     return yield* this.run(context, input).pipe(

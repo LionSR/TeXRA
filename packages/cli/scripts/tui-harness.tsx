@@ -66,6 +66,7 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
+import { descendantRuns } from '@shared/session/sessionView';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   buildScenario,
@@ -589,21 +590,6 @@ function seedRows(
       verbose: entry.verbose,
     })),
   );
-}
-
-/** Every run under `rootId`, the root first. */
-function descendantsOf(rootId: RunId): RunId[] {
-  const view = currentView();
-  const out: RunId[] = [];
-  const pending = [rootId];
-  while (pending.length > 0) {
-    const id = pending.shift()!;
-    const run = view.runs.get(id);
-    if (!run) continue;
-    out.push(id);
-    pending.push(...run.childIds);
-  }
-  return out;
 }
 
 /** A text entry the transcript store settles and the fold projects. */
@@ -1451,7 +1437,9 @@ function markHarnessInterrupted(): void {
     'Harness interrupt requested.',
     HARNESS_RUN_ID,
   );
-  for (const runId of descendantsOf(HARNESS_RUN_ID)) {
+  for (const runId of descendantRuns(currentView(), HARNESS_RUN_ID, {
+    includeRoot: true,
+  })) {
     const run = runViewOf(currentView(), runId);
     if (run && isInFlightPhase(run.status)) {
       seedRunEnd(runId, RUN_OUTCOME.CANCELLED);

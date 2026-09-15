@@ -1432,7 +1432,7 @@ const applySchema = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
   // The official driver prepares one statement at a time. This fixed schema
   // contains only DDL statements, with no semicolons inside SQL literals.
   for (const statement of SCHEMA.split(';')
-    .map((sql) => sql.trim())
+    .map((part) => part.trim())
     .filter(Boolean)) {
     yield* sql.unsafe(statement, []);
   }

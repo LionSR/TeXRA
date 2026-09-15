@@ -37,19 +37,15 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
  * Known per-tool default timeouts (ms) for display in the running timer.
  * Every entry must be a timeout the tool actually enforces: a tool with no
  * timeout belongs nowhere in this map, so its card shows a bare elapsed timer
- * rather than a limit it will never hit.
+ * rather than a limit it will never hit. `action`, where present, is the one
+ * action value the limit applies to; the tool's other actions show none.
  */
-const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
-  bash: BASH_TOOL_DEFAULT_TIMEOUT_MS,
-  executions: EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS * 1000,
-};
-
-/**
- * Tools where the timeout only applies to a specific action value.
- * For these tools, only show the timer limit when that action is used.
- */
-const TIMEOUT_GATED_BY_ACTION: Record<string, string> = {
-  executions: 'wait',
+const TOOL_DEFAULT_TIMEOUTS: Record<string, { ms: number; action?: string }> = {
+  bash: { ms: BASH_TOOL_DEFAULT_TIMEOUT_MS },
+  executions: {
+    ms: EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS * 1000,
+    action: 'wait',
+  },
 };
 
 /**
@@ -60,13 +56,12 @@ export function getToolTimeoutMs(
   toolName: string,
   input: unknown,
 ): number | undefined {
-  const defaultTimeout = TOOL_DEFAULT_TIMEOUTS[toolName];
-  if (defaultTimeout === undefined) return undefined;
-  if (!isObject(input)) return defaultTimeout;
+  const spec = TOOL_DEFAULT_TIMEOUTS[toolName];
+  if (spec === undefined) return undefined;
+  if (!isObject(input)) return spec.ms;
 
   // Some tools only have a meaningful timeout for a specific action
-  const requiredAction = TIMEOUT_GATED_BY_ACTION[toolName];
-  if (requiredAction && input.action !== requiredAction) return undefined;
+  if (spec.action && input.action !== spec.action) return undefined;
 
   // Background tools return immediately — timeout timer is misleading
   if (input.run_in_background === true) return undefined;
@@ -75,7 +70,7 @@ export function getToolTimeoutMs(
     return executionsWaitTimeoutSeconds(input.timeout) * 1000;
   }
 
-  return typeof input.timeout === 'number' ? input.timeout : defaultTimeout;
+  return typeof input.timeout === 'number' ? input.timeout : spec.ms;
 }
 
 /**

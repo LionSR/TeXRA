@@ -619,7 +619,7 @@ export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
 
     // GROUP 1: PARENTHESIZED REFERENCES
     // Single equation in parentheses (\cref{eqn:...})
-    '\\(\\\\cref\\{(eqn:[^,}]+)\\}\\)': '(eqn.~\\ref{$1})',
+    [PAREN_CREF_EQN]: '(eqn.~\\ref{$1})',
 
     // --- Custom word list based \cref{eqn:...} replacements ---
     // Special words (equation, SDE, formula) before non-parenthesized \cref{eqn:...}

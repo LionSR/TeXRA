@@ -72,8 +72,9 @@ function toElectronAcceleratorPart(part: string): string {
   const normalized = part.trim().toLowerCase();
   const mapped = ELECTRON_ACCELERATOR_PARTS[normalized];
   if (mapped) return mapped;
-  if (/^f\d{1,2}$/.test(normalized)) return normalized.toUpperCase();
-  return normalized.length === 1 ? normalized.toUpperCase() : normalized;
+  return normalized.length === 1 || /^f\d{1,2}$/.test(normalized)
+    ? normalized.toUpperCase()
+    : normalized;
 }
 
 // Each entry maps a token to its [mac symbol, non-mac label] display forms.

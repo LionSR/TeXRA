@@ -221,15 +221,10 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     const detach = session.followUps.onRelease((runId) => {
       const bound = this.perRun.get(runId);
       if (!bound) return;
-      const owned = [...bound]
+      const removed = [...bound]
         .filter(([, binding]) => binding.owner === session)
-        .map(([key]) => key);
-      if (owned.length === 0) return;
-      const removed = owned
-        .map((key) => this.deleteBoundKey(runId, bound, key))
-        .filter(
-          (binding): binding is BoundSubscription => binding !== undefined,
-        );
+        .flatMap(([key]) => this.deleteBoundKey(runId, bound, key) ?? []);
+      if (removed.length === 0) return;
       this.detachReleaseHookIfUnused(session);
       for (const binding of removed) binding.disposable.dispose();
       this.emitBindingsChanged();

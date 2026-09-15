@@ -1,84 +1,23 @@
 /**
- * Resolve git worktree context (branch, dirty status) for a working directory.
+ * The worktree context a run's `run.start` carries.
  *
- * Host-neutral: shells out via the shared command runner so the same resolver
- * is usable from the VS Code extension host and the Electron desktop main process.
- *
- * A tiny per-path cache lets sync callers (`launchWorktreeInfo`, which stamps
- * the worktree a run's `run.start` carries) read the last-known value via
- * `peekWorktreeInfo()` while async resolution is triggered separately by
- * callers (e.g. on stream creation).
+ * Host-neutral and side-effect free: the fold never shells out, so the worktree
+ * is the run's working directory as a bare path chip, and `branch`/`dirty` stay
+ * absent. Resolving them (a per-path cache plus `probeWorktree`) had no entry
+ * point left after `resolveWorktreeInfo` was deleted, so it went with it — a
+ * host that wants them again owns a cache writer, not just a reader.
  */
-
-import { LRUCache } from 'lru-cache';
 
 import type { WorktreeInfo } from '@shared/schemas';
 
-import { coalesceAsync } from '@utils/core';
-import { executeCommand } from '@utils/system/execUtils';
-
-const GIT_TIMEOUT_MS = 5_000;
-const CACHE_TTL_MS = 10_000;
-const CACHE_MAX_ENTRIES = 32;
-
-// Cap entries so an unusual session that probes many distinct working
-// directories doesn't grow this Map forever; the LRU drops cold paths.
-// `noDeleteOnStaleGet` keeps stale entries in place so a render path can
-// keep showing the last-known value across many frames while an async
-// refresh runs — without it, the first stale read would evict the entry
-// and subsequent frames would see `undefined` until the probe completes.
-const cache = new LRUCache<string, WorktreeInfo>({
-  max: CACHE_MAX_ENTRIES,
-  ttl: CACHE_TTL_MS,
-  noDeleteOnStaleGet: true,
-});
-const inflight = new Map<string, Promise<WorktreeInfo>>();
-
-/** Read the last-known worktree info synchronously. Returns stale entries
- *  too: callers are expected to trigger an async refresh separately. */
-function peekWorktreeInfo(workingDirectory: string): WorktreeInfo | undefined {
-  // `allowStale` so a render path can show the last-known value while a
-  // refresh is in flight; an empty slot still returns undefined.
-  return cache.get(workingDirectory, { allowStale: true });
-}
-
 /**
  * The worktree a run's `run.start` carries (PRD one-fold-three-renderers,
- * section 6, item 4): the cached resolution when one exists, else the bare
- * path chip until async resolution lands. The fold never shells out.
+ * section 6, item 4).
  */
 export function launchWorktreeInfo(
   workingDirectory: string | null | undefined,
 ): WorktreeInfo | undefined {
   const cwd = workingDirectory?.trim();
   if (!cwd) return undefined;
-  return peekWorktreeInfo(cwd) ?? { workingDirectory: cwd };
-}
-
-async function probeWorktree(workingDirectory: string): Promise<WorktreeInfo> {
-  const [branch, dirty] = await Promise.all([
-    readBranch(workingDirectory),
-    readDirty(workingDirectory),
-  ]);
-
-  return { workingDirectory, branch, dirty };
-}
-
-async function readBranch(cwd: string): Promise<string | undefined> {
-  const result = await executeCommand(
-    ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-    { cwd, timeout: GIT_TIMEOUT_MS, channel: 'worktreeInfo' },
-  );
-  if (!result.success) return undefined;
-  const name = result.stdout.trim();
-  return name && name !== 'HEAD' ? name : undefined;
-}
-
-async function readDirty(cwd: string): Promise<boolean | undefined> {
-  const result = await executeCommand(['git', 'status', '--porcelain'], {
-    cwd,
-    timeout: GIT_TIMEOUT_MS,
-    channel: 'worktreeInfo',
-  });
-  return result.success ? result.stdout.trim().length > 0 : undefined;
+  return { workingDirectory: cwd };
 }

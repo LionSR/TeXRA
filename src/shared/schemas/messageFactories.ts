@@ -1,10 +1,4 @@
-/**
- * Shared factory functions for constructing message schemas.
- *
- * These helpers reduce boilerplate when defining inbound (frontend → backend)
- * message schemas across views. Each factory produces a Zod object schema
- * with a `command` literal discriminator plus optional payload fields.
- */
+/** Shared helpers for inbound (frontend → backend) message schemas. */
 import { z } from 'zod';
 
 /** Schema with only a `command` literal (no payload). */

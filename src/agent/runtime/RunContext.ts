@@ -2,7 +2,6 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
-import type { RunId } from '@shared/schemas';
 import type { RunScope } from './RunScope';
 
 import type { SessionHandle } from './SessionHandle';
@@ -169,22 +168,13 @@ export function tryUseRunContext(): RunContext | undefined {
 }
 
 /**
- * Read a field shared by `RunScope` and `BareRunContext`, dispatching on
- * context kind — `launch` contexts read through `runScope`, `bare` contexts
- * read the field directly.
+ * Return the owner session for a context, reading launch contexts through
+ * `RunScope` and bare contexts directly.
  */
-function getRunContextField<K extends keyof RunScope & keyof BareRunContext>(
-  field: K,
-  context: RunContext | undefined,
-): RunScope[K] | BareRunContext[K] | undefined {
-  return context?.kind === 'launch'
-    ? context.runScope[field]
-    : context?.[field];
-}
-
-/** Return the owner session for a context, reading launch contexts through RunScope. */
 export function getRunContextSession(
   context: RunContext | undefined = tryUseRunContext(),
 ): SessionHandle | undefined {
-  return getRunContextField('session', context);
+  return context?.kind === 'launch'
+    ? context.runScope.session
+    : context?.session;
 }

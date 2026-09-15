@@ -37,12 +37,9 @@ export function createEnvironmentPopover({
     workspacePath: string | undefined,
   ): TemplateResult {
     const childCount = getChildRunCount();
-    const terminalCount = getWorkbenchTabs().filter(
-      (tab) => tab.kind === 'terminal',
-    ).length;
-    const sources = getWorkbenchTabs().filter(
-      (tab) => tab.kind === 'editor' && tab.target,
-    );
+    const tabs = getWorkbenchTabs();
+    const terminalCount = tabs.filter((tab) => tab.kind === 'terminal').length;
+    const sources = tabs.filter((tab) => tab.kind === 'editor' && tab.target);
     const branchLabel =
       environmentSummary?.branch ?? (environmentLoading ? 'Loading…' : 'Local');
     const changedFiles = environmentSummary?.changedFiles ?? 0;

@@ -32,32 +32,15 @@ function describeAttachments(
   });
 }
 
-type AttachmentSummaryVariant =
-  'metadata-only' | 'included-inline' | 'metadata-fallback';
-
+/**
+ * The summary of an attachment set the model must read back itself: the list
+ * of paths and MIME types, plus the hint naming the tool that opens them.
+ */
 function formatAttachmentSummary(
   attachments: readonly ToolFileAttachment[],
-  variant: AttachmentSummaryVariant = 'metadata-only',
 ): string {
-  const descriptions = describeAttachments(attachments).join('\n');
-  return formatAttachmentSummaryFromNotes(descriptions, variant);
-}
-
-const ATTACHMENT_SUMMARY_TEMPLATES: Record<AttachmentSummaryVariant, string> = {
-  'included-inline': 'Attachments included in this response:',
-  'metadata-fallback': 'Attachments available but returned as metadata only:',
-  'metadata-only': 'Attachments available:',
-};
-
-const READ_FILE_HINT = 'Use the read_file tool to read them.';
-
-function formatAttachmentSummaryFromNotes(
-  notes: string,
-  variant: AttachmentSummaryVariant = 'metadata-only',
-): string {
-  const header = ATTACHMENT_SUMMARY_TEMPLATES[variant];
-  const hint = variant !== 'included-inline' ? `\n${READ_FILE_HINT}` : '';
-  return `${header}\n${notes}${hint}`;
+  const notes = describeAttachments(attachments).join('\n');
+  return `Attachments available:\n${notes}\nUse the read_file tool to read them.`;
 }
 
 /**

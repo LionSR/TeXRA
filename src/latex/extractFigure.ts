@@ -31,18 +31,12 @@ function parseGraphicspath(content: string): string[] {
   const graphicspathPattern = /\\graphicspath\s*\{((?:\s*\{[^{}]+\}\s*)+)\}/g;
   const pathPattern = /\{([^{}]+)\}/g;
 
-  const extractedPaths: string[] = [];
-  for (const outerMatch of content.matchAll(graphicspathPattern)) {
-    for (const pathMatch of outerMatch[1].matchAll(pathPattern)) {
-      const trimmed = pathMatch[1].trim();
-      if (!trimmed) {
-        continue;
-      }
-      extractedPaths.push(trimmed.endsWith('/') ? trimmed : `${trimmed}/`);
-    }
-  }
-
-  return extractedPaths;
+  return [...content.matchAll(graphicspathPattern)].flatMap((outerMatch) =>
+    [...outerMatch[1].matchAll(pathPattern)]
+      .map((pathMatch) => pathMatch[1].trim())
+      .filter((trimmed) => trimmed !== '')
+      .map((trimmed) => (trimmed.endsWith('/') ? trimmed : `${trimmed}/`)),
+  );
 }
 
 /**

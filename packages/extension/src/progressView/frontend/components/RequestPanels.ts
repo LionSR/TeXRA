@@ -130,17 +130,18 @@ const SECTIONS: readonly SectionConfig[] = [
  */
 const PANEL_MARKER_SELECTOR = '[data-request-panel]';
 
-/** Retry is the one kind not keyed by `requestId`: it is keyed by `runId`
- *  instead (one pending retry per stream, a new request replaces the old). */
-function permissionId(permission: PermissionPayload): string {
-  return permission.kind === 'retry'
-    ? permission.data.runId
-    : permission.data.requestId;
-}
-
-/** Stable identity key for a pending permission, used for selection/dedup. */
+/**
+ * Stable identity key for a pending permission, used for selection/dedup.
+ *
+ * Retry is the one kind not keyed by `requestId`: it is keyed by `runId`
+ * instead (one pending retry per stream, a new request replaces the old).
+ */
 function getPermissionKey(permission: PermissionPayload): string {
-  return `${permission.kind}:${permissionId(permission)}`;
+  const id =
+    permission.kind === 'retry'
+      ? permission.data.runId
+      : permission.data.requestId;
+  return `${permission.kind}:${id}`;
 }
 
 function externalInquiryKeys(
@@ -399,6 +400,7 @@ export class RequestPanels extends LitElement {
       return this.renderSection(config, perms);
     }
 
+    const armedKey = this.armedPermissionKey();
     const index = this.externalInquiryIndex;
     const current = perms[index];
     const currentKey = getPermissionKey(current);
@@ -452,11 +454,7 @@ export class RequestPanels extends LitElement {
         <div class="${config.cssClass}__list">
           ${keyed(
             currentKey,
-            this.renderRequest(
-              config,
-              current,
-              currentKey === this.armedPermissionKey(),
-            ),
+            this.renderRequest(config, current, currentKey === armedKey),
           )}
         </div>
       </section>

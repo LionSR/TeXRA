@@ -254,23 +254,18 @@ class AgentDirectoryManager {
 
     for (const entry of directories) {
       const directoryUri = vscode.Uri.file(entry.directory);
-      const workspaceFolder = vscode.workspace.getWorkspaceFolder(directoryUri);
 
-      if (workspaceFolder) {
+      if (vscode.workspace.getWorkspaceFolder(directoryUri)) {
         this.watchDirectoryTree(directoryUri, '**/*');
-        watchedDirectories.push(entry.directory);
-        continue;
-      }
-
-      if (entry.source !== AGENT_SOURCE.CUSTOM) {
+      } else if (entry.source !== AGENT_SOURCE.CUSTOM) {
         skippedDirectories.push(entry.directory);
         continue;
+      } else {
+        await this.watchExternalCustomDirectory(
+          directoryUri,
+          previousExternalWatcherDirectoryPaths,
+        );
       }
-
-      await this.watchExternalCustomDirectory(
-        directoryUri,
-        previousExternalWatcherDirectoryPaths,
-      );
       watchedDirectories.push(entry.directory);
     }
 
@@ -343,11 +338,12 @@ class AgentDirectoryManager {
 
   private async collectDirectoryUris(root: vscode.Uri): Promise<vscode.Uri[]> {
     const directories: vscode.Uri[] = [];
+    // Breadth-first from `root`: a directory discovered while walking is
+    // appended to the queue being iterated.
     const pending: vscode.Uri[] = [root];
     const visitedRealPaths = new Set<string>();
 
-    for (let i = 0; i < pending.length; i++) {
-      const uri = pending[i];
+    for (const uri of pending) {
       const realPath = await this.realDirectoryPath(uri);
       if (visitedRealPaths.has(realPath)) {
         continue;

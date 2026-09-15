@@ -32,10 +32,7 @@ import {
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   RunId,
@@ -225,11 +222,10 @@ function updateCodexLiveToolLog(
 function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolCallStatus;
-  childRunId: RunId;
   logger: AgentTrace;
   refs: Map<string, ToolUseCardRef>;
 }): boolean {
-  const { item, status, childRunId, logger, refs } = params;
+  const { item, status, logger, refs } = params;
 
   if (item.type === 'todo_list') {
     publishCodexTodos(toProgressTodos(item), logger);
@@ -296,7 +292,6 @@ export async function runStreamedTurn(
           publishCodexItemProgress({
             item: event.item,
             status: 'in_progress',
-            childRunId,
             logger,
             refs: itemLogRefs,
           });
@@ -306,7 +301,6 @@ export async function runStreamedTurn(
           const wasRenderedAsProgress = publishCodexItemProgress({
             item,
             status: 'completed',
-            childRunId,
             logger,
             refs: itemLogRefs,
           });
@@ -376,7 +370,6 @@ function startCodexLoop(params: {
     releaseFallbackClaim,
   } = params;
   const { childRunId, logger } = childRun;
-
   return startAgentCliLoop({
     session: params.session,
     childRun,

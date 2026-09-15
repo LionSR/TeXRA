@@ -316,9 +316,10 @@ export function createWorkflowScriptStrategy(
             // commit for live results and after validation for cache hits.
             onJournalEntryConsumed: (entry) => {
               attemptJournalByKey.set(entry.key, entry);
+              const journal = attemptJournal();
               settleSummary(
-                { journal: attemptJournal(), board: projection.board() },
-                attemptCost.total(attemptJournal()),
+                { journal, board: projection.board() },
+                attemptCost.total(journal),
               );
             },
             // The engine's control is already keyed by the grandchild run

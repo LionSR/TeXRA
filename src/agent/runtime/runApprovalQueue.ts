@@ -274,12 +274,12 @@ export function createSessionApprovals(
   const resolveParent = (runId: RunId): RunId | undefined =>
     parentOf.get(runId);
   const resolveDescendants = (runId: RunId): readonly RunId[] => {
-    // Breadth-first from `runId`; every id discovered is appended after it,
-    // so the walk's own queue is the result minus the root.
+    // Breadth-first from `runId`; an id discovered while walking is appended
+    // to the queue being iterated, so the walk's own queue is the result minus
+    // the root.
     const pending = [runId];
     const seen = new Set(pending);
-    for (let index = 0; index < pending.length; index += 1) {
-      const parent = pending[index];
+    for (const parent of pending) {
       for (const [child, directParent] of parentOf) {
         if (directParent !== parent || seen.has(child)) continue;
         seen.add(child);
