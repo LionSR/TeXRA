@@ -240,7 +240,9 @@ export const sessionEventsLayer = Layer.effect(
           Exit.isSuccess(exit) && exit.value !== null ? [exit.value] : [],
         );
         return Effect.succeed(
-          commits.length === 0 ? null : Math.max(...commits),
+          commits.length === 0
+            ? null
+            : commits.reduce((a, b) => Math.max(a, b)),
         );
       }),
     );

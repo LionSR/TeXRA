@@ -75,7 +75,9 @@ const NOT_YET_RUN_BUTTONS = new Set<string>([
 ]);
 
 /** Interrupted rows get the terminal set whatever their display key. */
-const INTERRUPTED_BUTTONS = new Set(TERMINAL_STATE_BUTTONS);
+const INTERRUPTED_BUTTONS: ReadonlySet<string> = new Set(
+  TERMINAL_STATE_BUTTONS,
+);
 
 const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   RunStatusDisplayKey,

@@ -128,22 +128,6 @@ function defaultCredentials(
 }
 
 /**
- * The reason a failed fetch maps to, most specific cause first. The failure
- * classes are disjoint, so at most one of these checks can hold.
- */
-function usageFailureReason(
-  error: unknown,
-): SubscriptionUsageUnavailableReason {
-  const invalidCredentials =
-    (error instanceof CodexAuthError && error.needsReauth) ||
-    (error instanceof SubscriptionUsageHttpError &&
-      (error.status === 401 || error.status === 403));
-  if (invalidCredentials) return 'invalid_credentials';
-  if (error instanceof SyntaxError) return 'malformed_response';
-  return 'request_failed';
-}
-
-/**
  * Read-only, host-neutral access to coding-plan usage. Results are short-lived,
  * coalesced per provider, and always resolve to a snapshot instead of exposing
  * provider transport failures to extension or CLI consumers.
@@ -338,7 +322,19 @@ export class SubscriptionUsageService {
       }
       return this.available(provider, parsed);
     } catch (error: unknown) {
-      return this.unavailable(provider, usageFailureReason(error));
+      // The reason a failed fetch maps to, most specific cause first. The
+      // failure classes are disjoint, so at most one of these checks holds.
+      const invalidCredentials =
+        (error instanceof CodexAuthError && error.needsReauth) ||
+        (error instanceof SubscriptionUsageHttpError &&
+          (error.status === 401 || error.status === 403));
+      if (invalidCredentials) {
+        return this.unavailable(provider, 'invalid_credentials');
+      }
+      if (error instanceof SyntaxError) {
+        return this.unavailable(provider, 'malformed_response');
+      }
+      return this.unavailable(provider, 'request_failed');
     }
   }
 }
