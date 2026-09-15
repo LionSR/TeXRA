@@ -585,17 +585,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * Generic write path for catalog-backed settings-view rows.
    */
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
-    const result = await applyStateSettingUpdate(key, value, {
-      host: 'vscode',
-      stores: platformSettingsStores(),
-      // The shared function already gates this hook on
-      // `configTarget !== 'global'`; this checks only the workspace half.
-      requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
-      onApprovalPolicyChanged: (policy) => {
-        defaultSession().setApprovalPolicy(policy);
-        appSignals.emit('approvalPolicyChanged', undefined);
-      },
-    });
+    const result = await this.runtime.runPromise(
+      applyStateSettingUpdate(key, value, {
+        host: 'vscode',
+        stores: platformSettingsStores(),
+        // The shared function already gates this hook on
+        // `configTarget !== 'global'`; this checks only the workspace half.
+        requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
+        onApprovalPolicyChanged: (policy) => {
+          defaultSession().setApprovalPolicy(policy);
+          appSignals.emit('approvalPolicyChanged', undefined);
+        },
+      }),
+    );
     if (result.kind === 'ignored') return;
     const label = result.entry.title ?? result.entry.key;
     if (result.kind === 'rejected') {

@@ -27,6 +27,7 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
 });
 
 // Local imports
+import { effectRuntime } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -47,6 +48,9 @@ function createHarness(): AgentSkillsHarness {
   const handler = Object.create(SettingsViewMessageHandler.prototype);
   Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
   Reflect.set(handler, 'postStateSettingSnapshot', vi.fn());
+  // The shared write path is an Effect program now, settled on the same
+  // process runtime the real constructor is handed.
+  Reflect.set(handler, 'runtime', effectRuntime());
   return handler as AgentSkillsHarness;
 }
 

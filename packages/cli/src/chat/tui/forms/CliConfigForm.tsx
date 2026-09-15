@@ -192,11 +192,13 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     entry: SurfacedSettingEntry,
     value: unknown,
   ): Promise<void> => {
-    const result = await applyStateSettingUpdate(entry.key, value, {
-      host: 'cli',
-      stores,
-      onApprovalPolicyChanged: props.onApprovalPolicyChanged,
-    });
+    const result = await runtime.runPromise(
+      applyStateSettingUpdate(entry.key, value, {
+        host: 'cli',
+        stores,
+        onApprovalPolicyChanged: props.onApprovalPolicyChanged,
+      }),
+    );
     const label = entry.title ?? entry.key;
     switch (result.kind) {
       case 'applied':
@@ -307,6 +309,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           <SkillsSettingsForm
             availableRows={props.availableRows}
             stores={stores}
+            runtime={props.runtime}
             onClose={onBack}
           />
         ),

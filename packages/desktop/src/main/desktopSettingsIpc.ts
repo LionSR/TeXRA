@@ -370,12 +370,14 @@ export function createDesktopSettingsIpc(
     key: string,
     value: unknown,
   ): Promise<void> {
-    const result = await applyStateSettingUpdate(key, value, {
-      host: 'desktop',
-      stores: settingsStores,
-      onApprovalPolicyChanged: (policy) =>
-        options.session.setApprovalPolicy(policy),
-    });
+    const result = await runtime.runPromise(
+      applyStateSettingUpdate(key, value, {
+        host: 'desktop',
+        stores: settingsStores,
+        onApprovalPolicyChanged: (policy) =>
+          options.session.setApprovalPolicy(policy),
+      }),
+    );
     if (result.kind === 'ignored') return;
     if (result.kind === 'rejected' || result.kind === 'failed') {
       options.ui.onError(result.error);

@@ -10,6 +10,8 @@
 //   - null explicitly resets a setting while an omitted value remains a no-op,
 //   - only catalog rows tagged for a settings-view snapshot are writable.
 
+import { Data, Effect } from 'effect';
+
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -86,6 +88,15 @@ export type StateSettingUpdateResult =
       readonly error: unknown;
     };
 
+/**
+ * The write path's own failure. It never leaves this module: the program folds
+ * it back into the `failed` result, carrying the original thrown value so the
+ * hosts report exactly what they reported before.
+ */
+class StateSettingWriteFailed extends Data.TaggedError(
+  'StateSettingWriteFailed',
+)<{ readonly cause: unknown }> {}
+
 export interface StateSettingUpdatePorts {
   readonly stores: SettingsStores;
   /**
@@ -111,46 +122,66 @@ export interface StateSettingUpdatePorts {
  * `UPDATE_STATE_SETTING` boundaries and the CLI `/config` panel — so a row with
  * a runtime side effect cannot be persisted by one surface without the running
  * session being told. Callers own all UI feedback and the outbound snapshot
- * rebroadcast — this performs only the decision and the write.
+ * rebroadcast — this performs only the decision and the write. The program
+ * carries no error channel: a failed persist or a throwing approval-policy
+ * hook settles as the `failed` result the callers already render.
  */
-export async function applyStateSettingUpdate(
+export function applyStateSettingUpdate(
   key: string,
   value: unknown,
   ports: StateSettingUpdatePorts,
-): Promise<StateSettingUpdateResult> {
+): Effect.Effect<StateSettingUpdateResult> {
   const write = resolveStateSettingWrite(key, value);
-  if (!write) return { kind: 'ignored' };
+  if (!write) return Effect.succeed({ kind: 'ignored' });
   if (write.kind === 'rejected') {
-    return { kind: 'rejected', entry: write.entry, error: write.error };
+    return Effect.succeed({
+      kind: 'rejected',
+      entry: write.entry,
+      error: write.error,
+    });
   }
   if (
     write.entry.slots[ports.host] === 'config' &&
     write.entry.configTarget !== 'global' &&
     ports.requiresOpenWorkspace?.(write.entry)
   ) {
-    return { kind: 'workspace-required', entry: write.entry };
+    return Effect.succeed({ kind: 'workspace-required', entry: write.entry });
   }
-  try {
-    await (write.kind === 'reset'
-      ? resetSetting(write.entry, ports.stores, ports.host)
-      : writeSetting(write.entry, write.value, ports.stores, ports.host));
-    if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
-      // A reset clears only the workspace layer, so a surviving global value
-      // is what the session must run (issue #9749).
-      const policy =
-        write.kind === 'reset'
-          ? (readSetting(
-              write.entry,
-              ports.stores,
-              ports.host,
-            ) as TexraApprovalPolicy)
-          : (write.value as TexraApprovalPolicy);
-      ports.onApprovalPolicyChanged?.(policy);
-    }
-    return { kind: 'applied', entry: write.entry };
-  } catch (error) {
-    return { kind: 'failed', entry: write.entry, error };
-  }
+  return Effect.tryPromise({
+    try: () =>
+      write.kind === 'reset'
+        ? resetSetting(write.entry, ports.stores, ports.host)
+        : writeSetting(write.entry, write.value, ports.stores, ports.host),
+    catch: (cause) => new StateSettingWriteFailed({ cause }),
+  }).pipe(
+    Effect.andThen(
+      Effect.try({
+        try: () => {
+          if (write.entry.key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return;
+          // A reset clears only the workspace layer, so a surviving global
+          // value is what the session must run (issue #9749).
+          const policy =
+            write.kind === 'reset'
+              ? (readSetting(
+                  write.entry,
+                  ports.stores,
+                  ports.host,
+                ) as TexraApprovalPolicy)
+              : (write.value as TexraApprovalPolicy);
+          ports.onApprovalPolicyChanged?.(policy);
+        },
+        catch: (cause) => new StateSettingWriteFailed({ cause }),
+      }),
+    ),
+    Effect.as({ kind: 'applied', entry: write.entry } as const),
+    Effect.catchTag('StateSettingWriteFailed', (failure) =>
+      Effect.succeed({
+        kind: 'failed',
+        entry: write.entry,
+        error: failure.cause,
+      } as const),
+    ),
+  );
 }
 
 /**
