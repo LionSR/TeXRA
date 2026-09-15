@@ -9,11 +9,13 @@ import {
 import { FakeSecrets } from '@test/support/FakePlatform';
 
 /**
- * `selectSetupCredentialModelExcludingOpenRouter` is the credential-priority core
- * shared by the VS Code extension (`selectLaunchModel`) and desktop
- * (`selectDesktopSetupModel`) setup-launch paths. Exercising it directly
+ * `selectSetupCredentialModelExcludingOpenRouter` is the credential-priority
+ * core shared by the VS Code extension (`selectLaunchModel`) and desktop
+ * (`buildDesktopSetupRunRequest`) setup-launch paths. Exercising it directly
  * guards the priority order (ChatGPT subscription > Grok subscription > direct key)
- * against silently drifting between hosts again.
+ * against silently drifting between hosts again, and the "skips OpenRouter"
+ * arm is not observable through `resolveSetupLaunchModel`, which probes the
+ * OpenRouter key first by design.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -52,8 +54,8 @@ vi.mock('@utils/config/providerConfig', () => ({
 }));
 
 const {
+  buildDesktopSetupRunRequest,
   selectSetupCredentialModelExcludingOpenRouter,
-  selectDesktopSetupModel,
   resolveSetupLaunchModel,
 } = await import('@controllers/onboarding/setupLaunch');
 
@@ -81,8 +83,16 @@ function selectCredentialModel(
   );
 }
 
-function desktopSetupModel(): Promise<string | null> {
-  return Effect.runPromise(selectDesktopSetupModel(secrets));
+/**
+ * Desktop's launch model, read back off the request its host actually builds.
+ * `buildDesktopSetupRunRequest` is the entry point `packages/desktop` calls,
+ * so the resolved model is asserted through the same path a launch takes -
+ * including the request validation that stands between the resolution and the
+ * launch - rather than by re-deriving the projection here.
+ */
+async function desktopSetupModel(): Promise<string | null> {
+  const request = await Effect.runPromise(buildDesktopSetupRunRequest(secrets));
+  return request?.config.model ?? null;
 }
 
 function launchModel(
@@ -181,7 +191,12 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   });
 });
 
-describe('selectDesktopSetupModel', () => {
+/**
+ * Desktop's setup-launch path, end to end through
+ * `buildDesktopSetupRunRequest`: the OpenRouter access-list fallback stays
+ * opted out, and the model that comes back out is the one the host launches.
+ */
+describe('buildDesktopSetupRunRequest', () => {
   it('routes through OpenRouter only when the flag is on and a key exists', async () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
     mockDirectApiKey('openRouter');
@@ -223,10 +238,10 @@ describe('selectDesktopSetupModel', () => {
 });
 
 /**
- * `selectDesktopSetupModel` above always calls `resolveSetupLaunchModel`
- * with `includeAccessListFallback: false`, so it never exercises the
- * access-list-default branch the extension opts into. These cases drive
- * `resolveSetupLaunchModel` directly (against the real `decideRunModel`,
+ * The desktop cases above always call `resolveSetupLaunchModel` with
+ * `includeAccessListFallback: false`, so they never exercise the
+ * access-list-default branch the extension opts into. These cases drive the
+ * same function with the fallback enabled (against the real `decideRunModel`,
  * not a mock) to cover that branch and prove the two hosts' policies
  * actually diverge where intended.
  */

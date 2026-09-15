@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  LatexToolingController,
-  type LatexPathTool,
-  type LatexToolingControllerDeps,
-} from '@controllers/settingsView/LatexToolingController';
+import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/schemas';
 import {
   HOMEBREW_INSTALL_COMMAND,
   type OSPlatform,
 } from '@shared/constants/latexToolchain';
+
+/** The controller's deps and probe-tool names are file-local; derive them. */
+type LatexToolingControllerDeps = ConstructorParameters<
+  typeof LatexToolingController
+>[0];
+type LatexPathTool = Parameters<LatexToolingControllerDeps['findPath']>[0];
 
 const INSTALLED_TOOLS = {
   pdflatex: false,

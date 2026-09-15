@@ -332,6 +332,7 @@ if (RESET_WORKFLOW_SCRIPT_DISABLED) {
     HARNESS_PLATFORM_SERVICES.globalState,
     'workflow-script',
     false,
+    HARNESS_PLATFORM_SERVICES.runtime,
   );
 }
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
@@ -357,30 +358,34 @@ if (
   process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined ||
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
-  await workspaceRoots().workspaceState.update(
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    {
-      kind: 'custom',
-      agentKeys: {
-        workflow:
-          process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
-            ? HARNESS_VISIBLE_WORKFLOW_AGENTS
-            : 'all',
-        toolUse:
-          process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
-            ? HARNESS_VISIBLE_TOOL_USE_AGENTS
-            : 'all',
+  await effectRuntime().runPromise(
+    workspaceRoots().workspaceState.update(
+      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      {
+        kind: 'custom',
+        agentKeys: {
+          workflow:
+            process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
+              ? HARNESS_VISIBLE_WORKFLOW_AGENTS
+              : 'all',
+          toolUse:
+            process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
+              ? HARNESS_VISIBLE_TOOL_USE_AGENTS
+              : 'all',
+        },
       },
-    },
+    ),
   );
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
-  await workspaceRoots().globalState.update(GlobalStateKey.MODEL_SELECTION, {
-    enabledExtras: HARNESS_VISIBLE_MODELS,
-    disabledDefaults: DEFAULT_MODELS.filter(
-      (model) => !HARNESS_VISIBLE_MODELS.includes(model),
-    ),
-  });
+  await effectRuntime().runPromise(
+    workspaceRoots().globalState.update(GlobalStateKey.MODEL_SELECTION, {
+      enabledExtras: HARNESS_VISIBLE_MODELS,
+      disabledDefaults: DEFAULT_MODELS.filter(
+        (model) => !HARNESS_VISIBLE_MODELS.includes(model),
+      ),
+    }),
+  );
 }
 await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
 

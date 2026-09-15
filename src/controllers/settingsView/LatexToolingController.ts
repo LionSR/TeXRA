@@ -20,14 +20,14 @@ const LATEX_PROBE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
 
 type LatexProbeTool = (typeof LATEX_PROBE_TOOLS)[number];
 
-export type LatexPathTool = Exclude<LatexProbeTool, 'perl'>;
+type LatexPathTool = Exclude<LatexProbeTool, 'perl'>;
 
 type LatexRecommendedStatus = Pick<
   LatexSettingsStatus,
   'outDir' | 'autoRevealExclude'
 >;
 
-export interface LatexToolingControllerDeps {
+interface LatexToolingControllerDeps {
   checkToolInstalled(tool: LatexProbeTool): Promise<boolean>;
   findPath(tool: LatexPathTool): string | null;
   detectPackageManager(): LatexSettingsStatus['packageManager'];

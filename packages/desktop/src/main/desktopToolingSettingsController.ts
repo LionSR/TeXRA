@@ -2,6 +2,7 @@ import { LatexToolingController } from '@controllers/settingsView/LatexToolingCo
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { appSignals } from '@eventBus/AppSignals';
 import type { ConfigProvider } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   SettingsViewInboundHandlerRegistry,
@@ -35,6 +36,7 @@ type DesktopLatexHandlers = Pick<
 
 interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePorts {
   readonly config: ConfigProvider;
+  readonly runtime: ProcessRuntime;
   readonly onError: (error: unknown) => void;
   readonly renderer: {
     postToRenderer(message: unknown): void;
@@ -157,7 +159,9 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
   }
 
   private async toggleTool(toolId: string, enabled: boolean): Promise<void> {
-    await setToolEnabled(toolId, enabled, this.options.globalState);
+    await this.options.runtime.runPromise(
+      setToolEnabled(toolId, enabled, this.options.globalState),
+    );
     await this.postToolDashboardData();
   }
 

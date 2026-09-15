@@ -11,10 +11,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import {
-  wolframApprovalCommand,
-  WolframTool,
-} from '@tools/wolfram/WolframTool';
+import { WolframTool } from '@tools/wolfram/WolframTool';
 import * as toolUtils from '@utils/system/toolUtils';
 import {
   autoDecideRequests,
@@ -103,7 +100,9 @@ describe('WolframTool approval', () => {
         '1+1',
       );
       expect(permission).toMatchObject({
-        command: wolframApprovalCommand('1+1'),
+        // The exact command the user is asked to approve, not a call back
+        // into the same formatter the tool uses to build it.
+        command: 'wolframscript -code "1+1"',
         allowBypass: true,
         runId,
       });

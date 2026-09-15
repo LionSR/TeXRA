@@ -1,4 +1,4 @@
-import { Exit, Scope } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 import {
   afterEach,
   beforeEach,
@@ -393,10 +393,8 @@ describe('UsageLogService', () => {
 
     it('sends nothing while the setting is off', async () => {
       stubAccessToken();
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        false,
-        'global',
+      await Effect.runPromise(
+        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
       );
 
       await expectNoOptionalUsageSent();
@@ -404,10 +402,12 @@ describe('UsageLogService', () => {
 
     it('honours a workspace-scoped telemetry opt-out', async () => {
       stubAccessToken();
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        false,
-        'workspace',
+      await Effect.runPromise(
+        workspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          false,
+          'workspace',
+        ),
       );
 
       await expectNoOptionalUsageSent();
@@ -415,15 +415,15 @@ describe('UsageLogService', () => {
 
     it('does not let a project opt in over a user-wide opt-out', async () => {
       stubAccessToken();
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        false,
-        'global',
+      await Effect.runPromise(
+        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
       );
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        true,
-        'workspace',
+      await Effect.runPromise(
+        workspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          true,
+          'workspace',
+        ),
       );
 
       await expectNoOptionalUsageSent();
@@ -446,10 +446,8 @@ describe('UsageLogService', () => {
         usageEntry('before-opt-out'),
         workspaceRoots().config,
       );
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        false,
-        'global',
+      await Effect.runPromise(
+        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
       );
 
       await vi.advanceTimersByTimeAsync(60_000);
@@ -460,10 +458,8 @@ describe('UsageLogService', () => {
 
     it('resumes sending once the setting is turned back on', async () => {
       stubAccessToken();
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        false,
-        'global',
+      await Effect.runPromise(
+        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
       );
 
       const { batches, fetchMock } = stubBatchFetch();
@@ -472,10 +468,8 @@ describe('UsageLogService', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(fetchMock).not.toHaveBeenCalled();
 
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        true,
-        'global',
+      await Effect.runPromise(
+        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, true, 'global'),
       );
       UsageLogService.log(usageEntry('sent'), workspaceRoots().config);
       await vi.advanceTimersByTimeAsync(0);
@@ -496,10 +490,12 @@ describe('UsageLogService', () => {
       'still sends %s usage while the setting is off',
       async (usageRoute) => {
         stubAccessToken();
-        await workspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          false,
-          'global',
+        await Effect.runPromise(
+          workspaceRoots().config.update(
+            TELEMETRY_ENABLED_KEY,
+            false,
+            'global',
+          ),
         );
 
         const { batches, fetchMock } = stubBatchFetch();
@@ -534,10 +530,8 @@ describe('UsageLogService', () => {
         { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
         workspaceRoots().config,
       );
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        false,
-        'global',
+      await Effect.runPromise(
+        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
       );
 
       await vi.advanceTimersByTimeAsync(60_000);
@@ -562,10 +556,8 @@ describe('UsageLogService', () => {
 
       UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
 
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        false,
-        'global',
+      await Effect.runPromise(
+        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
       );
       releaseToken();
 
@@ -583,10 +575,8 @@ describe('UsageLogService', () => {
       ['DO_NOT_TRACK', '1'],
     ])('sends nothing while %s=%s is set', async (name, value) => {
       stubAccessToken();
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        true,
-        'global',
+      await Effect.runPromise(
+        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, true, 'global'),
       );
       vi.stubEnv(name, value);
 
@@ -597,10 +587,8 @@ describe('UsageLogService', () => {
       'ignores TEXRA_NO_TELEMETRY=%p',
       async (value) => {
         stubAccessToken();
-        await workspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          true,
-          'global',
+        await Effect.runPromise(
+          workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, true, 'global'),
         );
         vi.stubEnv('TEXRA_NO_TELEMETRY', value);
 
@@ -638,10 +626,12 @@ describe('UsageLogService', () => {
       'treats the non-boolean value %p as opted out',
       async (value) => {
         stubAccessToken();
-        await workspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          value,
-          'global',
+        await Effect.runPromise(
+          workspaceRoots().config.update(
+            TELEMETRY_ENABLED_KEY,
+            value,
+            'global',
+          ),
         );
 
         const { batches, fetchMock } = stubBatchFetch();
@@ -656,15 +646,15 @@ describe('UsageLogService', () => {
 
     it('fails closed for a malformed workspace value despite a valid global opt-in', async () => {
       stubAccessToken();
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        true,
-        'global',
+      await Effect.runPromise(
+        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, true, 'global'),
       );
-      await workspaceRoots().config.update(
-        TELEMETRY_ENABLED_KEY,
-        'false',
-        'workspace',
+      await Effect.runPromise(
+        workspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          'false',
+          'workspace',
+        ),
       );
 
       const { batches, fetchMock } = stubBatchFetch();

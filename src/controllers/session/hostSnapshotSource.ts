@@ -19,7 +19,7 @@ import {
   readModelAvailabilityInputs,
   type ModelAvailabilityScope,
 } from '@model/computeModelOptions';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { FileOptions, SessionType } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -114,8 +114,11 @@ export interface HostSnapshotSource {
   /** A run loaded an agent from the custom directory, under the category
    *  it was launched as: the banner's actions edit that catalog. */
   showAgentConfigBanner(agentName: string, sessionType: SessionType): void;
-  /** The user dismissed one of the dismissable banners. */
-  dismissBanner(banner: 'login' | 'gettingStarted' | 'dependency'): void;
+  /** The user dismissed one of the dismissable banners. The login dismissal
+   *  is the one that persists, so the caller runs the write it returns. */
+  dismissBanner(
+    banner: 'login' | 'gettingStarted' | 'dependency',
+  ): Effect.Effect<void, StateWriteFailed>;
   setOnboarding(state: HostSnapshot['onboarding']): void;
 }
 
@@ -278,14 +281,27 @@ export function createHostSnapshotSource(
       publish();
     },
     dismissBanner(banner) {
-      if (banner === 'login') {
-        void options.globalState
-          .update(GlobalStateKey.LOGIN_BANNER_DISMISSED, true)
-          .then(undefined, options.onError);
-      } else {
+      // The non-login banners are this process's own record, so `dismissed`
+      // takes them before `publish` hands the snapshot out. The login
+      // dismissal is the one write that outlives the session, and it goes
+      // back to the caller to run: its refusal is that request's failure
+      // rather than a rejection nobody reads.
+      if (banner !== 'login') {
         dismissed.add(banner);
+        publish();
+        return Effect.void;
       }
-      publish();
+      // The login dismissal is read back out of the store by `publish`, so
+      // the publish has to run behind the write rather than beside it: the
+      // update is lazy, and a snapshot taken before it executes still reads
+      // the banner as undismissed.
+      return Effect.gen(function* () {
+        yield* options.globalState.update(
+          GlobalStateKey.LOGIN_BANNER_DISMISSED,
+          true,
+        );
+        publish();
+      });
     },
     setOnboarding(state) {
       if (state === onboarding) return;

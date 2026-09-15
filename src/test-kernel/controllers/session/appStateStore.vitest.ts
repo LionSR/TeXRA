@@ -11,12 +11,9 @@ import { describe, expect } from 'vitest';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-const runWrite = (write: Effect.Effect<void, Error>) =>
-  Effect.runPromise(write);
-
 describe('application state on SQLite', () => {
   const tempDirs = useTempDirs();
-  const openStore = (storage: string) => openAppStateStore(storage, runWrite);
+  const openStore = (storage: string) => openAppStateStore(storage);
 
   it.effect('reads back the latest value of each key after reopening', () =>
     Effect.gen(function* () {
@@ -24,11 +21,11 @@ describe('application state on SQLite', () => {
         makeTempDir('texra-app-state-', tempDirs),
       );
       const first = yield* openStore(storage);
-      yield* Effect.promise(() => first.update('texra.modelSelection', ['a']));
-      yield* Effect.promise(() => first.update('texra.modelSelection', ['b']));
-      yield* Effect.promise(() => first.update('goals:index', { open: 1 }));
-      yield* Effect.promise(() => first.update('texra.dropped', 'gone'));
-      yield* Effect.promise(() => first.update('texra.dropped', undefined));
+      yield* first.update('texra.modelSelection', ['a']);
+      yield* first.update('texra.modelSelection', ['b']);
+      yield* first.update('goals:index', { open: 1 });
+      yield* first.update('texra.dropped', 'gone');
+      yield* first.update('texra.dropped', undefined);
 
       const reopened = yield* openStore(storage);
       expect(reopened.get('texra.modelSelection')).toEqual(['b']);
@@ -46,9 +43,9 @@ describe('application state on SQLite', () => {
       const two = yield* openStore(storage);
       // Interleaved, as two hosts on one project are: the whole-file store
       // this replaces would have lost whichever key flushed second.
-      yield* Effect.promise(() => one.update('texra.useOpenRouter', true));
-      yield* Effect.promise(() => two.update('texra.glm.codingPlan', false));
-      yield* Effect.promise(() => one.update('texra.memory.enabled', true));
+      yield* one.update('texra.useOpenRouter', true);
+      yield* two.update('texra.glm.codingPlan', false);
+      yield* one.update('texra.memory.enabled', true);
 
       const reopened = yield* openStore(storage);
       expect(reopened.get('texra.useOpenRouter')).toBe(true);

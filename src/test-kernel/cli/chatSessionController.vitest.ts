@@ -191,8 +191,8 @@ import {
 setupPlatform(
   {},
   {
-    globalState: { get: mocks.globalGet, update: async () => {} },
-    workspaceState: { get: mocks.workspaceGet, update: async () => {} },
+    globalState: { get: mocks.globalGet, update: () => Effect.void },
+    workspaceState: { get: mocks.workspaceGet, update: () => Effect.void },
   },
 );
 
@@ -540,7 +540,8 @@ describe('createChatSessionController', () => {
     mocks.globalGet.mockImplementation(
       (_key: unknown, defaultValue?: unknown) => defaultValue,
     );
-    mocks.setCliHelperModel.mockResolvedValue(undefined);
+    // The helper-model write is an Effect now, so the stubs are too.
+    mocks.setCliHelperModel.mockReturnValue(Effect.void);
     mocks.presentationHostClose.mockResolvedValue(undefined);
     mocks.createCliRuntimeHost.mockReturnValue({
       close: mocks.presentationHostClose,
@@ -1186,8 +1187,8 @@ describe('createChatSessionController', () => {
       interruptedRunId: 'e11111' as RunId,
       runCompleted: true,
     });
-    mocks.setCliHelperModel.mockRejectedValueOnce(
-      new Error('rehydration failed'),
+    mocks.setCliHelperModel.mockReturnValueOnce(
+      Effect.fail(new Error('rehydration failed')),
     );
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -1243,7 +1244,9 @@ describe('createChatSessionController', () => {
 
   it('forwards a stop issued during manual resume helper-model setup', async () => {
     const helperModel = pDefer<void>();
-    mocks.setCliHelperModel.mockReturnValueOnce(helperModel.promise);
+    mocks.setCliHelperModel.mockReturnValueOnce(
+      Effect.tryPromise(() => helperModel.promise),
+    );
 
     const session = makeSession({ runCompleted: true });
     const ctrl = createChatSessionController(makeInit({ session }));
@@ -1602,7 +1605,9 @@ describe('createChatSessionController', () => {
   });
 
   it('keeps retained follow-ups ahead of a retry after manual resume rollback', async () => {
-    mocks.setCliHelperModel.mockRejectedValueOnce(new Error('load failed'));
+    mocks.setCliHelperModel.mockReturnValueOnce(
+      Effect.fail(new Error('load failed')),
+    );
     const { ctrl, session } = makeInterruptedController(
       Promise.resolve(),
       true,
@@ -1663,7 +1668,9 @@ describe('createChatSessionController', () => {
     const helperModel = pDefer<void>();
     const session = makeSession({ runCompleted: true });
     const config = makeResumeConfig();
-    mocks.setCliHelperModel.mockReturnValueOnce(helperModel.promise);
+    mocks.setCliHelperModel.mockReturnValueOnce(
+      Effect.tryPromise(() => helperModel.promise),
+    );
     mocks.resumeRun.mockImplementationOnce(
       (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({

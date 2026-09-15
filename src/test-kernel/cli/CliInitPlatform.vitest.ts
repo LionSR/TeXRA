@@ -8,6 +8,7 @@ import {
   initCliPlatform,
   setCliAgentResumeHandler,
 } from '@cli/runtime/initPlatform';
+import { StateWriteFailed } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -211,7 +212,7 @@ function cliContext(
 function stubGlobalState(
   get: (key: string, defaultValue: unknown) => unknown = (_key, def) => def,
 ) {
-  return { get: vi.fn(get), update: vi.fn() };
+  return { get: vi.fn(get), update: vi.fn(() => Effect.void) };
 }
 
 /**
@@ -248,6 +249,10 @@ describe('CLI platform init', () => {
       (_key, defaultValue) => defaultValue,
     );
     mocks.cliGlobalState.update.mockReset();
+    // The store's write is an Effect the callers compose, so the double's
+    // default is one too; a bare `vi.fn()` returns undefined and `yield*`
+    // fails on it.
+    mocks.cliGlobalState.update.mockReturnValue(Effect.void);
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.openTexraConfigStores.mockReturnValue(
@@ -288,7 +293,17 @@ describe('CLI platform init', () => {
       const storeFailure = new Error(
         'disabled-tool defaults could not be seeded',
       );
-      mocks.cliGlobalState.update.mockRejectedValueOnce(storeFailure);
+      // The store is the failure's author now, so the double fails with the
+      // store's own tagged error rather than a bare rejection.
+      mocks.cliGlobalState.update.mockReturnValueOnce(
+        Effect.fail(
+          new StateWriteFailed({
+            key: GlobalStateKey.DISABLED_TOOLS,
+            message: storeFailure.message,
+            cause: storeFailure,
+          }),
+        ),
+      );
 
       // The seed's own typed failure, carrying the store's rejection.
       await expect(

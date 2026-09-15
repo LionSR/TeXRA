@@ -2,12 +2,16 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   showLoggedErrorMessage: vi.fn(),
   showLoggedInfoMessage: vi.fn(),
-  writeSetting: vi.fn(),
+  // The module under test composes `writeSetting`'s Effect, so the standing
+  // double is a succeeding one; a test that wants a failure swaps in
+  // `Effect.fail` for that call.
+  writeSetting: vi.fn((): Effect.Effect<void, Error> => Effect.void),
 }));
 
 vi.mock('@shared/config/settingsAccess', async (original) => {
@@ -115,7 +119,7 @@ describe('agent skills workspace guard', () => {
   it('surfaces write failures and restores the owning snapshot', async () => {
     const handler = createHarness();
     const error = new Error('write failed');
-    mocks.writeSetting.mockRejectedValueOnce(error);
+    mocks.writeSetting.mockReturnValueOnce(Effect.fail(error));
 
     await handler.updateStateSetting(
       GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,

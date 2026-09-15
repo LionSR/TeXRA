@@ -13,7 +13,7 @@ import { EventEmitter } from 'node:events';
  * from a host that deliberately doesn't. Keep the note truthful when you add a
  * subscriber; "no equivalent surface" is a valid, and common, answer.
  */
-export interface AppSignalPayloads {
+interface AppSignalPayloads {
   /**
    * GitHub rejected the configured token. Frontends can surface the failure
    * and direct the user to token settings.

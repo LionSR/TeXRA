@@ -470,7 +470,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
             present: this.signInPresenter(provider.displayName),
           }),
         );
-        await provider.setPreferSubscription(true);
+        await this.options.runtime.runPromise(
+          provider.setPreferSubscription(true),
+        );
         await this.options.runtime.runPromise(
           this.options.notifications.showInfoMessage(
             ACCOUNT_OUTCOME.signedInAs(provider.displayName, account.label),
@@ -556,7 +558,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       (provider, error) =>
         `${provider.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
       async (provider) => {
-        const update = await provider.setPreferSubscription(enabled);
+        const update = await this.options.runtime.runPromise(
+          provider.setPreferSubscription(enabled),
+        );
         if (update.effective !== enabled) {
           await this.options.runtime.runPromise(
             this.options.notifications.showWarningMessage(

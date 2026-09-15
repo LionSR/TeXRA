@@ -53,12 +53,12 @@ const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> = {
   ...CODING_PLAN_PROVIDER_NAMES,
 };
 
-export const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
+const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT Coding Plan',
   ...CODING_PLAN_DEFAULT_NAMES,
 };
 
-export interface SubscriptionUsageCredentials {
+interface SubscriptionUsageCredentials {
   loadChatGpt(): Promise<ChatGptUsageCredential | null>;
   loadApiKey(provider: 'kimiCode' | 'glm'): Promise<string | undefined>;
   /** Defaults to the China endpoint when omitted by an injected test/client. */

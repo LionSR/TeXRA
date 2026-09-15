@@ -82,10 +82,9 @@ function mockLoopbackSuccess(): void {
 }
 
 function mockPreferenceEnabled(): void {
-  mocks.setPreferCodexSubscription.mockResolvedValue({
-    effective: true,
-    target: 'global',
-  });
+  mocks.setPreferCodexSubscription.mockReturnValue(
+    Effect.succeed({ effective: true, target: 'global' }),
+  );
 }
 
 describe('signInWithSubscription (ChatGPT)', () => {
@@ -115,8 +114,8 @@ describe('signInWithSubscription (ChatGPT)', () => {
 
   it('does not treat a completed OAuth sign-in as a sign-in failure when preference update fails', async () => {
     mockLoopbackSuccess();
-    mocks.setPreferCodexSubscription.mockRejectedValue(
-      new Error('config write failed'),
+    mocks.setPreferCodexSubscription.mockReturnValue(
+      Effect.fail(new Error('config write failed')),
     );
 
     const signedIn = await signInWithChatGptSubscription('TestChannel');
@@ -136,10 +135,9 @@ describe('signInWithSubscription (ChatGPT)', () => {
 
   it('warns when a more specific setting keeps subscription preference disabled', async () => {
     mockLoopbackSuccess();
-    mocks.setPreferCodexSubscription.mockResolvedValue({
-      effective: false,
-      target: 'global',
-    });
+    mocks.setPreferCodexSubscription.mockReturnValue(
+      Effect.succeed({ effective: false, target: 'global' }),
+    );
 
     const signedIn = await signInWithChatGptSubscription('TestChannel');
 

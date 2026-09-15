@@ -185,12 +185,13 @@ export function createDesktopAuthCallbackState(
       persistLanes,
       AUTH_PERSIST_LANE,
     )(
-      Effect.tryPromise({
-        try: () =>
-          store?.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state) ??
-          Promise.resolve(),
-        catch: (error) => error,
-      }),
+      // The store's write is already a program: with no store handed down
+      // there is nothing to persist, and its refusal is the caller's failure.
+      store
+        ? Effect.suspend(() =>
+            store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state),
+          )
+        : Effect.void,
     );
 
   const persistPendingState = async (

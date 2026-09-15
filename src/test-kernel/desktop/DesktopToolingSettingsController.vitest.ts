@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { appSignals } from '@eventBus/AppSignals';
+import { effectRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ToolDashboardItem } from '@shared/schemas';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
@@ -107,6 +108,10 @@ function createFixture(overrides: FixtureOverrides = {}) {
       }),
     }),
     ...overrides,
+    // The controller settles every write on the runtime it is handed; the
+    // spread above makes any overridden member possibly undefined, so the
+    // default is restated here rather than left to the fixture's shape.
+    runtime: overrides.runtime ?? effectRuntime(),
     dashboard,
   });
   // The controller subscribes to a process-global bus, so a fixture left

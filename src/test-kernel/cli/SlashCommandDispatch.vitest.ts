@@ -538,10 +538,9 @@ describe('handleTuiSlashCommand', () => {
         label: 'person@example.com',
       }),
     );
-    vi.spyOn(codexPreference, 'setPreferCodexSubscription').mockResolvedValue({
-      effective: true,
-      target: 'global',
-    });
+    vi.spyOn(codexPreference, 'setPreferCodexSubscription').mockReturnValue(
+      Effect.succeed({ effective: true, target: 'global' }),
+    );
 
     const handled = await handleTuiSlashCommand(
       '/login chatgpt',

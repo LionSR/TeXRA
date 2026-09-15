@@ -90,7 +90,12 @@ async function toggleTool(
   enabled: boolean,
 ): Promise<number> {
   const services = await initCliPlatform({ ...context, quietLogs: true });
-  const ok = await setCliToolEnabled(services.globalState, id, enabled);
+  const ok = await setCliToolEnabled(
+    services.globalState,
+    id,
+    enabled,
+    services.runtime,
+  );
   if (!ok) {
     writeTextStderr(formatCliToolNotToggleableMessage(id));
     return CliExitCode.Usage;

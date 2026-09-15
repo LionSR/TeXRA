@@ -158,12 +158,14 @@ export class AgentHandlers {
       this.ctx,
       'Failed to update agent visibility',
       async () => {
-        await this.roster.setAgentEnabled({
-          category: data.category,
-          source: data.agentSource,
-          name: data.agentName,
-          enabled: data.enabled,
-        });
+        await this.runtime.runPromise(
+          this.roster.setAgentEnabled({
+            category: data.category,
+            source: data.agentSource,
+            name: data.agentName,
+            enabled: data.enabled,
+          }),
+        );
         await this.refreshAfterAgentMutation();
       },
     );
@@ -176,11 +178,13 @@ export class AgentHandlers {
       this.ctx,
       'Failed to update agent visibility',
       async () => {
-        await this.catalogController.setAllAgentsEnabled({
-          category: data.category,
-          source: data.source,
-          enabled: data.enabled,
-        });
+        await this.runtime.runPromise(
+          this.catalogController.setAllAgentsEnabled({
+            category: data.category,
+            source: data.source,
+            enabled: data.enabled,
+          }),
+        );
         await this.refreshAfterAgentMutation();
       },
     );
@@ -288,7 +292,9 @@ export class AgentHandlers {
       this.ctx,
       'Failed to reset custom agent directory',
       async () => {
-        await this.directoryController.resetCustomDir();
+        await this.runtime.runPromise(
+          this.directoryController.resetCustomDir(),
+        );
         await this.refreshAgentDirUI();
       },
     );
@@ -379,7 +385,9 @@ export class AgentHandlers {
 
         await this.runtime.runPromise(loadAgents());
 
-        await this.catalogController.saveCurrentPreset(name);
+        await this.runtime.runPromise(
+          this.catalogController.saveCurrentPreset(name),
+        );
 
         await this.refreshAfterAgentMutation(undefined, true);
 
@@ -406,7 +414,9 @@ export class AgentHandlers {
         );
         if (!confirmed) return;
 
-        await this.catalogController.deleteCustomPreset(data.presetId);
+        await this.runtime.runPromise(
+          this.catalogController.deleteCustomPreset(data.presetId),
+        );
 
         await this.refreshAfterAgentMutation(undefined, true);
       },
