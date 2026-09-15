@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { MESSAGE_TYPES, type MessageType } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Trace levels that the output managers use for recoverable failures. */
 type OutputLogLevel = 'error' | 'warn' | 'debug';
@@ -22,15 +22,6 @@ interface RecoverOptions<T, R> {
   /** Produces the fallback value (and any side effects) after logging. */
   recover: (error: unknown) => Effect.Effect<T, never, R>;
 }
-
-/**
- * Run a filesystem promise as a typed failure. The output pipeline still
- * reads and writes through `AbsoluteFS`, whose errors are Node errors the
- * recovery sites below inspect by `code`; wrapping preserves that identity
- * rather than re-normalizing it into a `PlatformError`.
- */
-export const fsCall = <A>(thunk: () => Promise<A>): Effect.Effect<A, Error> =>
-  Effect.tryPromise({ try: thunk, catch: ensureError });
 
 /**
  * Shared `run → log internal → recover` combinator for the output pipeline.

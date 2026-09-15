@@ -26,13 +26,13 @@ import { runDirUnder } from '@utils/files/runStorageFs';
 import { type TaskRunFileService } from '@utils/files/taskRunStorage';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { fsCall } from '@utils/errors/fsCall';
 import { truncatedHexId } from '@utils/core/idHash';
 import { hasExtension } from '@utils/core/pathCore';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
-import { fsCall } from './outputOperations';
 import { getOutputFilesByRound, type OutputState } from './outputState';
 
 interface CompileCheckContext {

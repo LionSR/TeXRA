@@ -50,7 +50,7 @@ import {
   type WorkflowPhaseRow,
   type WorkflowRunModel,
 } from '@shared/runs/workflowRunModel';
-import { filterNotNullish } from '@utils/core';
+import { clampIndex, filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and policy
@@ -255,9 +255,7 @@ export function WorkflowPopup({
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
 
   const { phases } = model;
-  const clampPhaseIndex = (index: number): number =>
-    Math.min(Math.max(0, index), Math.max(0, phases.length - 1));
-  const phaseIndex = clampPhaseIndex(view.phaseIndex);
+  const phaseIndex = clampIndex(view.phaseIndex, phases.length);
   const phase = phases[phaseIndex];
   // The cards whose child run needs the user, its own approval or a
   // descendant's: the fold's `approval` aggregate, read off the child
@@ -419,7 +417,10 @@ export function WorkflowPopup({
       return;
     }
     if (key.leftArrow || key.rightArrow) {
-      const next = clampPhaseIndex(phaseIndex + (key.rightArrow ? 1 : -1));
+      const next = clampIndex(
+        phaseIndex + (key.rightArrow ? 1 : -1),
+        phases.length,
+      );
       if (next !== phaseIndex) {
         onViewChange({ phaseIndex: next, selectedKey: undefined });
       }

@@ -58,7 +58,7 @@ type AgentPromptPair = z.infer<typeof ParsedCreatorYamlSchema>['prompts'];
 export interface CreatorConfig {
   workflow: AgentPromptPair;
   toolUse: AgentPromptPair;
-  retryPrompts: Record<AgentCategory, string>;
+  retryPrompt: string;
   templates: {
     workflowSingle: string;
     toolUse: string;
@@ -101,10 +101,7 @@ export function buildCreatorConfig(files: CreatorTemplateFiles): CreatorConfig {
   return {
     workflow: wf.prompts,
     toolUse: tu.prompts,
-    retryPrompts: {
-      workflow: RETRY_PROMPT,
-      toolUse: RETRY_PROMPT,
-    },
+    retryPrompt: RETRY_PROMPT,
     templates: {
       workflowSingle: files.workflowSingle,
       toolUse: files.toolUseTpl,
@@ -423,7 +420,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
     if (lastValidationError) {
       userMessage +=
         '\n' +
-        nunjucksEnv.renderString(config.retryPrompts[blueprint.category], {
+        nunjucksEnv.renderString(config.retryPrompt, {
           VALIDATION_ERROR: lastValidationError,
         });
     }

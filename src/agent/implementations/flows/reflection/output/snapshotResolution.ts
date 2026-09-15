@@ -16,8 +16,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { originalSnapshotPathUnder } from '@utils/files/runStorageFs';
 
-import { fsCall } from './outputOperations';
-
+import { fsCall } from '@utils/errors/fsCall';
 /** Map each workspace base file to its snapshot location when one exists.
  *  Non-workspace files and missing snapshots pass through unchanged. The
  *  snapshot is looked up under the run's own session storage root. */

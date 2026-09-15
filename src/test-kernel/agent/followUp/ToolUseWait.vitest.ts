@@ -15,11 +15,8 @@ import {
 import type { FollowUpQueueInput } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { followUpsLayer } from '@agent/runtime/FollowUps';
-import {
-  ModelInvoker,
-  turnText,
-  type InvokeRequest,
-} from '@agent/runtime/ModelInvoker';
+import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
+import { turnText } from '@agent/runtime/run/turnText';
 import {
   appendRow,
   rowAggregate,
