@@ -53,6 +53,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * catalog refresh that follows a mutation. Each is reported to the user by
  * the surrounding `catchCause`, which is why one tag with a member name is
  * the whole vocabulary any caller here reads.
+ *
+ * `message` always ends with the rejection's own text, and never repeats what
+ * the reporting `catchCause` already prefixes: the surrounding notification
+ * renders `toErrorMessage(Cause.squash(cause))`, so a message that named only
+ * the step would drop the reason the call actually gave.
  */
 class AgentSettingsActionFailed extends Data.TaggedError(
   'AgentSettingsActionFailed',
@@ -260,7 +265,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
             catch: (cause) =>
               new AgentSettingsActionFailed({
                 member: 'runAction',
-                message: failureMessage,
+                // The reporting `catchCause` below prefixes `failureMessage`
+                // itself, so the tag carries the rejection's own text only.
+                message: toErrorMessage(cause),
                 cause,
               }),
           }).pipe(
@@ -453,7 +460,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           catch: (cause) =>
             new AgentSettingsActionFailed({
               member: 'getCustomAgentDirectory',
-              message: 'The custom agent directory could not be resolved.',
+              message: `The custom agent directory could not be resolved: ${toErrorMessage(cause)}`,
               cause,
             }),
         });
@@ -471,7 +478,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           catch: (cause) =>
             new AgentSettingsActionFailed({
               member: 'writeTemplateAgentFile',
-              message: 'The agent template could not be written.',
+              message: `The agent template could not be written: ${toErrorMessage(cause)}`,
               cause,
             }),
         });
@@ -490,7 +497,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
             new ExternalOpenFailed({
               kind: 'path',
               target: plan.filePath,
-              message: 'The new agent definition could not be opened.',
+              message: `The new agent definition could not be opened: ${toErrorMessage(cause)}`,
               cause,
             }),
         });
@@ -504,7 +511,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           catch: (cause) =>
             new AgentSettingsActionFailed({
               member: 'refreshAfterMutation',
-              message: 'The agent catalog could not be reloaded.',
+              message: `The agent catalog could not be reloaded: ${toErrorMessage(cause)}`,
               cause,
             }),
         });
@@ -537,7 +544,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           catch: (cause) =>
             new AgentSettingsActionFailed({
               member: 'getRemoteAgentPrompt',
-              message: 'The hosted agent prompt could not be fetched.',
+              message: `The hosted agent prompt could not be fetched: ${toErrorMessage(cause)}`,
               cause,
             }),
         });
@@ -556,7 +563,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
             catch: (cause) =>
               new AgentSettingsActionFailed({
                 member: 'createTempDir',
-                message: 'A temporary directory could not be created.',
+                message: `A temporary directory could not be created: ${toErrorMessage(cause)}`,
                 cause,
               }),
           }),
@@ -570,7 +577,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
             new ExternalOpenFailed({
               kind: 'path',
               target,
-              message: 'The hosted agent prompt could not be opened.',
+              message: `The hosted agent prompt could not be opened: ${toErrorMessage(cause)}`,
               cause,
             }),
         });

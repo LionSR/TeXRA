@@ -109,6 +109,10 @@ export class SetupPlatform extends Context.Service<
  * accessor raises. The client's reads stay `Promise`-shaped: the auth ring
  * spans the three hosts' sign-in surfaces and the subscription probes, which
  * the credential lane measured and left for their own cut.
+ *
+ * Exported, unlike the file-local tags beside it, because
+ * `toolProbing.collectCoreSetupStatus` carries it in its error channel and the
+ * agent package's declaration emit has to be able to name it.
  */
 export class SetupAccountProbeFailed extends Data.TaggedError(
   'SetupAccountProbeFailed',
@@ -156,7 +160,7 @@ export const getSetupAuthStatus = Effect.fn('getSetupAuthStatus')(
  * subscription" this way, which is a value. They stay `Promise`-shaped with
  * the rest of the account group.
  */
-export class SubscriptionProbeFailed extends Data.TaggedError(
+class SubscriptionProbeFailed extends Data.TaggedError(
   'SubscriptionProbeFailed',
 )<{
   readonly member: 'getCodexStatus' | 'isCodexSubscriptionActive';

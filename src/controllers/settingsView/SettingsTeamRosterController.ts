@@ -12,6 +12,7 @@ import {
 } from '@common/teams/TeamRosterApplication';
 import type { MessageHost } from '@hosts/uiHosts';
 import { assertNever } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 type SettingsTeamRosterCatalog = TeamRosterApplicationDeps['catalog'] & {
@@ -123,8 +124,7 @@ export function applySettingsTeamRoster(
           try: () => options.refreshAfterApply(selectedToolUseAgent),
           catch: (cause) =>
             new TeamRosterRefreshFailed({
-              message:
-                'The team was applied, but the settings view could not be refreshed.',
+              message: `The team was applied, but the settings view could not be refreshed: ${toErrorMessage(cause)}`,
               cause,
             }),
         });

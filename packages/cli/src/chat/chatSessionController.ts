@@ -920,7 +920,7 @@ export function createChatSessionController(
           catch: (cause) =>
             new StateWriteFailed({
               key: GlobalStateKey.HELPER_MODEL,
-              message: 'The helper model could not be recorded.',
+              message: `The helper model could not be recorded: ${toErrorMessage(cause)}`,
               cause,
             }),
         });
@@ -1082,9 +1082,13 @@ export function createChatSessionController(
                 ),
               }),
             catch: (cause) =>
+              // The selection's own rejection is the user-facing text: it
+              // names the model, its availability status and the `/key`
+              // recovery. The tag carries that message verbatim, because the
+              // transcript renders `toErrorMessage` of this failure.
               new ChatSessionCallFailed({
                 member: 'selectRunnableModel',
-                message: 'No runnable model could be selected.',
+                message: toErrorMessage(cause),
                 cause,
               }),
           });
@@ -1093,7 +1097,7 @@ export function createChatSessionController(
             catch: (cause) =>
               new StateWriteFailed({
                 key: GlobalStateKey.HELPER_MODEL,
-                message: 'The helper model could not be recorded.',
+                message: `The helper model could not be recorded: ${toErrorMessage(cause)}`,
                 cause,
               }),
           });

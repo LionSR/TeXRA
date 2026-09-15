@@ -1,5 +1,7 @@
 import { Data, Effect } from 'effect';
 
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
 /**
  * A team-catalog port the host would not answer.
  *
@@ -111,7 +113,7 @@ export function preflightTeamAvailability<T>(
       catch: (cause) =>
         new TeamCatalogPortFailed({
           member: 'canAccessRemoteCatalog',
-          message: 'Remote agent catalog access could not be checked.',
+          message: `Remote agent catalog access could not be checked: ${toErrorMessage(cause)}`,
           cause,
         }),
     });
@@ -133,7 +135,7 @@ export function preflightTeamAvailability<T>(
         catch: (cause) =>
           new TeamCatalogPortFailed({
             member: 'choose',
-            message: 'The host could not ask about the unavailable members.',
+            message: `The host could not ask about the unavailable members: ${toErrorMessage(cause)}`,
             cause,
           }),
       }));
@@ -156,7 +158,7 @@ export function preflightTeamAvailability<T>(
       catch: (cause) =>
         new TeamCatalogPortFailed({
           member: 'signIn',
-          message: 'The host could not run the TeXRA sign-in.',
+          message: `The host could not run the TeXRA sign-in: ${toErrorMessage(cause)}`,
           cause,
         }),
     });

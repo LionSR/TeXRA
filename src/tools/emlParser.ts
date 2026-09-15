@@ -46,7 +46,7 @@ const turndownService = createHtmlToMarkdown();
  * process already holds, not a host port, so there is one reason and it
  * carries the library's own error.
  */
-export class EmlParseFailed extends Data.TaggedError('EmlParseFailed')<{
+class EmlParseFailed extends Data.TaggedError('EmlParseFailed')<{
   readonly message: string;
   readonly cause: unknown;
 }> {}

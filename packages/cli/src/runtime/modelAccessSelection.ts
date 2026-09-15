@@ -12,7 +12,7 @@ import {
 import { AppState, StateWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   shouldUseSubscriptionDeviceCode,
@@ -138,7 +138,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
         new ModelAccessPreferenceFailed({
           member: 'setPreferSubscription',
           subscription: providerId,
-          message: `The ${displayName} subscription preference could not be disabled.`,
+          message: `The ${displayName} subscription preference could not be disabled: ${toErrorMessage(cause)}`,
           cause,
         }),
     });
@@ -155,7 +155,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
       new ModelAccessPreferenceFailed({
         member: 'getStatus',
         subscription: providerId,
-        message: `The ${displayName} subscription session could not be read.`,
+        message: `The ${displayName} subscription session could not be read: ${toErrorMessage(cause)}`,
         cause,
       }),
   });
@@ -178,7 +178,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
       new ModelAccessPreferenceFailed({
         member: 'setPreferSubscription',
         subscription: providerId,
-        message: `The ${displayName} subscription preference could not be enabled.`,
+        message: `The ${displayName} subscription preference could not be enabled: ${toErrorMessage(cause)}`,
         cause,
       }),
   });
@@ -190,7 +190,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     catch: (cause) =>
       new StateWriteFailed({
         key: GlobalStateKey.USE_OPENROUTER,
-        message: 'The OpenRouter preference could not be cleared.',
+        message: `The OpenRouter preference could not be cleared: ${toErrorMessage(cause)}`,
         cause,
       }),
   });
@@ -216,7 +216,7 @@ const updateKeyedCliModelAccess = Effect.fn(
         new ModelAccessPreferenceFailed({
           member: 'setEnabled',
           subscription: plan.id,
-          message: `${plan.preferenceLabel} could not be disabled.`,
+          message: `${plan.preferenceLabel} could not be disabled: ${toErrorMessage(cause)}`,
           cause,
         }),
     });
@@ -240,7 +240,7 @@ const updateKeyedCliModelAccess = Effect.fn(
       new ModelAccessPreferenceFailed({
         member: 'setEnabled',
         subscription: plan.id,
-        message: `${plan.preferenceLabel} could not be enabled.`,
+        message: `${plan.preferenceLabel} could not be enabled: ${toErrorMessage(cause)}`,
         cause,
       }),
   });

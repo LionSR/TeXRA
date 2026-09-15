@@ -9,6 +9,7 @@ import type {
   TeamRosterResolution,
 } from '@common/teams/TeamRoster';
 import type { AgentModePreset } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface ResolvedTeam {
   readonly ok: true;
@@ -100,7 +101,7 @@ export function applyTeamRosterWithPreflight(
       catch: (cause) =>
         new TeamCatalogPortFailed({
           member: 'commitPreset',
-          message: 'The applied team could not be stored.',
+          message: `The applied team could not be stored: ${toErrorMessage(cause)}`,
           cause,
         }),
     });

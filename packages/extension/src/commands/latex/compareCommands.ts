@@ -73,6 +73,10 @@ function executeVscodeCommand<T = void>(
  * The host-neutral accept sequence, or the quick pick in front of it, faulted.
  * Both sides answer their ordinary outcomes as values — a cancelled pick is
  * `undefined`, a refused replace is `false` — so reaching here is a fault.
+ *
+ * `message` names the step and ends with the rejection's own text, because
+ * the reporting tail shows `toErrorMessage` of this failure and the reason
+ * the call gave is the part the user can act on.
  */
 class AcceptEditedFailed extends Data.TaggedError('AcceptEditedFailed')<{
   readonly step: 'pick-target' | 'replace' | 'commit';
@@ -293,7 +297,7 @@ export const handleAcceptEdited = Effect.fn(
         catch: (cause) =>
           new AcceptEditedFailed({
             step: 'replace',
-            message: 'The edited file could not replace the original.',
+            message: `The edited file could not replace the original: ${toErrorMessage(cause)}`,
             cause,
           }),
       });
@@ -311,7 +315,7 @@ export const handleAcceptEdited = Effect.fn(
       catch: (cause) =>
         new AcceptEditedFailed({
           step: 'pick-target',
-          message: 'The accept target could not be chosen.',
+          message: `The accept target could not be chosen: ${toErrorMessage(cause)}`,
           cause,
         }),
     });
@@ -333,7 +337,7 @@ export const handleAcceptEdited = Effect.fn(
       catch: (cause) =>
         new AcceptEditedFailed({
           step: 'commit',
-          message: 'The accepted file could not be committed.',
+          message: `The accepted file could not be committed: ${toErrorMessage(cause)}`,
           cause,
         }),
     });

@@ -339,7 +339,7 @@ export function openDesktopProjectRegistry(
                 catch: (cause) =>
                   new ProjectRunsNotStopped({
                     root,
-                    message: "The project's runs could not be stopped.",
+                    message: `The project's runs could not be stopped: ${toErrorMessage(cause)}`,
                     cause,
                   }),
               });

@@ -19,6 +19,7 @@ import {
   implicitDefaultToolUseAgents,
 } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { capitalize } from '@utils/text/stringUtils';
 
 import {
@@ -394,7 +395,7 @@ export function refreshRemoteCatalogForGaps<T>(
         catch: (cause) =>
           new TeamCatalogPortFailed({
             member: 'canAccessRemoteCatalog',
-            message: 'Remote agent catalog access could not be checked.',
+            message: `Remote agent catalog access could not be checked: ${toErrorMessage(cause)}`,
             cause,
           }),
       });

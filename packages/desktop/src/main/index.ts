@@ -407,11 +407,14 @@ function createWindow(options: {
   /**
    * The onboarding funnel could not be recomputed. The funnel is host state
    * every open project's snapshot carries, so a refresh that faults leaves
-   * the last state in place and is reported, not swallowed.
+   * the last state in place and is reported, not swallowed. `reportAsyncError`
+   * shows `toErrorMessage` of this failure, so the message is the rejection's
+   * own text rather than an empty tail.
    */
   class OnboardingRefreshFailed extends Data.TaggedError(
     'OnboardingRefreshFailed',
   )<{
+    readonly message: string;
     readonly cause: unknown;
   }> {}
   const showMessageBoxOfType =
@@ -1510,7 +1513,11 @@ function createWindow(options: {
   runtime.runFork(
     Effect.tryPromise({
       try: () => onboardingIpc.refreshOnboardingFunnel(),
-      catch: (cause) => new OnboardingRefreshFailed({ cause }),
+      catch: (cause) =>
+        new OnboardingRefreshFailed({
+          message: `The onboarding state could not be refreshed: ${toErrorMessage(cause)}`,
+          cause,
+        }),
     }).pipe(
       Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
     ),
