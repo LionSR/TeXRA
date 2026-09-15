@@ -54,6 +54,7 @@ vi.mock('@utils/config/providerConfig', () => ({
 }));
 
 const {
+  buildDesktopSetupRunRequest,
   selectSetupCredentialModelExcludingOpenRouter,
   resolveSetupLaunchModel,
 } = await import('@controllers/onboarding/setupLaunch');
@@ -82,13 +83,16 @@ function selectCredentialModel(
   );
 }
 
-/** Desktop's launch model: `resolveSetupLaunchModel` with the OpenRouter
- *  access-list fallback opted out, projected to the model alone. */
+/**
+ * Desktop's launch model, read back off the request its host actually builds.
+ * `buildDesktopSetupRunRequest` is the entry point `packages/desktop` calls,
+ * so the resolved model is asserted through the same path a launch takes -
+ * including the request validation that stands between the resolution and the
+ * launch - rather than by re-deriving the projection here.
+ */
 async function desktopSetupModel(): Promise<string | null> {
-  const resolution = await Effect.runPromise(
-    resolveSetupLaunchModel(secrets, false),
-  );
-  return resolution?.model ?? null;
+  const request = await Effect.runPromise(buildDesktopSetupRunRequest(secrets));
+  return request?.config.model ?? null;
 }
 
 function launchModel(
@@ -188,10 +192,11 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
 });
 
 /**
- * Desktop's launch model: `resolveSetupLaunchModel(secrets, false)`, which is
- * what `buildDesktopSetupRunRequest` feeds into request validation.
+ * Desktop's setup-launch path, end to end through
+ * `buildDesktopSetupRunRequest`: the OpenRouter access-list fallback stays
+ * opted out, and the model that comes back out is the one the host launches.
  */
-describe('resolveSetupLaunchModel with the access-list fallback opted out', () => {
+describe('buildDesktopSetupRunRequest', () => {
   it('routes through OpenRouter only when the flag is on and a key exists', async () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
     mockDirectApiKey('openRouter');

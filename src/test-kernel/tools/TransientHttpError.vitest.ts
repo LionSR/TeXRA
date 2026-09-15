@@ -18,33 +18,33 @@ function kyErrorWithStatus(status: number): HTTPError {
 }
 
 /**
- * Assert whether `retryTransientFetch` treats `error` as transient: a
- * transient failure is attempted a second time and reports the retry back
- * through `onFailedAttempt`, a permanent one ends the program on its first
- * attempt.
+ * Assert whether `retryTransientFetch` treats `error` as transient, by the
+ * only consequence that matters to a caller: a transient failure runs the
+ * request a second time, a permanent one ends the program on its first
+ * attempt. Counting executions inside the request effect covers the retry
+ * wiring as well, which an `onFailedAttempt` flag would not: that hook runs
+ * from `Effect.tapError` gated on the same classifier, so it fires on the
+ * initial failure whether or not another attempt follows.
  */
 function expectTransience(
   error: unknown,
   transient: boolean,
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
-    let retried = false;
+    let attempts = 0;
     const fiber = yield* Effect.forkChild(
       Effect.flip(
-        retryTransientFetch(Effect.fail(error), {
-          retries: 1,
-          minTimeout: 1,
-          timeoutMs: 1000,
-          onFailedAttempt: () =>
-            Effect.sync(() => {
-              retried = true;
-            }),
-        }),
+        retryTransientFetch(
+          Effect.sync(() => {
+            attempts += 1;
+          }).pipe(Effect.andThen(Effect.fail(error))),
+          { retries: 1, minTimeout: 1, timeoutMs: 1000 },
+        ),
       ),
     );
     yield* TestClock.adjust('40 millis');
     yield* Fiber.join(fiber);
-    expect(retried).toBe(transient);
+    expect(attempts).toBe(transient ? 2 : 1);
   });
 }
 
