@@ -6,12 +6,19 @@
  * Promise-facing methods; inside, cancellation is fiber interruption.
  * Installed like the process roots: exactly once, by the entry.
  */
+import {
+  Cause,
+  Effect,
+  Exit,
+  type FileSystem,
+  type ManagedRuntime,
+  type Path,
+} from 'effect';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
-import type { FileSystem, ManagedRuntime, Path } from 'effect';
 import type { HttpClient } from 'effect/unstable/http';
 
 import type { AppState } from './interfaces';
@@ -81,4 +88,40 @@ export function effectRuntime(): ProcessRuntime {
     );
   }
   return processRuntime;
+}
+
+/**
+ * A runtime whose `runFork` reports what a forked fiber leaves unhandled
+ * (#12613). A bare `runFork` announces nothing for a fiber that fails or
+ * dies unobserved, so every fiber this runtime forks gets an exit observer:
+ * a failure or defect surfaces once, as an error entry through the runtime's
+ * own logger (`@logger/effectDiagnostics`, then the host's installed sink),
+ * while a success or an interrupts-only exit — the fiber's own control
+ * flow, not a failure — stays silent. `runPromise` and `runSync` hand their
+ * exits to the caller already and need no seam.
+ */
+export function withForkFailureReporting<R, ER>(
+  runtime: ManagedRuntime.ManagedRuntime<R, ER>,
+): ManagedRuntime.ManagedRuntime<R, ER> {
+  // The report forks on the underlying `runFork`, not the observed one: a
+  // defect in the reporter itself must not recurse back into this observer.
+  const reportExit = (
+    fiberId: number,
+    exit: Exit.Exit<unknown, unknown>,
+  ): void => {
+    if (Exit.isSuccess(exit) || Cause.hasInterruptsOnly(exit.cause)) return;
+    runtime.runFork(
+      Effect.logError('Unhandled failure in forked fiber', exit.cause).pipe(
+        Effect.annotateLogs({ forkedFiber: fiberId }),
+      ),
+    );
+  };
+  return {
+    ...runtime,
+    runFork: (effect, options) => {
+      const fiber = runtime.runFork(effect, options);
+      fiber.addObserver((exit) => reportExit(fiber.id, exit));
+      return fiber;
+    },
+  };
 }
