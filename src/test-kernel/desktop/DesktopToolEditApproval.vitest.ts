@@ -573,12 +573,15 @@ describe('desktop tool edit approval', () => {
         yield* Effect.tryPromise(() =>
           vi.waitFor(() => expect(runLatexdiff).toHaveBeenCalledOnce()),
         );
+        // The controller injects its own display callback so it can register
+        // the host build and join it at release, so the second argument is
+        // checked structurally instead of against the host stub by identity.
         expect(runLatexdiff).toHaveBeenCalledWith(
           expect.objectContaining({ requestId: request.requestId }),
-          {
+          expect.objectContaining({
             subtype: 'ONLYCHANGEDPAGE',
-            openBuildDisplay,
-          },
+            openBuildDisplay: expect.any(Function),
+          }),
         );
         expect(result.pollUnsafe()).toBeUndefined();
 
