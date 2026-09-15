@@ -3,7 +3,6 @@ import { mkdir } from 'node:fs/promises';
 import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { Effect, FileSystem, Option } from 'effect';
 import { execa, type Subprocess } from 'execa';
 import OpenAI from 'openai';
 
@@ -11,9 +10,7 @@ import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { THREE_DAYS_MS } from '@utils/config/constants';
 import { readConfig } from '@utils/config/configUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   BinaryResolver,
   type ResolvedBinaryCommand,
@@ -30,7 +27,7 @@ const RECORDINGS_DIR = 'recordings';
  * storage root without the module entering (or reading) an ambient roots
  * scope — the desktop holds one session per open paper.
  */
-function recordingsDir(roots: WorkspaceRoots): string {
+export function recordingsDir(roots: WorkspaceRoots): string {
   return path.join(roots.storage, RECORDINGS_DIR);
 }
 
@@ -48,66 +45,6 @@ let activeRecordingPath: string | null = null;
 function resetRecordingState(): void {
   activeRecordingProcess = null;
   activeRecordingPath = null;
-}
-
-/**
- * Delete recordings older than `maxAgeMs` under `directory`.
- *
- * Never throws. The sweep runs after a transcription has already succeeded,
- * so a take another process is still holding, or one that vanished between
- * the listing and the stat, must not destroy that result: every failure is
- * warned with its cause, and one bad entry does not stop the rest of the
- * sweep. A listing that fails is warned and skipped for the same reason.
- *
- * The directory arrives as data from the caller that owns the session's roots
- * — the absolute form the old `RelativeFS.cleanupOldFiles` resolved to — so
- * the sweep no longer reads an ambient storage root.
- */
-export function cleanupOldRecordings(
-  roots: WorkspaceRoots,
-): Effect.Effect<void, never, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
-    const directory = recordingsDir(roots);
-    const fs = yield* FileSystem.FileSystem;
-    const cutoff = Date.now() - THREE_DAYS_MS;
-    const names = yield* fs.readDirectory(directory).pipe(
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          log.warn(`Skipped cleanup of ${directory}: ${toErrorMessage(error)}`);
-          return [] as string[];
-        }),
-      ),
-    );
-    yield* Effect.forEach(
-      names,
-      (name) => {
-        const filePath = path.join(directory, name);
-        return fs.stat(filePath).pipe(
-          Effect.flatMap((stats) => {
-            // The sweep it replaces filtered on the provider's type bits,
-            // where a symlink answers for its target and so counted as a file
-            // when it pointed at one. The follow above does the same job: a
-            // link to a file is swept by its target's age, a link to a
-            // directory is not swept at all.
-            if (stats.type !== 'File') return Effect.void;
-            const mtime = Option.match(stats.mtime, {
-              onNone: () => 0,
-              onSome: (modified) => modified.getTime(),
-            });
-            return mtime <= cutoff ? fs.remove(filePath) : Effect.void;
-          }),
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              log.warn(
-                `Could not remove stale recording ${filePath}: ${toErrorMessage(error)}`,
-              );
-            }),
-          ),
-        );
-      },
-      { concurrency: 'unbounded', discard: true },
-    );
-  });
 }
 
 /** Resolve the sox executable command from config or auto-detection. */
@@ -293,8 +230,7 @@ export async function stopRecording(): Promise<{
  * rather than as a store this function would have to read from. The recorder
  * is already terminated by the time this runs — it is {@link stopRecording}
  * that owns the microphone. Stale takes under the session's recordings
- * directory are swept by {@link cleanupOldRecordings} at that same host
- * boundary after a successful transcription.
+ * directory are swept by the host take fiber after a successful transcription.
  */
 export async function transcribeRecording(
   recordingPath: string,

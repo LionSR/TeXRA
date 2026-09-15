@@ -11,7 +11,6 @@ import { mkdir } from 'node:fs/promises';
 
 import * as vscode from 'vscode';
 
-import { type Effect, FileSystem } from 'effect';
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
@@ -34,6 +33,7 @@ import {
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { pluralize } from '@utils/text/stringUtils';
+import type { Effect, FileSystem } from 'effect';
 
 const CHANNEL = 'ToolEditApproval';
 

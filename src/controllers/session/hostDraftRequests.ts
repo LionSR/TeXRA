@@ -1,24 +1,84 @@
 /** Shared draft operations and the process recorder's originating request. */
-import { Data, Deferred, Effect, FileSystem } from 'effect';
+import * as path from 'node:path';
+
+import { Data, Deferred, Effect, FileSystem, Option } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
+import { createLog } from '@logger/logUtils';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import type { HostOutcome } from '@shared/session/sessionFrames';
 import {
-  cleanupOldRecordings,
   killActiveRecording,
+  recordingsDir,
   startRecording,
   stopRecording,
   transcribeRecording,
 } from '@tools/media/audio';
+import { THREE_DAYS_MS } from '@utils/config/constants';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
+
+const log = createLog('HostDraftRequests');
+
+/**
+ * Delete recordings older than three days under the session's recordings
+ * directory. Never fails the transcription: every listing or unlink error is
+ * warned with its cause, and one bad entry does not stop the rest of the sweep.
+ */
+function cleanupOldRecordings(
+  roots: WorkspaceRoots,
+): Effect.Effect<void, never, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
+    const directory = recordingsDir(roots);
+    const fs = yield* FileSystem.FileSystem;
+    const cutoff = Date.now() - THREE_DAYS_MS;
+    const names = yield* fs.readDirectory(directory).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          log.warn(`Skipped cleanup of ${directory}: ${toErrorMessage(error)}`);
+          return [] as string[];
+        }),
+      ),
+    );
+    yield* Effect.forEach(
+      names,
+      (name) => {
+        const filePath = path.join(directory, name);
+        return fs.stat(filePath).pipe(
+          Effect.flatMap((stats) => {
+            // The sweep it replaces filtered on the provider's type bits,
+            // where a symlink answers for its target and so counted as a file
+            // when it pointed at one. The follow above does the same job: a
+            // link to a file is swept by its target's age, a link to a
+            // directory is not swept at all.
+            if (stats.type !== 'File') return Effect.void;
+            const mtime = Option.match(stats.mtime, {
+              onNone: () => 0,
+              onSome: (modified) => modified.getTime(),
+            });
+            return mtime <= cutoff ? fs.remove(filePath) : Effect.void;
+          }),
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              log.warn(
+                `Could not remove stale recording ${filePath}: ${toErrorMessage(error)}`,
+              );
+            }),
+          ),
+        );
+      },
+      { concurrency: 'unbounded', discard: true },
+    );
+  });
+}
 
 /**
  * A draft operation this controller drives faulted rather than reporting an

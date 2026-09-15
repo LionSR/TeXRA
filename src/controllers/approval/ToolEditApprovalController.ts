@@ -12,7 +12,6 @@
  */
 
 // Local imports
-import { type Effect, FileSystem } from 'effect';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { createLog } from '@logger/logUtils';
 import type {
@@ -30,6 +29,7 @@ import {
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import type { Effect, FileSystem } from 'effect';
 
 const log = createLog('ToolEditApproval');
 

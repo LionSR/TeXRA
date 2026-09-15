@@ -9,7 +9,7 @@
 import { readFile, rm } from 'node:fs/promises';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 
 // Local imports - types
 import type {
