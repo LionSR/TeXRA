@@ -117,27 +117,30 @@ export function notifyFollowUpSent(
 }
 
 /**
- * Wake a recovery lease whose follow-up row is already durable. The Promise
+ * Wake a recovery lease whose follow-up row is already durable. The wake
  * owns its settlement even if the submitting fiber stops waiting: a declined
- * or rejected wake releases the lease so the next attempt can claim it.
+ * or faulted wake releases the lease so the next attempt can claim it.
  */
 export function startFollowUpWake(
   runId: RunId,
   recovery: FollowUpRecoveryLease,
   session: SessionHandle,
   resumePort?: Pick<AgentResumePort, 'tryResumeRun'>,
-): Promise<boolean> {
-  return Promise.resolve(
+): Effect.Effect<boolean> {
+  return Effect.suspend(() =>
     (resumePort ?? platform().agentResume).tryResumeRun(runId, recovery),
-  ).then(
-    (resumed) => {
-      if (!resumed) session.followUps.release(recovery, 'recoverable');
-      return resumed;
-    },
-    () => {
-      session.followUps.release(recovery, 'recoverable');
-      return false;
-    },
+  ).pipe(
+    Effect.tap((resumed) =>
+      Effect.sync(() => {
+        if (!resumed) session.followUps.release(recovery, 'recoverable');
+      }),
+    ),
+    Effect.catch(() =>
+      Effect.sync(() => {
+        session.followUps.release(recovery, 'recoverable');
+        return false;
+      }),
+    ),
   );
 }
 
@@ -158,7 +161,7 @@ export function enqueueLiveFollowUp(
 
 type Admission =
   | SubmitFollowUpResult
-  | { readonly resume: Promise<boolean> }
+  | { readonly resume: Effect.Effect<boolean> }
   | { status: 'no_session' };
 
 /**
@@ -340,10 +343,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   ).pipe(Effect.tapError(() => notifyAdmitted(false)));
   if ('resume' in dispatch) {
     yield* notifyAdmitted(true);
-    const resumed = yield* Effect.tryPromise({
-      try: () => dispatch.resume,
-      catch: ensureError,
-    });
+    const resumed = yield* dispatch.resume;
     if (resumed) return { status: 'queued' };
     return { status: 'queued', wake: 'failed' };
   }

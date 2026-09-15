@@ -20,11 +20,12 @@ import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
-import type {
-  AgentResumePort,
-  LifecycleHost,
-  StateStore,
-  StateWriteFailed,
+import {
+  AgentResumeFailed,
+  type LifecycleHost,
+  type RecoveryContinuation,
+  type StateStore,
+  type StateWriteFailed,
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { DisposableStore } from '@platform/disposable';
@@ -263,11 +264,20 @@ export function handOffCliShutdownSignalHandlers(): void {
  * The chat TUI's stream resume, installed while a chat session is mounted.
  * The platform port above forwards to it; outside a chat there is no host
  * that can resume, so the port answers `false`.
+ *
+ * Promise-typed on purpose: the TUI's controller claims its root-run slot in
+ * a synchronous promise handshake, so the port adopts the attempt where it
+ * stands rather than the controller answering in a shape it cannot.
  */
-let cliResumeHandler: AgentResumePort['tryResumeRun'] | undefined;
+type CliResumeHandler = (
+  runId: RunId,
+  recovery?: RecoveryContinuation,
+) => Promise<boolean>;
+
+let cliResumeHandler: CliResumeHandler | undefined;
 
 export function setCliAgentResumeHandler(
-  handler: AgentResumePort['tryResumeRun'],
+  handler: CliResumeHandler,
 ): () => void {
   cliResumeHandler = handler;
   return () => {
@@ -419,8 +429,17 @@ export async function initCliPlatform(
       const platform = createNodePlatform({
         lifecycle,
         agentResume: {
-          tryResumeRun: async (runId, recovery) =>
-            (await cliResumeHandler?.(runId, recovery)) ?? false,
+          tryResumeRun: (runId, recovery) =>
+            Effect.tryPromise({
+              try: async () =>
+                (await cliResumeHandler?.(runId, recovery)) ?? false,
+              catch: (cause) =>
+                new AgentResumeFailed({
+                  runId,
+                  message: toErrorMessage(cause),
+                  cause,
+                }),
+            }),
         },
         agentDirectories,
       });
