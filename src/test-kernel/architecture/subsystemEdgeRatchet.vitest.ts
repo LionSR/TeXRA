@@ -357,6 +357,21 @@ describe('LAY-1 subsystem edge ratchet', () => {
     expect(violations, formatViolations(violations)).toEqual([]);
   });
 
+  it('rejects baseline edges with no live site (stale headroom)', () => {
+    const baseline = readBaseline();
+    const currentKeys = new Set(collectSubsystemEdges().map(edgeKey));
+    const stale = baseline.edges.filter(
+      (edge) => !currentKeys.has(edgeKey(edge)),
+    );
+
+    expect(
+      stale,
+      `Stale subsystem edge(s) in ${BASELINE_PATH}:\n` +
+        stale.map((edge) => `  - ${edgeKey(edge)} (${edge.kind})`).join('\n') +
+        '\n\nRemove them from the baseline so they cannot absorb a future new edge.',
+    ).toEqual([]);
+  });
+
   it('keeps the baseline non-empty and ordered', () => {
     const baseline = readBaseline();
     const sortedEdges = baseline.edges.toSorted(compareEdges);
