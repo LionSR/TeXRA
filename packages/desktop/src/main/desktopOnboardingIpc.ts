@@ -7,7 +7,6 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   buildDesktopOnboardingSetStateMessage,
   DESKTOP_ONBOARDING_COMMANDS,
@@ -26,7 +25,6 @@ import type {
  * in-flight guard.
  */
 class SetupKickoffFailed extends Data.TaggedError('SetupKickoffFailed')<{
-  readonly message: string;
   readonly cause: unknown;
 }> {}
 
@@ -38,7 +36,6 @@ class SetupKickoffFailed extends Data.TaggedError('SetupKickoffFailed')<{
 class OnboardingDismissFailed extends Data.TaggedError(
   'OnboardingDismissFailed',
 )<{
-  readonly message: string;
   readonly cause: unknown;
 }> {}
 
@@ -125,8 +122,7 @@ export function createDesktopOnboardingIpc(
     options.runtime.runFork(
       Effect.tryPromise({
         try: () => options.kickoffSetup(),
-        catch: (cause) =>
-          new SetupKickoffFailed({ message: toErrorMessage(cause), cause }),
+        catch: (cause) => new SetupKickoffFailed({ cause }),
       }).pipe(
         // Swallow — the kickoff handler already surfaced the error to the user.
         Effect.catchTag('SetupKickoffFailed', () => Effect.void),
@@ -151,14 +147,12 @@ export function createDesktopOnboardingIpc(
   const dismiss = Effect.gen(function* () {
     yield* Effect.tryPromise({
       try: () => state.update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true),
-      catch: (cause) =>
-        new OnboardingDismissFailed({ message: toErrorMessage(cause), cause }),
+      catch: (cause) => new OnboardingDismissFailed({ cause }),
     });
     yield* Effect.try({
       try: () =>
         renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(false)),
-      catch: (cause) =>
-        new OnboardingDismissFailed({ message: toErrorMessage(cause), cause }),
+      catch: (cause) => new OnboardingDismissFailed({ cause }),
     });
   });
 
