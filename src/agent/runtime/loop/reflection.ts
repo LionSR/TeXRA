@@ -34,6 +34,7 @@ import {
   Effect,
   Exit,
   FileSystem,
+  PlatformError,
   Ref,
   SynchronizedRef,
 } from 'effect';
@@ -169,9 +170,7 @@ type RoundExit = {
 };
 
 /** ENOENT, or ENOTDIR on a parent, as `AbsoluteFS.exists`/`statIfExists` treated them. */
-function isAbsentFsPath(error: {
-  readonly reason: { readonly _tag: string; readonly cause: unknown };
-}): boolean {
+function isAbsentFsPath(error: PlatformError.PlatformError): boolean {
   return (
     error.reason._tag === 'NotFound' ||
     (error.reason._tag === 'BadResource' &&

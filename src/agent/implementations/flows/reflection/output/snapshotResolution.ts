@@ -8,7 +8,7 @@
  * canonical "before" content for accurate stats.
  */
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { isNotADirectoryError } from '@common/errors';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -18,9 +18,7 @@ import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { originalSnapshotPathUnder } from '@utils/files/runStorageFs';
 
 /** ENOENT, or ENOTDIR on a parent, as `AbsoluteFS.isFile` via `statIfExists` treated them. */
-function isAbsentFsPath(error: {
-  readonly reason: { readonly _tag: string; readonly cause: unknown };
-}): boolean {
+function isAbsentFsPath(error: PlatformError.PlatformError): boolean {
   return (
     error.reason._tag === 'NotFound' ||
     (error.reason._tag === 'BadResource' &&
