@@ -149,38 +149,44 @@ describe('AgentRosterController', () => {
         [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
       }),
     });
-    await inherited.setAgentEnabled({
-      category: 'workflow',
-      source: 'builtInWorkflow',
-      name: 'write',
-      enabled: true,
-    });
+    await Effect.runPromise(
+      inherited.setAgentEnabled({
+        category: 'workflow',
+        source: 'builtInWorkflow',
+        name: 'write',
+        enabled: true,
+      }),
+    );
     expect(inherited.snapshot().selection).toEqual({ kind: 'inherit' });
     expect(
       inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toBeUndefined();
 
     const team = controller(new FakeStateStore());
-    await team.setTeam('test-team');
-    await team.setAgentEnabled({
-      category: 'toolUse',
-      source: 'builtInToolUse',
-      name: 'lead',
-      enabled: true,
-    });
+    await Effect.runPromise(team.setTeam('test-team'));
+    await Effect.runPromise(
+      team.setAgentEnabled({
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        name: 'lead',
+        enabled: true,
+      }),
+    );
     expect(team.snapshot().selection).toEqual({
       kind: 'team',
       teamId: 'test-team',
     });
 
     const all = controller(new FakeStateStore());
-    await all.setAll();
-    await all.setAgentEnabled({
-      category: 'toolUse',
-      source: 'custom',
-      name: 'search',
-      enabled: true,
-    });
+    await Effect.runPromise(all.setAll());
+    await Effect.runPromise(
+      all.setAgentEnabled({
+        category: 'toolUse',
+        source: 'custom',
+        name: 'search',
+        enabled: true,
+      }),
+    );
     expect(all.snapshot().selection).toEqual({ kind: 'all' });
   });
 
@@ -286,21 +292,25 @@ describe('AgentRosterController', () => {
     const workspaceState = new FakeStateStore();
     const first = controller(workspaceState);
     const second = controller(workspaceState);
-    await first.setAll();
+    await Effect.runPromise(first.setAll());
 
     await Promise.all([
-      first.setAgentEnabled({
-        category: 'workflow',
-        source: 'custom',
-        name: 'review',
-        enabled: false,
-      }),
-      second.setAgentEnabled({
-        category: 'toolUse',
-        source: 'custom',
-        name: 'search',
-        enabled: false,
-      }),
+      Effect.runPromise(
+        first.setAgentEnabled({
+          category: 'workflow',
+          source: 'custom',
+          name: 'review',
+          enabled: false,
+        }),
+      ),
+      Effect.runPromise(
+        second.setAgentEnabled({
+          category: 'toolUse',
+          source: 'custom',
+          name: 'search',
+          enabled: false,
+        }),
+      ),
     ]);
 
     expect(first.snapshot().selection).toEqual({

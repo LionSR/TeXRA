@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Effect } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
@@ -142,7 +143,9 @@ describe('SettingsModelSelectionController', () => {
 
     expect((await controller.buildSelectionData()).helperModel).toBe('gpt55');
 
-    await controller.setModelEnabled({ modelName: 'gpt55', enabled: false });
+    await Effect.runPromise(
+      controller.setModelEnabled({ modelName: 'gpt55', enabled: false }),
+    );
 
     expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
       enabledExtras: [],
@@ -164,7 +167,9 @@ describe('SettingsModelSelectionController', () => {
     const controller = createController({ globalState });
 
     await expect(
-      controller.setModelEnabled({ modelName: 'gpt55', enabled: false }),
+      Effect.runPromise(
+        controller.setModelEnabled({ modelName: 'gpt55', enabled: false }),
+      ),
     ).rejects.toThrow(/at least one model/i);
     expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual(onlyGpt55);
   });
@@ -186,14 +191,18 @@ describe('SettingsModelSelectionController', () => {
 
     // A toggle edits the fallback the picker shows, not the hidden delta.
     const [first] = DEFAULT_MODELS;
-    await controller.setModelEnabled({ modelName: first, enabled: false });
+    await Effect.runPromise(
+      controller.setModelEnabled({ modelName: first, enabled: false }),
+    );
     expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
       enabledExtras: [],
       disabledDefaults: [first],
     });
 
     // Turned back on, it stays on even after the curated defaults drop it.
-    await controller.setModelEnabled({ modelName: first, enabled: true });
+    await Effect.runPromise(
+      controller.setModelEnabled({ modelName: first, enabled: true }),
+    );
     expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
       enabledExtras: [first],
       disabledDefaults: [],

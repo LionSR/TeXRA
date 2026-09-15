@@ -395,17 +395,22 @@ describe('SettingsAgentCatalogController', () => {
       },
     });
 
-    assert.deepEqual(await state.controller.saveCurrentPreset('  My Team  '), {
-      id: 'custom-456',
-      name: 'My Team',
-      description: 'Custom team: review, correct',
-      icon: 'bookmark',
-      agents: {
-        workflow: ['correct'],
-        toolUse: ['review'],
+    assert.deepEqual(
+      await Effect.runPromise(
+        state.controller.saveCurrentPreset('  My Team  '),
+      ),
+      {
+        id: 'custom-456',
+        name: 'My Team',
+        description: 'Custom team: review, correct',
+        icon: 'bookmark',
+        agents: {
+          workflow: ['correct'],
+          toolUse: ['review'],
+        },
+        texraHostedAgents: [],
       },
-      texraHostedAgents: [],
-    });
+    );
     assert.equal(state.customPresets.length, 1);
   });
 
@@ -414,7 +419,7 @@ describe('SettingsAgentCatalogController', () => {
       customPresets: [LEGACY_ICON_PRESET, MALFORMED_PRESET],
     });
 
-    await state.controller.saveCurrentPreset('New Team');
+    await Effect.runPromise(state.controller.saveCurrentPreset('New Team'));
 
     assert.deepEqual(state.customPresets.slice(0, 2), [
       LEGACY_ICON_PRESET,
@@ -441,11 +446,16 @@ describe('SettingsAgentCatalogController', () => {
     const state = createController({ customPresets: [preset] });
 
     assert.deepEqual(
-      await state.controller.deleteCustomPreset('custom-team'),
+      await Effect.runPromise(
+        state.controller.deleteCustomPreset('custom-team'),
+      ),
       preset,
     );
     assert.deepEqual(state.customPresets, []);
-    assert.equal(await state.controller.deleteCustomPreset('missing'), null);
+    assert.equal(
+      await Effect.runPromise(state.controller.deleteCustomPreset('missing')),
+      null,
+    );
   });
 
   it('preserves other raw records when deleting a preset', async () => {
@@ -465,7 +475,7 @@ describe('SettingsAgentCatalogController', () => {
     });
 
     assert.deepEqual(
-      await state.controller.deleteCustomPreset(target.id),
+      await Effect.runPromise(state.controller.deleteCustomPreset(target.id)),
       target,
     );
     assert.deepEqual(state.customPresets, [
