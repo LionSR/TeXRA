@@ -118,49 +118,80 @@ export async function initializeLatexSupport(
   // find latexmk, pdflatex, and other TeX binaries.  When VS Code is launched
   // from the macOS Finder or Windows Start Menu it often inherits a minimal
   // PATH that excludes TeX directories, causing "spawn latexmk ENOENT" errors.
-  try {
-    const extendedPath = extendEnvPath(process.env.PATH);
-    if (extendedPath !== process.env.PATH) {
-      process.env.PATH = extendedPath;
-      log.info('Extended process PATH with TeX directories');
-    }
-  } catch (err) {
-    log.warn(
-      `Failed to extend PATH with TeX directories: ${toErrorMessage(err)}`,
-    );
-  }
+  await Effect.runPromise(
+    Effect.sync(() => {
+      const extendedPath = extendEnvPath(process.env.PATH);
+      if (extendedPath !== process.env.PATH) {
+        process.env.PATH = extendedPath;
+        log.info('Extended process PATH with TeX directories');
+      }
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          log.warn(
+            `Failed to extend PATH with TeX directories: ${toErrorMessage(Cause.squash(cause))}`,
+          );
+        }),
+      ),
+    ),
+  );
 
-  try {
-    const latexWorkshop = vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID);
+  await Effect.runPromise(
+    Effect.tryPromise({
+      try: async () => {
+        const latexWorkshop = vscode.extensions.getExtension(
+          LATEX_WORKSHOP_EXT_ID,
+        );
 
-    if (!latexWorkshop && (await workspaceContainsLatexFiles())) {
-      // Only nag if the workspace actually contains LaTeX files; a user
-      // evaluating TeXRA or using it on a non-LaTeX project should not be
-      // prompted to install a TeX extension they don't need. They'll still
-      // discover it via the LaTeX settings tab or compile errors later.
-      log.info('LaTeX Workshop extension not found, prompting installation');
-      await promptExtensionInstall(globalState, {
-        suppressKey: 'latex-workshop-install',
-        message:
-          'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
-        extensionId: LATEX_WORKSHOP_EXT_ID,
-        channel: 'extension',
-      });
-    }
-  } catch (err) {
-    log.error(`Error initializing LaTeX support: ${toErrorMessage(err)}`);
-  }
+        if (!latexWorkshop && (await workspaceContainsLatexFiles())) {
+          // Only nag if the workspace actually contains LaTeX files; a user
+          // evaluating TeXRA or using it on a non-LaTeX project should not be
+          // prompted to install a TeX extension they don't need. They'll still
+          // discover it via the LaTeX settings tab or compile errors later.
+          log.info(
+            'LaTeX Workshop extension not found, prompting installation',
+          );
+          await promptExtensionInstall(globalState, {
+            suppressKey: 'latex-workshop-install',
+            message:
+              'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
+            extensionId: LATEX_WORKSHOP_EXT_ID,
+            channel: 'extension',
+          });
+        }
+      },
+      catch: (err) => err,
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          log.error(
+            `Error initializing LaTeX support: ${toErrorMessage(Cause.squash(cause))}`,
+          );
+        }),
+      ),
+    ),
+  );
 }
 
 async function workspaceContainsLatexFiles(): Promise<boolean> {
-  try {
-    const hits = await vscode.workspace.findFiles(
-      '**/*.tex',
-      '**/node_modules/**',
-      1,
-    );
-    return hits.length > 0;
-  } catch {
-    return false;
-  }
+  return Effect.runPromise(
+    Effect.tryPromise({
+      try: async () =>
+        (await vscode.workspace.findFiles('**/*.tex', '**/node_modules/**', 1))
+          .length > 0,
+      catch: (err) => err,
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          // Loud rather than silent: a scan that failed means the LaTeX
+          // Workshop recommendation is skipped, and that decision deserves a
+          // trace instead of looking like "this workspace has no TeX".
+          log.warn(
+            `Could not scan the workspace for LaTeX files: ${toErrorMessage(Cause.squash(cause))}`,
+          );
+          return false;
+        }),
+      ),
+    ),
+  );
 }
