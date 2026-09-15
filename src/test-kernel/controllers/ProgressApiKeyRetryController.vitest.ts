@@ -5,10 +5,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import {
-  ProgressApiKeyRetryController,
-  type ProgressApiKeyRetryControllerDeps,
-} from '@controllers/progressView/ProgressApiKeyRetryController';
+import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import type { ApiProvider } from '@model/apiProviders';
 import type { AppState } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
@@ -31,6 +28,11 @@ const PROVIDERS = [
   'openai',
   'anthropic',
 ] as const satisfies readonly ApiProvider[];
+
+/** The controller's deps are file-local; derive them from its constructor. */
+type ProgressApiKeyRetryControllerDeps = ConstructorParameters<
+  typeof ProgressApiKeyRetryController
+>[0];
 
 interface HarnessOptions {
   keys?: Partial<Record<ApiProvider, string | undefined>>;

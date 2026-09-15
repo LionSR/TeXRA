@@ -147,7 +147,7 @@ export interface BoundModel {
   readonly backgroundCapable: boolean;
 }
 
-export interface BindModelInput {
+interface BindModelInput {
   readonly config: ModelConfig;
   /** The run's process secret store and global state, from the launch. */
   readonly stores: ModelOptionStores;

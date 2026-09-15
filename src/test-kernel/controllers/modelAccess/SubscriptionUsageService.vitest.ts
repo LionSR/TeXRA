@@ -22,10 +22,18 @@ import {
 import {
   DEFAULT_PLAN_NAMES,
   SubscriptionUsageService,
-  type SubscriptionUsageCredentials,
 } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { SubscriptionUsageSnapshotSchema } from '@shared/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
+
+/**
+ * The credential port is file-local; derive it from the service constructor,
+ * whose init is the options bag intersected with one of its two sources.
+ */
+type SubscriptionUsageCredentials = Extract<
+  ConstructorParameters<typeof SubscriptionUsageService>[0],
+  { readonly credentials: unknown }
+>['credentials'];
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

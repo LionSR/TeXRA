@@ -28,7 +28,7 @@ import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName, isObject } from '@utils/core';
 
-export interface SettingsAgentCatalogEntry {
+interface SettingsAgentCatalogEntry {
   name: string;
   source: AgentSource;
   category: AgentCategory;

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import {
-  SettingsModelSelectionController,
-  type SettingsModelSelectionControllerDeps,
-} from '@controllers/settingsView/SettingsModelSelectionController';
+import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import {
   getEnabledModels,
   type ModelOptionStores,
@@ -17,6 +14,11 @@ import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+
+/** The controller's deps are file-local; derive them from its constructor. */
+type SettingsModelSelectionControllerDeps = ConstructorParameters<
+  typeof SettingsModelSelectionController
+>[0];
 
 // Stub the injected availability resolver so the controller stays decoupled
 // from the global platform / server-side key service in unit tests.

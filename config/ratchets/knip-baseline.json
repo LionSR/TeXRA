@@ -914,12 +914,6 @@
       "name": "selectSetupCredentialModelExcludingOpenRouter"
     },
     {
-      "file": "src/controllers/settingsView/LatexToolingController.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "LatexPathTool"
-    },
-    {
       "file": "src/eventBus/AppSignals.ts",
       "category": "production-dead",
       "kind": "types",

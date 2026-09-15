@@ -9,10 +9,15 @@ import {
 } from '@common/teams/TeamPlan';
 import {
   SettingsAgentCatalogController,
-  type SettingsAgentCatalogEntry,
+  type SettingsAgentCatalogState,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { AGENT_MODE_PRESETS_BY_ID } from '@shared/schemas';
 import type { AgentCategory, AgentModePreset } from '@shared/schemas';
+
+/** The entry is file-local; derive it from the exported catalog state port. */
+type SettingsAgentCatalogEntry = ReturnType<
+  SettingsAgentCatalogState['getAgents']
+>[0];
 
 const AGENTS: Record<AgentCategory, SettingsAgentCatalogEntry[]> = {
   workflow: [

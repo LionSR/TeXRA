@@ -16,7 +16,7 @@ import type { DispatchFacts, ToolDefinition } from '@shared/schemas';
 
 import { convertToolSchema } from './toolSchema';
 
-export type ToolDefinitions = NonNullable<TurnRequest['tools']>;
+type ToolDefinitions = NonNullable<TurnRequest['tools']>;
 
 /** The package's uniform tool definitions for the run's resolved tool list. */
 export function toolDefinitionsFor(

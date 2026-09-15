@@ -68,6 +68,7 @@ import {
   toolUseFlowState,
   type Message,
 } from './rows';
+import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
 
 /** Max concurrently executing tool calls within one parallel-safe partition. */
@@ -88,7 +89,6 @@ type Settlement = Pick<
 >;
 
 type SettledAttachment = ToolResultPayload['attachments'][number];
-type InvokeError = RunLedgerRefused | DatabaseWriteFailed;
 
 export interface TurnContext {
   readonly workspace: AgentWorkspaceState;

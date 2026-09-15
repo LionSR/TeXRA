@@ -52,7 +52,7 @@ const BASE_URLS: Record<ModelProvider, string | (() => string) | null> = {
   [ModelProvider.OTHERS]: null,
 };
 
-export interface RouteEndpoint {
+interface RouteEndpoint {
   readonly baseUrl: string;
   readonly usageRoute?: UsageRoute;
 }

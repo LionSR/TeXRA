@@ -36,7 +36,7 @@ export class ApiKeyPromptFailed extends Data.TaggedError('ApiKeyPromptFailed')<{
   readonly cause?: unknown;
 }> {}
 
-export interface ProgressApiKeyRetryControllerDeps {
+interface ProgressApiKeyRetryControllerDeps {
   providers: readonly ApiProvider[];
   readKey(
     provider: ApiProvider,
