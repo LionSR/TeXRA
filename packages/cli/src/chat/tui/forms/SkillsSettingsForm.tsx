@@ -1,5 +1,6 @@
 import { Text } from 'ink';
 
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   ActiveSkillSourceScopeSchema,
   stateSettingByKey,
@@ -30,6 +31,11 @@ interface SkillsSettingsData {
 interface SkillsSettingsFormProps {
   readonly availableRows?: number;
   readonly stores: SettingsStores;
+  /**
+   * The process runtime the shared write path settles on. Ink components run
+   * no Effect of their own, so it arrives as a prop from `/config`.
+   */
+  readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
 }
 
@@ -115,10 +121,13 @@ export function SkillsSettingsForm(
           toggle.kind === 'source' ? data.disabledScopes : data.disabledNames;
         const value = toggle.kind === 'source' ? toggle.scope : toggle.name;
         const next = toggleDisabled(current, value, current.includes(value));
-        void applyStateSettingUpdate(key, next, {
-          host: 'cli',
-          stores: props.stores,
-        })
+        void props.runtime
+          .runPromise(
+            applyStateSettingUpdate(key, next, {
+              host: 'cli',
+              stores: props.stores,
+            }),
+          )
           .then((result) => {
             if (result.kind !== 'applied') {
               throw new Error(`Could not update skills (${result.kind}).`);
