@@ -28,7 +28,16 @@
  * family, and the reflection run's tool registry is empty by construction.
  */
 import { dirname } from 'node:path';
-import { Cause, Effect, Exit, FileSystem, Ref, SynchronizedRef } from 'effect';
+import {
+  ByteSize,
+  Cause,
+  Effect,
+  Exit,
+  FileSystem,
+  PlatformError,
+  Ref,
+  SynchronizedRef,
+} from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
@@ -68,6 +77,7 @@ import {
 } from '@agent/prompt/PromptBuilder';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { logUserMessage, type StageHandle } from '@agent/trace';
+import { isNotADirectoryError } from '@common/errors';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import type { WorkspaceFs } from '@platform/rootedFs';
@@ -100,10 +110,8 @@ import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
-
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
@@ -128,6 +136,9 @@ const K_SLICE = 200;
 const CONTINUE_LIMIT = 10;
 const INPUT_TOKEN_LIMIT = 1500000;
 const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
+
+/** Decodes the raw-output bytes a resumed run reads back at a byte offset. */
+const utf8 = new TextDecoder();
 
 export interface ReflectionStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
@@ -157,6 +168,15 @@ type RoundExit = {
   readonly state: RunState;
   readonly kind: 'completed' | 'failed' | 'cancelled';
 };
+
+/** ENOENT, or ENOTDIR on a parent, as `AbsoluteFS.exists`/`statIfExists` treated them. */
+function isAbsentFsPath(error: PlatformError.PlatformError): boolean {
+  return (
+    error.reason._tag === 'NotFound' ||
+    (error.reason._tag === 'BadResource' &&
+      isNotADirectoryError(error.reason.cause))
+  );
+}
 
 /** The finish reason of a completed turn; the editor arm reports none. */
 function finishReasonOf(
@@ -394,7 +414,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** Restore the family state a resumed run continues from. */
   const restore = Effect.fn('reflection.restore')(function* (
     state: RunState,
-  ): Effect.fn.Return<void, Error> {
+  ): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+    const fs = yield* FileSystem.FileSystem;
     const persisted = reflectionFlowState(state);
     if (persisted === null) {
       return yield* Effect.fail(
@@ -420,16 +441,16 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         state.phase === 'response.ready')
     ) {
       const path = persisted.outputLocation.absolutePath;
-      const content = yield* Effect.tryPromise({
-        try: async () => {
-          if (!(await AbsoluteFS.exists(path))) return '';
-          const bytes = await AbsoluteFS.readBytes(path);
-          return bytes
-            .subarray(0, persisted.rawOutputBytes ?? 0)
-            .toString('utf8');
-        },
-        catch: ensureError,
-      });
+      const content = yield* fs.readFile(path).pipe(
+        Effect.map((bytes) =>
+          utf8.decode(bytes.subarray(0, persisted.rawOutputBytes ?? 0)),
+        ),
+        // A raw output file the resume finds gone contributes no text; the
+        // round rebuilds it from the rows that follow. Any other failure to
+        // read it — permissions, a directory, I/O — still fails the resume
+        // rather than quietly continuing without the earlier responses.
+        Effect.catchIf(isAbsentFsPath, () => Effect.succeed('')),
+      );
       workspace.assembly.accumulatedOutput = content;
       workspace.assembly.lastResponse = content;
     }
@@ -573,49 +594,56 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const writeOutputFragment = (
     location: AgentFileLocation,
     fragment: string,
-  ): Effect.Effect<void, Error> =>
-    Effect.tryPromise({
-      try: () =>
-        run.inScope(async () => {
-          const path = location.absolutePath;
-          const expected = flow.rawOutputBytes ?? 0;
-          const fragmentBytes = Buffer.byteLength(fragment);
-          await AbsoluteFS.ensureDir(dirname(path));
-          const exists = await AbsoluteFS.exists(path);
-          const actual = exists ? (await AbsoluteFS.stat(path)).size : 0;
-          if (
-            actual === expected + fragmentBytes &&
-            expected + fragmentBytes > 0
-          ) {
-            logger.debug(
-              'Raw output already holds this response; not appending twice.',
-            );
-          } else if (actual === expected) {
-            if (exists) {
-              logger.debug(`Appending to existing file: ${path}`);
-              await AbsoluteFS.appendFile(path, fragment);
-            } else {
-              logger.debug(`Creating new file: ${path}`);
-              await AbsoluteFS.write(path, fragment);
-            }
-          } else {
-            logger.warn(
-              `Raw output ${path} is ${actual} bytes where ${expected} were recorded; rewriting from the recorded offset.`,
-            );
-            const existing = exists
-              ? await AbsoluteFS.readBytes(path)
-              : Buffer.alloc(0);
-            await AbsoluteFS.write(
-              path,
-              Buffer.concat([
-                existing.subarray(0, Math.min(expected, existing.length)),
-                Buffer.from(fragment),
-              ]).toString('utf8'),
-            );
-          }
-          flow = { ...flow, rawOutputBytes: expected + fragmentBytes };
-        }),
-      catch: ensureError,
+  ): Effect.Effect<void, Error, FileSystem.FileSystem> =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = location.absolutePath;
+      const expected = flow.rawOutputBytes ?? 0;
+      const fragmentBytes = Buffer.byteLength(fragment);
+      yield* fs.makeDirectory(dirname(path), { recursive: true });
+      // A `ByteSize` is a branded bigint: the comparisons below are against
+      // byte counts of a raw output, which no file reaches unsafely.
+      const actual = yield* fs.stat(path).pipe(
+        Effect.map((info) => ByteSize.toNumberUnsafe(info.size)),
+        // No file yet is the same as an empty one: both mean "write it".
+        Effect.catchIf(isAbsentFsPath, () => Effect.succeed(0)),
+      );
+      if (actual === expected + fragmentBytes && expected + fragmentBytes > 0) {
+        logger.debug(
+          'Raw output already holds this response; not appending twice.',
+        );
+      } else if (actual === expected) {
+        if (actual > 0) {
+          logger.debug(`Appending to existing file: ${path}`);
+          yield* fs.writeFileString(path, fragment, { flag: 'a' });
+        } else {
+          logger.debug(`Creating new file: ${path}`);
+          yield* fs.writeFileString(path, fragment);
+        }
+      } else {
+        logger.warn(
+          `Raw output ${path} is ${actual} bytes where ${expected} were recorded; rewriting from the recorded offset.`,
+        );
+        const existing = yield* fs
+          .readFile(path)
+          .pipe(
+            Effect.catchIf(isAbsentFsPath, () =>
+              Effect.succeed(Buffer.alloc(0)),
+            ),
+          );
+        // The rewrite is byte-for-byte what the create and append paths above
+        // would have left: the recorded offset counts bytes of the fragment, so
+        // normalizing line endings here would put the file below its own count
+        // and make every later cycle take this branch again.
+        yield* fs.writeFileString(
+          path,
+          Buffer.concat([
+            existing.subarray(0, Math.min(expected, existing.length)),
+            Buffer.from(fragment),
+          ]).toString('utf8'),
+        );
+      }
+      flow = { ...flow, rawOutputBytes: expected + fragmentBytes };
     });
 
   /**
@@ -625,7 +653,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
    */
   const processResponse = Effect.fn('reflection.processResponse')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RunState, Error> {
+  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem> {
     const turn = initial.lastTurn;
     const location = flow.outputLocation;
     if (turn === null || location === null) {
@@ -876,7 +904,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     round: number,
     outputLocation: AgentFileLocation,
     error: Error,
-  ): Effect.fn.Return<OutputExecResult> {
+  ): Effect.fn.Return<OutputExecResult, never, FileSystem.FileSystem> {
     logger.warn(`Output processing failed: ${error.message}`, { data: error });
     const summary = yield* summarizeRound(
       outputState,

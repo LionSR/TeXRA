@@ -1,11 +1,12 @@
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, FileSystem, PlatformError } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
 
 import { debugInternal, logInternal, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
+import { isNotADirectoryError } from '@common/errors';
 import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
@@ -15,7 +16,7 @@ import {
   SCRATCHPAD_TAG,
 } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@utils/files/outputFileUtils';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { entryTypeAt } from '@utils/files/fsDurability';
 import {
   createExternalLocation,
   getFileDirectory,
@@ -23,8 +24,10 @@ import {
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { readConfig } from '@utils/config/configUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { fsCall } from '@utils/errors/fsCall';
-import { formatResultCount } from '@utils/text/stringUtils';
+import {
+  formatResultCount,
+  normalizeLineEndings,
+} from '@utils/text/stringUtils';
 import { addCdataToTagsMultiple } from '@utils/text/xmlCdata';
 import {
   DOCUMENT_NAME_REGEX,
@@ -44,17 +47,31 @@ import {
 } from './extraction/filenameHeaders';
 import { reportMissingOutputs, type OutputState } from './outputState';
 
-/** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
-async function writeRoundOutput(
-  absolutePath: string,
-  content: string,
-): Promise<void> {
-  await AbsoluteFS.ensureDir(path.dirname(absolutePath));
-  if (await AbsoluteFS.isSymbolicLink(absolutePath)) {
-    await AbsoluteFS.delete(absolutePath);
-  }
-  await AbsoluteFS.write(absolutePath, content);
+/** ENOENT, or ENOTDIR on a parent, as `AbsoluteFS.exists`/`statIfExists` treated them. */
+function isAbsentFsPath(error: PlatformError.PlatformError): boolean {
+  return (
+    error.reason._tag === 'NotFound' ||
+    (error.reason._tag === 'BadResource' &&
+      isNotADirectoryError(error.reason.cause))
+  );
 }
+
+/** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
+const writeRoundOutput = Effect.fn('XmlOutputManager.writeRoundOutput')(
+  function* (absolutePath: string, content: string) {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(path.dirname(absolutePath), { recursive: true });
+    // `FileSystem.stat` follows a link, so the probe is the `lstat`-backed one:
+    // a link must be seen as itself to be removed rather than written through.
+    const type = yield* entryTypeAt(absolutePath).pipe(
+      Effect.catchIf(isAbsentFsPath, () => Effect.succeed(null)),
+    );
+    if (type === 'SymbolicLink') {
+      yield* fs.remove(absolutePath, { force: true });
+    }
+    yield* fs.writeFileString(absolutePath, content);
+  },
+);
 
 /** Global version of DOCUMENT_NAME_REGEX for counting matches */
 const DOCUMENT_NAME_REGEX_GLOBAL = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');
@@ -181,8 +198,9 @@ export class XmlOutputManager {
     outputLocation: FileLocation,
     round: number,
     baseFiles: readonly FileLocation[],
-  ): Effect.Effect<NamedDocument[] | null> {
+  ): Effect.Effect<NamedDocument[] | null, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
+      const fs = yield* FileSystem.FileSystem;
       const blocks = this.collectLatexFencedBlocks(outputContent);
       if (blocks.length === 0) return null;
 
@@ -190,13 +208,16 @@ export class XmlOutputManager {
       const files = yield* Effect.forEach(
         baseFiles.slice(0, inputFiles.length),
         (loc, idx) =>
-          fsCall(() => AbsoluteFS.read(loc.absolutePath)).pipe(
-            // An unreadable base file becomes '': it will score near-zero
-            // similarity against any real fenced block rather than aborting
-            // the whole recovery pass.
-            Effect.orElseSucceed(() => ''),
-            Effect.map((content) => ({ name: inputFiles[idx], content })),
-          ),
+          fs
+            .readFileString(loc.absolutePath)
+            .pipe(Effect.map(normalizeLineEndings))
+            .pipe(
+              // An unreadable base file becomes '': it will score near-zero
+              // similarity against any real fenced block rather than aborting
+              // the whole recovery pass.
+              Effect.orElseSucceed(() => ''),
+              Effect.map((content) => ({ name: inputFiles[idx], content })),
+            ),
         { concurrency: 'unbounded' },
       );
       if (files.length === 0) return null;
@@ -239,10 +260,11 @@ export class XmlOutputManager {
     outputLocation: FileLocation,
     round: number,
     baseFiles: readonly FileLocation[] = [],
-  ): Effect.Effect<OutputFileInfo[], Error> {
+  ): Effect.Effect<OutputFileInfo[], Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
-      const rawOutputContent = yield* fsCall(() =>
-        AbsoluteFS.read(outputLocation.absolutePath),
+      const fs = yield* FileSystem.FileSystem;
+      const rawOutputContent = normalizeLineEndings(
+        yield* fs.readFileString(outputLocation.absolutePath),
       );
       // Count document tag occurrences with name attributes (case-sensitive to
       // match extraction).
@@ -441,7 +463,7 @@ export class XmlOutputManager {
     latexDocuments: NamedDocument[],
     outputLocation: FileLocation,
     round: number,
-  ): Effect.Effect<OutputFileInfo[], Error> {
+  ): Effect.Effect<OutputFileInfo[], Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const outputFiles: OutputFileInfo[] = [];
       // For workspace/runStorage outputs use the workspace-relative round dir
@@ -474,9 +496,7 @@ export class XmlOutputManager {
           doc.content.trim(),
           texFile,
         );
-        yield* fsCall(() =>
-          writeRoundOutput(texLocation.absolutePath, cleanedContent),
-        );
+        yield* writeRoundOutput(texLocation.absolutePath, cleanedContent);
         outputFiles.push({
           source,
           round,
@@ -495,13 +515,14 @@ export class XmlOutputManager {
 
   ensureCorrectXmlStructure(
     fileLocation: FileLocation,
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
+      const fs = yield* FileSystem.FileSystem;
       this.logger.debug(
         `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
       );
-      const originalContent = yield* fsCall(() =>
-        AbsoluteFS.read(fileLocation.absolutePath),
+      const originalContent = normalizeLineEndings(
+        yield* fs.readFileString(fileLocation.absolutePath),
       );
       let content = replacementEngine.applyFor(
         originalContent,
@@ -519,9 +540,7 @@ export class XmlOutputManager {
       }
 
       if (content !== originalContent) {
-        yield* fsCall(() =>
-          AbsoluteFS.write(fileLocation.absolutePath, content),
-        );
+        yield* fs.writeFileString(fileLocation.absolutePath, content);
       }
     });
   }

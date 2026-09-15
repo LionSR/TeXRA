@@ -9,7 +9,7 @@
  * parsing. Low-level XML text utilities live in @utils/text/xmlExtraction.
  */
 
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import {
   fileLocationDisplayPath,
@@ -17,8 +17,7 @@ import {
   type FileLocation,
 } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { fsCall } from '@utils/errors/fsCall';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import { replaceInputCommands } from './fileMapping';
 import { recoverOutputFailure } from './outputOperations';
@@ -82,7 +81,8 @@ const handleNoOutputs = Effect.fn('reflection.handleNoOutputs')(function* (
   deps: OutputDependencies,
   currRound: number,
   outputLocation: FileLocation,
-) {
+): Effect.fn.Return<void, never, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
   // Distinguish a genuinely empty turn from a non-empty response that simply
   // could not be parsed: if the model returned content but nothing extracted,
   // it almost always means it did not wrap each file in
@@ -90,9 +90,10 @@ const handleNoOutputs = Effect.fn('reflection.handleNoOutputs')(function* (
   // silent "success" that writes no files; the raw response is kept for recovery.
   // An unreadable raw response reads as empty here — the missing-output report
   // below still fires, so the round is never recorded as a quiet success.
-  const rawText = yield* fsCall(() =>
-    AbsoluteFS.read(outputLocation.absolutePath),
-  ).pipe(Effect.orElseSucceed(() => ''));
+  const rawText = yield* fs.readFileString(outputLocation.absolutePath).pipe(
+    Effect.map(normalizeLineEndings),
+    Effect.orElseSucceed(() => ''),
+  );
   if (rawText.trim().length > 0) {
     deps.logger.warn(
       `The model returned output but no files could be extracted from it: it likely did not wrap each document in <${OUTPUT_DOCUMENTS_TAG}>. The raw response was kept at ${outputLocation.absolutePath} for recovery.`,
