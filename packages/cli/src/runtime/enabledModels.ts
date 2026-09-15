@@ -10,10 +10,12 @@
  * own `CliPlatformServices`, or the `AppState` service), so the read and the
  * write that follows it hit the same store.
  */
+import { Effect } from 'effect';
+
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import { getModelLabel } from '@shared/model/modelLabel';
 
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
@@ -55,23 +57,34 @@ export function listCliEnabledModelCatalog(
 /**
  * Enable or disable one model from a CLI argument, resolving common spellings
  * (`grok-4.5` → `grok45`) before handing the id to the shared writer.
+ *
+ * One program: the caller runs it on the process runtime, so a refused write
+ * and the writer's own invariant refusals reach the same `catch`. Both the
+ * unknown-id refusal and the writer's throws land inside `Effect.suspend`, so
+ * neither escapes before the caller has a program to run.
  */
-export async function setCliModelEnabled(
+export function setCliModelEnabled(
   state: StateStore,
   modelInput: string,
   enabled: boolean,
-): Promise<{
-  readonly model: string;
-  readonly enabled: boolean;
-  readonly list: readonly string[];
-}> {
-  const model = resolveKnownCliModelId(modelInput);
-  if (!model) {
-    throw new Error(
-      `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`,
-    );
-  }
+): Effect.Effect<
+  {
+    readonly model: string;
+    readonly enabled: boolean;
+    readonly list: readonly string[];
+  },
+  StateWriteFailed
+> {
+  return Effect.suspend(() => {
+    const model = resolveKnownCliModelId(modelInput);
+    if (!model) {
+      throw new Error(
+        `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`,
+      );
+    }
 
-  const list = await setModelEnabled({ model, enabled, state });
-  return { model, enabled: list.includes(model), list };
+    return setModelEnabled({ model, enabled, state }).pipe(
+      Effect.map((list) => ({ model, enabled: list.includes(model), list })),
+    );
+  });
 }

@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { Box, Text } from 'ink';
 import { useState } from 'react';
 
@@ -17,7 +18,7 @@ import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { workspaceRoots, type WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AGENT_MODE_PRESETS,
@@ -125,8 +126,14 @@ export function AgentRosterForm(
       onError: props.onError,
     });
 
-  const write = (action: () => Promise<void>, nextMode = mode): void => {
-    void action()
+  /** Every roster write is a program, and Ink owns no runtime: the form runs
+   *  the one it was handed, so a refused write reaches `reportError`. */
+  const write = (
+    action: () => Effect.Effect<void, unknown, ProcessServices>,
+    nextMode = mode,
+  ): void => {
+    void props.runtime
+      .runPromise(action())
       .then(() => {
         setMode(nextMode);
         reload();
@@ -277,16 +284,17 @@ export function AgentRosterForm(
       ),
       (value) => {
         const cwd = roots.workspace;
-        write(async () => {
-          if (!cwd) {
-            throw new Error(
-              'Default chat-agent selection requires a workspace.',
-            );
-          }
-          await props.runtime.runPromise(
-            setWorkspaceCliChatAgent(cwd, value || undefined),
-          );
-        }, 'overview');
+        write(
+          () =>
+            cwd
+              ? setWorkspaceCliChatAgent(cwd, value || undefined)
+              : Effect.fail(
+                  new Error(
+                    'Default chat-agent selection requires a workspace.',
+                  ),
+                ),
+          'overview',
+        );
       },
       () => setMode('overview'),
     );

@@ -590,7 +590,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     });
     if (!name?.trim()) return;
     await this.runtime.runPromise(this.registry.loadAgents());
-    const preset = await this.catalogController.saveCurrentPreset(name);
+    const preset = await this.runtime.runPromise(
+      this.catalogController.saveCurrentPreset(name),
+    );
     this.postAgentModePresets();
     await this.onCatalogChanged();
     await this.runtime.runPromise(
