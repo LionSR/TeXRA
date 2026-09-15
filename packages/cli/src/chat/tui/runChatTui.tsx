@@ -203,6 +203,7 @@ export async function runChat(
     Effect.flatMap(loadAgents(), () =>
       resolveChatDefaults({
         cwd: context.cwd,
+        globalStorageDir: services.globalStorage,
         agentOverride: explicitAgent ?? setupAgentOverride,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,

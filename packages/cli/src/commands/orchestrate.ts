@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 import { defineCommand } from 'citty';
 
 import { getVisibleAgents, refresh } from '@agent/index';
@@ -86,11 +86,13 @@ const canLaunchWithDefaultModel = Effect.fn(function* (
   context: CliContext,
   models: readonly CliModelAccess[],
   stores: CliModelStores,
-): Effect.fn.Return<boolean, Error> {
+  globalStorageDir: string,
+): Effect.fn.Return<boolean, Error, FileSystem.FileSystem> {
   if (models.length === 0) return true;
 
   const defaults = yield* resolveChatDefaults({
     cwd: context.cwd,
+    globalStorageDir,
     envAgent: context.envAgent,
     envModel: context.envModel,
     quiet: context.quietLogs,
@@ -227,7 +229,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
       runtime.runPromise(loadCliApiStatus(services.secrets, authProfile)),
     ]);
     const allowDefaultModelLaunch = await runtime.runPromise(
-      canLaunchWithDefaultModel(context, models, services),
+      canLaunchWithDefaultModel(
+        context,
+        models,
+        services,
+        services.globalStorage,
+      ),
     );
     const { runOrchestrationTui } =
       await import('../orchestration/runOrchestrationTui');

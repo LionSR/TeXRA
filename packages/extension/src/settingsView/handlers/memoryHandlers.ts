@@ -5,22 +5,29 @@
  * previewing a single entry, deleting, and pinning workspace memory from the
  * Settings view.
  */
+import { Cause, Data, Effect, Exit } from 'effect';
 import * as vscode from 'vscode';
 
+import { defaultSession } from '@agent/runtime';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
+import { StorageFs, withSessionFs } from '@platform/rootedFs';
 
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 import { hasExtension } from '@utils/core/pathCore';
-import { StorageFS } from '@utils/files/storageFS';
 
 import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
+
+/** A settings-view message the webview refused to accept. */
+class MemoryMessageUndelivered extends Data.TaggedError(
+  'MemoryMessageUndelivered',
+)<{ readonly cause: unknown }> {}
 
 /** Memory-settings handler delegate. */
 export class MemoryHandlers {
@@ -47,20 +54,24 @@ export class MemoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
   ): Promise<void> {
     await this.ctx.withActiveWebview(async (webview) => {
-      try {
-        await webview.postMessage(
-          await this.runtime.runPromise(
+      const delivered = await this.runtime.runPromise(
+        Effect.exit(
+          Effect.flatMap(
             this.memory.getMemoryPreviewMessage(data.storagePath),
+            (preview) =>
+              Effect.tryPromise({
+                try: () => webview.postMessage(preview),
+                catch: (cause) => new MemoryMessageUndelivered({ cause }),
+              }),
           ),
-        );
-        return;
-      } catch (error) {
-        await showLoggedErrorMessage(
-          this.ctx.channel,
-          'Failed to load memory preview',
-          error,
-        );
-      }
+        ),
+      );
+      if (Exit.isSuccess(delivered)) return;
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        'Failed to load memory preview',
+        Cause.squash(delivered.cause),
+      );
       await webview.postMessage(
         this.memory.getMemoryPreviewErrorMessage(data.storagePath),
       );
@@ -75,7 +86,14 @@ export class MemoryHandlers {
       'Failed to open memory file',
       async () => {
         const resolvedPath = resolveMemoryStoragePath(data.storagePath);
-        const absolutePath = StorageFS.fullPath(resolvedPath);
+        const absolutePath = await this.runtime.runPromise(
+          withSessionFs(
+            defaultSession().roots,
+            Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
+              storageFs.resolve(resolvedPath),
+            ),
+          ),
+        );
         const fileUri = vscode.Uri.file(absolutePath);
 
         // Open markdown files in preview mode (read-only rendered view)
@@ -99,8 +117,19 @@ export class MemoryHandlers {
       'Failed to open memory folder',
       async () => {
         const resolvedPath = resolveMemoryStoragePath();
-        await StorageFS.ensureDir(resolvedPath);
-        const absolutePath = StorageFS.fullPath(resolvedPath);
+        // One program over the session's storage view: create the folder and
+        // hand back the same view's absolute path for it.
+        const absolutePath = await this.runtime.runPromise(
+          withSessionFs(
+            defaultSession().roots,
+            Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
+              Effect.flatMap(
+                storageFs.makeDirectory(resolvedPath, { recursive: true }),
+                () => storageFs.resolve(resolvedPath),
+              ),
+            ),
+          ),
+        );
         await safeExecuteCommand(
           'revealFileInOS',
           [vscode.Uri.file(absolutePath)],
@@ -113,21 +142,25 @@ export class MemoryHandlers {
   async handleDeleteMemory(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
-    try {
-      const message = await this.runtime.runPromise(
-        this.memory.deleteMemory(data),
-      );
-      if (message != null) {
-        await this.ctx.postMessageToActiveWebview(message);
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to delete memory',
-        error,
-      );
-      await this.ctx.withActiveWebview((w) => this.sendMemoryData(w));
-    }
+    const posted = await this.runtime.runPromise(
+      Effect.exit(
+        Effect.flatMap(this.memory.deleteMemory(data), (message) =>
+          message == null
+            ? Effect.void
+            : Effect.tryPromise({
+                try: () => this.ctx.postMessageToActiveWebview(message),
+                catch: (cause) => new MemoryMessageUndelivered({ cause }),
+              }),
+        ),
+      ),
+    );
+    if (Exit.isSuccess(posted)) return;
+    await showLoggedErrorMessage(
+      this.ctx.channel,
+      'Failed to delete memory',
+      Cause.squash(posted.cause),
+    );
+    await this.ctx.withActiveWebview((w) => this.sendMemoryData(w));
   }
 
   async setMemoryPinned(storagePath: string, pinned: boolean): Promise<void> {

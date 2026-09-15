@@ -90,6 +90,7 @@ import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
+import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import {
   formatTexraApprovalPolicy,
@@ -117,7 +118,6 @@ import {
   readPlatformSetting,
 } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { StorageFS } from '@utils/files/storageFS';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -615,7 +615,16 @@ async function activateExtension(context: vscode.ExtensionContext) {
   initializeNodeRuntimeSkills({
     resourcesPath: path.join(context.extensionPath, 'resources'),
   });
-  await StorageFS.ensureDir(RUNS_STORAGE_DIR);
+  // The run-storage directory of the session just initialized, through that
+  // session's own storage view rather than a static that re-reads the root.
+  await runtime.runPromise(
+    withSessionFs(
+      runtimeSession.roots,
+      Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
+        storageFs.makeDirectory(RUNS_STORAGE_DIR, { recursive: true }),
+      ),
+    ),
+  );
   FileLister.initialize(context);
 
   // Seed first-install defaults (e.g. disabled tools). No-ops once

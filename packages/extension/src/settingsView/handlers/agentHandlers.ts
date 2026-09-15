@@ -6,7 +6,7 @@
  */
 import * as path from 'node:path';
 
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import {
@@ -50,7 +50,7 @@ import {
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
   withHandlerErrorHandling,
@@ -108,7 +108,11 @@ export class AgentHandlers {
       // location instead of writing back into the packaged resources.
       openReadOnlyDocument: async (filePath) => {
         const doc = await vscode.workspace.openTextDocument({
-          content: await AbsoluteFS.read(filePath),
+          content: await this.runtime.runPromise(
+            Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+              Effect.map(fs.readFileString(filePath), normalizeLineEndings),
+            ),
+          ),
           language: 'yaml',
         });
         await vscode.window.showTextDocument(doc, { preview: false });
@@ -428,7 +432,11 @@ export class AgentHandlers {
         if (!name) return;
 
         const customDir = await agentDirectories.custom();
-        await AbsoluteFS.ensureDir(customDir);
+        await this.runtime.runPromise(
+          Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+            fs.makeDirectory(customDir, { recursive: true }),
+          ),
+        );
 
         const templatePlan = this.directoryController.planTemplateAgent({
           category,

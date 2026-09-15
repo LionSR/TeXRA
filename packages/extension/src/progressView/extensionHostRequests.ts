@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import {
@@ -60,7 +60,7 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { withSessionFs } from '@platform/rootedFs';
+import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
@@ -82,14 +82,19 @@ import {
 
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import {
+  locateInWorkspace,
+  workspaceRelativePath,
+} from '@utils/files/workspaceFS';
 import {
   checkCoreDependencies,
   getToolDocsCommand,
 } from '@utils/system/toolUtils';
-import { formatResultCount } from '@utils/text/stringUtils';
+import {
+  formatResultCount,
+  normalizeLineEndings,
+} from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';
 const log = createLog(CHANNEL);
@@ -253,7 +258,16 @@ export function createExtensionHostRequests(
         runCommand<boolean>('texra.openLabel', label, {
           notifyNotFound: false,
         }).then((result) => result ?? false),
-      readFile: (file) => AbsoluteFS.read(file),
+      // An accepted-edit backup names an absolute workspace path the
+      // controller already resolved, so this reads through the process
+      // filesystem rather than a rooted view that would refuse a path the
+      // user picked outside the workspace.
+      readFile: (file) =>
+        runtime.runPromise(
+          Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+            Effect.map(fs.readFileString(file), normalizeLineEndings),
+          ),
+        ),
       showInfo,
       showError,
       logError: (message, error) => {
@@ -426,7 +440,8 @@ export function createExtensionHostRequests(
   }
 
   function getOpenedFiles(): string[] {
-    if (!WorkspaceFS.getPath()) {
+    const workspaceRoot = session.roots.workspace;
+    if (!workspaceRoot) {
       log.warn('No workspace path found for opened files');
       return [];
     }
@@ -441,7 +456,9 @@ export function createExtensionHostRequests(
       .map((input) => input.uri)
       .filter((uri) => uri.scheme === 'file');
     return [
-      ...new Set(fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath))),
+      ...new Set(
+        fileUris.map((uri) => workspaceRelativePath(workspaceRoot, uri.fsPath)),
+      ),
     ];
   }
 
@@ -470,7 +487,7 @@ export function createExtensionHostRequests(
             ),
           )
         : trimmed;
-      const resolved = WorkspaceFS.locatePath(decodedPath);
+      const resolved = locateInWorkspace(session.roots.workspace, decodedPath);
       if (resolved.kind !== 'workspace') return null;
       return yield* Effect.tryPromise({
         try: () =>
@@ -549,7 +566,15 @@ export function createExtensionHostRequests(
             `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
           );
         }
-        if (await WorkspaceFS.exists(parsed.sourcePath)) {
+        const sourceExists = await runtime.runPromise(
+          withSessionFs(
+            session.roots,
+            Effect.flatMap(Effect.service(WorkspaceFs), (workspaceFs) =>
+              workspaceFs.exists(parsed.sourcePath),
+            ),
+          ),
+        );
+        if (sourceExists) {
           await runtime.runPromise(snapshot.refreshFiles);
           return { kind: 'files', paths: [parsed.sourcePath] };
         }
