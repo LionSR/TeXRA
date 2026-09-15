@@ -589,11 +589,11 @@ class ArxivSourceProcessor {
       if (!(yield* permanentFs(existsAt(fs, paperDirFull)))) {
         return false;
       }
-      // The tolerant listing is the facade's `readDir`: the provider took each
-      // entry's type from the `readdir` dirent and syscalled only for an
-      // unknown one, so a directory that is readable but not searchable still
-      // listed. The strict form lstats every entry, and its EACCES would abort
-      // the download -- turning "the source is already here" into a failure.
+      // The tolerant listing is the facade's `readDir`: the provider typed
+      // ordinary entries from the `readdir` dirent, but a *symlink* dirent
+      // still ran one `stat` (`fileTypeFor` → `resolveSymlinkType`). The
+      // strict form lstats every entry, and its EACCES would abort the
+      // download -- turning "the source is already here" into a failure.
       const entries = yield* permanentFs(
         readDirectoryTypedTolerant(paperDirFull),
       );

@@ -158,7 +158,7 @@ function entryTypeOf(entry: {
  * one follows the link and finds nothing there. A caller asking whether a
  * dependency, figure, bibliography or input *file* is unusable wants the
  * follow; a caller asking whether the path names an entry wants `readLink`
- * first and this as the fallback, which is what `entryExists` does.
+ * first and this as the fallback (see `existsAt` in `arxivProcessor.ts`).
  *
  * The caller passes the filesystem it probes with, so a rooted view answers
  * for the paths inside its root and the process filesystem answers for the
