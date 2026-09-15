@@ -99,14 +99,6 @@ function formatNodeContent(
         node.results.map(({ title, url }) => `${title} (${url})`).join(', '),
         options,
       );
-    case 'web-fetch': {
-      // A title/url marker, never the fetched page text.
-      const { title, url } = node;
-      return toolResultMarker(
-        title && url ? `${title} (${url})` : title || url || 'web_fetch_result',
-        options,
-      );
-    }
     default:
       return assertNever(node, 'Unhandled export node kind');
   }
@@ -121,7 +113,6 @@ const NODE_ROLE = {
   'tool-result': 'user',
   'web-search': 'assistant',
   'web-search-results': 'assistant',
-  'web-fetch': 'assistant',
 } as const satisfies Record<ExportNode['kind'], 'user' | 'assistant'>;
 
 /** Render one conversation node as the role and text conversation views show. */

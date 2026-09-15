@@ -1,5 +1,5 @@
 /**
- * Web-search and web-fetch log-entry formatters.
+ * Web-search log-entry formatter.
  *
  * IMPORTANT: Lit templates preserve whitespace literally. Always use
  * single-line templates with `// prettier-ignore` to prevent whitespace issues.
@@ -10,11 +10,10 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 
 import {
   buildToolUseSection,
-  wrapInPre,
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
 import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
-import type { WebFetchRow, WebSearchRow } from '@shared/transcript';
+import type { WebSearchRow } from '@shared/transcript';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
@@ -25,9 +24,6 @@ const STATUS_ICONS: Record<string, TeXRAIconName | typeof SPINNER_ICON_NAME> = {
   failed: 'circle-exclamation',
   in_progress: SPINNER_ICON_NAME,
 };
-
-/** Line count past which fetched page text becomes a fixed-height scroll box. */
-const CONTENT_SCROLL_LINES = 20;
 
 /** Render a sanitized destination with protocol-appropriate navigation. */
 function buildWebLink(
@@ -44,12 +40,6 @@ function webSearchFallback(status: string): string {
   if (status === 'in_progress') return 'Search in progress';
   if (status === 'failed') return 'Unable to complete search';
   return 'Search completed';
-}
-
-function webFetchFallback(status: string | undefined, failed: boolean): string {
-  if (status === 'in_progress') return 'Fetching page';
-  if (failed) return 'Unable to fetch page';
-  return 'Fetch completed';
 }
 
 /** Format web search results as TemplateResult. */
@@ -96,57 +86,6 @@ export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {
     iconName,
     label: row.label,
     isError: row.failed,
-    content: contentTemplate,
-  });
-}
-
-/** Format web fetch results as TemplateResult. */
-export function formatWebFetchTemplate(row: WebFetchRow): FormatResult {
-  const { url, title, errorLabel, failed } = row;
-  const iconName = failed ? 'circle-exclamation' : 'cloud-arrow-down';
-
-  // Build content sections
-  const sections: TemplateResult[] = [];
-
-  if (url) {
-    // prettier-ignore
-    sections.push(buildToolUseSection('URL:', buildWebLink(url, html`<bdi dir="ltr">${url}</bdi>`, url)));
-  }
-
-  if (title) {
-    sections.push(buildToolUseSection('Title:', wrapInPre(title)));
-  }
-
-  if (errorLabel) {
-    sections.push(buildToolUseSection('Error:', wrapInPre(errorLabel)));
-  }
-
-  // The fetched text itself. The row carries it untruncated; this surface
-  // hands a long one to the scroll box rather than the page.
-  if (row.content) {
-    sections.push(
-      buildToolUseSection(
-        'Content:',
-        wrapInPre(
-          row.content.full,
-          row.content.lineCount > CONTENT_SCROLL_LINES
-            ? 'tool-output-full'
-            : '',
-        ),
-      ),
-    );
-  }
-
-  const contentTemplate =
-    sections.length > 0
-      ? html`${sections}`
-      : html`<pre>${webFetchFallback(row.status, failed)}</pre>`;
-
-  return buildToolUseDetails({
-    row,
-    iconName,
-    label: row.label,
-    isError: failed,
     content: contentTemplate,
   });
 }

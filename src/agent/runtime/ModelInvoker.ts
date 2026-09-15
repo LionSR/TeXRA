@@ -149,7 +149,7 @@ function automaticAttemptLimit(): number {
   return (
     1 +
     getValidatedConfig(
-      'texra.model.retry.maxAttempts',
+      MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
       ModelRetryMaxAttemptsSchema,
       MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     )

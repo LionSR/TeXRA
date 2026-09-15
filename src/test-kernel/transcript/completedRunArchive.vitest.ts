@@ -192,16 +192,6 @@ async function writeArchiveFixture(runId: RunId): Promise<void> {
         status: 'completed',
       },
     }),
-    logRow(MESSAGE_TYPES.WEB_FETCH, {
-      data: {
-        url: 'https://example.org/a',
-        title: 'Sobolev notes',
-        provider: 'anthropic',
-        callId: 'wf-1',
-        status: 'completed',
-        content: 'The Sobolev constant satisfies...',
-      },
-    }),
     logRow(MESSAGE_TYPES.TOOL_USE, {
       data: {
         toolName: 'write_file',
@@ -434,12 +424,6 @@ describe('completedRunArchive facade', () => {
       {
         kind: 'web-search-results',
         results: [{ url: 'https://example.org/a', title: 'Sobolev notes' }],
-      },
-      {
-        kind: 'web-fetch',
-        url: 'https://example.org/a',
-        title: 'Sobolev notes',
-        content: 'The Sobolev constant satisfies...',
       },
       {
         kind: 'tool-call',
