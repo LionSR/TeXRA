@@ -18,13 +18,15 @@ function memoryStorage(initial?: XaiSession): XaiSessionStorage & {
 } {
   let value = initial ? JSON.stringify(initial) : undefined;
   return {
-    get: async () => value,
-    store: async (v) => {
-      value = v;
-    },
-    delete: async () => {
-      value = undefined;
-    },
+    get: () => Effect.sync(() => value),
+    store: (v) =>
+      Effect.sync(() => {
+        value = v;
+      }),
+    delete: () =>
+      Effect.sync(() => {
+        value = undefined;
+      }),
     peek: () => (value ? (JSON.parse(value) as XaiSession) : undefined),
   };
 }
@@ -97,9 +99,9 @@ describe('XaiSessionCoordinator', () => {
     async ({ stored, warning }) => {
       const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
       const storage: XaiSessionStorage = {
-        get: async () => stored,
-        store: async () => {},
-        delete: async () => {},
+        get: () => Effect.succeed(stored),
+        store: () => Effect.void,
+        delete: () => Effect.void,
       };
       const coordinator = makeCoordinator({ storage });
       expect(await coordinator.loadSession()).toBeNull();

@@ -29,13 +29,15 @@ function memoryStorage(initial?: CodexSession): CodexSessionStorage & {
 } {
   let value = initial ? JSON.stringify(initial) : undefined;
   return {
-    get: async () => value,
-    store: async (v) => {
-      value = v;
-    },
-    delete: async () => {
-      value = undefined;
-    },
+    get: () => Effect.sync(() => value),
+    store: (v) =>
+      Effect.sync(() => {
+        value = v;
+      }),
+    delete: () =>
+      Effect.sync(() => {
+        value = undefined;
+      }),
     peek: () => (value ? (JSON.parse(value) as CodexSession) : undefined),
   };
 }
@@ -57,26 +59,29 @@ function gatedStorage(
   const reached = pDefer<void>();
   const released = pDefer<void>();
   let gated = true;
-  const gate = async () => {
-    if (!gated) return;
+  const gate = Effect.suspend(() => {
+    if (!gated) return Effect.void;
     gated = false;
     reached.resolve();
-    await released.promise;
-  };
+    return Effect.promise(() => released.promise);
+  });
   return {
-    get: async () => {
-      const snapshot = value;
-      if (gateOn === 'get') await gate();
-      return snapshot;
-    },
-    store: async (v) => {
-      if (gateOn === 'store') await gate();
-      value = v;
-    },
-    delete: async () => {
-      if (gateOn === 'delete') await gate();
-      value = undefined;
-    },
+    get: () =>
+      Effect.gen(function* () {
+        const snapshot = value;
+        if (gateOn === 'get') yield* gate;
+        return snapshot;
+      }),
+    store: (v) =>
+      Effect.gen(function* () {
+        if (gateOn === 'store') yield* gate;
+        value = v;
+      }),
+    delete: () =>
+      Effect.gen(function* () {
+        if (gateOn === 'delete') yield* gate;
+        value = undefined;
+      }),
     peek: () => (value ? (JSON.parse(value) as CodexSession) : undefined),
     gateReached: reached.promise,
     release: () => released.resolve(),
@@ -343,14 +348,16 @@ describe('CodexSessionCoordinator', () => {
         const ops: string[] = [];
         const storage: CodexSessionStorage = {
           get: gated.get,
-          store: async (value) => {
-            ops.push('store');
-            await gated.store(value);
-          },
-          delete: async () => {
-            ops.push('delete');
-            await gated.delete();
-          },
+          store: (value) =>
+            Effect.gen(function* () {
+              ops.push('store');
+              yield* gated.store(value);
+            }),
+          delete: () =>
+            Effect.gen(function* () {
+              ops.push('delete');
+              yield* gated.delete();
+            }),
         };
         const exchangeAuthorizationCode = vi.fn(() =>
           Effect.succeed(newLoginTokenResponse()),
