@@ -20,16 +20,20 @@
  * headless) the Effect's own result is
  * the response; a bridge posts it as the `Response` of 8.4.
  *
- * Built per `SessionHandle` by `sessionLayer.ts`'s opener: it acts on
- * exactly the session it was built for, and on that session's `Runs`.
+ * Built per session by `sessionLayer.ts`'s opener as that session's
+ * `Requests`: it acts on exactly the session it was built for, on that
+ * session's `Runs`, and on the approval state it carries.
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunBusy } from '@agent/runtime/runLanes';
 import { Runs } from '@agent/runtime/runRegistry';
+import type {
+  Requests,
+  SessionApprovals,
+} from '@agent/runtime/runApprovalQueue';
 import {
   aggregateId as qualifyAggregateId,
   requestParksItsCaller,
@@ -57,34 +61,47 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const done: Outcome = { kind: 'done' };
 
-/**
- * One in-process serial lane per request id. `decideRequest`'s checked append
- * fences the row across processes, but the row alone: two surfaces of this
- * process deciding one inquiry would both pass the pending check and both
- * reach the thread record before either appended, so the loser's verdict
- * could stand over an answer already recorded and delivered. The lane makes
- * the pending check, the inquiry record and the append one operation per
- * request.
- */
-const decisionLanes = new Map<string, PerKeyLane>();
-
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
   'aggregateState' | 'readAll' | 'removeRun'
 >;
 
-/** The session's request handler, admitting on the log's sequence table. */
+/**
+ * The session's `Requests`: its approval state and the handler that admits
+ * on the log's sequence table. One value per session, so the decision lanes
+ * below, like the approval queues beside them, serialize within a session and
+ * never across two.
+ */
 export function sessionRequests(
   session: SessionHandle,
+  approvals: SessionApprovals,
   log: SessionRequestLog,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   inquiryRecords: Context.Service.Shape<typeof InquiryRecords>,
-): SessionGraph['requests'] {
+): Context.Service.Shape<typeof Requests> {
+  /**
+   * One in-process serial lane per request id. `decideRequest`'s checked
+   * append fences the row across processes, but the row alone: two surfaces
+   * of this process deciding one inquiry would both pass the pending check
+   * and both reach the thread record before either appended, so the loser's
+   * verdict could stand over an answer already recorded and delivered. The
+   * lane makes the pending check, the inquiry record and the append one
+   * operation per request.
+   */
+  const decisionLanes = new Map<string, PerKeyLane>();
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeRequest,
   ) {
     const admitted = yield* admit(log, local, req);
-    return yield* handle(session, req, log, admitted, local).pipe(
+    return yield* handle(
+      session,
+      approvals,
+      decisionLanes,
+      req,
+      log,
+      admitted,
+      local,
+    ).pipe(
       Effect.provideService(InquiryRecords, inquiryRecords),
       Effect.provideService(Runs, session.runs),
     );
@@ -110,7 +127,7 @@ export function sessionRequests(
       Effect.provideService(Runs, session.runs),
     );
   });
-  return { request, removeRun };
+  return { approvals, request, removeRun };
 }
 
 /** Admit against current sequence-row existence and claims. A foreign owner
@@ -180,6 +197,7 @@ function settled(runId: RunId): Unavailable {
  */
 function decide(
   session: SessionHandle,
+  decisionLanes: Map<string, PerKeyLane>,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   admitted: AggregateState,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
@@ -312,6 +330,8 @@ function deleteAdmittedRun(
 
 function handle(
   session: SessionHandle,
+  approvals: SessionApprovals,
+  decisionLanes: Map<string, PerKeyLane>,
   req: RuntimeRequest,
   log: SessionRequestLog,
   admitted: AggregateState,
@@ -383,28 +403,19 @@ function handle(
         ),
       );
     case 'request.decide':
-      return decide(session, req, admitted, local);
+      return decide(session, decisionLanes, req, admitted, local);
     case 'policy.set':
       return Effect.sync(() => {
         const { change } = req;
         switch (change.bypass) {
           case 'bash':
-            session.approvals.bash.bypass.setBypass(
-              change.runId,
-              change.enabled,
-            );
+            approvals.bash.bypass.setBypass(change.runId, change.enabled);
             break;
           case 'toolEdit':
-            session.approvals.toolEdit.bypass.setBypass(
-              change.runId,
-              change.enabled,
-            );
+            approvals.toolEdit.bypass.setBypass(change.runId, change.enabled);
             break;
           case 'superYolo':
-            session.approvals.setDelegatedWorkBypasses(
-              change.runId,
-              change.enabled,
-            );
+            approvals.setDelegatedWorkBypasses(change.runId, change.enabled);
             break;
         }
         return done;
