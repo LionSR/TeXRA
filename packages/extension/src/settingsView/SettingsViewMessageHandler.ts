@@ -336,10 +336,12 @@ export class SettingsViewMessageHandler {
       setModelEnabled: (message) =>
         this.setModelEnabled(message.modelName, message.enabled),
       setModelReasoningLevel: async (message) => {
-        await this.modelSelectionController.setReasoningLevel({
-          modelName: message.modelName,
-          level: message.level,
-        });
+        await this.runtime.runPromise(
+          this.modelSelectionController.setReasoningLevel({
+            modelName: message.modelName,
+            level: message.level,
+          }),
+        );
         await this.postModelSelectionData();
       },
       requestModelAccess: (message) =>
@@ -402,7 +404,9 @@ export class SettingsViewMessageHandler {
       recheckToolStatus: () =>
         this.runtime.runPromise(refreshToolAvailability()),
       toggleTool: async (message) => {
-        await setToolEnabled(message.toolId, message.enabled, this.globalState);
+        await this.runtime.runPromise(
+          setToolEnabled(message.toolId, message.enabled, this.globalState),
+        );
         await this.withActiveWebview((w) =>
           this.sendToolDashboardData(w, { skipChecks: true }),
         );

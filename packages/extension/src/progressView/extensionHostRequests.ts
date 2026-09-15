@@ -698,7 +698,9 @@ export function createExtensionHostRequests(
         await options.refreshOnboardingFunnel();
         return;
       case 'skip':
-        await setOnboardingDeclined(options.globalState, true);
+        await runtime.runPromise(
+          setOnboardingDeclined(options.globalState, true),
+        );
         await options.refreshOnboardingFunnel();
         return;
       case 'runSetup':
@@ -706,7 +708,7 @@ export function createExtensionHostRequests(
         await options.refreshOnboardingFunnel();
         return;
       case 'skipSetup':
-        await setFirstRunDone(options.globalState, true);
+        await runtime.runPromise(setFirstRunDone(options.globalState, true));
         await options.refreshOnboardingFunnel();
         return;
       case 'openGettingStarted':
