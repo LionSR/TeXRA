@@ -571,7 +571,14 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           isGoogle: modelConfig.provider === ModelProvider.GOOGLE,
         },
         agentLogger,
-        { delegationAgentScope: runScope.delegationAgentScope, stageId },
+        {
+          // The session's own root, handed to prompt assembly as data: file
+          // names, readable-file reads and CWD resolve against this paper's
+          // folder rather than whatever roots the calling fiber carries.
+          workspacePath: session.roots.workspace,
+          delegationAgentScope: runScope.delegationAgentScope,
+          stageId,
+        },
       );
 
     const baseVars = yield* Effect.tryPromise({

@@ -6,7 +6,6 @@ import { sync as globSync } from 'glob';
 import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -65,9 +64,14 @@ async function cleanupBackupFiles(
   }
 }
 
+/**
+ * `workspacePath` is the root a relative `filePath` resolves against and the
+ * cwd latexindent runs in — the caller's own session root, held as data, not
+ * the roots the calling fiber happens to carry.
+ */
 export async function runLatexIndent(
   filePath: string,
-  workspacePath: string | undefined = WorkspaceFS.getPath(),
+  workspacePath: string | undefined,
   latexindentConfig: string | undefined = getConfig<string>(
     LATEXINDENT_CONFIG_KEY,
   ),

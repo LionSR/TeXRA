@@ -5,6 +5,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import {
   showLoggedErrorMessage,
@@ -34,7 +35,7 @@ const log = createLog(CHANNEL);
 export async function handleIndentTeX(): Promise<void> {
   try {
     const notification = getIndentTeXNotification(
-      await indentLatexFilesInDirectory(),
+      await indentLatexFilesInDirectory(defaultSession().roots.workspace),
     );
     if (!notification) return;
     await showLatexHousekeepingNotification(CHANNEL, notification);
@@ -65,6 +66,7 @@ export async function handleFixCompilation(): Promise<void> {
           instruction: await buildLatexdiffAwareFixInstruction(
             `Fix the LaTeX compilation errors in ${relativePath}.`,
             editor.document.fileName,
+            defaultSession().roots.workspace,
           ),
         },
         // This is a "run latexFixer" command, so prefer the helper model.
@@ -85,7 +87,10 @@ export async function handleIndentCurrentTeX(): Promise<void> {
     async ({ relativePath }) => {
       log.debug(`Indenting LaTeX file: ${relativePath}`);
 
-      const success = await runLatexFormatter(relativePath);
+      const success = await runLatexFormatter(
+        relativePath,
+        defaultSession().roots.workspace,
+      );
 
       if (success) {
         await sleep(100);

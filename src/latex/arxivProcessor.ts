@@ -483,9 +483,9 @@ class ArxivSourceProcessor {
 
         const indentResult = yield* permanent(() =>
           indentLatexFilesInDirectory(
+            workspaceRoot,
             paperDirFull,
             progressCallback,
-            workspaceRoot,
             formatter,
           ),
         );
