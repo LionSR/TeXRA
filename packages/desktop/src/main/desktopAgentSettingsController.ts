@@ -11,6 +11,8 @@ import {
   type loadAgents,
   type refresh,
 } from '@agent/index';
+import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { type TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
@@ -20,7 +22,6 @@ import {
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -504,8 +505,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await this.runReported(
       'Failed to view remote agent prompt',
       Effect.gen({ self: this }, function* () {
-        const result = yield* Effect.tryPromise({
-          try: () => getRemoteAgentPromptConfig(data.agentName),
+        const token = yield* Effect.tryPromise({
+          try: () => SupabaseClient.getAccessToken(),
           catch: (cause) =>
             new AgentSettingsActionFailed({
               member: 'getRemoteAgentPrompt',
@@ -513,10 +514,21 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
               cause,
             }),
         });
-        if (!result.ok) {
-          yield* this.notifications.showErrorMessage(result.message);
+        if (!token) {
+          yield* this.notifications.showErrorMessage(
+            'Authentication required. Sign in using "TeXRA: Sign In".',
+          );
           return;
         }
+        const config = yield* Effect.tryPromise({
+          try: () => fetchRemoteAgentConfigYaml(data.agentName, token),
+          catch: (cause) =>
+            new AgentSettingsActionFailed({
+              member: 'getRemoteAgentPrompt',
+              message: `The hosted agent prompt could not be fetched: ${toErrorMessage(cause)}`,
+              cause,
+            }),
+        });
 
         const target = path.join(
           yield* Effect.tryPromise({
@@ -531,7 +543,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           `${data.agentName}.yaml`,
         );
         const fs = yield* FileSystem.FileSystem;
-        yield* fs.writeFileString(target, result.config);
+        yield* fs.writeFileString(target, config);
         yield* Effect.tryPromise({
           try: () => this.directory.openPath(target),
           catch: (cause) =>

@@ -16,6 +16,7 @@ import {
   loadAgents,
   refresh as refreshAgents,
 } from '@agent/index';
+import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
@@ -26,7 +27,6 @@ import {
   templateAgentNamePrompt,
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
-import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
@@ -226,14 +226,17 @@ export class AgentHandlers {
       this.ctx,
       'Failed to view remote agent prompt',
       async () => {
-        const result = await getRemoteAgentPromptConfig(data.agentName);
-        if (!result.ok) {
-          await showLoggedMessage(this.ctx.channel, result.message);
+        const token = await SupabaseClient.getAccessToken();
+        if (!token) {
+          await showLoggedMessage(
+            this.ctx.channel,
+            'Authentication required. Sign in using "TeXRA: Sign In".',
+          );
           return;
         }
 
         const doc = await vscode.workspace.openTextDocument({
-          content: result.config,
+          content: await fetchRemoteAgentConfigYaml(data.agentName, token),
           language: 'yaml',
         });
         await vscode.window.showTextDocument(doc, { preview: false });
