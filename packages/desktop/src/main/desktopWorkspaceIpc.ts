@@ -31,7 +31,10 @@ import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { readDirectoryTyped } from '@utils/files/fsDurability';
+import {
+  entryTypeAt,
+  readDirectoryTypedTolerant,
+} from '@utils/files/fsDurability';
 import { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -222,18 +225,13 @@ const resolveWorkspaceWritePath = Effect.fn(
 
   // A dangling symlink also makes realPath fail with ENOENT. It must remain
   // rejected: writing through it could create a target outside the workspace.
-  // The parent's typed listing is what reports a link as itself — `stat`
-  // follows it — and a missing parent is the next step's sentence to report.
-  const siblings = yield* readDirectoryTyped(parent).pipe(
-    Effect.catchIf(isAbsent, () =>
-      Effect.succeed<ReadonlyArray<readonly [string, FileSystem.File.Type]>>(
-        [],
-      ),
-    ),
+  // One lstat on the target itself is what reports a link as itself — `stat`
+  // follows it — on case-insensitive volumes too, and any failure other than
+  // "not there" refuses the write instead of reading as "no link here".
+  const entryType = yield* entryTypeAt(absolutePath).pipe(
+    Effect.catchIf(isAbsent, () => Effect.succeed(undefined)),
   );
-  if (
-    siblings.some(([entry, type]) => entry === name && type === 'SymbolicLink')
-  ) {
+  if (entryType === 'SymbolicLink') {
     return yield* Effect.fail(
       new WorkspaceRequestRefused({
         message: 'Symbolic links cannot be recreated by the editor.',
@@ -346,8 +344,11 @@ export function createDesktopWorkspaceIpc(
         ? yield* resolveWorkspacePath(root, directory)
         : root;
       // The typed listing reports a link as itself; `readDirectory` answers
-      // names alone and `stat` would follow a link to what it points at.
-      const entries = yield* readDirectoryTyped(absoluteDirectory);
+      // names alone and `stat` would follow a link to what it points at. The
+      // tolerant form drops an entry whose type cannot be read (warn-logged)
+      // rather than failing the tree: readdir already named every entry, so
+      // one unreadable row must not cost the directory.
+      const entries = yield* readDirectoryTypedTolerant(absoluteDirectory);
       const files = entries
         .toSorted(([left], [right]) =>
           left.localeCompare(right, undefined, {
@@ -402,9 +403,11 @@ export function createDesktopWorkspaceIpc(
         path,
       );
       // The editor's buffers are LF-only, as every read of a workspace file
-      // through the shared facade this replaces already was.
+      // through the shared facade this replaces already was. Decoding the
+      // bytes ourselves keeps a UTF-8 BOM, which `readFileString`'s decoder
+      // strips and the editor's verbatim save would otherwise delete.
       const contents = normalizeLineEndings(
-        yield* fs.readFileString(absolutePath),
+        Buffer.from(yield* fs.readFile(absolutePath)).toString('utf8'),
       );
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,

@@ -234,6 +234,33 @@ describe('desktop workspace IPC', () => {
     expect(existsSync(missingExternalPath)).toBe(false);
   });
 
+  it('keeps a UTF-8 byte-order mark when reading, so a save cannot delete it', async () => {
+    const postToRenderer = vi.fn();
+    const ipc = createIpc(postToRenderer);
+
+    writeFileSync(
+      join(workspacePath, 'bom.tex'),
+      Buffer.concat([
+        Buffer.from([0xef, 0xbb, 0xbf]),
+        Buffer.from('hi', 'utf8'),
+      ]),
+    );
+    ipc.handleMessage({
+      command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
+      requestId: REQUEST_ID,
+      path: 'bom.tex',
+    });
+    await vi.waitFor(() =>
+      expect(postToRenderer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
+          path: 'bom.tex',
+          contents: '\uFEFFhi',
+        }),
+      ),
+    );
+  });
+
   it('recreates a workspace file deleted after the editor loaded it', async () => {
     const postToRenderer = vi.fn();
     const ipc = createIpc(postToRenderer);

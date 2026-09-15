@@ -22,7 +22,11 @@ import { pid } from 'node:process';
 
 // Third-party imports
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
+
 import writeFileAtomicLib from 'write-file-atomic';
+import { createLog } from '@logger/logUtils';
+
+const log = createLog('fsDurability');
 
 const MODULE = 'FsDurability';
 
@@ -130,6 +134,19 @@ function entryTypeOf(stats: Stats): FileSystem.File.Type {
   return 'Unknown';
 }
 
+/** The entry type of one path, `lstat`-backed: a link is itself, never what
+ * it points at. `FileSystem.stat` follows links, so a containment check that
+ * must see the link itself probes with this instead. */
+export const entryTypeAt = Effect.fn('fsDurability.entryTypeAt')(function* (
+  target: string,
+) {
+  const stats = yield* Effect.tryPromise({
+    try: async () => nodeFs.lstat(target),
+    catch: (cause) => systemErrorFrom('entryTypeAt', target, cause),
+  });
+  return entryTypeOf(stats);
+});
+
 /**
  * The entries of `target` with the type of each, one `lstat` per entry: a
  * symlink reports as `SymbolicLink`, never as what it points at, so the
@@ -156,6 +173,47 @@ export const readDirectoryTyped = Effect.fn('fsDurability.readDirectoryTyped')(
     );
   },
 );
+
+/**
+ * `readDirectoryTyped` for listings that must survive one bad entry: an
+ * entry whose `lstat` fails is dropped with a warning naming it and the
+ * reason, instead of failing the whole directory. The readdir answer is the
+ * fact the listing stands on; an entry that vanishes or turns unreadable
+ * between the two calls costs one row, not the directory. The strict form
+ * stays with the containment and deletion walkers, where a refused answer is
+ * the safe one.
+ */
+export const readDirectoryTypedTolerant = Effect.fn(
+  'fsDurability.readDirectoryTypedTolerant',
+)(function* (target: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const names = yield* fs.readDirectory(target);
+  const rows = yield* Effect.forEach(
+    names,
+    (name) => {
+      const entry = path.join(target, name);
+      return Effect.tryPromise({
+        try: async () =>
+          [name, entryTypeOf(await nodeFs.lstat(entry))] as const,
+        catch: (cause) => systemErrorFrom('readDirectoryTyped', entry, cause),
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            log.warn(
+              `Skipping ${entry}: its entry type could not be read (${error.reason._tag}).`,
+            );
+            return undefined;
+          }),
+        ),
+      );
+    },
+    { concurrency: 'unbounded' },
+  );
+  return rows.filter(
+    (row): row is readonly [string, FileSystem.File.Type] => row !== undefined,
+  );
+});
 
 /**
  * Copy one file to a destination that must not exist yet (`COPYFILE_EXCL`):
