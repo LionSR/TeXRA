@@ -11,7 +11,7 @@ import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import { effectRuntime, type ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import {
@@ -89,9 +89,10 @@ export async function invokeLatexWorkshopBuild(
   const log = createLog(channel);
   // `executeCommand` rejects in VS Code's own Promise world; `tryPromise` puts
   // that rejection in the typed channel so the recovery below warn-logs it.
-  // The run sits at this outermost Promise-facing function, and this file
-  // imports `effect`, so its catch sites convert with it (R7).
-  await Effect.runPromise(
+  // This function holds no `ProcessRuntime` of its own, so the program settles
+  // on the process runtime the extension installed; this file imports `effect`,
+  // so its catch sites convert with the import (R7).
+  await effectRuntime().runPromise(
     Effect.tryPromise({
       try: async () => {
         await vscode.commands.executeCommand('latex-workshop.build', uri);
@@ -288,7 +289,7 @@ export async function scheduleViewerDisplay(): Promise<boolean> {
   // channel and the recovery warn-logs it. The refresh stays a detached side
   // effect scheduled only after the view opened, exactly as the nested
   // `try`/`catch` did.
-  const displayed = await Effect.runPromise(
+  const displayed = await effectRuntime().runPromise(
     Effect.tryPromise({
       try: async () => {
         await vscode.commands.executeCommand('latex-workshop.view');
@@ -307,7 +308,7 @@ export async function scheduleViewerDisplay(): Promise<boolean> {
   if (!displayed) return false;
 
   void sleep(LATEX_VIEWER_REFRESH_DELAY_MS).then(() =>
-    Effect.runPromise(
+    effectRuntime().runPromise(
       Effect.tryPromise({
         try: async () => {
           await vscode.commands.executeCommand('latex-workshop.refresh-viewer');
