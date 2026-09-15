@@ -1,9 +1,6 @@
 import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 
-import { Result } from 'effect';
-import type { AgentTrace } from '@agent/trace';
-import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
@@ -71,33 +68,6 @@ export function partitionDuplicateCalls<
     }
   }
   return sharedWithPrimary;
-}
-
-/** Parse tool input, handling JSON strings and other formats from model providers. */
-function parseToolInput(
-  raw: unknown,
-  callId: string,
-  logger: AgentTrace,
-): unknown {
-  if (raw == null) {
-    logger.debug(
-      `Tool call ${callId}: Received null input, using empty object`,
-    );
-    return {};
-  }
-
-  if (typeof raw !== 'string') {
-    return raw;
-  }
-
-  const parsed = safeParseJson(raw);
-  if (Result.isFailure(parsed)) {
-    logger.debug(
-      `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
-    );
-    return raw;
-  }
-  return parsed.success;
 }
 
 /** Normalize a tool call error into a user-friendly message with optional diagnostics. */

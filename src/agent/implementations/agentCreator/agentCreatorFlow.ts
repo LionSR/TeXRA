@@ -82,7 +82,7 @@ const RETRY_PROMPT =
   'The previous attempt failed validation: {{ VALIDATION_ERROR }}. Fix it and return only the YAML.\n';
 
 /** Raw bytes of the four bundled template files, already read by the host. */
-export interface CreatorTemplateFiles {
+interface CreatorTemplateFiles {
   workflowYaml: string;
   toolUseYaml: string;
   workflowSingle: string;

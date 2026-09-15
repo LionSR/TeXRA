@@ -7,7 +7,7 @@
  * replaces. Nothing here is threaded through node fields or a services bag;
  * the loop and the invoker take it from context.
  */
-import { Context, Data, Effect, Layer, Scope, SynchronizedRef } from 'effect';
+import { Context, Effect, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
@@ -29,9 +29,7 @@ import {
   DeclinableUsageRouteSchema,
   type DeclinableUsageRoute,
   type JsonValue,
-  type RetryErrorInfo,
   type RunId,
-  type RunOutcome,
   type SubagentProgressUpdate,
   type UserVariableChannels,
 } from '@shared/schemas';
@@ -59,17 +57,6 @@ function launchDeclinedRoutes(
 ): readonly DeclinableUsageRoute[] {
   return ctx.ownApiKeyFallback ? DeclinableUsageRouteSchema.options : [];
 }
-
-/**
- * The loop's typed halt: the run ends without a completed turn. `cancelled`
- * is a stop or a declined retry; `failed` carries the provider error the run
- * reports on its `run.end` row.
- */
-export class RunHalted extends Data.TaggedError('RunHalted')<{
-  readonly runId: RunId;
-  readonly outcome: Extract<RunOutcome, 'cancelled' | 'failed'>;
-  readonly error?: RetryErrorInfo;
-}> {}
 
 interface RunCallbacks {
   /** Fires on meaningful progress: todo changes, tool call milestones. */
