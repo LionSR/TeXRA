@@ -2,10 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@auth/codex';
 import { CodexAuthError } from '@auth/codex';
-import {
-  CHATGPT_USAGE_URL,
-  parseChatGptUsage,
-} from '@controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
+import { parseChatGptUsage } from '@controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
 import {
   timestampField,
   type SubscriptionUsageHttp,
@@ -15,14 +12,8 @@ import {
   GLM_CODING_PLAN_USAGE_URL,
   parseGlmCodingPlanUsage,
 } from '@controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter';
-import {
-  KIMI_CODE_USAGE_URL,
-  parseKimiCodeUsage,
-} from '@controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
-import {
-  DEFAULT_PLAN_NAMES,
-  SubscriptionUsageService,
-} from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import { parseKimiCodeUsage } from '@controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
+import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { SubscriptionUsageSnapshotSchema } from '@shared/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 
@@ -180,13 +171,13 @@ describe('subscription usage parsers', () => {
       ]);
       // The adapters no longer fabricate a display name; the service owns the
       // default (`available()` applies `?? DEFAULT_PLAN_NAMES`), so the
-      // snapshot is built with that same default here.
+      // snapshot is built with that default's literal value here.
       expect(
         SubscriptionUsageSnapshotSchema.safeParse({
           state: 'available',
           provider: 'chatgpt',
           providerName: 'ChatGPT',
-          planName: parsed.planName ?? DEFAULT_PLAN_NAMES.chatgpt,
+          planName: parsed.planName ?? 'ChatGPT Coding Plan',
           fetchedAt: 1,
           windows: parsed.windows,
         }).success,
@@ -432,7 +423,7 @@ describe('SubscriptionUsageService', () => {
   it.each([
     {
       provider: 'chatgpt' as const,
-      url: CHATGPT_USAGE_URL,
+      url: 'https://chatgpt.com/backend-api/wham/usage',
       response: {
         rate_limit: { primary_window: { used_percent: 10 } },
       },
@@ -444,7 +435,7 @@ describe('SubscriptionUsageService', () => {
     },
     {
       provider: 'kimiCode' as const,
-      url: KIMI_CODE_USAGE_URL,
+      url: 'https://api.kimi.com/coding/v1/usages',
       response: { usage: { limit: 10, remaining: 5 } },
       authorization: 'Bearer kimiCode-secret',
       extraHeaders: {},

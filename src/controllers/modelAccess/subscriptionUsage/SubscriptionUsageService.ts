@@ -53,7 +53,7 @@ const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> = {
   ...CODING_PLAN_PROVIDER_NAMES,
 };
 
-export const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
+const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT Coding Plan',
   ...CODING_PLAN_DEFAULT_NAMES,
 };
