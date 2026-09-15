@@ -29,7 +29,7 @@ import {
   formatWorkflowPhaseHeading,
   workflowCallDetail,
 } from '@shared/copy/workflowCall';
-import { assertNever, isObject, tryParseUrl } from '@utils/core';
+import { assertNever, isObject } from '@utils/core';
 import {
   formatCompactTokenCount,
   formatCostUsd,
@@ -265,17 +265,6 @@ const WEB_SEARCH_STATUS_SUFFIX: Readonly<Record<string, string>> = {
   failed: ' (failed)',
 };
 
-const WEB_FETCH_ERROR_LABEL: Readonly<Record<string, string>> = {
-  invalid_tool_input: 'Invalid URL format',
-  url_too_long: 'URL exceeds maximum length',
-  url_not_allowed: 'URL blocked by domain filter',
-  url_not_accessible: 'Failed to access URL',
-  unsupported_content_type: 'Unsupported content type',
-  too_many_requests: 'Rate limit exceeded',
-  max_uses_exceeded: 'Maximum fetch uses exceeded',
-  unavailable: 'Service unavailable',
-};
-
 // ---------------------------------------------------------------------------
 // Phase / group rows
 // ---------------------------------------------------------------------------
@@ -404,27 +393,6 @@ export function projectTranscriptRow(
         ...(status !== undefined ? { status } : {}),
         failed: status === 'failed',
         inProgress: status === 'in_progress',
-      };
-    }
-
-    case MESSAGE_TYPES.WEB_FETCH: {
-      const { url, title, status, errorCode, content } = entry.data;
-      const failed = status === 'failed';
-      const host = url ? (tryParseUrl(url)?.hostname ?? url) : '';
-      const errorLabel =
-        failed && errorCode
-          ? (WEB_FETCH_ERROR_LABEL[errorCode] ?? errorCode)
-          : undefined;
-      return {
-        ...rowBase(entry),
-        kind: 'webFetch',
-        label: `Web Fetch${host ? `: ${host}` : ''}${failed ? ' (failed)' : ''}`,
-        ...(url !== undefined ? { url } : {}),
-        ...(title !== undefined ? { title } : {}),
-        ...(status !== undefined ? { status } : {}),
-        ...(errorLabel !== undefined ? { errorLabel } : {}),
-        ...(content ? { content: transcriptText(content) } : {}),
-        failed,
       };
     }
 

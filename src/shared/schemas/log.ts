@@ -19,7 +19,6 @@ export const MESSAGE_TYPES = {
   STATISTICS: 'statistics',
   TOOL_USE: 'toolUse',
   WEB_SEARCH: 'webSearch',
-  WEB_FETCH: 'webFetch',
   MODEL_RESPONSE: 'modelResponse',
   USER_MESSAGE: 'userMessage',
   PROGRESS_STATUS: 'progressStatus',

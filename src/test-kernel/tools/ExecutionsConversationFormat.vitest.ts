@@ -58,20 +58,4 @@ describe('formatConversation', () => {
       '[tool_result: TeXRA (https://texra.ai), TeXRA docs (https://texra.ai/docs)]',
     );
   });
-
-  it('summarizes a web fetch as a title/url marker without the page text', () => {
-    const output = formatConversation([
-      {
-        kind: 'web-fetch',
-        url: 'https://texra.ai',
-        title: 'TeXRA home',
-        content: 'fetched page text',
-      },
-      { kind: 'web-fetch', url: 'https://texra.ai/raw' },
-    ]);
-
-    expect(output).toContain('[tool_result: TeXRA home (https://texra.ai)]');
-    expect(output).toContain('[tool_result: https://texra.ai/raw]');
-    expect(output).not.toContain('fetched page text');
-  });
 });

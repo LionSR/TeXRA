@@ -2,7 +2,6 @@
 
 import type { DocumentMeta, ExportAttachmentType } from '@agent/export/schemas';
 import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
-import { filterNotNullish } from '@utils/core';
 
 import {
   HEADER_FIELDS,
@@ -117,20 +116,6 @@ const MD_NODES: NodeRenderers = {
   'web-search-results': ({ results }) =>
     results.map((r) => `- ${markdownLinkOrText(r.url, r.title)}`).join('\n') +
     '\n',
-
-  'web-fetch': ({ url, title, content }) => {
-    const safeUrl = url ? sanitizeLiveLinkUrl(url) : undefined;
-    return [
-      '#### Web Fetch',
-      '',
-      safeUrl ? `**URL:** ${escapeMarkdownText(safeUrl)}` : undefined,
-      title ? `**Title:** ${escapeMarkdownText(title)}` : undefined,
-      content ? `\n${fencedBlock(content)}` : undefined,
-      '',
-    ]
-      .filter(filterNotNullish)
-      .join('\n');
-  },
 };
 
 export const markdownSpec: FormatSpec = {

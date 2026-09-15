@@ -73,13 +73,7 @@ export type ExportNode =
   | { kind: 'tool-call'; name: string; input: unknown }
   | { kind: 'tool-result'; text: string }
   | { kind: 'web-search'; query: string }
-  | { kind: 'web-search-results'; results: ExportWebSearchResult[] }
-  | {
-      kind: 'web-fetch';
-      url?: string;
-      title?: string;
-      content?: string;
-    };
+  | { kind: 'web-search-results'; results: ExportWebSearchResult[] };
 
 // ============================================================
 // Document metadata

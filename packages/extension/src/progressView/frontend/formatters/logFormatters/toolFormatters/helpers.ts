@@ -1,5 +1,5 @@
 /**
- * Shared helpers for the tool-use, web-search, and web-fetch formatters.
+ * Shared helpers for the tool-use and web-search formatters.
  *
  * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates
  * with indentation render unwanted spaces. Always use single-line templates
@@ -80,8 +80,8 @@ export function getToolTimeoutMs(
 
 /**
  * Wrap formatted tool content in the collapsible banner shell shared by the
- * tool-use, web-search, and web-fetch entries. `extraClasses` and
- * `extraContent` carry the tool-use-only state flags and summary-row controls.
+ * tool-use and web-search entries. `extraClasses` and `extraContent` carry the
+ * tool-use-only state flags and summary-row controls.
  */
 export function buildToolUseDetails(opts: {
   row: Pick<TranscriptRowBase, 'id' | 'groupId' | 'timestamp'>;

@@ -33,10 +33,7 @@ import {
   formatUserMessageTemplate,
 } from './logFormatters/messageFormatters';
 import { formatToolUseTemplate } from './logFormatters/toolFormatters';
-import {
-  formatWebFetchTemplate,
-  formatWebSearchTemplate,
-} from './logFormatters/toolFormatters/webFormatters';
+import { formatWebSearchTemplate } from './logFormatters/toolFormatters/webFormatters';
 import type { FormatResult } from './baseLogFormatter';
 
 type RowOf<K extends TranscriptRowKind> = Extract<TranscriptRow, { kind: K }>;
@@ -54,7 +51,6 @@ const ROW_FORMATTERS: RowFormatters = {
   error: formatErrorTemplate,
   tool: formatToolUseTemplate,
   webSearch: formatWebSearchTemplate,
-  webFetch: formatWebFetchTemplate,
   fileList: formatFileListTemplate,
   missingOutputs: formatMissingOutputsTemplate,
   latexdiff: formatLatexdiffTemplate,

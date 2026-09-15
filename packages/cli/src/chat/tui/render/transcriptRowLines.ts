@@ -83,18 +83,6 @@ function webSearchLines(
   });
 }
 
-function webFetchLines(
-  row: Extract<TranscriptRow, { kind: 'webFetch' }>,
-  elide: boolean,
-): string[] {
-  const lines: string[] = [];
-  if (row.title) lines.push(row.title);
-  if (row.url) lines.push(row.url);
-  if (row.errorLabel) lines.push(row.errorLabel);
-  if (row.content) lines.push(...elidedTextLines(row.content, elide));
-  return lines;
-}
-
 /**
  * The rows a transcript entry paints beneath its headline. Returns terminal-
  * safe, unwrapped lines already carrying their corner/indent gutter; the
@@ -133,8 +121,6 @@ export function transcriptRowBodyLines(
         return row.detail ? elidedTextLines(row.detail, elide) : [];
       case 'webSearch':
         return webSearchLines(row);
-      case 'webFetch':
-        return webFetchLines(row, elide);
       case 'assistant':
       case 'user':
       case 'tool':

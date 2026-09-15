@@ -9,7 +9,6 @@
 
 import type { DocumentMeta, ExportAttachmentType } from '@agent/export/schemas';
 import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
-import { filterNotNullish } from '@utils/core';
 
 import { escapeLatex, escapeLatexUrl, latexListing } from './escapeUtils';
 import {
@@ -102,22 +101,6 @@ const TEX_NODES: NodeRenderers = {
       .map((r) => `  \\item ${latexLinkOrText(r.url, r.title)}`)
       .join('\n');
     return `\\begin{websearchbox}\n\\begin{itemize}\n${items}\n\\end{itemize}\n\\end{websearchbox}\n`;
-  },
-
-  'web-fetch': ({ url, title, content }) => {
-    const safeUrl = url ? sanitizeLiveLinkUrl(url) : undefined;
-    return [
-      '\\begin{websearchbox}',
-      safeUrl ? `\\textbf{URL:} \\url{${escapeLatexUrl(safeUrl)}}` : undefined,
-      title
-        ? `${safeUrl ? '\\\\' : ''}\\textbf{Title:} ${escapeLatex(title)}`
-        : undefined,
-      content ? `\n${latexListing(content)}` : undefined,
-      '\\end{websearchbox}',
-      '',
-    ]
-      .filter(filterNotNullish)
-      .join('\n');
   },
 };
 

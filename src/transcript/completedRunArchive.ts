@@ -147,11 +147,6 @@ function conversationNodesForEntry(entry: StreamLogEntry): ExportNode[] {
       return toolUseNodes(entry);
     case MESSAGE_TYPES.WEB_SEARCH:
       return webSearchNodes(entry);
-    case MESSAGE_TYPES.WEB_FETCH: {
-      // Failed fetches carry no title/content; the node keeps only the url.
-      const { url, title, content } = entry.data;
-      return url ? [{ kind: 'web-fetch', url, title, content }] : [];
-    }
     // ── Deliberately skipped: not conversation content ──────────────────
     // scratchpad is a derived view carved from the modelResponse raw text
     // (already mapped above); the rest are run diagnostics/status rows, not
