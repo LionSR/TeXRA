@@ -188,7 +188,9 @@ export function createDesktopAuthCallbackState(
       // The store's write is already a program: with no store handed down
       // there is nothing to persist, and its refusal is the caller's failure.
       store
-        ? store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state)
+        ? Effect.suspend(() =>
+            store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state),
+          )
         : Effect.void,
     );
 
