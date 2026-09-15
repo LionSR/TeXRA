@@ -4,9 +4,16 @@ import {
   User,
   type SupportedStorage,
 } from '@supabase/supabase-js';
+import { Effect } from 'effect';
 import { createLog } from '@logger/logUtils';
+import type { SecretsFailed } from '@platform/secrets';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { runAuthProgram } from './authProgram';
+import {
+  AuthPortError,
+  callPort,
+  runAuthProgram,
+  settleFailure,
+} from './authProgram';
 import { SUPABASE_GOTRUE_STORAGE_KEY } from './config';
 import type { SessionSecretStore } from './oauth/sessionAccess';
 import type { AuthTokenProvider, StoredSessionState } from './TokenProvider';
@@ -49,26 +56,31 @@ function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
   /**
    * Run one secret-store operation, unless the key is the session slot. That
    * slot and a failed store both answer `undefined`, which every caller
-   * resolves against the memory mirror. This is `@supabase/auth-js`'s own
-   * Promise callback surface — a foreign-runtime boundary, not a temporary
-   * adapter — so its catch stays. The store is Effect-typed, so every one of
-   * its calls settles on the auth subsystem's installed run edge.
+   * resolves against the memory mirror. The store is Effect-typed, so the
+   * recovery is part of the program and only its result crosses
+   * `@supabase/auth-js`'s own Promise callback surface, on the auth
+   * subsystem's installed run edge.
    */
-  const onFlowState = async <T>(
+  const onFlowState = <T>(
     action: string,
     key: string,
-    run: () => Promise<T>,
+    program: Effect.Effect<T, SecretsFailed>,
   ): Promise<T | undefined> => {
-    if (key === SUPABASE_GOTRUE_STORAGE_KEY) return undefined;
-    try {
-      return await run();
-    } catch (error) {
-      log.warn(
-        `Could not ${action} PKCE flow state (${key}); sign-in will only be ` +
-          `completable in this window: ${toErrorMessage(error)}`,
-      );
-      return undefined;
-    }
+    if (key === SUPABASE_GOTRUE_STORAGE_KEY) return Promise.resolve(undefined);
+    return runAuthProgram(
+      program.pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            log.warn(
+              `Could not ${action} PKCE flow state (${key}); sign-in will ` +
+                `only be completable in this window: ` +
+                `${toErrorMessage(settleFailure(cause))}`,
+            );
+            return undefined;
+          }),
+        ),
+      ),
+    );
   };
 
   return {
@@ -76,22 +88,16 @@ function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
     // locked keychain that denies decryption). The mirrored write is still
     // this window's best answer, so a miss falls back like a failure does.
     getItem: async (key) =>
-      (await onFlowState('read', key, () =>
-        runAuthProgram(secrets.get(key)),
-      )) ??
+      (await onFlowState('read', key, secrets.get(key))) ??
       memory.get(key) ??
       null,
     setItem: async (key, value) => {
       memory.set(key, value);
-      await onFlowState('store', key, () =>
-        runAuthProgram(secrets.set(key, value)),
-      );
+      await onFlowState('store', key, secrets.set(key, value));
     },
     removeItem: async (key) => {
       memory.delete(key);
-      await onFlowState('clear', key, () =>
-        runAuthProgram(secrets.delete(key)),
-      );
+      await onFlowState('clear', key, secrets.delete(key));
     },
   };
 }
@@ -158,23 +164,31 @@ export class SupabaseClient {
    * Check if auth system is fully initialized and ready for use.
    */
   static async isReady(): Promise<boolean> {
+    const provider = this.authProvider;
     if (
       this.instance === null ||
-      this.authProvider === null ||
+      provider === null ||
       this.initError !== null
     ) {
       return false;
     }
 
-    try {
-      await runAuthProgram(this.authProvider.whenReady());
-      this.readinessError = null;
-      return true;
-    } catch (error) {
-      this.readinessError = ensureError(error);
-      log.error(`Auth provider not ready: ${toErrorMessage(error)}`);
-      return false;
-    }
+    return runAuthProgram(
+      provider.whenReady().pipe(
+        Effect.map(() => {
+          this.readinessError = null;
+          return true;
+        }),
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            const error = settleFailure(cause);
+            this.readinessError = ensureError(error);
+            log.error(`Auth provider not ready: ${toErrorMessage(error)}`);
+            return false;
+          }),
+        ),
+      ),
+    );
   }
 
   /**
@@ -236,17 +250,25 @@ export class SupabaseClient {
    * Returns null if no session is authenticated or auth system is not ready.
    */
   static async getAccessToken(): Promise<string | null> {
-    if (!this.authProvider) {
+    const provider = this.authProvider;
+    if (!provider) {
       // Auth provider not set - system not initialized
       return null;
     }
 
-    try {
-      return await runAuthProgram(this.authProvider.ensureFreshToken());
-    } catch (error) {
-      log.error(`Error getting access token: ${toErrorMessage(error)}`);
-      return null;
-    }
+    return runAuthProgram(
+      provider.ensureFreshToken().pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            log.error(
+              `Error getting access token: ` +
+                `${toErrorMessage(settleFailure(cause))}`,
+            );
+            return null;
+          }),
+        ),
+      ),
+    );
   }
 
   /**
@@ -256,14 +278,25 @@ export class SupabaseClient {
     const token = await this.getAccessToken();
     if (!token) return null;
 
-    try {
-      const { data, error } = await this.getClient().auth.getUser(token);
-      if (error || !data.user) return null;
-      return data.user;
-    } catch (error) {
-      log.error(`Error getting user: ${toErrorMessage(error)}`);
-      return null;
-    }
+    return runAuthProgram(
+      Effect.try({
+        try: () => this.getClient(),
+        catch: (cause) => new AuthPortError({ cause }),
+      }).pipe(
+        Effect.flatMap((client) => callPort(() => client.auth.getUser(token))),
+        Effect.map(({ data, error }) =>
+          error || !data.user ? null : data.user,
+        ),
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            log.error(
+              `Error getting user: ${toErrorMessage(settleFailure(cause))}`,
+            );
+            return null;
+          }),
+        ),
+      ),
+    );
   }
 
   /**
@@ -288,14 +321,23 @@ export class SupabaseClient {
    * is registered.
    */
   static async getStoredAccountLabel(): Promise<string | null> {
-    if (!this.authProvider) return null;
-    try {
-      return await runAuthProgram(this.authProvider.getStoredAccountLabel());
-    } catch (error) {
-      // A failed read is otherwise indistinguishable from "no session
-      // stored", and both collapse to the generic account label in the UI.
-      log.warn(`Error reading stored account label: ${toErrorMessage(error)}`);
-      return null;
-    }
+    const provider = this.authProvider;
+    if (!provider) return null;
+    return runAuthProgram(
+      provider.getStoredAccountLabel().pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            // A failed read is otherwise indistinguishable from "no session
+            // stored", and both collapse to the generic account label in
+            // the UI.
+            log.warn(
+              `Error reading stored account label: ` +
+                `${toErrorMessage(settleFailure(cause))}`,
+            );
+            return null;
+          }),
+        ),
+      ),
+    );
   }
 }
