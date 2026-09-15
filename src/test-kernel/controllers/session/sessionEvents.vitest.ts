@@ -2033,7 +2033,7 @@ describe('the C1 event table and the C6 publisher', () => {
    * start identity from before the crash: the pid resolves, its identity
    * differs, and that is `proveOwnerLiveness`'s pid-reuse verdict.
    */
-  it.effect('reclaims a run whose recorded owner is provably dead', () => {
+  it.live('reclaims a run whose recorded owner is provably dead', () => {
     const storage = workspace();
     const CRASHED = JSON.stringify([
       os.hostname().toLowerCase(),
