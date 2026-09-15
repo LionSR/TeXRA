@@ -32,7 +32,10 @@ import { hasExtension } from '@utils/core/pathCore';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
-import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
+import {
+  publishCompiledPdfArtifact,
+  publishCompiledPdfArtifactBestEffort,
+} from './compiledPdfArtifacts';
 import { getOutputFilesByRound, type OutputState } from './outputState';
 
 interface CompileCheckContext {
@@ -512,14 +515,21 @@ const tryPublishArtifact = ({
   never,
   FileSystem.FileSystem
 > =>
-  publishCompiledPdfArtifact({
-    runDirectory: opts.runDirectory,
-    runId,
-    round: currentRound,
-    displayName,
-    source: outputFile.location,
-    compiledPdfPath,
-  }).pipe(
+  publishCompiledPdfArtifactBestEffort(
+    publishCompiledPdfArtifact({
+      runDirectory: opts.runDirectory,
+      runId,
+      round: currentRound,
+      displayName,
+      source: outputFile.location,
+      compiledPdfPath,
+    }),
+    (err) =>
+      ctx.logger.warn(
+        `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
+        { data: err },
+      ),
+  ).pipe(
     Effect.tap((artifact) =>
       Effect.sync(() => {
         if (artifact) {
@@ -527,15 +537,6 @@ const tryPublishArtifact = ({
             data: artifact.relativePath,
           });
         }
-      }),
-    ),
-    Effect.catch((err) =>
-      Effect.sync((): RunStorageFileLocation | null => {
-        ctx.logger.warn(
-          `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
-          { data: err },
-        );
-        return null;
       }),
     ),
   );
