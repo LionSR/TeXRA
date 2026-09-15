@@ -238,7 +238,7 @@ async function prepareLatexdiffResultsAndScheduleViewer(
           await restorePreparedViewerTarget(lastViewerLocation);
       }
       if (viewerTargetReady) {
-        void runtime.runPromise(scheduleViewerDisplay);
+        runtime.runFork(scheduleViewerDisplay);
       }
     }
   }
