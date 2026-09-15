@@ -1259,8 +1259,10 @@ export class SessionHandle {
    * LIFO store, once: the store aggregates each disposer's failure and still
    * runs the remaining disposers. The session owner calls it, after disposing
    * the session's runs, whenever it releases the session (a `closeSession`,
-   * the runtime's disposal, {@link dispose}); the owner has already dropped
-   * the session from the set {@link forEachLiveSession} reads by then.
+   * the runtime's disposal, {@link dispose}). On owner-release paths
+   * (`closeSession`, runtime disposal) the owner has already dropped the
+   * session from the set {@link forEachLiveSession} reads by then;
+   * {@link dispose} unwinds first and drops the session afterwards.
    */
   unwind(): void {
     this.teardown.dispose();
