@@ -6,7 +6,8 @@ import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import { StateWriteFailed } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   MODEL_AVAILABILITY_STATUS,
@@ -718,8 +719,17 @@ export function setModelEnabled(input: {
   };
   const nextEnabled = enabledModelsOf(next);
   if (nextEnabled.length === 0) {
-    throw new Error(
-      'At least one model must stay enabled. Enable another model before disabling this one.',
+    // A refusal, not a defect: the caller is told in the channel its signature
+    // declares, so a UI that disables the last model can surface it instead of
+    // crashing the program that composed this.
+    const message =
+      'At least one model must stay enabled. Enable another model before disabling this one.';
+    return Effect.fail(
+      new StateWriteFailed({
+        key: GlobalStateKey.MODEL_SELECTION,
+        message,
+        cause: new Error(message),
+      }),
     );
   }
   // If the helper model was just removed, pin the built-in default. Do not

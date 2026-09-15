@@ -1029,7 +1029,9 @@ export class SettingsViewMessageHandler {
     modelName: string,
     enabled: boolean,
   ): Promise<void> {
-    await this.modelSelectionController.setModelEnabled({ modelName, enabled });
+    await this.runtime.runPromise(
+      this.modelSelectionController.setModelEnabled({ modelName, enabled }),
+    );
     await this.postModelSelectionData();
     // The options cache is invalidated by the writer itself.
     await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
