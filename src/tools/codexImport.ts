@@ -17,9 +17,11 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
+import { Result } from 'effect';
 import { z } from 'zod';
 
 import { isModuleNotFoundError } from '@common/errors';
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { createLog } from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { executeCommand } from '@utils/system/execUtils';
@@ -162,23 +164,18 @@ function catalogSupportsXhigh(
   stdout: string,
   model: string,
 ): boolean | undefined {
-  try {
-    const parsed: unknown = JSON.parse(stdout);
-    const catalog = BundledCodexCatalogSchema.safeParse(parsed);
-    if (!catalog.success) return undefined;
-    const entry = catalog.data.models.find(
-      (item): item is BundledCodexModel =>
-        typeof item === 'object' &&
-        item != null &&
-        (item as BundledCodexModel).slug === model,
-    );
-    if (entry == null) return false;
-    return (entry.supported_reasoning_levels ?? []).some(
-      (level) => level.effort === 'xhigh',
-    );
-  } catch {
-    return undefined;
-  }
+  const catalog = parseJsonWith(stdout, BundledCodexCatalogSchema);
+  if (Result.isFailure(catalog)) return undefined;
+  const entry = catalog.success.models.find(
+    (item): item is BundledCodexModel =>
+      typeof item === 'object' &&
+      item != null &&
+      (item as BundledCodexModel).slug === model,
+  );
+  if (entry == null) return false;
+  return (entry.supported_reasoning_levels ?? []).some(
+    (level) => level.effort === 'xhigh',
+  );
 }
 
 /**

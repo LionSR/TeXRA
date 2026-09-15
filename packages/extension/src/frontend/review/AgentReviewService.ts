@@ -39,6 +39,7 @@ import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
+import { groupBy } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -531,23 +532,23 @@ class AgentReviewServiceImpl {
     this.collection.clear();
     if (!this.reviewRoot) return;
 
-    const byFile = new Map<string, vscode.Diagnostic[]>();
-    for (const issue of this.issues) {
-      const message = issue.description
-        ? `${issue.title}: ${issue.description}`
-        : issue.title;
-      const diagnostic = new vscode.Diagnostic(
-        issueRange(issue),
-        message,
-        SEVERITY_MAP[issue.severity],
-      );
-      diagnostic.source = SOURCE_LABEL;
-      diagnostic.code = issue.id;
-      const filePath = this.issuePath(issue);
-      const existing = byFile.get(filePath) ?? [];
-      existing.push(diagnostic);
-      byFile.set(filePath, existing);
-    }
+    const byFile = groupBy(
+      this.issues,
+      (issue) => this.issuePath(issue),
+      (issue) => {
+        const message = issue.description
+          ? `${issue.title}: ${issue.description}`
+          : issue.title;
+        const diagnostic = new vscode.Diagnostic(
+          issueRange(issue),
+          message,
+          SEVERITY_MAP[issue.severity],
+        );
+        diagnostic.source = SOURCE_LABEL;
+        diagnostic.code = issue.id;
+        return diagnostic;
+      },
+    );
     for (const [filePath, diagnostics] of byFile) {
       this.collection.set(vscode.Uri.file(filePath), diagnostics);
     }

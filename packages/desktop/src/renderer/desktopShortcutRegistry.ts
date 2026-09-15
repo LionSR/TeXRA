@@ -1,3 +1,6 @@
+import { Result } from 'effect';
+
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 import type {
   DesktopShortcutEntry,
   DesktopShortcutOverrides,
@@ -244,12 +247,7 @@ function readOverrides(storage: Storage | undefined): DesktopShortcutOverrides {
   if (!storage) return {};
   const raw = storage.getItem(DESKTOP_SHORTCUT_STORAGE_KEY);
   if (!raw) return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    const result = DesktopShortcutOverridesSchema.safeParse(parsed);
-    if (result.success) return result.data;
-  } catch {
-    // Malformed JSON resolves to the same empty defaults as a failed schema parse.
-  }
-  return {};
+  // Malformed JSON resolves to the same empty defaults as a failed schema parse.
+  const result = parseJsonWith(raw, DesktopShortcutOverridesSchema);
+  return Result.isSuccess(result) ? result.success : {};
 }

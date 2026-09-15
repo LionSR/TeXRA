@@ -41,7 +41,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
-import { formatDuration } from '@utils/core';
+import { formatDuration, groupBy } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - progress view constants
@@ -119,13 +119,12 @@ function transcriptTimeline(
   rows: readonly TranscriptRow[],
 ): TimelineEntry[] {
   const groupIds = new Set(groups.map((group) => group.id));
-  const children = new Map<string, TaskGroup[]>();
-  for (const group of groups) {
-    if (!group.parentGroupId || !groupIds.has(group.parentGroupId)) continue;
-    const siblings = children.get(group.parentGroupId) ?? [];
-    siblings.push(group);
-    children.set(group.parentGroupId, siblings);
-  }
+  const children = groupBy(
+    groups.filter(
+      (group) => group.parentGroupId && groupIds.has(group.parentGroupId),
+    ),
+    (group) => group.parentGroupId as string,
+  );
   const rowsByGroup = new Map<string, TranscriptRow[]>();
   const ungrouped: TranscriptRow[] = [];
   for (const row of rows.toSorted(compareRows)) {
