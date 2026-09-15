@@ -117,7 +117,9 @@ function appendLocalTranscriptEntry(
   ]);
 }
 
-export function resolveLocalTranscriptRunId({
+/** Which run a local row belongs to. Module-private: this is the one answer,
+ *  and `appendLocalTranscriptEntry` is the one caller that needs it. */
+function resolveLocalTranscriptRunId({
   activeRunId,
   fallbackRunId,
   parentOf,

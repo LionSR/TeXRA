@@ -2369,12 +2369,20 @@ const SCENARIOS = [
     unexpect: ['ERROR', 'signal read during notification phase'],
   },
   {
+    // Enter resumes the selected interrupted run. The list opens on the
+    // active run (`bash`), and the three ↓ walk the run rows past `waiting`
+    // and the resumed root to `nested`, the run this asserts on; group
+    // headings are not selectable.
     name: 'session-tree-resume',
     cols: 150,
     env: { HARNESS_ENTRIES: '0', HARNESS_SESSION_TREE: '1' },
-    keys: ['\t', DOWN, DOWN, '\r'],
+    keys: ['\t', DOWN, DOWN, DOWN, '\r'],
     expect: ['Harness resume selected: 111111111111.'],
-    unexpect: ['ERROR', 'signal read during notification phase'],
+    unexpect: [
+      'ERROR',
+      'signal read during notification phase',
+      'Harness resume selected: ffffffffffff.',
+    ],
   },
   {
     name: 'subagents-collapsed-rollup',
