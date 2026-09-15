@@ -1,11 +1,11 @@
 // Third-party imports
-import { Effect, type FileSystem, type Path } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import { sessionFsLayer } from '@platform/rootedFs';
+import type { WorkspaceFs } from '@platform/rootedFs';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
@@ -37,7 +37,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   }: ExtractTikzInput): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolCall | FileSystem.FileSystem | Path.Path
+    ToolCall | FileSystem.FileSystem | WorkspaceFs
   > {
     const call = yield* ToolCall;
     const { path, display } = yield* resolveLatexFile(texPath);
@@ -65,12 +65,10 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
 
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
-      // A tool's services do not carry the run's rooted filesystems yet, so
-      // the compile is given the ones of the roots this call was handed.
       const compiledPaths = yield* TikzPictureManager.compile(
         location,
         call.roots.config,
-      ).pipe(Effect.provide(sessionFsLayer(call.roots)));
+      );
       if (compiledPaths.length > 0) {
         // Convert FileLocation[] to string[] for legacy attachment API
         const compiledPathStrings = compiledPaths.map(

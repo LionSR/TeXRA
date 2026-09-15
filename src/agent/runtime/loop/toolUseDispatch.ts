@@ -29,6 +29,7 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { AgentTrace } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
+import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   type DispatchFacts,
   type FileLocation,
@@ -242,7 +243,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
-  AgentRun | RunLedger | ProcessServices | Runs
+  AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -363,7 +364,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: DispatchFacts,
     call: LocalCall,
     attempt: number,
-  ): Effect.fn.Return<void, InvokeError, ProcessServices | Runs> {
+  ): Effect.fn.Return<
+    void,
+    InvokeError,
+    ProcessServices | Runs | WorkspaceFs | StorageFs
+  > {
     const tool: ITool | undefined = run.tools.get(fact.toolName);
     const parsedInput = parseCallArguments(call, logger);
     const stageId = fact.stageId ?? undefined;
@@ -725,7 +730,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const dispatchCall = Effect.fn('toolUse.dispatchCall')(function* (
     fact: DispatchFacts,
     afterEndTurn: boolean,
-  ): Effect.fn.Return<void, InvokeError, ProcessServices | Runs> {
+  ): Effect.fn.Return<
+    void,
+    InvokeError,
+    ProcessServices | Runs | WorkspaceFs | StorageFs
+  > {
     const current = yield* SynchronizedRef.get(stateRef);
     if (settledOf(current, fact.callId) !== null) return;
     const call = calls[fact.ordinal];
@@ -779,7 +788,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const deriveDuplicate = Effect.fn('toolUse.duplicate')(function* (
     fact: DispatchFacts,
     primaryId: string,
-  ): Effect.fn.Return<void, InvokeError, ProcessServices | Runs> {
+  ): Effect.fn.Return<
+    void,
+    InvokeError,
+    ProcessServices | Runs | WorkspaceFs | StorageFs
+  > {
     const current = yield* SynchronizedRef.get(stateRef);
     if (settledOf(current, fact.callId) !== null) return;
     const primary = settledOf(current, primaryId);

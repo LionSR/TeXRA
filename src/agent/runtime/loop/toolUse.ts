@@ -33,6 +33,7 @@ import {
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
 import type { ProcessServices } from '@platform/processRuntime';
+import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
   AgentRunStateSnapshotSchema,
@@ -119,7 +120,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 ): Effect.fn.Return<
   ToolUseResult,
   Error,
-  AgentRun | RunLedger | ProcessServices | Runs | ModelInvoker | FollowUps
+  | AgentRun
+  | RunLedger
+  | ProcessServices
+  | Runs
+  | ModelInvoker
+  | FollowUps
+  | WorkspaceFs
+  | StorageFs
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -449,7 +457,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   ): Effect.fn.Return<
     TurnExit,
     Error,
-    AgentRun | RunLedger | ProcessServices | Runs
+    AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
     let state = initial;
     const turnContext: TurnContext = {
@@ -508,7 +516,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         ): Effect.fn.Return<
           { readonly state: RunState; readonly done: boolean },
           Error,
-          AgentRun | RunLedger | ProcessServices | Runs
+          | AgentRun
+          | RunLedger
+          | ProcessServices
+          | Runs
+          | WorkspaceFs
+          | StorageFs
         > {
           let next = at;
           const previous = next.messages.at(-2);
