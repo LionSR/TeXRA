@@ -147,11 +147,12 @@ function launchedIds(result: ToolResult): {
 }
 
 function launchBackgroundBash(parentRunId: RunId) {
-  // A child's registration reads its parent's existence, so the parent's own
-  // `run.start` has to be committed before the launch.
-  return defaultSession()
-    .settlePublications()
-    .pipe(Effect.andThen(backgroundBashCall(parentRunId)));
+  // No settle before the launch. `registerRun` opens the parent check with an
+  // empty batch on the session's publisher, so a child's admission read runs
+  // after every fact its parent queued, this parent's `run.start` included.
+  // Settling here instead would make this suite pass whether or not that
+  // barrier exists.
+  return backgroundBashCall(parentRunId);
 }
 
 function backgroundBashCall(parentRunId: RunId) {
