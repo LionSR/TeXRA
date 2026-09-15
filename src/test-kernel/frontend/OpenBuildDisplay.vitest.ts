@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,11 +11,7 @@ import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
 } from '@shared/constants/latexTiming';
-
-vi.mock('node:timers/promises', () => ({
-  setTimeout: (delay: number) =>
-    new Promise<void>((resolve) => globalThis.setTimeout(resolve, delay)),
-}));
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(async (_path: string) => true),
@@ -40,10 +36,6 @@ const mocks = vi.hoisted(() => ({
   showLoggedMessage: vi.fn(async (_channel: string, _message: string) => ''),
 }));
 
-vi.mock('@utils/files/absoluteFS', () => ({
-  AbsoluteFS: { exists: mocks.exists },
-}));
-
 vi.mock('@common/files/fileTypeUtils', () => ({
   isLatexFile: mocks.isLatexFile,
 }));
@@ -64,8 +56,25 @@ vi.mock('@platform/rootedFs', () => ({
   withSessionFs: (_roots: unknown, program: unknown) => program,
 }));
 
-/** The host entry's runtime; the compile it settles is mocked. */
-const runtime = { runPromise: Effect.runPromise } as unknown as ProcessRuntime;
+/**
+ * The host entry's runtime over the real filesystem service, with the
+ * existence probe this suite drives standing in for the disk.
+ */
+const runtime = {
+  runPromise: <A, E>(program: Effect.Effect<A, E, FileSystem.FileSystem>) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        return yield* program.pipe(
+          Effect.provideService(FileSystem.FileSystem, {
+            ...fs,
+            exists: (target: string) =>
+              Effect.promise(() => mocks.exists(target)),
+          }),
+        );
+      }).pipe(Effect.provide(nodePlatformLayer)),
+    ),
+} as unknown as ProcessRuntime;
 
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedMessage: mocks.showLoggedMessage,
@@ -293,7 +302,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
 
     // The command's try/finally schedules the final viewer for the last
     // prepared diff after the setup rejection propagates.
-    void scheduleViewerDisplay();
+    void runtime.runPromise(scheduleViewerDisplay);
     await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
 
     const viewerIndexes = order
@@ -344,7 +353,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     expect(order).not.toContain('latex-workshop.view');
 
     // Schedule exactly one viewer for the final diff context and let it fire.
-    void scheduleViewerDisplay();
+    void runtime.runPromise(scheduleViewerDisplay);
     await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
 
     const viewerIndexes = order

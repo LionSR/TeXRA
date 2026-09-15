@@ -5,9 +5,8 @@
  * using the diff-match-patch library.
  */
 
-import { Effect } from 'effect';
+import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import {
   fileLocationDisplayPath,
@@ -15,13 +14,11 @@ import {
   type FileLocation,
   type OutputFileInfo,
 } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { fsCall } from '@utils/errors/fsCall';
 import { diffLineChanges } from '@utils/text/diff';
-import { countLines } from '@utils/text/stringUtils';
+import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
 
 import { traceFileLineage } from './lineageMapping';
 import { ensureRoundData, type OutputState } from './outputState';
@@ -37,10 +34,11 @@ const log = createLog('OutputDiffStats');
 function computeDiffStats(
   baseLocation: FileLocation | null,
   outputLocation: FileLocation,
-): Effect.Effect<DiffStats> {
-  const read = (absolutePath: string) =>
-    fsCall(() => AbsoluteFS.read(absolutePath));
+): Effect.Effect<DiffStats, Error, FileSystem.FileSystem> {
   return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const read = (absolutePath: string) =>
+      fs.readFileString(absolutePath).pipe(Effect.map(normalizeLineEndings));
     if (!baseLocation) {
       const outContent = yield* read(outputLocation.absolutePath);
       return { added: countLines(outContent) };
@@ -59,7 +57,12 @@ function computeDiffStats(
     Effect.catch((err) =>
       Effect.sync((): DiffStats => {
         const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
-        if (isFileNotFoundError(err)) {
+        // The reads fail as `PlatformError`s, whose `reason` carries the
+        // errno classification the raw Node error used to.
+        if (
+          err instanceof PlatformError.PlatformError &&
+          err.reason._tag === 'NotFound'
+        ) {
           log.debug(message);
         } else {
           log.warn(message);
@@ -84,14 +87,18 @@ function computeDiffStats(
 function toWorkspaceOrigin(
   workspace: string | undefined,
   loc: FileLocation | null,
-): Effect.Effect<FileLocation | null, Error> {
+): Effect.Effect<FileLocation | null, Error, FileSystem.FileSystem> {
   return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     if (!loc || loc.kind !== 'runStorage') return loc;
     const resolved = locateInWorkspace(workspace, loc.relativePath);
-    if (
-      resolved.kind !== 'workspace' ||
-      !(yield* fsCall(() => AbsoluteFS.isFile(resolved.absolutePath)))
-    ) {
+    // `stat` follows a link, as the `isFile` this replaces did, so a symlink to
+    // a file counts and a dangling one (or a directory) does not.
+    const isFile = yield* fs.stat(resolved.absolutePath).pipe(
+      Effect.map((info) => info.type === 'File'),
+      Effect.orElseSucceed(() => false),
+    );
+    if (resolved.kind !== 'workspace' || !isFile) {
       return loc;
     }
     return createWorkspaceLocation(
@@ -133,7 +140,7 @@ export const computeOutputDiffStats = Effect.fn(
     roundOutputs,
     (output) =>
       Effect.gen(function* (): Generator<
-        Effect.Effect<unknown, Error>,
+        Effect.Effect<unknown, Error, FileSystem.FileSystem>,
         OutputFileInfo
       > {
         const location = output.location;

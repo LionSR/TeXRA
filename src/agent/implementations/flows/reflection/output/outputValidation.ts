@@ -5,13 +5,11 @@
  * reporting missing files for user notification.
  */
 
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import { debugInternal } from '@agent/trace';
 import type { FileLocation } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
-import { fsCall } from '@utils/errors/fsCall';
 import {
   publishMissingOutputs,
   reportMissingOutputs,
@@ -28,6 +26,7 @@ export const checkExpectedOutputs = Effect.fn(
   outputLocation: FileLocation,
   currRound: number,
 ) {
+  const fs = yield* FileSystem.FileSystem;
   const expected = deps.config.outputFiles;
   let missing: string[] = [];
 
@@ -35,17 +34,15 @@ export const checkExpectedOutputs = Effect.fn(
     const results = yield* Effect.forEach(
       expected,
       (file) =>
-        fsCall(() =>
-          AbsoluteFS.exists(deps.fileService.createLocation(file).absolutePath),
-        ).pipe(Effect.map((exists) => ({ file, exists }))),
+        fs
+          .exists(deps.fileService.createLocation(file).absolutePath)
+          .pipe(Effect.map((exists) => ({ file, exists }))),
       { concurrency: 'unbounded' },
     );
     missing = results.filter((r) => !r.exists).map((r) => r.file);
 
     if (missing.length > 0) {
-      const xmlExists = yield* fsCall(() =>
-        AbsoluteFS.exists(outputLocation.absolutePath),
-      );
+      const xmlExists = yield* fs.exists(outputLocation.absolutePath);
       reportMissingOutputs(state, deps.logger, {
         round: currRound,
         missing,

@@ -44,16 +44,7 @@ export const getLinterMessages = Effect.fn('linter.getLinterMessages')(
     });
 
     if (isTexFile(filePath)) {
-      yield* Effect.tryPromise({
-        try: () => triggerLaTeXBuild(filePath, fileUri),
-        catch: (cause) =>
-          new DiagnosticsReadFailed({
-            reason: 'build-failed',
-            path: filePath,
-            message: 'The LaTeX build that refreshes diagnostics failed.',
-            cause,
-          }),
-      });
+      yield* triggerLaTeXBuild(filePath, fileUri);
     }
 
     return yield* Effect.try({
@@ -71,29 +62,50 @@ export const getLinterMessages = Effect.fn('linter.getLinterMessages')(
 
 /**
  * Trigger a LaTeX build and wait for diagnostics to update.
+ *
+ * Every stage fails as the same `build-failed` reason: the caller cannot act
+ * differently on a file that would not open than on a build that would not
+ * start, and both leave the diagnostics just as stale.
  */
-async function triggerLaTeXBuild(
+const triggerLaTeXBuild = (
   filePath: string,
   fileUri: vscode.Uri,
-): Promise<void> {
-  await openFileInEditor(fileUri.fsPath, {
-    preserveFocus: true,
-    save: true,
-    reuseVisible: true,
-  });
+): Effect.Effect<void, DiagnosticsReadFailed> => {
+  const buildFailed = (cause: unknown) =>
+    new DiagnosticsReadFailed({
+      reason: 'build-failed',
+      path: filePath,
+      message: 'The LaTeX build that refreshes diagnostics failed.',
+      cause,
+    });
 
-  const diagnosticsWait = waitForDiagnosticsChange(
-    fileUri,
-    DIAGNOSTIC_UPDATE_TIMEOUT_MS,
-  );
+  return Effect.gen(function* () {
+    yield* Effect.tryPromise({
+      try: () =>
+        openFileInEditor(fileUri.fsPath, {
+          preserveFocus: true,
+          save: true,
+          reuseVisible: true,
+        }),
+      catch: buildFailed,
+    });
 
-  try {
-    await invokeLatexWorkshopBuild(
+    const diagnosticsWait = waitForDiagnosticsChange(
+      fileUri,
+      DIAGNOSTIC_UPDATE_TIMEOUT_MS,
+    );
+
+    // The wait is the `finally` of the build attempt: the build command never
+    // fails on its own — it warn-logs — so sequencing the two is what makes
+    // the wait run however the build went.
+    yield* invokeLatexWorkshopBuild(
       fileUri,
       CHANNEL,
       'Failed to trigger LaTeX build',
     );
-  } finally {
-    await diagnosticsWait;
-  }
-}
+    yield* Effect.tryPromise({
+      try: () => diagnosticsWait,
+      catch: buildFailed,
+    });
+  });
+};

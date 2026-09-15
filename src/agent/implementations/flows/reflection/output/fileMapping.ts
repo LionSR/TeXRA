@@ -1,14 +1,12 @@
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-
-import { fsCall } from '@utils/errors/fsCall';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 /**
  * Create a mapping between two file lists based on name similarity.
  * Uses string keys (comparable paths) for robust lookups, FileLocation values for data.
@@ -82,7 +80,8 @@ export const replaceInputCommands = Effect.fn(
   baseFiles: FileLocation[],
   outputFiles: FileLocation[],
   logger?: AgentTrace,
-) {
+): Effect.fn.Return<void, never, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
   if (baseFiles.length === 0 || outputFiles.length === 0) {
     logger?.debug('No files to process for input command replacement');
     return;
@@ -148,8 +147,8 @@ export const replaceInputCommands = Effect.fn(
     const outputPath = fileLocationDisplayPath(outputLocation);
 
     yield* Effect.gen(function* () {
-      const content = yield* fsCall(() =>
-        AbsoluteFS.read(outputLocation.absolutePath),
+      const content = normalizeLineEndings(
+        yield* fs.readFileString(outputLocation.absolutePath),
       );
       const newContent = content.replaceAll(
         /\\input{([^}]+)}/g,
@@ -163,9 +162,7 @@ export const replaceInputCommands = Effect.fn(
       );
 
       if (newContent !== content) {
-        yield* fsCall(() =>
-          AbsoluteFS.write(outputLocation.absolutePath, newContent),
-        );
+        yield* fs.writeFileString(outputLocation.absolutePath, newContent);
         logger?.debug(`Updated input commands in ${outputPath}`);
       }
     }).pipe(
