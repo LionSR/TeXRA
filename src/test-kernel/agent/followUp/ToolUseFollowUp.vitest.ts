@@ -14,6 +14,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { AgentResumeFailed } from '@platform/interfaces';
 import { aggregateId, type RunId, type SessionEvent } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
@@ -28,8 +29,10 @@ const settle = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
 );
 
-function mockTryResume(): Mock<() => Promise<boolean>> {
-  return vi.fn(async () => true);
+function mockTryResume(): Mock<
+  () => Effect.Effect<boolean, AgentResumeFailed>
+> {
+  return vi.fn(() => Effect.succeed(true));
 }
 
 /**
@@ -286,7 +289,7 @@ describe('submitFollowUp', () => {
       const claimed: unknown[] = [];
       const tryResumeRun = vi.fn((_: RunId, recovery: unknown) => {
         claimed.push(recovery);
-        return barrier.promise;
+        return Effect.promise(() => barrier.promise);
       });
 
       const first = yield* Effect.forkChild(
@@ -331,7 +334,9 @@ describe('submitFollowUp', () => {
         const fiber = yield* Effect.forkChild(
           submitFollowUp(runId, 'keep this input', {
             session,
-            resumePort: { tryResumeRun: () => resumed.promise },
+            resumePort: {
+              tryResumeRun: () => Effect.promise(() => resumed.promise),
+            },
             onAdmitted: () => {
               Deferred.doneUnsafe(admitted, Effect.void);
             },
@@ -352,7 +357,7 @@ describe('submitFollowUp', () => {
       }),
   );
 
-  it.effect('releases recovery when tryResumeRun rejects', () =>
+  it.effect('releases recovery when tryResumeRun fails', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
       const session = fakeSession({ kind: 'queue' });
@@ -360,7 +365,14 @@ describe('submitFollowUp', () => {
         yield* submitFollowUp(runId, 'keep this input', {
           session,
           resumePort: {
-            tryResumeRun: () => Promise.reject(new Error('resume prep failed')),
+            tryResumeRun: () =>
+              Effect.fail(
+                new AgentResumeFailed({
+                  runId,
+                  message: 'resume prep failed',
+                  cause: new Error('resume prep failed'),
+                }),
+              ),
           },
         }),
       ).toEqual({ status: 'queued', wake: 'failed' });

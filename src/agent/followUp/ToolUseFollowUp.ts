@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Exit } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import {
@@ -118,8 +118,11 @@ export function notifyFollowUpSent(
 
 /**
  * Wake a recovery lease whose follow-up row is already durable. The wake
- * owns its settlement even if the submitting fiber stops waiting: a declined
- * or faulted wake releases the lease so the next attempt can claim it.
+ * owns its settlement even if the submitting fiber stops waiting: a declined,
+ * faulted, or abandoned wake releases the lease so the next attempt can
+ * claim it. `onExit` is what carries that: it runs on an interrupt as well
+ * as on the attempt's own exit, where `tap`/`catch` would leave the lease
+ * claimed behind an interrupted submitter.
  */
 export function startFollowUpWake(
   runId: RunId,
@@ -127,20 +130,18 @@ export function startFollowUpWake(
   session: SessionHandle,
   resumePort?: Pick<AgentResumePort, 'tryResumeRun'>,
 ): Effect.Effect<boolean> {
+  const release = Effect.sync(() =>
+    session.followUps.release(recovery, 'recoverable'),
+  );
   return Effect.suspend(() =>
     (resumePort ?? platform().agentResume).tryResumeRun(runId, recovery),
   ).pipe(
-    Effect.tap((resumed) =>
-      Effect.sync(() => {
-        if (!resumed) session.followUps.release(recovery, 'recoverable');
-      }),
+    Effect.onExit((exit) =>
+      Exit.isSuccess(exit) && exit.value ? Effect.void : release,
     ),
-    Effect.catch(() =>
-      Effect.sync(() => {
-        session.followUps.release(recovery, 'recoverable');
-        return false;
-      }),
-    ),
+    // A faulted attempt is `false` to this caller: the retry decision is what
+    // it asked for, and the failure has already settled the lease above.
+    Effect.catch(() => Effect.succeed(false)),
   );
 }
 
