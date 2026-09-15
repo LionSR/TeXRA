@@ -1,3 +1,4 @@
+import type { ConfigWriteFailed } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { settingByKey, type SettingHost } from '@shared/schemas';
 import {
@@ -5,6 +6,7 @@ import {
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
+import type { Effect } from 'effect';
 
 function requireEntry(key: string) {
   const entry = settingByKey(key);
@@ -83,7 +85,7 @@ export function readSettingFrom<T>(stores: SettingsStores, key: string): T {
 export function writePlatformSetting(
   key: string,
   value: unknown,
-): Promise<void> {
+): Effect.Effect<void, ConfigWriteFailed | Error> {
   return writeSetting(
     requireEntry(key),
     value,

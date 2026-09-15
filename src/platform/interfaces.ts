@@ -2,7 +2,7 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
-import { Context, Data, Layer } from 'effect';
+import { Context, Data, Effect, Layer } from 'effect';
 import type { RunId } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
@@ -36,11 +36,9 @@ export interface ConfigInspection<T = unknown> {
  * store's: a filesystem error under the config path, or a config file whose
  * contents are no longer a JSON object.
  *
- * {@link ConfigProvider.update} itself is still `Promise`-shaped, because a
- * settings slot write travels with the state slot beside it
- * (`settingsAccess.writeSlot`) and with the provider routing that reads it —
- * the same fifty-file plane the credential lane measured and stopped at. This
- * is the tag its Effect-side callers raise until that plane moves.
+ * {@link ConfigProvider.update} raises it as the failure of the write itself,
+ * so a caller inside a program composes the write rather than adopting a
+ * rejection it cannot type.
  */
 export class ConfigWriteFailed extends Data.TaggedError('ConfigWriteFailed')<{
   readonly key: string;
@@ -61,7 +59,17 @@ export interface ConfigProvider {
    * for keys the catalog does not own.
    */
   get<T>(key: string, defaultValue?: T): T;
-  update<T>(key: string, value: T, target?: ConfigTarget): Promise<void>;
+  /**
+   * Persist one value to the target's store. The write is an `Effect` so it
+   * composes directly into the caller's program: the store's own write is an
+   * Effect, and a Promise face here could only be an injected runner that
+   * executes that Effect on the caller's behalf.
+   */
+  update<T>(
+    key: string,
+    value: T,
+    target?: ConfigTarget,
+  ): Effect.Effect<void, ConfigWriteFailed>;
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined;
   isExplicitlySet(key: string): boolean;
 }

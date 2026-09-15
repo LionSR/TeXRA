@@ -499,8 +499,11 @@ describe('CliConfigForm API-key status lifecycle', () => {
 describe('/config slash command wiring', () => {
   it('wires the roster and reads through the injected CLI stores', async () => {
     const { stores, config } = makeFakeSettingsStores();
-    // Seed the git-author config slot the CLI reads from.
-    void config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
+    // Seed the git-author config slot the CLI reads from. Awaited, so the
+    // read below cannot race the write.
+    await Effect.runPromise(
+      config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false),
+    );
 
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),

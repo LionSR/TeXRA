@@ -115,10 +115,13 @@ export async function signInWithSubscription(
       catch: (cause) => new SubscriptionSignInFailed({ cause }),
     });
 
-    const update = yield* Effect.tryPromise({
-      try: () => provider.setPreferSubscription(true),
-      catch: (cause) => new SubscriptionPreferenceUpdateFailed({ cause }),
-    });
+    const update = yield* provider
+      .setPreferSubscription(true)
+      .pipe(
+        Effect.mapError(
+          (cause) => new SubscriptionPreferenceUpdateFailed({ cause }),
+        ),
+      );
 
     if (update.effective) {
       void vscode.window.showInformationMessage(

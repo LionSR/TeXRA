@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { JsonConfigProvider, type ConfigStore } from './jsonConfigProvider';
 
 /** Process-local {@link ConfigStore}, the in-memory twin of a `JsonStore`. */
@@ -12,14 +14,16 @@ class MemoryConfigStore implements ConfigStore {
     return this.values.has(key);
   }
 
-  async update(key: string, value: unknown): Promise<void> {
-    // `JsonStore` treats `undefined` as a delete; match it so
-    // `isExplicitlySet` agrees across backings.
-    if (value === undefined) {
-      this.values.delete(key);
-    } else {
-      this.values.set(key, value);
-    }
+  set(key: string, value: unknown): Effect.Effect<void, Error> {
+    return Effect.sync(() => {
+      // `JsonStore` treats `undefined` as a delete; match it so
+      // `isExplicitlySet` agrees across backings.
+      if (value === undefined) {
+        this.values.delete(key);
+      } else {
+        this.values.set(key, value);
+      }
+    });
   }
 }
 

@@ -40,9 +40,9 @@ const codexMocks = vi.hoisted(() => ({
     }): Effect.Effect<{ email: string }, unknown> =>
       Effect.succeed({ email: 'user@example.com' }),
   ),
-  setPreferSubscription: vi.fn(async (enabled: boolean) => ({
-    effective: enabled,
-  })),
+  setPreferSubscription: vi.fn((enabled: boolean) =>
+    Effect.succeed({ effective: enabled }),
+  ),
   signOut: vi.fn(async () => undefined),
 }));
 
@@ -226,9 +226,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     codexMocks.loginWithDeviceCode.mockReturnValue(
       Effect.succeed({ email: 'user@example.com' }),
     );
-    codexMocks.setPreferSubscription.mockImplementation(async (enabled) => ({
-      effective: enabled,
-    }));
+    codexMocks.setPreferSubscription.mockImplementation((enabled: boolean) =>
+      Effect.succeed({ effective: enabled }),
+    );
     codexMocks.signOut.mockResolvedValue(undefined);
   });
 
@@ -351,9 +351,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
   it('warns when a more specific setting overrides the requested subscription toggle', async () => {
     const fixture = await createFixture();
-    codexMocks.setPreferSubscription.mockResolvedValueOnce({
-      effective: false,
-    });
+    codexMocks.setPreferSubscription.mockReturnValueOnce(
+      Effect.succeed({ effective: false }),
+    );
 
     await assertSupported(
       fixture.controller.chatGptHandlers.setChatGptPreferSubscription,

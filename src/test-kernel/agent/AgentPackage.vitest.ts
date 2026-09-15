@@ -855,12 +855,14 @@ describe('agent package Node configuration', () => {
       workspaceDir: '/workspace',
     }).roots;
 
-    await config.update('texra.goal.enabled', true, 'global');
+    await Effect.runPromise(
+      config.update('texra.goal.enabled', true, 'global'),
+    );
     expect(config.get('goal.enabled')).toBe(true);
     expect(config.inspect('goal.enabled')?.globalValue).toBe(true);
     expect(config.isExplicitlySet('goal.enabled')).toBe(true);
 
-    await config.update('goal.enabled', undefined, 'global');
+    await Effect.runPromise(config.update('goal.enabled', undefined, 'global'));
     // With no explicit value, resolution matches every host: the core-schema
     // default (goal.enabled defaults to true) wins over the caller fallback.
     expect(config.get('texra.goal.enabled', false)).toBe(true);

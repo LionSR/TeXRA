@@ -8,7 +8,7 @@ import {
   type PlatformSecrets,
   type SecretsOperation,
 } from '@platform/secrets';
-import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
+import type { JsonStore } from '@platform/defaults/jsonStore';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -241,7 +241,7 @@ export class ElectronSecrets implements PlatformSecrets {
   ): Effect.Effect<void, SecretsFailed> {
     const operation: SecretsOperation = stored ? 'set' : 'delete';
     return Effect.mapError(
-      Effect.provide(this.store.set(key, stored), nodeFileServices),
+      this.store.set(key, stored),
       (cause) =>
         new SecretsFailed({
           reason: 'io',
