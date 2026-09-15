@@ -580,11 +580,10 @@ function createWindow(options: {
             cause,
           }),
       }).pipe(
-        // The only failure this expression can carry is the one built above,
-        // so the handler names that tag: a second failure added here fails to
-        // compile instead of reading as a documentation URL that would not
-        // open.
-        Effect.catchTag('ExternalOpenFailed', (error) =>
+        // The handler's parameter is the whole error type this expression can
+        // carry, so a second failure added here fails to compile instead of
+        // reading as a documentation URL that would not open.
+        Effect.catch((error: ExternalOpenFailed) =>
           Effect.sync(() => reportBackgroundError(error)),
         ),
       ),
@@ -1562,10 +1561,10 @@ function createWindow(options: {
           cause,
         }),
     }).pipe(
-      // The funnel refresh is the only step that can fail here, so the handler
-      // names its tag: a second failure added to this channel fails to compile
+      // The handler's parameter is the whole error type this expression can
+      // carry, so a second failure added to this channel fails to compile
       // instead of being reported as a funnel refresh the host could not do.
-      Effect.catchTag('OnboardingRefreshFailed', (error) =>
+      Effect.catch((error: OnboardingRefreshFailed) =>
         Effect.sync(() => reportAsyncError(error)),
       ),
     ),
@@ -1998,11 +1997,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                     cause,
                   }),
               }).pipe(
-                // The warning dialog is the only step that can fail here, so
-                // the handler names its tag: a second failure added to this
+                // The handler's parameter is the whole error type this
+                // expression can carry, so a second failure added to this
                 // channel fails to compile instead of being logged as a
                 // warning that would not show.
-                Effect.catchTag('NotificationFailed', (error) =>
+                Effect.catch((error: NotificationFailed) =>
                   Effect.sync(() => console.error(error)),
                 ),
               ),
