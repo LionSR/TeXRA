@@ -22,6 +22,7 @@ import {
 } from '@shared/schemas';
 
 import { executed } from '@tools/core/result';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { defineTool } from '../core/define';
 
 /**
@@ -134,7 +135,7 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
       new ConfigWriteFailed({
         key: input.key,
         target,
-        message: `The ${target} configuration store refused the write.`,
+        message: `The ${target} configuration store refused the write: ${toErrorMessage(cause)}`,
         cause,
       }),
   });
