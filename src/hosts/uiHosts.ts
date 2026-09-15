@@ -27,11 +27,12 @@ export interface DiffViewHost {
  * The operating system would not open what it was handed: no handler for the
  * URL's scheme or the file's type, or the shell refusing the request.
  *
- * {@link ExternalOpener.openExternal} and the desktop's sibling `openPath`
- * keep their `Promise` shape — they are bound in the desktop's browser-view,
- * shell, settings, tooling and credential surfaces and in the VS Code opener,
- * more than one lane carries — so this is the tag their Effect-side callers
- * raise. `kind` says whether a URL or a local path was refused.
+ * This is the tag {@link ExternalOpener.openExternal} fails with. The
+ * desktop's sibling `openPath` keeps its `Promise` shape — it is bound in the
+ * desktop's browser-view, shell, settings, tooling and credential surfaces, a
+ * permanent face by owner ruling — so the Effect-side callers of that fan-out
+ * raise this tag from their own `Effect.tryPromise`. `kind` says whether a
+ * URL or a local path was refused.
  */
 export class ExternalOpenFailed extends Data.TaggedError('ExternalOpenFailed')<{
   readonly kind: 'url' | 'path';
@@ -40,8 +41,17 @@ export class ExternalOpenFailed extends Data.TaggedError('ExternalOpenFailed')<{
   readonly cause: unknown;
 }> {}
 
+/**
+ * Open a URL in the host's default browser. The member is an `Effect`, so a
+ * host that could not open it reaches the caller as {@link ExternalOpenFailed}
+ * rather than as `unknown`. Neither VS Code's `env.openExternal` nor
+ * Electron's `shell.openExternal` has a cancellation channel, so an
+ * interrupted fiber detaches from the wait — the foreign-API limitation the
+ * port retains. The desktop's shell-facing fan-out behind this port keeps
+ * its `Promise` shape by ruling; the desktop composition root adapts it here.
+ */
 export interface ExternalOpener {
-  openExternal(url: string): Promise<void>;
+  openExternal(url: string): Effect.Effect<void, ExternalOpenFailed>;
 }
 
 /**

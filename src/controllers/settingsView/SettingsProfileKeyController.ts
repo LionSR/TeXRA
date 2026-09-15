@@ -4,7 +4,12 @@ import { Cause, Effect, Exit } from 'effect';
 // Local imports - secrets
 import { storeCredential } from '@common/secrets/storeCredential';
 // Local imports - hosts
-import type { ExternalOpener, PromptFailed, PromptHost } from '@hosts/uiHosts';
+import type {
+  ExternalOpenFailed,
+  ExternalOpener,
+  PromptFailed,
+  PromptHost,
+} from '@hosts/uiHosts';
 // Local imports - model
 import { apiKeySecretName, isApiProvider } from '@model/apiProviders';
 // Local imports - platform
@@ -86,11 +91,11 @@ export class SettingsProfileKeyController {
     );
   }
 
-  async openProviderKeyUrl(provider: string): Promise<void> {
+  openProviderKeyUrl(
+    provider: string,
+  ): Effect.Effect<void, ExternalOpenFailed> {
     const url = this.deps.getProviderKeyUrl(provider);
-    if (url) {
-      await this.deps.externalOpener.openExternal(url);
-    }
+    return url ? this.deps.externalOpener.openExternal(url) : Effect.void;
   }
 
   private storeProviderKey(
