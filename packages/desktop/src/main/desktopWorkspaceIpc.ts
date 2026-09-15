@@ -460,7 +460,10 @@ export function createDesktopWorkspaceIpc(
         session.write(`${initialCommand}\r`);
       }
     }).pipe(
-      Effect.catch((error) =>
+      // The only failure this can carry is the host call above, so the handler
+      // names that tag: a second failure added to the channel propagates to the
+      // window's reporter instead of reading as a terminal that would not start.
+      Effect.catchTag('WorkspaceHostCallFailed', (error) =>
         // Surface in the terminal itself: a silent no-op looks like a shell
         // that never printed a prompt.
         reportRequestFailure(error, {
@@ -483,8 +486,11 @@ export function createDesktopWorkspaceIpc(
         }),
     }).pipe(
       // The renderer's loading state clears either way, but the failure still
-      // reaches the window's reporter instead of being swallowed.
-      Effect.catch((error) =>
+      // reaches the window's reporter instead of being swallowed. Naming the
+      // one tag the channel carries keeps that true: a second failure added
+      // here fails the request loudly rather than degrading to an empty
+      // environment summary.
+      Effect.catchTag('WorkspaceHostCallFailed', (error) =>
         Effect.sync(() => {
           reportError(error);
           return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
