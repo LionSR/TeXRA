@@ -20,6 +20,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { Secrets } from '@platform/secrets';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
@@ -216,6 +217,7 @@ function prSubscriptionActivitySentence(
 const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   input: SubscribeInput,
   runId: RunId,
+  session: SessionHandle,
 ) {
   yield* requireToken();
   const target = requirePath(input);
@@ -224,7 +226,11 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   const annotationLevelDescription =
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
   if (target.kind === 'repo') {
-    const created = yield* repoSubscriptionRegistry.bind(runId, target);
+    const created = yield* repoSubscriptionRegistry.bind(
+      runId,
+      target,
+      session,
+    );
     const slug = slugOf(target);
     return executed(
       created
@@ -236,10 +242,14 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
     );
   }
   if (target.kind === 'pr') {
-    const created = yield* prSubscriptionRegistry.bind(runId, {
-      ...target,
-      minAnnotationLevel,
-    });
+    const created = yield* prSubscriptionRegistry.bind(
+      runId,
+      {
+        ...target,
+        minAnnotationLevel,
+      },
+      session,
+    );
     const slug = prRef(slugOf(target), target.pullNumber);
     return executed(
       created
@@ -268,12 +278,16 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
       (yield* resolveIssueIsPR(target.owner, target.repo, target.issueNumber)));
 
   if (isPR) {
-    const created = yield* prSubscriptionRegistry.bind(runId, {
-      owner: target.owner,
-      repo: target.repo,
-      pullNumber: target.issueNumber,
-      minAnnotationLevel,
-    });
+    const created = yield* prSubscriptionRegistry.bind(
+      runId,
+      {
+        owner: target.owner,
+        repo: target.repo,
+        pullNumber: target.issueNumber,
+        minAnnotationLevel,
+      },
+      session,
+    );
     let summary: string;
     if (!created) {
       summary = `Already subscribed to ${prSlug}`;
@@ -289,7 +303,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
       summary,
     );
   }
-  const created = yield* issueSubscriptionRegistry.bind(runId, target);
+  const created = yield* issueSubscriptionRegistry.bind(runId, target, session);
   return executed(
     created
       ? `Subscribed to ${issueSlug}. New comments and state transitions (closed / reopened) arrive as <github-webhook-activity> follow-ups. The subscription stays active across close so reopens are caught: call command="unsubscribe" to release the slot.`
@@ -578,8 +592,8 @@ export const GitHubSubscriptionTool = defineTool({
   execute: (input: GitHubSubscriptionInput) =>
     Effect.gen(function* () {
       const toolCall = yield* ToolCall;
-      const runId = toolCall.run?.runId;
-      if (!runId) {
+      const run = toolCall.run;
+      if (!run) {
         return yield* Effect.fail(
           new ToolError(
             'github_subscription must be called from within an agent stream.',
@@ -588,11 +602,11 @@ export const GitHubSubscriptionTool = defineTool({
       }
       switch (input.command) {
         case 'subscribe':
-          return yield* execSubscribe(input, runId);
+          return yield* execSubscribe(input, run.runId, run.session);
         case 'unsubscribe':
-          return yield* Effect.sync(() => execUnsubscribe(input, runId));
+          return yield* Effect.sync(() => execUnsubscribe(input, run.runId));
         case 'list':
-          return yield* Effect.sync(() => execList(runId));
+          return yield* Effect.sync(() => execList(run.runId));
         case 'find_current':
           return yield* execFindCurrent(input, toolCall.workingDirectory);
       }
