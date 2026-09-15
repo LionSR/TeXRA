@@ -20,6 +20,7 @@ import {
 } from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -114,6 +115,8 @@ export function registerLanguageModelTools(
                   inScope: (operation) => operation(),
                 }),
                 Effect.provideService(Runs, session.runs),
+                // The call works on this session's folders, as a run's would.
+                Effect.provide(sessionFsLayer(session.roots)),
               );
             }),
           ),

@@ -7,7 +7,6 @@ import ignore from 'ignore';
 
 // Local imports - utils
 import { filterNotNull } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toPosixPath } from '@utils/core/pathCore';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -62,13 +61,15 @@ const readGlobalGitignore = () => {
 };
 
 /**
- * Build the ignore matcher for the current workspace from its ignore policy
- * files. Read on every call: the workspace is scoped per session and a
- * process can serve several projects, and each call should see the policy as
+ * Build the ignore matcher for `workspacePath` from its ignore policy files.
+ * The root is the caller's — the `WorkspaceFs` of the session the call works
+ * on — rather than whichever roots the calling fiber carries, so a listing
+ * and the policy that filters it name the same workspace. Read on every call:
+ * a process serves several projects, and each call should see the policy as
  * it is on disk now.
  */
 export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(function* (
-  workspacePath: string | undefined = WorkspaceFS.getPath(),
+  workspacePath: string | undefined,
 ) {
   if (!workspacePath) {
     return EMPTY_GITIGNORE_MATCHER;

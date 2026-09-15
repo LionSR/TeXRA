@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
+import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
@@ -19,7 +20,6 @@ import {
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { filterNotNull } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toPosixPath } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
@@ -51,6 +51,8 @@ interface GlobMatchInfo {
  */
 interface GlobPorts extends WorkspacePathPorts {
   readonly signal: AbortSignal | undefined;
+  /** The root of the call's own workspace view; `undefined` with no folder open. */
+  readonly workspaceRoot: string | undefined;
 }
 
 const runGlob = Effect.fn('GlobTool.execute')(function* (
@@ -61,9 +63,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   const { path, display } = ports.inScope(() =>
     resolveAndFormat(input.path ?? undefined, root),
   );
-  const gitignore = yield* getGitignoreMatcher(
-    ports.inScope(() => WorkspaceFS.getPath()),
-  );
+  const gitignore = yield* getGitignoreMatcher(ports.workspaceRoot);
 
   const cancelSignal = ports.signal;
   const matches = yield* Effect.tryPromise({
@@ -171,6 +171,7 @@ export const GlobTool = defineTool({
     const ports: GlobPorts = {
       ...workspacePathPorts(call),
       signal: yield* Effect.abortSignal,
+      workspaceRoot: (yield* WorkspaceFs).root,
     };
     return yield* runGlob(ports, input);
   }),
