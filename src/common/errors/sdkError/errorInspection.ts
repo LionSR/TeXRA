@@ -1,7 +1,8 @@
 import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import { Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import { isNonEmptyString, isObject, isString } from '@utils/core';
+import { isObject } from '@utils/core';
+import { isNonEmptyString, isString } from '@utils/text/stringUtils';
 
 import { pickStatus } from './sdkErrorKinds';
 

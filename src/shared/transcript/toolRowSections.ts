@@ -33,7 +33,8 @@ import {
   normalizeToolName,
 } from '@shared/tools/toolDisplayName';
 import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
-import { filterNotNullish, formatDuration, isObject } from '@utils/core';
+import { filterNotNullish, isObject } from '@utils/core';
+import { formatDuration } from '@utils/text/stringUtils';
 
 import { stringifyPayload, transcriptText } from './transcriptText';
 import type {

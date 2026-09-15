@@ -9,8 +9,10 @@ import {
 import { STATUS_DOT } from '@cli/tui/ui/glyphs';
 import type { RunView } from '@shared/session/sessionView';
 import { TOKENS_GENERATED } from '@shared/copy/workflowCall';
-import { formatCompactTokenCount } from '@utils/core';
-import { formatResultCount } from '@utils/text/stringUtils';
+import {
+  formatCompactTokenCount,
+  formatResultCount,
+} from '@utils/text/stringUtils';
 
 // Local imports - TUI state
 import type { PendingApprovalKind } from '../state/approvalQueue';

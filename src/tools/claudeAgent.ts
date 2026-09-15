@@ -57,12 +57,12 @@ import type {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { requestBashApproval } from '@tools/approval/bashApproval';
+import { linkAbortSignals } from '@utils/core';
 import {
   formatWallTimeSeconds,
   isNonEmptyString,
-  linkAbortSignals,
-} from '@utils/core';
-import { previewLabel } from '@utils/text/stringUtils';
+  previewLabel,
+} from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports

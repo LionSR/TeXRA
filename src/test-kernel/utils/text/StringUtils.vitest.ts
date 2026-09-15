@@ -7,7 +7,6 @@ import {
   formatCompactDuration,
   formatCompactTokenCount,
   formatResultCount,
-  formatShortDateTime,
   pluralize,
   splitContentLines,
   splitOutputLines,

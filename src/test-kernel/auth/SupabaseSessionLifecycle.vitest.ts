@@ -8,13 +8,15 @@ import { describe, it } from 'vitest';
 // Local imports - auth
 import { callPort, runAuthProgram } from '@auth/authProgram';
 import {
-  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-  parseStoredSupabaseSession,
   SupabaseSessionCoordinator,
   toStorableSupabaseSession,
   type SupabaseSession,
-  type SupabaseSessionStorage,
 } from '@auth/SupabaseSession';
+import {
+  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+  parseStoredSupabaseSession,
+  type SupabaseSessionStorage,
+} from '@auth/supabaseSessionTypes';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import type {
   Session as SupabaseNativeSession,

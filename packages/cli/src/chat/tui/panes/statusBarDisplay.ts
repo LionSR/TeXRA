@@ -36,14 +36,12 @@ import {
   formatFlowPositionLabel,
 } from '@shared/runs/runStatusDisplay';
 import type { RunView, SessionView } from '@shared/session/sessionView';
+import { assertNever, filterNotNullish, unique } from '@utils/core';
 import {
-  assertNever,
-  filterNotNullish,
   formatCompactDuration,
   formatCompactTokenCount,
-  unique,
-} from '@utils/core';
-import { formatResultCount } from '@utils/text/stringUtils';
+  formatResultCount,
+} from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';

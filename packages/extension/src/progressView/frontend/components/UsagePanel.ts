@@ -22,8 +22,11 @@ import { focusRingStyles } from '@shared/styles/controlStyles';
 // Local imports - shared icons and utils
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { clamp, formatCompactTokenCount } from '@utils/core';
-import { formatCostUsd } from '@utils/text/stringUtils';
+import { clamp } from '@utils/core';
+import {
+  formatCompactTokenCount,
+  formatCostUsd,
+} from '@utils/text/stringUtils';
 
 /** One token counter in the usage strip: icon, count, and its tooltip. */
 type TokenStat = {

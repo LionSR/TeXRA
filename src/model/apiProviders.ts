@@ -9,7 +9,7 @@ import { LRUCache } from 'lru-cache';
 
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
-import { isNonEmptyString } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
 

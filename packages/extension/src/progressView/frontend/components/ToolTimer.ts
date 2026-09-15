@@ -13,7 +13,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports
 import { TickerController } from '@shared/litControllers/TickerController';
-import { formatDuration } from '@utils/core';
+import { formatDuration } from '@utils/text/stringUtils';
 
 @customElement('tool-timer')
 export class ToolTimer extends LitElement {

@@ -25,7 +25,8 @@ import {
   setDefaultTeamId,
 } from '@shared/state/onboardingState';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { KeyedMutex, unique } from '@utils/core';
+import { unique } from '@utils/core';
+import { KeyedMutex } from '@utils/core/keyedMutex';
 
 const log = createLog('AgentRosterController');
 

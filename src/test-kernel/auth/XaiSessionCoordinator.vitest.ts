@@ -1,12 +1,12 @@
 import { Deferred, Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { XaiAuthError } from '@auth/xai';
 import {
-  XaiAuthError,
+  XaiSessionCoordinator,
   type XaiOAuthClient,
   type XaiSessionStorage,
-} from '@auth/xai';
-import { XaiSessionCoordinator } from '@auth/xai/XaiSessionCoordinator';
+} from '@auth/xai/XaiSessionCoordinator';
 import type { XaiSession, XaiTokenResponse } from '@auth/xai/xaiSessionTypes';
 import * as logger from '@logger/logUtils';
 

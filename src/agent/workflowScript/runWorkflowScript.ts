@@ -24,7 +24,8 @@ import {
   WORKFLOW_CALL_STATUS,
   WorkflowScriptFilesSchema,
 } from '@shared/schemas';
-import { isNonEmptyString, onAbort } from '@utils/core';
+import { onAbort } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 import { truncatedHexId } from '@utils/core/idHash';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 

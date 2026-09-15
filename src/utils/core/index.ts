@@ -11,25 +11,13 @@
  * Anything needing real filesystem-path semantics (segment traversal,
  * `.`/`..` resolution) should import from '@utils/core/pathCore' instead.
  *
- * String validation/formatting primitives live in @utils/text/stringUtils
- * (the single home for generic string helpers) and are re-exported here for
- * existing @utils/core consumers.
+ * String validation/formatting primitives live in @utils/text/stringUtils;
+ * per-key async serialization lives in @utils/core/keyedMutex.
  */
 import { customAlphabet, nanoid } from 'nanoid';
 import { basename as pathBasename, extname as pathExtname } from 'pathe';
 
 import type { RunId } from '@shared/schemas';
-
-export {
-  isNonEmptyString,
-  isString,
-  formatCompactDuration,
-  formatCompactTokenCount,
-  formatDuration,
-  formatWallTimeSeconds,
-  serializeError,
-} from '@utils/text/stringUtils';
-export { KeyedMutex } from '@utils/core/keyedMutex';
 
 // ---------------------------------------------------------------------------
 // typeGuards
