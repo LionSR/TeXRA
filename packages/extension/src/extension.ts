@@ -190,7 +190,9 @@ async function initVscodePlatform(
         acquireVscodeLanguageModel(context, configuration),
     },
     // Lean through the Lean 4 extension, not a direct `lake` pool.
-    lean: LeanLanguageServices.layer(createVscodeLeanLanguageServices(globalState)),
+    lean: LeanLanguageServices.layer(
+      createVscodeLeanLanguageServices(globalState),
+    ),
   });
   // The auth subsystem's run edge, installed here beside the runtime it
   // settles on (PRD R1): the edge is a process-wide value, so it belongs to

@@ -657,9 +657,10 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         const globalState = yield* AppState;
         // Best-effort by contract: the flag is a funnel input, so a refused
         // write is logged and the run still completes.
-        yield* (getFirstRunDone(globalState)
-          ? Effect.void
-          : setFirstRunDone(globalState, true)
+        yield* (
+          getFirstRunDone(globalState)
+            ? Effect.void
+            : setFirstRunDone(globalState, true)
         ).pipe(
           Effect.catch((error) =>
             Effect.sync(() =>

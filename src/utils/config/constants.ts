@@ -1,10 +1,7 @@
 // Local imports
 import type { Effect } from 'effect';
 
-import type {
-  StateStore,
-  StateWriteFailed,
-} from '@platform/interfaces';
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Time constants
