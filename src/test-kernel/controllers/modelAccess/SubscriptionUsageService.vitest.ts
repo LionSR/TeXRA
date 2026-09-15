@@ -13,9 +13,7 @@ import {
   parseGlmCodingPlanUsage,
 } from '@controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter';
 import { parseKimiCodeUsage } from '@controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
-import {
-  SubscriptionUsageService,
-} from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { SubscriptionUsageSnapshotSchema } from '@shared/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 
