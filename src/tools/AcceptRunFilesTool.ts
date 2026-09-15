@@ -18,7 +18,6 @@ import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { isNotADirectoryError } from '@common/errors/errorPredicates';
 import { appSignals } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
@@ -39,12 +38,9 @@ import {
 } from '@tools/approval/toolEditApproval';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { entryExists } from '@utils/files/fsEntryExists';
-import {
-  formatResultCount,
-  normalizeLineEndings,
-  pluralize,
-} from '@utils/text/stringUtils';
+import { entryExists, absentReason } from '@utils/files/fsEntryExists';
+import { readNormalizedFile } from '@utils/files/fsDurability';
+import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import {
   findExistingRunStoragePath,
   getOriginalSnapshotPath,
@@ -60,24 +56,8 @@ import { ensureError } from '@utils/errors/errorMessage';
 const fileAt = (fs: FileSystem.FileSystem, target: string) =>
   fs.stat(target).pipe(
     Effect.map((stats) => stats.type === 'File'),
-    Effect.catchIf(
-      (error) =>
-        error.reason._tag === 'NotFound' ||
-        (error.reason._tag === 'BadResource' &&
-          isNotADirectoryError(error.reason.cause)),
-      () => Effect.succeed(false),
-    ),
+    Effect.catchIf(absentReason, () => Effect.succeed(false)),
   );
-
-/** `BaseFS.read` without the facade: the bytes with line endings normalized. */
-const readAt = (fs: FileSystem.FileSystem, target: string) =>
-  fs
-    .readFile(target)
-    .pipe(
-      Effect.map((bytes) =>
-        normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
-      ),
-    );
 
 // ============================================================================
 // Rejection bookkeeping
@@ -269,7 +249,7 @@ Parameters map directly to subagent-result delivery attributes:
             const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
             const processFs = yield* FileSystem.FileSystem;
 
-            const rawContent = yield* readAt(
+            const rawContent = yield* readNormalizedFile(
               processFs,
               sourceLocation.absolutePath,
             ).pipe(Effect.mapError(ensureError));
@@ -292,7 +272,7 @@ Parameters map directly to subagent-result delivery attributes:
               Effect.mapError(ensureError),
             );
             const snapshotContent = snapshotExists
-              ? yield* readAt(processFs, snapshotPath).pipe(
+              ? yield* readNormalizedFile(processFs, snapshotPath).pipe(
                   Effect.mapError(ensureError),
                 )
               : undefined;
@@ -305,7 +285,7 @@ Parameters map directly to subagent-result delivery attributes:
             } else if (isSameFile) {
               originalContent = rawContent;
             } else if (destExists) {
-              originalContent = yield* readAt(
+              originalContent = yield* readNormalizedFile(
                 workspaceFs,
                 dest.relativePath,
               ).pipe(Effect.mapError(ensureError));

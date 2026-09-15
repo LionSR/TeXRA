@@ -25,6 +25,7 @@ import { errorResult } from '@tools/core/result';
 import { clamp, generateShortId } from '@utils/core';
 import { readConfig } from '@utils/config/configUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { applyPatchToText } from '@utils/text/diff';
 import { buildDiffHunks, unifiedDiffText } from '@utils/text/unifiedDiff';
@@ -344,16 +345,6 @@ interface WriteApprovedContentResult {
   baseContent: string;
 }
 
-/** `BaseFS.read` without the facade: the bytes with line endings normalized. */
-const readTarget = (fs: FileSystem.FileSystem, target: string) =>
-  fs
-    .readFile(target)
-    .pipe(
-      Effect.map((bytes) =>
-        normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
-      ),
-    );
-
 /**
  * Reconcile approved content with the current workspace file and mark the path
  * as read after the operation succeeds, so every approved-write caller keeps
@@ -386,7 +377,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
     if (exists) {
       // All content is already LF-normalized at the FS read boundary,
       // so comparisons work directly without extra normalization.
-      const currentContent = yield* readTarget(fs, path);
+      const currentContent = yield* readNormalizedFile(fs, path);
       baseContent = currentContent;
 
       if (currentContent === finalContent || originalContent === finalContent) {

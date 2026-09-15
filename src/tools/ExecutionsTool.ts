@@ -54,13 +54,10 @@ import {
 } from '@transcript';
 import { assertNever, unique } from '@utils/core';
 import { readPlatformSetting } from '@utils/config/platformSettings';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePath } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
-import {
-  formatBytes,
-  normalizeLineEndings,
-  splitContentLines,
-} from '@utils/text/stringUtils';
+import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -1043,7 +1040,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    return yield* readFileContent(context, yield* StorageFs, fullPath, {
+    return yield* readFileContent(yield* StorageFs, fullPath, {
       directoryErrorPath: displayPath,
       resultPath: displayPath,
       viewRange,
@@ -1119,7 +1116,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     return yield* readFileContent(
-      context,
       yield* FileSystem.FileSystem,
       resolved.absolutePath,
       {
@@ -1141,7 +1137,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
  * but the canonical resolved path on success).
  */
 const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
-  context: RunToolContext,
   fs: FileSystem.FileSystem,
   fullPath: string,
   {
@@ -1166,10 +1161,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     );
   }
 
-  const content = yield* fs.readFile(fullPath).pipe(
-    Effect.map((bytes) =>
-      normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
-    ),
+  const content = yield* readNormalizedFile(fs, fullPath).pipe(
     Effect.mapError(failed),
   );
   return formatFileView({

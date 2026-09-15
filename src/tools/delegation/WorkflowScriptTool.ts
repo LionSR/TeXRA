@@ -45,9 +45,9 @@ import {
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { entryExists } from '@utils/files/fsEntryExists';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { childRunDescription, createChildRun } from './childRun';
 
 // Local imports - errors
@@ -183,10 +183,7 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
     const fs = yield* fileSystemAt(resolved.fsPath);
     const exists = yield* entryExists(fs, resolved.fsPath);
     if (exists) {
-      const existing = yield* fs.readFile(resolved.fsPath).pipe(
-        Effect.map((bytes) =>
-          normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
-        ),
+      const existing = yield* readNormalizedFile(fs, resolved.fsPath).pipe(
         Effect.mapError(ensureError),
       );
       if (existing === script) {
@@ -306,10 +303,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         );
         scriptPath = resolved.relative;
         const scriptFs = yield* fileSystemAt(resolved.fsPath);
-        script = yield* scriptFs.readFile(resolved.fsPath).pipe(
-          Effect.map((bytes) =>
-            normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
-          ),
+        script = yield* readNormalizedFile(scriptFs, resolved.fsPath).pipe(
           Effect.mapError(
             (error) =>
               new ToolError(

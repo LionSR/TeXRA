@@ -10,7 +10,7 @@ import { isNotADirectoryError } from '@common/errors';
  * (`ENOTDIR`), which `FileSystem.exists` reports as `BadResource`. Every other
  * failure propagated, and still does.
  */
-const absentReason = (error: PlatformError.PlatformError): boolean =>
+export const absentReason = (error: PlatformError.PlatformError): boolean =>
   error.reason._tag === 'NotFound' ||
   (error.reason._tag === 'BadResource' &&
     isNotADirectoryError(error.reason.cause));
