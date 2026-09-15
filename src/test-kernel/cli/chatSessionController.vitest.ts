@@ -1268,6 +1268,7 @@ describe('createChatSessionController', () => {
       expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
         expect.anything(),
         'demo-model',
+        expect.anything(),
       ),
     );
 
@@ -1681,6 +1682,7 @@ describe('createChatSessionController', () => {
       expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
         expect.anything(),
         config.model,
+        expect.anything(),
       ),
     );
     ctrl.stop();

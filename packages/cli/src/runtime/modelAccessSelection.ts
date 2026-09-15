@@ -183,17 +183,16 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     ),
   );
   const appState = yield* AppState;
-  yield* Effect.tryPromise({
-    try: async () => {
-      await appState.update(GlobalStateKey.USE_OPENROUTER, false);
-    },
-    catch: (cause) =>
-      new StateWriteFailed({
-        key: GlobalStateKey.USE_OPENROUTER,
-        message: `The OpenRouter preference could not be cleared: ${toErrorMessage(cause)}`,
-        cause,
-      }),
-  });
+  yield* appState.update(GlobalStateKey.USE_OPENROUTER, false).pipe(
+    Effect.mapError(
+      (cause) =>
+        new StateWriteFailed({
+          key: GlobalStateKey.USE_OPENROUTER,
+          message: `The OpenRouter preference could not be cleared: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    ),
+  );
   return {
     message: update.effective
       ? `Prefer ${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`

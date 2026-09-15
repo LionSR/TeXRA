@@ -278,9 +278,10 @@ export function setCliAgentResumeHandler(
 export async function setCliHelperModel(
   state: StateStore,
   model: string | undefined,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   if (!model) return;
-  await state.update(GlobalStateKey.HELPER_MODEL, model);
+  await runtime.runPromise(state.update(GlobalStateKey.HELPER_MODEL, model));
 }
 
 /**

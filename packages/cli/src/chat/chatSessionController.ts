@@ -729,7 +729,7 @@ export function createChatSessionController(
       // honored by `isCancellationRequested`, which `resumeRun` re-reads once
       // this returns, rather than starting an agent the user cancelled.
       const adoptResumedRun = async (): Promise<void> => {
-        await setCliHelperModel(state, config.model);
+        await setCliHelperModel(state, config.model, runtime);
         adoptRunConfig(config, 'history');
         clearLocalTranscript();
         followUpQueue.clear();
@@ -916,7 +916,7 @@ export function createChatSessionController(
         session.runExitCode = CliExitCode.Success;
 
         yield* Effect.tryPromise({
-          try: () => setCliHelperModel(state, config.model),
+          try: () => setCliHelperModel(state, config.model, runtime),
           catch: (cause) =>
             new StateWriteFailed({
               key: GlobalStateKey.HELPER_MODEL,
@@ -1093,7 +1093,7 @@ export function createChatSessionController(
               }),
           });
           yield* Effect.tryPromise({
-            try: () => setCliHelperModel(state, selection.model),
+            try: () => setCliHelperModel(state, selection.model, runtime),
             catch: (cause) =>
               new StateWriteFailed({
                 key: GlobalStateKey.HELPER_MODEL,
