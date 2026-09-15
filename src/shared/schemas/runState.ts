@@ -43,12 +43,12 @@ const ActiveChildInfoSchema = z.object({
    * (finished) rows keep it. Optional because only a workflow-script run's
    * children have an owning phase.
    *
-   * A wire field: the roster rides verbatim onto the CLI NDJSON
-   * `run.children` record, and no in-repo reader consumes this off a roster
-   * row. It is not a join key. The run's task cards join their phase by the
-   * card's own `groupId` (`src/shared/runs/workflowRunModel.ts`), and a card
-   * joins the child that opened it by `call.childRunId`, so neither needs
-   * this field.
+   * Wire surface, not a join key. It rides the roster verbatim onto the CLI
+   * NDJSON `run.children` record, and no production reader consumes it off a
+   * roster row; `AgentRunLifecycle.vitest.ts` pins that wire shape. The run's
+   * task cards join their phase by the card's own `groupId`
+   * (`src/shared/runs/workflowRunModel.ts`), and a card joins the child that
+   * opened it by `call.childRunId`, so none of them needs this field.
    */
   workflowPhase: z.string().optional(),
 });
