@@ -610,7 +610,7 @@ describe('childRunLoop E2E fixtures', () => {
         const loop = yield* startLoop(runId, strategy, {
           childRun,
         });
-        const tryResumeRun = vi.fn(async () => false);
+        const tryResumeRun = vi.fn(() => Effect.succeed(false));
         const resumePort = { tryResumeRun };
         yield* Deferred.await(launchStarted);
 

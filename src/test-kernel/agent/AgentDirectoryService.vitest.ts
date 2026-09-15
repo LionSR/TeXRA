@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, it } from 'vitest';
 
 // Local imports
@@ -58,9 +59,12 @@ describe('AgentDirectoryService', () => {
   it('resolves built-in directories inside the packaged resources', async () => {
     const { service } = createService();
 
-    assert.equal(await service.builtIn(), path.join(RESOURCES_PATH, 'agents'));
     assert.equal(
-      await service.builtInToolUse(),
+      await Effect.runPromise(service.builtIn()),
+      path.join(RESOURCES_PATH, 'agents'),
+    );
+    assert.equal(
+      await Effect.runPromise(service.builtInToolUse()),
       path.join(RESOURCES_PATH, 'tool_use_agents'),
     );
     // Packaged content is read in place: nothing is created under storage.
@@ -74,7 +78,7 @@ describe('AgentDirectoryService', () => {
     const { service } = createService('   ');
 
     assert.equal(
-      await service.custom(),
+      await Effect.runPromise(service.custom()),
       path.join(storageBase(), 'custom_agents'),
     );
     assert.equal(
@@ -88,7 +92,7 @@ describe('AgentDirectoryService', () => {
     const customPath = path.join(parentDir, 'custom');
     const { service, reporter } = createService(customPath);
 
-    assert.equal(await service.custom(), customPath);
+    assert.equal(await Effect.runPromise(service.custom()), customPath);
     assert.equal(await AbsoluteFS.exists(customPath), true);
     assert.equal(
       await AbsoluteFS.exists(path.join(storageBase(), 'custom_agents')),
@@ -114,7 +118,7 @@ describe('AgentDirectoryService', () => {
       const { service, reporter } = createService(customPath);
 
       assert.equal(
-        await service.custom(),
+        await Effect.runPromise(service.custom()),
         path.join(storageBase(), 'custom_agents'),
       );
       assert.equal(
@@ -132,7 +136,7 @@ describe('AgentDirectoryService', () => {
     const customPath = path.join(parentDir, 'custom');
     const { service } = createService(customPath);
 
-    assert.deepEqual(await service.getAllLocal(), [
+    assert.deepEqual(await Effect.runPromise(service.getAllLocal()), [
       { directory: customPath, source: 'custom' },
       {
         directory: path.join(RESOURCES_PATH, 'agents'),
@@ -148,6 +152,9 @@ describe('AgentDirectoryService', () => {
   it('does not resolve a local directory for remote agents', async () => {
     const { service } = createService();
 
-    assert.equal(await service.getDirectory('remote'), undefined);
+    assert.equal(
+      await Effect.runPromise(service.getDirectory('remote')),
+      undefined,
+    );
   });
 });

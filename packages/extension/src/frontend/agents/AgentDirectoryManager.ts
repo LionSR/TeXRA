@@ -16,6 +16,7 @@ import {
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
+import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { AGENT_SOURCE } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -92,24 +93,33 @@ class AgentDirectoryManager {
     return this.host;
   }
 
-  async builtIn(): Promise<string> {
-    return this.getHost().directories.builtIn();
+  // The four readers below are the platform port's, so they stay `Effect`s:
+  // `Effect.suspend` keeps the uninitialized-host guard inside the Effect
+  // rather than throwing from a call that is supposed to return a program.
+  // A caller that owns a runtime and needs the path outright runs it.
+
+  builtIn(): Effect.Effect<string, AgentDirectoriesFailed> {
+    return Effect.suspend(() => this.getHost().directories.builtIn());
   }
 
-  async builtInToolUse(): Promise<string> {
-    return this.getHost().directories.builtInToolUse();
+  builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed> {
+    return Effect.suspend(() => this.getHost().directories.builtInToolUse());
   }
 
   /**
    * Get the directory for a given source type.
    * Returns undefined for Remote sources (which have no local directory).
    */
-  async getDirectory(source: AgentSource): Promise<string | undefined> {
-    return this.getHost().directories.getDirectory(source);
+  getDirectory(
+    source: AgentSource,
+  ): Effect.Effect<string | undefined, AgentDirectoriesFailed> {
+    return Effect.suspend(() =>
+      this.getHost().directories.getDirectory(source),
+    );
   }
 
-  async custom(): Promise<string> {
-    return this.getHost().directories.custom();
+  custom(): Effect.Effect<string, AgentDirectoriesFailed> {
+    return Effect.suspend(() => this.getHost().directories.custom());
   }
 
   async promptCustom(): Promise<string | undefined> {
@@ -206,36 +216,33 @@ class AgentDirectoryManager {
       return;
     }
 
-    await runSettledEffect(
-      runtime,
-      onRebuildLane(
-        Effect.tryPromise({
-          try: () => this.rebuildAgentWatchers(),
-          catch: (error) => error,
-        }),
-      ),
-    );
+    await runSettledEffect(runtime, onRebuildLane(this.rebuildAgentWatchers()));
   }
 
-  private async rebuildAgentWatchers(): Promise<void> {
-    if (!this.onAgentYamlChange) {
-      return;
-    }
+  private rebuildAgentWatchers(): Effect.Effect<void, unknown> {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.onAgentYamlChange) {
+        return;
+      }
 
-    const directories = await this.getHost().directories.getAllLocal();
-    if (!this.onAgentYamlChange) {
-      return;
-    }
-    const cached = this.watcherDirectories;
-    this.watcherDirectories = directories;
-    if (cached && this.sameDirectories(cached, directories)) {
-      return;
-    }
+      const directories = yield* this.getHost().directories.getAllLocal();
+      if (!this.onAgentYamlChange) {
+        return;
+      }
+      const cached = this.watcherDirectories;
+      this.watcherDirectories = directories;
+      if (cached && this.sameDirectories(cached, directories)) {
+        return;
+      }
 
-    await this.buildAgentWatchers(directories);
-    if (!this.onAgentYamlChange) {
-      this.disposeAgentWatchers();
-    }
+      yield* Effect.tryPromise({
+        try: () => this.buildAgentWatchers(directories),
+        catch: (error) => error,
+      });
+      if (!this.onAgentYamlChange) {
+        this.disposeAgentWatchers();
+      }
+    });
   }
 
   private async buildAgentWatchers(

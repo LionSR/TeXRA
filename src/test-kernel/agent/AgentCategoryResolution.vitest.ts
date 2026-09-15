@@ -72,11 +72,18 @@ describe('cross-category agent resolution', () => {
       {
         fs: nodeFilesystem,
         agentDirectories: {
-          custom: async () => customDir,
-          builtIn: async () =>
-            resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-          builtInToolUse: async () =>
-            resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+          custom: () => Effect.sync(() => customDir),
+          builtIn: () =>
+            Effect.sync(() =>
+              resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+            ),
+          builtInToolUse: () =>
+            Effect.sync(() =>
+              resolve(
+                REPO_ROOT,
+                'packages/extension/resources/tool_use_agents',
+              ),
+            ),
         },
       },
     );

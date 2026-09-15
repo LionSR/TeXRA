@@ -792,10 +792,7 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   }
   const recovery = pending.recovery;
   if (recovery) {
-    const resumed = yield* Effect.tryPromise({
-      try: () => startFollowUpWake(targetRunId, recovery, session),
-      catch: ensureError,
-    });
+    const resumed = yield* startFollowUpWake(targetRunId, recovery, session);
     if (!resumed) {
       logger.warn(
         'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
