@@ -34,7 +34,7 @@ const { prepareSurfaceLaunch } =
 
 function createHost() {
   return {
-    showInfoMessage: vi.fn(),
+    showInfoMessage: vi.fn(() => Effect.void),
     chooseTeamAvailability: vi.fn(async () => 'continue' as const),
     signInForRemoteAgentCatalog: vi.fn(async () => true),
   };
@@ -220,6 +220,10 @@ describe('main-view run launch controller', () => {
           },
           cli: { multiAgentPresetId: 'custom-team' },
         });
+        // The partial-team notice is forked, so give the detached fiber a tick.
+        yield* Effect.promise(
+          () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+        );
         expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');
         expect(mocks.resolveTeamLaunch).toHaveBeenCalledWith(
           expect.objectContaining({
