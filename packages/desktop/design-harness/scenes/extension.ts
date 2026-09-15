@@ -16,7 +16,6 @@ import {
   type SurfaceAction,
 } from '@shared/session/surface';
 import {
-  BOARD_NOW,
   CHILD,
   fanOutView,
   GRANDCHILD,
@@ -126,7 +125,6 @@ function sidebar(
       .view=${view}
       .surface=${surfaceRecord}
       .host=${hostRecord}
-      .nowMs=${BOARD_NOW}
     ></progress-app>
   </div>`;
 }
@@ -141,7 +139,6 @@ function editorTab(view: SessionView, surfaceRecord: Surface): TemplateResult {
       .surface=${surfaceRecord}
       .host=${host()}
       placement="editor"
-      .nowMs=${BOARD_NOW}
     ></progress-app>
   </div>`;
 }

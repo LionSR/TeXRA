@@ -50,7 +50,6 @@ export class WorkflowRunContent extends BaseRunContent {
                 .run=${run}
                 .view=${view}
                 .surface=${surface}
-                .nowMs=${this.nowMs}
               ></workflow-run-board>`
             : this.renderLog()
         }

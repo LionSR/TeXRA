@@ -41,7 +41,6 @@ export class ToolUseRunContent extends BaseRunContent {
             .run=${run}
             .view=${this.view}
             .surface=${this.surface}
-            .nowMs=${this.nowMs}
           ></background-tasks-panel>
         </div>
         ${this.renderLog()}

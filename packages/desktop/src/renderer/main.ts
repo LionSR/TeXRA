@@ -806,7 +806,6 @@ function rerenderShell(): void {
   conversationView.view = active?.view ?? null;
   conversationView.surface = active?.surface ?? null;
   conversationView.host = session?.host$.get() ?? null;
-  conversationView.nowMs = Date.now();
   render(
     projectWorkbenches.has(shell.active)
       ? shellTemplate()
