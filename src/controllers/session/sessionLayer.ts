@@ -984,19 +984,19 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  *
  * The process services (injection plan §3.1, the one process provide point)
  * are merged here from what the root hands over: `Secrets` and `AppState`
- * over thunks of the root's own stores, which in the desktop and CLI roots
- * open on this very runtime after it is installed (the layer is built at the
- * runtime's first run, so a value could not be threaded there; the thunk
- * closes over the root's local, never over `platform()`); `SetupPlatform`
- * over the root's host-varying setup capabilities; and `ToolInjections` over
- * `AGENT_TOOL_INJECTIONS`, the same list for every host.
+ * over the root's own stores, which every root now opens before it calls
+ * this — the desktop and CLI roots open theirs on a bootstrap run rather
+ * than on the runtime they are about to install, so both arrive as values;
+ * `SetupPlatform` over the root's host-varying setup capabilities; and
+ * `ToolInjections` over `AGENT_TOOL_INJECTIONS`, the same list for every
+ * host.
  */
 export interface ProcessRuntimeOptions {
   readonly processStart: string | undefined | Promise<string | undefined>;
   readonly globalStorage: () => string;
   readonly updateCheckStorage: () => string;
-  readonly secrets: () => PlatformSecrets;
-  readonly appState: () => StateStore;
+  readonly secrets: PlatformSecrets;
+  readonly appState: StateStore;
   readonly setup: SetupPlatformShape;
   /**
    * The editor's language models, for the one host that has an editor: the

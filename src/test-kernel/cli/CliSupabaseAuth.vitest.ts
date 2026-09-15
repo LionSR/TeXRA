@@ -19,6 +19,11 @@ import {
  * does, so the coordinator is keyed on one store for the whole suite.
  */
 const cliSecrets = new FakeSecrets();
+
+/** The synchronous process-service members `Layer.mock` cannot stub itself. */
+const unreadProcessService = (): never => {
+  throw new Error('The CLI auth edge reads no process services.');
+};
 const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
   executeFileCommand: () =>
     Effect.die(
@@ -149,11 +154,11 @@ async function loadSupabaseAuth() {
       inquiryRecordsLayer(() => globalStorage).pipe(
         Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
       ),
-      // The process services over this suite's platform mock: the auth run
-      // edge reads none of them, so a member call is a test error that
-      // surfaces through the mock.
-      Secrets.layer(() => mocks.platform().secrets),
-      AppState.layer(() => mocks.platform().globalState),
+      // The process services this suite's runtime carries: the auth run edge
+      // reads none of them, so a member call is a test error the mock raises
+      // rather than an answer from a store nothing here opened.
+      Layer.mock(Secrets, { getEnv: unreadProcessService }),
+      Layer.mock(AppState, { update: unreadProcessService }),
       SetupPlatform.layer({ host: 'cli', signIn: async () => false }),
       ToolInjections.layer([]),
     ),

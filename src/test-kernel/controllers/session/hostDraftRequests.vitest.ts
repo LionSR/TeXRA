@@ -28,17 +28,15 @@ vi.mock('@agent/runtime/textEnhancement', () => ({
 // and the OpenAI credential the take binds its transcription under, which is
 // why the credential store carries a key.
 const processStores = Layer.mergeAll(
-  Secrets.layer(
-    () => new FakeSecrets({ [apiKeySecretName('openai')]: 'sk-test' }),
-  ),
-  AppState.layer(() => new FakeStateStore()),
+  Secrets.layer(new FakeSecrets({ [apiKeySecretName('openai')]: 'sk-test' })),
+  AppState.layer(new FakeStateStore()),
 );
 
 /** The same pair with no saved OpenAI key, so the take's credential read
  *  fails after the recorder has already been stopped. */
 const storesWithoutCredential = Layer.mergeAll(
-  Secrets.layer(() => new FakeSecrets()),
-  AppState.layer(() => new FakeStateStore()),
+  Secrets.layer(new FakeSecrets()),
+  AppState.layer(new FakeStateStore()),
 );
 
 it.effect(

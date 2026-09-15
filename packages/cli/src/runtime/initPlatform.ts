@@ -52,11 +52,7 @@ import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import {
-  bindCliGlobalState,
-  cliGlobalState,
-  installCliProcessRuntime,
-} from './cliProcessRuntime';
+import { installCliProcessRuntime } from './cliProcessRuntime';
 import { getCliSecrets } from './cliSecrets';
 import {
   flushNdjsonStdout,
@@ -64,7 +60,7 @@ import {
   writeTextStderr,
 } from './logSinks';
 import { initializeCliSupabaseAuth } from './supabaseAuth';
-import { createCliStateStores } from './cliStateStores';
+import { openCliWorkspaceState } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 import type { CliContext } from './cliContext';
 
@@ -356,7 +352,9 @@ export async function initCliPlatform(
   // update check, `clone` -- may already have installed it, and every later
   // init finds it installed; each then adopts that one rather than building a
   // second and leaving the first undisposed.
-  const runtime = await installCliProcessRuntime(context.storageRoot);
+  const { runtime, globalState } = await installCliProcessRuntime(
+    context.storageRoot,
+  );
 
   // Double init is the normal path (every command calls one of these), so the
   // already-installed platform is the value returned on the second and later
@@ -381,7 +379,7 @@ export async function initCliPlatform(
       const runWrite: RunStateWrite = (write) => runtime.runPromise(write);
       const { stateStores, configStores } = await runtime.runPromise(
         Effect.gen(function* () {
-          const stores = yield* createCliStateStores({
+          const stores = yield* openCliWorkspaceState({
             storageRoot: context.storageRoot,
             workspacePath: context.cwd,
             runWrite,
@@ -397,9 +395,6 @@ export async function initCliPlatform(
           };
         }),
       );
-      // The store the process runtime's `AppState` reads from here on: it opened
-      // on that runtime, so it could not be threaded into the install above.
-      bindCliGlobalState(stateStores.globalState);
       // Same severity and wording as the extension/desktop hosts: a shutdown
       // handler failure is an error everywhere, not a warning in one host.
       const lifecycle = createLifecycleHost({
@@ -416,7 +411,7 @@ export async function initCliPlatform(
         resourcesPath: context.resourcesPath,
         customDirectoryStore: { get: () => undefined },
       });
-      const cliSecrets = getCliSecrets(runtime, context.storageRoot);
+      const cliSecrets = getCliSecrets(context.storageRoot);
       const platform = createNodePlatform({
         lifecycle,
         agentResume: {
@@ -432,7 +427,7 @@ export async function initCliPlatform(
         globalStorage: stateStores.storage.getGlobalStoragePath(),
         config: configStores,
         workspaceState: stateStores.workspaceState,
-        globalState: stateStores.globalState,
+        globalState,
       });
       // The one open of the process session, over the roots published below,
       // memoized so the first entry point that needs a session opens it and
@@ -446,7 +441,7 @@ export async function initCliPlatform(
             responseTextProcessing: createTexraResponseTextProcessing(
               createAgentResponseTextConnector({
                 secrets: cliSecrets,
-                globalState: stateStores.globalState,
+                globalState,
               }),
             ),
           }).pipe(
@@ -465,9 +460,7 @@ export async function initCliPlatform(
       // Seed first-install defaults (e.g. disabled tools). No-ops for anyone
       // whose DISABLED_TOOLS list already exists, so upgrading users keep the
       // tools they enabled.
-      await runtime.runPromise(
-        seedDisabledToolDefaults(stateStores.globalState),
-      );
+      await runtime.runPromise(seedDisabledToolDefaults(globalState));
 
       // Kill agent-spawned OS children before the process dies, exactly as the
       // extension and desktop hosts do. Background `bash` runs are spawned
@@ -529,7 +522,7 @@ export async function initCliPlatform(
   // The stores this root opened, handed back rather than read off a
   // process-wide singleton: the secret store is the same stateless view over
   // this process's storage root the composition block installed, and the
-  // application state is the store `bindCliGlobalState` latched there.
+  // application state is the store that install opened before it.
   const cliServices: CliPlatformServices = {
     runtime,
     // The pure path calculator over this process's storage root (no mkdir),
@@ -538,8 +531,8 @@ export async function initCliPlatform(
     globalStorage: resolveGlobalStoragePath(
       context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
     ),
-    globalState: cliGlobalState(),
-    secrets: getCliSecrets(runtime, context.storageRoot),
+    globalState,
+    secrets: getCliSecrets(context.storageRoot),
     session:
       sessionOpen ??
       Effect.suspend(() => {

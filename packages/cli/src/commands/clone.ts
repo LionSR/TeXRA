@@ -17,7 +17,6 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -39,12 +38,11 @@ import { emitCliResult } from './_helpers/output';
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
 function buildOverleafClonePorts(
-  runtime: ProcessRuntime,
   context: CliContext,
   remote: OverleafRemote,
   workspacePath: string,
 ): OverleafCloneWorkflowPorts {
-  const secrets = getCliSecrets(runtime);
+  const secrets = getCliSecrets();
   let canonicalWorkspacePath = workspacePath;
   return {
     // `orDie` keeps what `Effect.promise` did with a rejected store call: a
@@ -205,13 +203,13 @@ export const cloneCommand = withUsageSections(
       // `CliSecrets`, whose reads and writes are Effect programs run at this
       // host edge. Install the process runtime before the first one, the same
       // way the update check does for the entry that precedes any platform.
-      const runtime = await installCliProcessRuntime(context.storageRoot);
+      const { runtime } = await installCliProcessRuntime(context.storageRoot);
 
       const outcome = await runtime.runPromise(
         cloneOverleafProject(
           remote,
           workspacePath,
-          buildOverleafClonePorts(runtime, context, remote, workspacePath),
+          buildOverleafClonePorts(context, remote, workspacePath),
         ),
       );
       switch (outcome.status) {

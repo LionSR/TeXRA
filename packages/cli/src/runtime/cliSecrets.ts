@@ -11,7 +11,6 @@ import {
   type PlatformSecrets,
   type SecretsOperation,
 } from '@platform/secrets';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -54,14 +53,11 @@ const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
  * it: a mutation cancelled there has written nothing. The commit itself is
  * not — `JsonStore.set` masks its own read-modify-write once it holds the
  * file's write lane, which is where host-controller study Q2's guarantee
- * lives. Reads are plain programs; the process runtime this instance is
- * keyed by is only its identity in {@link getCliSecrets}.
+ * lives. Reads are plain programs: this store runs none of its own, so it
+ * holds no runtime and outlives any of them.
  */
 export class CliSecrets implements PlatformSecrets {
-  constructor(
-    readonly runtime: ProcessRuntime,
-    private readonly filePath = cliSecretsPath(),
-  ) {}
+  constructor(private readonly filePath = cliSecretsPath()) {}
 
   get(key: string) {
     return secretsGet(this, key);
@@ -159,17 +155,13 @@ export function cliSecretsPath(
 let cliSecrets: CliSecrets | undefined;
 
 /**
- * The one secret store of this process, over the runtime it runs on. A
- * runtime that replaced a disposed one (an init retried after its failure
- * disposed the first) gets a store of its own rather than one bound to the
- * runtime that is gone.
+ * The one secret store of this process, over the storage root the first
+ * caller names: a later caller that names another root, or none, gets that
+ * same store rather than a second view over a different file. Nothing here
+ * is bound to a process runtime, so a runtime that replaced a disposed one
+ * (an init retried after its failure disposed the first) keeps this store.
  */
-export function getCliSecrets(
-  runtime: ProcessRuntime,
-  storageRoot?: string,
-): CliSecrets {
-  if (cliSecrets?.runtime !== runtime) {
-    cliSecrets = new CliSecrets(runtime, cliSecretsPath(storageRoot));
-  }
+export function getCliSecrets(storageRoot?: string): CliSecrets {
+  cliSecrets ??= new CliSecrets(cliSecretsPath(storageRoot));
   return cliSecrets;
 }

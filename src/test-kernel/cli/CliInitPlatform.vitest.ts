@@ -170,9 +170,8 @@ vi.mock('@platform/defaults/nodeWorkspace', () => ({
 }));
 
 vi.mock('@cli/runtime/cliStateStores', () => ({
-  createCliStateStores: vi.fn(() =>
+  openCliWorkspaceState: vi.fn(() =>
     Effect.succeed({
-      globalState: mocks.cliGlobalState,
       workspaceState: {},
       storage: {
         getStoragePath: () => '/workspace/.texra/storage',
@@ -180,6 +179,13 @@ vi.mock('@cli/runtime/cliStateStores', () => ({
       },
     }),
   ),
+}));
+
+// The global state store the CLI's process-runtime install opens before it
+// installs the runtime that serves it: this suite runs that real install, so
+// the open is what it stubs.
+vi.mock('@controllers/session/appStateStore', () => ({
+  openAppStateStore: vi.fn(() => Effect.succeed(mocks.cliGlobalState)),
 }));
 
 vi.mock('@cli/runtime/cliSecrets', () => ({

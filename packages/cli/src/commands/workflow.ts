@@ -525,7 +525,7 @@ export const headlessRunCommand = defineCliCommand({
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
     };
-    const runtime = await installCliProcessRuntime(context.storageRoot);
+    const { runtime } = await installCliProcessRuntime(context.storageRoot);
     return runtime.runPromise(runHeadlessAgent(context, init));
   },
 });

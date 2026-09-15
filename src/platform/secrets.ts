@@ -148,24 +148,15 @@ export function secretsGet(
  * or writes a credential yields the store's own Effect and matches
  * {@link SecretsFailed}.
  *
- * `layer` takes the store as a thunk because a `ManagedRuntime` builds its
- * whole layer at its first run, and in the desktop and CLI roots that first
- * run is the program that opens this very store. The service resolves the
- * thunk on each member call, by which time every root has finished wiring;
- * the thunk closes over the root's own local, never over `platform()`, and a
- * call before the store exists throws on the calling fiber, never a default.
+ * `layer` takes the store itself. Every root builds its stores before it
+ * installs the runtime that serves them, so there is nothing left to defer:
+ * the service is the value the root already holds, not a thunk resolved per
+ * member call.
  */
 export class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
   '@texra/platform/Secrets',
 ) {
-  static layer(secrets: () => PlatformSecrets): Layer.Layer<Secrets> {
-    return Layer.succeed(Secrets)({
-      get: (key) => secrets().get(key),
-      getStored: (key) => secrets().getStored(key),
-      set: (key, value) => secrets().set(key, value),
-      delete: (key) => secrets().delete(key),
-      listStoredKeys: () => secrets().listStoredKeys(),
-      getEnv: (name) => secrets().getEnv(name),
-    });
+  static layer(secrets: PlatformSecrets): Layer.Layer<Secrets> {
+    return Layer.succeed(Secrets)(secrets);
   }
 }

@@ -21,7 +21,11 @@ import type {
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { JsonStore, type RunStateWrite } from '@platform/defaults/jsonStore';
+import {
+  JsonStore,
+  nodeFileServices,
+  type RunStateWrite,
+} from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
@@ -115,32 +119,27 @@ export async function initializeElectronPlatform(
   // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.
   const storage = new WorkspaceStorageProvider(dataRoot, undefined);
-  // The one Effect runtime of this process (PRD 7.7) is installed first: the
-  // stores below open as Effect programs, and every project's session graph and
-  // Promise-facing fiber runs on it. The entry disposes it last
-  // (`disposeProcessRuntime`), after run settlement and the projects'
-  // release of their graphs. Its process identity is read before
-  // installing: an opener that uses the synchronous `open` would otherwise
-  // face an asynchronous layer build.
+  // The process identity is read before the runtime is installed: an opener
+  // that uses the synchronous `open` would otherwise face an asynchronous
+  // layer build.
   const processStart = await nodeProcesses.selfIdentity();
   installLongRunningModelDispatcher();
-  // The secrets and global state stores below open on this runtime, so the
-  // process services bind them through thunks over this root's own locals,
-  // resolved at first use — after this function has assigned them.
-  const runtime = installProcessRuntime({
-    processStart,
-    globalStorage: () => storage.getGlobalStoragePath(),
-    updateCheckStorage: () => resolveGlobalStoragePath(userDataPath),
-    secrets: () => secrets,
-    appState: () => globalStateStore,
-    setup: desktopSetupPlatform,
-    lean: directLeanLanguageServices(),
-  });
   // The Promise face of `StateStore.update`, run on this process's runtime:
-  // the store itself is below the boundary and never runs an Effect.
+  // the store itself is below the boundary and never runs an Effect. The
+  // stores below hold it and call it only when something writes, which is
+  // after the runtime this closure names has been installed.
   const runWrite: RunStateWrite = (write) => runtime.runPromise(write);
+  // The stores this root serves as `Secrets` and `AppState` open before the
+  // runtime that serves them, so both are threaded in as values rather than
+  // resolved per call. Opening needs the filesystem and nothing else —
+  // `openAppStateStore` provides its own database layer, and the JSON stores
+  // want only `FileSystem`/`Path` — so it runs here, on a bootstrap fiber,
+  // instead of on the runtime this function has yet to build. Nothing in the
+  // open path logs or traces through Effect (the session database's one
+  // warning goes through the host's own logger), so running it off the
+  // process runtime's diagnostics layer changes no output.
   const { globalStateStore, workspaceStateStore, configStores, secretsStore } =
-    await runtime.runPromise(
+    await Effect.runPromise(
       Effect.gen(function* () {
         const [globalState, workspaceState, config, secrets] =
           yield* Effect.all(
@@ -169,8 +168,24 @@ export async function initializeElectronPlatform(
           configStores: config,
           secretsStore: secrets,
         };
-      }),
+      }).pipe(Effect.provide(nodeFileServices)),
     );
+  const secrets = new ElectronSecrets(secretsStore, {
+    showWarningMessage: showDesktopWarningDialog,
+  });
+  // The one Effect runtime of this process (PRD 7.7), over the stores it
+  // serves: every project's session graph and Promise-facing fiber runs on
+  // it, and the entry disposes it last (`disposeProcessRuntime`), after run
+  // settlement and the projects' release of their graphs.
+  const runtime = installProcessRuntime({
+    processStart,
+    globalStorage: () => storage.getGlobalStoragePath(),
+    updateCheckStorage: () => resolveGlobalStoragePath(userDataPath),
+    secrets,
+    appState: globalStateStore,
+    setup: desktopSetupPlatform,
+    lean: directLeanLanguageServices(),
+  });
 
   repairLaunchPath();
   const resourcesPath = resolveResourcesPath(mainDirname);
@@ -182,9 +197,6 @@ export async function initializeElectronPlatform(
     customDirectoryStore: {
       get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
     },
-  });
-  const secrets = new ElectronSecrets(secretsStore, {
-    showWarningMessage: showDesktopWarningDialog,
   });
   initPlatform(
     createNodePlatform({

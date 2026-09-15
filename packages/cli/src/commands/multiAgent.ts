@@ -341,7 +341,7 @@ const multiAgentRunCommand = withUsageSections(
         agent: optString(ctx.args.agent),
         model: optString(ctx.args.model),
       };
-      const runtime = await installCliProcessRuntime(context.storageRoot);
+      const { runtime } = await installCliProcessRuntime(context.storageRoot);
       return runtime.runPromise(runMultiAgentPreset(context, init));
     },
   }),

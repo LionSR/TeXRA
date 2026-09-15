@@ -4,7 +4,7 @@ import { openAppStateStore } from '@controllers/session/appStateStore';
 import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 
-interface CliStateStoresInit {
+interface CliWorkspaceStateInit {
   readonly storageRoot?: string;
   readonly workspacePath: string | undefined;
   /** The entry's run of a durable state write: the store is below the
@@ -13,23 +13,22 @@ interface CliStateStoresInit {
 }
 
 /**
- * The CLI's two state scopes, each in the `texra.db` of its own storage root:
- * global state beside the update-check and inquiry records, workspace state
- * in the project's storage directory.
+ * The CLI's workspace state scope, in the `texra.db` of the project's storage
+ * directory, beside the storage provider that named it. The global scope is
+ * not opened here: it is the store `installCliProcessRuntime` opens before it
+ * installs the runtime that serves it as `AppState`, and this root takes it
+ * from there.
  */
-export const createCliStateStores = Effect.fn(
-  'cliStateStores.createCliStateStores',
-)(function* (init: CliStateStoresInit) {
+export const openCliWorkspaceState = Effect.fn(
+  'cliStateStores.openCliWorkspaceState',
+)(function* (init: CliWorkspaceStateInit) {
   const storage = createNodeStorageProvider({
     storageRoot: init.storageRoot,
     workspacePath: init.workspacePath,
   });
-  const [globalState, workspaceState] = yield* Effect.all(
-    [
-      openAppStateStore(storage.getGlobalStoragePath(), init.runWrite),
-      openAppStateStore(storage.getStoragePath(), init.runWrite),
-    ],
-    { concurrency: 'unbounded' },
+  const workspaceState = yield* openAppStateStore(
+    storage.getStoragePath(),
+    init.runWrite,
   );
-  return { storage, globalState, workspaceState };
+  return { storage, workspaceState };
 });

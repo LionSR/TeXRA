@@ -1,6 +1,11 @@
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
-import { fakeSetupPlatform, installedHost } from './setupPlatform';
+import {
+  fakeHostAppState,
+  fakeHostSecrets,
+  fakeSetupPlatform,
+  installedHost,
+} from './setupPlatform';
 /**
  * The test kernel's process runtime and session graph family (PRD
  * one-fold-three-renderers, 7.7): what a composition root installs beside
@@ -31,8 +36,8 @@ export function installTestSessionGraphs(): void {
     processStart: 'vitest',
     globalStorage: () => installedHost().roots.globalStorage,
     updateCheckStorage: () => installedHost().roots.globalStorage,
-    secrets: () => installedHost().secrets,
-    appState: () => installedHost().roots.globalState,
+    secrets: fakeHostSecrets,
+    appState: fakeHostAppState,
     setup: fakeSetupPlatform,
     // The Node hosts' layer: inert until a Lean tool is invoked.
     lean: directLeanLanguageServices(),
