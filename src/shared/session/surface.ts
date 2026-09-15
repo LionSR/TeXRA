@@ -228,7 +228,10 @@ function retain<V>(
  * The `Surface` fields that are stream-keyed maps — the only fields
  * `pruneSurface` may retain over. Restricting the list below to these keys
  * means a non-map field (`search`, `drawerOpen`) is refused at the list
- * itself, not several lines later at the read.
+ * itself, not several lines later at the read. `RunId` is branded
+ * (`identifiers.ts`), so this also excludes `inquiryDrafts`: a map too, but
+ * keyed by `${InquiryThreadId}#${turn}` (plain `string`), not by stream — no
+ * stream leaving the view can retire one, so it must stay off the list below.
  */
 type RunKeyedMapField = {
   [K in keyof Surface]: Surface[K] extends ReadonlyMap<RunId, unknown>
@@ -237,24 +240,25 @@ type RunKeyedMapField = {
 }[keyof Surface];
 
 /**
- * The single list `pruneSurface` reads: the per-stream maps it retains over.
- * `RunKeyedMapField` refuses any entry that is not a stream-keyed map, so a
- * typo or a non-map field fails here at the list. It does not enforce the
- * reverse — the type system cannot, since `RunId` is `string` and so a
- * stream-keyed map is indistinguishable from any other string-keyed one — so a
- * new per-stream field added to `Surface` but left off this list still keeps a
- * deleted stream's entry forever, and adding such a field means adding it here.
- * `inquiryDrafts` is that indistinguishable case made deliberate: it is a
- * string-keyed map too, but keyed by `${InquiryThreadId}#${turn}`, not by
- * stream, so no stream leaving the view can retire one and it stays off.
+ * The single list `pruneSurface` reads: the per-stream maps it retains over,
+ * spelled as a `Record` rather than an array so both directions are checked
+ * at compile time — `satisfies Record<RunKeyedMapField, true>` fails if an
+ * entry here is not a stream-keyed `Surface` field (a typo, or a field this
+ * list should not touch) and equally fails if a stream-keyed field is
+ * missing from it. Adding a new `ReadonlyMap<RunId, ...>` field to `Surface`
+ * is therefore a compile error here until it is added below, rather than a
+ * silent leak of deleted streams' entries.
  */
-const PER_STREAM_MAPS = [
-  'drafts',
-  'expanded',
-  'groups',
-  'phase',
-  'rejected',
-] as const satisfies readonly RunKeyedMapField[];
+const PER_STREAM_MAP_FIELDS = {
+  drafts: true,
+  expanded: true,
+  groups: true,
+  phase: true,
+  rejected: true,
+} as const satisfies Record<RunKeyedMapField, true>;
+const PER_STREAM_MAPS = Object.keys(
+  PER_STREAM_MAP_FIELDS,
+) as readonly RunKeyedMapField[];
 
 /**
  * Every per-stream map drops its entry when that stream leaves the view
