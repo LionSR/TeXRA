@@ -2,7 +2,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, css, html, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
@@ -54,8 +54,6 @@ export class OnboardingSetupCard extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) headingLevel: 1 | 2 = 1;
-
   private handleRunSetup(): void {
     this.dispatchEvent(
       SessionUiEvents.host({ kind: 'onboarding', action: 'runSetup' }),
@@ -81,11 +79,7 @@ export class OnboardingSetupCard extends LitElement {
     return html`
       <wa-callout id="onboardingSetupCard" variant="brand">
         ${waIcon('rocket', { slot: 'icon' })}
-        ${
-          this.headingLevel === 1
-            ? html`<h1 class="title">Credential ready</h1>`
-            : html`<h2 class="title">Credential ready</h2>`
-        }
+        <h1 class="title">Credential ready</h1>
         <p class="copy">${ONBOARDING_SETUP_HANDOFF}</p>
         <div class="actions">
           <wa-button

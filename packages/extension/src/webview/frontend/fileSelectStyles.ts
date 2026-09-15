@@ -1,5 +1,5 @@
 /**
- * Shared file-select styles for MainView components.
+ * Shared file-select styles for the launcher's Shadow DOM components.
  *
  * These styles are used by:
  * - FileSelectGroup

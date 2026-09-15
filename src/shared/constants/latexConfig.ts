@@ -95,8 +95,9 @@ export type LatexConfigValues = Partial<LatexConfigValueTypes>;
  * Every frontend-facing LaTeX field → its canonical catalog key. This map is
  * the field set: the `satisfies` below fails to compile if a field is added to
  * (or removed from) {@link LatexConfigValueTypes} without a matching entry
- * here, in either direction. `miscSettingsSlice` uses the map to re-key the
- * snapshot at the wire boundary; `LaTeXTab` uses it for catalog-driven writes
+ * here, in either direction. The settings view's message dispatcher uses the
+ * map to re-key the snapshot at the wire boundary; `LaTeXTab` uses it for
+ * catalog-driven writes
  * and for the `latex-setting-<field>` control ids. `stateSettings.vitest.ts`
  * checks that every key here still names a catalog row.
  */

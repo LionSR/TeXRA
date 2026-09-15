@@ -86,7 +86,7 @@ export function planOnboardingFunnelTransition(
 }
 
 /** What one host contributes to a funnel refresh. */
-export interface OnboardingFunnelHost {
+interface OnboardingFunnelHost {
   /**
    * This host's usable-credential check (a subscription or any provider API
    * key), as a program the refresh yields. It cannot fail: every host binds
