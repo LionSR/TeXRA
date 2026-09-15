@@ -138,7 +138,9 @@ export function startFollowUpWake(
       }),
     ),
     // A faulted attempt is `false` to this caller: the retry decision is what
-    // it asked for, and the failure has already settled the lease above.
+    // it asked for. This handler is what releases the lease on that path; the
+    // success path releases it in the `tap` above unless the host accepted the
+    // resume, in which case the resumed run owns it.
     Effect.catch(() =>
       Effect.sync(() => {
         session.followUps.release(recovery, 'recoverable');
