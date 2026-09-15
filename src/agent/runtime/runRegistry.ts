@@ -21,7 +21,7 @@ import {
 } from '@shared/schemas';
 import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunView } from '@shared/session/sessionView';
-import { formatDuration } from '@utils/core';
+import { formatDuration } from '@utils/text/stringUtils';
 import {
   type RunHandle,
   type RunStatusInfo,

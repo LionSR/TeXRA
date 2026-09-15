@@ -40,7 +40,8 @@ import {
   formatRunStatusLabel,
 } from '@shared/runs/runStatusDisplay';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
-import { filterNotNullish, formatCompactDuration } from '@utils/core';
+import { filterNotNullish } from '@utils/core';
+import { formatCompactDuration } from '@utils/text/stringUtils';
 
 type WorkflowRunDetailTone =
   'neutral' | 'hint' | 'muted' | 'success' | 'warning' | 'error';

@@ -1,5 +1,5 @@
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
-import { isNonEmptyString } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 /**
  * Validate a configured helper-model choice against a candidate list, falling

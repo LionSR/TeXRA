@@ -48,7 +48,8 @@ import {
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
-import { generateShortId, getBasename, isNonEmptyString } from '@utils/core';
+import { generateShortId, getBasename } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';

@@ -40,9 +40,10 @@ import {
   type WorkflowPhaseHeading,
   type WorkflowTally,
 } from '@shared/copy/workflowCall';
-import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
+import { filterNotNullish } from '@utils/core';
 import {
   formatCompactDuration,
+  formatCompactTokenCount,
   formatCostUsd,
   pluralize,
 } from '@utils/text/stringUtils';

@@ -20,7 +20,7 @@ import { LOG_CHANNEL, writeLogEntry, type LogEntry } from '@logger/logSink';
 // the barrel would create an import cycle. Recorded in the shared-schemas
 // deep-import baseline as its documented cycle floor.
 import { LOG_LEVELS, type LogLevel } from '@shared/schemas/log';
-import { serializeError } from '@utils/core';
+import { serializeError } from '@utils/text/stringUtils';
 import { getConfigBeforePlatformInit } from '@utils/config/configUtils';
 
 export interface LogUtilsOptions {

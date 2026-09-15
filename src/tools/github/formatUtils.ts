@@ -8,8 +8,10 @@
  */
 
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { isNonEmptyString } from '@utils/core';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import {
+  isNonEmptyString,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 import type { GhIssueComment } from './prTypes';
 
 const WEBHOOK_TAG = DELIVERY_TAG.githubWebhookActivity;

@@ -7,7 +7,7 @@
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { childElapsedMs } from '@shared/runs/childElapsed';
-import { formatCompactDuration } from '@utils/core';
+import { formatCompactDuration } from '@utils/text/stringUtils';
 import { focusRun, openWorkflowPopup } from './cliState';
 import { currentView, runViewOf } from './sessionView';
 

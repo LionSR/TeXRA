@@ -29,7 +29,8 @@ import {
 } from '@tools/delegation/delegationAvailability';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
-import { filterNotNull, isNonEmptyString, unique } from '@utils/core';
+import { filterNotNull, unique } from '@utils/core';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 import {
   getListOfFiles,
   getPromptFileName,

@@ -27,14 +27,11 @@ import type { SupabaseClient as Client } from '@supabase/supabase-js';
 // Only the symbols consumers actually use are forwarded; the Zod schemas and
 // callback/parse option types stay internal to `supabaseSessionTypes`.
 export {
-  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   GitHubTokenExchangeSchema,
-  parseStoredSupabaseSession,
   toStorableSupabaseSession,
   type SupabaseCallbackResult,
   type SupabaseSession,
   type SupabaseSessionLog,
-  type SupabaseSessionStorage,
 } from './supabaseSessionTypes';
 
 export interface SupabaseSessionCoordinatorOptions {

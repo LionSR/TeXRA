@@ -9,12 +9,11 @@ import {
   resolveAndFormat,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
-import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toPosixPath } from '@utils/core/pathCore';
-import { formatBytes } from '@utils/text/stringUtils';
+import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
 
 export interface BuildFileAttachmentOptions {
   /** Path to a workspace file (relative or absolute) */
