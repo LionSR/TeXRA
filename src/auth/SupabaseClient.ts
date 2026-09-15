@@ -4,33 +4,21 @@ import {
   User,
   type SupportedStorage,
 } from '@supabase/supabase-js';
-import { Cause, Effect, Option } from 'effect';
+import { Effect } from 'effect';
 import { createLog } from '@logger/logUtils';
 import type { SecretsFailed } from '@platform/secrets';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { AuthPortError, callPort, runAuthProgram } from './authProgram';
+import {
+  AuthPortError,
+  callPort,
+  runAuthProgram,
+  settleFailure,
+} from './authProgram';
 import { SUPABASE_GOTRUE_STORAGE_KEY } from './config';
 import type { SessionSecretStore } from './oauth/sessionAccess';
 import type { AuthTokenProvider, StoredSessionState } from './TokenProvider';
 
 const log = createLog('SupabaseClient');
-
-/**
- * The value {@link runAuthProgram} would have thrown for `cause`. The
- * recoveries below used to sit in a `catch` on the Promise side of that edge,
- * so they classify a failure exactly as the edge's own fold does: an expected
- * {@link AuthPortError} re-mints as the port's own rejection, another expected
- * failure stays itself, and a defect or an interruption squashes.
- */
-function settledFailure<E>(cause: Cause.Cause<E>): unknown {
-  const failure = Cause.findErrorOption(cause);
-  if (Option.isSome(failure)) {
-    return failure.value instanceof AuthPortError
-      ? failure.value.cause
-      : failure.value;
-  }
-  return Cause.squash(cause);
-}
 
 /**
  * GoTrue storage for the shared client.
@@ -86,7 +74,7 @@ function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
             log.warn(
               `Could not ${action} PKCE flow state (${key}); sign-in will ` +
                 `only be completable in this window: ` +
-                `${toErrorMessage(settledFailure(cause))}`,
+                `${toErrorMessage(settleFailure(cause))}`,
             );
             return undefined;
           }),
@@ -193,7 +181,7 @@ export class SupabaseClient {
         }),
         Effect.catchCause((cause) =>
           Effect.sync(() => {
-            const error = settledFailure(cause);
+            const error = settleFailure(cause);
             this.readinessError = ensureError(error);
             log.error(`Auth provider not ready: ${toErrorMessage(error)}`);
             return false;
@@ -274,7 +262,7 @@ export class SupabaseClient {
           Effect.sync(() => {
             log.error(
               `Error getting access token: ` +
-                `${toErrorMessage(settledFailure(cause))}`,
+                `${toErrorMessage(settleFailure(cause))}`,
             );
             return null;
           }),
@@ -302,7 +290,7 @@ export class SupabaseClient {
         Effect.catchCause((cause) =>
           Effect.sync(() => {
             log.error(
-              `Error getting user: ${toErrorMessage(settledFailure(cause))}`,
+              `Error getting user: ${toErrorMessage(settleFailure(cause))}`,
             );
             return null;
           }),
@@ -344,7 +332,7 @@ export class SupabaseClient {
             // the UI.
             log.warn(
               `Error reading stored account label: ` +
-                `${toErrorMessage(settledFailure(cause))}`,
+                `${toErrorMessage(settleFailure(cause))}`,
             );
             return null;
           }),

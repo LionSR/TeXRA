@@ -105,10 +105,27 @@ export class SerializedWrites {
 export const unwrapAuthPortCause = (error: AuthPortError): Error =>
   ensureError(error.cause);
 
+// Preserve the port's original rejection value. `unwrapAuthPortCause`
+// would mint an `Error` from a non-`Error` cause and break its identity.
+const settleExpected = (error: unknown): unknown =>
+  error instanceof AuthPortError ? error.cause : error;
+
 function rethrowPortCause(error: unknown): never {
-  // Preserve the port's original rejection value. `unwrapAuthPortCause`
-  // would mint an `Error` from a non-`Error` cause and break its identity.
-  throw error instanceof AuthPortError ? error.cause : error;
+  throw settleExpected(error);
+}
+
+/**
+ * The value {@link runAuthProgram} throws for `cause` under the default
+ * `rethrow`: an expected {@link AuthPortError} re-mints as the port's own
+ * rejection, another expected failure stays itself, and a defect or an
+ * interruption squashes. A recovery that settles a program inside
+ * `Effect.catchCause` classifies the failure through this same fold, so the
+ * unwrap rule lives in exactly one place.
+ */
+export function settleFailure<E>(cause: Cause.Cause<E>): unknown {
+  const failure = Cause.findErrorOption(cause);
+  if (Option.isSome(failure)) return settleExpected(failure.value);
+  return Cause.squash(cause);
 }
 
 /**
