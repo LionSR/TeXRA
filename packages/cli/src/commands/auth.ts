@@ -210,7 +210,7 @@ export const loginCommand = withUsageSections(
   ],
 );
 
-export async function runLoginCommand(
+async function runLoginCommand(
   context: CliContext,
   init: CliLoginInit,
 ): Promise<number> {

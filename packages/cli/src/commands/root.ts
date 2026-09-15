@@ -43,7 +43,6 @@ import { installGithubActionCommand } from './installGithubAction';
 import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
-import { orchestrationCommand } from './orchestrate';
 import { resumeCommand } from './resume';
 import { setupCommand } from './setup';
 import { skillsCommand } from './skills';
@@ -51,9 +50,9 @@ import { toolsCommand } from './tools';
 import { versionCommand } from './version';
 import { headlessRunCommand } from './workflow';
 
-function defaultRootSubcommand(): 'orchestrate' | 'help' {
+function defaultRootSubcommand(): 'chat' | 'help' {
   const ambient = readCliAmbientState();
-  return ambient.stdinIsTty && ambient.stdoutIsTty ? 'orchestrate' : 'help';
+  return ambient.stdinIsTty && ambient.stdoutIsTty ? 'chat' : 'help';
 }
 
 export const rootCommand = withUsageSections(
@@ -74,7 +73,6 @@ export const rootCommand = withUsageSections(
       ...AGENT_RUN_GLOBAL_ARGS,
     },
     subCommands: {
-      orchestrate: orchestrationCommand,
       chat: chatCommand,
       clone: cloneCommand,
       run: headlessRunCommand,
@@ -100,15 +98,15 @@ export const rootCommand = withUsageSections(
       version: versionCommand,
       help: helpCommand,
     },
-    // No subcommand on bare `texra`: dispatch to the orchestration view when
-    // both TTYs are interactive; fall through to synthetic `help` otherwise.
+    // No subcommand on bare `texra`: start an interactive chat when both TTYs
+    // are interactive; fall through to synthetic `help` otherwise.
     default: defaultRootSubcommand,
   }),
   [
     {
       title: 'EXAMPLES',
       rows: [
-        ['texra', 'open the interactive launcher'],
+        ['texra', 'start an interactive chat session'],
         ['texra setup', 'choose ChatGPT, sign in, or add a key (guided)'],
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
         ['texra auth grok login', 'sign in with a Grok (xAI) subscription'],

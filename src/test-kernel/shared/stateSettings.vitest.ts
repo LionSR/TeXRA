@@ -78,8 +78,7 @@ const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
 
 const SETTING_HOSTS: readonly SettingHost[] = ['vscode', 'cli', 'desktop'];
 
-const CLI_RUNTIME_COMMAND_PATTERN =
-  /^texra\s+(?:chat|run|multi-agent run|orchestrate)\b/;
+const CLI_RUNTIME_COMMAND_PATTERN = /^texra\s+(?:chat|run|multi-agent run)\b/;
 
 function entryByKey(key: string): StateSettingEntry {
   const entry = stateSettingByKey(key);

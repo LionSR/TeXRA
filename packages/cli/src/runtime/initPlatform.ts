@@ -118,7 +118,7 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> & {
   /**
    * The process session over the process roots: one CLI process, one
    * project, one persistent session, opened by the first entry point that
-   * runs this Effect (`chat`, `run`, `orchestrate`, `resume`, `history`) and
+   * runs this Effect (`chat`, `run`, `resume`, `history`) and
    * handed to every later one as the same handle. `auth`, `doctor`,
    * `models`, `skills`, `tools` and `init` never run it, so a storage root
    * nothing can write to fails a command only when it asks for a transcript.
@@ -246,7 +246,7 @@ export function installCliShutdownSignalHandlers(
  *
  * Call this right at the handoff point, not any earlier: everything between
  * `initInteractiveCliPlatform()` and this call (onboarding, model
- * resolution, the orchestration launcher) still needs a graceful handler, so
+ * resolution) still needs a graceful handler, so
  * the platform's stays live for that whole window instead of being
  * suppressed for the entire span up front.
  *
@@ -304,15 +304,15 @@ export async function initLocalCliPlatform(
 /**
  * Init for the REAL interactive entry points that hand control to the chat
  * TUI once the terminal-capability gate has already confirmed a usable TTY:
- * `texra chat`, the default-command launcher (`texra`/`texra orchestrate`),
- * `texra setup`, and `texra resume`. All four eventually call
+ * `texra chat` (including the bare `texra` default), `texra setup`, and
+ * `texra resume`. All three eventually call
  * `runChatTui.tsx`'s `runChat()`, which installs its own SIGINT/SIGTERM/
  * SIGHUP handlers once Ink mounts and owns teardown (terminal-mode restore,
  * persistence drain, `runCliPlatformShutdownSequence`) from there.
  *
  * Unlike `initLocalCliPlatform`, this does *not* suppress the platform's own
- * signal handlers up front — every one of the four call sites still does
- * real async I/O (onboarding, model resolution, the orchestration launcher)
+ * signal handlers up front — every one of the three call sites still does
+ * real async I/O (onboarding, model resolution)
  * between this call and the moment Ink actually mounts, and that window
  * needs a graceful handler just as much as a headless command does. The
  * platform handler stays installed through that window; `runChat()` calls

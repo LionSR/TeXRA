@@ -36,7 +36,7 @@ const readCliAuthProfile = Effect.tryPromise({
   catch: ensureError,
 });
 
-export function formatCliAuthStatusLine(
+function formatCliAuthStatusLine(
   profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
 ): string {
   return formatAccountStatusLine(

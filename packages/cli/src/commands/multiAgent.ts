@@ -353,10 +353,7 @@ const multiAgentRunCommand = withUsageSections(
           'direct',
           'executes the team in the terminal and exits after the final response',
         ],
-        [
-          'rich TUI',
-          'use `texra orchestrate` to pick a team from the launcher and keep chat/subagent panes open',
-        ],
+        ['rich TUI', 'use `texra chat` and ask the team lead in the session'],
       ],
     },
   ],

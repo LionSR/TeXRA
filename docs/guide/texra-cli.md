@@ -211,7 +211,7 @@ credentials.
 
 `texra chat` opens an interactive tool-use session in the terminal. It streams
 reasoning, tool calls, and diffs, and writes to the same run history as the VS
-Code extension.
+Code extension. Running bare `texra` in a terminal opens this same session.
 
 <CliChatHero />
 
@@ -260,6 +260,11 @@ and `--context` files as with `texra run`;
 read-only context files are included in the instruction the team receives.
 When the work splits cleanly, the lead can fan it out as a scripted
 [multi-agent workflow](./multi-agent-workflows.md).
+
+`run` is the way to start a team from a terminal. For an interactive session,
+open a chat and use `/agent` to pick the team's lead by name, such as
+`engineer` or `orchestrator`; team scoping applies to `multi-agent run` and to
+resumed team sessions.
 
 <CliMultiAgentHero />
 
@@ -406,9 +411,8 @@ texra memory show memories/<file>
 
 ## Workspace defaults
 
-Run `texra config` in a terminal to open the same configuration view available
-from the launcher's **Settings** row and from `/config` in a chat. Its **Agents**
-section has three distinct choices:
+Run `texra config` in a terminal, or `/config` in a chat, to open the same
+configuration view. Its **Agents** section has three distinct choices:
 
 - **Workspace roster** controls which agents are available in the current
   folder. It may inherit the user default, show all agents, use a named team,

@@ -222,8 +222,9 @@ interface PickConfigOptions {
    *  `undefined` means all of {@link COMMAND_SECTIONS}. A caller that only
    *  resolves `chat` values has no use warning about a `run.*` typo, and
    *  every extra field read is a field a caller invoked on every loop
-   *  iteration (e.g. `resolveChatDefaults` from `orchestrate`'s launcher
-   *  loop) can print the same warning again on the next pass. */
+   *  iteration (e.g. a caller that re-resolves chat defaults after one
+   *  session ends and another starts) can print the same warning again on
+   *  the next pass. */
   readonly sections?: ReadonlySet<(typeof COMMAND_SECTIONS)[number]>;
   /** Restricts which top-level scalar fields get read — same rationale as
    *  `sections`, one level up. */

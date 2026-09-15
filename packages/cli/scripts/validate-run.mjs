@@ -595,47 +595,7 @@ async function runTexraPty(args, options = {}) {
   });
 }
 
-async function validateOrchestratePreservesScrollback() {
-  let exitSent = false;
-  let promptExitTimer;
-  const sendExit = (pty) => {
-    if (exitSent) return;
-    exitSent = true;
-    pty.write(ESC);
-  };
-
-  const result = await runTexraPty(['orchestrate'], {
-    label: 'texra orchestrate',
-    cwd: cliRoot,
-    onStart: (pty) => {
-      pty.setTimer(() => sendExit(pty), 4_000);
-    },
-    onData: (_data, pty) => {
-      if (
-        !exitSent &&
-        promptExitTimer == null &&
-        pty.output.includes('Start a session or configure model access')
-      ) {
-        promptExitTimer = pty.setTimer(() => sendExit(pty), 100);
-      }
-    },
-  });
-
-  assert(
-    result.exit.exitCode === 0 && !result.exit.signal,
-    `texra orchestrate Esc exit should succeed (exit ${result.exit.exitCode}, signal ${result.exit.signal || 'none'})`,
-  );
-  assert(
-    result.output.includes(`${ESC}[2J`),
-    'texra orchestrate should clear the visible launcher screen on exit',
-  );
-  assert(
-    !result.output.includes(`${ESC}[3J`),
-    'texra orchestrate should not erase terminal scrollback on exit',
-  );
-}
-
-async function validateOrchestrateOnboardingPicker(options) {
+async function validateChatOnboardingPicker(options) {
   const root = mkdtempSync(path.join(tmpdir(), 'texra-cli-onboarding-'));
   try {
     const home = path.join(root, 'home');
@@ -662,13 +622,6 @@ async function validateOrchestrateOnboardingPicker(options) {
         ) {
           welcomeExitTimer = pty.setTimer(() => sendEsc(pty), 100);
         }
-        if (
-          !exitSent &&
-          pty.output.includes('Start a session or configure model access')
-        ) {
-          exitSent = true;
-          pty.write('\r');
-        }
       },
     });
 
@@ -679,14 +632,6 @@ async function validateOrchestrateOnboardingPicker(options) {
     assert(
       result.output.includes('Welcome to TeXRA'),
       `${options.label} should show onboarding`,
-    );
-    assert(
-      !result.output.includes('Start a session or configure model access'),
-      `${options.label} should not show launcher actions before onboarding`,
-    );
-    assert(
-      !result.output.includes('New chat'),
-      `${options.label} should not offer New chat before onboarding`,
     );
     assert(
       !result.output.includes('Model "deepseekT" is not available'),
@@ -709,7 +654,7 @@ async function validateOrchestrateOnboardingPicker(options) {
   }
 }
 
-async function validateOrchestrateOnboardingPickers() {
+async function validateChatOnboardingPickers() {
   const oldTruncatedLabels = [
     'Sign in for included re…',
     'Use my own provider API…',
@@ -721,9 +666,9 @@ async function validateOrchestrateOnboardingPickers() {
     'Use your own provider A…',
   ];
 
-  await validateOrchestrateOnboardingPicker({
-    label: 'texra orchestrate first-run onboarding',
-    args: ['orchestrate'],
+  await validateChatOnboardingPicker({
+    label: 'texra chat first-run onboarding',
+    args: ['chat'],
     env: {},
     expected: [
       'Use ChatGPT subscription',
@@ -1157,8 +1102,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateMultiAgentListAvailability();
   validateToolsCommand();
   validateFileFlagMissingValues();
-  await validateOrchestratePreservesScrollback();
-  await validateOrchestrateOnboardingPickers();
+  await validateChatOnboardingPickers();
   validateRunCommand();
   validateToolUseAgentRunCommand();
   validateWorkflowScriptAgentRunCommand();

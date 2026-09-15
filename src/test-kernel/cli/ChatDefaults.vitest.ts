@@ -6,7 +6,6 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { Effect } from 'effect';
 import {
-  __resetUserConfigWarningDedupeForTests,
   resolveChatDefaults as nativeResolveChatDefaults,
 } from '@cli/runtime/chatDefaults';
 import {
@@ -78,7 +77,6 @@ beforeEach(async () => {
   // A fresh root per test: the common case is a user config that is simply
   // not there, which the reader must treat as "no user defaults".
   userConfigDir = await makeTempDir('texra-chat-defaults-user-', tempDirs);
-  __resetUserConfigWarningDedupeForTests();
 });
 
 async function workspaceWithConfig(config: unknown): Promise<string> {
@@ -446,16 +444,11 @@ describe('CLI chat defaults', () => {
     warnSpy.mockRestore();
   });
 
-  it('reprints a warning once an intervening valid read clears the dedup state', async () => {
-    // The warning text carries only the field name, not the invalid value,
-    // so a field a user fixes and later breaks again the same way must
-    // still warn — deduping must not be "seen this message ever," only
-    // "seen this message on the immediately preceding read."
+  it('warns once for an invalid user-config field', async () => {
     const invalidModel = {
       'texra.agent': 'assistant',
       'texra.model': 'not-a-real-model-xyz',
     };
-    const validModel = { 'texra.agent': 'assistant', 'texra.model': 'gpt55' };
     const warnSpy = vi
       .spyOn(logSinks, 'writeTextStderr')
       .mockImplementation(() => {});
@@ -463,21 +456,6 @@ describe('CLI chat defaults', () => {
     await writeUserConfig(invalidModel);
     await resolveChatDefaults({ cwd: NO_WORKSPACE });
     expect(warnSpy).toHaveBeenCalledTimes(1);
-
-    // Same invalid config again: deduped against the previous read.
-    await writeUserConfig(invalidModel);
-    await resolveChatDefaults({ cwd: NO_WORKSPACE });
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-
-    // Fixed: no warning, and the dedup state no longer carries the old one.
-    await writeUserConfig(validModel);
-    await resolveChatDefaults({ cwd: NO_WORKSPACE });
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-
-    // Broken again: warns again, since the previous read had no warnings.
-    await writeUserConfig(invalidModel);
-    await resolveChatDefaults({ cwd: NO_WORKSPACE });
-    expect(warnSpy).toHaveBeenCalledTimes(2);
 
     warnSpy.mockRestore();
   });
