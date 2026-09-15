@@ -860,18 +860,6 @@
       "name": "buildTeamOptions"
     },
     {
-      "file": "src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DEFAULT_PLAN_NAMES"
-    },
-    {
-      "file": "src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CHATGPT_USAGE_URL"
-    },
-    {
       "file": "src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -887,37 +875,13 @@
       "file": "src/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "KIMI_CODE_USAGE_URL"
-    },
-    {
-      "file": "src/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "parseKimiCodeUsage"
-    },
-    {
-      "file": "src/controllers/onboarding/onboardingFunnel.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "deriveOnboardingFunnelState"
-    },
-    {
-      "file": "src/controllers/onboarding/setupLaunch.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "selectDesktopSetupModel"
     },
     {
       "file": "src/controllers/onboarding/setupLaunch.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "selectSetupCredentialModelExcludingOpenRouter"
-    },
-    {
-      "file": "src/eventBus/AppSignals.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "AppSignalPayloads"
     },
     {
       "file": "src/latex/acceptedFileTarget.ts",
@@ -1070,22 +1034,10 @@
       "name": "isUnsupported"
     },
     {
-      "file": "src/tools/DiagnosticsTool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DiagnosticsInputSchema"
-    },
-    {
       "file": "src/tools/claudeAgent.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "runStreamedTurn"
-    },
-    {
-      "file": "src/tools/codex.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "publishCodexTodos"
     },
     {
       "file": "src/tools/codex.ts",
@@ -1134,18 +1086,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "countPinnedMemories"
-    },
-    {
-      "file": "src/tools/timeouts.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isTransientHttpError"
-    },
-    {
-      "file": "src/tools/wolfram/WolframTool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "wolframApprovalCommand"
     },
     {
       "file": "src/utils/files/pastedImageUtils.ts",
