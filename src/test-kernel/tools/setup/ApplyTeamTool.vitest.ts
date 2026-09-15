@@ -57,13 +57,17 @@ function mockCatalogAccess(canAccessCatalog: boolean): void {
 async function clearOnboardingState(): Promise<void> {
   signIn.mockReset();
   signIn.mockResolvedValue(false);
-  await workspaceRoots().workspaceState.update(
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    undefined,
+  await Effect.runPromise(
+    workspaceRoots().workspaceState.update(
+      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      undefined,
+    ),
   );
-  await hostStores().globalState.update(
-    GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID,
-    undefined,
+  await Effect.runPromise(
+    hostStores().globalState.update(
+      GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID,
+      undefined,
+    ),
   );
 }
 

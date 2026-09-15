@@ -324,16 +324,24 @@ describe('catalog-derived settings snapshots', () => {
     }
   });
 
-  it('builds the LaTeX message from validated catalog values and defaults', () => {
+  it('builds the LaTeX message from validated catalog values and defaults', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const { stores, workspaceState } = makeFakeSettingsStores();
-    void workspaceState.update(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, false);
-    void workspaceState.update(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, 25000);
-    void workspaceState.update(
-      WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-      'stale-bogus-value',
+    await Effect.runPromise(
+      workspaceState.update(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, false),
     );
-    void workspaceState.update(WorkspaceStateKey.LATEX_FORMATTER, 'tex-fmt');
+    await Effect.runPromise(
+      workspaceState.update(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, 25000),
+    );
+    await Effect.runPromise(
+      workspaceState.update(
+        WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+        'stale-bogus-value',
+      ),
+    );
+    await Effect.runPromise(
+      workspaceState.update(WorkspaceStateKey.LATEX_FORMATTER, 'tex-fmt'),
+    );
 
     try {
       const message = buildSettingsSnapshotMessage('latex', stores, 'desktop');
@@ -559,11 +567,13 @@ describe('settingsAccess', () => {
     }
   });
 
-  it('falls back to the default for a stored value that no longer validates', () => {
+  it('falls back to the default for a stored value that no longer validates', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const { stores, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
-    void workspaceState.update(entry.key, 'stale-bogus-value');
+    await Effect.runPromise(
+      workspaceState.update(entry.key, 'stale-bogus-value'),
+    );
     try {
       assert.equal(
         readSetting(entry, stores, 'vscode'),

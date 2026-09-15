@@ -113,7 +113,9 @@ describe('bindModel', () => {
   });
 
   it('sends the short model name when the preference is on', async () => {
-    await hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+    await Effect.runPromise(
+      hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, false),
+    );
 
     const exit = await bind(MODEL_CONFIGS['gpt4o']);
 

@@ -191,7 +191,9 @@ describe('runtime model registry', () => {
       /does not currently/,
     );
 
-    await setCopilotRoutePreference('gemini31p', false, globalState);
+    await Effect.runPromise(
+      setCopilotRoutePreference('gemini31p', false, globalState),
+    );
     expect(
       copilotRouteUnavailableReason('gemini31p', globalState),
     ).toBeUndefined();
