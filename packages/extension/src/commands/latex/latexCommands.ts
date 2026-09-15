@@ -98,8 +98,9 @@ export async function handleIndentCurrentTeX(): Promise<void> {
     async ({ relativePath }) => {
       log.debug(`Indenting LaTeX file: ${relativePath}`);
 
-      // A disabled formatter is not a success: say so, as the directory
-      // entry point's own 'disabled' result does.
+      // The directory indent command treats a disabled formatter as a silent
+      // no-op (`case 'disabled': break`). The single-file command is an
+      // explicit user action, so it notifies instead of succeeding quietly.
       const formatter = resolveLatexFormatter();
       if (!formatter) {
         await showLoggedInfoMessage(
