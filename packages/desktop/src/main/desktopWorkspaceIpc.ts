@@ -384,7 +384,12 @@ export function createDesktopWorkspaceIpc(
       .replace(/^\.\//, '')
       .replace(/\/$/, '');
     return listDirectory(requestId, normalizedDirectory).pipe(
-      Effect.catch((error) =>
+      // A listing fails two ways and both are answered the same way: a path
+      // refused past the workspace boundary, and a directory the process
+      // filesystem could not read. The handler names that pair instead of
+      // inferring it, so a third tag added to the listing's channel fails to
+      // compile here rather than being reported as a listing error.
+      Effect.catch((error: WorkspaceFileFailure) =>
         reportRequestFailure(error, {
           command: DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR,
           requestId,
