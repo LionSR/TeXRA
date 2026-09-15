@@ -128,12 +128,16 @@ export async function inspectRunStorageEntry(
 
   const root = resolveRunStoragePath(runId);
   const entry = resolveRunStoragePath(runId, normalizedPath);
-  const ancestors = [root];
-  for (const [index] of pathSegments.slice(0, -1).entries()) {
-    ancestors.push(
-      resolveRunStoragePath(runId, ...pathSegments.slice(0, index + 1)),
-    );
-  }
+  // Every directory the walk below descends through, run root first, with the
+  // entry's own path excluded: one path per prefix of `pathSegments`.
+  const ancestors = [
+    root,
+    ...pathSegments
+      .slice(0, -1)
+      .map((_, index) =>
+        resolveRunStoragePath(runId, ...pathSegments.slice(0, index + 1)),
+      ),
+  ];
   for (const ancestor of ancestors) {
     const ancestorType = await storageEntryType(ancestor);
     if (ancestorType === undefined) return { kind: 'missing' };

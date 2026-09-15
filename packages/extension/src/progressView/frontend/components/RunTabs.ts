@@ -407,16 +407,13 @@ export class RunTabs extends LitElement {
   }
 
   private renderRows(
-    ids: readonly RunId[],
+    runs: readonly RunView[],
     selected: RunId | null,
   ): TemplateResult {
     return html`${repeat(
-      ids,
-      (id) => id,
-      (id) => {
-        const run = this.runOfEvent(id);
-        return run ? this.renderNode(run, selected) : nothing;
-      },
+      runs,
+      (run) => run.id,
+      (run) => this.renderNode(run, selected),
     )}`;
   }
 
@@ -434,10 +431,7 @@ export class RunTabs extends LitElement {
 
     let body: TemplateResult;
     if (!this.sections) {
-      body = this.renderRows(
-        top.map((run) => run.id),
-        selected,
-      );
+      body = this.renderRows(top, selected);
     } else {
       body = html`${RUN_GROUP_ORDER.map((group) => {
         const rows = top.filter((run) => run.group === group);
@@ -446,10 +440,7 @@ export class RunTabs extends LitElement {
             <span>${RUN_GROUP_LABELS[group]}</span>
             <span class="group-count">${rows.length}</span>
           </div>
-          ${this.renderRows(
-            rows.map((run) => run.id),
-            selected,
-          )}`;
+          ${this.renderRows(rows, selected)}`;
       })}`;
     }
 

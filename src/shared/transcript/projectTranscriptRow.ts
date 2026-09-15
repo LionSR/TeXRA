@@ -142,22 +142,21 @@ function errorDetails(
   summary: string,
 ): ErrorRowDetail[] {
   if (!data) return [];
-  const details: ErrorRowDetail[] = [];
-  for (const key of ERROR_DETAIL_FIELDS) {
+  return ERROR_DETAIL_FIELDS.flatMap((key) => {
     const value = data[key];
-    if (value == null) continue;
     // The message is the summary on most failures; repeating it under the
     // summary says nothing.
-    if (key === 'message' && value === summary) continue;
-    details.push({
-      key,
-      value:
-        typeof value === 'object'
-          ? JSON.stringify(value, null, 2)
-          : String(value),
-    });
-  }
-  return details;
+    if (value == null || (key === 'message' && value === summary)) return [];
+    return [
+      {
+        key,
+        value:
+          typeof value === 'object'
+            ? JSON.stringify(value, null, 2)
+            : String(value),
+      },
+    ];
+  });
 }
 
 function projectErrorRow(

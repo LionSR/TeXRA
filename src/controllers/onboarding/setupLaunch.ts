@@ -48,29 +48,29 @@ export function selectSetupCredentialModelExcludingOpenRouter(
   return Effect.gen(function* () {
     // Subscription routes follow the global OpenRouter selection.
     // When it is enabled, only managed direct credentials can bypass it.
-    if (
-      !useOpenRouter &&
-      (yield* probeSetupCredential(
-        Effect.tryPromise({
-          try: () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
-          catch: setupCredentialProbeFailed('ChatGPT subscription'),
-        }),
-        credentialLog.warn,
-      ))
-    ) {
-      return CHATGPT_SETUP_MODEL;
-    }
-    if (
-      !useOpenRouter &&
-      (yield* probeSetupCredential(
-        Effect.tryPromise({
-          try: () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
-          catch: setupCredentialProbeFailed('Grok subscription'),
-        }),
-        credentialLog.warn,
-      ))
-    ) {
-      return XAI_SETUP_MODEL;
+    if (!useOpenRouter) {
+      if (
+        yield* probeSetupCredential(
+          Effect.tryPromise({
+            try: () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
+            catch: setupCredentialProbeFailed('ChatGPT subscription'),
+          }),
+          credentialLog.warn,
+        )
+      ) {
+        return CHATGPT_SETUP_MODEL;
+      }
+      if (
+        yield* probeSetupCredential(
+          Effect.tryPromise({
+            try: () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
+            catch: setupCredentialProbeFailed('Grok subscription'),
+          }),
+          credentialLog.warn,
+        )
+      ) {
+        return XAI_SETUP_MODEL;
+      }
     }
 
     for (const provider of API_PROVIDERS) {

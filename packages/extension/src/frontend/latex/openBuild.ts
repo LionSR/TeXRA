@@ -68,10 +68,10 @@ function resolveLatexWorkshopOutDir(filePath: string): string {
     ['%TMPDIR%', os.tmpdir()],
   ];
 
-  let resolved = normalizedRaw;
-  for (const [placeholder, value] of replacements) {
-    resolved = resolved.replaceAll(placeholder, value);
-  }
+  const resolved = replacements.reduce(
+    (acc, [placeholder, value]) => acc.replaceAll(placeholder, value),
+    normalizedRaw,
+  );
 
   return path.isAbsolute(resolved) ? resolved : path.resolve(dir, resolved);
 }

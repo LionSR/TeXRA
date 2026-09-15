@@ -1184,7 +1184,7 @@ export function startChildRunLoop<TTurn, R = never>(
               const turn = attempt.kind === 'completed' ? attempt.turn : null;
               const err = attempt.kind === 'failed' ? attempt.err : null;
               const turnIsError =
-                attempt.kind === 'completed' ? attempt.turnIsError : false;
+                attempt.kind === 'completed' && attempt.turnIsError;
               const wallTimeMs = Date.now() - startedAt;
               const turnFailed = err != null || turnIsError;
 

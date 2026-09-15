@@ -25,13 +25,7 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
  */
 function countOccurrences(haystack: string, needle: string): number {
   if (needle.length === 0) return 0;
-  let count = 0;
-  let index = haystack.indexOf(needle);
-  while (index !== -1) {
-    count++;
-    index = haystack.indexOf(needle, index + needle.length);
-  }
-  return count;
+  return haystack.split(needle).length - 1;
 }
 
 /**

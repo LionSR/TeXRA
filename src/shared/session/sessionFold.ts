@@ -69,7 +69,6 @@ import {
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
-  STREAMING_TEXT_MESSAGE_TYPES,
   isPlainAgentIdentity,
   listingTypeOf,
   isTranscriptEvent,
@@ -138,7 +137,7 @@ import {
 } from '@shared/runs/workflowRunModel';
 import { isObject } from '@utils/core';
 import { createTranscriptFold } from './traceFold';
-import { StreamLog } from './traceEntries';
+import { isRunningStreamingTextEntry, StreamLog } from './traceEntries';
 
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
@@ -591,12 +590,9 @@ function reindexOwner(
     if (ownedIds?.size === 0) byOwner.delete(from);
   }
   if (to !== null) {
-    let ownedIds = byOwner.get(to);
-    if (!ownedIds) {
-      ownedIds = new Set();
-      byOwner.set(to, ownedIds);
-    }
+    const ownedIds = byOwner.get(to) ?? new Set<RunId>();
     ownedIds.add(runId);
+    byOwner.set(to, ownedIds);
   }
 }
 
@@ -640,15 +636,14 @@ function insertOrdered(
   const run = view.runs.get(id);
   if (!run) return next;
   const key = orderingKey(run);
-  let at = next.length;
-  for (let i = 0; i < next.length; i += 1) {
-    const other = view.runs.get(next[i]);
-    if (other && compareByNewestCreationTime(key, orderingKey(other)) < 0) {
-      at = i;
-      break;
-    }
-  }
-  next.splice(at, 0, id);
+  const at = next.findIndex((otherId) => {
+    const other = view.runs.get(otherId);
+    return (
+      other !== undefined &&
+      compareByNewestCreationTime(key, orderingKey(other)) < 0
+    );
+  });
+  next.splice(at < 0 ? next.length : at, 0, id);
   return next;
 }
 
@@ -824,14 +819,10 @@ function childProgressOf(child: RunView): ChildRunProgress {
 /** Whether a child's change moved a value its parent's run board reads. */
 function childProgressChanged(prev: RunView, next: RunView): boolean {
   if (prev === next) return false;
-  if (
+  return (
     prev.runStartedAt !== next.runStartedAt ||
     prev.conversationProgress.toolCallCount !==
-      next.conversationProgress.toolCallCount
-  ) {
-    return true;
-  }
-  return (
+      next.conversationProgress.toolCallCount ||
     prev.usage.outputTokens !== next.usage.outputTokens ||
     prev.usage.cost !== next.usage.cost
   );
@@ -993,15 +984,6 @@ function reconcileCompactionRows(
   }
 }
 
-function isStreamingEntry(entry: StreamLogEntry): boolean {
-  return (
-    entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
-    STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType) &&
-    isObject(entry.data) &&
-    entry.data.status === 'running'
-  );
-}
-
 /** A tool card still running: what it prints reaches the fold as live text
  *  keyed by the card id, like a streaming row's chunks, and projects as the
  *  card's output until the terminal row replaces it (C3: never a row). */
@@ -1101,7 +1083,7 @@ function applyEntry(
   // from offset zero (the bridge seeds one for every running row it
   // publishes) ends within the length held and is dropped (5.2, "In-flight
   // text").
-  const streamingText = isStreamingEntry(entry);
+  const streamingText = isRunningStreamingTextEntry(entry);
   const runningTool = isRunningToolEntry(entry);
   if (streamingText && entry.text && !inflight.has(key)) {
     inflight.set(key, entry.text);
@@ -1668,11 +1650,8 @@ function applySessionSlices(
 /** The follow-up ids a run's rows named, created on first use. */
 function knownFollowUpIds(view: SessionView, runId: RunId): Set<string> {
   const { followUpIds } = sessionIndexesOf(view);
-  let ids = followUpIds.get(runId);
-  if (!ids) {
-    ids = new Set();
-    followUpIds.set(runId, ids);
-  }
+  const ids = followUpIds.get(runId) ?? new Set<string>();
+  followUpIds.set(runId, ids);
   return ids;
 }
 

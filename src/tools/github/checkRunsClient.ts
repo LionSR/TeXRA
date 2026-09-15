@@ -195,6 +195,24 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
       };
     });
 
+    /**
+     * Pages needed to hold `totalCount`, capped at the runaway guard. When the
+     * cap bites we warn and walk only that many pages: under-reporting beats
+     * fanning out into hundreds of GETs every 30s.
+     */
+    const pagesForCheckRuns = (totalCount: number, midWalk = false): number => {
+      const neededPages = Math.max(
+        1,
+        Math.ceil(totalCount / CHECK_RUNS_PAGE_SIZE),
+      );
+      if (neededPages <= MAX_CHECK_RUNS_PAGES) return neededPages;
+      logger.warn(
+        `Pagination cap hit${midWalk ? ' mid-walk' : ''} for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
+        { data: { totalCount, neededPages, cappedAt: MAX_CHECK_RUNS_PAGES } },
+      );
+      return MAX_CHECK_RUNS_PAGES;
+    };
+
     // Page 1 always runs — we need its `total_count` (or a 304 fast-path
     // when nothing changed).
     const first = yield* fetchPage(1);
@@ -230,20 +248,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
     // server's view almost certainly matches what we last committed). If a
     // 200 arrives later, `latestTotal` takes precedence and we recompute.
     const seedTotal = latestTotal ?? cache?.lastTotalCount ?? 0;
-    let totalPages = Math.max(1, Math.ceil(seedTotal / CHECK_RUNS_PAGE_SIZE));
-    if (totalPages > MAX_CHECK_RUNS_PAGES) {
-      logger.warn(
-        `Pagination cap hit for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
-        {
-          data: {
-            totalCount: seedTotal,
-            neededPages: totalPages,
-            cappedAt: MAX_CHECK_RUNS_PAGES,
-          },
-        },
-      );
-      totalPages = MAX_CHECK_RUNS_PAGES;
-    }
+    let totalPages = pagesForCheckRuns(seedTotal);
     if (totalPages > 1) {
       logger.info(
         `Pagination for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
@@ -266,25 +271,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
       // tracker would strand the terminal gate forever.
       if (result.total !== undefined) {
         latestTotal = result.total;
-        const newTotalPages = Math.max(
-          1,
-          Math.ceil(latestTotal / CHECK_RUNS_PAGE_SIZE),
-        );
-        if (newTotalPages > MAX_CHECK_RUNS_PAGES) {
-          logger.warn(
-            `Pagination cap hit mid-walk for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
-            {
-              data: {
-                totalCount: latestTotal,
-                neededPages: newTotalPages,
-                cappedAt: MAX_CHECK_RUNS_PAGES,
-              },
-            },
-          );
-          totalPages = MAX_CHECK_RUNS_PAGES;
-        } else {
-          totalPages = newTotalPages;
-        }
+        totalPages = pagesForCheckRuns(latestTotal, true);
       }
       page += 1;
     }

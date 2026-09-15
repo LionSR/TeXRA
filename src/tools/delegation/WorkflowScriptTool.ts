@@ -269,6 +269,9 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       );
       const { session, runId: parentRunId } = parent.run;
       const workingDirectory = parent.workingDirectory;
+      // A mid-cycle parent has no later turn for a follow-up: wait on the run.
+      const stopAfterCycle =
+        parent.stopAfterCycle ?? parent.run.toolPolicy.stopAfterCycle;
       let scriptPath: string;
       let script: string;
       if (input.scriptPath != null) {
@@ -594,8 +597,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                           files,
                           name: meta.name,
                           workflowControls: session.workflowControls,
-                          ...((parent.stopAfterCycle ??
-                            parent.run.toolPolicy.stopAfterCycle) && {
+                          ...(stopAfterCycle && {
                             deliveryMode: 'persistOnly' as const,
                           }),
                           createRunAgent: (hooks) => {
@@ -614,10 +616,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                         // Detached callers do not await completion. Own late finalization
                         // failures here as trace diagnostics; the child loop already owns
                         // its one user-facing result/error delivery.
-                        ...(!(
-                          parent.stopAfterCycle ??
-                          parent.run.toolPolicy.stopAfterCycle
-                        ) && {
+                        ...(!stopAfterCycle && {
                           onLoopFailed: (error: unknown): void => {
                             childRun.logger.error(
                               `Workflow script '${meta.name}' run loop failed after launch`,
@@ -640,7 +639,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         if ('status' in launched) return launched;
         const { completion: runCompletion } = launched;
 
-        if (parent.stopAfterCycle ?? parent.run.toolPolicy.stopAfterCycle) {
+        if (stopAfterCycle) {
           yield* Fiber.join(runCompletion);
           const [report, runEnd] = yield* Effect.all([
             runStore.readReport(),

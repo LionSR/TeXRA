@@ -84,15 +84,13 @@ async function scanSkillRoot(root: string): Promise<SkillRootScan> {
   try {
     entries = await fs.readdir(root, { withFileTypes: true });
   } catch (err) {
-    if (isFileNotFoundError(err)) {
-      return { skills, errors };
+    if (!isFileNotFoundError(err)) {
+      errors.push(
+        issue('error', 'read_error', toErrorMessage(err), {
+          path: root,
+        }),
+      );
     }
-
-    errors.push(
-      issue('error', 'read_error', toErrorMessage(err), {
-        path: root,
-      }),
-    );
     return { skills, errors };
   }
 

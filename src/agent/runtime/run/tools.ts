@@ -98,8 +98,7 @@ export function dispatchFactsFor(
   let partition = -1;
   let previousSafe = false;
   return parsed.map((call, index) => {
-    const tool = registry.get(call.name);
-    const parallelSafe = tool?.parallelSafe === true;
+    const parallelSafe = isParallelSafe(call);
     if (!(parallelSafe && previousSafe)) partition += 1;
     previousSafe = parallelSafe;
     const primaryIndex = duplicates?.get(call.callId);

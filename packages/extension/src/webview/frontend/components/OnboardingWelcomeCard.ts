@@ -18,13 +18,32 @@ import {
 const { openWalkthrough: OPEN_WALKTHROUGH } =
   GETTING_STARTED_ACTION_PRESENTATION;
 
+/** The three steps of the getting-started path, in card order. */
+const WELCOME_PATH_STEPS = [
+  {
+    icon: 'right-to-bracket',
+    label: '1. Connect',
+    copy: 'A ChatGPT subscription or your own provider API key.',
+  },
+  {
+    icon: 'rocket',
+    label: '2. Setup',
+    copy: 'The setup assistant checks LaTeX and applies a starter team.',
+  },
+  {
+    icon: 'code-compare',
+    label: '3. Review',
+    copy: 'Run a polish pass and inspect the diff before accepting changes.',
+  },
+] as const;
+
 /**
  * State 0 welcome card (PRD: agent-native onboarding) — a port of the CLI
  * first-run picker, not a new design: ChatGPT subscription first, the API-key
  * alternative, and a quiet "Skip for now" link last.
- * Stateless: renders the shared onboarding copy verbatim and emits
- * `welcome-chatgpt` / `welcome-api-key` / setup navigation events; the host
- * owns the funnel state.
+ * Stateless: renders the shared onboarding copy verbatim and emits the
+ * `onboarding` host actions (`signInChatGpt`, `setApiKey`, `skip`, and
+ * getting-started navigation); the host owns the funnel state.
  */
 @customElement('onboarding-welcome-card')
 export class OnboardingWelcomeCard extends LitElement {
@@ -262,39 +281,19 @@ export class OnboardingWelcomeCard extends LitElement {
             </div>
           </div>
           <div class="path" role="list" aria-label="Getting started path">
-            <div class="path-step" role="listitem">
-              <span class="path-step__label">
-                <span class="icon-surface is-size-s" aria-hidden="true">
-                  ${waIcon('right-to-bracket')}
-                </span>
-                <span>1. Connect</span>
-              </span>
-              <p class="path-step__copy">
-                A ChatGPT subscription or your own provider API key.
-              </p>
-            </div>
-            <div class="path-step" role="listitem">
-              <span class="path-step__label">
-                <span class="icon-surface is-size-s" aria-hidden="true">
-                  ${waIcon('rocket')}
-                </span>
-                <span>2. Setup</span>
-              </span>
-              <p class="path-step__copy">
-                The setup assistant checks LaTeX and applies a starter team.
-              </p>
-            </div>
-            <div class="path-step" role="listitem">
-              <span class="path-step__label">
-                <span class="icon-surface is-size-s" aria-hidden="true">
-                  ${waIcon('code-compare')}
-                </span>
-                <span>3. Review</span>
-              </span>
-              <p class="path-step__copy">
-                Run a polish pass and inspect the diff before accepting changes.
-              </p>
-            </div>
+            ${WELCOME_PATH_STEPS.map(
+              (step) => html`
+                <div class="path-step" role="listitem">
+                  <span class="path-step__label">
+                    <span class="icon-surface is-size-s" aria-hidden="true">
+                      ${waIcon(step.icon)}
+                    </span>
+                    <span>${step.label}</span>
+                  </span>
+                  <p class="path-step__copy">${step.copy}</p>
+                </div>
+              `,
+            )}
           </div>
           <div class="choices">
             <div class="choice">

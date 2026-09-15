@@ -407,23 +407,19 @@ export class ToolCard extends LitElement {
   }
 
   override render(): TemplateResult {
+    // The status reads as an icon before the name when it is available, and as
+    // a badge after it otherwise; the two are mutually exclusive.
+    const isAvailable = this.item.status === 'available';
+
     return html`
       <article class="tool-card">
         <div class="tool-header">
           <div class="tool-title-group">
-            ${
-              this.item.status === 'available'
-                ? this.renderAvailableStatusIcon()
-                : nothing
-            }
+            ${isAvailable ? this.renderAvailableStatusIcon() : nothing}
             <h3 class="tool-name">
               <bdi dir="auto">${this.item.name}</bdi>
             </h3>
-            ${
-              this.item.status === 'available'
-                ? nothing
-                : this.renderStatusBadge()
-            }
+            ${isAvailable ? nothing : this.renderStatusBadge()}
             ${this.renderAuthNote()}
           </div>
           ${this.renderToggle()}

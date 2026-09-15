@@ -52,14 +52,13 @@ export function executionsSubagentSummary(
   if (targets.length === 0 && pathTarget) targets.push(pathTarget);
   if (targets.length === 0) return undefined;
 
-  let matchedSubagent = false;
+  const hasKnownTarget = targets.some(({ id }) => labels.get(id)?.trim());
+  if (!hasKnownTarget) return undefined;
+
   const displayTargets = targets.map(({ id, resourceSuffix }) => {
     const label = labels.get(id)?.trim();
-    if (!label) return `${id}${resourceSuffix}`;
-    matchedSubagent = true;
-    return `${label}${resourceSuffix}`;
+    return `${label || id}${resourceSuffix}`;
   });
-  if (!matchedSubagent) return undefined;
 
   return `${executionsAction(input)}: ${displayTargets.join(', ')}`;
 }

@@ -24,10 +24,7 @@ export function resolveEffectiveHelperModel(
   }
 
   const resolved = configuredModel.trim();
-  if (resolved === DEFAULT_HELPER_MODEL) return resolved;
-
-  if (candidateModels.includes(resolved)) {
-    return resolved;
-  }
-  return DEFAULT_HELPER_MODEL;
+  return resolved === DEFAULT_HELPER_MODEL || candidateModels.includes(resolved)
+    ? resolved
+    : DEFAULT_HELPER_MODEL;
 }

@@ -82,10 +82,7 @@ export class LatexDiffManager {
     });
   }
 
-  private logLatexdiffResult(
-    result: LaTeXdiffResult,
-    operation = 'latexdiff',
-  ): void {
+  private logLatexdiffResult(result: LaTeXdiffResult, operation: string): void {
     if (result.success) {
       this.logger.debug('Successfully generated diff file', {
         data: { operation, diffPath: result.diffPath },

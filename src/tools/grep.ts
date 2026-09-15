@@ -10,11 +10,11 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
+  resolveAndFormat,
   workspacePathPorts,
   type WorkspacePathPorts,
 } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { resolveAndFormat } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { executeCommand } from '@utils/system/execUtils';
 import { splitOutputLines } from '@utils/text/stringUtils';

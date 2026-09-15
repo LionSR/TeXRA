@@ -255,8 +255,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       // A stored list holds resolved `source:name` keys, but older workspaces
       // persisted bare names, which `agentMatchesIdentifier` still matches.
       enabled:
-        enabledKeys === undefined ||
-        enabledKeys.some((key) => agentMatchesIdentifier(entry, key)),
+        enabledKeys?.some((key) => agentMatchesIdentifier(entry, key)) ?? true,
     };
   }
 

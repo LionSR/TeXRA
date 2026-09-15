@@ -84,6 +84,12 @@ type SubscriptionUsageServiceInit = SubscriptionUsageServiceOptions &
     | { readonly credentials: SubscriptionUsageCredentials }
   );
 
+/** Why a usage snapshot carries no data (the `unavailable` variant's reason). */
+type SubscriptionUsageUnavailableReason = Extract<
+  SubscriptionUsageSnapshot,
+  { state: 'unavailable' }
+>['reason'];
+
 interface SubscriptionUsageAdapter {
   /** Credential-derived request variant (today: the GLM region flag). */
   readonly resolveVariant?: () => boolean | Promise<boolean>;
@@ -275,10 +281,7 @@ export class SubscriptionUsageService {
 
   private unavailable(
     provider: SubscriptionUsageProvider,
-    reason: Extract<
-      SubscriptionUsageSnapshot,
-      { state: 'unavailable' }
-    >['reason'],
+    reason: SubscriptionUsageUnavailableReason,
   ): SubscriptionUsageSnapshot {
     return {
       state: 'unavailable',
@@ -319,21 +322,19 @@ export class SubscriptionUsageService {
       }
       return this.available(provider, parsed);
     } catch (error: unknown) {
-      let reason: Extract<
-        SubscriptionUsageSnapshot,
-        { state: 'unavailable' }
-      >['reason'] = 'request_failed';
-      if (error instanceof SyntaxError) reason = 'malformed_response';
-      if (error instanceof CodexAuthError && error.needsReauth) {
-        reason = 'invalid_credentials';
+      // The reason a failed fetch maps to, most specific cause first. The
+      // failure classes are disjoint, so at most one of these checks holds.
+      const invalidCredentials =
+        (error instanceof CodexAuthError && error.needsReauth) ||
+        (error instanceof SubscriptionUsageHttpError &&
+          (error.status === 401 || error.status === 403));
+      if (invalidCredentials) {
+        return this.unavailable(provider, 'invalid_credentials');
       }
-      if (
-        error instanceof SubscriptionUsageHttpError &&
-        (error.status === 401 || error.status === 403)
-      ) {
-        reason = 'invalid_credentials';
+      if (error instanceof SyntaxError) {
+        return this.unavailable(provider, 'malformed_response');
       }
-      return this.unavailable(provider, reason);
+      return this.unavailable(provider, 'request_failed');
     }
   }
 }

@@ -49,30 +49,13 @@ function rootedLayer<I>(
 }
 
 /**
- * The workspace filesystem of `root`, named here rather than exported: a
- * session hands out both of its filesystems together, through
- * {@link sessionFsLayer}. `undefined` is the session with no folder open:
- * the view still exists, and every operation on it fails with `BadArgument`
- * instead of resolving against some other root.
- */
-function workspaceFsLayer(
-  root: string | undefined,
-): Layer.Layer<WorkspaceFs, never, FileSystem.FileSystem | Path.Path> {
-  return rootedLayer(WorkspaceFs, root);
-}
-
-/** The storage filesystem of `root`. */
-function storageFsLayer(
-  root: string,
-): Layer.Layer<StorageFs, never, FileSystem.FileSystem | Path.Path> {
-  return rootedLayer(StorageFs, root);
-}
-
-/**
  * Both rooted filesystems of one session, for the host boundaries that hold
- * a session's roots and run a program over its files. `FileSystem` and
- * `Path` stay requirements: they are process services the runtime already
- * provides, and building a second filesystem here would be a second base.
+ * a session's roots and run a program over its files. `roots.workspace` is
+ * `undefined` for the session with no folder open: the view still exists, and
+ * every operation on it fails with `BadArgument` instead of resolving against
+ * some other root. `FileSystem` and `Path` stay requirements: they are
+ * process services the runtime already provides, and building a second
+ * filesystem here would be a second base.
  */
 export function sessionFsLayer(
   roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
@@ -82,8 +65,8 @@ export function sessionFsLayer(
   FileSystem.FileSystem | Path.Path
 > {
   return Layer.merge(
-    workspaceFsLayer(roots.workspace),
-    storageFsLayer(roots.storage),
+    rootedLayer(WorkspaceFs, roots.workspace),
+    rootedLayer(StorageFs, roots.storage),
   );
 }
 

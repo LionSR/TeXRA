@@ -188,12 +188,11 @@ export class ChatExportController {
       }
       const { trace, record } = traceResult;
 
-      if (
-        !(yield* Effect.tryPromise({
-          try: () => AbsoluteFS.exists(standaloneTemplatePath),
-          catch: ensureError,
-        }))
-      ) {
+      const templateExists = yield* Effect.tryPromise({
+        try: () => AbsoluteFS.exists(standaloneTemplatePath),
+        catch: ensureError,
+      });
+      if (!templateExists) {
         return yield* Effect.fail(
           new Error(
             `Trace-viewer standalone bundle missing at ${standaloneTemplatePath}: ` +

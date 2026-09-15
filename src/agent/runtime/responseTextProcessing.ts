@@ -20,10 +20,12 @@ function connectResponseText(
   previous: string,
   next: string,
 ): Effect.Effect<string> {
-  if (!previous || !next || /\s$/.test(previous) || /^\s/.test(next)) {
-    return Effect.succeed('');
-  }
-  return Effect.succeed(' ');
+  const adjacent =
+    previous !== '' &&
+    next !== '' &&
+    !/\s$/.test(previous) &&
+    !/^\s/.test(next);
+  return Effect.succeed(adjacent ? ' ' : '');
 }
 
 /** Create neutral package defaults when a host supplies no text policy. */

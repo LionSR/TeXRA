@@ -227,18 +227,6 @@ export function createWorkflowScriptStrategy(
     }
   };
 
-  const updateDurableSummary = (
-    run: {
-      readonly journal: readonly WorkflowJournalEntry[];
-      readonly board: ReturnType<
-        WorkflowScriptProgressProjection<never>['board']
-      >;
-    },
-    costUsd: number,
-  ): void => {
-    settleSummary(run, costUsd);
-  };
-
   const formatSummaryLine = (
     outcome: 'completed' | 'failed',
     errorCause?: string,
@@ -328,7 +316,7 @@ export function createWorkflowScriptStrategy(
             // commit for live results and after validation for cache hits.
             onJournalEntryConsumed: (entry) => {
               attemptJournalByKey.set(entry.key, entry);
-              updateDurableSummary(
+              settleSummary(
                 { journal: attemptJournal(), board: projection.board() },
                 attemptCost.total(attemptJournal()),
               );
@@ -347,7 +335,7 @@ export function createWorkflowScriptStrategy(
           const journal = attemptJournal();
           const costUsd = attemptCost.total(journal);
           ports.recordCost(costUsd);
-          updateDurableSummary({ journal, board: projection.board() }, costUsd);
+          settleSummary({ journal, board: projection.board() }, costUsd);
         };
         const result = yield* Effect.exit(
           runPersistedWorkflowScript(projection.options).pipe(

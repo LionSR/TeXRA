@@ -141,7 +141,7 @@ export class TodoList extends CollapsiblePanel {
         class=${classMap({
           'todo-item': true,
           'todo-item--pending': status === TODO_STATUS.PENDING,
-          'todo-item--in-progress': status === TODO_STATUS.IN_PROGRESS,
+          'todo-item--in-progress': isInProgress,
           'todo-item--completed': status === TODO_STATUS.COMPLETED,
         })}
         aria-current=${isInProgress ? 'step' : nothing}

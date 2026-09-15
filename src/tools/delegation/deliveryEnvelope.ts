@@ -84,6 +84,11 @@ export function toDeliveryUsage(
     : null;
 }
 
+/** The `<wall-time>` element both envelope bodies open with, when given. */
+function wallTimeLine(wallTime: string | undefined): string[] {
+  return wallTime !== undefined ? [`<wall-time>${wallTime}</wall-time>`] : [];
+}
+
 /**
  * Build the `<...-result>` XML delivered to the parent's follow-up queue when
  * a child run's turn completes.
@@ -92,10 +97,7 @@ export function formatChildRunDelivery(
   envelope: ChildRunEnvelope,
   facts: ChildRunDeliveryFacts,
 ): string {
-  const bodyLines: string[] = [];
-  if (facts.wallTime !== undefined) {
-    bodyLines.push(`<wall-time>${facts.wallTime}</wall-time>`);
-  }
+  const bodyLines: string[] = wallTimeLine(facts.wallTime);
   if (facts.response !== undefined) {
     bodyLines.push(
       `<response>${escapeText(facts.response || '(no response)')}</response>`,
@@ -121,10 +123,7 @@ export function formatChildRunError(
     readonly message: string;
   },
 ): string {
-  const bodyLines: string[] = [];
-  if (facts.wallTime !== undefined) {
-    bodyLines.push(`<wall-time>${facts.wallTime}</wall-time>`);
-  }
+  const bodyLines: string[] = wallTimeLine(facts.wallTime);
   if (facts.lines) bodyLines.push(...facts.lines);
   bodyLines.push(`<message>${escapeText(facts.message)}</message>`);
   return childRunEnvelopeXml(envelope, bodyLines);

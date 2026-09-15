@@ -57,11 +57,13 @@ const THEBIBLIOGRAPHY_BLOCK =
 const BIBITEM_START = /(?:^|\n)\s*(?:\\DIF(?:add|del)\{)?\\bibitem\b/;
 
 export class DiffFileProcessor {
-  /** `config`: the workspace configuration held as data, when the caller has
-   *  one; otherwise the replacement rules read the calling context's. */
   /** The replacement rules' reader over `config`, when one was given. */
   private readonly readReplacementConfig: ReplacementConfigRead | undefined;
 
+  /**
+   * `config`: the workspace configuration held as data, when the caller has
+   * one; otherwise the replacement rules read the calling context's.
+   */
   constructor(config?: ConfigProvider) {
     this.readReplacementConfig = config
       ? (path) => readConfig(config, path)

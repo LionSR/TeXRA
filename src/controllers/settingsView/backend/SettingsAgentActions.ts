@@ -195,21 +195,20 @@ export function createSettingsAgentActions(
             try: () => AbsoluteFS.ensureDir(path.dirname(targetPath)),
             catch: ensureError,
           });
-          if (
-            (yield* Effect.tryPromise({
-              try: () => AbsoluteFS.exists(targetPath),
-              catch: ensureError,
-            })) &&
-            !(yield* Effect.tryPromise({
+          const targetExists = yield* Effect.tryPromise({
+            try: () => AbsoluteFS.exists(targetPath),
+            catch: ensureError,
+          });
+          if (targetExists) {
+            const overwrite = yield* Effect.tryPromise({
               try: () =>
                 options.confirmAction(
                   `A custom copy already exists: ${path.basename(targetPath)}`,
                   'Overwrite',
                 ),
               catch: ensureError,
-            }))
-          ) {
-            return;
+            });
+            if (!overwrite) return;
           }
 
           yield* Effect.tryPromise({
@@ -257,18 +256,15 @@ export function createSettingsAgentActions(
             return;
           }
 
-          if (
-            !(yield* Effect.tryPromise({
-              try: () =>
-                options.confirmAction(
-                  `Delete "${message.agentName}"? This cannot be undone.`,
-                  'Delete',
-                ),
-              catch: ensureError,
-            }))
-          ) {
-            return;
-          }
+          const confirmed = yield* Effect.tryPromise({
+            try: () =>
+              options.confirmAction(
+                `Delete "${message.agentName}"? This cannot be undone.`,
+                'Delete',
+              ),
+            catch: ensureError,
+          });
+          if (!confirmed) return;
 
           yield* Effect.tryPromise({
             try: () => AbsoluteFS.delete(entryPath, { recursive: false }),

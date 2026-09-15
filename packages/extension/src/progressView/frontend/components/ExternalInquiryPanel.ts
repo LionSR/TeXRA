@@ -513,12 +513,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     const answerInput = this.renderRoot.querySelector<ValidatableTextarea>(
       '.external-inquiry-request__answer-input',
     );
+    const hasAnswer = this.hasAnswer;
     answerInput?.setCustomValidity(
-      this.hasAnswer
-        ? ''
-        : 'Paste the external model’s answer before submitting.',
+      hasAnswer ? '' : 'Paste the external model’s answer before submitting.',
     );
-    if (!this.hasAnswer) {
+    if (!hasAnswer) {
       answerInput?.reportValidity();
       return;
     }

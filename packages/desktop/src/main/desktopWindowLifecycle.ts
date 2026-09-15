@@ -39,11 +39,10 @@ export function bootstrapDesktopWindowLifecycle(
   options: DesktopWindowLifecycleWiring,
 ): void {
   options.webContents.on('will-prevent-unload', (event) => {
-    if (options.isFatalShutdownRequested()) {
-      event.preventDefault();
-      return;
-    }
-    if (options.showDiscardDialog() === 1) {
+    if (
+      options.isFatalShutdownRequested() ||
+      options.showDiscardDialog() === 1
+    ) {
       event.preventDefault();
       return;
     }
@@ -72,14 +71,13 @@ export function installDesktopBeforeQuitWiring(options: {
   let quitting = false;
   options.app.on('before-quit', (event) => {
     if (quitting) return;
+    event.preventDefault();
     const window = options.getMainWindow();
     if (window && !window.isDestroyed()) {
-      event.preventDefault();
       options.continueAfterWindowClose(() => options.app.quit());
       window.close();
       return;
     }
-    event.preventDefault();
     if (shutdownStarted) return;
     shutdownStarted = true;
     void options.lifecycle.runShutdown().finally(() => {

@@ -416,7 +416,7 @@ export function createDesktopSettingsIpc(
    * to that paper. Every refresh a signal triggers runs in this paper's session.
    */
   function runAsyncInPaper(work: () => Promise<void>): void {
-    runAsync(Promise.resolve(runInSession(options.session, work)));
+    runAsync(runInSession(options.session, work));
   }
 
   // Agent runs execute in this same main process and the settings panel shares
