@@ -20,7 +20,10 @@ import {
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { registerAgentDirectoryRoots } from '@frontend/setup';
 import * as logger from '@logger/logUtils';
-import type { AgentDirectoriesPort } from '@platform/interfaces';
+import {
+  AgentDirectoriesFailed,
+  type AgentDirectoriesPort,
+} from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
@@ -66,9 +69,9 @@ function testAgentDirectories(
   overrides: Partial<AgentDirectoriesPort> = {},
 ): AgentDirectoriesPort {
   return {
-    custom: async () => '',
-    builtIn: async () => BUILTIN_AGENTS_DIR,
-    builtInToolUse: async () => BUILTIN_TOOL_USE_AGENTS_DIR,
+    custom: () => Effect.sync(() => ''),
+    builtIn: () => Effect.sync(() => BUILTIN_AGENTS_DIR),
+    builtInToolUse: () => Effect.sync(() => BUILTIN_TOOL_USE_AGENTS_DIR),
     ...overrides,
   };
 }
@@ -133,9 +136,11 @@ describe('agent registry', () => {
 
   it('skips root registration when called before agent directory initialization', async () => {
     await expect(
-      registerAgentDirectoryRoots({
-        extensionPath,
-      } as vscode.ExtensionContext),
+      Effect.runPromise(
+        registerAgentDirectoryRoots({
+          extensionPath,
+        } as vscode.ExtensionContext),
+      ),
     ).resolves.toBeUndefined();
 
     expect(registerExternalRoot).toHaveBeenCalledTimes(1);
@@ -149,9 +154,11 @@ describe('agent registry', () => {
     agentDirectories.initialize(globalState, resourcesPath, effectRuntime());
 
     await expect(
-      registerAgentDirectoryRoots({
-        extensionPath,
-      } as vscode.ExtensionContext),
+      Effect.runPromise(
+        registerAgentDirectoryRoots({
+          extensionPath,
+        } as vscode.ExtensionContext),
+      ),
     ).resolves.toBeUndefined();
     await expect(
       Effect.runPromise(loadAgents({ includeRemote: false })),
@@ -181,10 +188,10 @@ describe('agent registry', () => {
         expect(getAgent('assistant')?.name).toBe('assistant');
 
         useAgentDirectories({
-          builtInToolUse: async () => {
-            await builtInToolUseDir.promise;
-            return BUILTIN_TOOL_USE_AGENTS_DIR;
-          },
+          builtInToolUse: () =>
+            Effect.promise(() => builtInToolUseDir.promise).pipe(
+              Effect.as(BUILTIN_TOOL_USE_AGENTS_DIR),
+            ),
         });
 
         // startImmediately: the refresh claims the load lane and parks on the
@@ -288,9 +295,14 @@ describe('agent registry', () => {
         yield* refresh({ includeRemote: true });
         expect(isRemoteAgent('orchestrator')).toBe(true);
         useAgentDirectories({
-          builtIn: async () => {
-            throw new Error('local catalog unavailable');
-          },
+          builtIn: () =>
+            Effect.fail(
+              new AgentDirectoriesFailed({
+                source: 'builtInWorkflow',
+                message: 'local catalog unavailable',
+                cause: undefined,
+              }),
+            ),
         });
 
         // startImmediately: removeRemoteEntries runs in the invalidation's
@@ -329,11 +341,14 @@ describe('agent registry', () => {
       yield* refresh({ includeRemote: false });
       let builtInCalls = 0;
       useAgentDirectories({
-        builtIn: async () => {
-          builtInCalls += 1;
-          if (builtInCalls === 2) await localRebuild.promise;
-          return BUILTIN_AGENTS_DIR;
-        },
+        builtIn: () =>
+          Effect.gen(function* () {
+            builtInCalls += 1;
+            if (builtInCalls === 2) {
+              yield* Effect.promise(() => localRebuild.promise);
+            }
+            return BUILTIN_AGENTS_DIR;
+          }),
       });
       listRemoteAgents.mockImplementationOnce(() =>
         Deferred.succeed(remoteStarted, undefined).pipe(
@@ -384,9 +399,14 @@ describe('agent registry', () => {
       expect(getAgent('assistant')?.name).toBe('assistant');
 
       useAgentDirectories({
-        builtInToolUse: async () => {
-          throw new Error('refresh failed');
-        },
+        builtInToolUse: () =>
+          Effect.fail(
+            new AgentDirectoriesFailed({
+              source: 'builtInToolUse',
+              message: 'refresh failed',
+              cause: undefined,
+            }),
+          ),
       });
 
       try {
@@ -425,10 +445,10 @@ describe('agent registry', () => {
       const builtInToolUseDir = createDeferred<void>();
       return Effect.gen(function* () {
         useAgentDirectories({
-          builtInToolUse: async () => {
-            await builtInToolUseDir.promise;
-            return BUILTIN_TOOL_USE_AGENTS_DIR;
-          },
+          builtInToolUse: () =>
+            Effect.promise(() => builtInToolUseDir.promise).pipe(
+              Effect.as(BUILTIN_TOOL_USE_AGENTS_DIR),
+            ),
         });
 
         // startImmediately on both: the refresh claims the load lane and the

@@ -127,9 +127,10 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     const { host } = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession());
     publishTestRunStart(defaultSession(), PARENT_RUN_ID);
-    // A child's registration reads its parent's existence, so the parent's
-    // own `run.start` has to be committed before the launch.
-    yield* defaultSession().settlePublications();
+    // No settle before the launch. `registerRun` opens the parent check with an
+    // empty batch on the session's publisher, so the child's admission read
+    // runs after the parent's queued `run.start`. Settling here instead would
+    // make this suite pass whether or not that barrier exists.
     const launched = yield* new BashTool()
       .call({
         command: 'make build',

@@ -798,10 +798,7 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
     );
   const recovery = pending.recovery;
   if (recovery) {
-    const resumed = yield* Effect.tryPromise({
-      try: () => startFollowUpWake(targetRunId, recovery, session),
-      catch: ensureError,
-    });
+    const resumed = yield* startFollowUpWake(targetRunId, recovery, session);
     if (!resumed) warnParentNotResumed();
   }
   // Duplicate-safe: the parent row was admitted before the child prompt

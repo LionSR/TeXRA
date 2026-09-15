@@ -489,9 +489,10 @@ export function createFakeWorkspaceRoots(
 }
 
 const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
-  custom: async () => fakePath('workspace/.texra/agents'),
-  builtIn: async () => fakePath('workspace/resources/agents'),
-  builtInToolUse: async () => fakePath('workspace/resources/tool_use_agents'),
+  custom: () => Effect.sync(() => fakePath('workspace/.texra/agents')),
+  builtIn: () => Effect.sync(() => fakePath('workspace/resources/agents')),
+  builtInToolUse: () =>
+    Effect.sync(() => fakePath('workspace/resources/tool_use_agents')),
 };
 
 export function createFakePlatform(
@@ -502,7 +503,7 @@ export function createFakePlatform(
   return {
     fs: nodeFilesystem,
     lifecycle: createLifecycleHost(),
-    agentResume: { tryResumeRun: async () => false },
+    agentResume: { tryResumeRun: () => Effect.succeed(false) },
     agentDirectories: FAKE_AGENT_DIRECTORIES,
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     toolMissingHandler: () => {},

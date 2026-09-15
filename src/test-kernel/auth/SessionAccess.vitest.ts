@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 
 import {
+  createSecretBackedCoordinator,
   getSubscriptionSessionStatus,
   type SessionAccessCoordinator,
+  type SessionSecretStore,
 } from '@auth/oauth/sessionAccess';
 import * as logger from '@logger/logUtils';
 
@@ -41,5 +44,39 @@ describe('getSubscriptionSessionStatus', () => {
         'Failed to read ChatGPT session status: secret store unavailable',
       ),
     );
+  });
+});
+
+describe('createSecretBackedCoordinator', () => {
+  function store(values: Record<string, string> = {}) {
+    const secrets: SessionSecretStore = {
+      get: (key) => Effect.succeed(values[key]),
+      set: (key, value) =>
+        Effect.sync(() => {
+          values[key] = value;
+        }),
+      delete: (key) =>
+        Effect.sync(() => {
+          delete values[key];
+        }),
+    };
+    return { values, secrets };
+  }
+
+  it('reuses one coordinator per store, so distinct stores share no state', async () => {
+    const access = createSecretBackedCoordinator({
+      secretKey: 'session',
+      makeCoordinator: (storage) => ({ storage }),
+    });
+    const first = store();
+    const second = store();
+
+    const coordinator = access(first.secrets);
+    expect(access(first.secrets)).toBe(coordinator);
+    expect(access(second.secrets)).not.toBe(coordinator);
+
+    await coordinator.storage.store('{"accessToken":"first"}');
+    expect(first.values.session).toBe('{"accessToken":"first"}');
+    expect(second.values.session).toBeUndefined();
   });
 });
