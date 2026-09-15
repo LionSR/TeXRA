@@ -450,7 +450,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         () => openGettingStarted(context.extension.id),
       ),
       vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_IN, () =>
-        authSignIn(),
+        runtime.runPromise(authSignIn),
       ),
       vscode.commands.registerCommand('texra.auth.chatgpt.signIn', () =>
         signInWithSubscription('welcomeView', 'chatgpt', runtime),

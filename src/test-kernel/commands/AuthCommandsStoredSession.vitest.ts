@@ -1,5 +1,7 @@
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
   clearStoredSession: vi.fn(async () => true),
@@ -79,84 +81,104 @@ describe('auth commands for unavailable stored sessions', () => {
     vi.unstubAllEnvs();
   });
 
-  it('clears an invalid session before opening the sign-in chooser', async () => {
-    mockUnavailableStoredSession('invalid');
-    const authenticatedProbe = vi
-      .spyOn(SupabaseClient, 'isAuthenticated')
-      .mockResolvedValue(true);
-    authMocks.showQuickPick.mockResolvedValue(undefined);
+  it.effect(
+    'clears an invalid session before opening the sign-in chooser',
+    () =>
+      Effect.gen(function* () {
+        mockUnavailableStoredSession('invalid');
+        const authenticatedProbe = vi
+          .spyOn(SupabaseClient, 'isAuthenticated')
+          .mockResolvedValue(true);
+        authMocks.showQuickPick.mockResolvedValue(undefined);
 
-    await expect(signIn()).resolves.toBe(false);
+        expect(yield* signIn).toBe(false);
 
-    expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
-    expect(authMocks.getSession).not.toHaveBeenCalled();
-    expect(authMocks.showQuickPick).toHaveBeenCalledOnce();
-    expect(authenticatedProbe).not.toHaveBeenCalled();
-  });
+        expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
+        expect(authMocks.getSession).not.toHaveBeenCalled();
+        expect(authMocks.showQuickPick).toHaveBeenCalledOnce();
+        expect(authenticatedProbe).not.toHaveBeenCalled();
+      }),
+  );
 
-  it('preserves the session and defers sign-in during a transient outage', async () => {
-    mockUnavailableStoredSession('transient');
+  it.effect(
+    'preserves the session and defers sign-in during a transient outage',
+    () =>
+      Effect.gen(function* () {
+        mockUnavailableStoredSession('transient');
 
-    await expect(signIn()).resolves.toBe(false);
+        expect(yield* signIn).toBe(false);
 
-    expect(authMocks.clearStoredSession).not.toHaveBeenCalled();
-    expect(authMocks.getSession).not.toHaveBeenCalled();
-    expect(authMocks.showQuickPick).not.toHaveBeenCalled();
-    expect(authMocks.showLoggedMessage).toHaveBeenCalledWith(
-      'authCommands',
-      expect.stringContaining('temporarily unavailable'),
-    );
-  });
+        expect(authMocks.clearStoredSession).not.toHaveBeenCalled();
+        expect(authMocks.getSession).not.toHaveBeenCalled();
+        expect(authMocks.showQuickPick).not.toHaveBeenCalled();
+        expect(authMocks.showLoggedMessage).toHaveBeenCalledWith(
+          'authCommands',
+          expect.stringContaining('temporarily unavailable'),
+        );
+      }),
+  );
 
-  it('uses a replacement session installed during invalid cleanup', async () => {
-    vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
-    vi.spyOn(SupabaseClient, 'getStoredSessionState')
-      .mockResolvedValueOnce('invalid')
-      .mockResolvedValueOnce('authenticated');
-    authMocks.clearStoredSession.mockResolvedValueOnce(false);
-    authMocks.getSession.mockResolvedValue({
-      id: 'replacement',
-      account: { id: 'user-id', label: 'user@example.com' },
-    });
-    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
-      email: 'user@example.com',
-    } as never);
+  it.effect('uses a replacement session installed during invalid cleanup', () =>
+    Effect.gen(function* () {
+      vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
+      vi.spyOn(SupabaseClient, 'getStoredSessionState')
+        .mockResolvedValueOnce('invalid')
+        .mockResolvedValueOnce('authenticated');
+      authMocks.clearStoredSession.mockResolvedValueOnce(false);
+      authMocks.getSession.mockResolvedValue({
+        id: 'replacement',
+        account: { id: 'user-id', label: 'user@example.com' },
+      });
+      vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
+        email: 'user@example.com',
+      } as never);
 
-    await expect(signIn()).resolves.toBe(true);
+      expect(yield* signIn).toBe(true);
 
-    expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
-    expect(authMocks.getSession).toHaveBeenCalledOnce();
-    expect(authMocks.showQuickPick).not.toHaveBeenCalled();
-    expect(authMocks.showInformationMessage).toHaveBeenCalledWith(
-      'Already signed in as user@example.com',
-    );
-  });
+      expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
+      expect(authMocks.getSession).toHaveBeenCalledOnce();
+      expect(authMocks.showQuickPick).not.toHaveBeenCalled();
+      expect(authMocks.showInformationMessage).toHaveBeenCalledWith(
+        'Already signed in as user@example.com',
+      );
+    }),
+  );
 
-  it('defers sign-in when secondary validation cannot resolve a healthy session', async () => {
-    vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
-    vi.spyOn(SupabaseClient, 'getStoredSessionState').mockResolvedValue(
-      'authenticated',
-    );
-    authMocks.getSession.mockResolvedValue(undefined);
+  it.effect(
+    'defers sign-in when secondary validation cannot resolve a healthy session',
+    () =>
+      Effect.gen(function* () {
+        vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
+        vi.spyOn(SupabaseClient, 'getStoredSessionState').mockResolvedValue(
+          'authenticated',
+        );
+        authMocks.getSession.mockResolvedValue(undefined);
 
-    await expect(signIn()).resolves.toBe(false);
+        expect(yield* signIn).toBe(false);
 
-    expect(authMocks.clearStoredSession).not.toHaveBeenCalled();
-    expect(authMocks.showQuickPick).not.toHaveBeenCalled();
-    expect(authMocks.showLoggedMessage).toHaveBeenCalledWith(
-      'authCommands',
-      expect.stringContaining('temporarily unavailable'),
-    );
-  });
+        expect(authMocks.clearStoredSession).not.toHaveBeenCalled();
+        expect(authMocks.showQuickPick).not.toHaveBeenCalled();
+        expect(authMocks.showLoggedMessage).toHaveBeenCalledWith(
+          'authCommands',
+          expect.stringContaining('temporarily unavailable'),
+        );
+      }),
+  );
 
-  it('removes an unavailable stored session without resolving it first', async () => {
-    mockUnavailableStoredSession('invalid');
-    authMocks.showWarningMessage.mockResolvedValue('Sign out');
+  it.effect(
+    'removes an unavailable stored session without resolving it first',
+    () =>
+      Effect.gen(function* () {
+        mockUnavailableStoredSession('invalid');
+        authMocks.showWarningMessage.mockResolvedValue('Sign out');
 
-    await signOut();
+        yield* signOut;
 
-    expect(authMocks.getSession).not.toHaveBeenCalled();
-    expect(authMocks.removeStoredSession).toHaveBeenCalledOnce();
-    expect(authMocks.showInformationMessage).toHaveBeenCalledWith('Signed out');
-  });
+        expect(authMocks.getSession).not.toHaveBeenCalled();
+        expect(authMocks.removeStoredSession).toHaveBeenCalledOnce();
+        expect(authMocks.showInformationMessage).toHaveBeenCalledWith(
+          'Signed out',
+        );
+      }),
+  );
 });

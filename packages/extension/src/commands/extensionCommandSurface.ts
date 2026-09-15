@@ -98,10 +98,10 @@ export function createExtensionCommandActions(
         ),
       ),
     indentTeX: handleIndentTeX,
-    signIn: authSignIn,
+    signIn: () => runtime.runPromise(authSignIn),
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
-    signOut: authSignOut,
+    signOut: () => runtime.runPromise(authSignOut),
     runSetupAssistant: async () => {
       await launchSetupAssistant(secrets, context.globalState, runtime);
     },
