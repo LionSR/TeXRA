@@ -441,7 +441,7 @@ function createWindow(options: {
       showErrorMessage(
         `A desktop operation failed: ${toErrorMessage(error)}`,
       ).pipe(
-        Effect.catchTag('NotificationFailed', (notificationError) =>
+        Effect.catch((notificationError: NotificationFailed) =>
           Effect.sync(() => {
             console.error(
               'Failed to display desktop asynchronous operation error:',
@@ -1289,7 +1289,7 @@ function createWindow(options: {
           info: (message) =>
             showInfoMessage(message).pipe(
               Effect.map(() => undefined),
-              Effect.catchTag('NotificationFailed', (failure) =>
+              Effect.catch((failure: NotificationFailed) =>
                 Effect.fail(
                   new PromptFailed({
                     reason: 'host-unavailable',
