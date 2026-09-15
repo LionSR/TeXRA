@@ -1,7 +1,7 @@
 import { createLog } from '@logger/logUtils';
 
 import { AbsoluteFS } from './absoluteFS';
-import { WorkspaceFS } from './workspaceFS';
+import { workspaceAbsolutePath } from './workspaceFS';
 
 const log = createLog('VarsUtils');
 
@@ -16,16 +16,21 @@ export interface FileVarValue {
  * Returns `null` on read failure; the caller decides how to name and store
  * the pair, so this stays a plain read rather than a stringly-keyed write
  * into an arbitrary vars object.
+ *
+ * `workspaceRoot` is the root a relative `filePath` resolves against, held by
+ * the caller as data rather than read from the calling fiber's ambient roots.
+ * An already-absolute `filePath` passes through it untouched, so a caller that
+ * has resolved its own path can hand in `undefined`.
  */
 export async function setVarFromFile(
   filePath: string,
   varName: string,
-  absolute = false,
+  workspaceRoot: string | undefined,
 ): Promise<FileVarValue | null> {
   try {
-    const content = absolute
-      ? await AbsoluteFS.read(filePath)
-      : await WorkspaceFS.read(filePath);
+    const content = await AbsoluteFS.read(
+      workspaceAbsolutePath(workspaceRoot, filePath),
+    );
     return { file: filePath, content };
   } catch (error) {
     log.debug(`Failed to read ${varName} from file ${filePath}`, {

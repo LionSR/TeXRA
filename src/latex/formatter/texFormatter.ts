@@ -14,7 +14,7 @@ interface LatexFormatterDefinition {
   configKey: string;
   run(
     filePath: string,
-    workspaceRoot?: string,
+    workspaceRoot: string | undefined,
     configPath?: string,
   ): Promise<boolean>;
 }
@@ -52,9 +52,17 @@ export function resolveLatexFormatter(): LatexFormatter | null {
   return { ...selected, configPath: getConfig<string>(selected.configKey, '') };
 }
 
-export async function runLatexFormatter(filePath: string): Promise<boolean> {
+/**
+ * Format one file with the configured formatter. `workspaceRoot` is the root
+ * a relative `filePath` resolves against and the cwd the tool runs in — the
+ * caller's session root, held as data.
+ */
+export async function runLatexFormatter(
+  filePath: string,
+  workspaceRoot: string | undefined,
+): Promise<boolean> {
   const formatter = resolveLatexFormatter();
   return formatter
-    ? formatter.run(filePath, undefined, formatter.configPath)
+    ? formatter.run(filePath, workspaceRoot, formatter.configPath)
     : true;
 }

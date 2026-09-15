@@ -1,7 +1,11 @@
 import * as path from 'node:path';
 
 import { filterNotNull } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import {
+  locateInWorkspace,
+  workspaceAbsolutePath,
+} from '@utils/files/workspaceFS';
 
 export interface XmlFormatFromFilesResult {
   readonly xml: string | null;
@@ -21,19 +25,20 @@ export interface XmlFormatFromFilesResult {
  * basename remain distinct. For external absolute paths, expose only the
  * basename: model-produced document names must be portable run-storage names,
  * not host filesystem paths.
+ *
+ * `workspaceRoot` is the root the caller holds as data. `undefined` is a
+ * session with no folder open: every path is then external, so the basename
+ * rule applies on its own.
  */
-export function getPromptFileName(file: string): string {
+export function getPromptFileName(
+  workspaceRoot: string | undefined,
+  file: string,
+): string {
   if (!file) return file;
 
-  try {
-    const located = WorkspaceFS.locatePath(file);
-    if (located.kind === 'workspace') {
-      return located.relativePath;
-    }
-  } catch {
-    // Some pure prompt-formatting tests call this before host initialization.
-    // Without a workspace root, an absolute host path can only be an external
-    // file, so the basename rule still applies.
+  const located = locateInWorkspace(workspaceRoot, file);
+  if (located.kind === 'workspace') {
+    return located.relativePath;
   }
 
   return path.isAbsolute(file) ? path.basename(file) : file;
@@ -50,10 +55,12 @@ export function getPromptFileName(file: string): string {
  * caller can surface it on the run's own channel — a module logger here would
  * drop the reason outside the run that lost the file.
  *
+ * @param workspaceRoot Root a relative entry resolves against, held as data
  * @param files List of file paths
  * @returns XML formatted string of the readable files, or null if none are readable
  */
 export async function getXmlFormatFromReadableFiles(
+  workspaceRoot: string | undefined,
   files: string[],
 ): Promise<XmlFormatFromFilesResult> {
   if (files.length === 0) {
@@ -64,10 +71,12 @@ export async function getXmlFormatFromReadableFiles(
   const xmlContents = await Promise.all(
     files.map(async (file) => {
       try {
-        const content = await WorkspaceFS.read(file);
+        const content = await AbsoluteFS.read(
+          workspaceAbsolutePath(workspaceRoot, file),
+        );
         return {
           file,
-          xml: `<document name="${getPromptFileName(file)}">\n${content}\n</document>`,
+          xml: `<document name="${getPromptFileName(workspaceRoot, file)}">\n${content}\n</document>`,
         };
       } catch (err) {
         skipped.push({ file, reason: String(err) });
@@ -85,14 +94,18 @@ export async function getXmlFormatFromReadableFiles(
 
 /**
  * Convert a list of files to a comma-separated string
+ * @param workspaceRoot Root the caller holds as data (see {@link getPromptFileName})
  * @param files List of file paths
  * @returns Comma-separated string of file paths
  */
-export function getListOfFiles(files: string[] | null | undefined): string {
+export function getListOfFiles(
+  workspaceRoot: string | undefined,
+  files: string[] | null | undefined,
+): string {
   if (!files) return '';
   return files
     .filter((f) => f.trim() !== '')
-    .map(getPromptFileName)
+    .map((file) => getPromptFileName(workspaceRoot, file))
     .join(', ');
 }
 
