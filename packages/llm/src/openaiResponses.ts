@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 // Local imports - canonical model contract
 import { openaiFailure } from './openaiError.js';
-import { prefixFingerprint } from './prefixFingerprint.js';
+import { admittedFingerprint, prefixFingerprint } from './prefixFingerprint.js';
 import {
   BackgroundSubmissionSchema,
   CancellationEvidenceSchema,
@@ -735,29 +735,7 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   return input;
 });
 
-const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
-
-/**
- * The digest a submission records on its accepted operation: origin, system
- * text and admitted history, hashed with the function a continuation's prefix
- * fingerprint uses. It covers the input half of that prefix, which is the half
- * a resume rebuilds and can therefore get wrong; the reply does not exist yet.
- */
-export function openaiResponsesAdmittedFingerprint(
-  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
-): string {
-  return prefixFingerprint(
-    RESPONSES_PREFIX_DOMAIN,
-    {
-      protocol: turn.protocol,
-      codecVersion: turn.codecVersion,
-      requestedModel: turn.requestedModel,
-      deployment: turn.deployment,
-    },
-    turn.system,
-    turn.messages,
-  );
-}
+export const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
 
 /** Builds only a stored anchor, using the same selected configuration as admission. */
 export const openaiResponsesContinuation = Effect.fn(
@@ -1853,7 +1831,10 @@ export function openaiResponsesModel(
           origin,
           providerResponseId: response.id,
           afterSequence: sequence_number,
-          admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
+          admittedFingerprint: admittedFingerprint(
+            RESPONSES_PREFIX_DOMAIN,
+            turn,
+          ),
           store: turn.controls.store,
         });
         if (
@@ -1929,7 +1910,7 @@ export function openaiResponsesModel(
         // turn re-derived stored for a temporary operation must not chain.
         const chains =
           turn.controls.store === operation.store &&
-          openaiResponsesAdmittedFingerprint(turn) ===
+          admittedFingerprint(RESPONSES_PREFIX_DOMAIN, turn) ===
             operation.admittedFingerprint;
         if (!chains) {
           yield* Effect.logWarning(
