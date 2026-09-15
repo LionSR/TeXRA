@@ -409,7 +409,7 @@ export class AgentRosterController<
                 ),
               })
             : Effect.void;
-        return Effect.zipRight(clearSelection, removePreset());
+        return Effect.andThen(clearSelection, removePreset());
       }),
     );
   }

@@ -1,3 +1,5 @@
+// Third-party imports
+import { Effect } from 'effect';
 import {
   MODEL_CONFIGS,
   ModelProvider,
@@ -5,6 +7,7 @@ import {
   type ReasoningEffort,
 } from 'llm-zoo';
 
+// Local imports
 import {
   reasoningEffortOverrides,
   supportsReasoningLevel,

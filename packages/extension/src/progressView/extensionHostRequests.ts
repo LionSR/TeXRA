@@ -61,6 +61,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
+import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -902,7 +903,7 @@ export function createExtensionHostRequests(
         return done;
       }
       case 'dismissBanner':
-        snapshot.dismissBanner(request.banner);
+        await runtime.runPromise(snapshot.dismissBanner(request.banner));
         return done;
       case 'gettingStarted':
         await runCommand(GETTING_STARTED_COMMANDS[request.action]);

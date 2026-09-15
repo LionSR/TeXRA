@@ -23,6 +23,7 @@ import {
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
+import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import {
   resolveTeamRoster,
   type TeamRosterCatalog,
@@ -36,6 +37,7 @@ import {
   STARTER_AGENT_MODE_PRESET,
   ToolError,
 } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
@@ -97,13 +99,26 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
       };
     },
     commitPreset: (preset) =>
-      call.inScope(async () => {
-        await roster.setTeam(preset.id);
-        await roster.setDefaultTeam(preset.id);
-        // The setup agent runs this mid-conversation, so an open settings
-        // view is showing a roster this call just replaced.
-        appSignals.emit('agentRosterChanged', undefined);
-      }),
+      call.inScope(() =>
+        Effect.gen(function* () {
+          yield* roster.setTeam(preset.id);
+          yield* roster.setDefaultTeam(preset.id);
+          // The setup agent runs this mid-conversation, so an open settings
+          // view is showing a roster this call just replaced.
+          appSignals.emit('agentRosterChanged', undefined);
+        }).pipe(
+          // The roster writes are the port's own failure: the preflight reads
+          // this channel, and the two stores' tags would not name the port.
+          Effect.mapError(
+            (cause) =>
+              new TeamCatalogPortFailed({
+                member: 'commitPreset',
+                message: `The applied team could not be stored: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          ),
+        ),
+      ),
   };
 
   const result = yield* applyTeamRosterWithPreflight(input.teamId, {

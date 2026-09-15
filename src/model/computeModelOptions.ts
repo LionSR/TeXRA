@@ -6,7 +6,7 @@ import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   MODEL_AVAILABILITY_STATUS,
@@ -735,7 +735,7 @@ export function setModelEnabled(input: {
   return state
     .update(GlobalStateKey.MODEL_SELECTION, next)
     .pipe(
-      Effect.zipRight(
+      Effect.andThen(
         pinsHelper
           ? state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL)
           : Effect.void,

@@ -402,11 +402,7 @@ export class SettingsViewMessageHandler {
       recheckToolStatus: () =>
         this.runtime.runPromise(refreshToolAvailability()),
       toggleTool: async (message) => {
-        await setToolEnabled(
-          message.toolId,
-          message.enabled,
-          this.globalState,
-        );
+        await setToolEnabled(message.toolId, message.enabled, this.globalState);
         await this.withActiveWebview((w) =>
           this.sendToolDashboardData(w, { skipChecks: true }),
         );
@@ -911,18 +907,20 @@ export class SettingsViewMessageHandler {
         );
       }
       if (Exit.isSuccess(result)) {
-        result = await this.runtime.runPromiseExit(
-          Effect.tryPromise({
-            try: (): Promise<unknown> =>
-              !route || route.access === 'unavailable'
-                ? showLoggedInfoMessage(
+        // Two different programs: the notice is a host dialog, the preference
+        // is a state write. The boundary composes whichever it chose.
+        const settle: Effect.Effect<unknown, unknown> =
+          !route || route.access === 'unavailable'
+            ? Effect.tryPromise({
+                try: () =>
+                  showLoggedInfoMessage(
                     this.channel,
                     'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
-                  )
-                : setCopilotRoutePreference(modelName, true, this.globalState),
-            catch: (error) => error,
-          }),
-        );
+                  ),
+                catch: (error) => error,
+              })
+            : setCopilotRoutePreference(modelName, true, this.globalState);
+        result = await this.runtime.runPromiseExit(settle);
       }
       if (Exit.isFailure(result)) {
         const reason =
@@ -967,7 +965,11 @@ export class SettingsViewMessageHandler {
   /** Clear the per-model Copilot route preference (#9659), returning the
    * canonical model to direct-provider routing. */
   private async handleClearCopilotRoute(modelName: string): Promise<void> {
-    await setCopilotRoutePreference(modelName, false, this.globalState);
+    // The write is a program, not a promise: the boundary runs it, and a
+    // refused write reaches the caller as this method's rejection.
+    await this.runtime.runPromise(
+      setCopilotRoutePreference(modelName, false, this.globalState),
+    );
     await Promise.all([
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((webview) => this.sendModelSelectionData(webview)),
