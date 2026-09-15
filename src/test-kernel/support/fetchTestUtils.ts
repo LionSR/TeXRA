@@ -1,6 +1,7 @@
 /**
- * Shared fetch response builders for suites that drive HTTP clients through an
- * injected `fetch`.
+ * Shared fetch response builders and a fetch layer for suites that drive HTTP
+ * clients through an injected `fetch`, including a layer that still reads a
+ * globally stubbed `globalThis.fetch` at request time.
  */
 
 // Third-party imports
