@@ -19,8 +19,6 @@ import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 
-import { ELEMENT_IDS } from '../constants';
-
 // Local imports - base class
 import { CollapsiblePanel } from './CollapsiblePanel';
 
@@ -118,10 +116,9 @@ export class TodoList extends CollapsiblePanel {
         }
       </div>
       ${this.renderCollapsibleDetails({
-        id: ELEMENT_IDS.TODO_LIST_CONTAINER,
         summary: `Tasks (${completed} of ${total} complete)`,
         body: html`
-          <ol id=${ELEMENT_IDS.TODO_LIST} class="todo-list" aria-label="Tasks">
+          <ol class="todo-list" aria-label="Tasks">
             ${repeat(
               this.todos,
               (_todo, index) => index,

@@ -11,9 +11,6 @@ import { customElement, property } from 'lit/decorators.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { Plan } from '@shared/schemas';
 
-// Local imports - progress view constants
-import { ELEMENT_IDS } from '../constants';
-
 // Local imports - base class
 import { CollapsiblePanel } from './CollapsiblePanel';
 
@@ -52,11 +49,10 @@ export class PlanView extends CollapsiblePanel {
     }
 
     return this.renderCollapsibleDetails({
-      id: ELEMENT_IDS.PLAN_VIEW_CONTAINER,
       summary: 'Plan',
       // Kept to one line so the pre-wrap document gets no template whitespace.
       // prettier-ignore
-      body: html`<div class="plan-body"><div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-document">${this.plan.objective}</div></div>`,
+      body: html`<div class="plan-body"><div class="plan-document">${this.plan.objective}</div></div>`,
     });
   }
 }

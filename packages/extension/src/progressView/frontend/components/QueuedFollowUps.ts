@@ -12,9 +12,6 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
-// Local imports - progress view constants
-import { ELEMENT_IDS } from '../constants';
-
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
@@ -118,17 +115,8 @@ export class QueuedFollowUps extends LitElement {
     const messageCount = this.messages.length;
     const summary = `${pluralize(messageCount, 'Queued message', 'Queued messages')} (${messageCount})`;
     return html`
-      <wa-details
-        id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_COLLAPSIBLE}
-        class="queued-collapsible"
-        summary=${summary}
-        open
-      >
-        <ol
-          id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_LIST}
-          class="queued-follow-ups-list"
-          aria-label="Queued messages"
-        >
+      <wa-details class="queued-collapsible" summary=${summary} open>
+        <ol class="queued-follow-ups-list" aria-label="Queued messages">
           ${repeat(
             this.messages,
             (_message, index) => index,
