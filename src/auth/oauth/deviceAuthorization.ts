@@ -23,12 +23,12 @@ export class DeviceAuthorizationPending extends Data.TaggedError(
 }> {}
 
 /** The user code's lifetime elapsed before the user approved. */
-class DeviceCodeTimedOut extends Data.TaggedError('DeviceCodeTimedOut')<{
+export class DeviceCodeTimedOut extends Data.TaggedError('DeviceCodeTimedOut')<{
   readonly message: string;
 }> {}
 
 /** The coordinator rejected while persisting the approved session. */
-class SessionCompletionFailed extends Data.TaggedError(
+export class SessionCompletionFailed extends Data.TaggedError(
   'SessionCompletionFailed',
 )<{
   readonly message: string;
