@@ -345,14 +345,21 @@ export class AgentRosterController<
   ): Effect.Effect<void, StateWriteFailed> {
     return serializeWorkspaceWrite(
       this.deps.workspaceState,
-      this.writeSelection({
-        kind: 'custom',
-        agentKeys: byCategory((candidate) =>
-          candidate === category
-            ? unique(enabledKeys)
-            : this.effectiveCategorySelection(candidate),
-        ),
-      }),
+      // The untouched categories' keys are a read of the selection, so it has
+      // to happen while the lane is held: `byCategory` evaluates its callback
+      // at construction, which is before the lane is acquired. Two calls
+      // constructed back to back would otherwise both start from the same
+      // pre-lane snapshot and one update would be lost.
+      Effect.suspend(() =>
+        this.writeSelection({
+          kind: 'custom',
+          agentKeys: byCategory((candidate) =>
+            candidate === category
+              ? unique(enabledKeys)
+              : this.effectiveCategorySelection(candidate),
+          ),
+        }),
+      ),
     );
   }
 

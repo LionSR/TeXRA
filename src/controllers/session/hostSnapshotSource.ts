@@ -286,16 +286,22 @@ export function createHostSnapshotSource(
       // dismissal is the one write that outlives the session, and it goes
       // back to the caller to run: its refusal is that request's failure
       // rather than a rejection nobody reads.
-      if (banner !== 'login') dismissed.add(banner);
-      const persisted =
-        banner === 'login'
-          ? options.globalState.update(
-              GlobalStateKey.LOGIN_BANNER_DISMISSED,
-              true,
-            )
-          : Effect.void;
-      publish();
-      return persisted;
+      if (banner !== 'login') {
+        dismissed.add(banner);
+        publish();
+        return Effect.void;
+      }
+      // The login dismissal is read back out of the store by `publish`, so
+      // the publish has to run behind the write rather than beside it: the
+      // update is lazy, and a snapshot taken before it executes still reads
+      // the banner as undismissed.
+      return Effect.gen(function* () {
+        yield* options.globalState.update(
+          GlobalStateKey.LOGIN_BANNER_DISMISSED,
+          true,
+        );
+        publish();
+      });
     },
     setOnboarding(state) {
       if (state === onboarding) return;
