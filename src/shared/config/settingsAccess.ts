@@ -102,14 +102,12 @@ export function readSetting(
  * that `config` writes carry a target while state stores do not, so the
  * dispatch lives here once for both write and reset.
  *
- * The config slot composes the store's own Effect write and raises its
- * `ConfigWriteFailed`. The state slot is still `vscode.Memento`-shaped — that
- * port is its own conversion — so the one `PromiseLike` it returns is adopted
- * here, at the slot boundary, and the store's own failure is what the caller
- * reads. It is not re-tagged into the platform's `StateWriteFailed`: `src/shared`
- * may not reach `src/platform` at runtime (the LAY-1 edge ratchet holds that
- * pair to type-only), and the value it would carry is already the error the
- * host reports.
+ * Both slots now compose the store's own Effect write and carry its own
+ * failure: the config slot raises `ConfigWriteFailed`, the state slot the
+ * port's `StateWriteFailed`. Neither is re-tagged: `src/shared` may not reach
+ * `src/platform` at runtime (the LAY-1 edge ratchet holds that pair to
+ * type-only), and the value it would carry is already the error the host
+ * reports.
  */
 function writeSlot(
   entry: StateSettingEntry,
@@ -126,10 +124,7 @@ function writeSlot(
       target ?? entry.configTarget ?? 'workspace',
     );
   }
-  return Effect.tryPromise({
-    try: () => Promise.resolve(stores[slot].update(entry.key, value)),
-    catch: ensureError,
-  });
+  return stores[slot].update(entry.key, value);
 }
 
 /**

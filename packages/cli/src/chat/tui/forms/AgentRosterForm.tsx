@@ -142,7 +142,7 @@ export function AgentRosterForm(
             reload();
           }),
         ),
-        Effect.catchAllCause((cause) =>
+        Effect.catchCause((cause) =>
           Effect.sync(() => reportError(Cause.squash(cause))),
         ),
       ),
