@@ -2,6 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
+import type { InvalidAgentTeamError } from '@agent/roster/AgentRosterController';
 import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import {
   findTeamPreset,
@@ -33,7 +34,6 @@ import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName, isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { InvalidAgentTeamError } from '@agent/roster/AgentRosterController';
 
 interface SettingsAgentCatalogEntry {
   name: string;

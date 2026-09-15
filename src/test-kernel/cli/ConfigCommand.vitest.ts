@@ -14,10 +14,16 @@ const mocks = vi.hoisted(() => ({
   // one: a bare `vi.fn()` returns undefined, which `runPromise` cannot run.
   setAll: vi.fn(() => Effect.void),
   setCustom: vi.fn(() => Effect.void),
-  setDefaultTeam: vi.fn(() => Effect.void),
+  // The roster refuses an unknown team in its own right, so these two are
+  // typed for the refusal the tests below fail them with.
+  setDefaultTeam: vi.fn<() => Effect.Effect<void, InvalidAgentTeamError>>(
+    () => Effect.void,
+  ),
   setEnabledAgentKeys: vi.fn(() => Effect.void),
   setInherited: vi.fn(() => Effect.void),
-  setTeam: vi.fn(() => Effect.void),
+  setTeam: vi.fn<() => Effect.Effect<void, InvalidAgentTeamError>>(
+    () => Effect.void,
+  ),
   setWorkspaceCliChatAgent: vi.fn(() => Effect.void),
 }));
 

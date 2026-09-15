@@ -12,7 +12,11 @@ import {
 import { Effect } from 'effect';
 import { NotificationFailed } from '@hosts/uiHosts';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { ConfigProvider, StateStore } from '@platform/interfaces';
+import {
+  StateWriteFailed,
+  type ConfigProvider,
+  type StateStore,
+} from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -745,8 +749,13 @@ describe('desktop settings IPC', () => {
 
   it('reports failed setting writes and restores the authoritative snapshot', async () => {
     const workspaceState = new FakeStateStore();
-    const failure = new Error('workspace write failed');
-    // The store's write is an Effect the IPC composes, so the refusal is one.
+    // The store's own tagged refusal, which is what the IPC reports: the
+    // write is an Effect the IPC composes, so the double fails with one.
+    const failure = new StateWriteFailed({
+      key: WorkspaceStateKey.LATEX_FORMATTER,
+      message: 'workspace write failed',
+      cause: new Error('workspace write failed'),
+    });
     vi.spyOn(workspaceState, 'update').mockReturnValueOnce(
       Effect.fail(failure),
     );
