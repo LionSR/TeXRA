@@ -1,7 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import * as path from 'node:path';
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { it } from '@effect/vitest';
 // Test composition imports
 
@@ -21,6 +21,7 @@ import {
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { appSignals } from '@eventBus/AppSignals';
 import { FileType, type FileStat } from '@platform/interfaces';
+import { WorkspaceFs } from '@platform/rootedFs';
 import {
   runWithWorkspaceRoots,
   workspaceRoots,
@@ -31,7 +32,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
@@ -93,6 +93,68 @@ function installTestPlatform(): Promise<void> {
   });
 }
 
+/**
+ * The write side of the workspace: `accept_run_files` writes through the
+ * session's rooted workspace view now that the `WorkspaceFS` facade is gone,
+ * so a case stubs that one method of the real service rather than the deleted
+ * static.
+ */
+const workspaceWrites = vi.fn<(target: string, content: string) => void>();
+const workspaceReads = new Map<string, { exists: boolean; content: string }>();
+
+/**
+ * The absolute-path half: the process filesystem is what the deleted
+ * `AbsoluteFS` reached. A path in `absoluteFilePaths` answers as a file, and
+ * `absoluteContents` (falling back to `absoluteContentFallback`) is what a
+ * read of it returns.
+ */
+const absoluteFilePaths = new Set<string>();
+const absoluteContents = new Map<string, string>();
+let absoluteContentFallback = '';
+
+/** Install both stubbed halves over the real services for one tool call. */
+function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
+  return Effect.gen(function* () {
+    const workspaceFs = yield* WorkspaceFs;
+    const processFs = yield* FileSystem.FileSystem;
+    // One real `Info` to type a declared file with: a stat of a directory
+    // that always exists, with only its type asserted.
+    const fileInfo = { ...(yield* processFs.stat('/')), type: 'File' as const };
+    return yield* program.pipe(
+      Effect.provideService(WorkspaceFs, {
+        ...workspaceFs,
+        exists: (target: string) =>
+          Effect.succeed(workspaceReads.get(target)?.exists ?? false),
+        readFile: (target: string) =>
+          Effect.succeed(
+            Buffer.from(workspaceReads.get(target)?.content ?? '', 'utf-8'),
+          ),
+        writeFile: (target: string, content: Uint8Array) => {
+          workspaceWrites(target, Buffer.from(content).toString('utf-8'));
+          return Effect.void;
+        },
+        remove: () => Effect.void,
+      }),
+      Effect.provideService(FileSystem.FileSystem, {
+        ...processFs,
+        stat: (target: string) =>
+          absoluteFilePaths.has(target)
+            ? Effect.succeed(fileInfo)
+            : // A path no case named: the real filesystem's own failure, so the
+              // probe's `NotFound` reading sees the `PlatformError` it handles.
+              processFs.stat(target),
+        readFile: (target: string) =>
+          Effect.succeed(
+            Buffer.from(
+              absoluteContents.get(target) ?? absoluteContentFallback,
+              'utf-8',
+            ),
+          ),
+      }),
+    );
+  });
+}
+
 function runStorageStat(type: number): FileStat {
   return { type, ctime: 0, mtime: 0, size: 1 };
 }
@@ -123,10 +185,12 @@ function setRunStorageEntries(
 
 /** Stubs the workspace side of an accept and returns the write spy. */
 function stubWorkspaceFiles(exists: boolean, content: string) {
-  vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(exists);
-  vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(content);
+  workspaceReads.set('draft.tex', { exists, content });
+  workspaceReads.set('paper.tex', { exists, content });
+  // The diff-companion cleanup still runs through the facade, so its delete
+  // stays stubbed.
   vi.spyOn(WorkspaceFS, 'delete').mockResolvedValue(undefined);
-  return vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
+  return workspaceWrites;
 }
 
 function runAccept(
@@ -134,7 +198,7 @@ function runAccept(
   files: { path: string; original: string }[],
   tracker = new FileInteractionState(),
 ) {
-  return tool.call({ execution_id: runId, files }).pipe(
+  return withStubbedFiles(tool.call({ execution_id: runId, files })).pipe(
     Effect.provide(
       nativeToolTestLayer({
         tracker,
@@ -159,6 +223,11 @@ function recordWrittenFiles(): { written: string[][]; dispose: () => void } {
 describe('accept_run_files progress events', () => {
   beforeEach(async () => {
     stagedToolEdits.clear();
+    workspaceWrites.mockReset();
+    workspaceReads.clear();
+    absoluteFilePaths.clear();
+    absoluteContents.clear();
+    absoluteContentFallback = '';
     await installTestPlatform();
     session.approvals.clearAll();
     // Shared by every test below that stubs the run/workspace paths;
@@ -196,7 +265,7 @@ describe('accept_run_files progress events', () => {
         [`executions/${runId}/output.tex`]: FileType.File,
       });
       stubWorkspaceFiles(false, '');
-      vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
+      absoluteContentFallback = 'accepted content';
       decideToolEdits(() => ({ action: 'approve' }));
 
       const result = yield* runAccept(
@@ -223,7 +292,7 @@ describe('accept_run_files progress events', () => {
           [`executions/${runId}/output.tex`]: FileType.File,
         });
         stubWorkspaceFiles(false, '');
-        vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
+        absoluteContentFallback = 'proposed content';
         decideToolEdits(() => ({
           action: 'reject',
           feedback: 'keep the original normalization',
@@ -252,7 +321,7 @@ describe('accept_run_files progress events', () => {
           [`executions/${runId}/output.tex`]: FileType.File,
         });
         stubWorkspaceFiles(false, '');
-        vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
+        absoluteContentFallback = 'proposed content';
         decideToolEdits(() => ({ action: 'cancel', cause: null }));
 
         const result = yield* runAccept(tool, [
@@ -275,7 +344,7 @@ describe('accept_run_files progress events', () => {
         [`executions/${runId}/second.tex`]: FileType.File,
       });
       stubWorkspaceFiles(false, '');
-      vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
+      absoluteContentFallback = 'proposed content';
       decideToolEdits((request) =>
         request.path === 'first.tex'
           ? { action: 'deny', reason: 'Denied by approval policy.' }
@@ -307,12 +376,9 @@ describe('accept_run_files progress events', () => {
 
       setRunStorageEntries();
       const write = stubWorkspaceFiles(true, 'new content');
-      vi.spyOn(AbsoluteFS, 'isFile').mockImplementation(
-        async (target) => target === snapshotPath,
-      );
-      vi.spyOn(AbsoluteFS, 'read').mockImplementation(async (target) =>
-        target === snapshotPath ? 'old content' : 'new content',
-      );
+      absoluteFilePaths.add(snapshotPath);
+      absoluteContents.set(snapshotPath, 'old content');
+      absoluteContentFallback = 'new content';
       decideToolEdits((request) => {
         approvalOriginal = request.originalContent;
         approvalProposed = request.proposedContent;
@@ -354,44 +420,39 @@ describe('accept_run_files progress events', () => {
         vi.spyOn(StorageFS, 'fullPath').mockImplementation(
           (target) => `${workspaceRoots().storage}/${target}`,
         );
-        vi.spyOn(WorkspaceFS, 'locatePath').mockImplementation((target) => ({
-          kind: 'workspace',
-          absolutePath: `${workspaceRoots().workspace}/${target}`,
-          relativePath: target,
-        }));
-        vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(true);
-        vi.spyOn(WorkspaceFS, 'read').mockResolvedValue('current project');
-        vi.spyOn(WorkspaceFS, 'delete').mockResolvedValue(undefined);
-        vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
-        vi.spyOn(AbsoluteFS, 'isFile').mockImplementation(
-          async (target) => target === snapshotPath,
-        );
-        vi.spyOn(AbsoluteFS, 'read').mockImplementation(async (target) => {
-          if (target === snapshotPath) return 'original project';
-          if (target === '/project/draft.tex') return 'proposed project';
-          return 'wrong project';
+        workspaceReads.set('draft.tex', {
+          exists: true,
+          content: 'current project',
         });
+        workspaceReads.set('paper.tex', {
+          exists: true,
+          content: 'current project',
+        });
+        absoluteFilePaths.add(snapshotPath);
+        absoluteContents.set(snapshotPath, 'original project');
+        absoluteContents.set('/project/draft.tex', 'proposed project');
+        absoluteContentFallback = 'wrong project';
         decideToolEdits((request) => {
           approvalOriginal = request.originalContent;
           approvalProposed = request.proposedContent;
           return { action: 'approve' };
         });
 
-        const result = yield* tool
-          .call({
+        const result = yield* withStubbedFiles(
+          tool.call({
             execution_id: runId,
             files: [{ path: 'draft.tex', original: 'paper.tex' }],
-          })
-          .pipe(
-            Effect.provide(
-              nativeToolTestLayer({
-                tracker,
-                run: { runId, session: session, toolPolicy: {} },
-                inScope: (operation) =>
-                  runWithWorkspaceRoots(projectRoots, operation),
-              }),
-            ),
-          );
+          }),
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              tracker,
+              run: { runId, session: session, toolPolicy: {} },
+              inScope: (operation) =>
+                runWithWorkspaceRoots(projectRoots, operation),
+            }),
+          ),
+        );
 
         expect(result.status).toBe('executed');
         expect({ approvalOriginal, approvalProposed, written }).toEqual({
@@ -411,8 +472,7 @@ describe('accept_run_files progress events', () => {
 
       setRunStorageEntries();
       const write = stubWorkspaceFiles(true, 'same content');
-      vi.spyOn(AbsoluteFS, 'isFile').mockResolvedValue(false);
-      vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('same content');
+      absoluteContentFallback = 'same content';
       decideToolEdits(() => {
         approvals++;
         return { action: 'approve' };

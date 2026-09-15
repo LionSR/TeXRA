@@ -5,6 +5,7 @@ import { Effect, FileSystem } from 'effect';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - shared schemas
+import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local imports - tools
@@ -268,7 +269,11 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
     proposedContent,
     sourceTool,
     present,
-  }: ApprovedFileEditRequest): Effect.fn.Return<ToolResult, unknown, ToolCall> {
+  }: ApprovedFileEditRequest): Effect.fn.Return<
+    ToolResult,
+    unknown,
+    ToolCall | FileSystem.FileSystem | WorkspaceFs
+  > {
     const approval = yield* requestToolEditApproval({
       path,
       originalContent,

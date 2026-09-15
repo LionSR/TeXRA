@@ -11,6 +11,7 @@ import type { DiffSource } from '@hosts/uiHosts';
 import { effectRuntime } from '@platform/processRuntime';
 
 import type { RunId } from '@shared/schemas';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -194,6 +195,13 @@ function createApprovalFixture(
           return yield* modules.requestToolEditApproval(request).pipe(
             Effect.provide(
               nativeToolTestLayer({
+                // The run's roots, as a dispatched tool call carries them. The
+                // workspace is this suite's own: its resolution is mocked to
+                // `/workspace`, and the display path an edit is titled with is
+                // relative to the call's root.
+                roots: createFakeWorkspaceRoots({
+                  workspacePath: options.workspacePath ?? '/workspace',
+                }),
                 workingDirectory: options.workspacePath ?? '/workspace',
                 run: { runId, session, toolPolicy: {} },
               }),

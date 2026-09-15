@@ -1,8 +1,12 @@
-import { Effect } from 'effect';
+import * as nodePath from 'node:path';
+
+import { Effect, FileSystem } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
+import { isNotADirectoryError } from '@common/errors/errorPredicates';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import { WorkspaceFs } from '@platform/rootedFs';
 import {
   decideTexraApproval,
   isTexraApprovalDenied,
@@ -20,8 +24,8 @@ import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
 import { clamp, generateShortId } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { readConfig } from '@utils/config/configUtils';
+import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { applyPatchToText } from '@utils/text/diff';
 import { buildDiffHunks, unifiedDiffText } from '@utils/text/unifiedDiff';
 import {
@@ -43,6 +47,16 @@ export interface ToolEditApprovalRequest {
   readonly proposedContent: string;
   readonly sourceTool: string;
   readonly runId?: RunId | null;
+  /**
+   * The session's workspace root, as data: the LaTeX preview of this request
+   * writes its temp files under it, and that preview program runs on the
+   * host's own runner rather than inside the tool call that raised the
+   * request, so the root has to travel with the request instead of being read
+   * from an ambient workspace scope. {@link requestToolEditApproval} — the one
+   * producer of a live request — fills it from the run's session, and it is
+   * absent only for a request a caller scripted by hand.
+   */
+  readonly workspacePath?: string | undefined;
   /**
    * What the UI shows for this request, prepared once at the tool boundary
    * (`prepareToolEditApprovalPrompt`): the payload of the `request.opened`
@@ -199,10 +213,16 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     }
     const { session } = run;
     const contextRunId = run.runId;
-    const preparedRequest =
+    const withRunId =
       request.runId || !contextRunId
         ? request
         : { ...request, runId: contextRunId };
+    const preparedRequest: Omit<ToolEditApprovalRequest, 'permission'> = {
+      ...withRunId,
+      // Filled here, at the one boundary that has the run, so a caller cannot
+      // hand the preview a root that is not this session's.
+      workspacePath: session.roots.workspace,
+    };
 
     const runId = preparedRequest.runId ?? undefined;
     const isRunBypassed = Boolean(
@@ -233,8 +253,12 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     const permission = prepareToolEditApprovalPrompt(session, {
       requestId: `approval-${generateShortId()}`,
       request: preparedRequest,
-      relativePath: call.inScope(() =>
-        WorkspaceFS.relativePath(preparedRequest.path),
+      // The call's own workspace root, as data: the display path a host shows
+      // is relative to the session that raised the request, not to whichever
+      // roots the answering fiber happens to carry.
+      relativePath: workspaceRelativePath(
+        call.roots.workspace,
+        preparedRequest.path,
       ),
     });
     const staged: ToolEditApprovalRequest = { ...preparedRequest, permission };
@@ -321,21 +345,55 @@ interface WriteApprovedContentResult {
 }
 
 /**
+ * `BaseFS.exists` without the facade: `ENOENT` and `ENOTDIR` read as absent,
+ * every other failure propagates. `FileSystem.exists` reports a non-directory
+ * parent as `BadResource`, which the facade's own probe counted as absent.
+ */
+const targetExists = (fs: FileSystem.FileSystem, target: string) =>
+  fs.exists(target).pipe(
+    Effect.catchIf(
+      (error) =>
+        error.reason._tag === 'BadResource' &&
+        isNotADirectoryError(error.reason.cause),
+      () => Effect.succeed(false),
+    ),
+  );
+
+/** `BaseFS.read` without the facade: the bytes with line endings normalized. */
+const readTarget = (fs: FileSystem.FileSystem, target: string) =>
+  fs
+    .readFile(target)
+    .pipe(
+      Effect.map((bytes) =>
+        normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
+      ),
+    );
+
+/**
  * Reconcile approved content with the current workspace file and mark the path
  * as read after the operation succeeds, so every approved-write caller keeps
  * the later-edit guard in sync.
+ *
+ * The path's own view of the filesystem is the one the old `WorkspaceFS` static
+ * reached: a workspace-relative path through the session's confined workspace
+ * view, an already-absolute one (an external root, a worktree) through the
+ * process filesystem, which the static passed straight through.
  */
 export const writeApprovedContent = Effect.fn('writeApprovedContent')(
   function* (
     path: string,
     originalContent: string,
     finalContent: string,
-  ): Effect.fn.Return<WriteApprovedContentResult, unknown, ToolCall> {
-    const call = yield* ToolCall;
-    const exists = yield* Effect.tryPromise({
-      try: () => call.inScope(() => WorkspaceFS.exists(path)),
-      catch: (cause) => cause,
-    });
+  ): Effect.fn.Return<
+    WriteApprovedContentResult,
+    unknown,
+    ToolCall | FileSystem.FileSystem | WorkspaceFs
+  > {
+    yield* ToolCall;
+    const fs = nodePath.isAbsolute(path)
+      ? yield* FileSystem.FileSystem
+      : yield* WorkspaceFs;
+    const exists = yield* targetExists(fs, path);
     let baseContent = '';
     let appliedContent = finalContent;
     let shouldWrite = true;
@@ -343,10 +401,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
     if (exists) {
       // All content is already LF-normalized at the FS read boundary,
       // so comparisons work directly without extra normalization.
-      const currentContent = yield* Effect.tryPromise({
-        try: () => call.inScope(() => WorkspaceFS.read(path)),
-        catch: (cause) => cause,
-      });
+      const currentContent = yield* readTarget(fs, path);
       baseContent = currentContent;
 
       if (currentContent === finalContent || originalContent === finalContent) {
@@ -363,10 +418,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
     }
 
     if (shouldWrite) {
-      yield* Effect.tryPromise({
-        try: () => call.inScope(() => WorkspaceFS.write(path, appliedContent)),
-        catch: (cause) => cause,
-      });
+      yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
     }
     yield* recordToolFileRead(path);
     return { appliedContent, baseContent };

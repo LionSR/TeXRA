@@ -28,7 +28,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import type { FileStat } from '@platform/interfaces';
+import { StorageFs } from '@platform/rootedFs';
 import {
   AgentCategory,
   RunIdSchema,
@@ -54,12 +54,13 @@ import {
 } from '@transcript';
 import { assertNever, unique } from '@utils/core';
 import { readPlatformSetting } from '@utils/config/platformSettings';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { StorageFS } from '@utils/files/storageFS';
-import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
-import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
+import {
+  formatBytes,
+  normalizeLineEndings,
+  splitContentLines,
+} from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -286,7 +287,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   ): Effect.fn.Return<
     ToolResult,
     Error | ExecutionsReadFailed,
-    Runs | FileSystem.FileSystem
+    Runs | FileSystem.FileSystem | StorageFs
   > {
     const segments = getPathSegments(input.path);
     const [namespace, id, resource, ...rest] = segments;
@@ -1042,7 +1043,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    return yield* readFileContent(context, StorageFS, fullPath, {
+    return yield* readFileContent(context, yield* StorageFs, fullPath, {
       directoryErrorPath: displayPath,
       resultPath: displayPath,
       viewRange,
@@ -1117,29 +1118,31 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    return yield* readFileContent(context, AbsoluteFS, resolved.absolutePath, {
-      directoryErrorPath: `/executions/${runId}/workspace-files/${filePath}`,
-      resultPath: `/executions/${runId}/workspace-files/${resolved.path}`,
-      viewRange,
-    });
+    return yield* readFileContent(
+      context,
+      yield* FileSystem.FileSystem,
+      resolved.absolutePath,
+      {
+        directoryErrorPath: `/executions/${runId}/workspace-files/${filePath}`,
+        resultPath: `/executions/${runId}/workspace-files/${resolved.path}`,
+        viewRange,
+      },
+    );
   });
 }
 
 /**
  * Shared stat → directory-guard → read → format tail for `readFile` and
- * `readWorkspaceFile`, which differ only in which FS backend resolved the
- * path. `directoryErrorPath` and `resultPath` can differ (a workspace-file
- * read reports the raw requested path on error but the canonical resolved
- * path on success).
+ * `readWorkspaceFile`, which differ only in which filesystem resolves the
+ * path: the session's rooted storage view for a run-storage path, the process
+ * filesystem for an already-absolute workspace path (a workspace file may sit
+ * in a worktree, outside every root). `directoryErrorPath` and `resultPath`
+ * can differ (a workspace-file read reports the raw requested path on error
+ * but the canonical resolved path on success).
  */
-interface FileBackend {
-  stat: (target: string) => Promise<FileStat>;
-  read: (target: string) => Promise<string>;
-}
-
 const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
   context: RunToolContext,
-  fs: FileBackend,
+  fs: FileSystem.FileSystem,
   fullPath: string,
   {
     directoryErrorPath,
@@ -1151,8 +1154,11 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     viewRange: [number, number] | undefined;
   },
 ) {
-  const stats = yield* executionsRead(context, () => fs.stat(fullPath));
-  if (isDirectory(stats.type)) {
+  const failed = (cause: unknown) => new ExecutionsReadFailed({ cause });
+  const stats = yield* fs.stat(fullPath).pipe(Effect.mapError(failed));
+  // A symlink to a directory counts, which is what the bitmask probe this
+  // replaced answered for: the standard `stat` follows the link.
+  if (stats.type === 'Directory') {
     return yield* Effect.fail(
       new ToolError(
         `Path is a directory: ${directoryErrorPath}. Use without trailing path to list.`,
@@ -1160,7 +1166,12 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     );
   }
 
-  const content = yield* executionsRead(context, () => fs.read(fullPath));
+  const content = yield* fs.readFile(fullPath).pipe(
+    Effect.map((bytes) =>
+      normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
+    ),
+    Effect.mapError(failed),
+  );
   return formatFileView({
     path: resultPath,
     lines: splitContentLines(content),

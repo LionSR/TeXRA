@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Stream } from 'effect';
+import { Effect, FileSystem, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -26,7 +26,6 @@ import {
 } from '@tools/memory/memoryFileSystem';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 import {
   formatBytes,
@@ -61,15 +60,21 @@ import {
 } from './memoryMeta';
 
 /** Create a memory directory and its parents. */
-const ensureMemoryDir = Effect.fn('MemoryTool.ensureMemoryDir')(
-  (storagePath: string, storageRoot: string) =>
-    Effect.tryPromise({
-      try: () =>
-        // An absolute path never asks StorageFS for a later workspace root.
-        AbsoluteFS.ensureDir(path.resolve(storageRoot, storagePath)),
-      catch: (cause) => new MemoryFileUnwritable({ storagePath, cause }),
-    }),
-);
+const ensureMemoryDir = Effect.fn('MemoryTool.ensureMemoryDir')(function* (
+  storagePath: string,
+  storageRoot: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  // The call's own storage root, taken as data and joined here, so an
+  // absolute path never asks a rooted view for a later workspace root.
+  yield* fs
+    .makeDirectory(path.resolve(storageRoot, storagePath), { recursive: true })
+    .pipe(
+      Effect.mapError(
+        (cause) => new MemoryFileUnwritable({ storagePath, cause }),
+      ),
+    );
+});
 
 const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md).`;
 

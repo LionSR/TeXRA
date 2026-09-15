@@ -1,3 +1,5 @@
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import { mkdir, readdir, stat, unlink } from 'node:fs/promises';
 import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -8,10 +10,9 @@ import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { RelativeFS } from '@utils/files/relativeFS';
 import { THREE_DAYS_MS } from '@utils/config/constants';
 import { readConfig } from '@utils/config/configUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   BinaryResolver,
   type ResolvedBinaryCommand,
@@ -48,6 +49,48 @@ function resetRecordingState(): void {
   activeRecordingPath = null;
 }
 
+/**
+ * Delete recordings older than `maxAgeMs` under `directory`.
+ *
+ * Never throws. The sweep runs after a transcription has already succeeded,
+ * so a take another process is still holding, or one that vanished between
+ * the listing and the stat, must not destroy that result: every failure is
+ * warned with its cause, and one bad entry does not stop the rest of the
+ * sweep. A listing that fails is warned and skipped for the same reason.
+ *
+ * The directory arrives as data from the caller that owns the session's roots
+ * — the absolute form the old `RelativeFS.cleanupOldFiles` resolved to — so
+ * the sweep no longer reads an ambient storage root.
+ */
+async function cleanupOldRecordings(
+  directory: string,
+  maxAgeMs: number,
+): Promise<void> {
+  const cutoff = Date.now() - maxAgeMs;
+  try {
+    const entries = await readdir(directory, { withFileTypes: true });
+    await Promise.all(
+      entries
+        .filter((entry) => entry.isFile())
+        .map(async (entry) => {
+          const filePath = path.join(directory, entry.name);
+          try {
+            const stats = await stat(filePath);
+            if (stats.mtimeMs <= cutoff) {
+              await unlink(filePath);
+            }
+          } catch (error) {
+            log.warn(
+              `Could not remove stale recording ${filePath}: ${toErrorMessage(error)}`,
+            );
+          }
+        }),
+    );
+  } catch (error) {
+    log.warn(`Skipped cleanup of ${directory}: ${toErrorMessage(error)}`);
+  }
+}
+
 /** Resolve the sox executable command from config or auto-detection. */
 function resolveSoxCommand(
   roots: WorkspaceRoots,
@@ -56,7 +99,7 @@ function resolveSoxCommand(
     roots.config,
     'texra.audio.soxPath',
   );
-  if (configuredPath && AbsoluteFS.existsSync(configuredPath)) {
+  if (configuredPath && existsSync(configuredPath)) {
     return BinaryResolver.resolveOptionalCommand('sox', [], {
       resolvedPath: configuredPath,
     });
@@ -84,7 +127,7 @@ export async function startRecording(roots: WorkspaceRoots): Promise<{
     }
 
     const directory = recordingsDir(roots);
-    await AbsoluteFS.ensureDir(directory);
+    await mkdir(directory, { recursive: true });
     const absPath = path.join(directory, `record_${Date.now()}.wav`);
 
     const soxArgs = [
@@ -196,11 +239,11 @@ export async function stopRecording(): Promise<{
       delay(SOX_SHUTDOWN_TIMEOUT_MS),
     ]);
 
-    if (!AbsoluteFS.existsSync(recordingPath)) {
+    if (!existsSync(recordingPath)) {
       return { success: false, error: 'Recording file not found' };
     }
 
-    const stats = AbsoluteFS.statSync(recordingPath);
+    const stats = statSync(recordingPath);
     if (stats.size === 0) {
       return { success: false, error: 'Recording file is empty' };
     }
@@ -240,14 +283,14 @@ export async function transcribeRecording(
       baseURL: credential.endpoint,
     });
     const result = await client.audio.transcriptions.create({
-      file: AbsoluteFS.createReadStream(recordingPath),
+      file: createReadStream(recordingPath),
       model: 'gpt-4o-transcribe',
       response_format: 'json',
     });
 
-    // `RelativeFS` passes an absolute target through untouched, so the sweep
-    // is rooted by the caller's storage root rather than by an ambient read.
-    await RelativeFS.cleanupOldFiles(recordingsDir(roots), THREE_DAYS_MS);
+    // The sweep is rooted by the caller's storage root, as data, rather than
+    // by an ambient read of the calling fiber's roots.
+    await cleanupOldRecordings(recordingsDir(roots), THREE_DAYS_MS);
 
     return { success: true, text: result.text };
   } catch (err) {

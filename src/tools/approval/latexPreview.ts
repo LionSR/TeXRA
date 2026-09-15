@@ -8,6 +8,7 @@
  */
 
 import path from 'node:path';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 
 import { Cause, Effect } from 'effect';
 import { sync as globSync } from 'glob';
@@ -23,12 +24,10 @@ import {
   type FileLocation,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
   createExternalLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import { isStrictlyWithin } from '@utils/core/pathCore';
@@ -44,7 +43,13 @@ interface LatexPreviewDisplayOptions {
 
 /** Interface for entries that support LaTeX preview operations */
 export interface LatexPreviewEntry {
-  request: { path: string };
+  /**
+   * The request this preview belongs to. `workspacePath` is the session root
+   * the temp files are placed under; these programs run on the host's own
+   * runner, outside the tool call, so it rides the request rather than being
+   * read from an ambient workspace scope.
+   */
+  request: { path: string; workspacePath?: string | undefined };
   originalUri: { fsPath: string };
   proposedUri: { fsPath: string };
   originalContent: string;
@@ -76,7 +81,11 @@ const silentDelete = (
   kind: 'file' | 'dir',
 ): Effect.Effect<void> =>
   Effect.tryPromise({
-    try: () => AbsoluteFS.delete(targetPath),
+    // What `BaseFS.delete` reached on the process provider: a non-directory
+    // (a symlink included) is unlinked, a directory is `rm`'d without
+    // recursion, and an already-absent target is not an error — that last is
+    // what `force` carries, not a new best-effort.
+    try: () => rm(targetPath, { force: true }),
     catch: (error) => error,
   }).pipe(
     // Best-effort temp cleanup; the target may already be gone.
@@ -159,7 +168,9 @@ const readFileWithFallback = (
   fallback: string,
 ): Effect.Effect<string> =>
   Effect.tryPromise({
-    try: () => AbsoluteFS.readBytes(uri.fsPath),
+    // `BaseFS.readBytes` returned the raw bytes: no line-ending normalization
+    // and no BOM handling, unlike `read`.
+    try: () => readFile(uri.fsPath),
     catch: (error) => error,
   }).pipe(
     Effect.map((bytes) => bytes.toString('utf8')),
@@ -187,7 +198,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     content: string,
     suffix: string,
   ): Effect.fn.Return<string, unknown> {
-    const workspacePath = WorkspaceFS.getPath();
+    const workspacePath = entry.request.workspacePath;
     if (!workspacePath) {
       return yield* Effect.fail(new Error('No workspace folder open'));
     }
@@ -221,9 +232,11 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
       Effect.tryPromise({
         try: async () => {
           if (location === 'workspaceTemp') {
-            await AbsoluteFS.createDir(tempDir);
+            // Recursive because the provider's `createDirectory` always was:
+            // two previews of files in one folder share this temp directory.
+            await mkdir(tempDir, { recursive: true });
           }
-          await AbsoluteFS.write(tempPath, content);
+          await writeFile(tempPath, content);
         },
         catch: (error) => error,
       }).pipe(
@@ -244,8 +257,10 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     return tempPath;
   },
 );
-function tempPathToLocation(tempPath: string): FileLocation {
-  const workspacePath = WorkspaceFS.getPath();
+function tempPathToLocation(
+  workspacePath: string | undefined,
+  tempPath: string,
+): FileLocation {
   if (workspacePath == null) return createExternalLocation(tempPath);
 
   const normalizedWorkspacePath = path.normalize(workspacePath);
@@ -285,9 +300,12 @@ export const previewProposedLatex = (
 
       yield* Effect.tryPromise({
         try: () =>
-          options.openBuildDisplay(tempPathToLocation(tempPath), {
-            preserveFocus: true,
-          }),
+          options.openBuildDisplay(
+            tempPathToLocation(entry.request.workspacePath, tempPath),
+            {
+              preserveFocus: true,
+            },
+          ),
         catch: (error) => error,
       });
     }),
@@ -344,12 +362,12 @@ export const runLatexdiff = (
       );
 
       const result = yield* latexdiffService.runDiff(
-        tempPathToLocation(originalPath),
-        tempPathToLocation(proposedPath),
+        tempPathToLocation(entry.request.workspacePath, originalPath),
+        tempPathToLocation(entry.request.workspacePath, proposedPath),
         DIFF_SUFFIX,
         'coarse',
         {
-          cwd: WorkspaceFS.getPath() ?? outputDirectory,
+          cwd: entry.request.workspacePath ?? outputDirectory,
           subtype: options.subtype,
           outputDirectory,
         },
@@ -362,7 +380,10 @@ export const runLatexdiff = (
 
       if (entry.isSettled()) return;
 
-      const diffLocation = tempPathToLocation(result.diffPath);
+      const diffLocation = tempPathToLocation(
+        entry.request.workspacePath,
+        result.diffPath,
+      );
       yield* Effect.tryPromise({
         try: () =>
           options.openBuildDisplay(diffLocation, { preserveFocus: true }),

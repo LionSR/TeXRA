@@ -15,10 +15,10 @@
  *    `query()`. Results are cached for the session.
  */
 
+import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { isModuleNotFoundError } from '@common/errors';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import {
   createCachedBinaryResolver,
@@ -91,12 +91,19 @@ const PLATFORM_PACKAGES: Record<string, readonly string[]> = {
 /** Native CLI binary filename for the current platform. */
 const CLAUDE_BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
 
-/** The platform binary sits directly in the platform-package directory. */
-async function claudeBinaryInPlatformPackage(
+/**
+ * The platform binary sits directly in the platform-package directory.
+ *
+ * The probe is a plain predicate on a path this module just built, over the
+ * real filesystem the packaged binary lives on, so it stays synchronous like
+ * the sibling `which.sync` / `executeCommandSync` probes — the same call the
+ * static's own `existsSync` made.
+ */
+function claudeBinaryInPlatformPackage(
   platformPkgDir: string,
 ): Promise<string | undefined> {
   const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
-  return (await AbsoluteFS.exists(binary)) ? binary : undefined;
+  return Promise.resolve(existsSync(binary) ? binary : undefined);
 }
 
 /**

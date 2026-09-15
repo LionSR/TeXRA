@@ -11,15 +11,17 @@
 
 // Third-party imports
 import { z } from 'zod';
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { isNotADirectoryError } from '@common/errors/errorPredicates';
 import { appSignals } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
+import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import {
   RunIdSchema,
@@ -35,16 +37,61 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { formatResultCount, pluralize } from '@utils/text/stringUtils';
+import { locateInWorkspace } from '@utils/files/workspaceFS';
+import {
+  formatResultCount,
+  normalizeLineEndings,
+  pluralize,
+} from '@utils/text/stringUtils';
 import {
   findExistingRunStoragePath,
   getOriginalSnapshotPath,
   inspectRunStorageEntry,
 } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
+
+/**
+ * `BaseFS.exists` without the facade: `ENOENT` and `ENOTDIR` read as absent,
+ * every other failure propagates — `FileSystem.exists` reports a non-directory
+ * parent as `BadResource`, which the facade's own probe counted as absent.
+ */
+const targetExists = (fs: FileSystem.FileSystem, target: string) =>
+  fs.exists(target).pipe(
+    Effect.catchIf(
+      (error) =>
+        error.reason._tag === 'BadResource' &&
+        isNotADirectoryError(error.reason.cause),
+      () => Effect.succeed(false),
+    ),
+  );
+
+/**
+ * `BaseFS.isFile` without the facade: `ENOENT` and `ENOTDIR` read as "not a
+ * file", and a symlink answers for its target, which is the type the provider's
+ * `stat` resolved.
+ */
+const fileAt = (fs: FileSystem.FileSystem, target: string) =>
+  fs.stat(target).pipe(
+    Effect.map((stats) => stats.type === 'File'),
+    Effect.catchIf(
+      (error) =>
+        error.reason._tag === 'NotFound' ||
+        (error.reason._tag === 'BadResource' &&
+          isNotADirectoryError(error.reason.cause)),
+      () => Effect.succeed(false),
+    ),
+  );
+
+/** `BaseFS.read` without the facade: the bytes with line endings normalized. */
+const readAt = (fs: FileSystem.FileSystem, target: string) =>
+  fs
+    .readFile(target)
+    .pipe(
+      Effect.map((bytes) =>
+        normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
+      ),
+    );
 
 // ============================================================================
 // Rejection bookkeeping
@@ -203,7 +250,11 @@ Parameters map directly to subagent-result delivery attributes:
       this: AcceptRunFilesTool,
       input: AcceptRunFilesInput,
       call: ToolCallShape,
-    ): Effect.fn.Return<ToolResult, unknown, ToolCall> {
+    ): Effect.fn.Return<
+      ToolResult,
+      unknown,
+      ToolCall | FileSystem.FileSystem | WorkspaceFs
+    > {
       const { execution_id: runId, files, strip_criticize } = input;
       const resolveSourceFile = (runId: RunId, runPath: string) =>
         this.resolveSourceFile(runId, runPath, call);
@@ -221,29 +272,29 @@ Parameters map directly to subagent-result delivery attributes:
             );
 
             const destPath = mapping.original ?? mapping.path;
-            const dest = call.inScope(() => WorkspaceFS.locatePath(destPath));
+            // The call's own workspace root, as data: the source may resolve
+            // under any root, but the destination is this session's.
+            const dest = locateInWorkspace(call.roots.workspace, destPath);
             if (dest.kind === 'external') {
               throw new ToolError(
                 `original must be inside the workspace: ${destPath}`,
               );
             }
+            const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
+            const processFs = yield* FileSystem.FileSystem;
 
-            const rawContent = yield* Effect.tryPromise({
-              try: () =>
-                call.inScope(() =>
-                  AbsoluteFS.read(sourceLocation.absolutePath),
-                ),
-              catch: ensureError,
-            });
+            const rawContent = yield* readAt(
+              processFs,
+              sourceLocation.absolutePath,
+            ).pipe(Effect.mapError(ensureError));
             const { content: proposedContent, count: strippedCount } =
               strip_criticize
                 ? stripCriticizeAnnotations(rawContent)
                 : { content: rawContent, count: 0 };
-            const destExists = yield* Effect.tryPromise({
-              try: () =>
-                call.inScope(() => WorkspaceFS.exists(dest.relativePath)),
-              catch: ensureError,
-            });
+            const destExists = yield* targetExists(
+              workspaceFs,
+              dest.relativePath,
+            ).pipe(Effect.mapError(ensureError));
 
             // Determine original content for diff display. In-place workflow
             // outputs can make source and destination the same workspace file, so
@@ -251,15 +302,13 @@ Parameters map directly to subagent-result delivery attributes:
             const snapshotPath = call.inScope(() =>
               getOriginalSnapshotPath(runId, dest.relativePath),
             );
-            const snapshotExists = yield* Effect.tryPromise({
-              try: () => call.inScope(() => AbsoluteFS.isFile(snapshotPath)),
-              catch: ensureError,
-            });
+            const snapshotExists = yield* fileAt(processFs, snapshotPath).pipe(
+              Effect.mapError(ensureError),
+            );
             const snapshotContent = snapshotExists
-              ? yield* Effect.tryPromise({
-                  try: () => call.inScope(() => AbsoluteFS.read(snapshotPath)),
-                  catch: ensureError,
-                })
+              ? yield* readAt(processFs, snapshotPath).pipe(
+                  Effect.mapError(ensureError),
+                )
               : undefined;
             const isSameFile =
               sourceLocation.kind === 'workspace' &&
@@ -270,11 +319,10 @@ Parameters map directly to subagent-result delivery attributes:
             } else if (isSameFile) {
               originalContent = rawContent;
             } else if (destExists) {
-              originalContent = yield* Effect.tryPromise({
-                try: () =>
-                  call.inScope(() => WorkspaceFS.read(dest.relativePath)),
-                catch: ensureError,
-              });
+              originalContent = yield* readAt(
+                workspaceFs,
+                dest.relativePath,
+              ).pipe(Effect.mapError(ensureError));
             } else {
               originalContent = '';
             }
@@ -428,7 +476,11 @@ Parameters map directly to subagent-result delivery attributes:
     runId: RunId,
     runPath: string,
     call: ToolCallShape,
-  ): Effect.fn.Return<FileLocation, Error> {
+  ): Effect.fn.Return<
+    FileLocation,
+    Error,
+    FileSystem.FileSystem | WorkspaceFs
+  > {
     const entry = yield* Effect.tryPromise({
       try: () => call.inScope(() => inspectRunStorageEntry(runId, runPath)),
       catch: ensureError,
@@ -452,13 +504,13 @@ Parameters map directly to subagent-result delivery attributes:
     }
 
     // Fall back to workspace
-    const wsLoc = call.inScope(() => WorkspaceFS.locatePath(runPath));
+    const workspaceFs = yield* WorkspaceFs;
+    const wsLoc = locateInWorkspace(call.roots.workspace, runPath);
     if (
       wsLoc.kind !== 'external' &&
-      (yield* Effect.tryPromise({
-        try: () => call.inScope(() => WorkspaceFS.exists(wsLoc.relativePath)),
-        catch: ensureError,
-      }))
+      (yield* targetExists(workspaceFs, wsLoc.relativePath).pipe(
+        Effect.mapError(ensureError),
+      ))
     ) {
       return createWorkspaceLocation(wsLoc.absolutePath, wsLoc.relativePath);
     }

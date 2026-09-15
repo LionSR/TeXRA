@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit } from 'effect';
+import { Cause, Deferred, Effect, Exit, FileSystem } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
@@ -13,7 +13,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
@@ -38,12 +38,31 @@ function createWorkflowScriptAgentRunner(
 ) {
   const runner = createNativeWorkflowScriptAgentRunner(...args);
   return (invocation: WorkflowAgentInvocation) =>
-    runner(invocation).pipe(
+    withStubbedExists(runner(invocation)).pipe(
       Effect.provide(fakeProcessServices()),
       Effect.provideService(Runs, args[0].run.session.runs),
     );
 }
 
+// The deleted facade's `exists` probe read a `stat` that treated `ENOENT` and
+// `ENOTDIR` as absent; the conversion reads the process `FileSystem` instead,
+// so the stub replaces that one method of the real service (as the fingerprint
+// stub below does for `readFile`) rather than mocking a `stat` module.
+function withStubbedExists<A, E, R>(program: Effect.Effect<A, E, R>) {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* program.pipe(
+      Effect.provideService(FileSystem.FileSystem, {
+        ...fs,
+        exists: (target: string) => mocks.exists(target),
+      }),
+    );
+  });
+}
+
+// The fingerprint now reads through the process `FileSystem` rather than the
+// deleted `AbsoluteFS` facade, so the stub replaces one method of the real
+// service (as GlobTool's suite does) instead of mocking a module.
 function fingerprintWorkflowAgentDependencies(
   ...args: Parameters<typeof fingerprintInputDependencies> extends [
     unknown,
@@ -52,7 +71,19 @@ function fingerprintWorkflowAgentDependencies(
     ? Rest
     : never
 ) {
-  return fingerprintInputDependencies(parentContext().run.session, ...args);
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* fingerprintInputDependencies(
+      parentContext().run.session,
+      ...args,
+    ).pipe(
+      Effect.provideService(FileSystem.FileSystem, {
+        ...fs,
+        readFile: (file: string) => mocks.readFileBytes(file),
+        exists: (target: string) => mocks.exists(target),
+      }),
+    );
+  }).pipe(Effect.provide(fakeProcessServices()));
 }
 
 const mocks = vi.hoisted(() => ({
@@ -69,11 +100,11 @@ const mocks = vi.hoisted(() => ({
   selectAvailableDelegationModel: vi.fn(),
   resolveChildRunOutput: vi.fn(),
   runStorageLocation: vi.fn(),
-  workspaceExists: vi.fn(),
+  exists: vi.fn(),
   rejectOversizedBibAttachments: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
   realpath: vi.fn(),
-  absoluteReadBytes: vi.fn(),
+  readFileBytes: vi.fn(),
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -132,18 +163,12 @@ vi.mock('@tools/delegation/inputFields', async (importOriginal) => ({
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
-vi.mock('@utils/files/workspaceFS', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/files/workspaceFS')>()),
-  WorkspaceFS: {
-    exists: mocks.workspaceExists,
-  },
-}));
+// `resolveInvocationFileList` canonicalizes through `node:fs/promises.realpath`
+// now that the `WorkspaceFS` facade is gone, so the stub stands in for that one
+// export.
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:fs/promises')>()),
   realpath: mocks.realpath,
-}));
-vi.mock('@utils/files/absoluteFS', () => ({
-  AbsoluteFS: { readBytes: mocks.absoluteReadBytes },
 }));
 
 const parentRunId = 'aaaaaa111111' as RunId;
@@ -390,31 +415,37 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.selectAvailableDelegationModel.mockReturnValue(
       Effect.succeed('child-model'),
     );
-    mocks.workspaceExists.mockResolvedValue(true);
-    mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
+    mocks.exists.mockReturnValue(Effect.succeed(true));
+    mocks.readFileBytes.mockReturnValue(
+      Effect.succeed(Buffer.from('run bytes')),
+    );
+    mocks.rejectOversizedBibAttachments.mockReturnValue(Effect.succeed(null));
     mocks.runStorageLocation.mockReturnValue(undefined);
     sessionRoots = { workspace: WORKSPACE_PATH, storage: STORAGE_PATH };
     mocks.realpath.mockImplementation(async (file: string) => file);
-    mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
     mocks.executeSubagentInBand.mockImplementation(inBandRunReturning(result));
   });
 
   it.effect('fingerprints file bytes rather than only their paths', () =>
     Effect.gen(function* () {
       const options = { inputFiles: ['proof.tex'] };
-      mocks.absoluteReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
+      mocks.readFileBytes.mockReturnValueOnce(
+        Effect.succeed(Buffer.from('old proof')),
+      );
       const oldFingerprint = yield* fingerprintWorkflowAgentDependencies(
         runId,
         options,
       );
-      mocks.absoluteReadBytes.mockResolvedValueOnce(Buffer.from('new proof'));
+      mocks.readFileBytes.mockReturnValueOnce(
+        Effect.succeed(Buffer.from('new proof')),
+      );
       const newFingerprint = yield* fingerprintWorkflowAgentDependencies(
         runId,
         options,
       );
 
       expect(oldFingerprint).not.toBe(newFingerprint);
-      expect(mocks.absoluteReadBytes).toHaveBeenCalledWith(
+      expect(mocks.readFileBytes).toHaveBeenCalledWith(
         workspacePath('proof.tex'),
       );
     }),
@@ -476,8 +507,8 @@ describe('createWorkflowScriptAgentRunner', () => {
             name: 'WorkflowRunAbortError',
             message: expect.stringContaining(file),
           });
-          expect(mocks.workspaceExists).not.toHaveBeenCalled();
-          expect(mocks.absoluteReadBytes).not.toHaveBeenCalled();
+          expect(mocks.exists).not.toHaveBeenCalled();
+          expect(mocks.readFileBytes).not.toHaveBeenCalled();
         }),
       ),
   );
@@ -562,18 +593,13 @@ describe('createWorkflowScriptAgentRunner', () => {
 
       expect(yield* runner(call)).toBe(result);
       expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
-      expect(mocks.workspaceExists).toHaveBeenCalledWith(
-        workspacePath('paper.tex'),
+      expect(mocks.exists).toHaveBeenCalledWith(workspacePath('paper.tex'));
+      expect(mocks.exists).toHaveBeenCalledWith(workspacePath('notes.tex'));
+      expect(mocks.rejectOversizedBibAttachments).toHaveBeenCalledWith(
+        fakePath('workspace'),
+        ['notes.tex'],
       );
-      expect(mocks.workspaceExists).toHaveBeenCalledWith(
-        workspacePath('notes.tex'),
-      );
-      expect(mocks.rejectOversizedBibAttachments).toHaveBeenCalledWith([
-        'notes.tex',
-      ]);
-      expect(mocks.workspaceExists).toHaveBeenCalledWith(
-        workspacePath('figure.pdf'),
-      );
+      expect(mocks.exists).toHaveBeenCalledWith(workspacePath('figure.pdf'));
       expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
         parentModel: 'parent-model',
         withScope: expect.any(Function),
@@ -623,7 +649,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it.effect('treats missing workspace files as run-fatal configuration', () =>
     Effect.gen(function* () {
-      mocks.workspaceExists.mockResolvedValueOnce(false);
+      mocks.exists.mockReturnValueOnce(Effect.succeed(false));
       const runner = defaultRunner();
 
       const error = yield* Effect.flip(
@@ -644,7 +670,7 @@ describe('createWorkflowScriptAgentRunner', () => {
           new Error('Model "missing-model" is not currently available.'),
         ),
       );
-      mocks.workspaceExists.mockResolvedValue(false);
+      mocks.exists.mockReturnValue(Effect.succeed(false));
       const runner = defaultRunner();
 
       const error = yield* Effect.flip(
@@ -659,7 +685,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         name: 'WorkflowRunAbortError',
         message: expect.stringContaining('missing-model'),
       });
-      expect(mocks.workspaceExists).not.toHaveBeenCalled();
+      expect(mocks.exists).not.toHaveBeenCalled();
     }),
   );
 
@@ -755,9 +781,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         secondRequested,
         parentContext().run.session,
       );
-      expect(mocks.workspaceExists).toHaveBeenCalledWith(
-        workspacePath('notes.tex'),
-      );
+      expect(mocks.exists).toHaveBeenCalledWith(workspacePath('notes.tex'));
       expect(mocks.preparedOptions[0]).toEqual(
         expect.objectContaining({
           agentName: 'merge',
@@ -800,17 +824,19 @@ describe('createWorkflowScriptAgentRunner', () => {
       Effect.gen(function* () {
         const message =
           'large.bib is over the 100 KiB limit. Extract the needed entries first.';
-        mocks.rejectOversizedBibAttachments.mockResolvedValue({
-          status: 'error',
-          summary: 'Rejected oversized BibTeX attachment',
-          error: message,
-          diagnostics: {
-            type: 'oversized_bib_attachment',
-            path: 'large.bib',
-            sizeBytes: 102_401,
-            limitBytes: 102_400,
-          },
-        });
+        mocks.rejectOversizedBibAttachments.mockReturnValue(
+          Effect.succeed({
+            status: 'error',
+            summary: 'Rejected oversized BibTeX attachment',
+            error: message,
+            diagnostics: {
+              type: 'oversized_bib_attachment',
+              path: 'large.bib',
+              sizeBytes: 102_401,
+              limitBytes: 102_400,
+            },
+          }),
+        );
         const runner = defaultRunner();
 
         const error = yield* Effect.flip(
@@ -1679,7 +1705,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         expect(
           (mocks.preparedOptions[0] as { configPayload: object }).configPayload,
         ).not.toHaveProperty('inputFiles');
-        expect(mocks.workspaceExists).not.toHaveBeenCalled();
+        expect(mocks.exists).not.toHaveBeenCalled();
       }),
   );
 

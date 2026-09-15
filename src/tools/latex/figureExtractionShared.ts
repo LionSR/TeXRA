@@ -1,7 +1,7 @@
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
-
+import { isNotADirectoryError } from '@common/errors/errorPredicates';
 import {
   ToolError,
   type ToolFileAttachment,
@@ -15,7 +15,6 @@ import {
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { ensureError } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
 export function texPathField(description: string): z.ZodString {
@@ -55,17 +54,30 @@ const ATTACHMENT_CONCURRENCY = 8;
 
 export const resolveLatexFile = Effect.fn('tools.resolveLatexFile')(function* (
   texPath: string,
-): Effect.fn.Return<LatexFileResolution, ToolError | Error, ToolCall> {
+): Effect.fn.Return<
+  LatexFileResolution,
+  ToolError | Error,
+  ToolCall | FileSystem.FileSystem
+> {
   const call = yield* ToolCall;
+  const fs = yield* FileSystem.FileSystem;
   const { path, display } = yield* Effect.try({
     try: () =>
       call.inScope(() => resolveAndFormat(texPath, call.workingDirectory)),
     catch: ensureError,
   });
-  const exists = yield* Effect.tryPromise({
-    try: () => AbsoluteFS.exists(path.absolute),
-    catch: ensureError,
-  });
+  // `BaseFS.exists` counted ENOTDIR as absent alongside ENOENT and propagated
+  // everything else; `FileSystem.exists` reports a non-directory parent as a
+  // `BadResource`, so the predicate names ENOTDIR specifically and an
+  // operational failure (`ELOOP`) still propagates.
+  const exists = yield* fs.exists(path.absolute).pipe(
+    Effect.catchIf(
+      (error) =>
+        error.reason._tag === 'BadResource' &&
+        isNotADirectoryError(error.reason.cause),
+      () => Effect.succeed(false),
+    ),
+  );
   if (!exists) {
     return yield* Effect.fail(
       new ToolError(`LaTeX file not found: ${display}`),

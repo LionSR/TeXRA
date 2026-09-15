@@ -4,11 +4,12 @@
 
 // Node imports
 import { createHash } from 'node:crypto';
+import { statSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -16,7 +17,7 @@ import { resolveChildRunOutput } from '@agent/storage';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentCallOptions } from '@agent/workflowScript/types';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { formatError } from '@common/errors';
+import { formatError, isNotADirectoryError } from '@common/errors';
 import type { RunId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -24,8 +25,7 @@ import { errorResult } from '@tools/core/result';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { runStorageLocationUnder } from '@utils/files/runStorageFs';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { workspaceAbsolutePath, WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 import {
   ensureError,
@@ -134,17 +134,33 @@ export function withToolUseSubagentHandoffInstruction(
 }
 
 function ensureWorkingDirectoryExists(dir: string): void {
-  const stat = Result.try(() => AbsoluteFS.statSync(dir));
-  if (Result.isFailure(stat)) {
-    const e = stat.failure;
+  const inspected = Result.try(() => statSync(dir));
+  if (Result.isFailure(inspected)) {
+    const e = inspected.failure;
     throw new Error(
       `working_directory must be an existing directory: ${toErrorMessage(e)}`,
       { cause: e },
     );
   }
-  if (stat.success.isDirectory()) return;
+  if (inspected.success.isDirectory()) return;
   throw new Error(`working_directory must be a directory: ${dir}`);
 }
+
+/**
+ * `BaseFS`'s existence probe without the facade: `ENOENT` and `ENOTDIR` read
+ * as absent, every other failure propagates. `FileSystem.exists` reports a
+ * non-directory parent as `BadResource`, which the facade's own probe counted
+ * as absent alongside the missing path.
+ */
+const pathExists = (fs: FileSystem.FileSystem, target: string) =>
+  fs.exists(target).pipe(
+    Effect.catchIf(
+      (error) =>
+        error.reason._tag === 'BadResource' &&
+        isNotADirectoryError(error.reason.cause),
+      () => Effect.succeed(false),
+    ),
+  );
 
 /**
  * Shared Zod field for the `working_directory` parameter on delegation tools.
@@ -176,56 +192,82 @@ export const workingDirectoryField = z
     return trimmed;
   });
 
-/** Reject delegated workflow context that attaches oversized bibliography files. */
-export async function rejectOversizedBibAttachments(
+/**
+ * Reject delegated workflow context that attaches oversized bibliography
+ * files. `workspaceRoot` is the owning session's workspace folder, handed in
+ * as data so a relative dependency resolves against its own session rather
+ * than against whichever roots the calling fiber happens to carry.
+ */
+export const rejectOversizedBibAttachments = Effect.fn(
+  'rejectOversizedBibAttachments',
+)(function* (
+  workspaceRoot: string | undefined,
   contextFiles: readonly string[],
-): Promise<Extract<ToolResult, { status: 'error' }> | null> {
+): Effect.fn.Return<
+  Extract<ToolResult, { status: 'error' }> | null,
+  Error,
+  FileSystem.FileSystem
+> {
+  const fs = yield* FileSystem.FileSystem;
   const bibFiles = contextFiles
     .filter(isNonEmptyString)
     .filter((file) => hasExtension(file, '.bib'));
 
   for (const bibFile of bibFiles) {
-    const stats = await WorkspaceFS.stat(bibFile);
-    if (stats.size <= LARGE_BIB_LIMIT_BYTES) continue;
+    const stats = yield* fs.stat(workspaceAbsolutePath(workspaceRoot, bibFile));
+    if (Number(stats.size) <= LARGE_BIB_LIMIT_BYTES) continue;
 
-    const message = `${bibFile} is ${stats.size} bytes (${formatBytes(stats.size)}), over the ${LARGE_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
+    const sizeBytes = Number(stats.size);
+    const message = `${bibFile} is ${sizeBytes} bytes (${formatBytes(sizeBytes)}), over the ${LARGE_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
     return errorResult(message, {
       summary: `Rejected oversized BibTeX attachment`,
       diagnostics: {
         type: 'oversized_bib_attachment',
         path: bibFile,
-        sizeBytes: stats.size,
+        sizeBytes,
         limitBytes: LARGE_BIB_LIMIT_BYTES,
       },
     });
   }
 
   return null;
-}
+});
 
 interface WorkflowFileGroup {
   readonly label: string;
   readonly files: readonly string[];
 }
 
-/** Validate workspace-backed workflow inputs before launching a child run. */
-export async function assertWorkflowFilesExist(
-  groups: readonly WorkflowFileGroup[],
-): Promise<void> {
-  const entries = groups.flatMap(({ label, files }) =>
-    files.filter(isNonEmptyString).map((path) => ({ label, path })),
-  );
-  const inspected = await Promise.all(
-    entries.map(async (entry) => ({
-      ...entry,
-      exists: await WorkspaceFS.exists(entry.path),
-    })),
-  );
-  const missing = inspected.find((entry) => !entry.exists);
-  if (missing) {
-    throw new Error(`${missing.label} not found: ${missing.path}`);
-  }
-}
+/**
+ * Validate workspace-backed workflow inputs before launching a child run.
+ * `workspaceRoot` is the owning session's workspace folder, handed in as
+ * data, so a relative declaration resolves against that session.
+ */
+export const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
+  function* (
+    workspaceRoot: string | undefined,
+    groups: readonly WorkflowFileGroup[],
+  ): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+    const fs = yield* FileSystem.FileSystem;
+    const entries = groups.flatMap(({ label, files }) =>
+      files.filter(isNonEmptyString).map((path) => ({ label, path })),
+    );
+    const inspected = yield* Effect.forEach(
+      entries,
+      (entry) =>
+        pathExists(fs, workspaceAbsolutePath(workspaceRoot, entry.path)).pipe(
+          Effect.map((exists) => ({ ...entry, exists })),
+        ),
+      { concurrency: 'unbounded' },
+    );
+    const missing = inspected.find((entry) => !entry.exists);
+    if (missing) {
+      yield* Effect.fail(
+        new Error(`${missing.label} not found: ${missing.path}`),
+      );
+    }
+  },
+);
 
 /**
  * Resolve workflow file dependencies against their owning session's roots,
@@ -237,7 +279,11 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
     parentRunId: RunId,
     label: string,
     files: readonly string[],
-  ): Effect.fn.Return<{ file: string; absolutePath: string }[], Error> {
+  ): Effect.fn.Return<
+    { file: string; absolutePath: string }[],
+    Error,
+    FileSystem.FileSystem
+  > {
     return yield* Effect.gen(function* () {
       const { storage, workspace } = session.roots;
       const references = yield* Effect.tryPromise({
@@ -274,18 +320,20 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
               };
             }),
           );
-          await assertWorkflowFilesExist([
-            {
-              label,
-              files: references
-                .filter((reference) => reference.runStoragePath === undefined)
-                .map((reference) => reference.absolutePath),
-            },
-          ]);
           return references;
         },
         catch: ensureError,
       });
+      // After the paths resolve, as it ran before: a reference this run does
+      // not own is refused before anything is probed on disk.
+      yield* assertWorkflowFilesExist(workspace, [
+        {
+          label,
+          files: references
+            .filter((reference) => reference.runStoragePath === undefined)
+            .map((reference) => reference.absolutePath),
+        },
+      ]);
       return yield* Effect.forEach(
         references,
         ({ file, absolutePath, runStoragePath }) =>
@@ -329,7 +377,8 @@ export const fingerprintWorkflowAgentDependencies = Effect.fn(
   session: SessionHandle,
   parentRunId: RunId,
   options: WorkflowAgentCallOptions,
-): Effect.fn.Return<string, Error> {
+): Effect.fn.Return<string, Error, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
   const groups = [
     { kind: 'input', label: 'Input file', files: options.inputFiles ?? [] },
     {
@@ -356,10 +405,7 @@ export const fingerprintWorkflowAgentDependencies = Effect.fn(
       files,
     );
     for (const [index, { absolutePath }] of resolved.entries()) {
-      const bytes = yield* Effect.tryPromise({
-        try: () => AbsoluteFS.readBytes(absolutePath),
-        catch: ensureError,
-      });
+      const bytes = yield* fs.readFile(absolutePath);
       hash.update(`${kind}\0${index}\0${bytes.length}\0`);
       hash.update(bytes);
     }
