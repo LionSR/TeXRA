@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import { Box, Text } from 'ink';
 import { useState } from 'react';
 
@@ -127,18 +127,26 @@ export function AgentRosterForm(
     });
 
   /** Every roster write is a program, and Ink owns no runtime: the form runs
-   *  the one it was handed, so a refused write reaches `reportError`. */
+   *  the one it was handed. The continuation and the refusal are both part of
+   *  that program, so one `runPromise` settles the pair and no promise-level
+   *  catch has to stand in for the fold. */
   const write = (
     action: () => Effect.Effect<void, unknown, ProcessServices>,
     nextMode = mode,
   ): void => {
-    void props.runtime
-      .runPromise(action())
-      .then(() => {
-        setMode(nextMode);
-        reload();
-      })
-      .catch((reason: unknown) => reportError(reason));
+    void props.runtime.runPromise(
+      action().pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            setMode(nextMode);
+            reload();
+          }),
+        ),
+        Effect.catchAllCause((cause) =>
+          Effect.sync(() => reportError(Cause.squash(cause))),
+        ),
+      ),
+    );
   };
 
   if (!data) {
