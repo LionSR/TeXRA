@@ -9,7 +9,7 @@ import {
   type DiffViewHost,
 } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -45,11 +45,11 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
   runtime: ProcessRuntime;
 }
 
-/** The pair of Review-tab verbs the main process owns. */
-interface DesktopDiffHost extends Pick<DiffViewHost, 'openDiff'> {
+/** The pair of Review-tab verbs one open project's diffs are shown under. */
+interface ProjectDiffHost extends Pick<DiffViewHost, 'openDiff'> {
   /**
    * Show a diff in the Review workbench under `previewId`, the key
-   * {@link DesktopDiffHost.closeDiff} closes it by. A caller with nothing to
+   * {@link ProjectDiffHost.closeDiff} closes it by. A caller with nothing to
    * close later (the progress view's compare) omits it and the host mints
    * one, so every diff the renderer holds is named and no close can dismiss
    * a diff its sender did not open. Omitting it also keeps this assignable
@@ -71,13 +71,27 @@ interface DesktopDiffHost extends Pick<DiffViewHost, 'openDiff'> {
   closeDiff(previewId: string): Promise<void>;
 }
 
+/** The window's diff host: one per Review surface, bound per open project. */
+interface DesktopDiffHost {
+  /**
+   * The Review verbs of the project rooted at `roots`, whose storage root is
+   * the session key the renderer files a review under.
+   *
+   * The host itself is built once per window, while a window shows several
+   * open projects at once — so the project cannot be read off the calling
+   * context here. The window binds one of these per project beside the
+   * preview host's `openBuildDisplayIn`, from the same `session.roots`, which
+   * is what keeps a run in a hidden project posting to its own Review pane
+   * instead of the shown one's.
+   */
+  inProject(roots: Pick<WorkspaceRoots, 'storage'>): ProjectDiffHost;
+}
+
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
 ): DesktopDiffHost {
-  /** The window's Review surface, which both messages below address. */
-  const reviewSession = (): string => workspaceRoots().storage;
-
   async function openDiff(
+    reviewSession: string,
     original: DiffSource,
     proposed: DiffSource,
     title: string,
@@ -110,7 +124,7 @@ export function createDesktopDiffHost(
       { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
       {
         command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
-        session: reviewSession(),
+        session: reviewSession,
         previewId,
         title,
         displayPath: title.replace(/^Tool edit:\s*/, ''),
@@ -175,7 +189,10 @@ export function createDesktopDiffHost(
    * editor is not a view this host can close, and the directory holding it
    * is removed at quit.
    */
-  async function closeDiff(previewId: string): Promise<void> {
+  async function closeDiff(
+    reviewSession: string,
+    previewId: string,
+  ): Promise<void> {
     tryShowInRenderer(
       {
         ...options,
@@ -184,11 +201,17 @@ export function createDesktopDiffHost(
       },
       {
         command: DESKTOP_DIFF_COMMANDS.CLOSE_DIFF,
-        session: reviewSession(),
+        session: reviewSession,
         previewId,
       } satisfies DesktopCloseDiffMessage,
     );
   }
 
-  return { openDiff, closeDiff };
+  return {
+    inProject: (roots) => ({
+      openDiff: (original, proposed, title, previewId) =>
+        openDiff(roots.storage, original, proposed, title, previewId),
+      closeDiff: (previewId) => closeDiff(roots.storage, previewId),
+    }),
+  };
 }

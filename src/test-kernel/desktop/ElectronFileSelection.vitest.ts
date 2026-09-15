@@ -63,9 +63,13 @@ describe('desktop file selection', () => {
     > = {},
   ) {
     const { createDesktopFileSelection } = await loadDesktopFileSelection();
+    // Read after the load: `loadDesktopFileSelection` resets the module
+    // registry and installs a fresh process runtime.
+    const { effectRuntime } = await import('@platform/processRuntime');
     return createDesktopFileSelection({
       workspacePath,
       showOpenFileDialog: vi.fn(async () => undefined),
+      runtime: effectRuntime(),
       ...overrides,
     });
   }

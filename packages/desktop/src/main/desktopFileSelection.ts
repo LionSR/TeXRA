@@ -1,6 +1,7 @@
-import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { Effect, FileSystem } from 'effect';
 
 import {
   getFileListConfig,
@@ -10,6 +11,7 @@ import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { attachDroppedPaths } from '@controllers/mainView/MainViewDroppedFilesController';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { DocumentFileType, FileOptions } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 
@@ -26,6 +28,9 @@ interface DesktopFileSelectionOptions {
   showOpenFileDialog(
     options: DesktopFileSelectionDialogOptions,
   ): Promise<string[] | undefined>;
+  /** The process runtime the window was handed; the dropped-path probe
+   *  below settles on it. */
+  runtime: ProcessRuntime;
 }
 
 /**
@@ -77,6 +82,34 @@ function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   );
 }
 
+/**
+ * One dropped path, answered with its workspace-relative name or `null` when
+ * the launcher does not take it.
+ *
+ * A path outside the paper, and one that does not name a regular file, are
+ * both dropped. So is one that is no longer there: a drag whose source moved
+ * between the drop and this probe is the user's own race, and `NotFound` is
+ * the only absence this treats as one. Every other stat failure — an
+ * unreadable folder, a symlink loop — fails the whole drop instead of quietly
+ * shrinking it, because a path discarded in silence looks to the user like a
+ * file the launcher refused.
+ */
+const droppedWorkspaceFile = Effect.fn(
+  'desktopFileSelection.droppedWorkspaceFile',
+)(function* (workspacePath: string, raw: string) {
+  const dropped = raw.startsWith('file:') ? fileURLToPath(raw) : raw;
+  const relative = relativeToRoot(workspacePath, dropped);
+  if (relative === undefined) return null;
+  const fs = yield* FileSystem.FileSystem;
+  const info = yield* fs.stat(resolve(workspacePath, relative)).pipe(
+    Effect.catchIf(
+      (error) => error.reason._tag === 'NotFound',
+      () => Effect.succeed(undefined),
+    ),
+  );
+  return info?.type === 'File' ? relative : null;
+});
+
 export function createDesktopFileSelection(
   options: DesktopFileSelectionOptions,
 ): DesktopFileSelection {
@@ -109,18 +142,14 @@ export function createDesktopFileSelection(
       );
     },
     async attachDroppedFiles(paths, category) {
-      const resolved = await Promise.all(
-        paths.map(async (raw): Promise<string | null> => {
-          if (!workspacePath) return null;
-          const dropped = raw.startsWith('file:') ? fileURLToPath(raw) : raw;
-          const relative = relativeToRoot(workspacePath, dropped);
-          if (relative === undefined) return null;
-          const info = await stat(resolve(workspacePath, relative)).catch(
-            () => null,
-          );
-          return info?.isFile() ? relative : null;
-        }),
-      );
+      const root = workspacePath;
+      const resolved = root
+        ? await options.runtime.runPromise(
+            Effect.forEach(paths, (raw) => droppedWorkspaceFile(root, raw), {
+              concurrency: 'unbounded',
+            }),
+          )
+        : paths.map(() => null);
       return attachDroppedPaths(resolved, getIncludedExtensions(category))
         .paths;
     },

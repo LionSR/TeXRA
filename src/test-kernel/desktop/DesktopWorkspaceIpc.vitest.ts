@@ -19,6 +19,7 @@ import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
 import { appSignals } from '@eventBus/AppSignals';
+import { effectRuntime } from '@platform/processRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 let fixtureRoot = '';
@@ -63,6 +64,7 @@ function createIpc(
     getWorkspacePath: () => workspacePath,
     getEnvironmentSummary: async () => EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
     onAsyncError: vi.fn(),
+    runtime: effectRuntime(),
     ...overrides,
   };
   const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);
@@ -333,7 +335,15 @@ describe('desktop workspace IPC', () => {
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST,
     });
 
-    await vi.waitFor(() => expect(onAsyncError).toHaveBeenCalledWith(failure));
+    await vi.waitFor(() =>
+      expect(onAsyncError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          _tag: 'WorkspaceHostCallFailed',
+          member: 'getEnvironmentSummary',
+          cause: failure,
+        }),
+      ),
+    );
     expect(postToRenderer).toHaveBeenLastCalledWith({
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
       environment: EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
