@@ -637,13 +637,6 @@ function collectCurrent(documentedFloors: DeepImports = {}): CollectedSchemas {
   };
 }
 
-function total(imports: DeepImports): number {
-  return Object.values(imports).reduce(
-    (sum, entries) => sum + entries.length,
-    0,
-  );
-}
-
 function addedEntries(current: DeepImports, baseline: DeepImports): string[] {
   return Object.entries(current).flatMap(([specifier, entries]) => {
     const allowed = new Set(baseline[specifier] ?? []);
@@ -831,12 +824,11 @@ describe('@shared/schemas deep-import ratchet', () => {
       }
     }
     // Pin collectCurrent's scope: excluding test-kernel again must fail even
-    // though no test-kernel deep import remains in the baseline.
+    // though no test-kernel deep import remains in the baseline. This is also
+    // the guard against a broken scan silently finding nothing, now that the
+    // baseline itself is legitimately empty: zero deep imports is the goal
+    // state (the host-agent ratchet already treats an empty list as a valid,
+    // welcome outcome), so no minimum row count is asserted here.
     expect(current.scannedTestKernelFiles).toBeGreaterThan(0);
-    expect(
-      total(baseline.floors) +
-        total(baseline.forced) +
-        total(baseline.gratuitous),
-    ).toBeGreaterThan(0);
   });
 });
