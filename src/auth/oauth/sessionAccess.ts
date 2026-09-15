@@ -5,12 +5,11 @@
  * here (with the status probe) so a provider does not re-copy the platform
  * dance.
  */
-import { runAuthProgram } from '@auth/authProgram';
+import { Effect } from 'effect';
+import { callPort, runAuthProgram, settleFailure } from '@auth/authProgram';
 import { createLog } from '@logger/logUtils';
 import type { SecretsFailed } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-import type { Effect } from 'effect';
 
 import type {
   SubscriptionSessionStatus,
@@ -77,19 +76,25 @@ export interface SessionAccessCoordinator {
 
 /**
  * Read signed-in status without throwing: a store the caller could not open
- * reports signed-out, with the cause logged.
+ * reports signed-out, with the cause logged. The probe's recovery is part of
+ * the program; only its settled answer crosses the Promise surface, on the
+ * auth subsystem's installed run edge.
  */
-export async function getSubscriptionSessionStatus(
+export function getSubscriptionSessionStatus(
   getCoordinator: () => SessionAccessCoordinator,
   channel: string,
   displayName: string,
 ): Promise<SubscriptionSessionStatus> {
-  try {
-    return await getCoordinator().getStatus();
-  } catch (error) {
-    createLog(channel).warn(
-      `Failed to read ${displayName} session status: ${toErrorMessage(error)}`,
-    );
-    return { signedIn: false };
-  }
+  return runAuthProgram(
+    callPort(() => getCoordinator().getStatus()).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          createLog(channel).warn(
+            `Failed to read ${displayName} session status: ${toErrorMessage(settleFailure(cause))}`,
+          );
+          return { signedIn: false };
+        }),
+      ),
+    ),
+  );
 }
