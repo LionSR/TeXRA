@@ -164,10 +164,13 @@ function runCommand<T = void>(
 ): Promise<T | undefined> {
   return Promise.resolve(
     vscode.commands.executeCommand<T>(command, ...args),
-  ).catch((error: unknown) => {
-    log.error(`Command ${command} failed: ${toErrorMessage(error)}`);
-    throw error;
-  });
+  ).then(
+    (result) => result,
+    (error: unknown) => {
+      log.error(`Command ${command} failed: ${toErrorMessage(error)}`);
+      throw error;
+    },
+  );
 }
 
 const showInfo = async (message: string): Promise<void> => {
