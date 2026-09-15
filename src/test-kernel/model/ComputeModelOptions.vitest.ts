@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { resetCodexCoordinator } from '@auth/codex';
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import * as logger from '@logger/logUtils';
@@ -84,9 +83,8 @@ async function installAccessPlatform(
     secrets: options.secrets ?? OPENAI_KEY_SECRETS,
   });
   invalidateApiKeyCache();
-  // The reinstalled host has its own secret store, and the coordinator caches
-  // the first one it is handed, so both are re-pointed at this host.
-  resetCodexCoordinator();
+  // Coordinators are keyed by the secret store, so the reinstalled host's
+  // store is what the probes installed here read.
   installTexraAccountProbes(hostStores().secrets);
 }
 
@@ -137,7 +135,6 @@ describe('model availability', () => {
 
   beforeEach(() => {
     invalidateApiKeyCache();
-    resetCodexCoordinator();
     // The picker reads the app's account plane through the model layer's
     // seam; install the same probes the three hosts install.
     installTexraAccountProbes(hostStores().secrets);
