@@ -6,7 +6,7 @@ import { HTTPError, TimeoutError } from 'ky';
 import { describe, expect } from 'vitest';
 
 // Local imports - tools
-import { isTransientHttpError, retryTransientFetch } from '@tools/timeouts';
+import { retryTransientFetch } from '@tools/timeouts';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 
 function kyErrorWithStatus(status: number): HTTPError {
@@ -17,79 +17,109 @@ function kyErrorWithStatus(status: number): HTTPError {
   );
 }
 
-describe('isTransientHttpError', () => {
-  it('treats ky TimeoutError as transient', () => {
-    expect(
-      isTransientHttpError(
-        new TimeoutError(new Request('https://example.com')),
+/**
+ * Assert whether `retryTransientFetch` treats `error` as transient: a
+ * transient failure is attempted a second time and reports the retry back
+ * through `onFailedAttempt`, a permanent one ends the program on its first
+ * attempt.
+ */
+function expectTransience(
+  error: unknown,
+  transient: boolean,
+): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    let retried = false;
+    const fiber = yield* Effect.forkChild(
+      Effect.flip(
+        retryTransientFetch(Effect.fail(error), {
+          retries: 1,
+          minTimeout: 1,
+          timeoutMs: 1000,
+          onFailedAttempt: () =>
+            Effect.sync(() => {
+              retried = true;
+            }),
+        }),
       ),
-    ).toBe(true);
+    );
+    yield* TestClock.adjust('40 millis');
+    yield* Fiber.join(fiber);
+    expect(retried).toBe(transient);
   });
+}
 
-  it('treats AbortSignal.timeout() errors as transient', () => {
+describe('retryTransientFetch transience classification', () => {
+  it.effect('treats ky TimeoutError as transient', () =>
+    expectTransience(
+      new TimeoutError(new Request('https://example.com')),
+      true,
+    ),
+  );
+
+  it.effect('treats AbortSignal.timeout() errors as transient', () => {
     const err = Object.assign(new Error('Timeout'), { name: 'TimeoutError' });
-    expect(isTransientHttpError(err)).toBe(true);
+    return expectTransience(err, true);
   });
 
-  it('treats AbortError with TimeoutError cause as transient (undici wrapping)', () => {
-    const cause = Object.assign(new Error('signal timed out'), {
-      name: 'TimeoutError',
-    });
-    const err = Object.assign(new Error('The operation was aborted'), {
-      name: 'AbortError',
-      cause,
-    });
-    expect(isTransientHttpError(err)).toBe(true);
-  });
+  it.effect(
+    'treats AbortError with TimeoutError cause as transient (undici wrapping)',
+    () => {
+      const cause = Object.assign(new Error('signal timed out'), {
+        name: 'TimeoutError',
+      });
+      const err = Object.assign(new Error('The operation was aborted'), {
+        name: 'AbortError',
+        cause,
+      });
+      return expectTransience(err, true);
+    },
+  );
 
-  it.each(['Failed to fetch', 'fetch failed'])(
+  it.effect.each(['Failed to fetch', 'fetch failed'])(
     'treats network failures (no response) as transient: %s',
-    (message) => {
-      // fetch throws TypeError for connection reset, DNS failure, socket hang-up
-      expect(isTransientHttpError(new TypeError(message))).toBe(true);
-    },
+    // fetch throws TypeError for connection reset, DNS failure, socket hang-up
+    (message) => expectTransience(new TypeError(message), true),
   );
 
-  it('treats programmer TypeErrors as permanent (not every TypeError is a network error)', () => {
-    // A bug in the wrapped call (reading a property of undefined) must surface,
-    // not be silently retried as if it were a transient network failure.
-    expect(
-      isTransientHttpError(
+  it.effect(
+    'treats programmer TypeErrors as permanent (not every TypeError is a network error)',
+    () =>
+      // A bug in the wrapped call (reading a property of undefined) must
+      // surface, not be silently retried as if it were a transient network
+      // failure.
+      expectTransience(
         new TypeError("Cannot read properties of undefined (reading 'x')"),
+        false,
       ),
-    ).toBe(false);
-  });
+  );
 
-  it.each([408, 429, 500, 503])(
+  it.effect.each([408, 429, 500, 503])(
     'treats request timeouts, rate limits, and 5xx errors as transient: HTTP %i',
-    (status) => {
-      expect(isTransientHttpError(kyErrorWithStatus(status))).toBe(true);
-    },
+    (status) => expectTransience(kyErrorWithStatus(status), true),
   );
 
-  it.each([400, 404])(
+  it.effect.each([400, 404])(
     'treats 4xx responses as permanent: HTTP %i',
-    (status) => {
-      expect(isTransientHttpError(kyErrorWithStatus(status))).toBe(false);
-    },
+    (status) => expectTransience(kyErrorWithStatus(status), false),
   );
 
-  it.each([new Error('boom'), 'nope', undefined])(
+  it.effect.each([new Error('boom'), 'nope', undefined])(
     'treats non-http errors as permanent: %s',
-    (value) => {
-      expect(isTransientHttpError(value)).toBe(false);
-    },
+    (value) => expectTransience(value, false),
   );
 });
 
-describe('isTransientHttpError / isTransientHttpStatus parity', () => {
-  it('agrees on ky HTTPError status codes', () => {
-    for (const status of [400, 404, 408, 429, 500, 503]) {
-      expect(isTransientHttpStatus(status)).toBe(
-        isTransientHttpError(kyErrorWithStatus(status)),
-      );
-    }
-  });
+describe('retryTransientFetch / isTransientHttpStatus parity', () => {
+  it.effect('agrees on ky HTTPError status codes', () =>
+    Effect.gen(function* () {
+      for (const status of [400, 404, 408, 429, 500, 503]) {
+        yield* expectTransience(
+          kyErrorWithStatus(status),
+          isTransientHttpStatus(status),
+        );
+      }
+    }),
+  );
 });
 
 describe('retryTransientFetch', () => {

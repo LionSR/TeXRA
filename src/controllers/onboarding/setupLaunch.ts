@@ -156,7 +156,7 @@ export function resolveSetupLaunchModel(
  * Desktop has no routing prompt, so OpenRouter is chosen only when the flag is
  * already on and an OpenRouter key exists.
  */
-export function selectDesktopSetupModel(
+function selectDesktopSetupModel(
   secrets: PlatformSecrets,
 ): Effect.Effect<string | null> {
   return resolveSetupLaunchModel(secrets, false).pipe(
