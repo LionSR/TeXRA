@@ -986,7 +986,8 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * are merged here from what the root hands over: `Secrets` and `AppState`
  * over the root's own stores, which every root now opens before it calls
  * this — the desktop and CLI roots open theirs on a bootstrap run rather
- * than on the runtime they are about to install, so both arrive as values;
+ * than on the runtime they are about to install, so both arrive as values
+ * (the CLI's secrets-only `clone` entry is the one `AppState` omission);
  * `SetupPlatform` over the root's host-varying setup capabilities; and
  * `ToolInjections` over `AGENT_TOOL_INJECTIONS`, the same list for every
  * host.
@@ -996,7 +997,14 @@ export interface ProcessRuntimeOptions {
   readonly globalStorage: () => string;
   readonly updateCheckStorage: () => string;
   readonly secrets: PlatformSecrets;
-  readonly appState: StateStore;
+  /**
+   * The root's global state store, opened before this install and served as
+   * `AppState`. Omitted only by an entry that serves no application state at
+   * all — the CLI's platform-less `clone`, whose storage root may be
+   * read-only — which installs with no `AppState` layer; a program that
+   * yields `AppState` on such a runtime fails as a missing service.
+   */
+  readonly appState?: StateStore;
   readonly setup: SetupPlatformShape;
   /**
    * The editor's language models, for the one host that has an editor: the
@@ -1032,7 +1040,12 @@ function processServicesLayer({
 > {
   return Layer.mergeAll(
     Secrets.layer(secrets),
-    AppState.layer(appState),
+    // `Layer.empty` satisfies the `AppState` arm of the declared type without
+    // serving it — the one omitting entry (the CLI's `clone`) runs no program
+    // that yields `AppState`.
+    appState === undefined
+      ? (Layer.empty as Layer.Layer<AppState>)
+      : AppState.layer(appState),
     SetupPlatform.layer(setup),
     ToolInjections.layer(AGENT_TOOL_INJECTIONS),
   );

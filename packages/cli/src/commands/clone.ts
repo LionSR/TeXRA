@@ -42,7 +42,7 @@ function buildOverleafClonePorts(
   remote: OverleafRemote,
   workspacePath: string,
 ): OverleafCloneWorkflowPorts {
-  const secrets = getCliSecrets();
+  const secrets = getCliSecrets(context.storageRoot);
   let canonicalWorkspacePath = workspacePath;
   return {
     // `orDie` keeps what `Effect.promise` did with a rejected store call: a
@@ -202,8 +202,14 @@ export const cloneCommand = withUsageSections(
       // `clone` runs without a platform, but its token ports are
       // `CliSecrets`, whose reads and writes are Effect programs run at this
       // host edge. Install the process runtime before the first one, the same
-      // way the update check does for the entry that precedes any platform.
-      const { runtime } = await installCliProcessRuntime(context.storageRoot);
+      // way the update check does for the entry that precedes any platform —
+      // but omit the global state store: clone serves no `AppState`, and
+      // opening the store would create the global storage directory and its
+      // database, which an env-token clone on a read-only storage root must
+      // not require.
+      const runtime = await installCliProcessRuntime(context.storageRoot, {
+        appState: 'omit',
+      });
 
       const outcome = await runtime.runPromise(
         cloneOverleafProject(
