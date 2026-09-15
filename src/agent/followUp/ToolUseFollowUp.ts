@@ -351,7 +351,9 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     // between the two cannot leave the durable row behind a claimed lease
     // with no host ever asked. Detached, so the wake settles that lease on
     // its own whether or not this fiber stays to collect the answer.
-    const wake = yield* Effect.forkDetach(dispatch.resume);
+    const wake = yield* Effect.forkDetach(dispatch.resume, {
+      startImmediately: true,
+    });
     yield* notifyAdmitted(true);
     const resumed = yield* Fiber.join(wake);
     if (resumed) return { status: 'queued' };
