@@ -20,6 +20,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { getHelperModelName } from './helperModelName';
 import { bindModel, type BoundModel } from './run/modelBinding';
 import { classifyModelFailure } from './run/modelFailure';
+import { turnText } from './run/turnText';
 
 /**
  * The configured helper model cannot serve right now (no key, disabled,
@@ -109,12 +110,6 @@ export const helperCompletion = Effect.fn('helperCompletion')(function* (
         classifyModelFailure(error, bound.usageRoute).autoRetryable,
     }),
   );
-  // The assistant text of the turn: message parts, in order. Derived here
-  // rather than borrowed from the run loop: a helper turn never touches
-  // `ModelInvoker`, and importing it would drag the whole run-loop closure.
-  return turn.content
-    .flatMap((part) =>
-      part.kind === 'message' ? part.content.map((piece) => piece.text) : [],
-    )
-    .join('');
+  // The turn's assistant text, from the same leaf the run loop reads.
+  return turnText(turn);
 });

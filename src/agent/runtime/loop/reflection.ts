@@ -107,7 +107,8 @@ import { extractScratchpad } from '@utils/text/xmlExtraction';
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
-import { ModelInvoker, turnText } from '../ModelInvoker';
+import { turnText } from '../run/turnText';
+import { ModelInvoker } from '../ModelInvoker';
 import {
   appendRow,
   haltedStepRow,

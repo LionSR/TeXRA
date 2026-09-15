@@ -18,9 +18,10 @@ import {
 } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { fsCall } from '@utils/errors/fsCall';
 
 import { replaceInputCommands } from './fileMapping';
-import { fsCall, recoverOutputFailure } from './outputOperations';
+import { recoverOutputFailure } from './outputOperations';
 import {
   ensureRoundData,
   reportMissingOutputs,

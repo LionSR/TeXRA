@@ -23,7 +23,8 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { followUpsLayer } from '@agent/runtime/FollowUps';
-import { ModelInvoker, turnText } from '@agent/runtime/ModelInvoker';
+import { ModelInvoker } from '@agent/runtime/ModelInvoker';
+import { turnText } from '@agent/runtime/run/turnText';
 import { rowAggregate, stepRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';

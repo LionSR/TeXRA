@@ -24,13 +24,14 @@ import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { fsCall } from '@utils/errors/fsCall';
 
 import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
 import {
   getWorkflowAutoCompileTimeoutMs,
   resolveWorkspaceSourceDir,
 } from './compileCheck';
-import { fsCall, recoverOutputFailure } from './outputOperations';
+import { recoverOutputFailure } from './outputOperations';
 import type { RoundFileEntry, RoundFileMapping } from './types';
 
 interface DiffOutputDirectory {

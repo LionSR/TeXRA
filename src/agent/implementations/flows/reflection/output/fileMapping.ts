@@ -8,8 +8,7 @@ import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
-import { fsCall } from './outputOperations';
-
+import { fsCall } from '@utils/errors/fsCall';
 /**
  * Create a mapping between two file lists based on name similarity.
  * Uses string keys (comparable paths) for robust lookups, FileLocation values for data.

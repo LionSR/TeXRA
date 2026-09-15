@@ -76,6 +76,7 @@ import { getValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
+import { estimateInputTokensOrNull } from './run/estimateInputTokens';
 import {
   backgroundDelivery,
   bindModel,
@@ -84,6 +85,7 @@ import {
 } from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
 import { priceTurnUsage } from './run/pricing';
+import { turnText } from './run/turnText';
 import { dispatchFactsFor } from './run/tools';
 import {
   redactedForFact,
@@ -197,15 +199,6 @@ export class ModelInvoker extends Context.Service<
     ) => Effect.Effect<InvocationOutcome, InvokeError>;
   }
 >()('@texra/agent/ModelInvoker') {}
-
-/** The assistant text of a completed turn: message parts, in order. */
-export function turnText(turn: TurnResult): string {
-  return turn.content
-    .flatMap((part) =>
-      part.kind === 'message' ? part.content.map((piece) => piece.text) : [],
-    )
-    .join('');
-}
 
 function turnReasoning(turn: TurnResult): string {
   if (turn.kind !== 'http') return '';
@@ -659,32 +652,24 @@ export const modelInvokerLayer = (): Layer.Layer<
         // that alone exceeds the window is refused before it is billed, and an
         // input that leaves too little room for the requested output shrinks
         // that output rather than letting the provider reject the request.
-        if (
-          resolved.mode === 'foreground' &&
-          bound.model.estimateInputTokens &&
-          bound.contextWindow > 0
-        ) {
-          const estimate = yield* Effect.exit(
-            bound.model.estimateInputTokens(resolved),
+        if (resolved.mode === 'foreground' && bound.contextWindow > 0) {
+          const inputTokens = yield* estimateInputTokensOrNull(
+            bound.model,
+            resolved,
+            logger,
+            'Token counting failed. Proceeding without token adjustment.',
           );
-          if (Exit.isFailure(estimate)) {
-            if (Cause.hasInterrupts(estimate.cause))
-              return yield* Effect.interrupt;
-            logger.debug(
-              'Token counting failed. Proceeding without token adjustment.',
-              { data: Cause.squash(estimate.cause) },
-            );
-          } else if (estimate.value.inputTokens > bound.contextWindow) {
-            return yield* failAttempt(
-              new ModelError({
-                kind: 'invalid-request',
-                message: `Input is ${estimate.value.inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
-              }),
-              state,
-              bound,
-            );
-          } else {
-            const inputTokens = estimate.value.inputTokens;
+          if (inputTokens !== null) {
+            if (inputTokens > bound.contextWindow) {
+              return yield* failAttempt(
+                new ModelError({
+                  kind: 'invalid-request',
+                  message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
+                }),
+                state,
+                bound,
+              );
+            }
             const { controls } = resolved;
             const requested =
               'maxOutputTokens' in controls ? controls.maxOutputTokens : null;

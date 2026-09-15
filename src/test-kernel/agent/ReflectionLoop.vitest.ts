@@ -28,15 +28,12 @@ import {
   stepRow,
 } from '@agent/runtime/loop/rows';
 import { runReflection } from '@agent/runtime/loop/reflection';
-import {
-  ModelInvoker,
-  turnText,
-  type InvokeRequest,
-} from '@agent/runtime/ModelInvoker';
+import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
+import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';

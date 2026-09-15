@@ -19,11 +19,11 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { fsCall } from '@utils/errors/fsCall';
 import { diffLineChanges } from '@utils/text/diff';
 import { countLines } from '@utils/text/stringUtils';
 
 import { traceFileLineage } from './lineageMapping';
-import { fsCall } from './outputOperations';
 import { ensureRoundData, type OutputState } from './outputState';
 import type { RoundFileMapping } from './types';
 

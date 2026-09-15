@@ -15,11 +15,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { followUpsLayer } from '@agent/runtime/FollowUps';
-import {
-  ModelInvoker,
-  turnText,
-  type InvokeRequest,
-} from '@agent/runtime/ModelInvoker';
+import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { rowAggregate, stepRow, type Message } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -27,6 +23,7 @@ import { createRunScope } from '@agent/runtime/RunScope';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
+import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';

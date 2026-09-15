@@ -11,7 +11,7 @@ import { debugInternal } from '@agent/trace';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
-import { fsCall } from './outputOperations';
+import { fsCall } from '@utils/errors/fsCall';
 import {
   publishMissingOutputs,
   reportMissingOutputs,
