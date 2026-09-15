@@ -85,7 +85,11 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
         : yield* WorkspaceFs;
       // A path whose parent is not a directory is a missing bibliography, not
       // a tool failure: `BaseFS.exists` counted ENOTDIR as absent alongside
-      // ENOENT, and `FileSystem.exists` reports it as `BadResource`.
+      // ENOENT, and `FileSystem.exists` reports it as `BadResource`. The
+      // predicate names ENOTDIR specifically so an operational failure
+      // (`ELOOP`) still propagates. One difference is deliberate: `exists`
+      // follows the link, so a dangling symlink now reads as missing where the
+      // old `lstat`-based check saw the entry itself.
       const exists = yield* fs.exists(resolved.fsPath).pipe(
         Effect.catchIf(
           (error) =>
