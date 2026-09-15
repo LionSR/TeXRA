@@ -1553,12 +1553,20 @@ wa-card.desktop-onboarding::part(footer) {
   white-space: nowrap;
 }
 
+/* Small filled circle, shared by every status-indicator dot in the desktop
+   renderer (this file's dirty-file dot, taskShell.css's pending-approval
+   badge). Callers size and color it through --dot-size/--dot-color and add
+   their own position/border on top. */
+.status-dot {
+  width: var(--dot-size, 6px);
+  height: var(--dot-size, 6px);
+  border-radius: 50%;
+  background: var(--dot-color, currentColor);
+}
+
 .desktop-editor-dirty-dot {
   flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--wa-color-brand-fill-loud, currentColor);
+  --dot-color: var(--wa-color-brand-fill-loud, currentColor);
 }
 
 /* Structure owned by the shared renderLoadingState helper (@shared/wa) — light-DOM

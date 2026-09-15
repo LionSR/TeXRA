@@ -15,6 +15,7 @@
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { join } from 'lit/directives/join.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared contracts
@@ -383,20 +384,22 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
-  /** `↓41k · $1.84 · 38m`: what the run has produced and spent so far. */
+  /** `⬇41k · $1.84 · 38m`: what the run has produced and spent so far. */
   private renderUsage(): TemplateResult {
     const usage = this.run.usage;
     const { runStartedAt } = this.run;
     const parts = [
       usage.outputTokens > 0
-        ? `↓${formatCompactTokenCount(usage.outputTokens)}`
+        ? html`${waIcon('arrow-down')}${formatCompactTokenCount(
+            usage.outputTokens,
+          )}`
         : undefined,
       usage.cost > 0 ? formatCostUsd(usage.cost) : undefined,
       !this.summary && runStartedAt !== null && this.nowMs !== null
         ? formatCompactDuration(this.nowMs - runStartedAt)
         : undefined,
     ].filter((part) => part !== undefined);
-    return html`<span class="quiet">${parts.join(' · ')}</span>`;
+    return html`<span class="quiet">${join(parts, ' · ')}</span>`;
   }
 
   private renderSummary(model: WorkflowRunModel): TemplateResult {

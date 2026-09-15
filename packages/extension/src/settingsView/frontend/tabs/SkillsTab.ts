@@ -13,6 +13,7 @@ import {
 } from '@shared/schemas';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { groupBy } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
@@ -46,10 +47,6 @@ export class SkillsTab extends LitElement {
       }
       .skill-issues {
         color: var(--wa-color-danger-text);
-      }
-      .empty-state {
-        padding-block: var(--wa-space-l);
-        text-align: center;
       }
     `,
   ];
@@ -165,7 +162,12 @@ export class SkillsTab extends LitElement {
         }
         ${
           this.skills.length === 0
-            ? html`<div class="empty-state">No skills found</div>`
+            ? renderEmptyState({
+                icon: 'wand-magic-sparkles',
+                title: 'No skills found',
+                headingTag: 'h3',
+                className: 'empty-state',
+              })
             : ActiveSkillSourceScopeSchema.options.flatMap((scope) => {
                 const items = groups.get(scope);
                 return items

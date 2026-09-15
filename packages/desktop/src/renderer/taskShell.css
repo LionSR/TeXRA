@@ -564,10 +564,8 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   position: absolute;
   top: 2px;
   right: 2px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-warning);
+  --dot-size: 8px;
+  --dot-color: var(--color-warning);
   border: 1.5px solid var(--wa-color-surface-default);
   pointer-events: none;
 }
