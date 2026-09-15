@@ -161,10 +161,11 @@ describe('team roster application', () => {
           forceRefreshRemoteCatalog: () => Effect.void,
           presentation: {
             chooseTeamAvailability: async () => 'cancel',
-            showErrorMessage: async () => {},
-            showInfoMessage: async (message) => {
-              calls.push(`info:${message}`);
-            },
+            showErrorMessage: () => Effect.void,
+            showInfoMessage: (message) =>
+              Effect.sync(() => {
+                calls.push(`info:${message}`);
+              }),
           },
           refreshAfterApply: async (selectedToolUseAgent) => {
             calls.push(`refresh:${selectedToolUseAgent}`);
@@ -203,10 +204,11 @@ describe('team roster application', () => {
             prompts.push(prompt);
             return 'sign-in';
           },
-          showErrorMessage: async (message) => {
-            errors.push(message);
-          },
-          showInfoMessage: async () => {},
+          showErrorMessage: (message) =>
+            Effect.sync(() => {
+              errors.push(message);
+            }),
+          showInfoMessage: () => Effect.void,
         },
         refreshAfterApply: async () => {},
       });

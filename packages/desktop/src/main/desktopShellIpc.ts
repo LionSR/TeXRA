@@ -1,6 +1,6 @@
 import { Data, Effect } from 'effect';
 
-import type { MessageHost } from '@hosts/uiHosts';
+import { type MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
 import {
@@ -72,16 +72,20 @@ export function createDesktopShellActions(
   /**
    * Shell actions are fire-and-forget: the program runs on its own fiber and
    * a host rejection reaches the window's async-error reporter with the
-   * rejection value itself, which is what the reporter formats.
+   * rejection value itself, which is what the reporter formats. Both failure
+   * tags carry the original rejection as `cause`.
    */
   function runShellAction(
-    program: Effect.Effect<void, ShellActionFailed>,
+    program: Effect.Effect<void, ShellActionFailed | NotificationFailed>,
   ): void {
     options.runtime.runFork(
       program.pipe(
-        Effect.catchTag('ShellActionFailed', (failure) =>
-          Effect.sync(() => reportAsyncError(failure.cause)),
-        ),
+        Effect.catchTags({
+          ShellActionFailed: (failure) =>
+            Effect.sync(() => reportAsyncError(failure.cause)),
+          NotificationFailed: (failure) =>
+            Effect.sync(() => reportAsyncError(failure.cause)),
+        }),
       ),
     );
   }
@@ -161,13 +165,9 @@ export function createDesktopShellActions(
       renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
     },
     showInfoMessage: (message) => {
-      // The host member returns `Promise<void> | void`; awaiting it inside the
-      // program covers both without a thenable assumption.
-      runShellAction(
-        hostCall(async () => {
-          await options.showInfoMessage(message);
-        }),
-      );
+      // The member is an Effect already failing with `NotificationFailed`, so
+      // the action program is the member itself.
+      runShellAction(options.showInfoMessage(message));
     },
   };
 }

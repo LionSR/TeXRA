@@ -84,12 +84,10 @@ export class PromptFailed extends Data.TaggedError('PromptFailed')<{
  * already gone. A user who ignores a notification is not a failure — these
  * members answer nothing.
  *
- * {@link MessageHost} itself stays `Promise`-shaped: its members are awaited
- * across the desktop settings, host-request and auth files and the shared
- * settings agent-action plane, which is more surface than one lane carries.
- * This is the tag its Effect-side callers raise in the meantime, so a
- * notification the host refused reaches them as a value they can match rather
- * than as `unknown`.
+ * This is the one tag every {@link MessageHost} member fails with, so a
+ * caller matches `NotificationFailed` rather than catching `unknown`.
+ * `message` is the rejection's own text, so it survives being shown through a
+ * reporting surface that renders only the message.
  */
 export class NotificationFailed extends Data.TaggedError('NotificationFailed')<{
   readonly member:
@@ -103,11 +101,18 @@ export class NotificationFailed extends Data.TaggedError('NotificationFailed')<{
  * user. Distinct from {@link PromptHost}, which additionally supports
  * action items and awaits the user's choice; this is fire-and-forget
  * status reporting (a saved credential, a failed operation, a caveat).
+ *
+ * Every member is an `Effect`: a host that could not present reaches the
+ * caller as {@link NotificationFailed} rather than as `unknown`, and a
+ * caller that does not want to wait for the dialog forks the member instead
+ * of `void`-ing a promise. Awaiting or forking is the caller's choice; the
+ * member itself never reports a dismissal as an error, because there is
+ * nothing to answer.
  */
 export interface MessageHost {
-  showInfoMessage(message: string): Promise<void> | void;
-  showWarningMessage(message: string): Promise<void> | void;
-  showErrorMessage(message: string): Promise<void> | void;
+  showInfoMessage(message: string): Effect.Effect<void, NotificationFailed>;
+  showWarningMessage(message: string): Effect.Effect<void, NotificationFailed>;
+  showErrorMessage(message: string): Effect.Effect<void, NotificationFailed>;
 }
 
 export type PromptMessageItem<T extends string = string> =

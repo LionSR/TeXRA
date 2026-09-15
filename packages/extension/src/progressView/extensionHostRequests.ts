@@ -42,6 +42,7 @@ import {
   type TranscriptExportOpenKind,
 } from '@controllers/progressView/exportTranscript';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import {
   createHostRunActions,
   type HostRunActionPorts,
@@ -51,6 +52,7 @@ import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
+import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
@@ -181,6 +183,9 @@ const showError = async (message: string): Promise<void> => {
   await vscode.window.showErrorMessage(message);
 };
 
+/** The typed notification surface the run-action ports and launch host take. */
+const messages = new VscodeMessageHost();
+
 export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
@@ -222,11 +227,20 @@ export function createExtensionHostRequests(
             readModelAvailabilityInputs({ secrets, globalState }),
           ),
         ),
-      promptForApiKey: async (provider) => {
-        await runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider);
-      },
-      showInfo,
-      showWarning,
+      // The set-key quick pick is a VS Code command: it either runs or
+      // faults, so its rejection is the one failure, as `ApiKeyPromptFailed`.
+      promptForApiKey: (provider) =>
+        Effect.tryPromise({
+          try: () => runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider),
+          catch: (cause) =>
+            new ApiKeyPromptFailed({
+              provider,
+              message: 'The host could not ask for a provider API key.',
+              cause,
+            }),
+        }),
+      showInfo: (message) => messages.showInfoMessage(message),
+      showWarning: (message) => messages.showWarningMessage(message),
     }),
   );
 
@@ -417,7 +431,7 @@ export function createExtensionHostRequests(
       prepareSurfaceLaunch(
         request,
         {
-          showInfoMessage: showInfo,
+          showInfoMessage: (message) => messages.showInfoMessage(message),
           chooseTeamAvailability: async (unavailableNames) => {
             const prompt = teamAvailabilityPrompt(unavailableNames);
             return (

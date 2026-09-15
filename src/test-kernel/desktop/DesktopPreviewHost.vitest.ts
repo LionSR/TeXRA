@@ -134,8 +134,8 @@ describe('desktop preview host', () => {
         await import('@desktop/main/desktopFileSelection');
       const { HostDraftRequests } =
         await import('@controllers/session/hostDraftRequests');
-      const showErrorMessage = vi.fn<(message: string) => Promise<void>>(
-        async () => {},
+      const showErrorMessage = vi.fn<(message: string) => Effect.Effect<void>>(
+        () => Effect.void,
       );
       const shell = makeShell();
       shell.openExternal.mockRejectedValue(new Error('Browser unavailable'));
@@ -219,7 +219,7 @@ describe('desktop preview host', () => {
   it('reports missing files before calling shell.openPath', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
     const missingPath = path.join(await makeTempDir(), 'missing.pdf');
-    const showErrorMessage = vi.fn();
+    const showErrorMessage = vi.fn((message: string) => Effect.void);
     const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
@@ -245,7 +245,7 @@ describe('desktop preview host', () => {
       access,
     );
     const filePath = path.join(await makeTempDir(), 'blocked.pdf');
-    const showErrorMessage = vi.fn();
+    const showErrorMessage = vi.fn((message: string) => Effect.void);
     const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
@@ -264,7 +264,7 @@ describe('desktop preview host', () => {
     const dir = await makeTempDir();
     const filePath = path.join(dir, 'blocked.pdf');
     await writeFile(filePath, 'pdf');
-    const showErrorMessage = vi.fn();
+    const showErrorMessage = vi.fn((message: string) => Effect.void);
     const shell = makeShell('No associated application');
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });

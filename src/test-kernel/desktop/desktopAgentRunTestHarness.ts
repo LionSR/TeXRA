@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { onTestFinished } from 'vitest';
 
 // Local imports
@@ -19,9 +20,9 @@ export function createStubDesktopAgentRunHost(
     confirmAcceptFile: async () => true,
     chooseTeamAvailability: async () => 'cancel',
     signInForRemoteAgentCatalog: async () => false,
-    showErrorMessage: async () => undefined,
-    showWarningMessage: async () => undefined,
-    showInfoMessage: async () => undefined,
+    showErrorMessage: () => Effect.void,
+    showWarningMessage: () => Effect.void,
+    showInfoMessage: () => Effect.void,
     showInstructionDialog: async () => undefined,
     showErrorDialog: async () => undefined,
     pickTranscriptExportFormat: async () => undefined,

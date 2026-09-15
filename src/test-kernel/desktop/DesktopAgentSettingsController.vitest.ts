@@ -123,12 +123,14 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       signIn: options.signInForRemoteCatalog ?? (async () => false),
     },
     notifications: {
-      showInfoMessage: async (message) => {
-        infoMessages.push(message);
-      },
-      showErrorMessage: async (message) => {
-        errorMessages.push(message);
-      },
+      showInfoMessage: (message) =>
+        Effect.sync(() => {
+          infoMessages.push(message);
+        }),
+      showErrorMessage: (message) =>
+        Effect.sync(() => {
+          errorMessages.push(message);
+        }),
     },
     resourcesPath: '/test/resources',
   });

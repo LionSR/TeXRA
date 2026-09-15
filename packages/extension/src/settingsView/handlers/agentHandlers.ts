@@ -31,11 +31,13 @@ import type { SettingsAgentDirectoryController } from '@controllers/settingsView
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
 import {
   chooseTeamAvailabilityViaDialog,
   confirmModal,
 } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { NotificationFailed } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
@@ -57,17 +59,8 @@ import {
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
 
-/**
- * The team-apply error notification never reached the user: the host's own
- * error dialog faulted after the roster program had already handed the
- * message off. The team is applied either way, so this is reported and
- * dropped rather than surfaced.
- */
-class AgentTeamNotificationFailed extends Data.TaggedError(
-  'AgentTeamNotificationFailed',
-)<{
-  readonly message: string;
-}> {}
+/** The typed notification surface this host's settings actions present on. */
+const messages = new VscodeMessageHost();
 
 /** Agent selection, directory, and team handler delegate. */
 export class AgentHandlers {
@@ -124,15 +117,36 @@ export class AgentHandlers {
         );
       },
       confirmAction: confirmModal,
-      showInfoMessage: async (message) => {
-        void vscode.window.showInformationMessage(message);
-      },
-      showErrorMessage: async (message) => {
-        await showLoggedMessage(this.ctx.channel, message);
-      },
+      // The info notice stays non-blocking, as the `void` toast was; a
+      // dialog fault is logged on its own fiber rather than failing the
+      // mutation that asked for the notice.
+      showInfoMessage: (message) =>
+        Effect.forkDetach(
+          messages.showInfoMessage(message).pipe(
+            Effect.catchTag('NotificationFailed', (failure) =>
+              Effect.sync(() => {
+                this.ctx.log.warn(
+                  `Agent settings notice failed: ${failure.message}`,
+                );
+              }),
+            ),
+          ),
+        ).pipe(Effect.asVoid),
+      showErrorMessage: (message) =>
+        Effect.tryPromise({
+          try: () => showLoggedMessage(this.ctx.channel, message),
+          catch: (cause) =>
+            new NotificationFailed({
+              member: 'showErrorMessage',
+              message: toErrorMessage(cause),
+              cause,
+            }),
+        }),
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
       run: (failureMessage, action) =>
-        withHandlerErrorHandling(this.ctx, failureMessage, action),
+        withHandlerErrorHandling(this.ctx, failureMessage, () =>
+          this.runtime.runPromise(action),
+        ),
     });
   }
 
@@ -328,30 +342,42 @@ export class AgentHandlers {
               presentation: {
                 chooseTeamAvailability: (prompt) =>
                   this.chooseTeamAvailability(prompt),
-                showInfoMessage: async (message) => {
-                  void vscode.window.showInformationMessage(message);
-                },
-                showErrorMessage: async (message) => {
-                  this.runtime.runFork(
+                // Both notices ride detached fibers, as the voided toast and
+                // the forked error dialog did: the apply flow does not wait
+                // on a toast, and a dialog fault is logged rather than
+                // failing the apply that asked for the notice.
+                showInfoMessage: (message) =>
+                  Effect.forkDetach(
+                    messages.showInfoMessage(message).pipe(
+                      Effect.catchTag('NotificationFailed', (failure) =>
+                        Effect.sync(() => {
+                          this.ctx.log.warn(
+                            `Team notice failed: ${failure.message}`,
+                          );
+                        }),
+                      ),
+                    ),
+                  ).pipe(Effect.asVoid),
+                showErrorMessage: (message) =>
+                  Effect.forkDetach(
                     Effect.tryPromise({
                       try: () => showLoggedMessage(this.ctx.channel, message),
                       catch: (cause) =>
-                        new AgentTeamNotificationFailed({
+                        new NotificationFailed({
+                          member: 'showErrorMessage',
                           message: toErrorMessage(cause),
+                          cause,
                         }),
                     }).pipe(
-                      Effect.catchTag(
-                        'AgentTeamNotificationFailed',
-                        (failure) =>
-                          Effect.sync(() => {
-                            this.ctx.log.warn(
-                              `Error notification failed after handoff: ${failure.message}`,
-                            );
-                          }),
+                      Effect.catchTag('NotificationFailed', (failure) =>
+                        Effect.sync(() => {
+                          this.ctx.log.warn(
+                            `Error notification failed after handoff: ${failure.message}`,
+                          );
+                        }),
                       ),
                     ),
-                  );
-                },
+                  ).pipe(Effect.asVoid),
               },
               refreshAfterApply: (selectedToolUseAgent) =>
                 this.refreshAfterAgentMutation(selectedToolUseAgent, true),

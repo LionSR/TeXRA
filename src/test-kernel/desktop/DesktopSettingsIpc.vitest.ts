@@ -10,6 +10,7 @@ import {
   vi,
 } from 'vitest';
 import { Effect } from 'effect';
+import { NotificationFailed } from '@hosts/uiHosts';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
@@ -182,7 +183,7 @@ function findSnapshot(
 
 function createFailureReportingFixture(workspaceState: FakeStateStore) {
   const onError = vi.fn();
-  const showErrorMessage = vi.fn(async () => undefined);
+  const showErrorMessage = vi.fn(() => Effect.void);
   const postLatexConfigValues = vi.fn();
   const { settings } = createCapturedSettingsFixture({
     workspaceState,
@@ -503,7 +504,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('shows unsupported-command reasons without reporting an error', async () => {
-    const showInfoMessage = vi.fn(async () => undefined);
+    const showInfoMessage = vi.fn(() => Effect.void);
     const onError = vi.fn();
     const { settings } = createSettingsFixture({
       ui: { showInfoMessage, onError },
@@ -524,7 +525,15 @@ describe('desktop settings IPC', () => {
 
   it('reports a failure to show an unsupported-command reason', async () => {
     const failure = new Error('notification failed');
-    const showInfoMessage = vi.fn(() => Promise.reject(failure));
+    const showInfoMessage = vi.fn(() =>
+      Effect.fail(
+        new NotificationFailed({
+          member: 'showInfoMessage',
+          message: 'notification failed',
+          cause: failure,
+        }),
+      ),
+    );
     const onError = vi.fn();
     const { settings } = createSettingsFixture({
       ui: { showInfoMessage, onError },

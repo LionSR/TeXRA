@@ -6,7 +6,7 @@
  * catalog lookups, its key prompt, and its notifications, and both the VS
  * Code extension and the desktop answer the same arms through one body.
  */
-import { Data, Effect, SubscriptionRef } from 'effect';
+import { Data, Deferred, Effect, Exit, Fiber, SubscriptionRef } from 'effect';
 
 import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import { getRunRecords } from '@agent/storage';
@@ -17,6 +17,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { MessageHost } from '@hosts/uiHosts';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import {
@@ -106,44 +107,19 @@ export interface HostRunActionPorts {
   ): Promise<void>;
   loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
   /**
-   * Ask the user for a provider key; the controller re-reads the store.
-   *
-   * Promise-shaped with the two notifications below because the extension
-   * binds all three in `extensionHostRequests.ts`, which imports no `effect`
-   * value and holds three raw `catch` clauses: the migration ratchet admits
-   * that file to the runtime-import row only once those are converted, which
-   * is its own cut. The five calls here carry the typed boundary instead.
+   * Ask the user for a provider key; the controller re-reads the store. A
+   * host that could not ask fails with `ApiKeyPromptFailed`; a user who
+   * closes the prompt without entering a key is not a failure.
    */
-  promptForApiKey(provider?: ApiProvider): Promise<void>;
-  showInfo(message: string): Promise<void> | void;
-  showWarning(message: string): Promise<void> | void;
+  promptForApiKey(
+    provider?: ApiProvider,
+  ): Effect.Effect<void, ApiKeyPromptFailed>;
+  /** The notification surface, shared with {@link MessageHost}: a host that
+   *  could not present fails with `NotificationFailed`, and a user who
+   *  ignores the notice is not a failure. */
+  showInfo: MessageHost['showInfoMessage'];
+  showWarning: MessageHost['showWarningMessage'];
 }
-
-/**
- * A notification this controller asked for never reached the user: the host's
- * own dialog surface faulted. A user who ignores a notification is not this —
- * these members answer nothing. Declared here rather than beside
- * `MessageHost`, because the two members are this port bag's, and `src` keeps
- * `controllers -> hosts` a type-only edge.
- */
-class RunNotificationFailed extends Data.TaggedError('RunNotificationFailed')<{
-  readonly member: 'showInfo' | 'showWarning';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
-/** Present one host notification, reporting a host that could not show it. */
-const notify = (
-  present: (message: string) => Promise<void> | void,
-  member: RunNotificationFailed['member'],
-  message: string,
-): Effect.Effect<void, RunNotificationFailed> =>
-  Effect.tryPromise({
-    try: async () => {
-      await present(message);
-    },
-    catch: (cause) => new RunNotificationFailed({ member, message, cause }),
-  });
 
 interface HostRunActions {
   resume(runId: RunId): Effect.Effect<void, Error>;
@@ -305,21 +281,9 @@ export const createHostRunActions = (
       providers: API_PROVIDERS,
       readKey: (provider) => lookupApiKeyUncached(secrets, provider),
       hasUsableKey: (provider) => hasUsableApiKey(secrets, provider),
-      // The host's key prompt is still Promise-shaped — on the extension it
-      // is a VS Code command invocation in a file the catch ratchet keeps out
-      // of the runtime-import row — so this is its one typed boundary call: a
-      // host that could not ask reaches the controller as `ApiKeyPromptFailed`
-      // rather than as an unknown rejection.
-      promptForApiKey: (provider) =>
-        Effect.tryPromise({
-          try: () => ports.promptForApiKey(provider),
-          catch: (cause) =>
-            new ApiKeyPromptFailed({
-              provider,
-              message: 'The host could not ask for a provider API key.',
-              cause,
-            }),
-        }),
+      // A host that could not ask reaches the controller as
+      // `ApiKeyPromptFailed`, the port's own failure.
+      promptForApiKey: (provider) => ports.promptForApiKey(provider),
       isRetryPending,
       triggerRetry: (runId, requestId) =>
         settleRetry(runId, requestId, {
@@ -354,9 +318,7 @@ export const createHostRunActions = (
         const modelsChanged =
           'The available models changed while TeXRA was preparing the API key. Try again.';
         if (!request.model) {
-          yield* notify(
-            (text) => ports.showInfo(text),
-            'showInfo',
+          yield* ports.showInfo(
             `TeXRA did not record which Copilot model this retry used. ${chooseAnotherModel}`,
           );
           return;
@@ -367,9 +329,7 @@ export const createHostRunActions = (
           getUseOpenRouter(),
         );
         if (!fallback) {
-          yield* notify(
-            (text) => ports.showInfo(text),
-            'showInfo',
+          yield* ports.showInfo(
             `No model you can use with your own API key matches this Copilot model. ${chooseAnotherModel}`,
           );
           return;
@@ -388,11 +348,7 @@ export const createHostRunActions = (
           getUseOpenRouter(),
         );
         if (!currentFallback) {
-          yield* notify(
-            (text) => ports.showInfo(text),
-            'showInfo',
-            modelsChanged,
-          );
+          yield* ports.showInfo(modelsChanged);
           return;
         }
         if (currentFallback.provider !== fallback.provider) {
@@ -407,19 +363,13 @@ export const createHostRunActions = (
             getUseOpenRouter(),
           );
           if (!finalFallback || finalFallback.provider !== fallback.provider) {
-            yield* notify(
-              (text) => ports.showInfo(text),
-              'showInfo',
-              modelsChanged,
-            );
+            yield* ports.showInfo(modelsChanged);
             return;
           }
         }
         const config = yield* readConfig(runId);
         if (!config) {
-          yield* notify(
-            (text) => ports.showInfo(text),
-            'showInfo',
+          yield* ports.showInfo(
             `The settings for this run are no longer available. ${chooseAnotherModel}`,
           );
           return;
@@ -432,23 +382,43 @@ export const createHostRunActions = (
         const started = yield* Effect.suspend(() => {
           if (!isRetryPending(runId, requestId)) return Effect.succeed(false);
           // Start acknowledges ownership of the replacement run. Settlement
-          // without an onRun callback means no replacement was launched.
-          return Effect.tryPromise({
-            try: () =>
-              new Promise<boolean>((resolve, reject) => {
-                void ports
-                  .runAgentRequest(
+          // without an onRun callback means no replacement was launched. The
+          // request's promise settles only with the run itself, so the answer
+          // is the first of the launcher's own start callback (the gate) and
+          // the request fiber's settlement — a rejection reaches the waiter
+          // as the fiber's failure rather than a lost second resolver.
+          return Effect.gen(function* () {
+            const runStarted = yield* Deferred.make<void>();
+            const requestFiber = yield* Effect.forkDetach(
+              Effect.tryPromise({
+                try: () =>
+                  ports.runAgentRequest(
                     { config: { ...config, model } },
-                    { ownApiKeyFallback: true, onRun: () => resolve(true) },
-                  )
-                  .then(() => resolve(false), reject);
+                    {
+                      ownApiKeyFallback: true,
+                      onRun: () => {
+                        Deferred.doneUnsafe(runStarted, Effect.void);
+                      },
+                    },
+                  ),
+                catch: (cause) =>
+                  new RunLaunchFailed({
+                    message:
+                      'The replacement run on your own API key could not be started.',
+                    cause,
+                  }),
               }),
-            catch: (cause) =>
-              new RunLaunchFailed({
-                message:
-                  'The replacement run on your own API key could not be started.',
-                cause,
-              }),
+            );
+            return yield* Effect.raceFirst(
+              Deferred.await(runStarted).pipe(Effect.as(true)),
+              Fiber.await(requestFiber).pipe(
+                Effect.flatMap((exit) =>
+                  Exit.isSuccess(exit)
+                    ? Effect.succeed(false)
+                    : Effect.failCause(exit.cause),
+                ),
+              ),
+            );
           });
         });
         if (!started) return;
@@ -471,8 +441,7 @@ export const createHostRunActions = (
         return parsed.data;
       },
       sendFollowUp(runId, text) {
-        const present = (message: string) =>
-          notify((text) => ports.showWarning(text), 'showWarning', message);
+        const present = (message: string) => ports.showWarning(message);
         const deliver = Effect.gen(function* () {
           const result = yield* submitFollowUp(
             runId,
@@ -598,17 +567,9 @@ export const createHostRunActions = (
           catch: ensureError,
         });
         if (plan.kind === 'warning') {
-          yield* notify(
-            (text) => ports.showWarning(text),
-            'showWarning',
-            plan.message,
-          );
+          yield* ports.showWarning(plan.message);
         } else if (plan.kind === 'info') {
-          yield* notify(
-            (text) => ports.showInfo(text),
-            'showInfo',
-            plan.message,
-          );
+          yield* ports.showInfo(plan.message);
         } else {
           yield* Effect.tryPromise({
             try: () =>

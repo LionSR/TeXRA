@@ -52,34 +52,6 @@ class TeamRosterRefreshFailed extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
-/**
- * A settings message never reached the user: the host's own dialog surface
- * faulted. Declared beside the presentation bag it belongs to rather than
- * beside `MessageHost`, because `src` keeps `controllers -> hosts` a
- * type-only edge.
- */
-class TeamRosterNotificationFailed extends Data.TaggedError(
-  'TeamRosterNotificationFailed',
-)<{
-  readonly member: 'showInfoMessage' | 'showErrorMessage';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
-/** Show one settings message, reporting a host that could not present it. */
-const notify = (
-  present: (message: string) => Promise<void> | void,
-  member: TeamRosterNotificationFailed['member'],
-  message: string,
-): Effect.Effect<void, TeamRosterNotificationFailed> =>
-  Effect.tryPromise({
-    try: async () => {
-      await present(message);
-    },
-    catch: (cause) =>
-      new TeamRosterNotificationFailed({ member, message, cause }),
-  });
-
 /** Apply a settings team and present its outcome consistently across hosts. */
 export function applySettingsTeamRoster(
   presetId: string,
@@ -96,9 +68,7 @@ export function applySettingsTeamRoster(
 
     switch (result.status) {
       case 'unknown':
-        yield* notify(
-          (text) => options.presentation.showErrorMessage(text),
-          'showErrorMessage',
+        yield* options.presentation.showErrorMessage(
           formatUnknownTeamMessage(presetId),
         );
         return;
@@ -106,9 +76,7 @@ export function applySettingsTeamRoster(
       case 'cancelled':
         return;
       case 'unavailable':
-        yield* notify(
-          (text) => options.presentation.showErrorMessage(text),
-          'showErrorMessage',
+        yield* options.presentation.showErrorMessage(
           formatTeamUnavailableMessage(
             result.preset.name,
             result.unavailableNames,
@@ -130,9 +98,7 @@ export function applySettingsTeamRoster(
         });
 
         const unresolvedCount = result.resolution.unresolvedNames.length;
-        yield* notify(
-          (text) => options.presentation.showInfoMessage(text),
-          'showInfoMessage',
+        yield* options.presentation.showInfoMessage(
           unresolvedCount === 0
             ? `Applied "${result.preset.name}" team`
             : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,

@@ -172,15 +172,18 @@ async function createFixture({
       presentSubscriptionDeviceCode: () => undefined,
     },
     notifications: {
-      showInfoMessage: async (message) => {
-        infos.push(message);
-      },
-      showWarningMessage: async (message) => {
-        warnings.push(message);
-      },
-      showErrorMessage: async (message) => {
-        errors.push(message);
-      },
+      showInfoMessage: (message) =>
+        Effect.sync(() => {
+          infos.push(message);
+        }),
+      showWarningMessage: (message) =>
+        Effect.sync(() => {
+          warnings.push(message);
+        }),
+      showErrorMessage: (message) =>
+        Effect.sync(() => {
+          errors.push(message);
+        }),
     },
     auth: {
       signIn,

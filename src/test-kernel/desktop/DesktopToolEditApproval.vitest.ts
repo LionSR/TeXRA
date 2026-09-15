@@ -484,9 +484,10 @@ describe('desktop tool edit approval', () => {
               openPath: async (filePath) => {
                 opened.push(filePath);
               },
-              showErrorMessage: (message) => {
-                messages.push(message);
-              },
+              showErrorMessage: (message) =>
+                Effect.sync(() => {
+                  messages.push(message);
+                }),
             }),
           });
 
@@ -603,9 +604,10 @@ describe('desktop tool edit approval', () => {
                   options,
                 });
               },
-              showErrorMessage: (message) => {
-                messages.push(message);
-              },
+              showErrorMessage: (message) =>
+                Effect.sync(() => {
+                  messages.push(message);
+                }),
             }),
           });
 
