@@ -17,7 +17,6 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -39,12 +38,11 @@ import { emitCliResult } from './_helpers/output';
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
 function buildOverleafClonePorts(
-  runtime: ProcessRuntime,
   context: CliContext,
   remote: OverleafRemote,
   workspacePath: string,
 ): OverleafCloneWorkflowPorts {
-  const secrets = getCliSecrets(runtime);
+  const secrets = getCliSecrets(context.storageRoot);
   let canonicalWorkspacePath = workspacePath;
   return {
     // `orDie` keeps what `Effect.promise` did with a rejected store call: a
@@ -204,14 +202,20 @@ export const cloneCommand = withUsageSections(
       // `clone` runs without a platform, but its token ports are
       // `CliSecrets`, whose reads and writes are Effect programs run at this
       // host edge. Install the process runtime before the first one, the same
-      // way the update check does for the entry that precedes any platform.
-      const runtime = await installCliProcessRuntime(context.storageRoot);
+      // way the update check does for the entry that precedes any platform —
+      // but omit the global state store: clone serves no `AppState`, and
+      // opening the store would create the global storage directory and its
+      // database, which an env-token clone on a read-only storage root must
+      // not require.
+      const runtime = await installCliProcessRuntime(context.storageRoot, {
+        appState: 'omit',
+      });
 
       const outcome = await runtime.runPromise(
         cloneOverleafProject(
           remote,
           workspacePath,
-          buildOverleafClonePorts(runtime, context, remote, workspacePath),
+          buildOverleafClonePorts(context, remote, workspacePath),
         ),
       );
       switch (outcome.status) {

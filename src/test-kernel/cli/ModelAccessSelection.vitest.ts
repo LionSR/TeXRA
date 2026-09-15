@@ -60,8 +60,8 @@ const appState = new ObservedStateStore();
 const withServices = Effect.provide(
   Layer.mergeAll(
     testHttpClientLayer,
-    Secrets.layer(() => secrets),
-    AppState.layer(() => appState),
+    Secrets.layer(secrets),
+    AppState.layer(appState),
   ),
 );
 

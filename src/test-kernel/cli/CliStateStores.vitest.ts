@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { createCliStateStores } from '@cli/runtime/cliStateStores';
+import { openCliWorkspaceState } from '@cli/runtime/cliStateStores';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -28,10 +28,11 @@ describe('CLI state stores', () => {
         agents: { workflow: ['polish'], toolUse: ['review'] },
       };
 
-      const first = yield* createCliStateStores({
+      const first = yield* openCliWorkspaceState({
         storageRoot: path.join(root, 'storage'),
         workspacePath,
-        runWrite: (write) => Effect.runPromise(write),
+        runWrite: (write: Effect.Effect<void, Error>) =>
+          Effect.runPromise(write),
       });
       yield* Effect.promise(() =>
         first.workspaceState.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
@@ -39,10 +40,11 @@ describe('CLI state stores', () => {
         ]),
       );
 
-      const second = yield* createCliStateStores({
+      const second = yield* openCliWorkspaceState({
         storageRoot: path.join(root, 'storage'),
         workspacePath,
-        runWrite: (write) => Effect.runPromise(write),
+        runWrite: (write: Effect.Effect<void, Error>) =>
+          Effect.runPromise(write),
       });
 
       expect(

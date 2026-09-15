@@ -28,7 +28,7 @@ const { signInCliSubscription } =
 
 // What the host root provides the flow.
 const signInServices = Layer.mergeAll(
-  Secrets.layer(() => new FakeSecrets()),
+  Secrets.layer(new FakeSecrets()),
   testHttpClientLayer,
 );
 /** Run the program as the login command does, on the test's own fiber. */

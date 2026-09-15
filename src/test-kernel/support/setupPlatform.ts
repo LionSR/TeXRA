@@ -23,7 +23,7 @@ import { afterEach, beforeEach } from 'vitest';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { AppState } from '@platform/interfaces';
+import type { AppState, StateStore } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -114,9 +114,8 @@ export function createFakeHost(
 
 /**
  * The host most recently installed. The process runtime below is built once
- * per module instance while hosts are swapped per test, so its process
- * services resolve against this binding on every call, exactly as the
- * production roots' thunks resolve against their own locals.
+ * per module instance while hosts are swapped per test, so the harness's own
+ * process-service values resolve against this binding on every call.
  */
 let current: FakeHost | undefined;
 
@@ -164,6 +163,29 @@ export const fakeSetupPlatform: SetupPlatformShape = {
   get terminal() {
     return installedSetup().terminal;
   },
+};
+
+/**
+ * The `Secrets` and `AppState` services of every test runtime, in the shape
+ * `fakeSetupPlatform` already uses: each member reads the installed host when
+ * it is called, because the runtime is built once per module instance while
+ * hosts are swapped per test. A production root passes its own store here
+ * instead — it has one before it installs its runtime, and this harness does
+ * not.
+ */
+export const fakeHostSecrets: PlatformSecrets = {
+  get: (key) => installedHost().secrets.get(key),
+  getStored: (key) => installedHost().secrets.getStored(key),
+  set: (key, value) => installedHost().secrets.set(key, value),
+  delete: (key) => installedHost().secrets.delete(key),
+  listStoredKeys: () => installedHost().secrets.listStoredKeys(),
+  getEnv: (name) => installedHost().secrets.getEnv(name),
+};
+
+export const fakeHostAppState: StateStore = {
+  get: <T>(key: string, defaultValue?: T): T =>
+    installedHost().roots.globalState.get<T>(key, defaultValue),
+  update: (key, value) => installedHost().roots.globalState.update(key, value),
 };
 
 /** The process services a fake host provides to a program. */
@@ -241,8 +263,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The run-end stop is absent, as on a host whose Lean integration owns
     // server lifetime: the mock's placeholder for it would die on every run.
     Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
-    Secrets.layer(() => installedHost().secrets),
-    AppState.layer(() => installedHost().roots.globalState),
+    Secrets.layer(fakeHostSecrets),
+    AppState.layer(fakeHostAppState),
     SetupPlatform.layer(fakeSetupPlatform),
     // No conditional injections on the bare fake host: a suite that
     // exercises them passes its own list to `resolveAgentTools`.

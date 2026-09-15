@@ -178,8 +178,8 @@ async function initVscodePlatform(
     processStart: await nodeProcesses.selfIdentity(),
     globalStorage: () => storage.getGlobalStoragePath(),
     updateCheckStorage: () => storage.getGlobalStoragePath(),
-    secrets: () => secrets,
-    appState: () => context.globalState,
+    secrets,
+    appState: context.globalState,
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`
     // models on this host (R2); consent was granted from the settings view.

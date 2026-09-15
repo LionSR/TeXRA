@@ -100,20 +100,16 @@ export interface StateStore {
  * composition root through `installProcessRuntime`. The shape stays the
  * synchronous `StateStore`; Effect-typing it is its own step.
  *
- * `layer` takes the store as a thunk for the same reason `Secrets.layer`
- * does: the runtime builds its layer at its first run, which in the desktop
- * and CLI roots is the program that opens this store. The service resolves
- * the thunk on each member call; the thunk closes over the root's own local.
+ * `layer` takes the store itself, for the same reason `Secrets.layer` does:
+ * every root opens its state store before installing the runtime that serves
+ * it, so the service is that store rather than a thunk resolved per member
+ * call.
  */
 export class AppState extends Context.Service<AppState, StateStore>()(
   '@texra/platform/AppState',
 ) {
-  static layer(store: () => StateStore): Layer.Layer<AppState> {
-    return Layer.succeed(AppState)({
-      get: <T>(key: string, defaultValue?: T): T =>
-        store().get<T>(key, defaultValue),
-      update: (key, value) => store().update(key, value),
-    });
+  static layer(store: StateStore): Layer.Layer<AppState> {
+    return Layer.succeed(AppState)(store);
   }
 }
 

@@ -90,11 +90,10 @@ const HOST_LAYER_IMPORT_PREFIXES = [
 /**
  * Effect run boundary (PRD R1, .agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md
  * "Execution strategy" rule 3): production code enters Effect through the
- * host-owned runtime, `effectRuntime()` from `@platform/processRuntime`, and
- * the SDK public entry. The pre-runtime exemption this once carried (the platform
- * stores every host opens in its `initPlatform`, and the file-lock provider
- * those stores flush through) is gone: each host now installs the process
- * runtime before it opens a store. Only the SDK public entry sites are pinned.
+ * host-owned runtime, `effectRuntime()` from `@platform/processRuntime`, the
+ * SDK public entry, and the composition roots that open a store the runtime
+ * they are about to install will serve. Everything else must borrow the
+ * installed runtime; each entry below names why it cannot.
  */
 const EFFECT_RUN_ROOTS = [
   ...ALL_HOST_PRODUCTION_ROOTS,
@@ -125,6 +124,17 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // post-init callers (`resolveChatDefaults`, `readCliAgentRoster`) settle
   // them on the process runtime instead of coming through here.
   'packages/cli/src/runtime/cliConfig.ts': 1,
+  // The CLI's process-runtime install, which opens the global state store it
+  // provides as `AppState` before it installs the runtime that serves it:
+  // the service takes the store as a value, so the open cannot run on the
+  // runtime it is being installed into. The program needs the filesystem and
+  // nothing else, and this module is the only place the CLI installs from.
+  'packages/cli/src/runtime/cliProcessRuntime.ts': 1,
+  // The desktop composition root, for the same reason: its four stores —
+  // global and workspace state, the config pair, and the secrets file — open
+  // before `installProcessRuntime`, because two of them are the values that
+  // install is given.
+  'packages/desktop/src/main/platform/index.ts': 1,
   // The VS Code entry's two pre-runtime folds, and only those: `activate`
   // reports a failed activation and runs the cleanup that disposes the
   // process runtime, so it cannot borrow the runtime it is tearing down (the
