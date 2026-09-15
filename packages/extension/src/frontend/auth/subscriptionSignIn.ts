@@ -1,4 +1,5 @@
 // Third-party imports
+import { Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -19,6 +20,20 @@ const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
 /** Dismissing the browser-choice dialog cancels sign-in, matching this
  * repo's modal convention (e.g. authCommands.ts, compareCommands.ts). */
 class SubscriptionSignInCancelled extends Error {}
+
+/**
+ * The OAuth leg's failure, carrying whatever the transport threw so the same
+ * value reaches the same report. A dismissed browser-choice dialog arrives
+ * here too, as a {@link SubscriptionSignInCancelled} cause.
+ */
+class SubscriptionSignInFailed extends Data.TaggedError(
+  'SubscriptionSignInFailed',
+)<{ readonly cause: unknown }> {}
+
+/** The preference write's failure, after a sign-in that already succeeded. */
+class SubscriptionPreferenceUpdateFailed extends Data.TaggedError(
+  'SubscriptionPreferenceUpdateFailed',
+)<{ readonly cause: unknown }> {}
 
 /** How VS Code shows a subscription sign-in prompt. */
 function vscodePresenter(
@@ -77,56 +92,66 @@ export async function signInWithSubscription(
 ): Promise<boolean> {
   const provider = subscriptionProvider(providerId);
   const { displayName, modelFamily } = provider;
-  let account: SubscriptionAccount;
-  try {
-    account = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Signing in with ${displayName}...`,
-        cancellable: false,
-      },
-      () =>
-        runtime.runPromise(
-          provider.signIn({
-            // Remote windows cannot reach the extension host's loopback port
-            // from the user's local browser.
-            transport: vscode.env.remoteName ? 'device' : 'loopback',
-            present: vscodePresenter(provider),
-          }),
+
+  const signIn = Effect.gen(function* () {
+    const account: SubscriptionAccount = yield* Effect.tryPromise({
+      try: () =>
+        vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Signing in with ${displayName}...`,
+            cancellable: false,
+          },
+          () =>
+            runtime.runPromise(
+              provider.signIn({
+                // Remote windows cannot reach the extension host's loopback port
+                // from the user's local browser.
+                transport: vscode.env.remoteName ? 'device' : 'loopback',
+                present: vscodePresenter(provider),
+              }),
+            ),
         ),
-    );
-  } catch (error) {
-    if (error instanceof SubscriptionSignInCancelled) {
-      return false;
+      catch: (cause) => new SubscriptionSignInFailed({ cause }),
+    });
+
+    const update = yield* Effect.tryPromise({
+      try: () => provider.setPreferSubscription(true),
+      catch: (cause) => new SubscriptionPreferenceUpdateFailed({ cause }),
+    });
+
+    if (update.effective) {
+      void vscode.window.showInformationMessage(
+        `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
+      );
+      return true;
     }
-    await showLoggedErrorMessage(
-      channel,
-      `${displayName} sign-in failed`,
-      error,
+    void vscode.window.showWarningMessage(
+      `Signed in with ${displayName} as ${account.label}, but a more specific setting kept the subscription preference disabled.`,
     );
     return false;
-  }
-
-  let update: { effective: boolean };
-  try {
-    update = await provider.setPreferSubscription(true);
-  } catch (error) {
-    await showLoggedErrorMessage(
-      channel,
-      `${displayName} sign-in succeeded but subscription preference update failed`,
-      error,
-    );
-    return false;
-  }
-
-  if (update.effective) {
-    void vscode.window.showInformationMessage(
-      `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
-    );
-    return true;
-  }
-  void vscode.window.showWarningMessage(
-    `Signed in with ${displayName} as ${account.label}, but a more specific setting kept the subscription preference disabled.`,
+  }).pipe(
+    Effect.catchTag('SubscriptionSignInFailed', (failure) =>
+      failure.cause instanceof SubscriptionSignInCancelled
+        ? Effect.succeed(false)
+        : Effect.promise(() =>
+            showLoggedErrorMessage(
+              channel,
+              `${displayName} sign-in failed`,
+              failure.cause,
+            ),
+          ).pipe(Effect.as(false)),
+    ),
+    Effect.catchTag('SubscriptionPreferenceUpdateFailed', (failure) =>
+      Effect.promise(() =>
+        showLoggedErrorMessage(
+          channel,
+          `${displayName} sign-in succeeded but subscription preference update failed`,
+          failure.cause,
+        ),
+      ).pipe(Effect.as(false)),
+    ),
   );
-  return false;
+
+  return runtime.runPromise(signIn);
 }
