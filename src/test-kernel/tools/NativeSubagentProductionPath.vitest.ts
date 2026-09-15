@@ -57,7 +57,10 @@ import {
   type TurnResult,
 } from '@llm/turn';
 import { effectRuntime } from '@platform/processRuntime';
-import type { RecoveryContinuation } from '@platform/interfaces';
+import {
+  AgentResumeFailed,
+  type RecoveryContinuation,
+} from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
 import {
   RUN_OUTCOME,
@@ -262,22 +265,34 @@ function scriptedBoundModel(
   };
 }
 
-async function resumePersistedRun(
+function resumePersistedRun(
   runId: RunId,
   recovery?: RecoveryContinuation,
-): Promise<boolean> {
-  resumedRuns.push(runId);
-  const resumed = await effectRuntime().runPromise(
-    resumeRun(runId, {
-      session,
-      recovery,
-      executeWorkflow: async () => {
-        throw new Error('Workflow resume is not part of this fixture.');
-      },
-    }),
-  );
-  completedResumes.push(runId);
-  return 'started' in resumed && resumed.delivered;
+): Effect.Effect<boolean, AgentResumeFailed> {
+  // The port's contract, not convenience: the fixture answers with the
+  // program the port declares, and records its ordering inside it.
+  return Effect.tryPromise({
+    try: async () => {
+      resumedRuns.push(runId);
+      const resumed = await effectRuntime().runPromise(
+        resumeRun(runId, {
+          session,
+          recovery,
+          executeWorkflow: async () => {
+            throw new Error('Workflow resume is not part of this fixture.');
+          },
+        }),
+      );
+      completedResumes.push(runId);
+      return 'started' in resumed && resumed.delivered;
+    },
+    catch: (cause) =>
+      new AgentResumeFailed({
+        runId,
+        message: 'Fixture resume failed.',
+        cause,
+      }),
+  });
 }
 
 async function integrationPlatform(): Promise<FakeHost> {
@@ -294,9 +309,9 @@ async function integrationPlatform(): Promise<FakeHost> {
       ...host.platform,
       agentResume: { tryResumeRun: resumePersistedRun },
       agentDirectories: {
-        custom: async () => agentsDir,
-        builtIn: async () => agentsDir,
-        builtInToolUse: async () => agentsDir,
+        custom: () => Effect.sync(() => agentsDir),
+        builtIn: () => Effect.sync(() => agentsDir),
+        builtInToolUse: () => Effect.sync(() => agentsDir),
       },
     },
   };

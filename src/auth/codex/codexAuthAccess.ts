@@ -1,6 +1,7 @@
 /**
- * Process-wide access to the Codex OAuth coordinator, over the secret store
- * its caller holds.
+ * Access to the Codex OAuth coordinator, over the secret store its caller
+ * holds: one coordinator per store instance, so distinct stores never share
+ * session state.
  */
 import { Effect, Result } from 'effect';
 
@@ -21,21 +22,16 @@ import { CodexAuthError } from './codexSessionTypes';
 
 const CHANNEL = 'codexAuth';
 
-const coordinatorAccess = createSecretBackedCoordinator({
+const coordinatorFor = createSecretBackedCoordinator({
   secretKey: CODEX_SESSION_SECRET_KEY,
   makeCoordinator: (storage) => new CodexSessionCoordinator({ storage }),
 });
 
-/** The shared coordinator, over the caller's secret store. */
+/** The coordinator for the caller's secret store. */
 export function codexCoordinator(
   secrets: SessionSecretStore,
 ): CodexSessionCoordinator {
-  return coordinatorAccess.get(secrets);
-}
-
-/** Test seam: drop the cached coordinator. */
-export function resetCodexCoordinator(): void {
-  coordinatorAccess.reset();
+  return coordinatorFor(secrets);
 }
 
 /** Signed-in status, read from the caller's secret store. */

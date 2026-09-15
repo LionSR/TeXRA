@@ -134,7 +134,7 @@ describe('sendFollowUp host-path session routing', () => {
         Effect.runPromise(
           submitFollowUp(parentRun, 'continue', {
             session: processSession,
-            resumePort: { tryResumeRun: async () => false },
+            resumePort: { tryResumeRun: () => Effect.succeed(false) },
           }),
         ),
       ).resolves.toEqual({ status: 'queued', wake: 'failed' });

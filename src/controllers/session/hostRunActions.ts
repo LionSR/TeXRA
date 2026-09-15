@@ -486,10 +486,7 @@ export const createHostRunActions = (
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 'resumed');
         if (config.agentCategory !== AgentCategory.Workflow) {
-          yield* Effect.tryPromise({
-            try: () => platform().agentResume.tryResumeRun(runId),
-            catch: ensureError,
-          });
+          yield* platform().agentResume.tryResumeRun(runId);
           return;
         }
         yield* Effect.tryPromise({

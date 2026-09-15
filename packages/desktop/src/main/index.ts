@@ -441,7 +441,7 @@ function createWindow(options: {
       showErrorMessage(
         `A desktop operation failed: ${toErrorMessage(error)}`,
       ).pipe(
-        Effect.catchTag('NotificationFailed', (notificationError) =>
+        Effect.catch((notificationError: NotificationFailed) =>
           Effect.sync(() => {
             console.error(
               'Failed to display desktop asynchronous operation error:',
@@ -556,7 +556,8 @@ function createWindow(options: {
   // Session requests present errors at their dispatcher. Menu, navigation,
   // and runtime preview callers retain the reporting host above.
   const requestPreviewHost = createDesktopPreviewHost(previewOptions);
-  const getCustomAgentDirectory = () => options.agentDirectories.custom();
+  const getCustomAgentDirectory = () =>
+    options.runtime.runPromise(options.agentDirectories.custom());
 
   // Button labels for the instruction dialog below. Desktop has one settings
   // home (Settings tab), so SET_API_KEY opens it directly rather than the
@@ -1199,11 +1200,17 @@ function createWindow(options: {
         getSourceDirectory: (source: AgentSource) => {
           switch (source) {
             case 'custom':
-              return options.agentDirectories.custom();
+              return options.runtime.runPromise(
+                options.agentDirectories.custom(),
+              );
             case 'builtInWorkflow':
-              return options.agentDirectories.builtIn();
+              return options.runtime.runPromise(
+                options.agentDirectories.builtIn(),
+              );
             case 'builtInToolUse':
-              return options.agentDirectories.builtInToolUse();
+              return options.runtime.runPromise(
+                options.agentDirectories.builtInToolUse(),
+              );
             // No local directory: remote agents live in Supabase.
             case 'remote':
               return Promise.resolve(undefined);
@@ -1289,7 +1296,7 @@ function createWindow(options: {
           info: (message) =>
             showInfoMessage(message).pipe(
               Effect.map(() => undefined),
-              Effect.catchTag('NotificationFailed', (failure) =>
+              Effect.catch((failure: NotificationFailed) =>
                 Effect.fail(
                   new PromptFailed({
                     reason: 'host-unavailable',
