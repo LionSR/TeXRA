@@ -123,7 +123,11 @@ export class ElectronSecrets implements PlatformSecrets {
           cause,
         }),
     }).pipe(
-      Effect.catch((failure) =>
+      // The handler's parameter is the whole error type this expression can
+      // carry, so a second failure added to this channel (another `mapError`,
+      // a joined step) fails to compile instead of being reported as a refused
+      // decrypt and answered with "no saved secret".
+      Effect.catch((failure: SecretsFailed) =>
         Effect.as(
           Effect.andThen(
             Effect.sync(() => {

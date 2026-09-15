@@ -580,7 +580,10 @@ function createWindow(options: {
             cause,
           }),
       }).pipe(
-        Effect.catch((error) =>
+        // The handler's parameter is the whole error type this expression can
+        // carry, so a second failure added here fails to compile instead of
+        // reading as a documentation URL that would not open.
+        Effect.catch((error: ExternalOpenFailed) =>
           Effect.sync(() => reportBackgroundError(error)),
         ),
       ),
@@ -1558,7 +1561,12 @@ function createWindow(options: {
           cause,
         }),
     }).pipe(
-      Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+      // The handler's parameter is the whole error type this expression can
+      // carry, so a second failure added to this channel fails to compile
+      // instead of being reported as a funnel refresh the host could not do.
+      Effect.catch((error: OnboardingRefreshFailed) =>
+        Effect.sync(() => reportAsyncError(error)),
+      ),
     ),
   );
   const shellActions = createDesktopShellActions(
@@ -1989,7 +1997,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                     cause,
                   }),
               }).pipe(
-                Effect.catch((error) =>
+                // The handler's parameter is the whole error type this
+                // expression can carry, so a second failure added to this
+                // channel fails to compile instead of being logged as a
+                // warning that would not show.
+                Effect.catch((error: NotificationFailed) =>
                   Effect.sync(() => console.error(error)),
                 ),
               ),
