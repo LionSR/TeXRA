@@ -393,11 +393,7 @@ export function createDesktopSettingsIpc(
       await options.credentialSettingsController.refreshAfterProviderSettingChange(
         key,
       );
-    }
-    if (
-      !invalidatesModelOptions &&
-      codingPlanForUsageSetting(key) !== undefined
-    ) {
+    } else if (codingPlanForUsageSetting(key) !== undefined) {
       await options.credentialSettingsController.postSubscriptionUsage();
     }
   }

@@ -14,6 +14,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { AgentResumeFailed } from '@platform/interfaces';
 import { aggregateId, type RunId, type SessionEvent } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
@@ -28,8 +29,10 @@ const settle = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
 );
 
-function mockTryResume(): Mock<() => Promise<boolean>> {
-  return vi.fn(async () => true);
+function mockTryResume(): Mock<
+  () => Effect.Effect<boolean, AgentResumeFailed>
+> {
+  return vi.fn(() => Effect.succeed(true));
 }
 
 /**
@@ -286,7 +289,7 @@ describe('submitFollowUp', () => {
       const claimed: unknown[] = [];
       const tryResumeRun = vi.fn((_: RunId, recovery: unknown) => {
         claimed.push(recovery);
-        return barrier.promise;
+        return Effect.promise(() => barrier.promise);
       });
 
       const first = yield* Effect.forkChild(
@@ -327,23 +330,32 @@ describe('submitFollowUp', () => {
         const runId = generateRunId();
         const session = fakeSession({ kind: 'queue' });
         const resumed = createDeferred<boolean>();
+        const started = yield* Deferred.make<void>();
         const admitted = yield* Deferred.make<void>();
         const fiber = yield* Effect.forkChild(
           submitFollowUp(runId, 'keep this input', {
             session,
-            resumePort: { tryResumeRun: () => resumed.promise },
+            resumePort: {
+              tryResumeRun: () => {
+                Deferred.doneUnsafe(started, Effect.void);
+                return Effect.promise(() => resumed.promise);
+              },
+            },
             onAdmitted: () => {
               Deferred.doneUnsafe(admitted, Effect.void);
             },
           }),
         );
+        // The host is asked before the submitter is told it was admitted, so
+        // the interrupt below lands on a wake already in flight.
+        yield* Deferred.await(started);
         yield* Deferred.await(admitted);
         yield* Fiber.interrupt(fiber);
         expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
         resumed.resolve(false);
-        // The production `.then` that releases the lease was registered on this
-        // Promise first, so it has run once the test's await resumes.
-        yield* Effect.promise(() => resumed.promise);
+        // The wake is detached: it answers the decline and settles the lease
+        // even though the fiber that dispatched it is gone.
+        yield* settle;
 
         const successor = session.followUps.claimLive(runId, 'child');
         expect(successor).toBeDefined();
@@ -352,7 +364,7 @@ describe('submitFollowUp', () => {
       }),
   );
 
-  it.effect('releases recovery when tryResumeRun rejects', () =>
+  it.effect('releases recovery when tryResumeRun fails', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
       const session = fakeSession({ kind: 'queue' });
@@ -360,7 +372,14 @@ describe('submitFollowUp', () => {
         yield* submitFollowUp(runId, 'keep this input', {
           session,
           resumePort: {
-            tryResumeRun: () => Promise.reject(new Error('resume prep failed')),
+            tryResumeRun: () =>
+              Effect.fail(
+                new AgentResumeFailed({
+                  runId,
+                  message: 'resume prep failed',
+                  cause: new Error('resume prep failed'),
+                }),
+              ),
           },
         }),
       ).toEqual({ status: 'queued', wake: 'failed' });

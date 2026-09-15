@@ -49,13 +49,13 @@ export function workflowOutputPath(params: {
 /** First-name chunk used in the "Save as copy" stem. */
 function getAgentFirstNameChunk(agent: string): string {
   const cleanAgent = getCleanAgentName(agent);
+  // A `write-` tool takes the chunk after that prefix; every other agent takes
+  // its first word, delimited by `_` when the name uses that convention and by
+  // `-` otherwise.
   if (cleanAgent.startsWith('write-')) {
     return cleanAgent.split('-')[1];
   }
-  if (cleanAgent.includes('_')) {
-    return cleanAgent.split('_')[0];
-  }
-  return cleanAgent.split('-')[0];
+  return cleanAgent.split(cleanAgent.includes('_') ? '_' : '-')[0];
 }
 
 /**

@@ -30,10 +30,6 @@ interface JSONSchemaObject {
   [key: string]: unknown;
 }
 
-function isSchemaObject(value: unknown): value is JSONSchemaObject {
-  return isObject(value);
-}
-
 function schemaLiteralValue(schema: JSONSchemaObject): unknown {
   if (schema.const !== undefined) return schema.const;
   if (Array.isArray(schema.enum) && schema.enum.length === 1) {
@@ -62,7 +58,7 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
 
   const rawVariants = schema[variantKey] as unknown[];
   const variants = rawVariants.filter(
-    (v): v is JSONSchemaObject => isSchemaObject(v) && v.type === 'object',
+    (v): v is JSONSchemaObject => isObject(v) && v.type === 'object',
   );
   if (variants.length === 0 || variants.length !== rawVariants.length) {
     return schema;

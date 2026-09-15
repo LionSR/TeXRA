@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import pDefer from 'p-defer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -78,12 +79,14 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 }));
 
 vi.mock('@agent/index/platformAgentDirectories', () => ({
+  // The service's readers, `Effect`s like the ones `AgentDirectoryService`
+  // answers with: the rebuild under test composes them.
   createPlatformAgentDirectories: () => ({
-    builtIn: async () => '/agents/builtin',
-    builtInToolUse: async () => '/agents/toolUse',
-    custom: async () => '/agents/custom',
-    getDirectory: async () => undefined,
-    getAllLocal: mocks.getAllLocal,
+    builtIn: () => Effect.succeed('/agents/builtin'),
+    builtInToolUse: () => Effect.succeed('/agents/toolUse'),
+    custom: () => Effect.succeed('/agents/custom'),
+    getDirectory: () => Effect.succeed(undefined),
+    getAllLocal: () => Effect.promise(() => mocks.getAllLocal()),
   }),
 }));
 

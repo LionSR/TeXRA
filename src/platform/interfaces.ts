@@ -3,7 +3,7 @@
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
 import { Context, Data, Effect, Layer } from 'effect';
-import type { RunId } from '@shared/schemas';
+import type { AgentSource, RunId } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
 // Disposable
@@ -253,11 +253,35 @@ export type ToolMissingHandler = (
 // Agent directories
 // ---------------------------------------------------------------------------
 
-/** Host-provided agent directory paths. */
+/**
+ * A host could not resolve one of its agent directories: the configured
+ * custom directory is not an absolute path, its parent is gone, it cannot be
+ * created, or the platform refused the filesystem call behind either.
+ *
+ * {@link AgentDirectoriesPort}'s three readers raise it as the failure of the
+ * read itself, for the same reason {@link StateWriteFailed} exists: the reads
+ * travel with the agent-catalog load beside them, so a caller inside a program
+ * composes the read rather than adopting a rejection it cannot type.
+ */
+export class AgentDirectoriesFailed extends Data.TaggedError(
+  'AgentDirectoriesFailed',
+)<{
+  /** Which of the port's readers failed. */
+  readonly source: AgentSource;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/**
+ * Host-provided agent directory paths. All three are `Effect`s (not Promises)
+ * so the one reader that can fault — `custom`, which creates the directory it
+ * resolves — carries its failure into the catalog load that asked for it
+ * instead of rejecting an await that cannot name it.
+ */
 export interface AgentDirectoriesPort {
-  custom(): Promise<string>;
-  builtIn(): Promise<string>;
-  builtInToolUse(): Promise<string>;
+  custom(): Effect.Effect<string, AgentDirectoriesFailed>;
+  builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
+  builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
 }
 
 // ---------------------------------------------------------------------------
@@ -276,15 +300,32 @@ export interface RecoveryContinuation {
   readonly kind: 'recovery';
 }
 
+/**
+ * A host's resume attempt faulted before it could answer. Distinct from the
+ * `false` {@link AgentResumePort.tryResumeRun} answers: `false` is this
+ * process declining a run it can classify, while this is the attempt itself
+ * failing, which the caller cannot read off the boolean.
+ */
+export class AgentResumeFailed extends Data.TaggedError('AgentResumeFailed')<{
+  readonly runId: RunId;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 export interface AgentResumePort {
   /**
    * Attempt to resume a WAITING / children-running stream from its
-   * persisted snapshot. Returns true if the host accepted the request
+   * persisted snapshot. Resolves true if the host accepted the request
    * (i.e. the resume command dispatched successfully).
    *
-   * Returns false if the stream cannot be resumed (no snapshot found,
+   * Resolves false if the stream cannot be resumed (no snapshot found,
    * already active/resuming, etc.) — callers should fall back to leaving
-   * the message queued for the next manual resume.
+   * the message queued for the next manual resume. The failure channel is
+   * reserved for the attempt faulting, so a caller that only wants the
+   * retry decision still learns when the decision itself could not be made.
    */
-  tryResumeRun(runId: RunId, recovery?: RecoveryContinuation): Promise<boolean>;
+  tryResumeRun(
+    runId: RunId,
+    recovery?: RecoveryContinuation,
+  ): Effect.Effect<boolean, AgentResumeFailed>;
 }

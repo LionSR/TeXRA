@@ -790,18 +790,16 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
     warnDetachedChildDelivery(logger, runId);
     return;
   }
+  /** The parent could not be resumed; its result still awaits an explicit resume. */
+  const warnParentNotResumed = (): void =>
+    logger.warn(
+      'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+      { data: { runId, parentRunId: targetRunId } },
+    );
   const recovery = pending.recovery;
   if (recovery) {
-    const resumed = yield* Effect.tryPromise({
-      try: () => startFollowUpWake(targetRunId, recovery, session),
-      catch: ensureError,
-    });
-    if (!resumed) {
-      logger.warn(
-        'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
-        { data: { runId, parentRunId: targetRunId } },
-      );
-    }
+    const resumed = yield* startFollowUpWake(targetRunId, recovery, session);
+    if (!resumed) warnParentNotResumed();
   }
   // Duplicate-safe: the parent row was admitted before the child prompt
   // was consumed. This wake still goes through submitFollowUp so a mocked
@@ -822,10 +820,7 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
       },
     );
   } else if (delivery.status === 'queued' && delivery.wake === 'failed') {
-    logger.warn(
-      'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
-      { data: { runId, parentRunId: targetRunId } },
-    );
+    warnParentNotResumed();
   }
 });
 

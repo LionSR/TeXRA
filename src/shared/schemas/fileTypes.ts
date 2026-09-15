@@ -12,18 +12,12 @@ export type MultipleDocumentFileType = z.infer<
 >;
 const MULTIPLE_DOCUMENT_FILE_TYPES = MultipleDocumentFileTypeSchema.options;
 
-/** Narrows a broader file-type value (e.g. `ExtendedDocumentFileType`) to `MultipleDocumentFileType`. */
+/** Narrows a broader file-type value to the `MultipleDocumentFileType` set. */
 export function isMultipleDocumentFileType(
   value: string,
 ): value is MultipleDocumentFileType {
   return (MULTIPLE_DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
 }
-
-const ExtendedDocumentFileTypeSchema = z.enum([
-  ...DocumentFileTypeSchema.options,
-  'edited',
-  'output',
-]);
 
 /**
  * Values accepted by the "get/set current editor file" round trip

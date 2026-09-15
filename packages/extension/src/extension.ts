@@ -640,7 +640,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
   // directories, and loadAgents scans them.
-  await registerAgentDirectoryRoots(context);
+  await runtime.runPromise(registerAgentDirectoryRoots(context));
   const agentIndex = await runtime.runPromiseExit(
     loadAgents({ includeRemote: false }),
   );

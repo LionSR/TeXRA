@@ -68,12 +68,12 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
     ...createNodePlatform({
       lifecycle: createLifecycleHost(),
       agentResume: {
-        tryResumeRun: async () => false,
+        tryResumeRun: () => Effect.succeed(false),
       },
       agentDirectories: {
-        custom: async () => options.agentsDir,
-        builtIn: async () => '',
-        builtInToolUse: async () => '',
+        custom: () => Effect.succeed(options.agentsDir),
+        builtIn: () => Effect.succeed(''),
+        builtInToolUse: () => Effect.succeed(''),
       },
     }),
     roots: createNodeWorkspaceRoots({

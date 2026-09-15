@@ -230,10 +230,12 @@ export class AgentRosterController<
       this.extraPresets(),
     );
     if (identifiers === undefined) return undefined;
+    // A custom selection already stores keys, so only an `all`/team selection
+    // has names left to resolve; the kind is the same for every identifier.
+    if (selection.kind === 'custom') return unique(identifiers);
 
     return unique(
       identifiers.map((identifier) => {
-        if (selection.kind === 'custom') return identifier;
         const entry = this.deps.resolveAgent(category, identifier);
         return entry ? agentKeyOf(entry) : identifier;
       }),

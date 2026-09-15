@@ -53,11 +53,8 @@ export class FileInteractionState {
     for (const filePath of parsed.readFiles) {
       state.readFiles.add(filePath);
     }
-    for (const entry of parsed.edits) {
-      state.edits.set(entry.path, {
-        added: entry.added,
-        removed: entry.removed,
-      });
+    for (const { path, added, removed } of parsed.edits) {
+      state.edits.set(path, { added, removed });
     }
     state._toolCallCount = parsed.toolCallCount;
     return state;

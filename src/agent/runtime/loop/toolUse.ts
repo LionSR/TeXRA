@@ -387,15 +387,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     if (userRequest) content.push({ kind: 'text', text: userRequest });
     userChannels[USER_VAR_MODEL] = bound.modelId;
     workspace = AgentWorkspaceState.create();
+    const openedAt = fresh(bound);
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [{ role: 'user', content }]),
-      snapshotRow(runId, fresh(bound), {
+      snapshotRow(runId, openedAt, {
         phase: 'initial',
         runtime: {
           modelId: bound.modelId,
           modelCompatibilityKey: bound.compatibilityKey,
         },
-        state: flowState(fresh(bound)),
+        state: flowState(openedAt),
       }),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });

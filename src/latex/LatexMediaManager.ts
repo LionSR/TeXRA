@@ -128,15 +128,14 @@ export class LatexMediaManager {
       // extractFiguresFromFiles) pass it in to avoid a redundant lookup.
       const resolvedBaseDir =
         baseDir ?? (yield* resolveLatexDir(latexFile.absolutePath));
-      const absolutePaths = new Set<string>();
-      for (const relative of figures) {
-        const trimmed = relative.trim();
-        if (trimmed) {
-          absolutePaths.add(
+      const absolutePaths = new Set(
+        figures
+          .map((relative) => relative.trim())
+          .filter((trimmed) => trimmed !== '')
+          .map((trimmed) =>
             path.normalize(path.join(resolvedBaseDir, trimmed)),
-          );
-        }
-      }
+          ),
+      );
 
       if (absolutePaths.size === 0) {
         return;
@@ -578,11 +577,11 @@ export class LatexMediaManager {
         { concurrency: LATEX_CONCURRENCY },
       );
 
-      workspaceState.media.addMediaFiles(tikzResults.flat());
+      const compiledFigures = tikzResults.flat();
+      workspaceState.media.addMediaFiles(compiledFigures);
 
       if (logSummary) {
-        const totalFigures = tikzResults.reduce((sum, r) => sum + r.length, 0);
-        this.logger.debug(`Extracted ${totalFigures} TikZ figures`);
+        this.logger.debug(`Extracted ${compiledFigures.length} TikZ figures`);
       }
     });
   }

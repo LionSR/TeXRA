@@ -101,7 +101,8 @@ const SUPPORTED_NAMED_KEYS: Record<string, string> = {
 
 function normalizeKeyboardKey(key: string): string | undefined {
   if (key === ' ') return 'Space';
-  if (key.length === 1) return key.toUpperCase();
-  if (FUNCTION_KEY_PATTERN.test(key)) return key.toUpperCase();
+  if (key.length === 1 || FUNCTION_KEY_PATTERN.test(key)) {
+    return key.toUpperCase();
+  }
   return SUPPORTED_NAMED_KEYS[key];
 }

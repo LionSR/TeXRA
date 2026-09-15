@@ -632,7 +632,7 @@ function insertOrdered(
   ids: readonly RunId[],
   id: RunId,
 ): RunId[] {
-  const next = ids.filter((existing) => existing !== id);
+  const next = withoutId(ids, id);
   const run = view.runs.get(id);
   if (!run) return next;
   const key = orderingKey(run);
@@ -1771,12 +1771,12 @@ function foldDurable(
     for (const childId of next.childIds) refreshAncestors(view, childId);
   }
   next = view.runs.get(next.id)!;
-  const aggregated =
-    own.status !== before.status
-      ? withAggregates(view, withTranscriptFacts(next))
-      : withAggregates(view, next);
+  const statusMoved = own.status !== before.status;
+  const aggregated = statusMoved
+    ? withAggregates(view, withTranscriptFacts(next))
+    : withAggregates(view, next);
   // The run model's own inputs: the run's existence and status.
-  const runInputsMoved = created || own.status !== before.status;
+  const runInputsMoved = created || statusMoved;
   setRun(
     view,
     runInputsMoved ? runModelAt(view, aggregated, deferred) : aggregated,

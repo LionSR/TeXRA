@@ -191,6 +191,17 @@ export type SessionHandleInit = Partial<
   readonly transcriptMode?: StreamLogStoreMode;
 };
 
+/**
+ * The graph's refusals arrive as causes; every door this class exposes reports
+ * them as a plain `Error`, so one normalization serves them all.
+ */
+const asTypedError = <A, E>(
+  effect: Effect.Effect<A, E>,
+): Effect.Effect<A, Error> =>
+  effect.pipe(
+    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  );
+
 export class SessionHandle {
   /**
    * The one session state every renderer of this session reads (PRD
@@ -505,17 +516,10 @@ export class SessionHandle {
   acquireClaims(
     id: AggregateId,
   ): Effect.Effect<Effect.Effect<void, Error>, Error> {
-    return this.graph.acquireClaims(id).pipe(
-      Effect.map((release) =>
-        release.pipe(
-          Effect.catchCause((cause) =>
-            Effect.fail(ensureError(Cause.squash(cause))),
-          ),
-        ),
-      ),
-      Effect.catchCause((cause) =>
-        Effect.fail(ensureError(Cause.squash(cause))),
-      ),
+    return asTypedError(
+      this.graph
+        .acquireClaims(id)
+        .pipe(Effect.map((release) => asTypedError(release))),
     );
   }
 
@@ -535,13 +539,7 @@ export class SessionHandle {
    * watches owners of runs already resident in it.
    */
   claimOwner(runId: RunId): Effect.Effect<AggregateClaim, Error> {
-    return this.graph
-      .claimOwner(runId)
-      .pipe(
-        Effect.catchCause((cause) =>
-          Effect.fail(ensureError(Cause.squash(cause))),
-        ),
-      );
+    return asTypedError(this.graph.claimOwner(runId));
   }
 
   /** Drop this process's claim on one aggregate, so the next process resumes
@@ -549,13 +547,7 @@ export class SessionHandle {
    *  workflow checkpoint's when its invocation does. The claim belongs to the
    *  invocation, not to the process, and this is its one release. */
   releaseClaims(id: AggregateId): Effect.Effect<void, Error> {
-    return this.graph
-      .releaseClaims(id)
-      .pipe(
-        Effect.catchCause((cause) =>
-          Effect.fail(ensureError(Cause.squash(cause))),
-        ),
-      );
+    return asTypedError(this.graph.releaseClaims(id));
   }
 
   /**

@@ -659,7 +659,7 @@ export function createExtensionHostRequests(
           await runCommand('texra.showAgents');
           return;
         }
-        const dir = await agentDirectories.custom();
+        const dir = await runtime.runPromise(agentDirectories.custom());
         if (dir) {
           await vscode.commands.executeCommand(
             'revealFileInOS',

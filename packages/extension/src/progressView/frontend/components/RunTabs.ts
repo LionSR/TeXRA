@@ -69,17 +69,20 @@ function buildTooltip(run: RunView): string {
   ]
     .filter(Boolean)
     .join(' · ');
-  const parts = [mainLine];
-  if (run.description) parts.push(run.description);
-  if (run.statusDetail) parts.push(run.statusDetail);
+  const lastSeen = run.lastTimestamp
+    ? formatRelativeTime(run.lastTimestamp)
+    : '';
   // The opaque id stays in the accessible name: it is what tells two
   // parallel runs of the same agent apart.
-  parts.push(run.id);
-  if (run.lastTimestamp) {
-    const lastSeen = formatRelativeTime(run.lastTimestamp);
-    if (lastSeen) parts.push(`Last activity ${lastSeen}`);
-  }
-  return parts.join('\n');
+  return [
+    mainLine,
+    run.description,
+    run.statusDetail,
+    run.id,
+    lastSeen && `Last activity ${lastSeen}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function runDecorator(run: RunView) {

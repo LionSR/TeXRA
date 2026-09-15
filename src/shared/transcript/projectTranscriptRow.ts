@@ -445,14 +445,15 @@ export function projectTranscriptRow(
 
     case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
       const data = entry.data;
+      const reduced = data.action === 'max_tokens_reduced';
       if (
-        data.action === 'max_tokens_reduced' &&
+        reduced &&
         data.reducedMaxTokens >= MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD
       ) {
         return undefined;
       }
       const items: StatItem[] = [];
-      if (data.action === 'max_tokens_reduced') {
+      if (reduced) {
         items.push({
           key: 'maxTokens',
           label: 'Max tokens reduced',
@@ -472,10 +473,9 @@ export function projectTranscriptRow(
       items.push({
         key: 'utilization',
         label: 'Context utilization',
-        value:
-          data.action === 'max_tokens_reduced'
-            ? before
-            : `${before} → ${data.utilizationAfter.toFixed(1)}%`,
+        value: reduced
+          ? before
+          : `${before} → ${data.utilizationAfter.toFixed(1)}%`,
       });
       items.push({
         key: 'contextWindow',

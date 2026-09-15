@@ -43,12 +43,9 @@ import {
 import {
   AgentCategory,
   INSTRUCTION_ACTION,
-  ModelCompatibilityKeySchema,
   RUN_OUTCOME,
-  RUN_PHASE,
 } from '@shared/schemas';
 import { createRunTrace, type RunTrace } from '@transcript';
-import { isObject } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, runInSession, withRunContext } from './RunContext';

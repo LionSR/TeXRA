@@ -67,20 +67,15 @@ export function aggregateClaudeModelUsage(
   const models = Object.values(modelUsage ?? {});
   if (models.length === 0) return null;
 
+  const sum = (pick: (model: ModelUsage) => number): number =>
+    models.reduce((total, model) => total + pick(model), 0);
   const usage: Required<ClaudeTurnUsage> = {
-    input_tokens: 0,
-    output_tokens: 0,
-    cache_read_input_tokens: 0,
-    cache_creation_input_tokens: 0,
-    cost_usd: 0,
+    input_tokens: sum((model) => model.inputTokens),
+    output_tokens: sum((model) => model.outputTokens),
+    cache_read_input_tokens: sum((model) => model.cacheReadInputTokens),
+    cache_creation_input_tokens: sum((model) => model.cacheCreationInputTokens),
+    cost_usd: sum((model) => model.costUSD),
   };
-  for (const model of models) {
-    usage.input_tokens += model.inputTokens;
-    usage.output_tokens += model.outputTokens;
-    usage.cache_read_input_tokens += model.cacheReadInputTokens;
-    usage.cache_creation_input_tokens += model.cacheCreationInputTokens;
-    usage.cost_usd += model.costUSD;
-  }
   return usage;
 }
 

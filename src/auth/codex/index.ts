@@ -16,7 +16,6 @@ export {
 } from './codexSessionTypes';
 export {
   codexCoordinator,
-  resetCodexCoordinator,
   getCodexStatus,
   isCodexSessionRoutable,
 } from './codexAuthAccess';

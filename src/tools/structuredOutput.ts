@@ -184,8 +184,8 @@ export function normalizeStructuredOutputSchema(
  * `ZodError` the model self-corrects. `execute` then enforces the persisted
  * JSON-value contract and hands the result to `capture`.
  *
- * `capture` is bound to instance state, not a module-level global, so
- * concurrent runs never share a sink.
+ * `capture` is closed over by a tool class built per call, not a module-level
+ * global, so concurrent runs never share a sink.
  */
 export function buildTerminalTool(
   input: z.ZodType | Record<string, unknown>,
@@ -200,16 +200,10 @@ export function buildTerminalTool(
     schema: zodSchema,
   });
 
+  // Built inside this call, so the class closes over this run's `capture`
+  // rather than having it threaded through a constructor.
   class TerminalTool extends GeneratedTool {
-    // Run-scoped capture slot bound to instance state, so concurrent workflow
-    // runs never race on a shared sink.
-    private readonly capture: (value: JsonValue) => void;
     private captured = false;
-
-    constructor(capture: (value: JsonValue) => void) {
-      super();
-      this.capture = capture;
-    }
 
     protected execute(input: unknown): Effect.Effect<ToolResult, unknown> {
       return Effect.try({
@@ -221,7 +215,7 @@ export function buildTerminalTool(
           }
           const jsonValue = JsonValueSchema.parse(input);
           this.captured = true;
-          this.capture(jsonValue);
+          capture(jsonValue);
           return {
             status: 'executed',
             endTurn: true,
@@ -234,7 +228,7 @@ export function buildTerminalTool(
     }
   }
 
-  return new TerminalTool(capture);
+  return new TerminalTool();
 }
 
 /**

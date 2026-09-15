@@ -364,6 +364,25 @@ export const modelInvokerLayer = (): Layer.Layer<
           ),
         );
 
+      /**
+       * Prepare one attempt's turn. A preparation that fails is this
+       * attempt's own failure, carrying the state its rows left; an
+       * interruption stays an interruption.
+       */
+      const prepareAttempt = Effect.fn('ModelInvoker.prepare')(function* (
+        bound: BoundModel,
+        request: TurnRequest,
+        at: RunState,
+      ): Effect.fn.Return<ResolvedTurn, AttemptFailed> {
+        const prepared = yield* Effect.exit(bound.model.prepareTurn(request));
+        if (Exit.isFailure(prepared)) {
+          if (Cause.hasInterrupts(prepared.cause))
+            return yield* Effect.interrupt;
+          return yield* failAttempt(Cause.squash(prepared.cause), at, bound);
+        }
+        return prepared.value;
+      });
+
       interface AttemptTrace {
         readonly thinking: StreamHandle;
         readonly output: StreamHandle;
@@ -637,15 +656,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           bound,
           backgroundRequested(bound) ? 'background' : 'foreground',
         );
-        const prepared = yield* Effect.exit(
-          bound.model.prepareTurn(turnRequest),
-        );
-        if (Exit.isFailure(prepared)) {
-          if (Cause.hasInterrupts(prepared.cause))
-            return yield* Effect.interrupt;
-          return yield* failAttempt(Cause.squash(prepared.cause), state, bound);
-        }
-        let resolved = prepared.value;
+        let resolved = yield* prepareAttempt(bound, turnRequest, state);
         yield* saveDebug(
           state.messages,
           'messages',
@@ -707,23 +718,11 @@ export const modelInvokerLayer = (): Layer.Layer<
               // The clamp is part of the request, so the request is prepared
               // again with it: execution never reapplies defaults over a
               // resolved turn.
-              const clamped = yield* Effect.exit(
-                bound.model.prepareTurn({
-                  ...turnRequest,
-                  maxOutputTokens: reduced,
-                }),
+              resolved = yield* prepareAttempt(
+                bound,
+                { ...turnRequest, maxOutputTokens: reduced },
+                state,
               );
-              if (Exit.isFailure(clamped)) {
-                if (Cause.hasInterrupts(clamped.cause)) {
-                  return yield* Effect.interrupt;
-                }
-                return yield* failAttempt(
-                  Cause.squash(clamped.cause),
-                  state,
-                  bound,
-                );
-              }
-              resolved = clamped.value;
             }
           }
         }
@@ -821,22 +820,11 @@ export const modelInvokerLayer = (): Layer.Layer<
             bound,
             'background',
           );
-          const prepared = yield* Effect.exit(
-            bound.model.prepareTurn({
-              ...admitted,
-              store: accepted.operation.store,
-            }),
+          const resolved = yield* prepareAttempt(
+            bound,
+            { ...admitted, store: accepted.operation.store },
+            initial,
           );
-          if (Exit.isFailure(prepared)) {
-            if (Cause.hasInterrupts(prepared.cause))
-              return yield* Effect.interrupt;
-            return yield* failAttempt(
-              Cause.squash(prepared.cause),
-              initial,
-              bound,
-            );
-          }
-          const resolved = prepared.value;
           if (resolved.mode !== 'background') {
             return yield* failAttempt(
               new ModelError({

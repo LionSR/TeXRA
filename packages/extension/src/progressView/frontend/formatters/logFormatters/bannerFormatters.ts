@@ -81,9 +81,12 @@ export function formatBannerContentTemplate(
   if (!trimmedContent) return null;
 
   const config = BANNER_CONFIG[kind];
-  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
-    new Date(timestamp),
-  );
+  // Formatted only for the rows that actually paint one: this runs per
+  // streaming chunk, and a thinking or scratchpad row never shows it.
+  const timestampInfo =
+    config.showTimestamp && verbose
+      ? formatDisplayTimestamp(new Date(timestamp))
+      : undefined;
   // Auto-expand while streaming in, so the block is visibly "live" instead
   // of hiding the growing text behind a closed summary row; collapses back
   // once finalized (mirrors the "thought for Xs, tap to expand" pattern
@@ -108,9 +111,10 @@ export function formatBannerContentTemplate(
   return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${buildDetailsSummary({
     iconName: config.iconName,
     label: config.labelText,
-    timestamp: config.showTimestamp && verbose
-      ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }
-      : undefined,
+    timestamp: timestampInfo && {
+      display: `[${timestampInfo.timeDisplay}]`,
+      tooltip: timestampInfo.tooltipTimestamp,
+    },
     copyButton: {
       title: config.copyTitle,
       content: trimmedContent,
