@@ -18,11 +18,8 @@ type CommandMessage = { command: string };
  * and handler delegates share.
  *
  * Posting is the awaited {@link BaseViewMessageHandler.postMessageToActiveWebview}
- * path, not fire-and-forget {@link BaseViewMessageHandler.postToActiveView}.
- * Mutation follow-ups (a settings refresh after a write; hide-banner then
- * credential refresh) depend on delivery having settled. Fire-and-forget
- * posts stay as a protected method on the handler class for intra-class use
- * (manager outbound, theme/debug) where ordering is not a follow-up contract.
+ * path. Mutation follow-ups (a settings refresh after a write; hide-banner
+ * then credential refresh) depend on delivery having settled.
  *
  * `withActiveWebview` is the shared "run with the active webview" accessor
  * (`vscode.Webview`). View-wrapper access (`vscode.WebviewView`) stays
@@ -110,11 +107,6 @@ export abstract class BaseViewMessageHandler<
     };
   }
 
-  /** Post a message to the tracked active view, if one is available. */
-  protected postToActiveView(message: unknown): void {
-    this.getActiveView()?.webview.postMessage(message);
-  }
-
   /** Run a callback with the active view's webview, if available. */
   protected async withActiveWebview(
     fn: (webview: vscode.Webview) => Promise<void> | void,
@@ -126,9 +118,9 @@ export abstract class BaseViewMessageHandler<
   /**
    * Post a message to the active view's webview, awaiting delivery. A `null`
    * or `undefined` message posts nothing, so callers can forward an optional
-   * response payload without a guard of their own. Unlike
-   * {@link postToActiveView}, this resolves only after the post settles —
-   * mutation paths that run a follow-up step depend on that ordering.
+   * response payload without a guard of their own. This resolves only after
+   * the post settles — mutation paths that run a follow-up step depend on
+   * that ordering.
    */
   protected async postMessageToActiveWebview(message: unknown): Promise<void> {
     if (message == null) return;
