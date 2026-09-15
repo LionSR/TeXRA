@@ -60,7 +60,7 @@ const FormattedZodIssueSchema = z.object({
   received: z.unknown().optional(),
   code: z.string().optional(),
 });
-export type FormattedZodIssue = z.infer<typeof FormattedZodIssueSchema>;
+type FormattedZodIssue = z.infer<typeof FormattedZodIssueSchema>;
 
 /**
  * Structured validation error diagnostics. One of several shapes a tool's
