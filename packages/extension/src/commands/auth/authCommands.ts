@@ -1,4 +1,6 @@
+import { Data, Effect } from 'effect';
 import * as vscode from 'vscode';
+
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
@@ -8,6 +10,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'authCommands';
 
@@ -32,125 +35,191 @@ const SIGN_IN_OPTIONS: readonly SignInOption[] = [
   },
 ];
 
+/**
+ * A host call one of these commands made faulted. The command reports the
+ * fault itself and returns its cancelled outcome, so the tag only carries the
+ * cause; `message` is the cause's own text, because the reporting surface
+ * adds the "Sign in failed"/"Sign out failed" prefix.
+ */
+class AuthCommandFailed extends Data.TaggedError('AuthCommandFailed')<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+const authCommandFailed = (cause: unknown): AuthCommandFailed =>
+  new AuthCommandFailed({ message: toErrorMessage(cause), cause });
+
+/** An information toast, on the fault path the commands already report. */
+const showInfo = (message: string): Effect.Effect<void, AuthCommandFailed> =>
+  Effect.try({
+    try: () => {
+      void vscode.window.showInformationMessage(message);
+    },
+    catch: authCommandFailed,
+  });
+
 // "<prefix> <email>" info toast.
-async function showSignedInMessage(prefix: string): Promise<void> {
-  const user = await SupabaseClient.getUser();
-  const email = user?.email || 'unknown user';
-  void vscode.window.showInformationMessage(`${prefix} ${email}`);
-}
+const showSignedInMessage = (
+  prefix: string,
+): Effect.Effect<void, AuthCommandFailed> =>
+  Effect.gen(function* () {
+    const user = yield* Effect.tryPromise({
+      try: () => SupabaseClient.getUser(),
+      catch: authCommandFailed,
+    });
+    const email = user?.email || 'unknown user';
+    yield* showInfo(`${prefix} ${email}`);
+  });
 
 /**
  * Run the interactive sign-in flow.
  *
- * Returns `true` when the user is authenticated by the time this resolves
- * (already signed in, or completed an OAuth flow). Returns `false` when the
- * user cancelled or hit an error.
+ * Succeeds with `true` when the user is authenticated by the time this
+ * settles (already signed in, or completed an OAuth flow), and with `false`
+ * when the user cancelled or hit an error. A host call that faults is
+ * reported here and answered as `false`, so nothing reaches the error
+ * channel and the host entry only has to run the program.
  */
-export async function signIn(): Promise<boolean> {
-  try {
-    // Check if auth system is ready - if not, provide clear error with reason
-    const authReady = await SupabaseClient.isReady();
-    if (!authReady) {
-      const reason =
-        SupabaseClient.getInitError()?.message ??
-        'Authentication service not initialized';
-      void showLoggedMessage(
-        CHANNEL,
-        `Sign in failed: ${reason}. Try reloading VS Code (Ctrl+Shift+P → "Reload Window"). If the problem continues, open Help → Toggle Developer Tools → Console for details.`,
-      );
-      return false;
-    }
+export const signIn: Effect.Effect<boolean> = Effect.gen(function* () {
+  // Check if auth system is ready - if not, provide clear error with reason
+  const authReady = yield* Effect.tryPromise({
+    try: () => SupabaseClient.isReady(),
+    catch: authCommandFailed,
+  });
+  if (!authReady) {
+    const reason =
+      SupabaseClient.getInitError()?.message ??
+      'Authentication service not initialized';
+    void showLoggedMessage(
+      CHANNEL,
+      `Sign in failed: ${reason}. Try reloading VS Code (Ctrl+Shift+P → "Reload Window"). If the problem continues, open Help → Toggle Developer Tools → Console for details.`,
+    );
+    return false;
+  }
 
-    const showAuthServiceUnavailable = () =>
-      showLoggedMessage(
-        CHANNEL,
-        'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
-      );
+  const showAuthServiceUnavailable = () =>
+    showLoggedMessage(
+      CHANNEL,
+      'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
+    );
 
-    let storedSessionState = await SupabaseClient.getStoredSessionState();
-    if (storedSessionState === 'invalid') {
-      const cleared =
+  const readStoredSessionState = Effect.tryPromise({
+    try: () => SupabaseClient.getStoredSessionState(),
+    catch: authCommandFailed,
+  });
+
+  let storedSessionState = yield* readStoredSessionState;
+  if (storedSessionState === 'invalid') {
+    const cleared = yield* Effect.tryPromise({
+      try: async () =>
         (await SupabaseAuthProvider.getInstance()?.clearStoredSession()) ??
-        false;
-      storedSessionState = cleared
-        ? 'none'
-        : await SupabaseClient.getStoredSessionState();
-    }
-    if (storedSessionState === 'transient') {
-      void showAuthServiceUnavailable();
-      return false;
-    }
+        false,
+      catch: authCommandFailed,
+    });
+    storedSessionState = cleared ? 'none' : yield* readStoredSessionState;
+  }
+  if (storedSessionState === 'transient') {
+    void showAuthServiceUnavailable();
+    return false;
+  }
 
-    if (storedSessionState === 'authenticated') {
-      // Auth readiness was established above, so the VS Code auth API is safe
-      // to consult here (calling it before readiness can hang on a timeout).
-      const existing = await vscode.authentication.getSession(
-        AUTH_PROVIDER_ID,
-        [],
-        { silent: true },
-      );
-      if (existing) {
-        await showSignedInMessage('Already signed in as');
-        return true;
-      }
-      void showAuthServiceUnavailable();
-      return false;
-    }
-
-    // Each option names its own provider, so a second "sign in to…" line
-    // would only repeat the title.
-    const selected = await vscode.window.showQuickPick<SignInOption>(
-      SIGN_IN_OPTIONS,
-      { title: 'Sign in to TeXRA', placeHolder: 'Choose a sign-in method' },
-    );
-    if (!selected) return false;
-
-    const session = await vscode.authentication.getSession(
-      AUTH_PROVIDER_ID,
-      [`provider:${selected.method}`],
-      { createIfNone: true },
-    );
-
-    if (session) {
-      await showSignedInMessage('Signed in as');
+  if (storedSessionState === 'authenticated') {
+    // Auth readiness was established above, so the VS Code auth API is safe
+    // to consult here (calling it before readiness can hang on a timeout).
+    const existing = yield* Effect.tryPromise({
+      try: () =>
+        Promise.resolve(
+          vscode.authentication.getSession(AUTH_PROVIDER_ID, [], {
+            silent: true,
+          }),
+        ),
+      catch: authCommandFailed,
+    });
+    if (existing) {
+      yield* showSignedInMessage('Already signed in as');
       return true;
     }
-    return false;
-  } catch (error) {
-    void showLoggedErrorMessage(CHANNEL, 'Sign in failed', error);
+    void showAuthServiceUnavailable();
     return false;
   }
-}
 
-export async function signOut(): Promise<void> {
-  try {
-    const storedSessionState = await SupabaseClient.getStoredSessionState();
-    if (storedSessionState === 'none') {
-      void vscode.window.showInformationMessage('Not signed in');
-      return;
-    }
+  // Each option names its own provider, so a second "sign in to…" line
+  // would only repeat the title.
+  const selected = yield* Effect.tryPromise({
+    try: () =>
+      Promise.resolve(
+        vscode.window.showQuickPick<SignInOption>(SIGN_IN_OPTIONS, {
+          title: 'Sign in to TeXRA',
+          placeHolder: 'Choose a sign-in method',
+        }),
+      ),
+    catch: authCommandFailed,
+  });
+  if (!selected) return false;
 
-    const confirmed = await confirmModal(
-      'Are you sure you want to sign out?',
-      'Sign out',
+  const session = yield* Effect.tryPromise({
+    try: () =>
+      Promise.resolve(
+        vscode.authentication.getSession(
+          AUTH_PROVIDER_ID,
+          [`provider:${selected.method}`],
+          { createIfNone: true },
+        ),
+      ),
+    catch: authCommandFailed,
+  });
+
+  if (session) {
+    yield* showSignedInMessage('Signed in as');
+    return true;
+  }
+  return false;
+}).pipe(
+  Effect.catchTag('AuthCommandFailed', (failure) =>
+    Effect.sync(() => {
+      void showLoggedErrorMessage(CHANNEL, 'Sign in failed', failure.cause);
+      return false;
+    }),
+  ),
+);
+
+/** Sign out of the stored TeXRA session, after confirming with the user. */
+export const signOut: Effect.Effect<void> = Effect.gen(function* () {
+  const storedSessionState = yield* Effect.tryPromise({
+    try: () => SupabaseClient.getStoredSessionState(),
+    catch: authCommandFailed,
+  });
+  if (storedSessionState === 'none') {
+    yield* showInfo('Not signed in');
+    return;
+  }
+
+  const confirmed = yield* Effect.tryPromise({
+    try: () => confirmModal('Are you sure you want to sign out?', 'Sign out'),
+    catch: authCommandFailed,
+  });
+  if (!confirmed) return;
+
+  const authProvider = SupabaseAuthProvider.getInstance();
+  if (!authProvider) {
+    void showLoggedMessage(
+      CHANNEL,
+      'Sign-out is unavailable right now. Reload the window, then try again.',
     );
-    if (!confirmed) return;
-
-    const authProvider = SupabaseAuthProvider.getInstance();
-    if (!authProvider) {
-      void showLoggedMessage(
-        CHANNEL,
-        'Sign-out is unavailable right now. Reload the window, then try again.',
-      );
-      return;
-    }
-    const removed = await authProvider.removeStoredSession();
-    const outcome = removed ? 'Signed out' : 'You were already signed out';
-    void vscode.window.showInformationMessage(outcome);
-  } catch (error) {
-    void showLoggedErrorMessage(CHANNEL, 'Sign out failed', error);
+    return;
   }
-}
+  const removed = yield* Effect.tryPromise({
+    try: () => authProvider.removeStoredSession(),
+    catch: authCommandFailed,
+  });
+  yield* showInfo(removed ? 'Signed out' : 'You were already signed out');
+}).pipe(
+  Effect.catchTag('AuthCommandFailed', (failure) =>
+    Effect.sync(() => {
+      void showLoggedErrorMessage(CHANNEL, 'Sign out failed', failure.cause);
+    }),
+  ),
+);
 
 /**
  * Login-banner input for the main view. Only the authenticated flag is

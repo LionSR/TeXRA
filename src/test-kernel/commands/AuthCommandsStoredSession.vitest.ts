@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
@@ -86,7 +87,7 @@ describe('auth commands for unavailable stored sessions', () => {
       .mockResolvedValue(true);
     authMocks.showQuickPick.mockResolvedValue(undefined);
 
-    await expect(signIn()).resolves.toBe(false);
+    await expect(Effect.runPromise(signIn)).resolves.toBe(false);
 
     expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
     expect(authMocks.getSession).not.toHaveBeenCalled();
@@ -97,7 +98,7 @@ describe('auth commands for unavailable stored sessions', () => {
   it('preserves the session and defers sign-in during a transient outage', async () => {
     mockUnavailableStoredSession('transient');
 
-    await expect(signIn()).resolves.toBe(false);
+    await expect(Effect.runPromise(signIn)).resolves.toBe(false);
 
     expect(authMocks.clearStoredSession).not.toHaveBeenCalled();
     expect(authMocks.getSession).not.toHaveBeenCalled();
@@ -122,7 +123,7 @@ describe('auth commands for unavailable stored sessions', () => {
       email: 'user@example.com',
     } as never);
 
-    await expect(signIn()).resolves.toBe(true);
+    await expect(Effect.runPromise(signIn)).resolves.toBe(true);
 
     expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
     expect(authMocks.getSession).toHaveBeenCalledOnce();
@@ -139,7 +140,7 @@ describe('auth commands for unavailable stored sessions', () => {
     );
     authMocks.getSession.mockResolvedValue(undefined);
 
-    await expect(signIn()).resolves.toBe(false);
+    await expect(Effect.runPromise(signIn)).resolves.toBe(false);
 
     expect(authMocks.clearStoredSession).not.toHaveBeenCalled();
     expect(authMocks.showQuickPick).not.toHaveBeenCalled();
@@ -153,7 +154,7 @@ describe('auth commands for unavailable stored sessions', () => {
     mockUnavailableStoredSession('invalid');
     authMocks.showWarningMessage.mockResolvedValue('Sign out');
 
-    await signOut();
+    await Effect.runPromise(signOut);
 
     expect(authMocks.getSession).not.toHaveBeenCalled();
     expect(authMocks.removeStoredSession).toHaveBeenCalledOnce();
