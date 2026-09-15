@@ -154,7 +154,8 @@ export function createDesktopHostRequests(
   const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
     Effect.tryPromise({
       try: () => rejectRequest(reason),
-      catch: (cause) => cause as Rejected,
+      catch: (cause) =>
+        cause instanceof Rejected ? cause : new Rejected({ reason }),
     });
   const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),

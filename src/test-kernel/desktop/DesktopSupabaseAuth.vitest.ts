@@ -78,8 +78,8 @@ function createTestAuth(options: DesktopAuthTestOptions) {
     ),
     log = createLog(),
     openExternalUrl = vi.fn(async () => {}),
-    showInfoMessage = vi.fn(),
-    showErrorMessage = vi.fn(),
+    showInfoMessage = vi.fn(() => Effect.void),
+    showErrorMessage = vi.fn(() => Effect.void),
     onSessionChanged = vi.fn(),
   } = options;
   const auth = createDesktopSupabaseAuth({
