@@ -165,19 +165,16 @@ export function createReviewPane(): ReviewPaneController {
               ${waIcon('magnifying-glass', { slot: 'start' })}
               ${
                 filter
-                  ? html`
-                      <span slot="end">
-                        ${renderIconActionButton({
-                          icon: 'xmark',
-                          label: 'Clear file filter',
-                          className: 'icon-button is-size-s',
-                          onClick: () => {
-                            filter = '';
-                            rerender();
-                          },
-                        })}
-                      </span>
-                    `
+                  ? renderIconActionButton({
+                      icon: 'xmark',
+                      label: 'Clear file filter',
+                      className: 'icon-button is-size-s',
+                      slot: 'end',
+                      onClick: () => {
+                        filter = '';
+                        rerender();
+                      },
+                    })
                   : nothing
               }
             </wa-input>
