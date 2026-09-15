@@ -527,12 +527,12 @@ members**, and the difference matters, because a third of them never convert:
   `createWriteStream`, `fullPath`. A synchronous API has no Effect to return
   that would help its callers, and the stream factories hand back Node
   streams. (A ninth, `mkdirSync`, had no caller at all and is deleted — §9.)
-  *(2026-09-15: `readSync`, `readBytesSync` and `deleteSync` lost their last
+  _(2026-09-15: `readSync`, `readBytesSync` and `deleteSync` lost their last
   callers to the migration and are deleted, as are `publish` and
   `removeEmptyDir` — the latter two by #12599, the first three by this wave's
   dead-surface slice. The synchronous tail this bullet describes is now
   `existsSync`, `statSync`, `createReadStream`, `createWriteStream` and
-  `fullPath`; the three sync members join `mkdirSync` in the deleted column.)*
+  `fullPath`; the three sync members join `mkdirSync` in the deleted column.)_
 - `RelativeFS` adds `readJson` and `cleanupOldFiles`; `WorkspaceFS` adds four
   synchronous path helpers (`getPath`, `relativePath`, `toAbsolute`,
   `locatePath`) with 81 production uses between them, none of which convert.
