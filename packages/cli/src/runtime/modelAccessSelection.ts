@@ -12,7 +12,7 @@ import {
 import { AppState, StateWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   shouldUseSubscriptionDeviceCode,
@@ -40,7 +40,7 @@ interface CliModelAccessSelectionResult {
 class ModelAccessPreferenceFailed extends Data.TaggedError(
   'ModelAccessPreferenceFailed',
 )<{
-  readonly member: 'getStatus' | 'setPreferSubscription' | 'setEnabled';
+  readonly member: 'setPreferSubscription' | 'setEnabled';
   readonly subscription: string;
   readonly message: string;
   readonly cause: unknown;
@@ -56,14 +56,9 @@ export const readCliModelAccessStatus = Effect.fn(
 )(function* (secrets: PlatformSecrets) {
   const [chatGpt, grok, codingPlanEntries] = yield* Effect.all(
     [
-      Effect.tryPromise({
-        try: () => subscriptionProvider('chatgpt').getStatus(secrets),
-        catch: ensureError,
-      }),
-      Effect.tryPromise({
-        try: () => subscriptionProvider('grok').getStatus(secrets),
-        catch: ensureError,
-      }),
+      // Infallible: an unreadable session store reports signed-out.
+      subscriptionProvider('chatgpt').getStatus(secrets),
+      subscriptionProvider('grok').getStatus(secrets),
       Effect.forEach(
         codingPlanSubscriptionRuntimes,
         (runtime) =>
@@ -148,16 +143,8 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     } satisfies CliModelAccessSelectionResult;
   }
 
-  const status = yield* Effect.tryPromise({
-    try: () => provider.getStatus(secrets),
-    catch: (cause) =>
-      new ModelAccessPreferenceFailed({
-        member: 'getStatus',
-        subscription: providerId,
-        message: `The ${displayName} subscription session could not be read: ${toErrorMessage(cause)}`,
-        cause,
-      }),
-  });
+  // Infallible like the status reads above; a read failure reports signed-out.
+  const status = yield* provider.getStatus(secrets);
   let accountLabel = status.label;
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };

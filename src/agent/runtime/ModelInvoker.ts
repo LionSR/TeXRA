@@ -94,6 +94,7 @@ import {
   runtimeSnapshotRow,
   stepRow,
 } from './loop/rows';
+import type { HttpClient } from 'effect/unstable/http';
 import type { RoutePolicy } from './ModelRetryGate';
 
 /**
@@ -202,7 +203,11 @@ export class ModelInvoker extends Context.Service<
     readonly invoke: (
       state: RunState,
       request: InvokeRequest,
-    ) => Effect.Effect<InvocationOutcome, InvokeError, FileSystem.FileSystem>;
+    ) => Effect.Effect<
+      InvocationOutcome,
+      InvokeError,
+      FileSystem.FileSystem | HttpClient.HttpClient
+    >;
   }
 >()('@texra/agent/ModelInvoker') {}
 
@@ -1012,7 +1017,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         failedAttempt: InvocationRef,
         operationId: string,
         outstanding: string | null,
-      ): Effect.fn.Return<Decision, InvokeError> {
+      ): Effect.fn.Return<Decision, InvokeError, HttpClient.HttpClient> {
         let state = initial;
         const requestId = outstanding ?? `retry-${generateShortId()}`;
         const info = toRetryErrorInfo(recorded);
@@ -1160,7 +1165,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       ): Effect.fn.Return<
         InvocationOutcome,
         InvokeError,
-        FileSystem.FileSystem
+        FileSystem.FileSystem | HttpClient.HttpClient
       > {
         let state = initial;
         const operationId = `model-operation-${generateShortId()}`;
