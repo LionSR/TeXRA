@@ -212,6 +212,22 @@ const BOUNDARY_RUNTIME_ENTRIES = new Map([
       },
     },
   ],
+  [
+    'src/platform/processRuntime.ts',
+    {
+      reason:
+        'the module that owns the process runtime: the host entry installs it here exactly once per process (initProcessRuntime, beside initPlatform), and withForkFailureReporting runs only on the runtime its caller passes — the parameter-entry premise',
+      // The one approved binding: withForkFailureReporting's
+      // `runtime: ManagedRuntime` parameter -- pinned to that function by
+      // name, so the exemption cannot transfer to another helper's
+      // lookalike parameter.
+      runtime: {
+        name: 'runtime',
+        parameterType: 'ManagedRuntime',
+        parameterOwner: 'withForkFailureReporting',
+      },
+    },
+  ],
 ]);
 
 const RUNTIME_ENTRY_PATHS = [...BOUNDARY_RUNTIME_ENTRIES.keys()];
@@ -455,7 +471,7 @@ const ROWS = [
   })),
   {
     id: ROW_RUN_BOUNDARY,
-    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli, plus runs on a local or parameter runtime in the named webview runtime entries: ${RUNTIME_ENTRY_NAMES.join(', ')} — owner ruling 2026-09-14), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
+    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli, plus runs on a local or parameter runtime in the named runtime entries: ${RUNTIME_ENTRY_NAMES.join(', ')} — owner ruling 2026-09-14), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
   },
   {
     id: ROW_CATCH,
@@ -472,7 +488,7 @@ const SEMANTICS =
   `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the three AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
   "'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  `'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a run on a runtime the file binds as a local or parameter inside a named webview runtime entry — ${RUNTIME_ENTRY_PATHS.join(', ')}; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); ` +
+  `'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a run on a runtime the file binds as a local or parameter inside a named runtime entry — ${RUNTIME_ENTRY_PATHS.join(', ')}; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); ` +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
   'The PR that zeroes a row deletes the row from the baseline; SUPERSEDED_PACKAGES and the other survey lists stay, so a later site fails as a new file.';
@@ -1039,6 +1055,14 @@ function selfTestBoundary() {
     'const runtime = installWebviewRuntime();\nruntime.runSync(a);\n',
     'packages/extension/src/progressView/frontend/ProgressApp.ts',
   );
+  const processRuntimeProbe = surveySource(
+    "import { Effect, type ManagedRuntime } from 'effect';\nexport function withForkFailureReporting(runtime: ManagedRuntime.ManagedRuntime<never, never>) {\n  const reportExit = (exit) => runtime.runFork(Effect.logError(exit));\n  return { ...runtime, runFork: (effect, options) => runtime.runFork(effect, options) };\n}\n",
+    'src/platform/processRuntime.ts',
+  );
+  const siblingParameterProbe = surveySource(
+    "import { type ManagedRuntime } from 'effect';\nexport function withForkFailureReporting(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\nexport function initProcessRuntime(runtime) { install(runtime); }\n",
+    'src/platform/processRuntime.ts',
+  );
   const runCases = [
     [(probe.counts.get(ROW_RUN_BOUNDARY) ?? 0) === 5, 'probe run count'],
     [
@@ -1094,8 +1118,21 @@ function selfTestBoundary() {
       'a file outside the map has no approved runtime',
     ],
     [
+      (processRuntimeProbe.counts.get(ROW_RUN_BOUNDARY) ?? 0) === 2 &&
+        processRuntimeProbe.localRuntimeRuns === 2,
+      "processRuntime's wrapper admits both runs on its caller-passed parameter",
+    ],
+    [
+      siblingParameterProbe.localRuntimeRuns === 0,
+      'a same-named parameter on another function in the entry fails closed',
+    ],
+    [
       belowBoundaryRuns('src/shared/signals.ts', 5, 1) === 4,
       'entry keeps unapproved runs',
+    ],
+    [
+      belowBoundaryRuns('src/platform/processRuntime.ts', 2, 2) === 0,
+      'processRuntime entry admits approved runs',
     ],
     [
       belowBoundaryRuns(
@@ -1156,6 +1193,7 @@ function selfTestBoundary() {
     ['packages/extension/src/progressView/frontend/sessionTransport.ts', false],
     ['packages/extension/src/progressView/frontend/ProgressApp.ts', false],
     ['src/shared/signals.ts', false],
+    ['src/platform/processRuntime.ts', false],
     ['src/shared/session/sessionFold.ts', false],
     ['packages/extension/src/webview/frontend/app.ts', false],
     ['packages/extension/src/settingsView/frontend/settings.ts', false],

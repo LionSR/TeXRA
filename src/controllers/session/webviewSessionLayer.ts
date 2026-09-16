@@ -12,8 +12,17 @@
  * that installed the runtime disposes it, once, on the shutdown path its
  * entry drives.
  */
-import { Context, Effect, Layer, LayerMap, ManagedRuntime } from 'effect';
+import {
+  Context,
+  Effect,
+  Layer,
+  LayerMap,
+  Logger,
+  ManagedRuntime,
+} from 'effect';
 
+import { writeLogEntry } from '@logger/logSink';
+import { withForkFailureReporting } from '@platform/processRuntime';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { SessionFrames } from '@shared/session/sessionFrames';
 import { TranscriptSubscriptions } from './sessionSources';
@@ -72,10 +81,41 @@ export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
 type WebviewRuntime = ManagedRuntime.ManagedRuntime<WebviewSessions, never>;
 
 /**
+ * Secret-redacting Effect logger for the webview runtime. The process
+ * diagnostics layer pulls Node-only `logUtils`, so this writes the same
+ * structured entry through `logSink` (redacted unless a host marked the sink
+ * trusted) instead of Effect's default console logger.
+ *
+ * ERROR/FATAL are emitted as WARN: this bundle has no host log channel, and
+ * Electron's smoke harness treats `console.error` (the sink's ERROR path) as
+ * a failed view. Fork-failure reports and fold defects still show in
+ * DevTools after redaction.
+ */
+const webviewDiagnosticsLayer = Logger.layer([
+  Logger.make((options) => {
+    if (options.logLevel === 'None') return;
+    const entry = Logger.formatStructured.log(options);
+    writeLogEntry(
+      entry.level === 'ERROR' || entry.level === 'FATAL'
+        ? { ...entry, level: 'WARN' }
+        : entry,
+    );
+  }),
+]);
+
+/**
  * Make the one Effect runtime of this webview over its session family (PRD
  * 7.7): called by the webview transport exactly once per module evaluation
- * and disposed by it, on the one shutdown path the entry drives.
+ * and disposed by it, on the one shutdown path the entry drives. Fork
+ * reporting applies here as it does to the process runtime; the logger
+ * layer above is the redacting sink, not the default console logger.
  */
 export function installWebviewRuntime(): WebviewRuntime {
-  return ManagedRuntime.make(WebviewSessions.layerNoDeps);
+  return withForkFailureReporting(
+    ManagedRuntime.make(
+      WebviewSessions.layerNoDeps.pipe(
+        Layer.provideMerge(webviewDiagnosticsLayer),
+      ),
+    ),
+  );
 }
