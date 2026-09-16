@@ -59,6 +59,7 @@ import {
   type SessionGraph,
   type SessionOpen,
 } from '@agent/runtime/sessionGraph';
+import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { createLog } from '@logger/logUtils';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import {
@@ -1033,6 +1034,13 @@ export interface ProcessRuntimeOptions {
    * yields `AppState` on such a runtime fails as a missing service.
    */
   readonly appState?: StateStore;
+  /**
+   * The root's account plane, served as `SupabaseAuth`. Every shipped host
+   * builds one from its secrets; a composition with no TeXRA account plane
+   * (the agent package serving an embedder) serves
+   * `unavailableSupabaseAuth()`, whose probes answer signed-out.
+   */
+  readonly auth: SupabaseAuthShape;
   readonly setup: SetupPlatformShape;
   /**
    * The editor's language models, for the one host that has an editor: the
@@ -1054,17 +1062,21 @@ export interface ProcessRuntimeOptions {
 }
 
 /**
- * The four cohort-A process services over a root's own stores and setup
- * platform: what {@link installProcessRuntime} merges into the process
+ * The cohort-A process services over a root's own stores, account plane, and
+ * setup platform: what {@link installProcessRuntime} merges into the process
  * runtime, and what the agent package provides around the launches it runs
  * on an embedder's runtime (its `Sessions` API keeps them off its types).
  */
 function processServicesLayer({
   secrets,
   appState,
+  auth,
   setup,
-}: Pick<ProcessRuntimeOptions, 'secrets' | 'appState' | 'setup'>): Layer.Layer<
-  Secrets | AppState | SetupPlatform | ToolInjections
+}: Pick<
+  ProcessRuntimeOptions,
+  'secrets' | 'appState' | 'auth' | 'setup'
+>): Layer.Layer<
+  Secrets | AppState | SupabaseAuth | SetupPlatform | ToolInjections
 > {
   return Layer.mergeAll(
     Secrets.layer(secrets),
@@ -1074,6 +1086,7 @@ function processServicesLayer({
     appState === undefined
       ? (Layer.empty as Layer.Layer<AppState>)
       : AppState.layer(appState),
+    SupabaseAuth.layer(auth),
     SetupPlatform.layer(setup),
     ToolInjections.layer(AGENT_TOOL_INJECTIONS),
   );
@@ -1085,6 +1098,7 @@ export function installProcessRuntime({
   updateCheckStorage,
   secrets,
   appState,
+  auth,
   setup,
   editorModel,
   lean,
@@ -1105,7 +1119,7 @@ export function installProcessRuntime({
   const services = Layer.mergeAll(
     inquiryRecordsLayer(globalStorage),
     updateCheckRecordsLayer(updateCheckStorage),
-    processServicesLayer({ secrets, appState, setup }),
+    processServicesLayer({ secrets, appState, auth, setup }),
     editorModel === undefined
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),

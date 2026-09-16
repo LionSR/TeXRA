@@ -5,12 +5,14 @@
  * catalog and never holds a stale one. Every producer is a read the host
  * already owns; nothing here is a fact about a run (`SessionView`) or a
  * choice of the user's (`Surface`). The catalogs are host-neutral; the
- * host injects its file lists, its git probe, its sign-in probe, and the
- * banners only it can answer (a VS Code host knows its API-key status and
- * its missing tools; the desktop keeps both in Settings).
+ * host injects its file lists, its git probe, and the banners only it can
+ * answer (a VS Code host knows its API-key status and
+ * its missing tools; the desktop keeps both in Settings). The sign-in probe
+ * is the account plane's own read, yielded from `SupabaseAuth`.
  */
 import { Cause, Data, Effect, Exit } from 'effect';
 import { computeAgentOptionsData } from '@agent/index';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import {
@@ -31,21 +33,20 @@ import type {
 type Banners = HostSnapshot['banners'];
 
 /**
- * One of the host's own snapshot reads failed. The five members below are the
- * reads only a host can answer — its file lists, its git probe, its sign-in
- * probe, and the two banners it alone knows about — so the failure is the
- * host's and carries it. `member` says which producer kept its last value:
- * every read here is guarded, so a failure never blanks the shell.
+ * One of the host's own snapshot reads failed. The members below are the
+ * reads only a host can answer — its file lists, its git probe, and the two
+ * banners it alone knows about — so the failure is the host's and carries it.
+ * `member` says which producer kept its last value: every read here is
+ * guarded, so a failure never blanks the shell. The sign-in probe is no
+ * longer a port: both GUI hosts bottomed out in the account plane's own
+ * infallible `authenticated` read, so the source yields `SupabaseAuth`
+ * directly.
  */
 export class HostSnapshotReadFailed extends Data.TaggedError(
   'HostSnapshotReadFailed',
 )<{
   readonly member:
-    | 'fileOptions'
-    | 'readRecentCommits'
-    | 'isAuthenticated'
-    | 'apiKeyBanner'
-    | 'dependencyBanner';
+    'fileOptions' | 'readRecentCommits' | 'apiKeyBanner' | 'dependencyBanner';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -77,8 +78,6 @@ interface HostSnapshotSourceOptions {
     { commits: string[]; isGitRepo: boolean },
     HostSnapshotReadFailed
   >;
-  /** Whether the user is signed in; the login banner is its negation. */
-  isAuthenticated(): Effect.Effect<boolean, HostSnapshotReadFailed>;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots?: () => HostSnapshot['workspaceRoots'];
   debugMode?: () => boolean;
@@ -96,7 +95,7 @@ interface HostSnapshotSourceOptions {
 
 export interface HostSnapshotSource {
   /** Reassemble every catalog and publish the result. */
-  readonly refresh: Effect.Effect<void>;
+  readonly refresh: Effect.Effect<void, never, SupabaseAuth>;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<void>;
@@ -104,7 +103,7 @@ export interface HostSnapshotSource {
   readonly refreshFiles: Effect.Effect<void>;
   readonly refreshCommits: Effect.Effect<void>;
   /** The sign-in state changed. */
-  readonly refreshAuth: Effect.Effect<void>;
+  readonly refreshAuth: Effect.Effect<void, never, SupabaseAuth>;
   /** The host's own banners changed (a key stored, a tool installed). */
   readonly refreshHostBanners: Effect.Effect<void>;
   /** The workspace folders changed. */
@@ -214,7 +213,10 @@ export function createHostSnapshotSource(
   });
 
   const loadAuth = Effect.gen(function* () {
-    authenticated = yield* options.isAuthenticated();
+    authenticated = yield* Effect.flatMap(
+      SupabaseAuth,
+      (auth) => auth.authenticated,
+    );
   });
 
   const loadHostBanners = Effect.gen(function* () {
@@ -236,9 +238,9 @@ export function createHostSnapshotSource(
   /** Each producer settles on its own: one that fails is reported and keeps
    *  its last value, and the snapshot still publishes what the others read,
    *  so a single unavailable source never leaves the shell blank. */
-  const guarded = (
-    ...loads: Effect.Effect<void, unknown>[]
-  ): Effect.Effect<void> =>
+  const guarded = <R>(
+    ...loads: Effect.Effect<void, unknown, R>[]
+  ): Effect.Effect<void, never, R> =>
     Effect.gen(function* () {
       const settled = yield* Effect.forEach(
         loads,

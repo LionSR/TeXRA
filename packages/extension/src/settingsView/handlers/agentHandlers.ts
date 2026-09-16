@@ -17,7 +17,7 @@ import {
   refresh as refreshAgents,
 } from '@agent/index';
 import { AUTH_COMMANDS } from '@auth/constants';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
@@ -226,7 +226,9 @@ export class AgentHandlers {
       this.ctx,
       'Failed to view remote agent prompt',
       async () => {
-        const result = await getRemoteAgentPromptConfig(data.agentName);
+        const result = await this.runtime.runPromise(
+          getRemoteAgentPromptConfig(data.agentName),
+        );
         if (!result.ok) {
           await showLoggedMessage(this.ctx.channel, result.message);
           return;
@@ -329,7 +331,7 @@ export class AgentHandlers {
             applySettingsTeamRoster(data.presetId, {
               catalog: this.catalogController,
               loadLocalCatalog: () => loadAgents({ includeRemote: false }),
-              canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
+              canAccessRemoteCatalog: () => supabaseAuthenticated,
               signIn: async () =>
                 (await vscode.commands.executeCommand<boolean>(
                   AUTH_COMMANDS.SIGN_IN,

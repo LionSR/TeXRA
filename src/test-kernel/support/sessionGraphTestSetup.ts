@@ -2,6 +2,7 @@ import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import {
   fakeHostAppState,
+  fakeHostAuth,
   fakeHostSecrets,
   fakeSetupPlatform,
   installedHost,
@@ -38,6 +39,9 @@ export function installTestSessionGraphs(): void {
     updateCheckStorage: () => installedHost().roots.globalStorage,
     secrets: fakeHostSecrets,
     appState: fakeHostAppState,
+    // Suites swap the account plane with their host; the default host's
+    // answers signed-out.
+    auth: fakeHostAuth,
     setup: fakeSetupPlatform,
     // The Node hosts' layer: inert until a Lean tool is invoked.
     lean: directLeanLanguageServices(),

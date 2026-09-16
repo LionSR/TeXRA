@@ -301,6 +301,23 @@ function readBaseline(): EdgeBaseline {
   return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as EdgeBaseline;
 }
 
+/**
+ * New edges admitted by name, each with its reason. The JSON baseline is
+ * shrink-only, so a deliberate new edge is recorded here, the way
+ * `check-effect-migration-ratchet.mjs` records BOUNDARY_RUNTIME_ENTRIES. The
+ * admission is for the type-only form only: a later value import still fails
+ * as a new-edge violation of kind `value`. Adding an entry is a ruling, not a
+ * refactor.
+ */
+const ADMITTED_TYPE_ONLY_EDGES = new Map<string, string>([
+  [
+    'platform->auth',
+    'processRuntime.ts unions the `SupabaseAuth` tag into `ProcessServices` ' +
+      'beside the existing `@agent`/`@tools` service tags: the account plane ' +
+      'is a process-lifetime service every host root installs once.',
+  ],
+]);
+
 function edgeKey(edge: Pick<SubsystemEdge, 'from' | 'to'>): string {
   return `${edge.from}->${edge.to}`;
 }
@@ -315,6 +332,12 @@ function findRatchetViolations(
   for (const edge of current) {
     const baselineEdge = baselineByEdge.get(edgeKey(edge));
     if (baselineEdge == null) {
+      if (
+        edge.kind === 'type-only' &&
+        ADMITTED_TYPE_ONLY_EDGES.has(edgeKey(edge))
+      ) {
+        continue;
+      }
       violations.push({
         edge: edgeKey(edge),
         reason: 'new-edge',

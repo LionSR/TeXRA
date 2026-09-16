@@ -19,12 +19,10 @@ import {
   implicitDefaultToolUseAgents,
 } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { capitalize } from '@utils/text/stringUtils';
 
 import {
   preflightTeamAvailability,
-  TeamCatalogPortFailed,
   type TeamAvailabilityChoice,
 } from './TeamAvailabilityPreflight';
 import { resolvePresetAgents } from './TeamRoster';
@@ -254,7 +252,7 @@ export function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
   customPresetsRaw: unknown;
   ensureCatalogLoaded: () => Effect.Effect<void, unknown>;
   getAgents: (category: AgentCategory) => readonly T[];
-  canAccessRemoteCatalog: () => Promise<boolean>;
+  canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   refreshRemote: () => Effect.Effect<void, unknown>;
 }): Effect.Effect<TeamOptionData[], unknown> {
   return Effect.gen(function* () {
@@ -299,7 +297,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
   customPresetsRaw: unknown;
   ensureCatalogLoaded: () => Effect.Effect<void, unknown>;
   getAgents: (category: AgentCategory) => readonly T[];
-  canAccessRemoteCatalog: () => Promise<boolean>;
+  canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   refreshRemote: () => Effect.Effect<void, unknown>;
   choose: (
     unavailableNames: readonly string[],
@@ -373,7 +371,7 @@ export function refreshRemoteCatalogForGaps<T>(
   hasGaps: (value: T) => boolean,
   replan: () => T,
   ports: {
-    canAccessRemoteCatalog: () => Promise<boolean>;
+    canAccessRemoteCatalog: () => Effect.Effect<boolean>;
     refreshRemote: () => Effect.Effect<void, unknown>;
   },
 ): Effect.Effect<
@@ -384,15 +382,7 @@ export function refreshRemoteCatalogForGaps<T>(
     // `hasGaps` first, as in the Promise original: a gapless plan must not
     // even probe remote access.
     if (hasGaps(value)) {
-      const canAccess = yield* Effect.tryPromise({
-        try: () => ports.canAccessRemoteCatalog(),
-        catch: (cause) =>
-          new TeamCatalogPortFailed({
-            member: 'canAccessRemoteCatalog',
-            message: `Remote agent catalog access could not be checked: ${toErrorMessage(cause)}`,
-            cause,
-          }),
-      });
+      const canAccess = yield* ports.canAccessRemoteCatalog();
       if (canAccess) {
         yield* ports.refreshRemote();
         return { value: replan(), remoteCatalogRefreshAttempted: true };

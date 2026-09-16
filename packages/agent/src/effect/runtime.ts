@@ -26,6 +26,7 @@ import {
   listSessions as listOwnedSessions,
   sessionOwnerInstalled,
 } from '@agent/runtime';
+import { unavailableSupabaseAuth } from '@auth/SupabaseAuth';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -191,6 +192,9 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   const processServices = {
     secrets: platform.secrets,
     appState: platform.roots.globalState,
+    // The package has no TeXRA account plane of its own: every probe answers
+    // signed-out, as the uninitialized facade did for an embedder.
+    auth: unavailableSupabaseAuth(),
     setup: PACKAGE_SETUP,
   };
   let processRuntime = tryProcessRuntime();

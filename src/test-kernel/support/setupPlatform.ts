@@ -21,6 +21,10 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import type { ToolInjections } from '@agent/runtime/toolInjection';
+import {
+  unavailableSupabaseAuth,
+  type SupabaseAuthShape,
+} from '@auth/SupabaseAuth';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { AppState, StateStore } from '@platform/interfaces';
@@ -54,6 +58,8 @@ export interface FakeHost {
   /** The store the host's `Secrets` service reads, as a root's own local. */
   readonly secrets: PlatformSecrets;
   readonly setup?: SetupPlatformShape;
+  /** The host's account plane; absent hosts answer signed-out. */
+  readonly auth?: SupabaseAuthShape;
 }
 
 type HostBuilder = () => FakeHost | Promise<FakeHost>;
@@ -98,6 +104,7 @@ export function createFakeHost(
     globalState,
     secrets,
     setup,
+    auth,
     ...platformOverrides
   } = overrides;
   return {
@@ -109,6 +116,7 @@ export function createFakeHost(
     }),
     secrets: secrets ?? new FakeSecrets(options.secrets, options.secretsEnv),
     ...(setup ? { setup } : {}),
+    ...(auth ? { auth } : {}),
   };
 }
 
@@ -122,6 +130,16 @@ let current: FakeHost | undefined;
 export function installedHost(): FakeHost {
   if (!current) throw new Error('No fake host is installed.');
   return current;
+}
+
+/**
+ * Swap the installed host's account plane mid-test. The host's other pieces
+ * stay: a describe-level `setupPlatform` override (a scoped config provider)
+ * survives the swap.
+ */
+export function installHostAuth(auth: SupabaseAuthShape): void {
+  if (!current) throw new Error('No fake host is installed.');
+  current = { ...current, auth };
 }
 
 /**
@@ -188,6 +206,49 @@ export const fakeHostAppState: StateStore = {
   update: (key, value) => installedHost().roots.globalState.update(key, value),
 };
 
+/**
+ * The `SupabaseAuth` service of every test runtime, in the shape
+ * `fakeHostSecrets` already uses: each member reads the installed host's
+ * `auth` when it runs, because the runtime is built once per module instance
+ * while hosts are swapped per test. A host without one answers signed-out.
+ */
+let defaultUnavailableAuth: SupabaseAuthShape | undefined;
+function installedAuth(): SupabaseAuthShape {
+  return (
+    installedHost().auth ??
+    (defaultUnavailableAuth ??= unavailableSupabaseAuth())
+  );
+}
+
+export const fakeHostAuth: SupabaseAuthShape = {
+  get client() {
+    return installedAuth().client;
+  },
+  get coordinator() {
+    return installedAuth().coordinator;
+  },
+  get isReady() {
+    return Effect.suspend(() => installedAuth().isReady);
+  },
+  get accessToken() {
+    return Effect.suspend(() => installedAuth().accessToken);
+  },
+  get user() {
+    return Effect.suspend(() => installedAuth().user);
+  },
+  get authenticated() {
+    return Effect.suspend(() => installedAuth().authenticated);
+  },
+  get storedSessionState() {
+    return Effect.suspend(() => installedAuth().storedSessionState);
+  },
+  get storedAccountLabel() {
+    return Effect.suspend(() => installedAuth().storedAccountLabel);
+  },
+  getInitError: () => installedAuth().getInitError(),
+  setInitError: (error) => installedAuth().setInitError(error),
+};
+
 /** The process services a fake host provides to a program. */
 export type FakeProcessServices = ProcessServices;
 
@@ -233,6 +294,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { AppState },
     { SetupPlatform },
     { ToolInjections },
+    { SupabaseAuth },
   ] = await Promise.all([
     import('@platform/platform'),
     import('@platform/workspaceRoots'),
@@ -244,6 +306,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/interfaces'),
     import('@tools/setup/platform'),
     import('@agent/runtime/toolInjection'),
+    import('@auth/SupabaseAuth'),
   ]);
   current = host;
   // The process services, over whichever host is installed when a member is
@@ -265,6 +328,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
     Secrets.layer(fakeHostSecrets),
     AppState.layer(fakeHostAppState),
+    SupabaseAuth.layer(fakeHostAuth),
     SetupPlatform.layer(fakeSetupPlatform),
     // No conditional injections on the bare fake host: a suite that
     // exercises them passes its own list to `resolveAgentTools`.

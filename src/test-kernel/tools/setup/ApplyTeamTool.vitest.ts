@@ -8,13 +8,17 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
+import {
+  hostStores,
+  installHostAuth,
+  installPlatform,
+} from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
@@ -48,10 +52,9 @@ function expectNoTeamState(): void {
 const signIn = vi.fn<() => Promise<boolean>>();
 
 function mockCatalogAccess(canAccessCatalog: boolean): void {
-  vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(
-    canAccessCatalog,
+  installHostAuth(
+    fakeSupabaseAuth({ authenticated: Effect.succeed(canAccessCatalog) }),
   );
-  vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
 }
 
 async function clearOnboardingState(): Promise<void> {

@@ -23,7 +23,7 @@ import {
   loadAgents,
   refresh,
 } from '@agent/index';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import {
   classifyAgentError,
   primaryAgentError,
@@ -297,6 +297,9 @@ const hostDraftRequests = new HostDraftRequests();
 function createWindow(options: {
   projects: DesktopProjectRegistry;
   authCoordinator: DesktopAuthCoordinator;
+  /** The account plane served as `SupabaseAuth`, for the window's direct
+   *  sign-in probes and the OAuth client it drives. */
+  supabaseAuth: SupabaseAuthShape;
   authCallbackState: DesktopAuthCallbackState;
   /**
    * The process services the composition root built (see
@@ -680,7 +683,7 @@ function createWindow(options: {
     createDesktopSupabaseAuth({
       router: protocolLifecycle.router,
       coordinator: options.authCoordinator,
-      oauthClient: SupabaseClient.getClient(),
+      oauthClient: options.supabaseAuth.client,
       callbackState: options.authCallbackState,
       host: desktopAuthHost,
       log: console,
@@ -709,7 +712,7 @@ function createWindow(options: {
     try {
       return (
         (await desktopAuth.signInAndWaitForSession(provider)) &&
-        (await SupabaseClient.isAuthenticated())
+        (await runtime.runPromise(options.supabaseAuth.authenticated))
       );
     } finally {
       teamSignInPending = false;
@@ -949,16 +952,6 @@ function createWindow(options: {
             new HostSnapshotReadFailed({
               member: 'readRecentCommits',
               message: 'The recent commits could not be read.',
-              cause,
-            }),
-        }),
-      isAuthenticated: () =>
-        Effect.tryPromise({
-          try: () => SupabaseClient.isAuthenticated(),
-          catch: (cause) =>
-            new HostSnapshotReadFailed({
-              member: 'isAuthenticated',
-              message: 'The TeXRA sign-in state could not be read.',
               cause,
             }),
         }),
@@ -1237,7 +1230,7 @@ function createWindow(options: {
         chooseTeamAvailability: presentTeamAvailabilityPrompt,
       },
       remoteCatalog: {
-        canAccess: () => SupabaseClient.isAuthenticated(),
+        canAccess: () => options.supabaseAuth.authenticated,
         signIn: signInForRemoteAgentCatalog,
       },
       notifications: { showInfoMessage, showErrorMessage },
@@ -1967,8 +1960,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           });
 
           const authCoordinator = createDesktopAuthCoordinator({
-            secrets: platformInit.secrets,
-            log: console,
+            auth: platformInit.supabaseAuth,
             runtime,
           });
           const authCallbackState = createDesktopAuthCallbackState(
@@ -1981,6 +1973,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             createWindow({
               projects,
               authCoordinator,
+              supabaseAuth: platformInit.supabaseAuth,
               authCallbackState,
               globalState: platformInit.globalState,
               secrets: platformInit.secrets,

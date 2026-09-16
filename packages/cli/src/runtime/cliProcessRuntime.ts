@@ -42,7 +42,7 @@
  */
 import { Effect } from 'effect';
 
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { AppState, type StateStore } from '@platform/interfaces';
@@ -56,7 +56,7 @@ import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 import { getCliSecrets } from './cliSecrets';
-import { signInCliSupabase } from './supabaseAuth';
+import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 
 /** The process runtime and the global state store installed under it. */
 export interface CliProcessRuntimeInstall {
@@ -130,19 +130,27 @@ export function installCliProcessRuntime(
             Effect.provide(nodeFileServices),
           ),
         );
+    const secrets = getCliSecrets(storageRoot);
+    // The account plane is built beside the runtime that serves it; the CLI's
+    // sign-in surfaces settle it through the auth run edge, which
+    // `initializeCliSupabaseAuth` installs over this runtime.
+    const auth = ensureCliSupabaseAuth(secrets);
     const runtime: ProcessRuntime = installProcessRuntime({
       processStart,
       globalStorage: () => storage.getGlobalStoragePath(),
       updateCheckStorage: () => storage.getGlobalStoragePath(),
-      secrets: getCliSecrets(storageRoot),
+      secrets,
       ...(globalState === undefined ? {} : { appState: globalState }),
+      auth,
       setup: {
         host: 'cli',
         // The one closure left over the runtime being installed, and a real
         // one: signing in runs a program on it, long after this returns.
         signIn: async () => {
           await signInCliSupabase(runtime, { openBrowser: true });
-          return SupabaseClient.isAuthenticated();
+          return runtime.runPromise(
+            Effect.flatMap(SupabaseAuth, (plane) => plane.authenticated),
+          );
         },
       },
       lean: directLeanLanguageServices(),

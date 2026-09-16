@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   initCliPlatform,
   setCliAgentResumeHandler,
@@ -62,6 +61,7 @@ function spyOnSignalRegistration(): {
 const mocks = vi.hoisted(() => ({
   consoleLogSink: { write: vi.fn() },
   signInCliSupabase: vi.fn(),
+  authenticated: false,
   createPlatformAgentDirectories: vi.fn(() => ({
     custom: vi.fn(),
     builtIn: vi.fn(),
@@ -90,10 +90,22 @@ vi.mock('@agent/index/platformAgentDirectories', () => ({
   createPlatformAgentDirectories: mocks.createPlatformAgentDirectories,
 }));
 
-vi.mock('@cli/runtime/supabaseAuth', () => ({
-  initializeCliSupabaseAuth: mocks.initializeCliSupabaseAuth,
-  signInCliSupabase: mocks.signInCliSupabase,
-}));
+vi.mock('@cli/runtime/supabaseAuth', async () => {
+  const { Effect } = await import('effect');
+  const { fakeSupabaseAuth } = await import('@test/support/fakeSupabaseAuth');
+  return {
+    initializeCliSupabaseAuth: mocks.initializeCliSupabaseAuth,
+    signInCliSupabase: mocks.signInCliSupabase,
+    // The runtime install's account plane, steerable per test: the probe
+    // reads the flag when it runs, not when the plane is built.
+    ensureCliSupabaseAuth: () =>
+      fakeSupabaseAuth({
+        authenticated: Effect.suspend(() =>
+          Effect.succeed(mocks.authenticated),
+        ),
+      }),
+  };
+});
 
 vi.mock('@logger/logSink', () => ({
   consoleLogSink: mocks.consoleLogSink,
@@ -193,9 +205,6 @@ vi.mock('@cli/runtime/cliSecrets', () => ({
   getCliSecrets: mocks.getCliSecrets,
 }));
 
-// Installed so startup never reaches a real auth check.
-const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
-
 function cliContext(
   overrides: Partial<Parameters<typeof initCliPlatform>[0]> = {},
 ): Parameters<typeof initCliPlatform>[0] {
@@ -258,7 +267,7 @@ describe('CLI platform init', () => {
     mocks.openTexraConfigStores.mockReturnValue(
       Effect.succeed({ workspace: {}, global: {} }),
     );
-    isAuthenticatedSpy.mockResolvedValue(false);
+    mocks.authenticated = false;
   });
 
   it('wires usage logging on first platform init', async () => {
@@ -395,7 +404,7 @@ describe('CLI platform init', () => {
   });
 
   it('wires setup sign-in to the existing CLI login implementation', async () => {
-    isAuthenticatedSpy.mockResolvedValue(true);
+    mocks.authenticated = true;
     mocks.signInCliSupabase.mockResolvedValue({ account: { label: 'User' } });
 
     await initCliPlatform(cliContext());

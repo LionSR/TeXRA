@@ -363,14 +363,10 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
     // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
     // (to Workflow when absent), so `setting.agentCategory` is always populated
-    // here; a second defaulting pass would be a guaranteed no-op.
-    const [setting, prompt] = yield* Effect.tryPromise({
-      try: async () =>
-        runInSession(input.session, () =>
-          loadAgentSettingAndPrompts(agentEntry),
-        ),
-      catch: ensureError,
-    });
+    // here; a second defaulting pass would be a guaranteed no-op. The load reads
+    // nothing from the run's ALS frame (absolute paths, the registry cache, the
+    // remote fetch), so it yields directly rather than entering `runInSession`.
+    const [setting, prompt] = yield* loadAgentSettingAndPrompts(agentEntry);
     yield* failIfAborted(input.signal);
     yield* failIfLaunchStopped(input.stopped);
 

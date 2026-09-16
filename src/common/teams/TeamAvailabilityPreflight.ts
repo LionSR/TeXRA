@@ -6,11 +6,12 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * A team-catalog port the host would not answer.
  *
  * The bag below is bound seven times across the three hosts and the setup
- * tool, and `canAccessRemoteCatalog` bottoms out in `SupabaseClient`, whose
- * reads the credential lane deliberately left `Promise`-shaped. So the
- * members keep that shape and their callers raise this instead of the
- * identity-caught `unknown` they used to propagate; `member` says which port
- * refused, which is the only distinction any caller here draws.
+ * tool. `choose`, `signIn`, and `commitPreset` reach host dialogs and stores,
+ * so their callers raise this instead of the identity-caught `unknown` they
+ * used to propagate; `member` says which port refused, which is the only
+ * distinction any caller here draws. `canAccessRemoteCatalog` is an Effect
+ * over the account plane's own infallible probe, so it has no failure to
+ * wrap.
  *
  * A user's own answer is never this: `choose` reporting `undefined` and
  * `signIn` reporting `false` are values the preflight already reads.
@@ -18,8 +19,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 export class TeamCatalogPortFailed extends Data.TaggedError(
   'TeamCatalogPortFailed',
 )<{
-  readonly member:
-    'canAccessRemoteCatalog' | 'choose' | 'signIn' | 'commitPreset';
+  readonly member: 'choose' | 'signIn' | 'commitPreset';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -44,7 +44,7 @@ export interface TeamAvailabilityPreflightOptions<T> {
   readonly initial: T;
   readonly unresolvedNames: (value: T) => readonly string[];
   readonly texraHostedNames: ReadonlySet<string>;
-  readonly canAccessRemoteCatalog: () => Promise<boolean>;
+  readonly canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   /** A decision already supplied by a non-interactive caller. */
   readonly providedChoice?: TeamAvailabilityChoice;
   readonly choose: (
@@ -108,15 +108,7 @@ export function preflightTeamAvailability<T>(
       return { status: 'proceed', value: options.initial, partial: true };
     }
 
-    const canAccessRemoteCatalog = yield* Effect.tryPromise({
-      try: () => options.canAccessRemoteCatalog(),
-      catch: (cause) =>
-        new TeamCatalogPortFailed({
-          member: 'canAccessRemoteCatalog',
-          message: `Remote agent catalog access could not be checked: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    });
+    const canAccessRemoteCatalog = yield* options.canAccessRemoteCatalog();
     if (canAccessRemoteCatalog) {
       if (options.remoteCatalogRefreshAttempted) {
         return {

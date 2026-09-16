@@ -33,7 +33,8 @@ function options(overrides: {
       initial: overrides.initial ?? { unresolvedNames: ['orchestrator'] },
       unresolvedNames: (value: Resolution) => value.unresolvedNames,
       texraHostedNames: hosted,
-      canAccessRemoteCatalog: async () => overrides.authenticated ?? false,
+      canAccessRemoteCatalog: () =>
+        Effect.succeed(overrides.authenticated ?? false),
       providedChoice: overrides.providedChoice,
       choose,
       signIn,

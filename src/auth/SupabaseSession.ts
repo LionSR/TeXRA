@@ -55,8 +55,10 @@ const NOOP_SUPABASE_SESSION_LOG: Required<SupabaseSessionLog> = {
  *
  * The public surface is Effect-typed (PRD R1): each method is one of the
  * programs below, and the caller's edge runs it. Storage and GoTrue rejections
- * travel as {@link AuthPortError}; `SupabaseClient`'s Promise facade settles
- * them through `runAuthProgram`, whose edge unwraps the port's own error.
+ * travel as {@link AuthPortError}; the `SupabaseAuth` plane wraps the probes
+ * with their signed-out recoveries, and the hosts' Promise-facing sign-in
+ * surfaces settle the rest through `runAuthProgram`, whose edge unwraps the
+ * port's own error.
  */
 export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private refreshInFlight: Deferred.Deferred<SupabaseSession | null> | null =

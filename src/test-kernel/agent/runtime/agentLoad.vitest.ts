@@ -126,86 +126,91 @@ describe('loadAgentSettingAndPrompts', () => {
     vi.restoreAllMocks();
   });
 
-  it('loads settings and prompts from the given definition path', async () => {
-    const entry = customEntry('polish', AgentCategory.Workflow);
+  it.effect('loads settings and prompts from the given definition path', () =>
+    Effect.gen(function* () {
+      const entry = customEntry('polish', AgentCategory.Workflow);
 
-    putYaml(entry, [
-      'name: polish',
-      'settings:',
-      // agentCategory is the discriminator of AgentSettingSchema; only
-      // builtInToolUse agents get it defaulted, so custom YAMLs declare it.
-      '  agentCategory: workflow',
-      '  rounds: 1',
-      'prompts:',
-      '  userRequest: unified variant',
-      '',
-    ]);
+      putYaml(entry, [
+        'name: polish',
+        'settings:',
+        // agentCategory is the discriminator of AgentSettingSchema; only
+        // builtInToolUse agents get it defaulted, so custom YAMLs declare it.
+        '  agentCategory: workflow',
+        '  rounds: 1',
+        'prompts:',
+        '  userRequest: unified variant',
+        '',
+      ]);
 
-    const [, prompts] = await loadAgentSettingAndPrompts(entry);
+      const [, prompts] = yield* loadAgentSettingAndPrompts(entry);
 
-    assert.strictEqual(prompts.userRequest, 'unified variant');
-  });
+      assert.strictEqual(prompts.userRequest, 'unified variant');
+    }),
+  );
 
-  it('rejects with a wrapped error naming the path for malformed YAML', async () => {
-    const entry = customEntry('broken', AgentCategory.Workflow);
+  it.effect(
+    'rejects with a wrapped error naming the path for malformed YAML',
+    () =>
+      Effect.gen(function* () {
+        const entry = customEntry('broken', AgentCategory.Workflow);
 
-    fileContents.set(path.normalize(entry.path), 'name: "unterminated\n');
+        fileContents.set(path.normalize(entry.path), 'name: "unterminated\n');
 
-    await assert.rejects(
-      () => loadAgentSettingAndPrompts(entry),
-      (error: unknown) =>
-        error instanceof Error &&
-        error.message.startsWith(`Failed to parse YAML at ${entry.path}:`),
-    );
-  });
+        const error = yield* Effect.flip(loadAgentSettingAndPrompts(entry));
+        assert.ok(
+          error.message.startsWith(`Failed to parse YAML at ${entry.path}:`),
+        );
+      }),
+  );
 
-  it('rejects a circular "inherits" chain instead of recursing without bound', async () => {
-    const entryA = customEntry('agent_a', AgentCategory.Workflow);
-    const entryB = customEntry('agent_b', AgentCategory.Workflow);
-    const entryByName: Record<string, AgentEntry> = {
-      agent_a: entryA,
-      agent_b: entryB,
-    };
+  it.effect(
+    'rejects a circular "inherits" chain instead of recursing without bound',
+    () =>
+      Effect.gen(function* () {
+        const entryA = customEntry('agent_a', AgentCategory.Workflow);
+        const entryB = customEntry('agent_b', AgentCategory.Workflow);
+        const entryByName: Record<string, AgentEntry> = {
+          agent_a: entryA,
+          agent_b: entryB,
+        };
 
-    putYaml(entryA, [
-      'name: agent_a',
-      'inherits: agent_b',
-      'settings:',
-      '  agentCategory: workflow',
-      'prompts: {}',
-      '',
-    ]);
-    putYaml(entryB, [
-      'name: agent_b',
-      'inherits: agent_a',
-      'settings:',
-      '  agentCategory: workflow',
-      'prompts: {}',
-      '',
-    ]);
+        putYaml(entryA, [
+          'name: agent_a',
+          'inherits: agent_b',
+          'settings:',
+          '  agentCategory: workflow',
+          'prompts: {}',
+          '',
+        ]);
+        putYaml(entryB, [
+          'name: agent_b',
+          'inherits: agent_a',
+          'settings:',
+          '  agentCategory: workflow',
+          'prompts: {}',
+          '',
+        ]);
 
-    const actual =
-      await vi.importActual<typeof import('@agent/index')>('@agent/index');
-    const getAgentMock = vi.mocked(getAgent);
-    getAgentMock.mockImplementation(
-      (identifier: string) => entryByName[identifier.split(':').pop()!],
-    );
+        const actual = yield* Effect.promise(() =>
+          vi.importActual<typeof import('@agent/index')>('@agent/index'),
+        );
+        const getAgentMock = vi.mocked(getAgent);
+        // This is a plain vi.fn(actual.getAgent), not a spy, so restore the
+        // real implementation explicitly — as a finalizer, since a failing
+        // yield* never resumes a `finally` in the generator.
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => getAgentMock.mockImplementation(actual.getAgent)),
+        );
+        getAgentMock.mockImplementation(
+          (identifier: string) => entryByName[identifier.split(':').pop()!],
+        );
 
-    try {
-      await assert.rejects(
-        () => loadAgentSettingAndPrompts(entryA),
-        (error: unknown) =>
-          error instanceof Error &&
+        const error = yield* Effect.flip(loadAgentSettingAndPrompts(entryA));
+        assert.ok(
           error.message.startsWith('Circular "inherits" chain detected:'),
-      );
-    } finally {
-      // mockRestore() only rehydrates vi.spyOn() mocks; this is a plain
-      // vi.fn(actual.getAgent), so restore the real implementation
-      // explicitly to avoid leaving `getAgent` returning undefined for
-      // any later test in this describe block.
-      getAgentMock.mockImplementation(actual.getAgent);
-    }
-  });
+        );
+      }),
+  );
 });
 
 describe('agent registry load state', () => {

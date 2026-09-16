@@ -146,7 +146,7 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
    */
   readonly resourcesPath: string;
   readonly remoteCatalog: {
-    readonly canAccess: () => Promise<boolean>;
+    readonly canAccess: () => Effect.Effect<boolean>;
     readonly signIn: () => Promise<boolean>;
   };
   readonly notifications: Pick<
@@ -504,15 +504,16 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await this.runReported(
       'Failed to view remote agent prompt',
       Effect.gen({ self: this }, function* () {
-        const result = yield* Effect.tryPromise({
-          try: () => getRemoteAgentPromptConfig(data.agentName),
-          catch: (cause) =>
-            new AgentSettingsActionFailed({
-              member: 'getRemoteAgentPrompt',
-              message: `The hosted agent prompt could not be fetched: ${toErrorMessage(cause)}`,
-              cause,
-            }),
-        });
+        const result = yield* getRemoteAgentPromptConfig(data.agentName).pipe(
+          Effect.mapError(
+            (cause) =>
+              new AgentSettingsActionFailed({
+                member: 'getRemoteAgentPrompt',
+                message: `The hosted agent prompt could not be fetched: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          ),
+        );
         if (!result.ok) {
           yield* this.notifications.showErrorMessage(result.message);
           return;

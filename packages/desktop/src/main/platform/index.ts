@@ -3,6 +3,7 @@ import { app } from 'electron';
 import { Effect } from 'effect';
 
 import { createPlatformAgentDirectories } from '@agent/index';
+import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
@@ -49,6 +50,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { desktopSetupPlatform } from '../desktopSetupAuth.js';
+import { createSessionLog } from '../desktopSupabaseAuth.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveDesktopDataRoot, resolveResourcesPath } from './paths.js';
@@ -75,6 +77,8 @@ export interface ElectronPlatformInitResult {
   globalState: StateStore;
   ownerId: OwnerId;
   secrets: PlatformSecrets;
+  /** The account plane served as `SupabaseAuth`, built beside `secrets`. */
+  supabaseAuth: SupabaseAuthShape;
   agentDirectories: AgentDirectoriesPort;
   /**
    * Desktop's memory/history/executions data root (`~/.texra` in
@@ -166,6 +170,13 @@ export async function initializeElectronPlatform(
           }),
       }),
   });
+  // The account plane is built before the runtime that serves it, beside the
+  // secrets store it reads; the window's sign-in surfaces take it from the
+  // init result below.
+  const supabaseAuth = createSupabaseAuth({
+    secrets,
+    log: createSessionLog(console),
+  });
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeProcessRuntime`), after run
@@ -176,6 +187,7 @@ export async function initializeElectronPlatform(
     updateCheckStorage: () => resolveGlobalStoragePath(userDataPath),
     secrets,
     appState: globalStateStore,
+    auth: supabaseAuth,
     setup: desktopSetupPlatform,
     lean: directLeanLanguageServices(),
   });
@@ -239,6 +251,7 @@ export async function initializeElectronPlatform(
     globalState: globalStateStore,
     ownerId: processOwnerId(processStart),
     secrets,
+    supabaseAuth,
     agentDirectories,
     dataRoot,
     resourcesPath,

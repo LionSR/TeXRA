@@ -14,7 +14,7 @@ import { Context, Data, Effect, Layer } from 'effect';
 // Local imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { getCodexStatus } from '@auth/codex';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { TerminalRunner } from '@hosts/uiHosts';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
@@ -102,57 +102,17 @@ export class SetupPlatform extends Context.Service<
   }
 }
 
-/**
- * The account probe itself could not run. `SupabaseClient` answers "not
- * signed in" for an absent session and logs a refresh failure itself, so the
- * only way here is the client never having been initialized — the reason its
- * accessor raises. The client's reads stay `Promise`-shaped: the auth ring
- * spans the three hosts' sign-in surfaces and the subscription probes, which
- * the credential lane measured and left for their own cut.
- *
- * Exported, unlike the file-local tags beside it, because
- * `toolProbing.collectCoreSetupStatus` carries it in its error channel and the
- * agent package's declaration emit has to be able to name it.
- */
-export class SetupAccountProbeFailed extends Data.TaggedError(
-  'SetupAccountProbeFailed',
-)<{
-  readonly member: 'isAuthenticated' | 'getUser';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
 /** TeXRA account status shared by every host. */
-export const getSetupAuthStatus = Effect.fn('getSetupAuthStatus')(
-  function* (): Effect.fn.Return<
-    { authenticated: boolean; email?: string },
-    SetupAccountProbeFailed
-  > {
-    const authenticated = yield* Effect.tryPromise({
-      try: () => SupabaseClient.isAuthenticated(),
-      catch: (cause) =>
-        new SetupAccountProbeFailed({
-          member: 'isAuthenticated',
-          message: 'The TeXRA account session could not be read.',
-          cause,
-        }),
-    });
-    if (!authenticated) {
-      return { authenticated: false };
-    }
-
-    const user = yield* Effect.tryPromise({
-      try: () => SupabaseClient.getUser(),
-      catch: (cause) =>
-        new SetupAccountProbeFailed({
-          member: 'getUser',
-          message: 'The signed-in TeXRA account could not be read.',
-          cause,
-        }),
-    });
-    return { authenticated: true, email: user?.email };
-  },
-);
+export const getSetupAuthStatus = Effect.fn('getSetupAuthStatus')(function* () {
+  const auth = yield* SupabaseAuth;
+  // The account plane's probes settle their own failures to the signed-out
+  // answer, so there is nothing to catch here.
+  if (!(yield* auth.authenticated)) {
+    return { authenticated: false };
+  }
+  const user = yield* auth.user;
+  return { authenticated: true, email: user?.email };
+});
 
 /**
  * The ChatGPT subscription probe could not answer. Both members read the

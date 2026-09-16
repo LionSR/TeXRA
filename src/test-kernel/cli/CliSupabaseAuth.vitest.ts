@@ -57,14 +57,12 @@ const mocks = vi.hoisted(() => {
   const authCoordinator = {
     clearSession: vi.fn(),
     storeSession: vi.fn(),
+    getStoredSessionState: vi.fn(),
+    loadSession: vi.fn(),
   };
   return {
     authCoordinator,
-    createHostAuthCoordinator: vi.fn((init: { secrets: unknown }) => ({
-      ...authCoordinator,
-      secrets: init.secrets,
-    })),
-    getStoredSessionState: vi.fn(),
+    createSupabaseAuth: vi.fn(),
     openBrowser: vi.fn(),
     pollForDeviceSession: vi.fn(),
     requestDeviceAuthorization: vi.fn(),
@@ -84,20 +82,22 @@ vi.mock('@auth/config', () => ({
   DEFAULT_OAUTH_PROVIDER: 'github',
 }));
 
-vi.mock('@auth/SupabaseAuthCoordinator', () => ({
-  createHostAuthCoordinator: mocks.createHostAuthCoordinator,
-}));
-
-vi.mock('@auth/SupabaseClient', () => ({
-  SupabaseClient: {
-    getClient: () => ({
-      auth: {
-        signInWithOAuth: mocks.signInWithOAuth,
-      },
-    }),
-    getStoredSessionState: mocks.getStoredSessionState,
-  },
-}));
+vi.mock('@auth/SupabaseAuth', async (importActual) => {
+  const actual = await importActual<typeof import('@auth/SupabaseAuth')>();
+  const { fakeSupabaseAuth } = await import('@test/support/fakeSupabaseAuth');
+  return {
+    ...actual,
+    createSupabaseAuth: (init: { secrets: unknown }) => {
+      mocks.createSupabaseAuth(init);
+      return fakeSupabaseAuth({
+        client: {
+          auth: { signInWithOAuth: mocks.signInWithOAuth },
+        } as never,
+        coordinator: mocks.authCoordinator as never,
+      });
+    },
+  };
+});
 
 vi.mock('@auth/SupabaseSession', () => ({
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS: 60_000,
@@ -142,6 +142,8 @@ async function loadSupabaseAuth() {
       import('@tools/setup/platform'),
       import('@agent/runtime/toolInjection'),
     ]);
+  const { SupabaseAuth, unavailableSupabaseAuth } =
+    await import('@auth/SupabaseAuth');
   const { createFakeWorkspaceRoots } =
     await import('@test/support/FakePlatform');
   const { globalStorage } = createFakeWorkspaceRoots();
@@ -159,6 +161,9 @@ async function loadSupabaseAuth() {
       // rather than an answer from a store nothing here opened.
       Layer.mock(Secrets, { getEnv: unreadProcessService }),
       Layer.mock(AppState, { update: unreadProcessService }),
+      // The account plane the module under test serves is its own module
+      // state; this one only satisfies the process-runtime type.
+      SupabaseAuth.layer(unavailableSupabaseAuth()),
       SetupPlatform.layer({ host: 'cli', signIn: async () => false }),
       ToolInjections.layer([]),
     ),
@@ -247,18 +252,22 @@ describe('CLI Supabase auth', () => {
     vi.clearAllMocks();
     mocks.authCoordinator.clearSession.mockReturnValue(Effect.void);
     mocks.authCoordinator.storeSession.mockReturnValue(Effect.void);
+    mocks.authCoordinator.getStoredSessionState.mockReturnValue(
+      Effect.succeed('none'),
+    );
+    mocks.authCoordinator.loadSession.mockReturnValue(Effect.succeed(null));
     mocks.platform.mockReturnValue({ secrets: { kind: 'platform-secrets' } });
     mocks.invalidateRemoteAgentsAfterSignOut.mockReturnValue(Effect.void);
   });
 
-  it('builds one coordinator for the root secret store', async () => {
+  it('builds one account plane for the root secret store', async () => {
     const { initializeCliSupabaseAuth, runtime } = await loadSupabaseAuth();
 
     initializeCliSupabaseAuth(runtime, cliSecrets);
     initializeCliSupabaseAuth(runtime, cliSecrets);
 
-    expect(mocks.createHostAuthCoordinator).toHaveBeenCalledTimes(1);
-    expect(mocks.createHostAuthCoordinator).toHaveBeenCalledWith(
+    expect(mocks.createSupabaseAuth).toHaveBeenCalledTimes(1);
+    expect(mocks.createSupabaseAuth).toHaveBeenCalledWith(
       expect.objectContaining({ secrets: cliSecrets }),
     );
   });
@@ -435,7 +444,9 @@ describe('CLI Supabase auth', () => {
       sessionState: 'invalid',
     },
   ])('$name', async ({ sessionState }) => {
-    mocks.getStoredSessionState.mockResolvedValue(sessionState);
+    mocks.authCoordinator.getStoredSessionState.mockReturnValue(
+      Effect.succeed(sessionState),
+    );
     const { getCliAuthProfile } = await loadSupabaseAuth();
 
     await expect(getCliAuthProfile()).resolves.toEqual({

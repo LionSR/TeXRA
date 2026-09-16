@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { SupabaseClient } from '@auth/SupabaseClient';
 import * as codexAuth from '@auth/codex';
 import * as providerCapabilities from '@model/providerCapabilities';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
@@ -30,7 +29,6 @@ setupPlatform(
 
 afterEach(() => {
   vi.restoreAllMocks();
-  SupabaseClient.resetForTests();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });

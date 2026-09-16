@@ -1,5 +1,7 @@
+import { Effect } from 'effect';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
+import { ensureError } from '@utils/errors/errorMessage';
 
 type SettingsRemoteAgentPromptResult =
   | { ok: true; config: string }
@@ -8,10 +10,13 @@ type SettingsRemoteAgentPromptResult =
       message: string;
     };
 
-export async function getRemoteAgentPromptConfig(
+export const getRemoteAgentPromptConfig = Effect.fn(
+  'SettingsRemoteAgentPromptController.getRemoteAgentPromptConfig',
+)(function* (
   agentName: string,
-): Promise<SettingsRemoteAgentPromptResult> {
-  const token = await SupabaseClient.getAccessToken();
+): Effect.fn.Return<SettingsRemoteAgentPromptResult, Error, SupabaseAuth> {
+  const auth = yield* SupabaseAuth;
+  const token = yield* auth.accessToken;
   if (!token) {
     return {
       ok: false,
@@ -21,6 +26,9 @@ export async function getRemoteAgentPromptConfig(
 
   return {
     ok: true,
-    config: await fetchRemoteAgentConfigYaml(agentName, token),
+    config: yield* Effect.tryPromise({
+      try: () => fetchRemoteAgentConfigYaml(agentName, token),
+      catch: ensureError,
+    }),
   };
-}
+});

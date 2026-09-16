@@ -232,10 +232,9 @@ describe('AgentLaunchContext', () => {
         session.interactions.use(recording.interactions);
 
         mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
-        mocks.load.mockResolvedValueOnce([
-          { agentCategory: AgentCategory.ToolUse },
-          {},
-        ]);
+        mocks.load.mockReturnValueOnce(
+          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+        );
 
         try {
           // Rejected while preparing the definition, before any execution is
@@ -284,10 +283,9 @@ describe('AgentLaunchContext', () => {
         );
         publishTestRunStart(session, EXECUTION_ID);
         mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
-        mocks.load.mockResolvedValueOnce([
-          { agentCategory: AgentCategory.ToolUse },
-          {},
-        ]);
+        mocks.load.mockReturnValueOnce(
+          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+        );
         mocks.createTrace.mockImplementationOnce(() => {
           throw new Error('trace failed');
         });
@@ -373,10 +371,9 @@ describe('AgentLaunchContext', () => {
         const batches = vi.spyOn(session, 'commitRegistration');
         const recording = recordSessionEvents(session);
         mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
-        mocks.load.mockResolvedValueOnce([
-          { agentCategory: AgentCategory.ToolUse },
-          {},
-        ]);
+        mocks.load.mockReturnValueOnce(
+          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+        );
         mocks.createTrace.mockReturnValueOnce({
           trace: noopTrace,
           handleStatus: () => {},
@@ -459,10 +456,9 @@ describe('AgentLaunchContext', () => {
         const trace = { ...noopTrace, subscribe: vi.fn(() => detachTrace) };
         trace.openStage = vi.fn(() => stage);
         mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
-        mocks.load.mockResolvedValueOnce([
-          { agentCategory: AgentCategory.ToolUse },
-          {},
-        ]);
+        mocks.load.mockReturnValueOnce(
+          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+        );
         mocks.createTrace.mockReturnValueOnce({ trace, dispose: rawDispose });
         mocks.buildVars.mockRejectedValueOnce(failure);
 

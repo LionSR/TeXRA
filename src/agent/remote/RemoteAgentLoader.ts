@@ -2,7 +2,7 @@
  * Config-loading half of the remote-agent client. The listing half — which the
  * agent index does reach — lives in `./remoteAgentList`.
  */
-import { Result } from 'effect';
+import { Effect, Result } from 'effect';
 import {
   type AgentSettingInput,
   AgentPromptSchema,
@@ -12,7 +12,7 @@ import {
 import { updateAgentMeta } from '@agent/index/agentRegistry';
 import { extractToolNames } from '@agent/index/agentYamlScanner';
 import { normalizeAgentSettingTools } from '@agent/runtime/agentSettingTools';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { createLog } from '@logger/logUtils';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -23,65 +23,74 @@ import type { RemoteAgentConfig } from './types';
 
 const log = createLog(CHANNEL);
 
-/** Load a remote agent configuration by name. */
-export async function loadRemoteAgent(
-  agentName: string,
-): Promise<RemoteAgentConfig> {
-  if (!(await SupabaseClient.isAuthenticated())) {
-    throw new Error(
-      'Remote agents require authentication. Sign in using the "TeXRA: Sign In" command.',
-    );
-  }
-
-  log.info(`Loading remote agent: ${agentName}`);
-
-  try {
-    const token = await SupabaseClient.getAccessToken();
+/**
+ * Load a remote agent configuration by name. A composition with no account
+ * plane (the embeddable agent package) answers the same as a signed-out user:
+ * the authentication-required failure.
+ */
+export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
+  function* (agentName: string): Effect.fn.Return<RemoteAgentConfig, Error> {
+    const auth = yield* Effect.serviceOption(SupabaseAuth);
+    const token = auth._tag === 'Some' ? yield* auth.value.accessToken : null;
     if (!token) {
-      throw new Error(
-        'Authentication token unavailable. Try signing in again.',
+      return yield* Effect.fail(
+        new Error(
+          'Remote agents require authentication. Sign in using the "TeXRA: Sign In" command.',
+        ),
       );
     }
 
-    const configYaml = await fetchRemoteAgentConfigYaml(agentName, token);
+    log.info(`Loading remote agent: ${agentName}`);
 
-    log.debug(`Parsing YAML for remote agent: ${agentName}`);
-    const parsedYaml = parseYamlWith(configYaml, AgentDefinitionSchema);
-    if (Result.isFailure(parsedYaml)) {
-      throw new Error(
-        `Failed to parse YAML for remote agent "${agentName}": ${parsedYaml.failure.message}`,
-        { cause: parsedYaml.failure },
-      );
-    }
-    const validated = parsedYaml.success;
+    const attempt = Effect.gen(function* () {
+      const configYaml = yield* Effect.tryPromise({
+        try: () => fetchRemoteAgentConfigYaml(agentName, token),
+        catch: ensureError,
+      });
 
-    const settings: AgentSettingInput = validated.settings;
-    const toolNames = extractToolNames(settings.tools);
-    const defaultOutputFiles = settings.defaultOutputFiles;
+      log.debug(`Parsing YAML for remote agent: ${agentName}`);
+      const parsedYaml = parseYamlWith(configYaml, AgentDefinitionSchema);
+      if (Result.isFailure(parsedYaml)) {
+        return yield* Effect.fail(
+          new Error(
+            `Failed to parse YAML for remote agent "${agentName}": ${parsedYaml.failure.message}`,
+            { cause: parsedYaml.failure },
+          ),
+        );
+      }
+      const validated = parsedYaml.success;
 
-    const config: RemoteAgentConfig = {
-      settings: AgentSettingSchema.parse(
-        normalizeAgentSettingTools(settings, CHANNEL),
-      ),
-      prompts: AgentPromptSchema.parse(validated.prompts),
-    };
+      const settings: AgentSettingInput = validated.settings;
+      const toolNames = extractToolNames(settings.tools);
+      const defaultOutputFiles = settings.defaultOutputFiles;
 
-    updateAgentMeta(`remote:${agentName}`, {
-      description: validated.description,
-      tools: toolNames?.length ? toolNames : undefined,
-      defaultOutputFiles: defaultOutputFiles?.length
-        ? defaultOutputFiles
-        : undefined,
+      const config: RemoteAgentConfig = {
+        settings: AgentSettingSchema.parse(
+          normalizeAgentSettingTools(settings, CHANNEL),
+        ),
+        prompts: AgentPromptSchema.parse(validated.prompts),
+      };
+
+      updateAgentMeta(`remote:${agentName}`, {
+        description: validated.description,
+        tools: toolNames?.length ? toolNames : undefined,
+        defaultOutputFiles: defaultOutputFiles?.length
+          ? defaultOutputFiles
+          : undefined,
+      });
+
+      log.info(`Successfully loaded remote agent: ${agentName}`);
+
+      return config;
     });
 
-    log.info(`Successfully loaded remote agent: ${agentName}`);
-
-    return config;
-  } catch (error) {
-    const lastError = ensureError(error);
-    log.error(
-      `Failed to load remote agent "${agentName}": ${lastError.message}`,
+    return yield* attempt.pipe(
+      Effect.catch((error: Error) => {
+        log.error(
+          `Failed to load remote agent "${agentName}": ${error.message}`,
+        );
+        return Effect.fail(error);
+      }),
     );
-    throw lastError;
-  }
-}
+  },
+);
