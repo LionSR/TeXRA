@@ -279,13 +279,13 @@ function resolveRoots(init: SessionHandleInit): SessionOpen {
 }
 
 /**
- * The session open on the process roots' storage root, if one is: the
- * hosts' default session, read through its owner on every call rather than
- * from a cached reference, so a root closed through the owner has no
- * default session until one is opened again. No owner, or no process
- * roots yet, no session.
+ * Inspect whether the host has installed its process-default session: the
+ * session open on the process roots' storage root, if one is, read through
+ * its owner on every call rather than from a cached reference, so a root
+ * closed through the owner has no default session until one is opened
+ * again. No owner, or no process roots yet, no session.
  */
-export function defaultRootSession(): SessionHandle | undefined {
+export function tryDefaultSession(): SessionHandle | undefined {
   const roots = tryProcessWorkspaceRoots();
   return roots && owner?.current(roots.storage);
 }

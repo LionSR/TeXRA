@@ -16,7 +16,8 @@ const ANNOTATION_LEVELS_BY_SEVERITY: readonly GitHubCheckAnnotationLevel[] = (
   Object.keys(ANNOTATION_LEVEL_RANK) as GitHubCheckAnnotationLevel[]
 ).sort((a, b) => ANNOTATION_LEVEL_RANK[b] - ANNOTATION_LEVEL_RANK[a]);
 
-function normalizeCheckAnnotationLevel(
+/** Unknown or missing levels read as GitHub's own default, `notice`. */
+export function normalizeCheckAnnotationLevel(
   level: string | null | undefined,
 ): GitHubCheckAnnotationLevel {
   if (level === 'warning' || level === 'failure') {
