@@ -27,8 +27,7 @@ import {
   isApiProvider,
 } from '@model/apiProviders';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
-import type { AppState } from '@platform/interfaces';
-import { platform } from '@platform/platform';
+import { AgentResume, type AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import {
   AgentCategory,
@@ -81,11 +80,11 @@ export interface WorkflowFileOperationRequest {
 }
 
 /**
- * The host's launcher refused a request. It is the one port member here that
+ * The host's launcher refused a request. {@link HostRunActionPorts.runAgentRequest}
  * settles only when the launched run itself settles, so the copilot fallback
  * below races it against the launcher's own start callback rather than
- * awaiting it; that is why it keeps its `Promise` shape while the rest of
- * this bag is Effect-typed.
+ * awaiting it; a launch that faults before that callback reaches the waiter
+ * as this failure.
  */
 class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
   readonly message: string;
@@ -94,7 +93,12 @@ class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
 
 export interface HostRunActionPorts {
   readonly session: SessionHandle;
-  /** Launch or resume a run; the host's own launcher reaches `runAgent`. */
+  /**
+   * Launch or resume a run; the host's own launcher reaches `runAgent`. The
+   * Effect settles with the launched run itself — a caller that wants only
+   * the launch acknowledged races it against the `onRun` gate instead of
+   * awaiting it.
+   */
   runAgentRequest(
     request: RunRequest,
     options?: {
@@ -104,7 +108,7 @@ export interface HostRunActionPorts {
       ownApiKeyFallback?: boolean;
       onRun?: () => void;
     },
-  ): Promise<void>;
+  ): Effect.Effect<void, Error>;
   loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
   /**
    * Ask the user for a provider key; the controller re-reads the store. A
@@ -122,7 +126,7 @@ export interface HostRunActionPorts {
 }
 
 interface HostRunActions {
-  resume(runId: RunId): Effect.Effect<void, Error>;
+  resume(runId: RunId): Effect.Effect<void, Error, AgentResume>;
   runNew(runId: RunId): Effect.Effect<void, Error>;
   runCompileFixer(runId: RunId): Effect.Effect<void, Error>;
   readConfig(runId: RunId): Effect.Effect<AgentConfig | undefined, Error>;
@@ -148,7 +152,10 @@ interface HostRunActions {
     getKnownWorkspaceOutputPaths(runId: RunId): Set<string>;
   };
   restoreProposal(proposal: unknown): AgentConfig;
-  sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
+  sendFollowUp(
+    runId: RunId,
+    text: string,
+  ): Effect.Effect<void, never, AgentResume>;
 }
 
 export const createHostRunActions = (
@@ -383,31 +390,33 @@ export const createHostRunActions = (
           if (!isRetryPending(runId, requestId)) return Effect.succeed(false);
           // Start acknowledges ownership of the replacement run. Settlement
           // without an onRun callback means no replacement was launched. The
-          // request's promise settles only with the run itself, so the answer
-          // is the first of the launcher's own start callback (the gate) and
-          // the request fiber's settlement — a rejection reaches the waiter
-          // as the fiber's failure rather than a lost second resolver.
+          // launch settles only with the run itself, so the answer is the
+          // first of the launcher's own start callback (the gate) and the
+          // detached launch fiber's settlement — a rejection reaches the
+          // waiter as the fiber's failure rather than a lost second resolver.
           return Effect.gen(function* () {
             const runStarted = yield* Deferred.make<void>();
             const requestFiber = yield* Effect.forkDetach(
-              Effect.tryPromise({
-                try: () =>
-                  ports.runAgentRequest(
-                    { config: { ...config, model } },
-                    {
-                      ownApiKeyFallback: true,
-                      onRun: () => {
-                        Deferred.doneUnsafe(runStarted, Effect.void);
-                      },
+              ports
+                .runAgentRequest(
+                  { config: { ...config, model } },
+                  {
+                    ownApiKeyFallback: true,
+                    onRun: () => {
+                      Deferred.doneUnsafe(runStarted, Effect.void);
                     },
+                  },
+                )
+                .pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new RunLaunchFailed({
+                        message:
+                          'The replacement run on your own API key could not be started.',
+                        cause,
+                      }),
                   ),
-                catch: (cause) =>
-                  new RunLaunchFailed({
-                    message:
-                      'The replacement run on your own API key could not be started.',
-                    cause,
-                  }),
-              }),
+                ),
             );
             return yield* Effect.raceFirst(
               Deferred.await(runStarted).pipe(Effect.as(true)),
@@ -486,23 +495,14 @@ export const createHostRunActions = (
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 'resumed');
         if (config.agentCategory !== AgentCategory.Workflow) {
-          yield* Effect.tryPromise({
-            try: () => platform().agentResume.tryResumeRun(runId),
-            catch: ensureError,
-          });
+          yield* (yield* AgentResume).tryResumeRun(runId);
           return;
         }
-        yield* Effect.tryPromise({
-          try: () => ports.runAgentRequest({ config, runId }),
-          catch: ensureError,
-        });
+        yield* ports.runAgentRequest({ config, runId });
       }),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 're-run');
-        yield* Effect.tryPromise({
-          try: () => ports.runAgentRequest({ config }),
-          catch: ensureError,
-        });
+        yield* ports.runAgentRequest({ config });
       }),
       readConfig,
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
@@ -571,12 +571,8 @@ export const createHostRunActions = (
         } else if (plan.kind === 'info') {
           yield* ports.showInfo(plan.message);
         } else {
-          yield* Effect.tryPromise({
-            try: () =>
-              ports.runAgentRequest(plan.request, {
-                preferHelperModel: true,
-              }),
-            catch: ensureError,
+          yield* ports.runAgentRequest(plan.request, {
+            preferHelperModel: true,
           });
         }
       }),

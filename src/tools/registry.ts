@@ -1,10 +1,9 @@
 // Local imports
-import type { ToolHost } from '@agent/core/tools/ToolTypes';
+import { MapToolRegistry, type ToolHost } from '@agent/core/tools/ToolTypes';
 import type {
   RuntimeTool as ITool,
   RuntimeToolRegistry as IToolRegistry,
 } from '@agent/runtime/ToolServices';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
@@ -60,18 +59,40 @@ import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ExternalInquiryTool } from './inquiry/ExternalInquiryTool';
 import { AskUserQuestionTool } from './userQuestion/UserQuestionTool';
 import { GitHubSubscriptionTool } from './github/githubSubscriptionTool';
-import {
-  ProbeEnvironmentTool,
-  VerifySetupTool,
-  UnsetApiKeyTool,
-  ListApiKeysTool,
-  InvokeCommandTool,
-  InstallVscodeExtensionTool,
-  ReadConfigTool,
-  UpdateConfigTool,
-  SendToTerminalTool,
-  ApplyTeamTool,
-} from './setup';
+/**
+ * Setup-assistant tools: a narrow UNIX-style set for the onboarding agent.
+ *
+ * Each tool has one responsibility:
+ *   - probe_environment — read-only environment snapshot
+ *   - verify_setup — re-check dependencies
+ *   - unset_api_key — remove a persisted provider credential
+ *   - list_api_keys — enumerate stored secret key names for auditing
+ *   - invoke_command — bridge to allowlisted VS Code commands
+ *   - install_vscode_extension — install LaTeX Workshop / Lean 4
+ *   - read_config / update_config — read a TeXRA setting, or write an
+ *     allowlisted one
+ *   - send_to_terminal — type into VS Code's integrated terminal for
+ *     sudo / interactive prompts the captured-stdio bash tool can't handle
+ *   - apply_team — apply a discipline roster + record the default team
+ *
+ * Shell-rc writes go through the regular `bash` tool (and its approval
+ * dialog) — there's no dedicated rc-writing tool. A hand-rolled validator
+ * on top of shell would be a second, weaker approval surface that every
+ * reviewer keeps finding bypasses for.
+ *
+ * Credentials come from the `Secrets` service and the host-varying
+ * capabilities from the `SetupPlatform` service, both provided by the host's
+ * composition root through `installProcessRuntime`.
+ */
+import { ProbeEnvironmentTool } from './setup/ProbeEnvironmentTool';
+import { VerifySetupTool } from './setup/VerifySetupTool';
+import { UnsetApiKeyTool } from './setup/UnsetApiKeyTool';
+import { ListApiKeysTool } from './setup/ListApiKeysTool';
+import { InvokeCommandTool } from './setup/InvokeCommandTool';
+import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
+import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
+import { SendToTerminalTool } from './setup/SendToTerminalTool';
+import { ApplyTeamTool } from './setup/ApplyTeamTool';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -171,9 +192,7 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
 
 /** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
-  if (!defaultRegistryInstance) {
-    defaultRegistryInstance = new MapToolRegistry(getDefaultTools());
-  }
+  defaultRegistryInstance ??= new MapToolRegistry(getDefaultTools());
   return defaultRegistryInstance;
 }
 

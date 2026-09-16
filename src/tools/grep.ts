@@ -10,11 +10,11 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
+  resolveAndFormat,
   workspacePathPorts,
   type WorkspacePathPorts,
 } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { resolveAndFormat } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { executeCommand } from '@utils/system/execUtils';
 import { splitOutputLines } from '@utils/text/stringUtils';
@@ -79,7 +79,8 @@ const CHANNEL = 'GrepTool';
 // failure boundary to a dependency default or killing rg after one page.
 const GREP_MAX_BUFFER_CHARS = 100_000_000;
 
-function buildArguments(input: GrepInput, outputMode: OutputMode): string[] {
+function buildArguments(input: GrepInput): string[] {
+  const outputMode: OutputMode = input.output_mode;
   const args: string[] = ['--color=never'];
 
   // Output mode flags
@@ -126,13 +127,12 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   ports: GrepPorts,
   input: GrepInput,
 ): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
-  const { output_mode: outputMode } = input;
   const root = ports.toolRoot();
   const { path, display } = ports.inScope(() =>
     resolveAndFormat(input.path ?? undefined, root),
   );
   const gitignore = yield* getGitignoreMatcher(ports.workspaceRoot);
-  const args = buildArguments(input, outputMode);
+  const args = buildArguments(input);
   const applyWorkspaceIgnores = !nodePath.isAbsolute(path.relative);
   const ignoreArgs = applyWorkspaceIgnores
     ? gitignore.ignoreFiles.flatMap((ignoreFile) => [

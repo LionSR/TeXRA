@@ -117,14 +117,22 @@ export function runHeldMessage(pid: number): string {
   return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the run.`;
 }
 
+/** The clause naming the process that holds a run: the pid and the machine
+ *  recorded in its claim, the two parts of an identity a user can act on. One
+ *  home, read by the refusal below and by the liveness ladder's unsettled
+ *  reason, so the two wordings cannot drift apart. */
+export function runHeldClause(ownerId: OwnerId): string {
+  const { pid, hostname } = ownerIdentity(ownerId);
+  return `held by another TeXRA process (pid ${pid} on ${hostname})`;
+}
+
 /** The refusal a host prints when another TeXRA process holds a run: the
  *  owner named by the pid and machine recorded in its claim. */
 export function runHeldByProcessMessage(
   runId: RunId,
   ownerId: OwnerId,
 ): string {
-  const { pid, hostname } = ownerIdentity(ownerId);
-  return `Run ${runId} is held by another TeXRA process (pid ${pid} on ${hostname}).`;
+  return `Run ${runId} is ${runHeldClause(ownerId)}.`;
 }
 
 /** Banner and tooltip copy for a run whose saved state could not be read. */

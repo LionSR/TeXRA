@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Deferred, Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import { XaiAuthError } from '@auth/xai';
 import {
@@ -18,13 +19,15 @@ function memoryStorage(initial?: XaiSession): XaiSessionStorage & {
 } {
   let value = initial ? JSON.stringify(initial) : undefined;
   return {
-    get: async () => value,
-    store: async (v) => {
-      value = v;
-    },
-    delete: async () => {
-      value = undefined;
-    },
+    get: () => Effect.sync(() => value),
+    store: (v) =>
+      Effect.sync(() => {
+        value = v;
+      }),
+    delete: () =>
+      Effect.sync(() => {
+        value = undefined;
+      }),
     peek: () => (value ? (JSON.parse(value) as XaiSession) : undefined),
   };
 }
@@ -86,7 +89,7 @@ describe('XaiSessionCoordinator', () => {
     expect(auth.state.length).toBeGreaterThan(20);
   });
 
-  it.each([
+  it.effect.each([
     { stored: '{not-json', warning: 'not valid JSON' },
     {
       stored: JSON.stringify({ accessToken: 'only' }),
@@ -94,20 +97,21 @@ describe('XaiSessionCoordinator', () => {
     },
   ])(
     'warns and treats an unreadable stored session ($warning) as signed out',
-    async ({ stored, warning }) => {
-      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-      const storage: XaiSessionStorage = {
-        get: async () => stored,
-        store: async () => {},
-        delete: async () => {},
-      };
-      const coordinator = makeCoordinator({ storage });
-      expect(await coordinator.loadSession()).toBeNull();
-      expect(await coordinator.getStatus()).toEqual({ signedIn: false });
-      expect(warn).toHaveBeenCalledWith(
-        'SubscriptionOAuth',
-        expect.stringContaining(warning),
-      );
-    },
+    ({ stored, warning }) =>
+      Effect.gen(function* () {
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const storage: XaiSessionStorage = {
+          get: () => Effect.succeed(stored),
+          store: () => Effect.void,
+          delete: () => Effect.void,
+        };
+        const coordinator = makeCoordinator({ storage });
+        expect(yield* coordinator.loadSession()).toBeNull();
+        expect(yield* coordinator.getStatus()).toEqual({ signedIn: false });
+        expect(warn).toHaveBeenCalledWith(
+          'SubscriptionOAuth',
+          expect.stringContaining(warning),
+        );
+      }),
   );
 });

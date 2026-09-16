@@ -37,6 +37,7 @@ import {
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { AgentResume } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
   aggregateId,
@@ -783,25 +784,23 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   session: SessionHandle,
   runId: RunId,
   logger: AgentTrace,
-): Effect.fn.Return<void, Error> {
+): Effect.fn.Return<void, Error, AgentResume> {
   if (!pending) return;
   const targetRunId = pending.resolveTargetRunId();
   if (!targetRunId) {
     warnDetachedChildDelivery(logger, runId);
     return;
   }
+  /** The parent could not be resumed; its result still awaits an explicit resume. */
+  const warnParentNotResumed = (): void =>
+    logger.warn(
+      'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+      { data: { runId, parentRunId: targetRunId } },
+    );
   const recovery = pending.recovery;
   if (recovery) {
-    const resumed = yield* Effect.tryPromise({
-      try: () => startFollowUpWake(targetRunId, recovery, session),
-      catch: ensureError,
-    });
-    if (!resumed) {
-      logger.warn(
-        'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
-        { data: { runId, parentRunId: targetRunId } },
-      );
-    }
+    const resumed = yield* startFollowUpWake(targetRunId, recovery, session);
+    if (!resumed) warnParentNotResumed();
   }
   // Duplicate-safe: the parent row was admitted before the child prompt
   // was consumed. This wake still goes through submitFollowUp so a mocked
@@ -822,10 +821,7 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
       },
     );
   } else if (delivery.status === 'queued' && delivery.wake === 'failed') {
-    logger.warn(
-      'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
-      { data: { runId, parentRunId: targetRunId } },
-    );
+    warnParentNotResumed();
   }
 });
 
@@ -893,7 +889,7 @@ export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
  */
 export function startChildRunLoop<TTurn, R = never>(
   params: ChildRunLoopParams<TTurn, R>,
-): Effect.Effect<Fiber.Fiber<void, Error>, Error, R | Runs> {
+): Effect.Effect<Fiber.Fiber<void, Error>, Error, R | Runs | AgentResume> {
   return Effect.gen(function* () {
     const runSession = params.session;
     const runs = yield* Runs;
@@ -1184,7 +1180,7 @@ export function startChildRunLoop<TTurn, R = never>(
               const turn = attempt.kind === 'completed' ? attempt.turn : null;
               const err = attempt.kind === 'failed' ? attempt.err : null;
               const turnIsError =
-                attempt.kind === 'completed' ? attempt.turnIsError : false;
+                attempt.kind === 'completed' && attempt.turnIsError;
               const wallTimeMs = Date.now() - startedAt;
               const turnFailed = err != null || turnIsError;
 

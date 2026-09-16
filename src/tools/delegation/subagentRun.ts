@@ -24,11 +24,10 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { generateRunId } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
@@ -159,11 +158,10 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
           ? `Cancelled '${agentName}'`
           : `Completed '${agentName}'`,
       );
-    } else {
-      return errorResult(toErrorMessage(Cause.squash(deliveryExit.cause)), {
-        summary: `Subagent '${agentName}' failed`,
-      });
     }
+    return errorResult(toErrorMessage(Cause.squash(deliveryExit.cause)), {
+      summary: `Subagent '${agentName}' failed`,
+    });
   }
 
   const runId = generateRunId();

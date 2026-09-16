@@ -60,13 +60,3 @@ export type RequestRefusal = Extract<
   RequestDecision,
   { action: 'reject' | 'deny' | 'cancel' }
 >;
-
-export function isRequestRefusal(
-  decision: RequestDecision,
-): decision is RequestRefusal {
-  return (
-    decision.action === 'reject' ||
-    decision.action === 'deny' ||
-    decision.action === 'cancel'
-  );
-}

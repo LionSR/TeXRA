@@ -1,17 +1,13 @@
-import { Effect } from 'effect';
+import { Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import {
   classifyRun,
   type RunClassification,
 } from '@agent/runtime/runClassification';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
-import type { AgentResumePort } from '@platform/interfaces';
+import { AgentResume } from '@platform/interfaces';
 import { ownerPid, type RunId } from '@shared/schemas';
 import {
   runHeldMessage,
@@ -59,7 +55,6 @@ type FollowUpPresentation =
 
 interface SubmitFollowUpOptions {
   readonly session: SessionHandle;
-  readonly resumePort?: Pick<AgentResumePort, 'tryResumeRun'>;
   /**
    * Notifications never revive a persisted cursor. A child delivery is an
    * ordinary continuation: its parent counts the child as active until the
@@ -109,35 +104,40 @@ export function presentFollowUpResult(
 
 const logger = createLog('ToolUseFollowUp');
 
-export function notifyFollowUpSent(
-  runId: RunId,
-  session?: SessionHandle,
-): void {
-  (session ?? currentSession()).followUps.notifySent(runId);
+export function notifyFollowUpSent(runId: RunId, session: SessionHandle): void {
+  session.followUps.notifySent(runId);
 }
 
 /**
- * Wake a recovery lease whose follow-up row is already durable. The Promise
- * owns its settlement even if the submitting fiber stops waiting: a declined
- * or rejected wake releases the lease so the next attempt can claim it.
+ * Wake a recovery lease whose follow-up row is already durable. The wake
+ * owns its settlement: a declined or faulted attempt releases the lease here,
+ * so whoever starts it — a submitter that stays to collect the answer, or one
+ * that does not — the next attempt can claim it. {@link submitFollowUp}
+ * dispatches it detached for exactly that.
  */
 export function startFollowUpWake(
   runId: RunId,
   recovery: FollowUpRecoveryLease,
   session: SessionHandle,
-  resumePort?: Pick<AgentResumePort, 'tryResumeRun'>,
-): Promise<boolean> {
-  return Promise.resolve(
-    (resumePort ?? platform().agentResume).tryResumeRun(runId, recovery),
-  ).then(
-    (resumed) => {
-      if (!resumed) session.followUps.release(recovery, 'recoverable');
-      return resumed;
-    },
-    () => {
-      session.followUps.release(recovery, 'recoverable');
-      return false;
-    },
+): Effect.Effect<boolean, never, AgentResume> {
+  return Effect.flatMap(AgentResume, (resume) =>
+    resume.tryResumeRun(runId, recovery),
+  ).pipe(
+    Effect.tap((resumed) =>
+      Effect.sync(() => {
+        if (!resumed) session.followUps.release(recovery, 'recoverable');
+      }),
+    ),
+    // A faulted attempt is `false` to this caller: the retry decision is what
+    // it asked for. This handler is what releases the lease on that path; the
+    // success path releases it in the `tap` above unless the host accepted the
+    // resume, in which case the resumed run owns it.
+    Effect.catch(() =>
+      Effect.sync(() => {
+        session.followUps.release(recovery, 'recoverable');
+        return false;
+      }),
+    ),
   );
 }
 
@@ -158,7 +158,7 @@ export function enqueueLiveFollowUp(
 
 type Admission =
   | SubmitFollowUpResult
-  | { readonly resume: Promise<boolean> }
+  | { readonly resume: Effect.Effect<boolean, never, AgentResume> }
   | { status: 'no_session' };
 
 /**
@@ -174,7 +174,7 @@ function admitFollowUp(
   item: FollowUpQueueInput,
   options: SubmitFollowUpOptions,
   ownerSession: SessionHandle,
-): Effect.Effect<Admission, Error> {
+): Effect.Effect<Admission, Error, AgentResume> {
   return Effect.suspend(() => {
     const target = ownerSession.runs.getToolUseFollowUpTarget(runId);
 
@@ -229,12 +229,7 @@ function admitFollowUp(
           return { status: 'queued' };
         }
         return {
-          resume: startFollowUpWake(
-            runId,
-            submission.lease,
-            ownerSession,
-            options.resumePort,
-          ),
+          resume: startFollowUpWake(runId, submission.lease, ownerSession),
         };
       },
     );
@@ -314,7 +309,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
   followUp: FollowUpQueueInput | string,
   options: SubmitFollowUpOptions,
-): Effect.fn.Return<SubmitFollowUpResult, Error> {
+): Effect.fn.Return<SubmitFollowUpResult, Error, AgentResume> {
   const ownerSession = options.session;
   const item = typeof followUp === 'string' ? { text: followUp } : followUp;
   // A host callback must not be able to strand the recovery lease below:
@@ -339,11 +334,16 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     ownerSession,
   ).pipe(Effect.tapError(() => notifyAdmitted(false)));
   if ('resume' in dispatch) {
-    yield* notifyAdmitted(true);
-    const resumed = yield* Effect.tryPromise({
-      try: () => dispatch.resume,
-      catch: ensureError,
+    // Dispatch before announcing: the wake starts in the same step that
+    // admitted it, the order the promise it replaces had, so an interrupt
+    // between the two cannot leave the durable row behind a claimed lease
+    // with no host ever asked. Detached, so the wake settles that lease on
+    // its own whether or not this fiber stays to collect the answer.
+    const wake = yield* Effect.forkDetach(dispatch.resume, {
+      startImmediately: true,
     });
+    yield* notifyAdmitted(true);
+    const resumed = yield* Fiber.join(wake);
     if (resumed) return { status: 'queued' };
     return { status: 'queued', wake: 'failed' };
   }

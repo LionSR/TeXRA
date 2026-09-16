@@ -238,7 +238,7 @@ async function prepareLatexdiffResultsAndScheduleViewer(
           await restorePreparedViewerTarget(lastViewerLocation);
       }
       if (viewerTargetReady) {
-        void scheduleViewerDisplay();
+        runtime.runFork(scheduleViewerDisplay);
       }
     }
   }
@@ -309,8 +309,9 @@ export function registerLatexdiffCommands(
     },
     {
       id: 'texra.cleanLatexdiffvc',
+      // Clean is a pack run with `clean` set, and the failure label follows it.
       handler: (inputFile: string, baseFile: string, commitHash: string) =>
-        handleCleanLatexdiffvc(inputFile, baseFile, commitHash, runtime),
+        handlePackLatexdiffvc(inputFile, baseFile, commitHash, true, runtime),
     },
     {
       id: 'texra.runLatexdiff',
@@ -404,7 +405,7 @@ async function handlePackLatexdiffvc(
 ): Promise<void> {
   await withLatexdiffTool(
     'latexdiff-vc',
-    'Error packing LaTeX diff',
+    clean ? 'Error cleaning LaTeX diff' : 'Error packing LaTeX diff',
     async () => {
       log.debug(
         `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
@@ -415,31 +416,6 @@ async function handlePackLatexdiffvc(
         await onSessionFiles(
           runtime,
           runPackLatexdiffvc(fileToUse, commitHash, clean),
-        ),
-      );
-    },
-  );
-}
-
-async function handleCleanLatexdiffvc(
-  inputFile: string,
-  baseFile: string,
-  commitHash: string,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  await withLatexdiffTool(
-    'latexdiff-vc',
-    'Error cleaning LaTeX diff',
-    async () => {
-      log.debug(
-        `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
-      );
-      const fileToUse = await resolveDiffBase(inputFile, baseFile);
-      if (!fileToUse) return;
-      reportLatexdiff(
-        await onSessionFiles(
-          runtime,
-          runPackLatexdiffvc(fileToUse, commitHash, true),
         ),
       );
     },

@@ -1,14 +1,12 @@
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-
-import { fsCall } from '@utils/errors/fsCall';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 /**
  * Create a mapping between two file lists based on name similarity.
  * Uses string keys (comparable paths) for robust lookups, FileLocation values for data.
@@ -82,7 +80,8 @@ export const replaceInputCommands = Effect.fn(
   baseFiles: FileLocation[],
   outputFiles: FileLocation[],
   logger?: AgentTrace,
-) {
+): Effect.fn.Return<void, never, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
   if (baseFiles.length === 0 || outputFiles.length === 0) {
     logger?.debug('No files to process for input command replacement');
     return;
@@ -104,8 +103,16 @@ export const replaceInputCommands = Effect.fn(
       .join(', ')}`,
   );
 
-  // Build replacement lookup: generates all path suffix variants for flexible matching
+  // Build replacement lookup: generates all path suffix variants for flexible matching.
+  // First registration of a normalized path wins (longest suffix first).
   const replacementLookup = new Map<string, string>();
+  const register = (baseVariant: string, outputVariant: string): void => {
+    const key = normalizeLatexPath(baseVariant);
+    if (key && !replacementLookup.has(key)) {
+      replacementLookup.set(key, normalizeLatexPath(outputVariant));
+    }
+  };
+
   for (const [baseFile, outputLoc] of baseToOutputMap) {
     const outputFile = fileLocationDisplayPath(outputLoc);
     const baseSegments = getPathSegments(baseFile);
@@ -116,25 +123,17 @@ export const replaceInputCommands = Effect.fn(
       const baseSuffix = baseSegments.slice(-depth).join('/');
       const outputSuffix = outputSegments.slice(-depth).join('/');
 
-      // Register replacement if not already present
-      const normalizedBase = normalizeLatexPath(baseSuffix);
-      if (normalizedBase && !replacementLookup.has(normalizedBase)) {
-        replacementLookup.set(normalizedBase, normalizeLatexPath(outputSuffix));
-      }
+      register(baseSuffix, outputSuffix);
 
       // Also register without .tex extension
-      const baseHasTex = TEX_EXTENSION_REGEX.test(baseSuffix);
-      const outputHasTex = TEX_EXTENSION_REGEX.test(outputSuffix);
-      if (baseHasTex && outputHasTex) {
-        const baseNoExt = normalizeLatexPath(
+      if (
+        TEX_EXTENSION_REGEX.test(baseSuffix) &&
+        TEX_EXTENSION_REGEX.test(outputSuffix)
+      ) {
+        register(
           baseSuffix.replace(TEX_EXTENSION_REGEX, ''),
+          outputSuffix.replace(TEX_EXTENSION_REGEX, ''),
         );
-        if (baseNoExt && !replacementLookup.has(baseNoExt)) {
-          replacementLookup.set(
-            baseNoExt,
-            normalizeLatexPath(outputSuffix.replace(TEX_EXTENSION_REGEX, '')),
-          );
-        }
       }
     }
   }
@@ -148,8 +147,8 @@ export const replaceInputCommands = Effect.fn(
     const outputPath = fileLocationDisplayPath(outputLocation);
 
     yield* Effect.gen(function* () {
-      const content = yield* fsCall(() =>
-        AbsoluteFS.read(outputLocation.absolutePath),
+      const content = normalizeLineEndings(
+        yield* fs.readFileString(outputLocation.absolutePath),
       );
       const newContent = content.replaceAll(
         /\\input{([^}]+)}/g,
@@ -163,9 +162,7 @@ export const replaceInputCommands = Effect.fn(
       );
 
       if (newContent !== content) {
-        yield* fsCall(() =>
-          AbsoluteFS.write(outputLocation.absolutePath, newContent),
-        );
+        yield* fs.writeFileString(outputLocation.absolutePath, newContent);
         logger?.debug(`Updated input commands in ${outputPath}`);
       }
     }).pipe(

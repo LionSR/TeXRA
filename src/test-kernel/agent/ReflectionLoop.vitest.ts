@@ -54,6 +54,7 @@ import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   attachTestTranscriptFold,
@@ -475,6 +476,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
         Layer.provideMerge(rootedFsLayer(init.session.roots)),
+        Layer.provideMerge(testHttpClientLayer),
       ),
     ),
   );
@@ -533,14 +535,18 @@ function startedRun(session: SessionHandle): RunId {
   return runId;
 }
 
-/** Flip the compile-rejection policy under a run already in flight. */
+/**
+ * Flip the compile-rejection policy under a run already in flight. The fake
+ * host's store is an in-memory map, whose write cannot fail, so the hook the
+ * invoker awaits stays an infallible program and a refusal would be a defect.
+ */
 const setRejectOnCompileFailure = (enabled: boolean) =>
-  Effect.promise(() =>
-    installedHost().roots.workspaceState.update(
+  installedHost()
+    .roots.workspaceState.update(
       WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
       enabled,
-    ),
-  );
+    )
+    .pipe(Effect.orDie);
 
 /** The verdict each round stage closed with, in transcript order. */
 function roundStageOutcomes(store: StreamLog): unknown[] {

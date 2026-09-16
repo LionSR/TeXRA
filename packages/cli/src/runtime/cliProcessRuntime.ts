@@ -50,15 +50,13 @@ import {
   tryProcessRuntime,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import {
-  nodeFileServices,
-  type RunStateWrite,
-} from '@platform/defaults/jsonStore';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 import { getCliSecrets } from './cliSecrets';
+import { cliAgentResume } from './cliAgentResume';
 import { signInCliSupabase } from './supabaseAuth';
 
 /** The process runtime and the global state store installed under it. */
@@ -120,10 +118,6 @@ export function installCliProcessRuntime(
   const storage = createNodeStorageProvider({ storageRoot });
   pending = (async () => {
     const processStart = await nodeProcesses.selfIdentity();
-    // The Promise face of `StateStore.update`, run on the runtime installed
-    // below: the store holds this and calls it only when something writes,
-    // which is after that install.
-    const runWrite: RunStateWrite = (write) => runtime.runPromise(write);
     // Both stores this entry provides exist before the runtime that serves
     // them. Opening the state store needs the filesystem and nothing else —
     // it provides its own database layer — so it runs here, on a bootstrap
@@ -133,7 +127,7 @@ export function installCliProcessRuntime(
     const globalState = omitAppState
       ? undefined
       : await Effect.runPromise(
-          openAppStateStore(storage.getGlobalStoragePath(), runWrite).pipe(
+          openAppStateStore(storage.getGlobalStoragePath()).pipe(
             Effect.provide(nodeFileServices),
           ),
         );
@@ -143,6 +137,10 @@ export function installCliProcessRuntime(
       updateCheckStorage: () => storage.getGlobalStoragePath(),
       secrets: getCliSecrets(storageRoot),
       ...(globalState === undefined ? {} : { appState: globalState }),
+      // The one resume port, shared with the platform `initCliPlatform`
+      // wires: it forwards to the chat TUI's handler whenever one is
+      // mounted, whichever entry installed this runtime.
+      agentResume: cliAgentResume,
       setup: {
         host: 'cli',
         // The one closure left over the runtime being installed, and a real

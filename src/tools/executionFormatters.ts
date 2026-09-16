@@ -15,17 +15,15 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import type { RunHandle, RunStatusInfo } from '@agent/runtime/RunHandle';
-import type {
-  AgentCategory,
-  RunId,
-  RunIdentity,
-  TodoItem,
-} from '@shared/schemas';
 import {
   countByStatus,
   runIdentityName,
   RUN_OUTCOME,
   STATUS_DISPLAY,
+  type AgentCategory,
+  type RunId,
+  type RunIdentity,
+  type TodoItem,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { RunView } from '@shared/session/sessionView';
@@ -98,8 +96,12 @@ function getAvailablePaths(
   category?: RunDisplayCategory,
   hasChildren?: boolean,
 ): string[] {
-  const common = ['config', 'report', 'result'];
-  if (hasChildren) common.push('children');
+  const common = [
+    'config',
+    'report',
+    'result',
+    ...(hasChildren ? ['children'] : []),
+  ];
   switch (category) {
     case 'toolUse':
       return [...common, 'conversation', 'todos', 'workspace-files'];

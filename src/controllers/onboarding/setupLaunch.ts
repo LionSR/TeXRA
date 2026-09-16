@@ -6,25 +6,18 @@ import {
 } from '@agent/core/state/runRequests';
 import { createLog } from '@logger/logUtils';
 import { hasUsableApiKey, API_PROVIDERS } from '@model/apiProviders';
-import {
-  isCodexSubscriptionActive,
-  isXaiSubscriptionActive,
-} from '@model/providerCapabilities';
+import { SETUP_MODEL_BY_PROVIDER } from '@model/setupModelDefaults';
 import {
   decideRunModel,
   type RunModelCandidate,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
-import {
-  CHATGPT_SETUP_MODEL,
-  SETUP_MODEL_BY_PROVIDER,
-  XAI_SETUP_MODEL,
-} from '@model/setupModelDefaults';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   probeSetupCredential,
   setupCredentialProbeFailed,
+  setupSubscriptionModel,
 } from '@model/setupCredentialAccess';
 import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory } from '@shared/schemas';
@@ -48,29 +41,11 @@ export function selectSetupCredentialModelExcludingOpenRouter(
   return Effect.gen(function* () {
     // Subscription routes follow the global OpenRouter selection.
     // When it is enabled, only managed direct credentials can bypass it.
-    if (
-      !useOpenRouter &&
-      (yield* probeSetupCredential(
-        Effect.tryPromise({
-          try: () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
-          catch: setupCredentialProbeFailed('ChatGPT subscription'),
-        }),
+    if (!useOpenRouter) {
+      const subscriptionModel = yield* setupSubscriptionModel(
         credentialLog.warn,
-      ))
-    ) {
-      return CHATGPT_SETUP_MODEL;
-    }
-    if (
-      !useOpenRouter &&
-      (yield* probeSetupCredential(
-        Effect.tryPromise({
-          try: () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
-          catch: setupCredentialProbeFailed('Grok subscription'),
-        }),
-        credentialLog.warn,
-      ))
-    ) {
-      return XAI_SETUP_MODEL;
+      );
+      if (subscriptionModel !== null) return subscriptionModel;
     }
 
     for (const provider of API_PROVIDERS) {
@@ -153,26 +128,19 @@ export function resolveSetupLaunchModel(
 }
 
 /**
- * Desktop has no routing prompt, so OpenRouter is chosen only when the flag is
- * already on and an OpenRouter key exists.
- */
-export function selectDesktopSetupModel(
-  secrets: PlatformSecrets,
-): Effect.Effect<string | null> {
-  return resolveSetupLaunchModel(secrets, false).pipe(
-    Effect.map((resolution) => resolution?.model ?? null),
-  );
-}
-
-/**
  * Build the validated run request that launches the setup conversation, or
  * `null` when no credential resolves to a runnable model.
+ *
+ * Desktop has no routing prompt, so OpenRouter is chosen only when the flag is
+ * already on and an OpenRouter key exists: the access-list fallback is opted
+ * out and the resolution is projected to its model.
  */
 export function buildDesktopSetupRunRequest(
   secrets: PlatformSecrets,
 ): Effect.Effect<ValidatedRunRequest | null, Error> {
   return Effect.gen(function* () {
-    const model = yield* selectDesktopSetupModel(secrets);
+    const model =
+      (yield* resolveSetupLaunchModel(secrets, false))?.model ?? null;
     if (!model) return null;
     const validation = validateRunRequest({
       config: {

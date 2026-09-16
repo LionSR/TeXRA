@@ -33,7 +33,7 @@ import {
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { pluralize } from '@utils/text/stringUtils';
-import type { Effect } from 'effect';
+import type { Effect, FileSystem } from 'effect';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -73,13 +73,15 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   }
 
   async revealApprovalSurface(): Promise<void> {
-    // Best-effort: don't let a command failure prevent the approval prompt.
-    await Promise.resolve(
-      vscode.commands.executeCommand('texra.showProgressView'),
-    ).catch(() => {});
+    // A rejection here reaches the controller's action wrapper, which reports
+    // it through `reportError`. Swallowing it left the diff tab open with no
+    // approve/reject surface and no visible cause.
+    await vscode.commands.executeCommand('texra.showProgressView');
   }
 
-  runPreview(program: Effect.Effect<void>): Promise<void> {
+  runPreview(
+    program: Effect.Effect<void, unknown, FileSystem.FileSystem>,
+  ): Promise<void> {
     return this.runtime.runPromise(program);
   }
 

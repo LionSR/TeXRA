@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   openRouter: false,
   setCliSubscriptionPreference: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
-  setGLMCodingPlan: vi.fn(),
+  setGLMCodingPlan: vi.fn((_enabled: boolean) => Effect.void),
   updateGlobalState: vi.fn(),
 }));
 
@@ -135,6 +135,7 @@ function tui(
   detachHost();
   detachHost = defaultSession().interactions.use(
     createTuiHostInteractions(presentationHost, cliContext, {
+      session: defaultSession(),
       secrets,
       runtime: effectRuntime(),
     }),
@@ -303,7 +304,7 @@ function glmCodingPlanRetry(label: string): RetryPermission {
 function decideCurrent(decision: SurfaceDecision): void {
   const pending = currentApproval.get();
   expect(pending).toBeDefined();
-  pending?.decide(effectRuntime(), decision);
+  pending?.decide(defaultSession(), effectRuntime(), decision);
 }
 
 function decideRetry(decision: SurfaceDecision): void {
@@ -387,14 +388,13 @@ beforeEach(() => {
       }
     },
   );
-  mocks.setCliSubscriptionPreference.mockImplementation(
-    async (_id, enabled) => {
-      mocks.preferSubscription = enabled;
-      return { effective: enabled, target: 'global' };
-    },
-  );
-  mocks.setGLMCodingPlan.mockImplementation(async (enabled) => {
+  mocks.setCliSubscriptionPreference.mockImplementation((_id, enabled) => {
+    mocks.preferSubscription = enabled;
+    return Effect.succeed({ effective: enabled, target: 'global' });
+  });
+  mocks.setGLMCodingPlan.mockImplementation((enabled) => {
     mocks.glmCodingPlan = enabled;
+    return Effect.void;
   });
 });
 
@@ -577,7 +577,9 @@ describe('TUI request decisions', () => {
           action: 'approve',
         });
         yield* waitFor(() => {
-          expect(proposalApprovals().isBypassed(runId)).toBe(true);
+          expect(proposalApprovals(defaultSession()).isBypassed(runId)).toBe(
+            true,
+          );
           expect(
             defaultSession().approvals.toolEdit.bypass.isBypassed(runId),
           ).toBe(true);
@@ -660,7 +662,9 @@ describe('TUI request decisions', () => {
         decideCurrent({ action: 'approve' });
 
         expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
-        expect(proposalApprovals().isBypassed(runId)).toBe(false);
+        expect(proposalApprovals(defaultSession()).isBypassed(runId)).toBe(
+          false,
+        );
         expect(
           defaultSession().approvals.toolEdit.bypass.isBypassed(runId),
         ).toBe(false);

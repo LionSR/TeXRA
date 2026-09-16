@@ -14,9 +14,8 @@ import type {
   PermissionPayload,
   RequestDecision,
   RequestRefusal,
-  RunId,
 } from '@shared/schemas';
-import { getExhaustionReason, isRequestRefusal } from '@shared/schemas';
+import { getExhaustionReason } from '@shared/schemas';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 
 import type { HostRequest } from './hostRequest';
@@ -65,18 +64,6 @@ export type SurfaceDecision =
 type ApprovalArm =
   { readonly runtime: RuntimeRequest } | { readonly host: HostRequest };
 
-/** Enable a session-wide bypass on one run: the field-level mutation the
- *  approval authority applies, not a snapshot. */
-function sessionBypassRequest(
-  runId: RunId,
-  bypass: ApprovalBypassKind,
-): Extract<RuntimeRequest, { kind: 'policy.set' }> {
-  return {
-    kind: 'policy.set',
-    change: { field: 'bypass', runId, bypass, enabled: true },
-  };
-}
-
 const BYPASS_OF_KIND: Partial<
   Record<PermissionPayload['kind'], ApprovalBypassKind>
 > = {
@@ -122,8 +109,15 @@ export function approvalDecisionArms(
               agent: decision.agent ?? null,
             }
           : { action: 'approve' };
+      // Enable the session-wide bypass first: the field-level mutation the
+      // approval authority applies, not a snapshot.
       return [
-        { runtime: sessionBypassRequest(runId, bypass) },
+        {
+          runtime: {
+            kind: 'policy.set',
+            change: { field: 'bypass', runId, bypass, enabled: true },
+          },
+        },
         decide(approve),
       ];
     }
@@ -182,7 +176,13 @@ export function refusalOf(
   kind: PermissionPayload['kind'],
   decision: RequestDecision,
 ): RequestRefusal {
-  if (isRequestRefusal(decision)) return decision;
+  if (
+    decision.action === 'reject' ||
+    decision.action === 'deny' ||
+    decision.action === 'cancel'
+  ) {
+    return decision;
+  }
   return {
     action: 'deny',
     reason: `The ${kind} request was answered with "${decision.action}", which it does not offer.`,

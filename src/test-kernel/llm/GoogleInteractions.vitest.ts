@@ -7,9 +7,10 @@ import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
-  googleInteractionsAdmittedFingerprint,
+  GOOGLE_PREFIX_DOMAIN,
   googleInteractionsModel,
 } from '@llm/googleInteractions';
+import { admittedFingerprint } from '@llm/prefixFingerprint';
 import { RemoteOperationSchema } from '@llm/turn';
 import type { ModelError, TurnRequest, TurnResult } from '@llm/turn';
 
@@ -62,7 +63,7 @@ function backgroundFixture() {
       },
       providerResponseId: 'int_1',
       afterSequence: null,
-      admittedFingerprint: googleInteractionsAdmittedFingerprint(turn),
+      admittedFingerprint: admittedFingerprint(GOOGLE_PREFIX_DOMAIN, turn),
       store: turn.controls.store,
     });
     return { configured, turn, background: configured.background, operation };

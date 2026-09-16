@@ -10,7 +10,7 @@
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 
-// Third-party imports - use optimized hljs with only TeXRA-relevant languages
+// Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -19,7 +19,7 @@ import { diffWordsWithSpace } from 'diff';
 
 import type { FileListEntry } from '@shared/schemas';
 import type { FileListRow } from '@shared/transcript';
-import { hljs } from '@shared/highlighting/hljs';
+import { highlightSpans } from '@shared/highlighting/highlightCode';
 
 // Local imports - shared utilities
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -27,7 +27,6 @@ import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { getBasename } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatBytes } from '@utils/text/stringUtils';
 
 // Local imports - formatter helpers
@@ -307,22 +306,6 @@ const LANGUAGE_LABELS: Record<string, string> = {
   plaintext: 'Text',
 };
 
-/** Apply syntax highlighting to code if language is supported. Returns HTML string for unsafeHTML. */
-function highlightCode(text: string, language: string): string {
-  if (!language || language === 'plaintext' || !hljs.getLanguage(language)) {
-    return text;
-  }
-  try {
-    // Returns HTML with syntax highlighting spans
-    return hljs.highlight(text, { language, ignoreIllegals: true }).value;
-  } catch (error) {
-    console.warn(
-      `[progressView] Syntax highlighting failed for ${language} (${text.length} chars); rendering plain text: ${toErrorMessage(error)}`,
-    );
-    return text;
-  }
-}
-
 /** Build a code block with optional syntax highlighting, language badge, and copy button. */
 export function buildCodeBlock(
   text: string,
@@ -341,8 +324,11 @@ export function buildCodeBlock(
   } = options;
 
   const preClasses = { hljs: true, [className]: Boolean(className) };
-  const highlighted = highlightCode(text, language);
-  const isHighlighted = highlighted !== text;
+  // `null` means unsupported or failed: render the code as plain text.
+  const highlighted =
+    !language || language === 'plaintext'
+      ? null
+      : highlightSpans(text, language);
   const showHeader = showLanguage || showCopy;
 
   // IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates cause
@@ -353,7 +339,7 @@ export function buildCodeBlock(
   // prettier-ignore
   const copyButton = showCopy ? html`<wa-button class="code-block-copy" appearance="plain" variant="neutral" size="s" type="button" title="Copy code" aria-label="Copy code" @click=${(event: Event) => copyFromClick(event, text, 'copied')}>${waIcon('copy')}</wa-button>` : nothing;
   // prettier-ignore
-  const codeTemplate = html`<pre class=${classMap(preClasses)} dir="ltr"><code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>`;
+  const codeTemplate = html`<pre class=${classMap(preClasses)} dir="ltr"><code>${highlighted === null ? text : unsafeHTML(highlighted)}</code></pre>`;
   // prettier-ignore
   const headerTemplate = showHeader ? html`<div class="code-block-header">${languageBadge}${copyButton}</div>` : nothing;
   // prettier-ignore

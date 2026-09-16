@@ -12,7 +12,6 @@ import {
   type AgentOptionData,
   type ModelOptionData,
 } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { AGENT_DECORATORS, getModelProviderDecorator } from '@shared/wa/icons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
@@ -71,13 +70,7 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
 }
 
 export function renderAgentOptions(options: AgentOptionData[]): TemplateResult {
-  return html`
-    ${repeat(
-      options,
-      (opt) => opt.value,
-      (opt) => renderAgentOption(opt),
-    )}
-  `;
+  return html` ${repeat(options, (opt) => opt.value, renderAgentOption)} `;
 }
 
 function renderModelOption(opt: ModelOptionData): TemplateResult {
@@ -126,11 +119,5 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
 }
 
 export function renderModelOptions(options: ModelOptionData[]): TemplateResult {
-  return html`
-    ${repeat(
-      options,
-      (opt) => opt.value,
-      (opt) => renderModelOption(opt),
-    )}
-  `;
+  return html` ${repeat(options, (opt) => opt.value, renderModelOption)} `;
 }

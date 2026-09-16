@@ -69,17 +69,20 @@ function buildTooltip(run: RunView): string {
   ]
     .filter(Boolean)
     .join(' · ');
-  const parts = [mainLine];
-  if (run.description) parts.push(run.description);
-  if (run.statusDetail) parts.push(run.statusDetail);
+  const lastSeen = run.lastTimestamp
+    ? formatRelativeTime(run.lastTimestamp)
+    : '';
   // The opaque id stays in the accessible name: it is what tells two
   // parallel runs of the same agent apart.
-  parts.push(run.id);
-  if (run.lastTimestamp) {
-    const lastSeen = formatRelativeTime(run.lastTimestamp);
-    if (lastSeen) parts.push(`Last activity ${lastSeen}`);
-  }
-  return parts.join('\n');
+  return [
+    mainLine,
+    run.description,
+    run.statusDetail,
+    run.id,
+    lastSeen && `Last activity ${lastSeen}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function runDecorator(run: RunView) {
@@ -407,16 +410,13 @@ export class RunTabs extends LitElement {
   }
 
   private renderRows(
-    ids: readonly RunId[],
+    runs: readonly RunView[],
     selected: RunId | null,
   ): TemplateResult {
     return html`${repeat(
-      ids,
-      (id) => id,
-      (id) => {
-        const run = this.runOfEvent(id);
-        return run ? this.renderNode(run, selected) : nothing;
-      },
+      runs,
+      (run) => run.id,
+      (run) => this.renderNode(run, selected),
     )}`;
   }
 
@@ -434,10 +434,7 @@ export class RunTabs extends LitElement {
 
     let body: TemplateResult;
     if (!this.sections) {
-      body = this.renderRows(
-        top.map((run) => run.id),
-        selected,
-      );
+      body = this.renderRows(top, selected);
     } else {
       body = html`${RUN_GROUP_ORDER.map((group) => {
         const rows = top.filter((run) => run.group === group);
@@ -446,10 +443,7 @@ export class RunTabs extends LitElement {
             <span>${RUN_GROUP_LABELS[group]}</span>
             <span class="group-count">${rows.length}</span>
           </div>
-          ${this.renderRows(
-            rows.map((run) => run.id),
-            selected,
-          )}`;
+          ${this.renderRows(rows, selected)}`;
       })}`;
     }
 

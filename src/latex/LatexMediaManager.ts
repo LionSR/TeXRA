@@ -9,7 +9,7 @@ import type { ConfigProvider } from '@platform/interfaces';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas';
-import { filterNotNullish } from '@utils/core';
+import { filterNotNullish, unique } from '@utils/core';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -128,15 +128,14 @@ export class LatexMediaManager {
       // extractFiguresFromFiles) pass it in to avoid a redundant lookup.
       const resolvedBaseDir =
         baseDir ?? (yield* resolveLatexDir(latexFile.absolutePath));
-      const absolutePaths = new Set<string>();
-      for (const relative of figures) {
-        const trimmed = relative.trim();
-        if (trimmed) {
-          absolutePaths.add(
+      const absolutePaths = new Set(
+        figures
+          .map((relative) => relative.trim())
+          .filter((trimmed) => trimmed !== '')
+          .map((trimmed) =>
             path.normalize(path.join(resolvedBaseDir, trimmed)),
-          );
-        }
-      }
+          ),
+      );
 
       if (absolutePaths.size === 0) {
         return;
@@ -263,9 +262,9 @@ export class LatexMediaManager {
         { concurrency: LATEX_CONCURRENCY },
       );
 
-      for (const result of compileResults.filter(filterNotNullish)) {
-        workspaceState.media.addMediaFiles([result]);
-      }
+      workspaceState.media.addMediaFiles(
+        compileResults.filter(filterNotNullish),
+      );
     });
   }
 
@@ -353,8 +352,6 @@ export class LatexMediaManager {
     latexFile: FileLocation,
   ): Effect.Effect<string[], never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
-      const found = new Set<string>();
-
       const direct = yield* extractLatexFileDependencies(latexFile).pipe(
         Effect.catch((error) =>
           Effect.sync((): readonly string[] => {
@@ -365,10 +362,6 @@ export class LatexMediaManager {
           }),
         ),
       );
-      for (const abs of direct) {
-        found.add(abs);
-      }
-
       const local = yield* Effect.gen({ self: this }, function* () {
         // `resolveLatexDir` follows the symlink and falls back to the literal
         // dirname, so a file whose real path can't be resolved still gets its
@@ -404,11 +397,7 @@ export class LatexMediaManager {
           }),
         ),
       );
-      for (const abs of local) {
-        found.add(abs);
-      }
-
-      return [...found];
+      return unique([...direct, ...local]);
     });
   }
 
@@ -437,16 +426,13 @@ export class LatexMediaManager {
       );
       if (!entries) return;
 
-      const candidates: string[] = [];
-      for (const name of entries) {
-        const ext = getExtensionLowercase(name);
-        if (
-          PROJECT_SIBLING_EXTENSIONS.has(ext) ||
-          PROJECT_SIBLING_NAMES.has(name)
-        ) {
-          candidates.push(path.join(projectDir, name));
-        }
-      }
+      const candidates = entries
+        .filter(
+          (name) =>
+            PROJECT_SIBLING_EXTENSIONS.has(getExtensionLowercase(name)) ||
+            PROJECT_SIBLING_NAMES.has(name),
+        )
+        .map((name) => path.join(projectDir, name));
 
       if (candidates.length === 0) return;
 
@@ -591,15 +577,11 @@ export class LatexMediaManager {
         { concurrency: LATEX_CONCURRENCY },
       );
 
-      for (const r of tikzResults) {
-        if (r.length > 0) {
-          workspaceState.media.addMediaFiles(r);
-        }
-      }
+      const compiledFigures = tikzResults.flat();
+      workspaceState.media.addMediaFiles(compiledFigures);
 
       if (logSummary) {
-        const totalFigures = tikzResults.reduce((sum, r) => sum + r.length, 0);
-        this.logger.debug(`Extracted ${totalFigures} TikZ figures`);
+        this.logger.debug(`Extracted ${compiledFigures.length} TikZ figures`);
       }
     });
   }

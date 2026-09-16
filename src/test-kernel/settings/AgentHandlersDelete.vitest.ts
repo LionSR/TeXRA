@@ -7,6 +7,7 @@ import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
+import type { AgentSource } from '@shared/schemas';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -26,7 +27,9 @@ const mocks = vi.hoisted(() => ({
       typeof import('@controllers/settingsView/SettingsTeamRosterController').applySettingsTeamRoster
     >(),
   getAgent: vi.fn(() => ({ path: '/custom/my-agent.yaml' })),
-  getSourceDirectory: vi.fn(async () => undefined as string | undefined),
+  getSourceDirectory: vi.fn(
+    async (_source: AgentSource) => undefined as string | undefined,
+  ),
   logWarn: vi.fn(),
   refreshAfterAgentMutation: vi.fn(async () => undefined),
   showLoggedMessage: vi.fn(async () => ''),
@@ -69,20 +72,17 @@ vi.mock('@controllers/settingsView/SettingsAgentControllerFactory', () => ({
 vi.mock('@controllers/settingsView/SettingsTeamRosterController', () => ({
   applySettingsTeamRoster: mocks.applySettingsTeamRoster,
 }));
-vi.mock(
-  '@controllers/settingsView/SettingsRemoteAgentPromptController',
-  () => ({
-    getRemoteAgentPromptConfig: vi.fn(),
-  }),
-);
 vi.mock('@frontend/auth/agentCatalogRefreshScope', () => ({
   withAgentCatalogAuthRefreshDeferred: async (action: () => Promise<void>) =>
     action(),
 }));
 vi.mock('@frontend/agents/AgentDirectoryManager', () => ({
+  // The readers as the manager declares them: `AgentHandlers` runs them on
+  // its own runtime, so a promise-returning double is not what it calls.
   agentDirectories: {
-    custom: vi.fn(async () => '/custom'),
-    getDirectory: mocks.getSourceDirectory,
+    custom: () => Effect.succeed('/custom'),
+    getDirectory: (source: AgentSource) =>
+      Effect.promise(() => mocks.getSourceDirectory(source)),
   },
 }));
 vi.mock('@frontend/ui/dialogs', () => ({

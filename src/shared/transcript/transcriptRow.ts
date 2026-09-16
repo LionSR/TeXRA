@@ -134,19 +134,6 @@ export interface WebSearchRow extends TranscriptRowBase {
   readonly inProgress: boolean;
 }
 
-export interface WebFetchRow extends TranscriptRowBase {
-  readonly kind: 'webFetch';
-  /** `Web Fetch: arxiv.org (failed)` */
-  readonly label: string;
-  readonly url?: string;
-  readonly title?: string;
-  readonly status?: string;
-  /** Human-readable form of the wire payload's `errorCode`. */
-  readonly errorLabel?: string;
-  readonly content?: TranscriptText;
-  readonly failed: boolean;
-}
-
 /** A file that came through the media pipeline as visual/audio model input. */
 export interface LoadedMediaRef {
   readonly path: string;
@@ -247,7 +234,6 @@ export type TranscriptRow =
   | ErrorRow
   | ToolRow
   | WebSearchRow
-  | WebFetchRow
   | FileListRow
   | MissingOutputsRow
   | LatexdiffRow
@@ -337,8 +323,6 @@ export function isSettledRow(
       return row.block.finalized;
     case 'webSearch':
       return !row.inProgress;
-    case 'webFetch':
-      return row.status !== 'in_progress';
     case 'user':
     case 'error':
     case 'fileList':
@@ -353,15 +337,6 @@ export function isSettledRow(
     default:
       return assertNever(row, 'Unhandled transcript row kind');
   }
-}
-
-/**
- * Rows a final stream status cannot promote on its own. Bridge cleanup can
- * still replace a planned/running compaction or workflow call after a
- * cancellation, so those two settle only on their own typed terminal state.
- */
-export function promotesOnlyOnTypedTerminalState(row: TranscriptRow): boolean {
-  return row.kind === 'compactionActivity' || row.kind === 'workflowTask';
 }
 
 // ---------------------------------------------------------------------------

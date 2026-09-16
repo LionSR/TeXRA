@@ -9,7 +9,7 @@ import { describe, expect } from 'vitest';
 
 // Local imports - platform
 import type { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import type { JsonStore, RunStateWrite } from '@platform/defaults/jsonStore';
+import type { JsonStore } from '@platform/defaults/jsonStore';
 
 // Local imports - test support
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -41,12 +41,9 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
       );
       const globalPath = join(tempDir, 'global.json');
       const workspacePath = join(tempDir, 'workspace.json');
-      // The provider's `update` is a Promise, so each store is handed the
-      // runner its write runs on, exactly as a host hands over its own.
-      const runWrite: RunStateWrite = (write) => Effect.runPromise(write);
       const [globalStore, workspaceStore] = yield* Effect.all([
-        JsonStore.open(globalPath, { runWrite }),
-        JsonStore.open(workspacePath, { runWrite }),
+        JsonStore.open(globalPath),
+        JsonStore.open(workspacePath),
       ]);
       return {
         provider: new JsonConfigProvider({
@@ -110,9 +107,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     Effect.gen(function* () {
       const { provider, workspaceStore } = yield* createProvider();
 
-      yield* Effect.promise(() =>
-        provider.update('files.exclude', ['node_modules']),
-      );
+      yield* provider.update('files.exclude', ['node_modules']);
 
       expect(provider.get('files.exclude', [])).toEqual(['node_modules']);
       expect(provider.get('texra.files.exclude', [])).toEqual(['node_modules']);
@@ -127,7 +122,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
       const { provider, workspaceStore } = yield* createProvider();
       yield* workspaceStore.set('texra.files.exclude', ['node_modules']);
 
-      yield* Effect.promise(() => provider.update('files.exclude', undefined));
+      yield* provider.update('files.exclude', undefined);
 
       expect(provider.isExplicitlySet('files.exclude')).toBe(false);
       expect(workspaceStore.snapshot()).toEqual({});

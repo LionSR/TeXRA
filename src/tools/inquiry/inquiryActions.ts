@@ -14,6 +14,7 @@ import { Effect } from 'effect';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
+import { AgentResume } from '@platform/interfaces';
 
 // Local imports - shared
 import {
@@ -41,14 +42,14 @@ const ANSWER_TRUNCATION = 2000;
 
 function formatStillOpen(threads: InquiryThreadSummary[]): string[] {
   if (!threads.length) return [];
-  const lines = ['', 'Still open on this run:'];
-  for (const t of threads) {
-    const since = formatRelativeTime(Date.parse(t.lastActivityIso));
-    lines.push(
-      `  - ${t.threadId}  "${previewLabel(t.lastQuestionPreview)}"  (dispatched ${since})`,
-    );
-  }
-  return lines;
+  return [
+    '',
+    'Still open on this run:',
+    ...threads.map(
+      (t) =>
+        `  - ${t.threadId}  "${previewLabel(t.lastQuestionPreview)}"  (dispatched ${formatRelativeTime(Date.parse(t.lastActivityIso))})`,
+    ),
+  ];
 }
 
 /** The `[inquiry]` follow-up the agent reads: the answer, or the drop. */
@@ -158,7 +159,7 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
     permission: ExternalInquiryPermission,
     decision: RequestDecision,
     session: SessionHandle,
-  ): Effect.fn.Return<void, Error, InquiryRecords> {
+  ): Effect.fn.Return<void, Error, InquiryRecords | AgentResume> {
     const records = yield* InquiryRecords;
     const { threadId } = permission;
     const turnIndex = permission.transcript?.at(-1)?.turnIndex ?? 1;

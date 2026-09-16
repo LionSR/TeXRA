@@ -70,6 +70,7 @@ import { getConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { ensureError } from '@utils/errors/errorMessage';
 import { validationModel } from './validationModel';
+import type { HttpClient } from 'effect/unstable/http';
 
 /** Tool-use runs keep output headroom for context growth. */
 const TOOL_USE_MAX_OUTPUT_FACTOR = 0.5;
@@ -132,8 +133,8 @@ export interface BoundModel {
   readonly usageRoute: UsageRoute;
   readonly contextWindow: number;
   readonly supportsVision: boolean;
-  /** Structural {@link MediaCapabilities}: a bound model is passed as one to
-   *  the media-input pipeline, so these two mirror `config.capabilities`. */
+  /** The media-input pipeline takes a bound model structurally, so these two
+   *  mirror `config.capabilities`. */
   readonly supportsNativePdf: boolean;
   readonly supportsNativeAudio: boolean;
   readonly supportsForcedToolChoice: boolean;
@@ -147,7 +148,7 @@ export interface BoundModel {
   readonly backgroundCapable: boolean;
 }
 
-export interface BindModelInput {
+interface BindModelInput {
   readonly config: ModelConfig;
   /** The run's process secret store and global state, from the launch. */
   readonly stores: ModelOptionStores;
@@ -829,7 +830,7 @@ export function releaseBindingUploads(
  */
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
-): Effect.fn.Return<BoundModel, Error, Scope.Scope> {
+): Effect.fn.Return<BoundModel, Error, Scope.Scope | HttpClient.HttpClient> {
   const useOpenRouter = getUseOpenRouter();
   // The wire identity the preference promises, applied to the bound config
   // and not only to the route decision below (which re-applies it as

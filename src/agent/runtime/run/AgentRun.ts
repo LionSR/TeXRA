@@ -43,6 +43,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
+import type { HttpClient } from 'effect/unstable/http';
 import type { AgentLaunchContext, ToolPolicy } from '../AgentLaunchContext';
 import type { RunScope } from '../RunScope';
 import type { SessionHandle } from '../SessionHandle';
@@ -144,7 +145,7 @@ export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
   '@texra/agent/AgentRun',
 ) {}
 
-export interface AgentRunLayerInput {
+interface AgentRunLayerInput {
   readonly setting: AgentSetting;
   readonly parentRunId: RunId | null;
   /** Caller-supplied tools available only to this run. */
@@ -165,7 +166,7 @@ export interface AgentRunLayerInput {
 export const agentRunLayer = (
   ctx: AgentLaunchContext,
   input: AgentRunLayerInput,
-): Layer.Layer<AgentRun, Error, RunLedger> =>
+): Layer.Layer<AgentRun, Error, RunLedger | HttpClient.HttpClient> =>
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {

@@ -20,15 +20,12 @@ import {
   listRuns,
   resolveRunWorkspaceFilePath,
 } from '@agent/storage';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import type { FileStat } from '@platform/interfaces';
+import { StorageFs } from '@platform/rootedFs';
 import {
   AgentCategory,
   RunIdSchema,
@@ -54,9 +51,7 @@ import {
 } from '@transcript';
 import { assertNever, unique } from '@utils/core';
 import { readPlatformSetting } from '@utils/config/platformSettings';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { StorageFS } from '@utils/files/storageFS';
-import { isDirectory } from '@utils/files/fsEntryType';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePath } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
 import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
@@ -108,8 +103,8 @@ import { workflowBoardView } from './executions/workflowSummaryView';
 /**
  * Bound on the durable reads one listing page or one children block fans
  * out at once: every row asks for its own metadata (and, when the row
- * recorded no outcome, its run lease and a checkpoint stat), so the
- * fan-out is bounded rather than page-wide.
+ * recorded no outcome, the run claim), so the fan-out is bounded rather
+ * than page-wide.
  */
 const DURABLE_READ_CONCURRENCY = 16;
 
@@ -189,25 +184,11 @@ function workflowBoardLines(
   view: SessionView | null,
   runId: RunId,
   board: ReturnType<typeof deriveWorkflowRunModel> | null,
-): Effect.Effect<string[]> {
-  if (board) {
-    return Effect.succeed([
-      '',
-      'Workflow:',
-      JSON.stringify(workflowBoardView(board), null, 2),
-    ]);
-  }
-  if (!view) return Effect.succeed([]);
-  const derivedBoard = deriveWorkflowRunModel(view, runId);
-  return Effect.succeed(
-    derivedBoard
-      ? [
-          '',
-          'Workflow:',
-          JSON.stringify(workflowBoardView(derivedBoard), null, 2),
-        ]
-      : [],
-  );
+): string[] {
+  const resolved = board ?? (view && deriveWorkflowRunModel(view, runId));
+  return resolved
+    ? ['', 'Workflow:', JSON.stringify(workflowBoardView(resolved), null, 2)]
+    : [];
 }
 
 function getRunningTodos(
@@ -269,7 +250,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     const context: RunToolContext = {
       session: toolCall.run.session,
-      runId: toolCall.run?.runId,
+      runId: toolCall.run.runId,
       inRunScope: toolCall.inScope,
     };
     return yield* this.run(context, input).pipe(
@@ -286,7 +267,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   ): Effect.fn.Return<
     ToolResult,
     Error | ExecutionsReadFailed,
-    Runs | FileSystem.FileSystem
+    Runs | FileSystem.FileSystem | StorageFs
   > {
     const segments = getPathSegments(input.path);
     const [namespace, id, resource, ...rest] = segments;
@@ -509,9 +490,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           run,
         );
         if (run?.identity.kind === 'multiAgentWorkflow') {
-          lines.push(
-            ...(yield* workflowBoardLines(null, runId, run.transcript.run)),
-          );
+          lines.push(...workflowBoardLines(null, runId, run.transcript.run));
         }
 
         yield* this.appendSummaryTail(
@@ -583,11 +562,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
       if (identity?.kind === 'multiAgentWorkflow') {
         lines.push(
-          ...(yield* workflowBoardLines(
+          ...workflowBoardLines(
             durableView,
             runId,
             summaryRun?.transcript.run ?? null,
-          )),
+          ),
         );
       }
 
@@ -1042,7 +1021,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    return yield* readFileContent(context, StorageFS, fullPath, {
+    return yield* readFileContent(yield* StorageFs, fullPath, {
       directoryErrorPath: displayPath,
       resultPath: displayPath,
       viewRange,
@@ -1095,20 +1074,21 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         return resolvedCandidate ? [resolvedCandidate.path] : [];
       }),
     );
+    /** The recorded workspace file `candidate` names, when it names one. */
+    const recordedFile = (candidate: string) => {
+      const candidateFile = resolveRunWorkspaceFilePath(record, candidate);
+      return candidateFile && recordedPaths.has(candidateFile.path)
+        ? candidateFile
+        : undefined;
+    };
     // The listing renders recorded paths under a `workspace/` display prefix,
     // so a read in that display form retries against the stripped path.
-    const direct = resolveRunWorkspaceFilePath(record, filePath);
-    let resolved =
-      direct && recordedPaths.has(direct.path) ? direct : undefined;
     const displayPrefix = 'workspace/';
-    if (!resolved && filePath.startsWith(displayPrefix)) {
-      const stripped = resolveRunWorkspaceFilePath(
-        record,
-        filePath.slice(displayPrefix.length),
-      );
-      resolved =
-        stripped && recordedPaths.has(stripped.path) ? stripped : undefined;
-    }
+    const resolved =
+      recordedFile(filePath) ??
+      (filePath.startsWith(displayPrefix)
+        ? recordedFile(filePath.slice(displayPrefix.length))
+        : undefined);
     if (!resolved) {
       return yield* Effect.fail(
         new ToolError(
@@ -1117,29 +1097,29 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    return yield* readFileContent(context, AbsoluteFS, resolved.absolutePath, {
-      directoryErrorPath: `/executions/${runId}/workspace-files/${filePath}`,
-      resultPath: `/executions/${runId}/workspace-files/${resolved.path}`,
-      viewRange,
-    });
+    return yield* readFileContent(
+      yield* FileSystem.FileSystem,
+      resolved.absolutePath,
+      {
+        directoryErrorPath: `/executions/${runId}/workspace-files/${filePath}`,
+        resultPath: `/executions/${runId}/workspace-files/${resolved.path}`,
+        viewRange,
+      },
+    );
   });
 }
 
 /**
  * Shared stat → directory-guard → read → format tail for `readFile` and
- * `readWorkspaceFile`, which differ only in which FS backend resolved the
- * path. `directoryErrorPath` and `resultPath` can differ (a workspace-file
- * read reports the raw requested path on error but the canonical resolved
- * path on success).
+ * `readWorkspaceFile`, which differ only in which filesystem resolves the
+ * path: the session's rooted storage view for a run-storage path, the process
+ * filesystem for an already-absolute workspace path (a workspace file may sit
+ * in a worktree, outside every root). `directoryErrorPath` and `resultPath`
+ * can differ (a workspace-file read reports the raw requested path on error
+ * but the canonical resolved path on success).
  */
-interface FileBackend {
-  stat: (target: string) => Promise<FileStat>;
-  read: (target: string) => Promise<string>;
-}
-
 const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
-  context: RunToolContext,
-  fs: FileBackend,
+  fs: FileSystem.FileSystem,
   fullPath: string,
   {
     directoryErrorPath,
@@ -1151,8 +1131,11 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     viewRange: [number, number] | undefined;
   },
 ) {
-  const stats = yield* executionsRead(context, () => fs.stat(fullPath));
-  if (isDirectory(stats.type)) {
+  const failed = (cause: unknown) => new ExecutionsReadFailed({ cause });
+  const stats = yield* fs.stat(fullPath).pipe(Effect.mapError(failed));
+  // A symlink to a directory counts, which is what the bitmask probe this
+  // replaced answered for: the standard `stat` follows the link.
+  if (stats.type === 'Directory') {
     return yield* Effect.fail(
       new ToolError(
         `Path is a directory: ${directoryErrorPath}. Use without trailing path to list.`,
@@ -1160,7 +1143,9 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     );
   }
 
-  const content = yield* executionsRead(context, () => fs.read(fullPath));
+  const content = yield* readNormalizedFile(fs, fullPath).pipe(
+    Effect.mapError(failed),
+  );
   return formatFileView({
     path: resultPath,
     lines: splitContentLines(content),

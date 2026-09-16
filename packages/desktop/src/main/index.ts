@@ -441,7 +441,7 @@ function createWindow(options: {
       showErrorMessage(
         `A desktop operation failed: ${toErrorMessage(error)}`,
       ).pipe(
-        Effect.catchTag('NotificationFailed', (notificationError) =>
+        Effect.catch((notificationError: NotificationFailed) =>
           Effect.sync(() => {
             console.error(
               'Failed to display desktop asynchronous operation error:',
@@ -556,7 +556,8 @@ function createWindow(options: {
   // Session requests present errors at their dispatcher. Menu, navigation,
   // and runtime preview callers retain the reporting host above.
   const requestPreviewHost = createDesktopPreviewHost(previewOptions);
-  const getCustomAgentDirectory = () => options.agentDirectories.custom();
+  const getCustomAgentDirectory = () =>
+    options.runtime.runPromise(options.agentDirectories.custom());
 
   // Button labels for the instruction dialog below. Desktop has one settings
   // home (Settings tab), so SET_API_KEY opens it directly rather than the
@@ -580,7 +581,10 @@ function createWindow(options: {
             cause,
           }),
       }).pipe(
-        Effect.catch((error) =>
+        // The handler's parameter is the whole error type this expression can
+        // carry, so a second failure added here fails to compile instead of
+        // reading as a documentation URL that would not open.
+        Effect.catch((error: ExternalOpenFailed) =>
           Effect.sync(() => reportBackgroundError(error)),
         ),
       ),
@@ -1196,11 +1200,17 @@ function createWindow(options: {
         getSourceDirectory: (source: AgentSource) => {
           switch (source) {
             case 'custom':
-              return options.agentDirectories.custom();
+              return options.runtime.runPromise(
+                options.agentDirectories.custom(),
+              );
             case 'builtInWorkflow':
-              return options.agentDirectories.builtIn();
+              return options.runtime.runPromise(
+                options.agentDirectories.builtIn(),
+              );
             case 'builtInToolUse':
-              return options.agentDirectories.builtInToolUse();
+              return options.runtime.runPromise(
+                options.agentDirectories.builtInToolUse(),
+              );
             // No local directory: remote agents live in Supabase.
             case 'remote':
               return Promise.resolve(undefined);
@@ -1286,7 +1296,7 @@ function createWindow(options: {
           info: (message) =>
             showInfoMessage(message).pipe(
               Effect.map(() => undefined),
-              Effect.catchTag('NotificationFailed', (failure) =>
+              Effect.catch((failure: NotificationFailed) =>
                 Effect.fail(
                   new PromptFailed({
                     reason: 'host-unavailable',
@@ -1379,6 +1389,7 @@ function createWindow(options: {
         workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
         config: project.roots.config,
+        runtime,
         renderer: {
           postToRenderer: postForActiveProject,
         },
@@ -1558,7 +1569,12 @@ function createWindow(options: {
           cause,
         }),
     }).pipe(
-      Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+      // The handler's parameter is the whole error type this expression can
+      // carry, so a second failure added to this channel fails to compile
+      // instead of being reported as a funnel refresh the host could not do.
+      Effect.catch((error: OnboardingRefreshFailed) =>
+        Effect.sync(() => reportAsyncError(error)),
+      ),
     ),
   );
   const shellActions = createDesktopShellActions(
@@ -1906,7 +1922,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               processRoots: platformInit.processRoots,
               globalConfigStore: platformInit.globalConfigStore,
               records: projectRecords,
-              runWrite: platformInit.runWrite,
               warn,
               stores: {
                 secrets: platformInit.secrets,
@@ -1989,7 +2004,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                     cause,
                   }),
               }).pipe(
-                Effect.catch((error) =>
+                // The handler's parameter is the whole error type this
+                // expression can carry, so a second failure added to this
+                // channel fails to compile instead of being logged as a
+                // warning that would not show.
+                Effect.catch((error: NotificationFailed) =>
                   Effect.sync(() => console.error(error)),
                 ),
               ),

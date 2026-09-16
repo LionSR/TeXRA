@@ -1,7 +1,6 @@
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
-
 import {
   ToolError,
   type ToolFileAttachment,
@@ -14,8 +13,8 @@ import {
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { ensureError } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
 export function texPathField(description: string): z.ZodString {
@@ -55,17 +54,19 @@ const ATTACHMENT_CONCURRENCY = 8;
 
 export const resolveLatexFile = Effect.fn('tools.resolveLatexFile')(function* (
   texPath: string,
-): Effect.fn.Return<LatexFileResolution, ToolError | Error, ToolCall> {
+): Effect.fn.Return<
+  LatexFileResolution,
+  ToolError | Error,
+  ToolCall | FileSystem.FileSystem
+> {
   const call = yield* ToolCall;
+  const fs = yield* FileSystem.FileSystem;
   const { path, display } = yield* Effect.try({
     try: () =>
       call.inScope(() => resolveAndFormat(texPath, call.workingDirectory)),
     catch: ensureError,
   });
-  const exists = yield* Effect.tryPromise({
-    try: () => AbsoluteFS.exists(path.absolute),
-    catch: ensureError,
-  });
+  const exists = yield* entryExists(fs, path.absolute);
   if (!exists) {
     return yield* Effect.fail(
       new ToolError(`LaTeX file not found: ${display}`),

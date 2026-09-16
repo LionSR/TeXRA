@@ -17,6 +17,7 @@ import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { StateStore } from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -223,15 +224,16 @@ function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
     },
 
     getCustomAgentDir() {
-      return Effect.tryPromise({
-        try: () => agentDirectories.custom(),
-        catch: (cause) =>
-          new AgentCreatorUiFailed({
-            reason: 'directory-unavailable',
-            message: 'The custom agents directory could not be resolved.',
-            cause,
-          }),
-      });
+      return agentDirectories.custom().pipe(
+        Effect.mapError(
+          (cause) =>
+            new AgentCreatorUiFailed({
+              reason: 'directory-unavailable',
+              message: 'The custom agents directory could not be resolved.',
+              cause,
+            }),
+        ),
+      );
     },
 
     showCreatedInfo(filePath) {
@@ -282,6 +284,7 @@ function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
  */
 export function handleCreateAgentWithAI(
   context: vscode.ExtensionContext,
+  globalState: StateStore,
   category: AgentCategory,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
@@ -290,7 +293,7 @@ export function handleCreateAgentWithAI(
     const config = yield* loadCreatorConfig(context);
     yield* runAgentCreator(config, category, buildVSCodeUI(runtime), {
       secrets,
-      globalState: context.globalState,
+      globalState,
     });
   }).pipe(
     Effect.catchCause((cause) =>

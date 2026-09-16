@@ -76,7 +76,12 @@ function useCliHostInteractions(
   detachHostInteractions();
   defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
   detachHostInteractions = defaultSession().interactions.use(
-    createHeadlessCliHostInteractions(effectRuntime(), cliContext, hooks),
+    createHeadlessCliHostInteractions(
+      defaultSession(),
+      effectRuntime(),
+      cliContext,
+      hooks,
+    ),
   );
 }
 

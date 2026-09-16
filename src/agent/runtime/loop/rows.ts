@@ -211,10 +211,7 @@ function buildSnapshot(
   return {
     type: 'flow.snapshot',
     aggregateId: rowAggregate(runId),
-    payload:
-      flow.family === 'toolUse'
-        ? { family: flow.family, runtime, references, state: flow.state }
-        : { family: flow.family, runtime, references, state: flow.state },
+    payload: { ...flow, runtime, references },
   };
 }
 

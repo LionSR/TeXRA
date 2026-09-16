@@ -24,6 +24,7 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { createLog } from '@logger/logUtils';
+import { AgentResume } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import {
   AgentCategory,
@@ -77,7 +78,7 @@ const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
     session: SessionHandle,
     runId: string,
     err: unknown,
-  ): Effect.fn.Return<void, Error> {
+  ): Effect.fn.Return<void, Error, AgentResume> {
     log.warn(
       `Failed to wake resumed subagent '${runId}': ${toErrorMessage(err)}`,
     );
@@ -152,23 +153,16 @@ Optional auto-attach from the input LaTeX:
         withScope: call.inScope,
       });
 
-      yield* Effect.tryPromise({
-        try: () =>
-          call.inScope(() =>
-            assertWorkflowFilesExist([
-              { label: 'Input file', files: input.inputFiles },
-              { label: 'Context file', files: input.contextFiles },
-              { label: 'Media file', files: input.mediaFiles },
-            ]),
-          ),
-        catch: ensureError,
-      });
+      yield* assertWorkflowFilesExist(call.roots.workspace, [
+        { label: 'Input file', files: input.inputFiles },
+        { label: 'Context file', files: input.contextFiles },
+        { label: 'Media file', files: input.mediaFiles },
+      ]).pipe(Effect.mapError(ensureError));
 
-      const oversizedBibRejection = yield* Effect.tryPromise({
-        try: () =>
-          call.inScope(() => rejectOversizedBibAttachments(input.contextFiles)),
-        catch: ensureError,
-      });
+      const oversizedBibRejection = yield* rejectOversizedBibAttachments(
+        call.roots.workspace,
+        input.contextFiles,
+      ).pipe(Effect.mapError(ensureError));
       if (oversizedBibRejection) return oversizedBibRejection;
 
       // Extraction flags map to toolConfig, flowing through the proposal UI and
@@ -321,7 +315,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       instruction: string,
       session: SessionHandle,
       callerRunId: RunId | undefined,
-    ): Effect.fn.Return<ToolResult, Error, Runs> {
+    ): Effect.fn.Return<ToolResult, Error, Runs | AgentResume> {
       const handle = (yield* Runs).getHandle(runId);
       if (!handle) {
         return yield* Effect.fail(

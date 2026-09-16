@@ -16,7 +16,7 @@ import type { DispatchFacts, ToolDefinition } from '@shared/schemas';
 
 import { convertToolSchema } from './toolSchema';
 
-export type ToolDefinitions = NonNullable<TurnRequest['tools']>;
+type ToolDefinitions = NonNullable<TurnRequest['tools']>;
 
 /** The package's uniform tool definitions for the run's resolved tool list. */
 export function toolDefinitionsFor(
@@ -98,8 +98,7 @@ export function dispatchFactsFor(
   let partition = -1;
   let previousSafe = false;
   return parsed.map((call, index) => {
-    const tool = registry.get(call.name);
-    const parallelSafe = tool?.parallelSafe === true;
+    const parallelSafe = isParallelSafe(call);
     if (!(parallelSafe && previousSafe)) partition += 1;
     previousSafe = parallelSafe;
     const primaryIndex = duplicates?.get(call.callId);

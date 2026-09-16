@@ -11,6 +11,7 @@ import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { oauthSubscriptionUsageRoute } from '@model/providerCapabilities';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { ConfigWriteFailed } from '@platform/interfaces';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
@@ -30,7 +31,14 @@ import { ensureError } from '@utils/errors/errorMessage';
 export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
   readonly getEnabled: () => boolean;
-  readonly setEnabled: (enabled: boolean) => Promise<void>;
+  /**
+   * Persist the toggle through the shared config write path. An `Effect`, like
+   * every other write of a catalog-backed setting, so the caller's program
+   * composes it and owns the failure.
+   */
+  readonly setEnabled: (
+    enabled: boolean,
+  ) => Effect.Effect<void, ConfigWriteFailed | Error>;
 }
 
 function isGlmCodingPlanActive(

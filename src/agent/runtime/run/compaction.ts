@@ -19,7 +19,8 @@ import {
   startCompactionActivity,
   type AgentTrace,
 } from '@agent/trace';
-import type { TurnRequest, TurnResult } from '@llm/turn';
+import type { TurnRequest } from '@llm/turn';
+import type { ConfigProvider } from '@platform/interfaces';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
@@ -29,7 +30,7 @@ import {
 import type { DatabaseWriteFailed } from '@shared/session/database';
 import type { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { getValidatedConfig } from '@utils/config/configUtils';
+import { readValidatedConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { rowAggregate, type Message } from '../loop/rows';
@@ -114,15 +115,6 @@ function logCompactionEvent({
   );
 }
 
-/** The compaction threshold setting, validated like its sibling readers. */
-function compactionThresholdPercent(): number {
-  return getValidatedConfig(
-    MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
-    ModelCompactionThresholdPercentSchema,
-    MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue,
-  );
-}
-
 /** The text of a history, for the estimate a provider cannot give. */
 function historyText(messages: readonly Message[]): string {
   const pieces: string[] = [];
@@ -145,11 +137,13 @@ function historyText(messages: readonly Message[]): string {
   return pieces.join('\n');
 }
 
-export interface CompactionInput {
+interface CompactionInput {
   readonly runId: RunId;
   readonly ledger: RunLedger['Service'];
   readonly logger: AgentTrace;
   readonly bound: BoundModel;
+  /** The session's config provider: the threshold is a live per-check read. */
+  readonly config: ConfigProvider;
   /** The system text and tools of the turn about to be issued: the input
    *  estimate counts the request as it will be sent. */
   readonly system: string | undefined;
@@ -170,7 +164,12 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   input: CompactionInput,
 ): Effect.fn.Return<RunState, RunLedgerRefused | DatabaseWriteFailed> {
   const { runId, ledger, logger, bound, force } = input;
-  const percent = compactionThresholdPercent();
+  const percent = readValidatedConfig(
+    input.config,
+    MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+    ModelCompactionThresholdPercentSchema,
+    MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue,
+  );
   if (!force && percent <= 0) return state;
   const conversation = state.messages;
   if (conversation.length <= 2) {

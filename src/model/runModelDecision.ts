@@ -61,26 +61,28 @@ export function decideRunModel(
     (candidate) =>
       candidate.reason === 'access-list-default' && isRunnable(candidate.model),
   );
-
-  for (const candidate of ordered) {
-    if (candidate.reason === 'access-list-default') continue;
-    if (isRunnable(candidate.model)) {
-      return { model: candidate.model, reason: candidate.reason };
-    }
-    const mode = candidate.fallbackMode ?? 'reject';
-    if (mode === 'reject' || !fallback) {
-      return {
-        model: candidate.model,
-        reason: candidate.reason,
-        unavailable: true,
-      };
-    }
+  // The highest-precedence candidate that is not the access-list default
+  // decides alone; the access-list default is only ever the fallback.
+  const primary = ordered.find(
+    (candidate) => candidate.reason !== 'access-list-default',
+  );
+  if (!primary) {
+    return fallback ? { model: fallback.model, reason: fallback.reason } : null;
+  }
+  if (isRunnable(primary.model)) {
+    return { model: primary.model, reason: primary.reason };
+  }
+  const mode = primary.fallbackMode ?? 'reject';
+  if (mode === 'reject' || !fallback) {
     return {
-      model: fallback.model,
-      reason: fallback.reason,
-      fallbackFrom: { model: candidate.model, reason: candidate.reason, mode },
+      model: primary.model,
+      reason: primary.reason,
+      unavailable: true,
     };
   }
-
-  return fallback ? { model: fallback.model, reason: fallback.reason } : null;
+  return {
+    model: fallback.model,
+    reason: fallback.reason,
+    fallbackFrom: { model: primary.model, reason: primary.reason, mode },
+  };
 }

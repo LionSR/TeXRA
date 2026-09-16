@@ -29,7 +29,7 @@ import {
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import type { Effect } from 'effect';
+import type { Effect, FileSystem } from 'effect';
 
 const log = createLog('ToolEditApproval');
 
@@ -77,7 +77,9 @@ export interface ToolEditApprovalHost {
    * the host's process runtime. The controller holds no runtime of its own,
    * so every Effect it starts runs through here.
    */
-  runPreview(program: Effect.Effect<void>): Promise<void>;
+  runPreview(
+    program: Effect.Effect<void, unknown, FileSystem.FileSystem>,
+  ): Promise<void>;
   reportError(message: string): void;
   /**
    * Send the decision for a staged request: the host's `request.decide` on
@@ -135,6 +137,15 @@ interface PendingToolEditApproval
   readonly preview: ToolEditPreview;
   /** Resolve {@link LatexPreviewEntry.settled}: the release that drops the entry calls it. */
   readonly settle: () => void;
+  /**
+   * Every action admitted on this entry and every host build one of them
+   * started, until each settles. {@link ToolEditApprovalController.release}
+   * joins this set before it disposes the preview or removes the temp files
+   * the request staged, so no build is left reading files it deletes. It is
+   * the one accounting path for both kinds of work, written only by
+   * {@link runAction} and {@link buildDisplayFor}.
+   */
+  readonly inFlightActions: Set<Promise<unknown>>;
 }
 
 type ToolEditApprovalState =
@@ -244,6 +255,7 @@ export class ToolEditApprovalController {
         workspaceTempCleanup: [],
         latexOperationInProgress: false,
         onError: (message) => this.options.host.reportError(message),
+        inFlightActions: new Set(),
         // This operation: it was assigned to `initialization` right after it
         // started, so before the `await` above could resolve. The staged
         // entry names the same one, so a release finds it in either phase.
@@ -314,7 +326,7 @@ export class ToolEditApprovalController {
           this.options.host.runPreview(
             runLatexdiff(entry, {
               subtype: 'ONLYCHANGEDPAGE',
-              openBuildDisplay: this.options.host.openBuildDisplay,
+              openBuildDisplay: this.buildDisplayFor(entry),
             }),
           ),
         );
@@ -466,6 +478,15 @@ export class ToolEditApprovalController {
         );
       }
       if (entry.phase !== 'pending') return;
+      // A build an admitted action started may still be running: settling
+      // above stopped the preview program, not the host's build, which has
+      // no cancellation signal. Joining it here is what keeps this release
+      // from deleting the diff files under a build still reading them.
+      // `allSettled` because a build that fails is reported through the
+      // program already, and this join is ordering, not a second error
+      // channel. Nothing is admitted after the entry delete above, so this
+      // snapshot is complete.
+      await Promise.allSettled([...entry.inFlightActions]);
       try {
         await entry.preview.dispose();
         await Promise.all(
@@ -483,24 +504,70 @@ export class ToolEditApprovalController {
     await cleanup;
   }
 
-  private async runAction(
+  /**
+   * Run one admitted action on an entry, accounting for its promise: it is
+   * registered on the entry before this call returns, so a release that
+   * lands while the action runs joins it in {@link release}, and it is
+   * withdrawn once the action settles. A failure is reported only while the
+   * request is unsettled: an action that fails after the entry is gone has
+   * no user left to tell.
+   */
+  private runAction(
     entry: PendingToolEditApproval,
     action: () => Promise<void>,
   ): Promise<void> {
-    try {
-      await action();
-    } catch (error) {
-      if (!entry.isSettled()) {
-        this.options.host.reportError(toErrorMessage(error));
+    const running = (async (): Promise<void> => {
+      try {
+        await action();
+      } catch (error) {
+        if (!entry.isSettled()) {
+          this.options.host.reportError(toErrorMessage(error));
+        }
       }
-    }
+    })();
+    entry.inFlightActions.add(running);
+    // Withdraw on either outcome, so a rejection can never be left unhandled
+    // by this registration. `running` already swallows the action's failure.
+    const withdraw = (): void => {
+      entry.inFlightActions.delete(running);
+    };
+    void running.then(withdraw, withdraw);
+    return running;
+  }
+
+  /**
+   * The display callback the preview programs get for one entry. It refuses
+   * to start a build for a request that already settled, and it registers
+   * the host's raw build promise while the build runs: the program's settle
+   * race interrupts its own fiber and resolves, leaving the host build
+   * running with no handle on it, and this promise is what {@link release}
+   * joins so the build is not still reading the temp files it deletes.
+   */
+  private buildDisplayFor(entry: PendingToolEditApproval): BuildDisplayFn {
+    return (location, options) => {
+      // The program's own settled check and this call are separate steps, so
+      // a settle can land between them: refuse to start work for a request
+      // nobody is looking at.
+      if (entry.isSettled()) return Promise.resolve();
+
+      const build = this.options.host.openBuildDisplay(location, options);
+      entry.inFlightActions.add(build);
+      // Withdraw on either outcome. A handler on both sides rather than
+      // `finally`, which would re-throw a failed build's rejection into a
+      // promise nobody awaits.
+      const cleanup = (): void => {
+        entry.inFlightActions.delete(build);
+      };
+      void build.then(cleanup, cleanup);
+      return build;
+    };
   }
 
   private async previewProposed(entry: PendingToolEditApproval): Promise<void> {
     if (isLatexFile(entry.request.path)) {
       await this.options.host.runPreview(
         previewProposedLatex(entry, {
-          openBuildDisplay: this.options.host.openBuildDisplay,
+          openBuildDisplay: this.buildDisplayFor(entry),
         }),
       );
       return;

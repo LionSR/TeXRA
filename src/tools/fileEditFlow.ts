@@ -5,6 +5,7 @@ import { Effect, FileSystem } from 'effect';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - shared schemas
+import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local imports - tools
@@ -25,13 +26,7 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
  */
 function countOccurrences(haystack: string, needle: string): number {
   if (needle.length === 0) return 0;
-  let count = 0;
-  let index = haystack.indexOf(needle);
-  while (index !== -1) {
-    count++;
-    index = haystack.indexOf(needle, index + needle.length);
-  }
-  return count;
+  return haystack.split(needle).length - 1;
 }
 
 /**
@@ -268,7 +263,11 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
     proposedContent,
     sourceTool,
     present,
-  }: ApprovedFileEditRequest): Effect.fn.Return<ToolResult, unknown, ToolCall> {
+  }: ApprovedFileEditRequest): Effect.fn.Return<
+    ToolResult,
+    unknown,
+    ToolCall | FileSystem.FileSystem | WorkspaceFs
+  > {
     const approval = yield* requestToolEditApproval({
       path,
       originalContent,

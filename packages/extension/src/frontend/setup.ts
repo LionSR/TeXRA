@@ -1,11 +1,13 @@
 import * as path from 'node:path';
 
+import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { createLog } from '@logger/logUtils';
-import type { StateStore } from '@platform/interfaces';
+import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
+import { tryProcessRuntime } from '@platform/processRuntime';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
@@ -28,31 +30,34 @@ const CUSTOM_AGENT_ROOT_OPTIONS = {
  * The built-in directories are the packaged ones, so this only needs the
  * extension's resources path to be resolvable.
  */
-export async function registerAgentDirectoryRoots(
+export function registerAgentDirectoryRoots(
   context: vscode.ExtensionContext,
-): Promise<void> {
-  // Register each root independently so one failing directory resolution
-  // (e.g. a misconfigured custom agents path) does not take out the others —
-  // the creator agent still needs its reference docs and built-in examples.
-  const registrations: Array<() => Promise<void> | void> = [
-    async () =>
-      registerExternalRoot(await agentDirectories.builtIn(), {
-        kind: 'builtInWorkflow',
-        writable: false,
-        label: 'Built-in workflow agents',
-      }),
-    async () =>
-      registerExternalRoot(await agentDirectories.builtInToolUse(), {
-        kind: 'builtInToolUse',
-        writable: false,
-        label: 'Built-in tool-use agents',
-      }),
-    async () =>
-      registerExternalRoot(
-        await agentDirectories.custom(),
-        CUSTOM_AGENT_ROOT_OPTIONS,
+): Effect.Effect<void> {
+  const registrations: Array<Effect.Effect<void, AgentDirectoriesFailed>> = [
+    Effect.flatMap(agentDirectories.builtIn(), (directory) =>
+      Effect.sync(() =>
+        registerExternalRoot(directory, {
+          kind: 'builtInWorkflow',
+          writable: false,
+          label: 'Built-in workflow agents',
+        }),
       ),
-    () =>
+    ),
+    Effect.flatMap(agentDirectories.builtInToolUse(), (directory) =>
+      Effect.sync(() =>
+        registerExternalRoot(directory, {
+          kind: 'builtInToolUse',
+          writable: false,
+          label: 'Built-in tool-use agents',
+        }),
+      ),
+    ),
+    Effect.flatMap(agentDirectories.custom(), (directory) =>
+      Effect.sync(() =>
+        registerExternalRoot(directory, CUSTOM_AGENT_ROOT_OPTIONS),
+      ),
+    ),
+    Effect.sync(() =>
       registerExternalRoot(
         path.join(context.extensionPath, 'resources', 'docs', 'agent-creation'),
         {
@@ -61,18 +66,25 @@ export async function registerAgentDirectoryRoots(
           label: 'Agent creation docs',
         },
       ),
+    ),
   ];
 
-  await Promise.all(
-    registrations.map(async (register) => {
-      try {
-        await register();
-      } catch (err) {
-        log.error(
-          `Failed to register agent directory root: ${toErrorMessage(err)}`,
-        );
-      }
-    }),
+  // Register each root independently so one failing directory resolution
+  // (e.g. a misconfigured custom agents path) does not take out the others —
+  // the creator agent still needs its reference docs and built-in examples.
+  return Effect.forEach(
+    registrations,
+    (register) =>
+      register.pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            log.error(
+              `Failed to register agent directory root: ${toErrorMessage(Cause.squash(cause))}`,
+            );
+          }),
+        ),
+      ),
+    { discard: true },
   );
 }
 
@@ -81,67 +93,101 @@ export async function registerAgentDirectoryRoots(
  * location via Settings. Registering the same `kind` overwrites the
  * previous slot, so no separate unregister step is needed.
  */
-export async function refreshCustomAgentRoot(): Promise<void> {
-  try {
-    const custom = await agentDirectories.custom();
-    registerExternalRoot(custom, CUSTOM_AGENT_ROOT_OPTIONS);
-  } catch (err) {
-    log.error(`Failed to refresh custom agents root: ${toErrorMessage(err)}`);
-  }
+export function refreshCustomAgentRoot(): Effect.Effect<void> {
+  return agentDirectories.custom().pipe(
+    Effect.andThen((custom) =>
+      Effect.sync(() =>
+        registerExternalRoot(custom, CUSTOM_AGENT_ROOT_OPTIONS),
+      ),
+    ),
+    Effect.catchCause((cause) =>
+      Effect.sync(() => {
+        log.error(
+          `Failed to refresh custom agents root: ${toErrorMessage(Cause.squash(cause))}`,
+        );
+      }),
+    ),
+  );
 }
 
 /** Prepare the host environment and recommend LaTeX Workshop when useful. */
 export async function initializeLatexSupport(
   globalState: StateStore,
 ): Promise<void> {
+  const runtime = tryProcessRuntime();
+  if (runtime == null) {
+    log.warn(
+      'Skipped LaTeX support setup: the process runtime is not installed.',
+    );
+    return;
+  }
   // Extend process.env.PATH with common TeX installation directories so that
   // child processes spawned by other extensions (e.g., LaTeX Workshop) can
   // find latexmk, pdflatex, and other TeX binaries.  When VS Code is launched
   // from the macOS Finder or Windows Start Menu it often inherits a minimal
   // PATH that excludes TeX directories, causing "spawn latexmk ENOENT" errors.
-  try {
-    const extendedPath = extendEnvPath(process.env.PATH);
-    if (extendedPath !== process.env.PATH) {
-      process.env.PATH = extendedPath;
-      log.info('Extended process PATH with TeX directories');
-    }
-  } catch (err) {
-    log.warn(
-      `Failed to extend PATH with TeX directories: ${toErrorMessage(err)}`,
-    );
-  }
+  await runtime.runPromise(
+    Effect.sync(() => {
+      const extendedPath = extendEnvPath(process.env.PATH);
+      if (extendedPath !== process.env.PATH) {
+        process.env.PATH = extendedPath;
+        log.info('Extended process PATH with TeX directories');
+      }
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          log.warn(
+            `Failed to extend PATH with TeX directories: ${toErrorMessage(Cause.squash(cause))}`,
+          );
+        }),
+      ),
+    ),
+  );
 
-  try {
-    const latexWorkshop = vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID);
+  await runtime.runPromise(
+    Effect.tryPromise({
+      try: async () => {
+        const latexWorkshop = vscode.extensions.getExtension(
+          LATEX_WORKSHOP_EXT_ID,
+        );
 
-    if (!latexWorkshop && (await workspaceContainsLatexFiles())) {
-      // Only nag if the workspace actually contains LaTeX files; a user
-      // evaluating TeXRA or using it on a non-LaTeX project should not be
-      // prompted to install a TeX extension they don't need. They'll still
-      // discover it via the LaTeX settings tab or compile errors later.
-      log.info('LaTeX Workshop extension not found, prompting installation');
-      await promptExtensionInstall(globalState, {
-        suppressKey: 'latex-workshop-install',
-        message:
-          'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
-        extensionId: LATEX_WORKSHOP_EXT_ID,
-        channel: 'extension',
-      });
-    }
-  } catch (err) {
-    log.error(`Error initializing LaTeX support: ${toErrorMessage(err)}`);
-  }
+        if (!latexWorkshop && (await workspaceContainsLatexFiles())) {
+          // Only nag if the workspace actually contains LaTeX files; a user
+          // evaluating TeXRA or using it on a non-LaTeX project should not be
+          // prompted to install a TeX extension they don't need. They'll still
+          // discover it via the LaTeX settings tab or compile errors later.
+          log.info(
+            'LaTeX Workshop extension not found, prompting installation',
+          );
+          await promptExtensionInstall(globalState, {
+            suppressKey: 'latex-workshop-install',
+            message:
+              'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
+            extensionId: LATEX_WORKSHOP_EXT_ID,
+            channel: 'extension',
+          });
+        }
+      },
+      catch: (err) => err,
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          log.error(
+            `Error initializing LaTeX support: ${toErrorMessage(Cause.squash(cause))}`,
+          );
+        }),
+      ),
+    ),
+  );
 }
 
+/** A failed search propagates: `initializeLatexSupport` logs it and skips the
+ *  recommendation, rather than reading "the query failed" as "no .tex files". */
 async function workspaceContainsLatexFiles(): Promise<boolean> {
-  try {
-    const hits = await vscode.workspace.findFiles(
-      '**/*.tex',
-      '**/node_modules/**',
-      1,
-    );
-    return hits.length > 0;
-  } catch {
-    return false;
-  }
+  const hits = await vscode.workspace.findFiles(
+    '**/*.tex',
+    '**/node_modules/**',
+    1,
+  );
+  return hits.length > 0;
 }

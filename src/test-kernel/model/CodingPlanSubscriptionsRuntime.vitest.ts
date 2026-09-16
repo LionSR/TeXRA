@@ -30,10 +30,18 @@ describe('coding-plan subscription runtime', () => {
 
   afterEach(async () => {
     delete MODEL_CONFIGS.glm52.baseUrl;
-    await hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
-    await hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true);
-    await hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, true);
-    await hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+    await Effect.runPromise(
+      hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, ''),
+    );
+    await Effect.runPromise(
+      hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true),
+    );
+    await Effect.runPromise(
+      hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, true),
+    );
+    await Effect.runPromise(
+      hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, true),
+    );
   });
 
   it.each([
@@ -78,18 +86,20 @@ describe('coding-plan subscription runtime', () => {
   ])(
     'resolves the exact $name route',
     async ({ useChina, codingPlan, expected }) => {
-      await hostStores().globalState.update(
-        GlobalStateKey.USE_OPENROUTER,
-        false,
+      await Effect.runPromise(
+        hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, false),
       );
-      await hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
-      await hostStores().globalState.update(
-        GlobalStateKey.GLM_CODING_PLAN,
-        codingPlan,
+      await Effect.runPromise(
+        hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, ''),
       );
-      await hostStores().globalState.update(
-        GlobalStateKey.GLM_USE_CHINA,
-        useChina,
+      await Effect.runPromise(
+        hostStores().globalState.update(
+          GlobalStateKey.GLM_CODING_PLAN,
+          codingPlan,
+        ),
+      );
+      await Effect.runPromise(
+        hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, useChina),
       );
 
       expect(resolveGlmRoute({ useOpenRouter: false })).toEqual(expected);
@@ -143,13 +153,17 @@ describe('coding-plan subscription runtime', () => {
       baseUrl,
       usageRoute,
     }) => {
-      await hostStores().globalState.update(
-        GlobalStateKey.USE_OPENROUTER,
-        useOpenRouter,
+      await Effect.runPromise(
+        hostStores().globalState.update(
+          GlobalStateKey.USE_OPENROUTER,
+          useOpenRouter,
+        ),
       );
-      await hostStores().globalState.update(
-        GlobalStateKey.ENDPOINT_GLM,
-        providerEndpoint,
+      await Effect.runPromise(
+        hostStores().globalState.update(
+          GlobalStateKey.ENDPOINT_GLM,
+          providerEndpoint,
+        ),
       );
       if (modelBaseUrl) MODEL_CONFIGS.glm52.baseUrl = modelBaseUrl;
 
@@ -178,8 +192,12 @@ describe('coding-plan subscription runtime', () => {
   );
 
   it('leaves the stored preference alone for a run that declined the plan', async () => {
-    await hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-    await hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true);
+    await Effect.runPromise(
+      hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, false),
+    );
+    await Effect.runPromise(
+      hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true),
+    );
 
     expect(resolveGlmRoute({ useOpenRouter: false }).route).toBe(
       'official-coding-plan',

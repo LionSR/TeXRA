@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { AgentResume } from '@platform/interfaces';
 import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -115,7 +116,7 @@ describe('sendFollowUp host-path session routing', () => {
   it('resolves the follow-up target against the passed session, not the process default', async () => {
     const processSession = createTestSession();
     const parentRun = publishTestRunStart(processSession);
-    await processSession.settlePublications();
+    await Effect.runPromise(processSession.settlePublications());
 
     try {
       // A child run is tracked in the explicit process session, as desktop
@@ -134,8 +135,11 @@ describe('sendFollowUp host-path session routing', () => {
         Effect.runPromise(
           submitFollowUp(parentRun, 'continue', {
             session: processSession,
-            resumePort: { tryResumeRun: async () => false },
-          }),
+          }).pipe(
+            Effect.provideService(AgentResume, {
+              tryResumeRun: () => Effect.succeed(false),
+            }),
+          ),
         ),
       ).resolves.toEqual({ status: 'queued', wake: 'failed' });
 
@@ -147,7 +151,11 @@ describe('sendFollowUp host-path session routing', () => {
         Effect.runPromise(
           submitFollowUp(parentRun, 'continue', {
             session: defaultSession(),
-          }),
+          }).pipe(
+            Effect.provideService(AgentResume, {
+              tryResumeRun: () => Effect.succeed(false),
+            }),
+          ),
         ),
       ).resolves.toEqual({
         status: 'failed',

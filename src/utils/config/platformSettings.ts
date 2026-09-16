@@ -1,3 +1,4 @@
+import type { ConfigWriteFailed } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { settingByKey, type SettingHost } from '@shared/schemas';
 import {
@@ -5,6 +6,7 @@ import {
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
+import type { Effect } from 'effect';
 
 function requireEntry(key: string) {
   const entry = settingByKey(key);
@@ -79,11 +81,19 @@ export function readSettingFrom<T>(stores: SettingsStores, key: string): T {
  * Write a catalog-modeled setting through the shared write path, so the row's
  * schema validation and its declared `onWrite` effects apply to runtime callers
  * as well as to the settings UIs.
+ *
+ * A value the row's schema rejects is a defect of the program, not a member of
+ * the declared `ConfigWriteFailed | Error` channel: it is raised inside
+ * `writeSetting`, so it will not arrive as a catchable failure. Callers must
+ * pass a value they already know is valid. User input is validated upstream — a
+ * setting write resolves through `resolveStateSettingWrite`, which `safeParse`s
+ * before reaching the shared path — and a malformed catalog row is a bug to
+ * fix rather than a condition to catch.
  */
 export function writePlatformSetting(
   key: string,
   value: unknown,
-): Promise<void> {
+): Effect.Effect<void, ConfigWriteFailed | Error> {
   return writeSetting(
     requireEntry(key),
     value,

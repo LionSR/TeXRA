@@ -2,7 +2,8 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import pDefer from 'p-defer';
+import { Effect } from 'effect';
+import pDefer, { type DeferredPromise } from 'p-defer';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
@@ -16,10 +17,33 @@ import {
   RunIdSchema,
   type SessionEvent,
 } from '@shared/schemas';
+import type {
+  BuildDisplayFn,
+  LatexPreviewEntry,
+} from '@tools/approval/latexPreview';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
 const RUN = RunIdSchema.parse('ab12cd');
+
+/**
+ * The preview program the controller runs for a LaTeX proposal, replaced so a
+ * test can hand the controller's injected display callback a build it holds
+ * open. The override starts that build and completes without awaiting it,
+ * which is what the real program's settle race produces: the fiber running it
+ * is interrupted and the host build keeps going with nobody holding it.
+ */
+const latexPreview = vi.hoisted(() => ({
+  previewProposedLatex: vi.fn(),
+  /** The options each call received, so a test can reuse the callback. */
+  injectedOptions: [] as Array<{ openBuildDisplay: BuildDisplayFn }>,
+}));
+
+vi.mock('@tools/approval/latexPreview', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@tools/approval/latexPreview')>();
+  return { ...actual, previewProposedLatex: latexPreview.previewProposedLatex };
+});
 
 function approvalRequest(): ToolEditApprovalRequest {
   return toolEditApprovalRequest({
@@ -84,7 +108,9 @@ function createTestHost() {
       },
       revealApprovalSurface: async () => {},
       openBuildDisplay: async () => {},
-      runPreview: async () => {},
+      runPreview: async (program: Effect.Effect<void>) => {
+        await Effect.runPromise(program);
+      },
       reportError: vi.fn(),
       decide: vi.fn(async () => {}),
     },
@@ -260,5 +286,102 @@ describe('tool edit approval controller', () => {
 
     expect(testHost.preview.showDiff).not.toHaveBeenCalled();
     expect(testHost.host.decide).toHaveBeenCalledOnce();
+  });
+
+  it('holds a release until a preview build still running has settled, and starts no build for a settled request', async () => {
+    const testHost = createTestHost();
+    const controller = createController(testHost.host);
+    const events: string[] = [];
+    const builds: DeferredPromise<void>[] = [];
+    const openBuildDisplay = vi.fn(() => {
+      const build = pDefer<void>();
+      builds.push(build);
+      return build.promise;
+    });
+    testHost.host.openBuildDisplay = openBuildDisplay;
+    testHost.preview.dispose.mockImplementation(async () => {
+      events.push('dispose');
+    });
+    const diffLocation = {
+      kind: 'external',
+      absolutePath: '/tmp/diff.pdf',
+    } as const;
+    latexPreview.previewProposedLatex.mockImplementation(
+      (
+        entry: LatexPreviewEntry,
+        options: { openBuildDisplay: BuildDisplayFn },
+      ) => {
+        latexPreview.injectedOptions.push(options);
+        return Effect.sync(() => {
+          entry.workspaceTempCleanup.push(
+            Effect.sync(() => {
+              events.push('temp-cleanup');
+            }),
+          );
+          const build = options.openBuildDisplay(diffLocation);
+          void build.then(
+            () => events.push('build-done'),
+            () => events.push('build-failed'),
+          );
+        });
+      },
+    );
+
+    testHost.staging.resolve();
+    testHost.presentation.resolve();
+    await controller.present(approvalRequest());
+    const requestId = testHost.contextForRequest().requestId;
+
+    controller.handleAction({ requestId, action: 'previewProposed' });
+    await vi.waitFor(() => {
+      expect(openBuildDisplay).toHaveBeenCalledOnce();
+    });
+
+    // The build is still running, so a release may not return yet: the
+    // release deletes the temp files the build is reading.
+    let released = false;
+    const release = controller.release(requestId).then(() => {
+      released = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(released).toBe(false);
+    expect(testHost.preview.dispose).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+
+    builds[0].resolve();
+    await release;
+    expect(released).toBe(true);
+    // The build settles before the release touches what it was reading.
+    expect(events).toEqual(['build-done', 'dispose', 'temp-cleanup']);
+
+    // A settle stops admission: the callback the program already holds opens
+    // no second build for a request nobody is looking at.
+    await latexPreview.injectedOptions[0].openBuildDisplay(diffLocation);
+    expect(openBuildDisplay).toHaveBeenCalledOnce();
+
+    // A build that fails settles too, so a release joins that one as well
+    // rather than hanging, and the failure stays on the program's own error
+    // path instead of escaping the display callback.
+    await controller.present(approvalRequest());
+    const secondRequestId = testHost.contextForRequest().requestId;
+    controller.handleAction({
+      requestId: secondRequestId,
+      action: 'previewProposed',
+    });
+    await vi.waitFor(() => {
+      expect(openBuildDisplay).toHaveBeenCalledTimes(2);
+    });
+
+    const secondRelease = controller.release(secondRequestId);
+    builds[1].reject(new Error('the build failed'));
+    await secondRelease;
+    expect(events).toEqual([
+      'build-done',
+      'dispose',
+      'temp-cleanup',
+      'build-failed',
+      'dispose',
+      'temp-cleanup',
+    ]);
   });
 });

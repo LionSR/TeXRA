@@ -269,7 +269,9 @@ export class ProgressFollowUpController {
       compileFailures,
       runOutputs,
     );
-    const targets: CompileFixerTarget[] = [];
+    // The map is the target list: insertion order is the order targets are
+    // named in, and a path seen twice keeps its first target, enriched by the
+    // second.
     const targetByPath = new Map<string, CompileFixerTarget>();
     for (const candidate of preferred) {
       const location = this.deps.workspace.locatePath(candidate);
@@ -285,10 +287,9 @@ export class ProgressFollowUpController {
           continue;
         }
         targetByPath.set(target.path, target);
-        targets.push(target);
       }
     }
-    return targets;
+    return [...targetByPath.values()];
   }
 
   private async compileFixerTargetsForCandidate(
@@ -338,10 +339,11 @@ export class ProgressFollowUpController {
     compileFailures: CompileFailure[],
     runOutputs: ReadonlyRoundIndexed<OutputFileInfo>,
   ): string[] {
-    const outputByPath = new Map<string, OutputFileInfo>();
-    for (const output of Object.values(runOutputs).flat()) {
-      outputByPath.set(output.location.absolutePath, output);
-    }
+    const outputByPath = new Map(
+      Object.values(runOutputs)
+        .flat()
+        .map((output) => [output.location.absolutePath, output] as const),
+    );
 
     const generatedOutputSources = compileFailures
       .map((failure) => outputByPath.get(failure.output.absolutePath)?.source)

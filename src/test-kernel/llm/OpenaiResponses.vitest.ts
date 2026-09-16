@@ -10,11 +10,12 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ContinuationSchema, RemoteOperationSchema } from '@llm/turn';
 import {
-  openaiResponsesAdmittedFingerprint,
+  RESPONSES_PREFIX_DOMAIN,
   openaiResponsesContinuation,
   openaiResponsesModel,
   openaiResponsesWebSocketModel,
 } from '@llm/openaiResponses';
+import { admittedFingerprint } from '@llm/prefixFingerprint';
 import { openaiChatModel } from '@llm/openaiChat';
 import type {
   BackgroundEvent,
@@ -203,7 +204,10 @@ function backgroundTurn(model: ReturnType<typeof modelWith>) {
         admitted: turn,
         operation: {
           ...OPERATION,
-          admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
+          admittedFingerprint: admittedFingerprint(
+            RESPONSES_PREFIX_DOMAIN,
+            turn,
+          ),
           store: turn.controls.store,
         },
       };
@@ -1413,7 +1417,10 @@ describe('native OpenAI Responses protocol', () => {
           afterSequence: 0,
           // Recorded at admission, so the resumed observation below can tell
           // that this turn is still the one the provider answered.
-          admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
+          admittedFingerprint: admittedFingerprint(
+            RESPONSES_PREFIX_DOMAIN,
+            turn,
+          ),
           // The storage mode the provider admitted, which a resumed
           // observation re-prepares with instead of the current setting.
           store: true,

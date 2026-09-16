@@ -69,6 +69,12 @@ function isCommandInput(language: string): boolean {
   return language === 'shell' || language === 'javascript';
 }
 
+/** The one list shell the file, file-group, and checklist sections share. */
+function renderDetailList(label: string, items: unknown): TemplateResult {
+  // prettier-ignore
+  return buildToolUseSection(label, html`<ul class="detail-list">${items}</ul>`);
+}
+
 function renderFileSection(section: ToolFileSection): TemplateResult {
   switch (section.namespace) {
     case 'memory':
@@ -99,8 +105,7 @@ function renderFileGroupsSection(
 ): TemplateResult {
   // prettier-ignore
   const fileItems = html`${section.groups.flatMap((group) => group.files.map((file) => html`<li class="detail-item">${waIcon('file')} ${group.clickable ? buildFileLinkSpan(file, html`<bdi dir="auto">${file}</bdi>`) : html`<span class="file-label"><bdi dir="auto">${file}</bdi></span>`} <span class="file-source">(<bdi dir="auto">${group.label}</bdi>)</span></li>`))}`;
-  // prettier-ignore
-  return buildToolUseSection(section.label, html`<ul class="detail-list">${fileItems}</ul>`);
+  return renderDetailList(section.label, fileItems);
 }
 
 function renderFileListSection(section: ToolFileListSection): TemplateResult {
@@ -112,15 +117,13 @@ function renderFileListSection(section: ToolFileListSection): TemplateResult {
     // prettier-ignore
     return html`<li class="detail-item">${waIcon('file')} ${buildFileLinkSpan(file.path, html`<bdi dir="auto">${file.path}</bdi>`)}${file.from ? html` <span class="file-source">(from <bdi dir="auto">${file.from}</bdi>)</span>` : nothing}${file.note ? html` <span class="file-source">(<bdi dir="auto">${file.note}</bdi>)</span>` : nothing}${diffStats}</li>`;
   })}`;
-  // prettier-ignore
-  return buildToolUseSection(section.label, html`<ul class="detail-list">${fileItems}</ul>`);
+  return renderDetailList(section.label, fileItems);
 }
 
 function renderChecklistSection(section: ToolChecklistSection): TemplateResult {
   // prettier-ignore
   const items = html`${section.items.map((item) => html`<li class="detail-item">${waIcon(item.done ? 'circle-check' : 'circle')} <span class="visually-hidden">${item.done ? 'Completed' : 'Pending'}: </span><bdi dir="auto">${item.text}</bdi></li>`)}`;
-  // prettier-ignore
-  return buildToolUseSection(section.label, html`<ul class="detail-list">${items}</ul>`);
+  return renderDetailList(section.label, items);
 }
 
 /** Paint one tool section. `filePath` is the most recent file section's path,

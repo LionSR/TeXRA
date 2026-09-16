@@ -29,7 +29,7 @@ import {
   formatWorkflowPhaseHeading,
   workflowCallDetail,
 } from '@shared/copy/workflowCall';
-import { assertNever, isObject, tryParseUrl } from '@utils/core';
+import { assertNever, isObject } from '@utils/core';
 import {
   formatCompactTokenCount,
   formatCostUsd,
@@ -142,22 +142,21 @@ function errorDetails(
   summary: string,
 ): ErrorRowDetail[] {
   if (!data) return [];
-  const details: ErrorRowDetail[] = [];
-  for (const key of ERROR_DETAIL_FIELDS) {
+  return ERROR_DETAIL_FIELDS.flatMap((key) => {
     const value = data[key];
-    if (value == null) continue;
     // The message is the summary on most failures; repeating it under the
     // summary says nothing.
-    if (key === 'message' && value === summary) continue;
-    details.push({
-      key,
-      value:
-        typeof value === 'object'
-          ? JSON.stringify(value, null, 2)
-          : String(value),
-    });
-  }
-  return details;
+    if (value == null || (key === 'message' && value === summary)) return [];
+    return [
+      {
+        key,
+        value:
+          typeof value === 'object'
+            ? JSON.stringify(value, null, 2)
+            : String(value),
+      },
+    ];
+  });
 }
 
 function projectErrorRow(
@@ -264,17 +263,6 @@ const WEB_SEARCH_PROVIDER_LABEL: Readonly<Record<string, string>> = {
 const WEB_SEARCH_STATUS_SUFFIX: Readonly<Record<string, string>> = {
   in_progress: ' (searching...)',
   failed: ' (failed)',
-};
-
-const WEB_FETCH_ERROR_LABEL: Readonly<Record<string, string>> = {
-  invalid_tool_input: 'Invalid URL format',
-  url_too_long: 'URL exceeds maximum length',
-  url_not_allowed: 'URL blocked by domain filter',
-  url_not_accessible: 'Failed to access URL',
-  unsupported_content_type: 'Unsupported content type',
-  too_many_requests: 'Rate limit exceeded',
-  max_uses_exceeded: 'Maximum fetch uses exceeded',
-  unavailable: 'Service unavailable',
 };
 
 // ---------------------------------------------------------------------------
@@ -408,27 +396,6 @@ export function projectTranscriptRow(
       };
     }
 
-    case MESSAGE_TYPES.WEB_FETCH: {
-      const { url, title, status, errorCode, content } = entry.data;
-      const failed = status === 'failed';
-      const host = url ? (tryParseUrl(url)?.hostname ?? url) : '';
-      const errorLabel =
-        failed && errorCode
-          ? (WEB_FETCH_ERROR_LABEL[errorCode] ?? errorCode)
-          : undefined;
-      return {
-        ...rowBase(entry),
-        kind: 'webFetch',
-        label: `Web Fetch${host ? `: ${host}` : ''}${failed ? ' (failed)' : ''}`,
-        ...(url !== undefined ? { url } : {}),
-        ...(title !== undefined ? { title } : {}),
-        ...(status !== undefined ? { status } : {}),
-        ...(errorLabel !== undefined ? { errorLabel } : {}),
-        ...(content ? { content: transcriptText(content) } : {}),
-        failed,
-      };
-    }
-
     case MESSAGE_TYPES.FILE_LIST: {
       const files = entry.data;
       if (files.length === 0) return undefined;
@@ -478,14 +445,15 @@ export function projectTranscriptRow(
 
     case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
       const data = entry.data;
+      const reduced = data.action === 'max_tokens_reduced';
       if (
-        data.action === 'max_tokens_reduced' &&
+        reduced &&
         data.reducedMaxTokens >= MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD
       ) {
         return undefined;
       }
       const items: StatItem[] = [];
-      if (data.action === 'max_tokens_reduced') {
+      if (reduced) {
         items.push({
           key: 'maxTokens',
           label: 'Max tokens reduced',
@@ -505,10 +473,9 @@ export function projectTranscriptRow(
       items.push({
         key: 'utilization',
         label: 'Context utilization',
-        value:
-          data.action === 'max_tokens_reduced'
-            ? before
-            : `${before} → ${data.utilizationAfter.toFixed(1)}%`,
+        value: reduced
+          ? before
+          : `${before} → ${data.utilizationAfter.toFixed(1)}%`,
       });
       items.push({
         key: 'contextWindow',

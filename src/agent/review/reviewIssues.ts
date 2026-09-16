@@ -76,14 +76,9 @@ export type ReviewIssueReport = z.infer<typeof ReportReviewIssueInputSchema>;
 
 /** Strip diff-style `a/`/`b/` prefixes and normalize separators. */
 export function normalizeReviewFilePath(file: string): string {
-  let normalized = normalizeFilePath(file.trim());
-  if (normalized.startsWith('a/') || normalized.startsWith('b/')) {
-    normalized = normalized.slice(2);
-  }
-  if (normalized.startsWith('./')) {
-    normalized = normalized.slice(2);
-  }
-  return normalized;
+  return normalizeFilePath(file.trim())
+    .replace(/^[ab]\//, '')
+    .replace(/^\.\//, '');
 }
 
 /**

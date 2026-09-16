@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
@@ -18,22 +18,14 @@ import { workspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation, OutputFileInfo, RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
 
 const RUN_ID = 'xml-output-manager-test' as RunId;
-
-const formatterMocks = vi.hoisted(() => ({
-  runLatexFormatter: vi.fn(),
-}));
-
-vi.mock('@latex/formatter/texFormatter', () => ({
-  runLatexFormatter: formatterMocks.runLatexFormatter,
-}));
 
 interface XmlManagerOptions {
   outputFiles?: string[];
@@ -94,9 +86,15 @@ function createXmlManager(
  */
 const fsEffect = {
   write: (target: string, content: string) =>
-    Effect.promise(() => AbsoluteFS.write(target, content)),
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      yield* fs.writeFileString(target, content);
+    }),
   ensureDir: (target: string) =>
-    Effect.promise(() => AbsoluteFS.ensureDir(target)),
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      yield* fs.makeDirectory(target, { recursive: true });
+    }),
 };
 
 /** Write a response and unpack it through the extraction pipeline. */
@@ -140,16 +138,14 @@ const expectWritten = Effect.fn('expectWritten')(function* (
   path: string,
   content: string,
 ) {
-  const written = yield* Effect.promise(() =>
-    AbsoluteFS.read(fakePath('tmp/run', path)),
-  );
+  const fs = yield* FileSystem.FileSystem;
+  const written = yield* fs.readFileString(fakePath('tmp/run', path));
   expect(written).toBe(content);
 });
 
 const expectAbsent = Effect.fn('expectAbsent')(function* (path: string) {
-  const exists = yield* Effect.promise(() =>
-    AbsoluteFS.exists(fakePath('tmp/run', path)),
-  );
+  const fs = yield* FileSystem.FileSystem;
+  const exists = yield* fs.exists(fakePath('tmp/run', path));
   expect(exists).toBe(false);
 });
 
@@ -845,7 +841,6 @@ const LABELED_RECOVERY_CASES: readonly LabeledRecoveryCase[] = [
 
 describe('XmlOutputManager', () => {
   beforeEach(async () => {
-    formatterMocks.runLatexFormatter.mockReset();
     await installPlatform({
       files: { '/tmp/run/output.xml': '<documents />' },
       workspacePath: fakePath('workspace'),
@@ -872,7 +867,7 @@ describe('XmlOutputManager', () => {
         'paper.tex',
         '\\documentclass{article}\n\\begin{document}\nHi.\n\\end{document}\n',
       );
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -893,7 +888,7 @@ describe('XmlOutputManager', () => {
         );
 
         yield* expectWritten('fragment.tex', 'Body only.\n');
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -909,7 +904,7 @@ describe('XmlOutputManager', () => {
         );
 
         yield* expectWritten('sections/main.tex', 'Nested section.\n');
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   for (const [name, output, files, absent = []] of RECOVERY_CASES) {
@@ -920,7 +915,7 @@ describe('XmlOutputManager', () => {
           files,
           absent,
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
     );
   }
 
@@ -935,7 +930,7 @@ describe('XmlOutputManager', () => {
 
         expectSources(outputs, ['appendix.tex']);
         yield* expectWritten('appendix.tex', 'Appendix.\n');
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -955,7 +950,7 @@ describe('XmlOutputManager', () => {
           'output_extracted-2.tex',
           'Explicit extracted fallback.\n',
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live('does not auto-format extracted workflow outputs', () =>
@@ -982,9 +977,11 @@ Appendix.
 
       const roundOutputs = state.rounds.get(0)?.outputs ?? [];
       expect(roundOutputs).toHaveLength(2);
-      expect(formatterMocks.runLatexFormatter).not.toHaveBeenCalled();
+      // The written bytes are the guard: extraction hands the document through
+      // untouched, so a formatter running anywhere on this path would show up
+      // as different content below.
       yield* expectWritten('main.tex', '\\[\n  f(x)=x^4-2x^2+1.\n\\]\n');
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   for (const [
@@ -1001,7 +998,7 @@ Appendix.
           files,
           absent,
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
     );
   }
 
@@ -1055,7 +1052,7 @@ Appendix.
         const outputs = yield* writeAndSplitDocuments(output, [...inputFiles]);
 
         expectSources(outputs, expectedSources);
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
     );
   }
 
@@ -1107,7 +1104,7 @@ Appendix.
           'cost_section.tex',
           '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nRevised numbers from the local interactive logs.\n',
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   // Agents like ocr/paper2slide declare one defaultOutputFiles entry while
@@ -1169,7 +1166,7 @@ Appendix.
 
         expectSources(outputs, ['ocr_result.tex']);
         yield* expectWritten('ocr_result.tex', expectedContent);
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
     );
   }
 
@@ -1231,7 +1228,7 @@ Appendix.
           'Page one transcription.\n\nPage two transcription.\n',
         );
         yield* expectAbsent('ocr_result-2.tex');
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
     );
   }
 
@@ -1257,7 +1254,7 @@ Appendix.
 
         expectSources(outputs, ['ocr_result.tex']);
         yield* expectWritten('ocr_result.tex', 'Page one transcription.\n');
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -1280,7 +1277,7 @@ Appendix.
 
         expectSources(outputs, ['paper.tex']);
         yield* expectWritten('paper.tex', 'Revised paper body.\n');
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -1309,7 +1306,7 @@ Appendix.
           'paper.tex',
           '\\section{Final}\nAccepted revision.\n',
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   // A tagged <latex_document> is the model's declared final answer; an
@@ -1344,7 +1341,7 @@ Appendix.
 
           expectSources(outputs, ['paper.tex']);
           yield* expectWritten('paper.tex', '\\section{Final}\n');
-        }),
+        }).pipe(Effect.provide(nodePlatformLayer)),
     );
   }
 
@@ -1370,7 +1367,7 @@ Appendix.
         // Both base files score identically, so there is no evidence which one
         // the block revises — refusing to guess beats corrupting one of them.
         expect(outputs).toEqual([]);
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -1418,7 +1415,7 @@ Appendix.
           'cost.tex',
           '\\section{Computational cost}\nFinal numbers from the local interactive logs.\n',
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -1513,7 +1510,7 @@ Appendix.
           'r1/cost_section.tex',
           '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nFinal numbers from the interactive logs.\n',
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -1548,7 +1545,7 @@ Appendix.
             data: expect.objectContaining({ missing: ['arch.tex'] }),
           }),
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -1578,7 +1575,7 @@ Appendix.
             data: expect.objectContaining({ missing: ['appendix.tex'] }),
           }),
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -1600,7 +1597,7 @@ Appendix.
           expect.stringContaining('Dropped unclosed LaTeX fence'),
           expect.anything(),
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
 
@@ -1733,7 +1730,7 @@ describe('extractFilesFromXml', () => {
           [{ filesByRound: { [round - 1]: ['earlier.tex'], [round]: [] } }],
         );
         expect(state.rounds.get(round)?.outputs).toEqual([]);
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
     );
   }
 
@@ -1767,6 +1764,6 @@ describe('extractFilesFromXml', () => {
           data: expect.objectContaining({ round: 5 }),
         }),
       );
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

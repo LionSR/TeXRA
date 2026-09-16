@@ -4,7 +4,7 @@ import { Cause, Clock, Effect, Exit, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
-import { prefixFingerprint } from './prefixFingerprint.js';
+import { admittedFingerprint, prefixFingerprint } from './prefixFingerprint.js';
 import {
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
@@ -34,7 +34,7 @@ import {
   completedTurn,
 } from './turn.js';
 
-const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
+export const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
 
 // SDK stream parsing does not validate the JSON values it returns.
 const WireTextSchema = z.strictObject({
@@ -80,6 +80,8 @@ const WireInteractionSchema = z.object({
   steps: z.unknown().optional(),
   usage: WireUsageSchema.optional(),
 });
+/** Wire statuses that report an interaction still working, not a terminal outcome. */
+const IN_FLIGHT_STATUSES: readonly string[] = ['queued', 'in_progress'];
 const WireEventSchema = z.discriminatedUnion('event_type', [
   z.object({
     event_type: z.literal('interaction.created'),
@@ -472,28 +474,6 @@ type ObservedStep = z.infer<typeof WireCompletedStepSchema> & {
 };
 
 /**
- * The digest a submission records on its accepted operation: origin, system
- * text and admitted history, hashed with the function a continuation's prefix
- * fingerprint uses. It covers the input half of that prefix, which is the half
- * a resume rebuilds and can therefore get wrong; the reply does not exist yet.
- */
-export function googleInteractionsAdmittedFingerprint(
-  turn: Extract<ResolvedTurn, { protocol: 'google-interactions' }>,
-): string {
-  return prefixFingerprint(
-    GOOGLE_PREFIX_DOMAIN,
-    {
-      protocol: turn.protocol,
-      codecVersion: turn.codecVersion,
-      requestedModel: turn.requestedModel,
-      deployment: turn.deployment,
-    },
-    turn.system,
-    turn.messages,
-  );
-}
-
-/**
  * Builds only the stored anchor a completed turn leaves for its next round.
  * Foreground completion and background observation share it, so an observed
  * turn chains on `previous_interaction_id` exactly as a streamed one does.
@@ -537,10 +517,10 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
     const callIds = new Set<string>();
     for (const step of responseSteps) {
       if (step.type === 'thought') {
-        const summary: Array<{ kind: 'text'; text: string }> = [];
-        for (const item of step.summary ?? []) {
-          summary.push({ kind: 'text', text: item.text });
-        }
+        const summary = (step.summary ?? []).map(({ text }) => ({
+          kind: 'text' as const,
+          text,
+        }));
         content.push({
           kind: 'reasoning',
           summary,
@@ -1184,14 +1164,11 @@ export function googleInteractionsModel(
         origin,
         providerResponseId: identity.data.id,
         afterSequence: null,
-        admittedFingerprint: googleInteractionsAdmittedFingerprint(turn),
+        admittedFingerprint: admittedFingerprint(GOOGLE_PREFIX_DOMAIN, turn),
         store: turn.controls.store,
       });
       const interaction = yield* snapshot(raw, operation);
-      if (
-        interaction.status === 'queued' ||
-        interaction.status === 'in_progress'
-      ) {
+      if (IN_FLIGHT_STATUSES.includes(interaction.status)) {
         return BackgroundSubmissionSchema.parse({
           kind: 'accepted',
           operation,
@@ -1245,7 +1222,7 @@ export function googleInteractionsModel(
         // turn re-derived stored for a temporary operation must not chain.
         const chains =
           turn.controls.store === operation.store &&
-          googleInteractionsAdmittedFingerprint(turn) ===
+          admittedFingerprint(GOOGLE_PREFIX_DOMAIN, turn) ===
             operation.admittedFingerprint;
         if (!chains) {
           yield* Effect.logWarning(
@@ -1300,10 +1277,7 @@ export function googleInteractionsModel(
               }
               returnedModel = interaction.model;
             }
-            if (
-              interaction.status !== 'queued' &&
-              interaction.status !== 'in_progress'
-            ) {
+            if (!IN_FLIGHT_STATUSES.includes(interaction.status)) {
               const result = yield* completedSnapshot({
                 ...interaction,
                 model: returnedModel,
@@ -1389,10 +1363,7 @@ export function googleInteractionsModel(
           kind: 'observed-terminal',
           status: interaction.status,
         });
-      if (
-        interaction.status === 'queued' ||
-        interaction.status === 'in_progress'
-      )
+      if (IN_FLIGHT_STATUSES.includes(interaction.status))
         return CancellationEvidenceSchema.parse({
           ...identity,
           kind: 'unconfirmed',

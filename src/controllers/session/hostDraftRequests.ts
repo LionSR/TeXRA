@@ -1,23 +1,85 @@
 /** Shared draft operations and the process recorder's originating request. */
-import { Data, Deferred, Effect } from 'effect';
+import * as path from 'node:path';
+
+import { Data, Deferred, Effect, FileSystem, Option } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
+import { createLog } from '@logger/logUtils';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import type { HostOutcome } from '@shared/session/sessionFrames';
 import {
   killActiveRecording,
+  recordingsDir,
   startRecording,
   stopRecording,
   transcribeRecording,
 } from '@tools/media/audio';
+import { THREE_DAYS_MS } from '@utils/config/constants';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
+import type { HttpClient } from 'effect/unstable/http';
+
+const log = createLog('HostDraftRequests');
+
+/**
+ * Delete recordings older than three days under the session's recordings
+ * directory. Never fails the transcription: every listing or unlink error is
+ * warned with its cause, and one bad entry does not stop the rest of the sweep.
+ */
+function cleanupOldRecordings(
+  roots: WorkspaceRoots,
+): Effect.Effect<void, never, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
+    const directory = recordingsDir(roots);
+    const fs = yield* FileSystem.FileSystem;
+    const cutoff = Date.now() - THREE_DAYS_MS;
+    const names = yield* fs.readDirectory(directory).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          log.warn(`Skipped cleanup of ${directory}: ${toErrorMessage(error)}`);
+          return [] as string[];
+        }),
+      ),
+    );
+    yield* Effect.forEach(
+      names,
+      (name) => {
+        const filePath = path.join(directory, name);
+        return fs.stat(filePath).pipe(
+          Effect.flatMap((stats) => {
+            // The sweep it replaces filtered on the provider's type bits,
+            // where a symlink answers for its target and so counted as a file
+            // when it pointed at one. The follow above does the same job: a
+            // link to a file is swept by its target's age, a link to a
+            // directory is not swept at all.
+            if (stats.type !== 'File') return Effect.void;
+            const mtime = Option.match(stats.mtime, {
+              onNone: () => 0,
+              onSome: (modified) => modified.getTime(),
+            });
+            return mtime <= cutoff ? fs.remove(filePath) : Effect.void;
+          }),
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              log.warn(
+                `Could not remove stale recording ${filePath}: ${toErrorMessage(error)}`,
+              );
+            }),
+          ),
+        );
+      },
+      { concurrency: 'unbounded', discard: true },
+    );
+  });
+}
 
 /**
  * A draft operation this controller drives faulted rather than reporting an
@@ -95,7 +157,11 @@ export class HostDraftRequests {
     session: SessionHandle,
     request: DraftRequest,
     port: string,
-  ): Effect.fn.Return<HostOutcome, unknown, AppState | Secrets> {
+  ): Effect.fn.Return<
+    HostOutcome,
+    unknown,
+    AppState | Secrets | FileSystem.FileSystem | HttpClient.HttpClient
+  > {
     switch (request.kind) {
       case 'polish': {
         // The helper model behind the polish is resolved against the process
@@ -182,88 +248,93 @@ export class HostDraftRequests {
     this: HostDraftRequests,
     take: Take,
   ) {
-    const takeProgram: Effect.Effect<HostOutcome, unknown, Secrets> =
-      Effect.gen(function* () {
-        // Transcription binds its OpenAI credential against the process
-        // secret store the host root provides.
-        const secrets = yield* Secrets;
-        // The recorder writes under the take's own session storage, so its
-        // roots travel with the call instead of through a roots scope the
-        // detached take fiber would have to stay inside.
-        const started = yield* Effect.tryPromise({
-          try: () => startRecording(take.session.roots),
-          catch: (cause) =>
-            new DraftOperationFailed({
-              member: 'startRecording',
-              message: 'The recorder could not be started.',
-              cause,
-            }),
-        });
-        if (!started.success) {
-          return yield* new Rejected({
-            reason: started.error ?? 'Recording could not start.',
-          });
-        }
-        yield* Deferred.await(take.settled);
-        if (take.cancelled) {
-          killActiveRecording();
-          return yield* new Rejected({
-            reason: 'The recording was cancelled.',
-          });
-        }
-        // The recorder is terminated before anything else is read: sox gets
-        // SIGTERM and the module's recording state resets here, so a slow,
-        // denied or failing credential read below cannot delay the kill or
-        // leave the microphone running when the take is rejected.
-        const stopped = yield* Effect.tryPromise({
-          try: () => stopRecording(),
-          catch: (cause) =>
-            new DraftOperationFailed({
-              member: 'stopRecording',
-              message: 'The recorder could not be stopped.',
-              cause,
-            }),
-        });
-        const recordingPath = stopped.recordingPath;
-        if (!stopped.success || recordingPath === undefined) {
-          return yield* new Rejected({
-            reason: stopped.error ?? 'The recording could not be stopped.',
-          });
-        }
-        // The transcription endpoint is an OpenAI SDK operation the llm
-        // package does not model, and the direct OpenAI route is deliberate:
-        // `gpt-4o-transcribe` is an OpenAI-only endpoint model with no
-        // OpenRouter route, so the global OpenRouter preference is not
-        // applied to it. The take holds no session frame to enter — its
-        // roots travel with each call — so the endpoint read runs in the
-        // calling frame, and the resolved credential reaches the
-        // transcription as data.
-        const inCallingScope = <A>(read: () => A): A => read();
-        const credential = yield* resolveRouteCredential(
-          MODEL_CONFIGS['gpt4o'],
-          false,
-          secrets,
-          inCallingScope,
-        ).pipe(
-          Effect.mapError((error) => new Rejected({ reason: error.message })),
-        );
-        const result = yield* Effect.tryPromise({
-          try: () =>
-            transcribeRecording(recordingPath, credential, take.session.roots),
-          catch: (cause) =>
-            new DraftOperationFailed({
-              member: 'transcribeRecording',
-              message: 'The recording could not be transcribed.',
-              cause,
-            }),
-        });
-        if (!result.success) {
-          return yield* new Rejected({
-            reason: result.error ?? 'Transcription failed.',
-          });
-        }
-        return { kind: 'text', text: result.text };
+    const takeProgram: Effect.Effect<
+      HostOutcome,
+      unknown,
+      Secrets | FileSystem.FileSystem
+    > = Effect.gen(function* () {
+      // Transcription binds its OpenAI credential against the process
+      // secret store the host root provides.
+      const secrets = yield* Secrets;
+      // The recorder writes under the take's own session storage, so its
+      // roots travel with the call instead of through a roots scope the
+      // detached take fiber would have to stay inside.
+      const started = yield* Effect.tryPromise({
+        try: () => startRecording(take.session.roots),
+        catch: (cause) =>
+          new DraftOperationFailed({
+            member: 'startRecording',
+            message: 'The recorder could not be started.',
+            cause,
+          }),
       });
+      if (!started.success) {
+        return yield* new Rejected({
+          reason: started.error ?? 'Recording could not start.',
+        });
+      }
+      yield* Deferred.await(take.settled);
+      if (take.cancelled) {
+        killActiveRecording();
+        return yield* new Rejected({
+          reason: 'The recording was cancelled.',
+        });
+      }
+      // The recorder is terminated before anything else is read: sox gets
+      // SIGTERM and the module's recording state resets here, so a slow,
+      // denied or failing credential read below cannot delay the kill or
+      // leave the microphone running when the take is rejected.
+      const stopped = yield* Effect.tryPromise({
+        try: () => stopRecording(),
+        catch: (cause) =>
+          new DraftOperationFailed({
+            member: 'stopRecording',
+            message: 'The recorder could not be stopped.',
+            cause,
+          }),
+      });
+      const recordingPath = stopped.recordingPath;
+      if (!stopped.success || recordingPath === undefined) {
+        return yield* new Rejected({
+          reason: stopped.error ?? 'The recording could not be stopped.',
+        });
+      }
+      // The transcription endpoint is an OpenAI SDK operation the llm
+      // package does not model, and the direct OpenAI route is deliberate:
+      // `gpt-4o-transcribe` is an OpenAI-only endpoint model with no
+      // OpenRouter route, so the global OpenRouter preference is not
+      // applied to it. The take holds no session frame to enter — its
+      // roots travel with each call — so the endpoint read runs in the
+      // calling frame, and the resolved credential reaches the
+      // transcription as data.
+      const inCallingScope = <A>(read: () => A): A => read();
+      const credential = yield* resolveRouteCredential(
+        MODEL_CONFIGS['gpt4o'],
+        false,
+        secrets,
+        inCallingScope,
+      ).pipe(
+        Effect.mapError((error) => new Rejected({ reason: error.message })),
+      );
+      const result = yield* Effect.tryPromise({
+        try: () => transcribeRecording(recordingPath, credential),
+        catch: (cause) =>
+          new DraftOperationFailed({
+            member: 'transcribeRecording',
+            message: 'The recording could not be transcribed.',
+            cause,
+          }),
+      });
+      if (!result.success) {
+        return yield* new Rejected({
+          reason: result.error ?? 'Transcription failed.',
+        });
+      }
+      // The sweep is rooted by the take's storage root, as data, rather than
+      // by an ambient read of the calling fiber's roots.
+      yield* cleanupOldRecordings(take.session.roots);
+      return { kind: 'text', text: result.text };
+    });
     // A cancelled take already has its answer; `into` leaves it in place.
     yield* takeProgram.pipe(
       Deferred.into(take.result),

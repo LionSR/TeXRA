@@ -128,17 +128,13 @@ const provider: InlineCommentProvider = {
   list: ({ absolutePath }) => {
     const comparablePath =
       absolutePath == null ? undefined : comparableFsPath(absolutePath);
-    const views: InlineCommentThreadView[] = [];
-    for (const [threadId, thread] of threads) {
-      if (
-        comparablePath &&
-        comparableFsPath(thread.uri.fsPath) !== comparablePath
-      ) {
-        continue;
-      }
-      views.push(toView(threadId, thread));
-    }
-    return views;
+    return [...threads.entries()]
+      .filter(
+        ([, thread]) =>
+          !comparablePath ||
+          comparableFsPath(thread.uri.fsPath) === comparablePath,
+      )
+      .map(([threadId, thread]) => toView(threadId, thread));
   },
 };
 

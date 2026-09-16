@@ -2,7 +2,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Cause, Effect, Stream } from 'effect';
+import { Effect, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract

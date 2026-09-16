@@ -13,8 +13,8 @@ import { ToolError, ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import {
-  joinWorkspaceRelativePath,
   resolveAndFormat,
+  resolveWorkspaceRelativePath,
   workspacePathPorts,
   type WorkspacePathPorts,
 } from '@tools/pathResolution';
@@ -100,7 +100,13 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
     const resolved = yield* Effect.try({
       try: () =>
         ports.inScope(() =>
-          joinWorkspaceRelativePath(path.relative, match, root),
+          resolveWorkspaceRelativePath(
+            // posix.join, not path.join: the base and the match are both
+            // POSIX-normalized, and path.join would reintroduce backslashes
+            // on Windows. `|| '.'` keeps an empty base a relative join.
+            nodePath.posix.join(path.relative || '.', match),
+            root,
+          ),
         ),
       catch: (err) =>
         new ToolError(

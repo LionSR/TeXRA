@@ -211,20 +211,6 @@ export abstract class BaseFS {
     return fs.existsSync(this.preparePath(target));
   }
 
-  public static readSync(this: typeof BaseFS, target: string): string {
-    return normalizeLineEndings(
-      fs.readFileSync(this.preparePath(target), 'utf-8'),
-    );
-  }
-
-  public static readBytesSync(this: typeof BaseFS, target: string): Buffer {
-    return fs.readFileSync(this.preparePath(target));
-  }
-
-  public static deleteSync(this: typeof BaseFS, target: string): void {
-    fs.unlinkSync(this.preparePath(target));
-  }
-
   public static statSync(this: typeof BaseFS, target: string): fs.Stats {
     return fs.statSync(this.preparePath(target));
   }

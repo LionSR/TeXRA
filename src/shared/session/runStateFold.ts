@@ -109,7 +109,13 @@ type FlowState = z.output<(typeof FlowStateSchema)[number]>;
 type RunUsageTotals = z.output<typeof RunUsageTotalsSchema>;
 type Message = z.output<typeof MessageSchema>;
 
-/** The family state of a snapshot, keeping the family/state correlation. */
+/**
+ * The family state of a snapshot, keeping the family/state correlation. The
+ * two arms are spelled out deliberately, though the text is the same: the
+ * test narrows the discriminated payload so that `state` keeps the arm its
+ * `family` names. Collapsing them widens the pair to a shape `FlowState`
+ * does not accept, so the identical arms are load-bearing, not a leftover.
+ */
 const flowOf = (p: FlowSnapshotPayload): FlowState =>
   p.family === 'toolUse'
     ? { family: p.family, state: p.state }

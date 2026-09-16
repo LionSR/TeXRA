@@ -7,9 +7,9 @@
  */
 import {
   AgentRosterController,
+  createWorkspaceAgentRosterController,
   getAgent,
   getAgentsByCategory,
-  getRosterAgent,
   getVisibleAgents as getVisibleRegistryAgents,
   type AgentEntry,
 } from '@agent/index';
@@ -20,7 +20,6 @@ import {
 } from '@controllers/settingsView/SettingsAgentCatalogController';
 import {
   agentKey,
-  parseAgentModePresets,
   type AgentCategory,
   type AgentSource,
 } from '@shared/schemas';
@@ -49,16 +48,10 @@ export function createSettingsAgentControllers(
   const { workspaceState, globalState } = options;
   const getAgents = options.getAgents ?? getAgentsByCategory;
   const getVisibleAgents = options.getVisibleAgents ?? getVisibleRegistryAgents;
-  const roster = new AgentRosterController({
-    workspaceState,
-    globalState,
+  const roster = createWorkspaceAgentRosterController(
+    { workspaceState, globalState },
     getAgents,
-    getPresets: () =>
-      parseAgentModePresets(
-        workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-      ),
-    resolveAgent: getRosterAgent,
-  });
+  );
 
   const state: SettingsAgentCatalogState = {
     getEnabledAgentKeys: (category) => roster.getEnabledAgentKeys(category),
@@ -69,12 +62,8 @@ export function createSettingsAgentControllers(
     getVisibleAgents,
     getCustomPresetsRaw: () =>
       workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-    setCustomPresets: async (presets) => {
-      await workspaceState.update(
-        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-        presets,
-      );
-    },
+    setCustomPresets: (presets) =>
+      workspaceState.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, presets),
     removeCustomPreset: (presetId, remaining) =>
       roster.removeTeamPreset(presetId, () =>
         workspaceState.update(
@@ -91,12 +80,11 @@ export function createSettingsAgentControllers(
     state: {
       getConfiguredCustomDir: () =>
         globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
-      setConfiguredCustomDir: async (customDir) => {
-        await globalState.update(
+      setConfiguredCustomDir: (customDir) =>
+        globalState.update(
           GlobalStateKey.CUSTOM_AGENT_DIR,
           customDir || undefined,
-        );
-      },
+        ),
       getCustomDir: options.getCustomAgentDirectory,
       getSourceDir: options.getSourceDirectory,
       getAgent: (source, name) => getAgent(agentKey(source, name)) ?? null,

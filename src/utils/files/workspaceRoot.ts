@@ -45,7 +45,10 @@ export function locatePathInRoot(
   // Normalize backslashes before posix.normalize so '..' segments collapse correctly.
   // On POSIX, backslashes are valid filename chars — path.normalize would preserve them.
   const relativePath = path.posix.normalize(normalizeFilePath(inputPath));
-  if (relativePath.startsWith('..')) {
+  // `startsWith('..')` alone also matches a first segment that merely begins
+  // with two dots (`..notes.tex`), which is a file inside the root. The
+  // normalized path uses '/' on every platform, so match the '..' segment.
+  if (relativePath === '..' || relativePath.startsWith('../')) {
     return annotateExternal({
       kind: 'external',
       absolutePath: path.resolve(root, inputPath),

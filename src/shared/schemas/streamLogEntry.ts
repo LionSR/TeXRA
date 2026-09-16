@@ -18,7 +18,6 @@ import {
   MissingOutputsPayloadSchema,
   ToolUseLogSchema,
   UserMessagePayloadSchema,
-  WebFetchPayloadSchema,
   WebSearchPayloadSchema,
 } from './progressView/data';
 import { GroupLogPayloadSchema } from './taskGroup';
@@ -40,7 +39,6 @@ const StreamMessageDataSchemas = {
   [MESSAGE_TYPES.STATISTICS]: ExtendedTokenUsageStatsSchema.partial(),
   [MESSAGE_TYPES.TOOL_USE]: ToolUseLogSchema,
   [MESSAGE_TYPES.WEB_SEARCH]: WebSearchPayloadSchema,
-  [MESSAGE_TYPES.WEB_FETCH]: WebFetchPayloadSchema,
   [MESSAGE_TYPES.MODEL_RESPONSE]: StreamingTextDataSchema.optional(),
   [MESSAGE_TYPES.USER_MESSAGE]: UserMessagePayloadSchema.optional(),
   [MESSAGE_TYPES.PROGRESS_STATUS]: z.unknown().optional(),
@@ -96,7 +94,6 @@ const StreamLogMessageEntrySchema = z.discriminatedUnion('messageType', [
   messageEntry(MESSAGE_TYPES.STATISTICS, StreamMessageDataSchemas.statistics),
   messageEntry(MESSAGE_TYPES.TOOL_USE, StreamMessageDataSchemas.toolUse),
   messageEntry(MESSAGE_TYPES.WEB_SEARCH, StreamMessageDataSchemas.webSearch),
-  messageEntry(MESSAGE_TYPES.WEB_FETCH, StreamMessageDataSchemas.webFetch),
   messageEntry(
     MESSAGE_TYPES.MODEL_RESPONSE,
     StreamMessageDataSchemas.modelResponse,

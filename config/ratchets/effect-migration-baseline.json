@@ -3,9 +3,7 @@
   "rows": {
     "platform()": {
       "packages/cli/src/runtime/executeCli.ts": 1,
-      "src/agent/followUp/ToolUseFollowUp.ts": 1,
       "src/agent/index/agentRegistry.ts": 1,
-      "src/controllers/session/hostRunActions.ts": 1,
       "src/controllers/session/workspaceFileOptions.ts": 1,
       "src/model/runtimeModelRegistry.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 1,

@@ -43,13 +43,9 @@ export class AgentReviewTreeProvider
 {
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.emitter.event;
-  private readonly subscription: vscode.Disposable;
-
-  constructor() {
-    this.subscription = AgentReviewService.onDidChange(() =>
-      this.emitter.fire(),
-    );
-  }
+  private readonly subscription = AgentReviewService.onDidChange(() =>
+    this.emitter.fire(),
+  );
 
   dispose(): void {
     this.subscription.dispose();

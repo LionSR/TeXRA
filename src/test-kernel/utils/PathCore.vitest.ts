@@ -1,6 +1,9 @@
+import * as path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
+  escapesRoot,
   getPathSegments,
   isPathWithin,
   isStrictlyWithin,
@@ -58,8 +61,25 @@ describe('isPathWithin', () => {
     ],
     // An absolute target unrelated to a relative base.
     ['base/child', '/etc/passwd', false],
+    // A first segment that merely begins with two dots is inside the base —
+    // only a whole `..` segment escapes it.
+    ['/base', '/base/..notes.tex', true],
   ])('isPathWithin(%j, %j) → %s', (base, target, expected) => {
     expect(isPathWithin(base, target)).toBe(expected);
+  });
+});
+
+describe('escapesRoot', () => {
+  it.each([
+    ['', false],
+    ['child/file.tex', false],
+    ['..notes.tex', false],
+    ['..foo/bar', false],
+    ['..', true],
+    [`..${path.sep}etc`, true],
+    [`..${path.sep}..${path.sep}etc`, true],
+  ])('escapesRoot(%j) → %s', (relativePath, expected) => {
+    expect(escapesRoot(relativePath)).toBe(expected);
   });
 });
 

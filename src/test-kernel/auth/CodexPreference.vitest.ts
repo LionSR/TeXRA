@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
@@ -18,7 +19,7 @@ describe('Codex subscription preference', () => {
       config: { [CODEX_PREFER_SUBSCRIPTION_KEY]: false },
     });
 
-    const update = await setPreferCodexSubscription(true);
+    const update = await Effect.runPromise(setPreferCodexSubscription(true));
 
     expect(update).toEqual({ effective: true, target: 'workspace' });
     expect(isPreferCodexSubscription()).toBe(true);
@@ -34,7 +35,7 @@ describe('Codex subscription preference', () => {
     config.seedWorkspaceFolder(CODEX_PREFER_SUBSCRIPTION_KEY, false);
     await installPlatform({}, { config });
 
-    const update = await setPreferCodexSubscription(true);
+    const update = await Effect.runPromise(setPreferCodexSubscription(true));
 
     expect(update).toEqual({ effective: false, target: 'global' });
     expect(isPreferCodexSubscription()).toBe(false);

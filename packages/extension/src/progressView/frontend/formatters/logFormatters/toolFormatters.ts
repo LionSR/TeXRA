@@ -144,7 +144,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
   // Live timer for in-progress tools, with timeout limit when available
   const toolTimeoutMs = getToolTimeoutMs(toolName, input);
   // prettier-ignore
-  const timerTemplate = model.isInProgress ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : undefined;
+  const timerTemplate = model.isInProgress ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : nothing;
 
   // Delegation banner extras: setup link (shown in summary row)
   const isProposalBearingDelegation = Object.hasOwn(
@@ -166,7 +166,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
     ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" @click=${(event: Event) => { event.preventDefault(); event.currentTarget?.dispatchEvent(SessionUiEvents.host({ kind: 'restoreProposalConfig', proposal })); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Restore setup</button>`
     : nothing;
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${setupButton}`;
+  const extraContent = html`${timerTemplate}${setupButton}`;
 
   return buildToolUseDetails({
     row,

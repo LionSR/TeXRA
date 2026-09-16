@@ -57,7 +57,11 @@ import {
   type TurnResult,
 } from '@llm/turn';
 import { effectRuntime } from '@platform/processRuntime';
-import type { RecoveryContinuation } from '@platform/interfaces';
+import {
+  AgentResume,
+  AgentResumeFailed,
+  type RecoveryContinuation,
+} from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
 import {
   RUN_OUTCOME,
@@ -72,7 +76,11 @@ import {
   makeTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { setupPlatform, type FakeHost } from '@test/support/setupPlatform';
+import {
+  fakeHostAgentResume,
+  setupPlatform,
+  type FakeHost,
+} from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentRun';
@@ -262,22 +270,34 @@ function scriptedBoundModel(
   };
 }
 
-async function resumePersistedRun(
+function resumePersistedRun(
   runId: RunId,
   recovery?: RecoveryContinuation,
-): Promise<boolean> {
-  resumedRuns.push(runId);
-  const resumed = await effectRuntime().runPromise(
-    resumeRun(runId, {
-      session,
-      recovery,
-      executeWorkflow: async () => {
-        throw new Error('Workflow resume is not part of this fixture.');
-      },
-    }),
-  );
-  completedResumes.push(runId);
-  return 'started' in resumed && resumed.delivered;
+): Effect.Effect<boolean, AgentResumeFailed> {
+  // The port's contract, not convenience: the fixture answers with the
+  // program the port declares, and records its ordering inside it.
+  return Effect.tryPromise({
+    try: async () => {
+      resumedRuns.push(runId);
+      const resumed = await effectRuntime().runPromise(
+        resumeRun(runId, {
+          session,
+          recovery,
+          executeWorkflow: async () => {
+            throw new Error('Workflow resume is not part of this fixture.');
+          },
+        }),
+      );
+      completedResumes.push(runId);
+      return 'started' in resumed && resumed.delivered;
+    },
+    catch: (cause) =>
+      new AgentResumeFailed({
+        runId,
+        message: 'Fixture resume failed.',
+        cause,
+      }),
+  });
 }
 
 async function integrationPlatform(): Promise<FakeHost> {
@@ -294,9 +314,9 @@ async function integrationPlatform(): Promise<FakeHost> {
       ...host.platform,
       agentResume: { tryResumeRun: resumePersistedRun },
       agentDirectories: {
-        custom: async () => agentsDir,
-        builtIn: async () => agentsDir,
-        builtInToolUse: async () => agentsDir,
+        custom: () => Effect.sync(() => agentsDir),
+        builtIn: () => Effect.sync(() => agentsDir),
+        builtInToolUse: () => Effect.sync(() => agentsDir),
       },
     },
   };
@@ -785,7 +805,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             deliveryId,
           },
           { session },
-        ),
+        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
       );
     }
     await Effect.runPromise(session.settlePublications());
@@ -810,7 +830,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           deliveryId: `${deliveryId}:other`,
         },
         { session },
-      ),
+      ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
     );
     await waitForCompletedResumes(2);
     await Effect.runPromise(session.settlePublications());

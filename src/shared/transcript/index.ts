@@ -12,7 +12,6 @@ export { projectTranscriptRow } from './projectTranscriptRow';
 export {
   compactionActivityRow,
   isSettledRow,
-  promotesOnlyOnTypedTerminalState,
   type CompactionActivityRow,
   type ContextManagementRow,
   type ErrorRow,
@@ -30,7 +29,6 @@ export {
   type TranscriptRowBase,
   type TranscriptRowKind,
   type UserRow,
-  type WebFetchRow,
   type WebSearchRow,
   type WorkflowTaskRow,
 } from './transcriptRow';

@@ -1,5 +1,6 @@
 import replacementEngine from '@replacement/engine';
 import type { Effect } from 'effect';
+import type { HttpClient } from 'effect/unstable/http';
 
 type ResponseTextPostProcessor = (text: string) => string;
 
@@ -7,7 +8,7 @@ type ResponseTextPostProcessor = (text: string) => string;
 export type ResponseTextConnector = (
   previous: string,
   next: string,
-) => Effect.Effect<string>;
+) => Effect.Effect<string, never, HttpClient.HttpClient>;
 
 /**
  * Latex-owned policy contract for provider-output cleanup and joining

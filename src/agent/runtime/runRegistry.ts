@@ -278,10 +278,8 @@ export class RunRegistry {
   ): Effect.Effect<A, E | Error, R> {
     return Effect.suspend(() => {
       this.assertActive();
-      return this.lanes.withInactiveStep(
-        runId,
-        () => this.hasRetainedOwner(runId),
-        operation,
+      return this.lanes.launch(runId, operation, () =>
+        this.hasRetainedOwner(runId),
       );
     });
   }
@@ -564,14 +562,13 @@ export class RunRegistry {
       return { kind: 'no_session', runStatus: status };
     }
 
-    const hasActiveChildren = this.hasActiveChildren(runId);
     const context = this.getToolUseFlowContext(runId);
     if (context) return { kind: 'active', context };
 
     if (
       run?.substate === RUN_SUBSTATE.RESUMING ||
       status === RUN_PHASE.WAITING ||
-      hasActiveChildren
+      this.hasActiveChildren(runId)
     ) {
       return { kind: 'queue' };
     }
@@ -1015,13 +1012,7 @@ export class RunRegistry {
   }
 
   hasActiveChildren(parentRunId: RunId): boolean {
-    for (const activation of this.activeChildActivations(parentRunId)) {
-      return true;
-    }
-    for (const handle of this.handles.values()) {
-      if (handle.isOwnedBy(parentRunId)) return true;
-    }
-    return false;
+    return this.childRunIds(parentRunId).length > 0;
   }
 
   private terminate(

@@ -183,33 +183,23 @@ export class WebFetchTool extends defineTool({
         ctLower.includes('xhtml') ||
         (!contentType && rawBody.trim().startsWith('<'));
 
-      let markdown: string;
-      if (isMarkupContent) {
-        markdown = yield* Effect.try({
-          try: () => this.turndown.turndown(rawBody),
-          catch: (error) =>
-            new ToolError(
-              `Failed to convert HTML to Markdown: ${toErrorMessage(error)}`,
-            ),
-        });
-      } else {
-        markdown = rawBody;
-      }
+      const markdown = isMarkupContent
+        ? yield* Effect.try({
+            try: () => this.turndown.turndown(rawBody),
+            catch: (error) =>
+              new ToolError(
+                `Failed to convert HTML to Markdown: ${toErrorMessage(error)}`,
+              ),
+          })
+        : rawBody;
 
       const cleaned = markdown.trim();
-      const sections: string[] = [];
-
-      if (prompt) {
-        sections.push(`Prompt\n------\n${prompt.trim()}`);
-      }
-
-      if (cleaned.length > 0) {
-        sections.push(cleaned);
-      } else {
-        sections.push(
-          'No readable content was extracted from the provided URL.',
-        );
-      }
+      const sections = [
+        ...(prompt ? [`Prompt\n------\n${prompt.trim()}`] : []),
+        cleaned.length > 0
+          ? cleaned
+          : 'No readable content was extracted from the provided URL.',
+      ];
 
       return executed(sections.join('\n\n'), `Fetched: ${url}`);
     },

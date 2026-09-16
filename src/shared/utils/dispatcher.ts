@@ -160,8 +160,14 @@ export function createDispatcher<TMessage extends CommandMessage>(
     // without this guard a missing entry would fall through to
     // `entry(message)` and throw a raw `TypeError` instead of returning the
     // same `false` the old `if (!handler) return false;` fallback gave
-    // callers.
+    // callers. The miss is reported, not swallowed: a registry that lost a
+    // command is a defect, not a message this host deliberately ignores.
     if (!entry) {
+      onError?.(
+        new Error(
+          `No handler registered for command "${message.command}". The handler registry is missing a key its type requires.`,
+        ),
+      );
       return false;
     }
 

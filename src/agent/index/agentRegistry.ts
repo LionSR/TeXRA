@@ -25,7 +25,6 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { scanDirectory } from './agentYamlScanner';
 import { loadRemoteAgents } from './remoteAgentMeta';
@@ -150,24 +149,19 @@ function doLoad(
 
     // Load from all sources in parallel
     const dirs = platform().agentDirectories;
-    const resolveDir = (
-      read: () => Promise<string>,
-    ): Effect.Effect<string, AgentCatalogLoadError> =>
-      Effect.tryPromise({
-        try: read,
-        catch: (cause) =>
-          new AgentCatalogLoadError({
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      });
     const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
-      [
-        resolveDir(() => dirs.custom()),
-        resolveDir(() => dirs.builtIn()),
-        resolveDir(() => dirs.builtInToolUse()),
-      ],
+      [dirs.custom(), dirs.builtIn(), dirs.builtInToolUse()],
       { concurrency: 'unbounded' },
+    ).pipe(
+      // The port names its own failure; the catalog load is what the caller
+      // asked for, so it carries the reason and the original cause up.
+      Effect.mapError(
+        (failure) =>
+          new AgentCatalogLoadError({
+            message: failure.message,
+            cause: failure.cause,
+          }),
+      ),
     );
 
     const [customScan, builtInScan, toolUseScan, remoteEntries] =
@@ -337,8 +331,12 @@ export function resolveAgentKey(
   return agentKeyOf(entry);
 }
 
-/** Resolve one roster identifier without collapsing an exact source key. */
-export function getRosterAgent(
+/**
+ * Resolve one roster identifier without collapsing an exact source key.
+ * Module-local: the roster controller it exists for is built here, so no
+ * caller outside this file needs the resolution rule on its own.
+ */
+function getRosterAgent(
   category: AgentCategoryType,
   identifier: string,
 ): AgentEntry | undefined {
@@ -374,12 +372,13 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  */
 export function createWorkspaceAgentRosterController(
   roots: Pick<WorkspaceRoots, 'workspaceState' | 'globalState'>,
+  getAgents: (category: AgentCategory) => AgentEntry[] = getAgentsByCategory,
 ): AgentRosterController<AgentEntry> {
   const { workspaceState, globalState } = roots;
   return new AgentRosterController({
     workspaceState,
     globalState,
-    getAgents: getAgentsByCategory,
+    getAgents,
     getPresets: () =>
       parseAgentModePresets(
         workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),

@@ -10,7 +10,7 @@ import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
-import { RUN_OUTCOME, RUN_PHASE } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import type {
   RunId,
   RunIdentity,

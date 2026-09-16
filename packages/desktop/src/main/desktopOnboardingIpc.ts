@@ -145,10 +145,9 @@ export function createDesktopOnboardingIpc(
   }
 
   const dismiss = Effect.gen(function* () {
-    yield* Effect.tryPromise({
-      try: () => state.update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true),
-      catch: (cause) => new OnboardingDismissFailed({ cause }),
-    });
+    yield* state
+      .update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true)
+      .pipe(Effect.mapError((cause) => new OnboardingDismissFailed({ cause })));
     yield* Effect.try({
       try: () =>
         renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(false)),
@@ -157,12 +156,12 @@ export function createDesktopOnboardingIpc(
   });
 
   async function skipMainOnboarding(): Promise<void> {
-    await setOnboardingDeclined(state, true);
+    await options.runtime.runPromise(setOnboardingDeclined(state, true));
     await refreshOnboardingFunnel();
   }
 
   async function skipSetup(): Promise<void> {
-    await setFirstRunDone(state, true);
+    await options.runtime.runPromise(setFirstRunDone(state, true));
     await refreshOnboardingFunnel();
   }
 

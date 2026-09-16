@@ -9,7 +9,6 @@ import {
   SETTINGS_TAB_GROUPS,
   SETTINGS_TAB_ORDER,
   SETTINGS_TAB_PANEL_NAMES,
-  WebFetchPayloadSchema,
   WebSearchPayloadSchema,
   planSummaryLine,
   parseClaudeAgentModel,
@@ -33,11 +32,11 @@ describe('parseClaudeAgentModel', () => {
 });
 
 /**
- * Regression coverage for issue #7230: `web_search`/`web_fetch` `url` fields
- * are LLM/tool-controlled and must never carry a dangerous scheme through to
- * a rendered `<a href>` in the live webview or the exported HTML. Sanitization
- * lives in the shared schemas (`WebSearchPayloadItemSchema` /
- * `WebFetchPayloadSchema`) so both render paths are protected by one fix.
+ * Regression coverage for issue #7230: a `web_search` result `url` is
+ * LLM/tool-controlled and must never carry a dangerous scheme through to a
+ * rendered `<a href>` in the live webview or the exported HTML. Sanitization
+ * lives in the shared schemas (`WebSearchPayloadItemSchema`, the one surviving
+ * consumer of `SafeUrlSchema`) so every render path is protected by one fix.
  * Only `http:`/`https:`/`mailto:` and anchor-only (`#foo`) URLs survive;
  * empty, protocol-relative, root-relative, and dangerous schemes collapse to
  * `undefined`.
@@ -47,10 +46,6 @@ function parseSearchUrl(url: string): string | undefined {
   return WebSearchPayloadSchema.parse({
     results: [{ url, title: 'result' }],
   }).results?.[0]?.url;
-}
-
-function parseFetchUrl(url: string): string | undefined {
-  return WebFetchPayloadSchema.parse({ url }).url;
 }
 
 describe('web tool URL sanitization (issue #7230)', () => {
@@ -67,20 +62,17 @@ describe('web tool URL sanitization (issue #7230)', () => {
       'javascript:alert(1)  ', // trailing whitespace likewise
     ];
 
-    it.each(dangerous)('strips %s from web_search and web_fetch', (url) => {
+    it.each(dangerous)('strips %s from web_search results', (url) => {
       expect(parseSearchUrl(url)).toBeUndefined();
-      expect(parseFetchUrl(url)).toBeUndefined();
     });
   });
 
   it('strips protocol-relative URLs (no scheme to validate against)', () => {
     expect(parseSearchUrl('//evil.example.com/path')).toBeUndefined();
-    expect(parseFetchUrl('//evil.example.com/path')).toBeUndefined();
   });
 
   it('strips the empty string', () => {
     expect(parseSearchUrl('')).toBeUndefined();
-    expect(parseFetchUrl('')).toBeUndefined();
   });
 
   it('strips whitespace-only URLs', () => {
@@ -96,13 +88,9 @@ describe('web tool URL sanitization (issue #7230)', () => {
       '  https://example.com/padded  ', // whitespace-padded but otherwise safe
     ];
 
-    it.each(safe)(
-      'keeps %s as a live href for web_search and web_fetch',
-      (url) => {
-        expect(parseSearchUrl(url)).toBe(url.trim());
-        expect(parseFetchUrl(url)).toBe(url.trim());
-      },
-    );
+    it.each(safe)('keeps %s as a live href for web_search results', (url) => {
+      expect(parseSearchUrl(url)).toBe(url.trim());
+    });
   });
 
   it('keeps anchor-only fragments as-is', () => {
@@ -120,9 +108,8 @@ describe('web tool URL sanitization (issue #7230)', () => {
       '/local/path',
     ];
 
-    it.each(rootRelative)('strips %s from web_search and web_fetch', (url) => {
+    it.each(rootRelative)('strips %s from web_search results', (url) => {
       expect(parseSearchUrl(url)).toBeUndefined();
-      expect(parseFetchUrl(url)).toBeUndefined();
     });
   });
 
@@ -140,7 +127,6 @@ describe('web tool URL sanitization (issue #7230)', () => {
 
   it('leaves a missing url as undefined without throwing', () => {
     expect(WebSearchPayloadSchema.parse({}).results).toBeUndefined();
-    expect(WebFetchPayloadSchema.parse({}).url).toBeUndefined();
   });
 });
 

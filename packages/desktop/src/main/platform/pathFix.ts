@@ -26,10 +26,10 @@ export function repairLaunchPath(
     if (env === process.env) fixPath();
     // ':' is the POSIX PATH separator; this branch only runs on darwin.
     const parts = (env.PATH ?? '').split(':').filter(Boolean);
-    for (const entry of MACOS_PATH_ENTRIES.toReversed()) {
-      if (!parts.includes(entry)) parts.unshift(entry);
-    }
-    env.PATH = parts.join(':');
+    const missing = MACOS_PATH_ENTRIES.filter(
+      (entry) => !parts.includes(entry),
+    );
+    env.PATH = [...missing, ...parts].join(':');
   }
   return env.PATH ?? '';
 }

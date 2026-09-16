@@ -24,21 +24,17 @@ export interface PageChangeDetail {
 export const DEFAULT_PAGE_SIZE = 100;
 
 /**
- * Compute the page slice for a given items array.
- * Returns `{ paged, totalPages }` where `paged` is the current page's items.
+ * The current page's items for a given items array, clamped to the last page.
  */
 export function paginate<T>(
   items: readonly T[],
   page: number,
   pageSize: number,
-): { paged: T[]; totalPages: number } {
+): T[] {
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   const safePage = clamp(page, 0, totalPages - 1);
   const start = safePage * pageSize;
-  return {
-    paged: items.slice(start, start + pageSize),
-    totalPages,
-  };
+  return items.slice(start, start + pageSize);
 }
 
 @customElement('list-pagination')

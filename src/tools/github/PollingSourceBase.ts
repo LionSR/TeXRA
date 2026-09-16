@@ -28,8 +28,7 @@ import {
   Schedule,
 } from 'effect';
 
-import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
+import { createChannelTrace, type AgentTrace } from '@agent/trace';
 import { appSignals } from '@eventBus/AppSignals';
 
 import {
@@ -302,7 +301,7 @@ export abstract class PollingSourceBase<
   ): Effect.Effect<Disposable, never, Secrets> {
     return Effect.suspend(() => {
       let state = this.subscriptions.get(key);
-      let created = false;
+      const created = !state;
       if (!state) {
         if (this.subscriptions.size >= this.config.maxConcurrent) {
           throw new Error(
@@ -312,7 +311,6 @@ export abstract class PollingSourceBase<
         state = initState();
         this.subscriptions.set(key, state);
         this.logger.info(`Subscribed to ${key}`);
-        created = true;
       }
       state.listeners.add(onEvent);
       if (created) this.notifyKeysChanged();
@@ -539,8 +537,8 @@ export abstract class PollingSourceBase<
   }
 
   /**
-   * One round, with its failures contained so the poller survives them. A
-   * Single request errors are handled per subscription. Non-interrupted
+   * One round, with its failures contained so the poller survives them. Single
+   * request errors are handled per subscription. Non-interrupted
    * defects and compound failures are logged here once, retaining every reason. An
    * interrupt is re-raised so the fiber ends. This does not recover child
    * failures discarded by the parallel iterator during external interruption.

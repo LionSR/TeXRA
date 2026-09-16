@@ -11,7 +11,7 @@ import type { ToolDefinition } from '@shared/schemas';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
 import { isObject } from '@utils/core';
 
-export interface JSONSchemaObject {
+interface JSONSchemaObject {
   type?: string | string[];
   properties?: Record<string, JSONSchemaObject>;
   required?: string[];
@@ -28,10 +28,6 @@ export interface JSONSchemaObject {
   definitions?: Record<string, JSONSchemaObject>;
   additionalProperties?: boolean | JSONSchemaObject;
   [key: string]: unknown;
-}
-
-function isSchemaObject(value: unknown): value is JSONSchemaObject {
-  return isObject(value);
 }
 
 function schemaLiteralValue(schema: JSONSchemaObject): unknown {
@@ -62,7 +58,7 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
 
   const rawVariants = schema[variantKey] as unknown[];
   const variants = rawVariants.filter(
-    (v): v is JSONSchemaObject => isSchemaObject(v) && v.type === 'object',
+    (v): v is JSONSchemaObject => isObject(v) && v.type === 'object',
   );
   if (variants.length === 0 || variants.length !== rawVariants.length) {
     return schema;

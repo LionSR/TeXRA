@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import { Data, Effect, FileSystem } from 'effect';
-import nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
@@ -12,16 +11,17 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
-import { buildUserVarPassthrough } from '@agent/prompt/userVars';
+import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
+import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
 import type { RegisteredToolName } from '@tools/registry';
-import { createTexraNunjucksEnvironment } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
+import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('AgentCreator');
 
@@ -309,12 +309,6 @@ const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
     'What should this agent do? State whether it rewrites existing documents or creates new ones.',
 };
 
-const PASSTHROUGH = buildUserVarPassthrough();
-
-// No loader: only in-memory template strings are rendered here, never named
-// template files, so `{% include %}`/`{% extends %}` never resolve.
-const nunjucksEnv = createTexraNunjucksEnvironment(nunjucks);
-
 /** Lazily built and cached for the extension host lifetime. Schemas are static. */
 let schemaRefCache: Record<AgentCategory, string> | null = null;
 
@@ -329,19 +323,22 @@ function getSchemaReference(category: AgentCategory): string {
 }
 
 function buildSchemaRef(settingsSchema: z.ZodObject<z.ZodRawShape>): string {
-  const schemaOptions = {
-    target: 'draft-2020-12',
-    unrepresentable: 'any',
-    io: 'input',
-  } as const;
   return [
     '## Agent YAML Schema (JSON Schema)',
     '',
     '### settings',
-    JSON.stringify(z.toJSONSchema(settingsSchema, schemaOptions), null, 2),
+    JSON.stringify(
+      z.toJSONSchema(settingsSchema, TOOL_JSON_SCHEMA_OPTIONS),
+      null,
+      2,
+    ),
     '',
     '### prompts',
-    JSON.stringify(z.toJSONSchema(AgentPromptSchema, schemaOptions), null, 2),
+    JSON.stringify(
+      z.toJSONSchema(AgentPromptSchema, TOOL_JSON_SCHEMA_OPTIONS),
+      null,
+      2,
+    ),
   ].join('\n');
 }
 
@@ -399,7 +396,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
   blueprint: AgentBlueprint,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Effect.fn.Return<string, unknown> {
+): Effect.fn.Return<string, unknown, HttpClient.HttpClient> {
   let lastValidationError: string | undefined;
 
   const attempt = Effect.gen(function* () {
@@ -407,20 +404,19 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
 
     const prompts = config[blueprint.category];
     const schemaRef = getSchemaReference(blueprint.category);
-    const renderVars = {
-      ...PASSTHROUGH,
-      ...blueprint.aiVars,
-    };
     const systemPrompt =
-      nunjucksEnv.renderString(prompts.systemPrompt, renderVars) +
+      renderAgentTemplateString(prompts.systemPrompt, blueprint.aiVars) +
       '\n' +
       schemaRef;
 
-    let userMessage = nunjucksEnv.renderString(prompts.userRequest, renderVars);
+    let userMessage = renderAgentTemplateString(
+      prompts.userRequest,
+      blueprint.aiVars,
+    );
     if (lastValidationError) {
       userMessage +=
         '\n' +
-        nunjucksEnv.renderString(config.retryPrompt, {
+        renderAgentTemplateString(config.retryPrompt, {
           VALIDATION_ERROR: lastValidationError,
         });
     }
@@ -484,7 +480,11 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   category: AgentCategory,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Effect.fn.Return<void, unknown, FileSystem.FileSystem> {
+): Effect.fn.Return<
+  void,
+  unknown,
+  FileSystem.FileSystem | HttpClient.HttpClient
+> {
   const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
   const agentName = yield* ui.promptAgentName(categoryLabel);
   if (!agentName) return;

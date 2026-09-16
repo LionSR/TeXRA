@@ -14,7 +14,7 @@ import {
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
-import { AppState } from '@platform/interfaces';
+import { AppState, type StateWriteFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -44,9 +44,12 @@ const updateGlobalState = vi.fn();
 
 /** A global state store whose writes the suite observes. */
 class ObservedStateStore extends FakeStateStore {
-  override async update(key: string, value: unknown): Promise<void> {
+  override update(
+    key: string,
+    value: unknown,
+  ): Effect.Effect<void, StateWriteFailed> {
     mocks.updateGlobalState(key, value);
-    await super.update(key, value);
+    return super.update(key, value);
   }
 }
 
@@ -183,25 +186,23 @@ function expectedAccessStatus(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
-  mocks.getXaiStatus.mockResolvedValue({ signedIn: false });
+  mocks.getCodexStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
+  mocks.getXaiStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
   mocks.isPreferCodexSubscription.mockReturnValue(false);
   mocks.isPreferXaiSubscription.mockReturnValue(false);
-  mocks.setPreferCodexSubscription.mockResolvedValue({
-    effective: false,
-    target: 'global',
-  });
-  mocks.setPreferXaiSubscription.mockResolvedValue({
-    effective: false,
-    target: 'global',
-  });
+  mocks.setPreferCodexSubscription.mockReturnValue(
+    Effect.succeed({ effective: false, target: 'global' }),
+  );
+  mocks.setPreferXaiSubscription.mockReturnValue(
+    Effect.succeed({ effective: false, target: 'global' }),
+  );
   mocks.shouldUseSubscriptionDeviceCode.mockReturnValue(false);
   mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
   mocks.lookupApiKeyOrigin.mockReturnValue(Effect.succeed('none'));
   mocks.getPreferKimiCode.mockReturnValue(false);
-  mocks.writePlatformSetting.mockResolvedValue(undefined);
+  mocks.writePlatformSetting.mockReturnValue(Effect.void);
   mocks.getGLMCodingPlan.mockReturnValue(false);
-  mocks.setGLMCodingPlan.mockResolvedValue(undefined);
+  mocks.setGLMCodingPlan.mockReturnValue(Effect.void);
 });
 
 describe('CLI model access routes', () => {
@@ -247,10 +248,12 @@ describe('CLI model access routes', () => {
   });
 
   it('reports the ChatGPT preference independently of sign-in', async () => {
-    mocks.getCodexStatus.mockResolvedValue({
-      signedIn: true,
-      email: 'user@example.com',
-    });
+    mocks.getCodexStatus.mockReturnValue(
+      Effect.succeed({
+        signedIn: true,
+        email: 'user@example.com',
+      }),
+    );
     mocks.isPreferCodexSubscription.mockReturnValue(true);
 
     expect(await Effect.runPromise(readCliModelAccessStatus(secrets))).toEqual(
@@ -264,7 +267,7 @@ describe('CLI model access routes', () => {
       }),
     );
 
-    mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
+    mocks.getCodexStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
     expect(await Effect.runPromise(readCliModelAccessStatus(secrets))).toEqual(
       expectedAccessStatus({
         preferences: {
@@ -408,10 +411,9 @@ describe('CLI model access routes', () => {
           label: 'user@example.com',
         }),
       );
-      mocks.setPreferCodexSubscription.mockResolvedValue({
-        effective: true,
-        target: 'global',
-      });
+      mocks.setPreferCodexSubscription.mockReturnValue(
+        Effect.succeed({ effective: true, target: 'global' }),
+      );
       const writeProgress = vi.fn();
 
       const result = yield* updateCliModelAccess(
@@ -438,15 +440,16 @@ describe('CLI model access routes', () => {
 
   it.effect('turns off ChatGPT without changing the Kimi preference', () =>
     Effect.gen(function* () {
-      mocks.getCodexStatus.mockResolvedValue({
-        signedIn: true,
-        email: 'user@example.com',
-      });
+      mocks.getCodexStatus.mockReturnValue(
+        Effect.succeed({
+          signedIn: true,
+          email: 'user@example.com',
+        }),
+      );
       mocks.isPreferCodexSubscription.mockReturnValue(true);
-      mocks.setPreferCodexSubscription.mockResolvedValue({
-        effective: false,
-        target: 'global',
-      });
+      mocks.setPreferCodexSubscription.mockReturnValue(
+        Effect.succeed({ effective: false, target: 'global' }),
+      );
 
       const result = yield* updateCliModelAccess(
         context,
@@ -467,10 +470,12 @@ describe('CLI model access routes', () => {
     'represents preferences independently and toggles each without side effects',
     () =>
       Effect.gen(function* () {
-        mocks.getCodexStatus.mockResolvedValue({
-          signedIn: true,
-          email: 'user@example.com',
-        });
+        mocks.getCodexStatus.mockReturnValue(
+          Effect.succeed({
+            signedIn: true,
+            email: 'user@example.com',
+          }),
+        );
         mocks.isPreferCodexSubscription.mockReturnValue(true);
         mocks.getPreferKimiCode.mockReturnValue(true);
         mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
@@ -510,15 +515,16 @@ describe('CLI model access routes', () => {
         expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
 
         vi.clearAllMocks();
-        mocks.getCodexStatus.mockResolvedValue({
-          signedIn: true,
-          email: 'user@example.com',
-        });
+        mocks.getCodexStatus.mockReturnValue(
+          Effect.succeed({
+            signedIn: true,
+            email: 'user@example.com',
+          }),
+        );
         mocks.isPreferCodexSubscription.mockReturnValue(true);
-        mocks.setPreferCodexSubscription.mockResolvedValue({
-          effective: false,
-          target: 'global',
-        });
+        mocks.setPreferCodexSubscription.mockReturnValue(
+          Effect.succeed({ effective: false, target: 'global' }),
+        );
         yield* updateCliModelAccess(
           context,
           subscriptionPreference('chatgpt', 'off'),
@@ -533,10 +539,9 @@ describe('CLI model access routes', () => {
   it.effect('turns off a stale signed-out preference without signing in', () =>
     Effect.gen(function* () {
       mocks.isPreferCodexSubscription.mockReturnValue(true);
-      mocks.setPreferCodexSubscription.mockResolvedValue({
-        effective: false,
-        target: 'global',
-      });
+      mocks.setPreferCodexSubscription.mockReturnValue(
+        Effect.succeed({ effective: false, target: 'global' }),
+      );
 
       const status = yield* readCliModelAccessStatus(secrets);
       const selection = buildCliModelAccessItems({

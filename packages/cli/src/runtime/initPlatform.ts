@@ -20,10 +20,10 @@ import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
-import type {
-  AgentResumePort,
-  LifecycleHost,
-  StateStore,
+import {
+  type LifecycleHost,
+  type StateStore,
+  type StateWriteFailed,
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { DisposableStore } from '@platform/disposable';
@@ -40,7 +40,6 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
-import type { RunStateWrite } from '@platform/defaults/jsonStore';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import type { SessionOpenError } from '@shared/session/database';
@@ -53,6 +52,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { installCliProcessRuntime } from './cliProcessRuntime';
+import { cliAgentResume } from './cliAgentResume';
 import { getCliSecrets } from './cliSecrets';
 import {
   flushNdjsonStdout,
@@ -260,27 +260,18 @@ export function handOffCliShutdownSignalHandlers(): void {
 }
 
 /**
- * The chat TUI's stream resume, installed while a chat session is mounted.
- * The platform port above forwards to it; outside a chat there is no host
- * that can resume, so the port answers `false`.
+ * Record the model the chat is running as the default helper model. Returns
+ * the write as the Effect it is: the callers that want a promise face own a
+ * runtime and run it, and the ones that are already inside a program compose
+ * it directly, so no runtime is threaded in here purely to keep the promise.
  */
-let cliResumeHandler: AgentResumePort['tryResumeRun'] | undefined;
-
-export function setCliAgentResumeHandler(
-  handler: AgentResumePort['tryResumeRun'],
-): () => void {
-  cliResumeHandler = handler;
-  return () => {
-    if (cliResumeHandler === handler) cliResumeHandler = undefined;
-  };
-}
-
-export async function setCliHelperModel(
+export function setCliHelperModel(
   state: StateStore,
   model: string | undefined,
-): Promise<void> {
-  if (!model) return;
-  await state.update(GlobalStateKey.HELPER_MODEL, model);
+): Effect.Effect<void, StateWriteFailed> {
+  // Keep the write lazy: a refused write is the caller's failure to handle,
+  // not a rejection nobody reads.
+  return model ? state.update(GlobalStateKey.HELPER_MODEL, model) : Effect.void;
 }
 
 /**
@@ -376,13 +367,11 @@ export async function initCliPlatform(
     // platform. Keep the platform, roots, and lazy session private until the
     // fallible setup has succeeded: their ports have no reset operation.
     const install = async () => {
-      const runWrite: RunStateWrite = (write) => runtime.runPromise(write);
       const { stateStores, configStores } = await runtime.runPromise(
         Effect.gen(function* () {
           const stores = yield* openCliWorkspaceState({
             storageRoot: context.storageRoot,
             workspacePath: context.cwd,
-            runWrite,
           });
           return {
             stateStores: stores,
@@ -390,7 +379,6 @@ export async function initCliPlatform(
               stores.storage,
               context.cwd,
               showPersistentConfigWarning,
-              runWrite,
             ),
           };
         }),
@@ -414,10 +402,7 @@ export async function initCliPlatform(
       const cliSecrets = getCliSecrets(context.storageRoot);
       const platform = createNodePlatform({
         lifecycle,
-        agentResume: {
-          tryResumeRun: async (runId, recovery) =>
-            (await cliResumeHandler?.(runId, recovery)) ?? false,
-        },
+        agentResume: cliAgentResume,
         agentDirectories,
       });
       // One process, one project: the process roots are the `--cwd` workspace.

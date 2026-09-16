@@ -518,6 +518,7 @@ export function createChatSessionController(
   disposables.add(
     runtimeSession.interactions.use(
       createTuiHostInteractions(presentationHost, sessionContext, {
+        session: runtimeSession,
         secrets,
         runtime,
       }),
@@ -539,7 +540,12 @@ export function createChatSessionController(
     session: runtimeSession,
     approvalPromptsUnavailable: approvalsUnavailable,
     onApprovalPolicyDenial: () =>
-      warnApprovalDenied(sessionContext, 'Tool or edit approval', launchRunId),
+      warnApprovalDenied(
+        runtimeSession,
+        sessionContext,
+        'Tool or edit approval',
+        launchRunId,
+      ),
     runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
     executeWorkflow: async (_config, runId) => {
       throw new Error(
@@ -606,6 +612,7 @@ export function createChatSessionController(
                   approvalPromptsUnavailable: approvalsUnavailable,
                   onApprovalPolicyDenial: () =>
                     warnApprovalDenied(
+                      runtimeSession,
                       sessionContext,
                       'Tool or edit approval',
                       runId,
@@ -729,7 +736,7 @@ export function createChatSessionController(
       // honored by `isCancellationRequested`, which `resumeRun` re-reads once
       // this returns, rather than starting an agent the user cancelled.
       const adoptResumedRun = async (): Promise<void> => {
-        await setCliHelperModel(state, config.model);
+        await runtime.runPromise(setCliHelperModel(state, config.model));
         adoptRunConfig(config, 'history');
         clearLocalTranscript();
         followUpQueue.clear();
@@ -915,15 +922,16 @@ export function createChatSessionController(
         focusRun(runId);
         session.runExitCode = CliExitCode.Success;
 
-        yield* Effect.tryPromise({
-          try: () => setCliHelperModel(state, config.model),
-          catch: (cause) =>
-            new StateWriteFailed({
-              key: GlobalStateKey.HELPER_MODEL,
-              message: `The helper model could not be recorded: ${toErrorMessage(cause)}`,
-              cause,
-            }),
-        });
+        yield* setCliHelperModel(state, config.model).pipe(
+          Effect.mapError(
+            (cause) =>
+              new StateWriteFailed({
+                key: GlobalStateKey.HELPER_MODEL,
+                message: `The helper model could not be recorded: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          ),
+        );
         recoveryHandedOff = true;
         const result = yield* resumeRun(runId, {
           ...toolUseResumeOptions(runId, approvalsUnavailable),
@@ -1092,15 +1100,16 @@ export function createChatSessionController(
                 cause,
               }),
           });
-          yield* Effect.tryPromise({
-            try: () => setCliHelperModel(state, selection.model),
-            catch: (cause) =>
-              new StateWriteFailed({
-                key: GlobalStateKey.HELPER_MODEL,
-                message: `The helper model could not be recorded: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          });
+          yield* setCliHelperModel(state, selection.model).pipe(
+            Effect.mapError(
+              (cause) =>
+                new StateWriteFailed({
+                  key: GlobalStateKey.HELPER_MODEL,
+                  message: `The helper model could not be recorded: ${toErrorMessage(cause)}`,
+                  cause,
+                }),
+            ),
+          );
           if (session.stopRequested) {
             session.markRunCompleted();
             return;

@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
@@ -38,13 +39,17 @@ setupPlatform({ workspacePath: '/workspace' });
 
 afterEach(async () => {
   setRuntimeSkillSources([]);
-  await workspaceRoots().config.update(
-    WorkspaceStateKey.DISABLED_SKILLS,
-    undefined,
+  await Effect.runPromise(
+    workspaceRoots().config.update(
+      WorkspaceStateKey.DISABLED_SKILLS,
+      undefined,
+    ),
   );
-  await workspaceRoots().config.update(
-    WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-    undefined,
+  await Effect.runPromise(
+    workspaceRoots().config.update(
+      WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+      undefined,
+    ),
   );
 });
 
@@ -160,7 +165,7 @@ describe('runtime skills', () => {
         { scope: 'project', path: projectRoot },
         { scope: 'user', path: userRoot },
       ]);
-      await workspaceRoots().config.update(key, value);
+      await Effect.runPromise(workspaceRoots().config.update(key, value));
 
       const result = await loadRuntimeSkillCatalog();
 

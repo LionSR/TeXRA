@@ -188,7 +188,6 @@ export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 
 /** Open workspace folder offered as a run working directory. */
 export const WorkspaceRootOptionDataSchema = PickerOptionBaseSchema;
-type WorkspaceRootOptionData = z.infer<typeof WorkspaceRootOptionDataSchema>;
 
 /**
  * Team picker option row for the main-view "Run with: Team" target. `value`
@@ -267,12 +266,6 @@ const FileSelectConfigSchema = z.object({
 export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
 
 export type CheckboxValues = z.infer<typeof ToolConfigFieldsSchema>;
-
-const SingleFilesSchema = z.object({
-  baseFile: z.string(),
-  editedFile: z.string(),
-});
-type SingleFiles = z.infer<typeof SingleFilesSchema>;
 
 export const FileOptionsSchema = z.object({
   baseFile: z.array(z.string()),

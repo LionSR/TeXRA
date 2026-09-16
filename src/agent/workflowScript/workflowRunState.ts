@@ -61,7 +61,6 @@ interface WorkflowStageRecord {
  */
 export class WorkflowRunState {
   readonly #emit: (event: WorkflowScriptEvent) => void;
-  readonly #hasDeclaredStages: boolean;
   readonly #declaredStageCount: number;
   readonly #stages: WorkflowStageRecord[];
   readonly #calls = new Map<string, WorkflowCallRecord>();
@@ -75,7 +74,6 @@ export class WorkflowRunState {
     readonly emit: (event: WorkflowScriptEvent) => void;
   }) {
     this.#emit = options.emit;
-    this.#hasDeclaredStages = options.phases.length > 0;
     this.#declaredStageCount = options.phases.length;
     this.#stages = options.phases.map((phase) => ({
       title: phase.title,
@@ -126,7 +124,7 @@ export class WorkflowRunState {
   enterStage(title: string): void {
     if (this.#sealed) throw new Error('Workflow run state is sealed.');
     let nextIndex = this.#stages.findIndex((stage) => stage.title === title);
-    if (nextIndex < 0 && this.#hasDeclaredStages) {
+    if (nextIndex < 0 && this.#declaredStageCount > 0) {
       throw new Error(`phase() references undeclared stage "${title}".`);
     }
     if (nextIndex < 0) {
@@ -166,24 +164,26 @@ export class WorkflowRunState {
       );
     }
     this.#issuedCallIds.add(definition.id);
-    const stageIndex =
-      definition.phase === undefined
-        ? -1
-        : this.#stages.findIndex((stage) => stage.title === definition.phase);
-    if (definition.phase !== undefined && stageIndex < 0) {
-      throw new Error(
-        `agent() references stage "${definition.phase}" before phase() entered it.`,
+    const { phase } = definition;
+    if (phase !== undefined) {
+      const stageIndex = this.#stages.findIndex(
+        (stage) => stage.title === phase,
       );
-    }
-    if (definition.phase !== undefined && stageIndex !== this.#currentIndex) {
-      throw new Error(
-        `agent() task ${definition.id} belongs to stage "${definition.phase}", but the current stage is ${this.currentPhase ?? 'not set'}.`,
-      );
+      if (stageIndex < 0) {
+        throw new Error(
+          `agent() references stage "${phase}" before phase() entered it.`,
+        );
+      }
+      if (stageIndex !== this.#currentIndex) {
+        throw new Error(
+          `agent() task ${definition.id} belongs to stage "${phase}", but the current stage is ${this.currentPhase ?? 'not set'}.`,
+        );
+      }
     }
     const call: WorkflowCallRecord = {
       id: definition.id,
       label: definition.label,
-      ...(definition.phase !== undefined && { phase: definition.phase }),
+      ...(phase !== undefined && { phase }),
       kind: definition.kind,
       ...(definition.agent !== undefined && { agent: definition.agent }),
       ...(definition.model !== undefined && { model: definition.model }),
@@ -378,7 +378,9 @@ export class WorkflowRunState {
 
   /** The facts every card carries; invocation facts only once issued. */
   #identity(call: WorkflowCallRecord) {
-    const attemptCounts =
+    // Shown once a call has begun more than one attempt and is past its plan
+    // label: running, settled, or skipped after it was issued.
+    const showAttemptNumber =
       call.attempts > 1 &&
       (call.status === WORKFLOW_CALL_STATUS.RUNNING ||
         call.status === WORKFLOW_CALL_STATUS.COMPLETED ||
@@ -395,7 +397,7 @@ export class WorkflowRunState {
       ...(call.agent !== undefined && { agent: call.agent }),
       ...(call.model !== undefined && { model: call.model }),
       ...(call.files !== undefined && { files: call.files }),
-      ...(attemptCounts && { attemptNumber: call.attempts }),
+      ...(showAttemptNumber && { attemptNumber: call.attempts }),
     };
   }
 

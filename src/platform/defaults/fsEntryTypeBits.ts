@@ -12,6 +12,15 @@ type FileTypeProbe = {
   isDirectory(): boolean;
 };
 
+/** The `FileType` bit an entry's own predicates report: a link is neither a
+ *  file nor a directory, so it lands on `Unknown` and its caller adds the
+ *  `SymbolicLink` bit. */
+export function fileTypeBitsOf(entry: FileTypeProbe): number {
+  if (entry.isFile()) return FileType.File;
+  if (entry.isDirectory()) return FileType.Directory;
+  return FileType.Unknown;
+}
+
 /**
  * Resolve the target type of a symlink, producing combined bitmasks
  * (e.g. SymbolicLink | File = 65) matching vscode.FileType behavior.
@@ -19,9 +28,7 @@ type FileTypeProbe = {
 async function resolveSymlinkType(target: string): Promise<number> {
   let targetType: number = FileType.Unknown;
   try {
-    const stats = await fs.promises.stat(target);
-    if (stats.isFile()) targetType = FileType.File;
-    else if (stats.isDirectory()) targetType = FileType.Directory;
+    targetType = fileTypeBitsOf(await fs.promises.stat(target));
   } catch {
     // Dangling symlink — target type stays Unknown
   }
@@ -41,7 +48,5 @@ export async function fileTypeFor(
   target: string,
 ): Promise<number> {
   if (entry.isSymbolicLink()) return resolveSymlinkType(target);
-  if (entry.isFile()) return FileType.File;
-  if (entry.isDirectory()) return FileType.Directory;
-  return FileType.Unknown;
+  return fileTypeBitsOf(entry);
 }

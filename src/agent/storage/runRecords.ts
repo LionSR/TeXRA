@@ -138,27 +138,22 @@ export const persistedParentRunId = Effect.fn('persistedParentRunId')(
 /** Native access to named run metadata, with no file-backed read arm. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
   const id = aggregateId('run', runId);
+  /** Rows are parsed on the way out, so a Zod fault passes through typed. */
+  const asError = <E>(cause: Cause.Cause<E>): Error => {
+    const error = Cause.squash(cause);
+    return error instanceof z.ZodError ? error : ensureError(error);
+  };
   const read = <A>(
     select: (rows: readonly SessionEvent[]) => A,
   ): Effect.Effect<A, Error> =>
     session.readRunRecords(runId).pipe(
       Effect.map(select),
-      Effect.catchCause((cause) => {
-        const error = Cause.squash(cause);
-        return Effect.fail(
-          error instanceof z.ZodError ? error : ensureError(error),
-        );
-      }),
+      Effect.catchCause((cause) => Effect.fail(asError(cause))),
     );
   const write = (draft: SessionEventDraft): Effect.Effect<void, Error> =>
     session.commit([draft]).pipe(
       Effect.asVoid,
-      Effect.catchCause((cause) => {
-        const error = Cause.squash(cause);
-        return Effect.fail(
-          error instanceof z.ZodError ? error : ensureError(error),
-        );
-      }),
+      Effect.catchCause((cause) => Effect.fail(asError(cause))),
     );
   /** The latest `run.record` row; the database reads a closed run as absent. */
   const recordOf = (rows: readonly SessionEvent[]): RunRecord | null => {

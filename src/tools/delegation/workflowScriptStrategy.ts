@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, type Scope } from 'effect';
+import { Cause, Effect, Exit, FileSystem, type Scope } from 'effect';
 
 /**
  * Workflow-script child-run strategy over the shared `childRunLoop`.
@@ -99,11 +99,16 @@ function formatWorkflowResult(result: unknown): string {
 
 export interface WorkflowScriptStrategyParams {
   readonly session: SessionHandle;
+  /**
+   * The host's dependency fingerprint. It reads file bytes through the process
+   * `FileSystem` now that the `AbsoluteFS` facade is gone, so its `R` names
+   * that service rather than nothing.
+   */
   readonly fingerprintAgentDependencies: (
     options: Parameters<
       NonNullable<WorkflowScriptRunOptions['fingerprintAgentDependencies']>
     >[0],
-  ) => Effect.Effect<string, Error>;
+  ) => Effect.Effect<string, Error, FileSystem.FileSystem>;
   /** The detached run's run id — echoed on the delivery envelope. */
   readonly runId: RunId;
   /** The run's child-stream trace — where phase/log progress projects. */
@@ -227,18 +232,6 @@ export function createWorkflowScriptStrategy(
     }
   };
 
-  const updateDurableSummary = (
-    run: {
-      readonly journal: readonly WorkflowJournalEntry[];
-      readonly board: ReturnType<
-        WorkflowScriptProgressProjection<never>['board']
-      >;
-    },
-    costUsd: number,
-  ): void => {
-    settleSummary(run, costUsd);
-  };
-
   const formatSummaryLine = (
     outcome: 'completed' | 'failed',
     errorCause?: string,
@@ -328,9 +321,10 @@ export function createWorkflowScriptStrategy(
             // commit for live results and after validation for cache hits.
             onJournalEntryConsumed: (entry) => {
               attemptJournalByKey.set(entry.key, entry);
-              updateDurableSummary(
-                { journal: attemptJournal(), board: projection.board() },
-                attemptCost.total(attemptJournal()),
+              const journal = attemptJournal();
+              settleSummary(
+                { journal, board: projection.board() },
+                attemptCost.total(journal),
               );
             },
             // The engine's control is already keyed by the grandchild run
@@ -347,7 +341,7 @@ export function createWorkflowScriptStrategy(
           const journal = attemptJournal();
           const costUsd = attemptCost.total(journal);
           ports.recordCost(costUsd);
-          updateDurableSummary({ journal, board: projection.board() }, costUsd);
+          settleSummary({ journal, board: projection.board() }, costUsd);
         };
         const result = yield* Effect.exit(
           runPersistedWorkflowScript(projection.options).pipe(

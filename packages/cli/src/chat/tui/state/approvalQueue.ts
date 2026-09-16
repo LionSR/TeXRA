@@ -12,7 +12,7 @@
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
-import { currentSession } from '@agent/runtime';
+import { type SessionHandle } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
@@ -86,10 +86,14 @@ export type RetryApprovalPayload = Extract<ApprovalPayload, { kind: 'retry' }>;
 
 export interface PendingApproval {
   readonly payload: ApprovalPayload;
-  /** Answer this request. The runtime comes from the surface that renders
-   *  the modal: this entry is a level of a module-level computed, so it has
-   *  none of its own to close over. */
-  readonly decide: (runtime: ProcessRuntime, decision: SurfaceDecision) => void;
+  /** Answer this request. The session and runtime come from the surface that
+   *  renders the modal: this entry is a level of a module-level computed, so
+   *  it has neither of its own to close over. */
+  readonly decide: (
+    session: SessionHandle,
+    runtime: ProcessRuntime,
+    decision: SurfaceDecision,
+  ) => void;
 }
 
 /** A pending `request.opened` fact, typed to {@link PendingApprovalKind}. */
@@ -267,8 +271,8 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   if (!first) return undefined;
   return {
     payload: first.payload,
-    decide: (runtime, decision) =>
-      decideRequest(runtime, first.request, first.payload, decision),
+    decide: (session, runtime, decision) =>
+      decideRequest(session, runtime, first.request, first.payload, decision),
   };
 });
 
@@ -364,13 +368,13 @@ export function dropPresentation(requestId: string): void {
  * over a refused decision parks the run on a request nobody answers again.
  */
 function issue(
+  session: SessionHandle,
   runtime: ProcessRuntime,
   runId: RunId,
   requestId: string,
   onRefused: (() => void) | undefined,
   ...requests: RuntimeRequest[]
 ): void {
-  const session = currentSession();
   void runtime.runPromise(
     Effect.forEach(requests, (request) => session.requests.request(request), {
       discard: true,
@@ -413,6 +417,7 @@ function issue(
  * decision itself once the credential is in place.
  */
 function decideRequest(
+  session: SessionHandle,
   runtime: ProcessRuntime,
   request: AttentionRequest,
   payload: PermissionPayload,
@@ -426,7 +431,14 @@ function decideRequest(
     'runtime' in arm ? [arm.runtime] : [],
   );
   if (runtimeArms.length > 0) {
-    issue(runtime, runId, request.requestId, onRefused, ...runtimeArms);
+    issue(
+      session,
+      runtime,
+      runId,
+      request.requestId,
+      onRefused,
+      ...runtimeArms,
+    );
   }
   for (const arm of arms) {
     if (!('host' in arm)) continue;
@@ -446,13 +458,14 @@ function decideRequest(
     (decision.action === APPROVE_ALL_DELEGATED_WORK_ACTION ||
       decision.action === APPROVE_SESSION_ACTION)
   ) {
-    approveQueuedDelegatedWorkForRun(runtime, runId);
+    approveQueuedDelegatedWorkForRun(session, runtime, runId);
   }
 }
 
 /** Approve every delegated request pending on `runId` once its bypass is
  *  on: the decisions the user's super-YOLO choice implied. */
 function approveQueuedDelegatedWorkForRun(
+  session: SessionHandle,
   runtime: ProcessRuntime,
   runId: RunId,
 ): void {
@@ -467,7 +480,9 @@ function approveQueuedDelegatedWorkForRun(
     ) {
       continue;
     }
-    decideRequest(runtime, request, request.payload, { action: 'approve' });
+    decideRequest(session, runtime, request, request.payload, {
+      action: 'approve',
+    });
   }
 }
 
@@ -479,6 +494,7 @@ function approveQueuedDelegatedWorkForRun(
  * a decision dropped in silence reads as a run waiting on nobody.
  */
 export function decidePendingRequest(
+  session: SessionHandle,
   runtime: ProcessRuntime,
   requestId: string,
   decision: SurfaceDecision,
@@ -494,7 +510,14 @@ export function decidePendingRequest(
     );
     return;
   }
-  decideRequest(runtime, request, request.payload, decision, onRefused);
+  decideRequest(
+    session,
+    runtime,
+    request,
+    request.payload,
+    decision,
+    onRefused,
+  );
 }
 
 /**
@@ -505,6 +528,7 @@ export function decidePendingRequest(
  * capability back to itself and the request would never be answered.
  */
 export function landRequestDecision(
+  session: SessionHandle,
   runtime: ProcessRuntime,
   runId: RunId,
   requestId: string,
@@ -512,7 +536,7 @@ export function landRequestDecision(
   onRefused?: () => void,
 ): void {
   markDecided(requestId);
-  issue(runtime, runId, requestId, onRefused, {
+  issue(session, runtime, runId, requestId, onRefused, {
     kind: 'request.decide',
     runId,
     requestId,

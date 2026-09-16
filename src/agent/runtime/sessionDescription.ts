@@ -19,6 +19,7 @@ import {
   isNonEmptyString,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('SessionDescription');
 const MAX_DESCRIPTION_LENGTH = 80;
@@ -103,7 +104,7 @@ export const generateSessionDescription = Effect.fn(
   agentDescription: string | undefined,
   session: SessionHandle,
   stores: ModelOptionStores,
-): Effect.fn.Return<void> {
+): Effect.fn.Return<void, never, HttpClient.HttpClient> {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
   yield* Effect.gen(function* () {

@@ -376,8 +376,7 @@ export class SessionComposer extends LitElement {
   private get recording(): boolean {
     const recording = this.host?.recording;
     return (
-      recording !== null &&
-      recording !== undefined &&
+      recording != null &&
       recording.session === this.surface?.session &&
       recording.target === this.recordingTarget
     );
@@ -841,10 +840,11 @@ export class SessionComposer extends LitElement {
       run ? (this.view?.queuedFollowUps.get(run.id) ?? []) : []
     ).map((followUp) => followUp.text);
     const text = this.text;
+    const hasText = text.trim() !== '';
     // A follow-up's Send and the Cmd+Alt+E accelerator read one rule
     // (`canSendFollowUp`); the launcher has no run and no draft images,
     // so its own Run turns on the instruction alone.
-    const canSend = run ? canSendFollowUp(run, this.draft) : text.trim() !== '';
+    const canSend = run ? canSendFollowUp(run, this.draft) : hasText;
     const sendLabel = compact ? 'Send follow-up' : 'Run';
 
     return html`
@@ -858,7 +858,7 @@ export class SessionComposer extends LitElement {
         class=${classMap({
           composer: true,
           'is-compact': compact,
-          'has-text': text.trim() !== '' || this.draft.images.length > 0,
+          'has-text': hasText || this.draft.images.length > 0,
         })}
       >
         <label for="composer-text" class="visually-hidden"
@@ -903,7 +903,7 @@ export class SessionComposer extends LitElement {
               busy: this.surface?.polishing.has(
                 this.run?.id ?? `launch:${this.surface.launch.sessionType}`,
               ),
-              disabled: readOnly || text.trim() === '',
+              disabled: readOnly || !hasText,
               onClick: this.polish,
             })}
             ${renderIconActionButton({

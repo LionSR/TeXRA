@@ -275,7 +275,8 @@ export function registerBuiltinSlashCommands(options: {
   /** The process runtime the account commands and the `/resume` listing run
    *  their programs on, from the same surface. */
   runtime: ProcessRuntime;
-  /** The process-default session `/resume` lists history from. */
+  /** The session `/resume` lists history from and `/plan` and `/compact` act
+   *  on, threaded from the surface that registers the commands. */
   runtimeSession: SessionHandle;
   onAgentSelect?: SelectHandler<string>;
   canSelectAgent?: () => boolean;
@@ -567,6 +568,7 @@ export function registerBuiltinSlashCommands(options: {
   ): React.JSX.Element => (
     <EnabledModelsForm
       state={state}
+      runtime={runtime}
       availableRows={props.availableRows}
       onClose={() => props.onDone(undefined)}
     />
@@ -666,7 +668,7 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Read the focused session work plan',
     category: 'session',
     echo: 'never',
-    handler: () => showCliWorkPlan(),
+    handler: () => showCliWorkPlan(options.runtimeSession),
   });
   registerSlashCommand({
     name: 'goal',
@@ -756,7 +758,7 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Request context compaction',
     category: 'session',
     echo: 'ifPersists',
-    handler: () => requestCliSessionCompaction(runtime),
+    handler: () => requestCliSessionCompaction(options.runtimeSession, runtime),
   });
   registerSlashCommand({
     name: 'exit',

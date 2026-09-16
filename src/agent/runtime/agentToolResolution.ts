@@ -164,8 +164,8 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
 
   const resolved: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
-  for (const config of toolConfigs) {
-    const name = typeof config === 'string' ? config : config.name;
+  for (const toolConfig of toolConfigs) {
+    const name = typeof toolConfig === 'string' ? toolConfig : toolConfig.name;
     if (resolvedNames.has(name)) continue;
     if (!passesRuntimeGates(name)) continue;
     if (disabled.has(name)) continue;

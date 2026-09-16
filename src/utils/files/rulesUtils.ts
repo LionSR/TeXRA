@@ -19,28 +19,21 @@ const RULES_FILE = '.texrarules';
 export async function loadTexraRules(
   workspace: string | undefined,
 ): Promise<string> {
-  try {
-    if (workspace) {
-      const workspaceFile = path.join(workspace, RULES_FILE);
-      if (await AbsoluteFS.exists(workspaceFile)) {
-        const trimmed = (await AbsoluteFS.read(workspaceFile)).trim();
-        if (trimmed) {
-          log.debug(`Loaded workspace ${RULES_FILE}`);
-          return trimmed;
-        }
-      }
-    }
+  // Precedence order: the run's workspace, then the home directory. A root
+  // whose file is absent or blank falls through to the next one.
+  const candidates: Array<{ root: string; source: string }> = [];
+  if (workspace) candidates.push({ root: workspace, source: 'workspace' });
+  const homeDir = safeHomedir();
+  if (homeDir) candidates.push({ root: homeDir, source: 'home' });
 
-    const homeDir = safeHomedir();
-    if (homeDir) {
-      const homeFile = path.join(homeDir, RULES_FILE);
-      if (await AbsoluteFS.exists(homeFile)) {
-        const trimmed = (await AbsoluteFS.read(homeFile)).trim();
-        if (trimmed) {
-          log.debug(`Loaded home ${RULES_FILE}`);
-          return trimmed;
-        }
-      }
+  try {
+    for (const { root, source } of candidates) {
+      const file = path.join(root, RULES_FILE);
+      if (!(await AbsoluteFS.exists(file))) continue;
+      const trimmed = (await AbsoluteFS.read(file)).trim();
+      if (!trimmed) continue;
+      log.debug(`Loaded ${source} ${RULES_FILE}`);
+      return trimmed;
     }
   } catch (err) {
     if (isFileNotFoundError(err)) return '';

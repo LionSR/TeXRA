@@ -48,7 +48,7 @@ import {
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
-import { generateShortId, getBasename } from '@utils/core';
+import { generateShortId, getBasename, groupBy } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -57,7 +57,10 @@ import { pathToLocation } from '@utils/files/fileLocation';
 import { AgentRun } from '../run/AgentRun';
 import { inlineMediaPart, type InputPart } from '../run/mediaInput';
 import { localCallsOf, parseCallArguments, type LocalCall } from '../run/tools';
-import { formatToolResultTextWithAttachments } from '../run/toolResultText';
+import {
+  formatAttachmentSummary,
+  formatToolResultAsText,
+} from '../run/toolResultText';
 import {
   appendRow,
   displayRow,
@@ -68,6 +71,7 @@ import {
   toolUseFlowState,
   type Message,
 } from './rows';
+import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
 
 /** Max concurrently executing tool calls within one parallel-safe partition. */
@@ -88,7 +92,6 @@ type Settlement = Pick<
 >;
 
 type SettledAttachment = ToolResultPayload['attachments'][number];
-type InvokeError = RunLedgerRefused | DatabaseWriteFailed;
 
 export interface TurnContext {
   readonly workspace: AgentWorkspaceState;
@@ -209,10 +212,9 @@ function settlementContent(
         : {}),
     }),
   );
-  const text = formatToolResultTextWithAttachments(
+  const text = formatToolResultAsText(
     settlement.result,
-    attachments,
-    true,
+    attachments.length > 0 ? formatAttachmentSummary(attachments) : undefined,
   );
   const media = settlement.attachments.flatMap((attachment) => {
     if (attachment.content.kind !== 'base64') {
@@ -824,12 +826,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 
   // Partitions in order; each barrier is its own, each run of parallel-safe
   // calls shares one and executes under the window.
-  const partitions = new Map<number, DispatchFacts[]>();
-  for (const fact of pending.calls) {
-    const members = partitions.get(fact.partition) ?? [];
-    members.push(fact);
-    partitions.set(fact.partition, members);
-  }
+  const partitions = groupBy(pending.calls, (fact) => fact.partition);
   let endTurn = Object.values(pending.settled).some(endsTurn);
   for (const members of partitions.values()) {
     const primaries = members.filter((fact) => fact.duplicateOf === null);
@@ -913,7 +910,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     documents.length === 0 ? undefined : bound.model.uploadFile;
   if (uploadFile !== undefined) {
     // Settled uploads leave the set; the aggregate deadline names the rest.
-    const pending = new Set(documents.map(({ path }) => path));
+    const pendingUploads = new Set(documents.map(({ path }) => path));
     yield* Effect.forEach(
       documents,
       ({ path, part }) =>
@@ -929,7 +926,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               ),
             ),
           ),
-          Effect.tap(Effect.sync(() => pending.delete(path))),
+          Effect.tap(Effect.sync(() => pendingUploads.delete(path))),
         ),
       { concurrency: MAX_PARALLEL_TOOL_CALLS, discard: true },
     ).pipe(
@@ -942,7 +939,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         orElse: () =>
           Effect.sync(() =>
             logger.warn(
-              `Sending ${[...pending].map((path) => `"${path}"`).join(', ')} as bytes: their uploads did not finish within ${UPLOAD_DEADLINE} in all.`,
+              `Sending ${[...pendingUploads].map((path) => `"${path}"`).join(', ')} as bytes: their uploads did not finish within ${UPLOAD_DEADLINE} in all.`,
             ),
           ),
       }),

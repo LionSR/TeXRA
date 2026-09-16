@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
@@ -16,7 +16,10 @@ import {
   resumeRunWithRefusalNotice,
 } from '@controllers/session/resumeRunPresentation';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { RecoveryContinuation } from '@platform/interfaces';
+import {
+  AgentResumeFailed,
+  type RecoveryContinuation,
+} from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
@@ -63,29 +66,25 @@ export class DesktopProcessResumeOwner {
   tryResumeRun(
     runId: RunId,
     recovery?: RecoveryContinuation,
-  ): Promise<boolean> {
+  ): Effect.Effect<boolean, AgentResumeFailed> {
     for (const session of this.options.sessions()) {
       if (!session.transcripts.has(runId)) continue;
-      return Promise.resolve(
-        runInSession(session, () =>
-          this.resumeDesktopRun(runId, session, recovery),
-        ),
+      return runInSession(session, () =>
+        this.resumeDesktopRun(runId, session, recovery),
       );
     }
-    return Promise.resolve(false);
+    return Effect.succeed(false);
   }
 
   private isOpen(session: SessionHandle): boolean {
-    for (const open of this.options.sessions())
-      if (open === session) return true;
-    return false;
+    return [...this.options.sessions()].includes(session);
   }
 
-  private async resumeDesktopRun(
+  private resumeDesktopRun(
     runId: RunId,
     session: SessionHandle,
     recovery: RecoveryContinuation | undefined,
-  ): Promise<boolean> {
+  ): Effect.Effect<boolean, AgentResumeFailed> {
     const isCancellationRequested = resumeCancellationLatch(
       session,
       runId,
@@ -96,56 +95,59 @@ export class DesktopProcessResumeOwner {
     // since it was loaded. Read the store before resuming: neither the lease
     // (a deleted run holds none) nor the run lane (in-process only)
     // sees that fact.
-    if (isCancellationRequested()) return false;
-    // Taken once here: the generator below has its own `this`.
+    if (isCancellationRequested()) return Effect.succeed(false);
     const runtime = this.options.runtime();
-    try {
-      const result = await runtime.runPromise(
-        Effect.exit(
-          Effect.gen(function* () {
-            const { getDefaultUnavailableToolNames } = yield* Effect.tryPromise(
-              {
-                try: () => import('@tools/registry'),
-                catch: ensureError,
-              },
-            );
-            const exists =
-              (yield* session.transcripts.readEvents(runId)).length > 0;
-            if (!exists) return false;
-            return yield* resumeRunWithRefusalNotice(runId, {
-              session,
-              recovery,
-              runtimeUnavailableTools:
-                getDefaultUnavailableToolNames('desktop'),
-              isCancellationRequested,
-              executeWorkflow: (config, id, modelCompatibilityKey) =>
-                launchDesktopAgent(
-                  { kind: 'resume', config, runId: id },
-                  { session, runtime },
-                  { modelCompatibilityKey },
-                ),
-            });
-          }),
-        ),
-      );
-      if (Exit.isSuccess(result)) return result.value;
-      const error = Cause.squash(result.cause);
-      if (isCancellationRequested()) return false;
-      this.logger.error(`Failed to resume desktop run ${runId}`, {
-        data: toLogData(error),
+    const attempt = Effect.gen(function* () {
+      const { getDefaultUnavailableToolNames } = yield* Effect.tryPromise({
+        try: () => import('@tools/registry'),
+        catch: ensureError,
       });
-      const primaryError = primaryAgentError(error);
-      presentAgentFailure(
-        session.interactions,
-        {
-          kind: classifyAgentError(primaryError),
-          message: `Resume failed: ${toErrorMessage(primaryError)}`,
-        },
-        { replayWhenAttached: true },
-      );
-      return false;
-    } finally {
-      this.options.onLaunchSettled?.();
-    }
+      const exists = (yield* session.transcripts.readEvents(runId)).length > 0;
+      if (!exists) return false;
+      return yield* resumeRunWithRefusalNotice(runId, {
+        session,
+        recovery,
+        runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
+        isCancellationRequested,
+        executeWorkflow: (config, id, modelCompatibilityKey) =>
+          // `executeWorkflow` is the one Promise-typed hook in the resume
+          // contract; the launch itself is the Effect this runs.
+          runtime.runPromise(
+            launchDesktopAgent(
+              { kind: 'resume', config, runId: id },
+              { session, runtime },
+              { modelCompatibilityKey },
+            ),
+          ),
+      });
+    });
+    // The resume is composed, not awaited: it takes the services the port's
+    // Effect may not require, so they come from this runtime's context on the
+    // fiber that runs it. Every fault is still this owner's to report and
+    // answer `false` for, as the caught rejection was.
+    return Effect.flatMap(runtime.contextEffect, (context) =>
+      Effect.provideContext(attempt, context),
+    ).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          const error = Cause.squash(cause);
+          if (isCancellationRequested()) return false;
+          this.logger.error(`Failed to resume desktop run ${runId}`, {
+            data: toLogData(error),
+          });
+          const primaryError = primaryAgentError(error);
+          presentAgentFailure(
+            session.interactions,
+            {
+              kind: classifyAgentError(primaryError),
+              message: `Resume failed: ${toErrorMessage(primaryError)}`,
+            },
+            { replayWhenAttached: true },
+          );
+          return false;
+        }),
+      ),
+      Effect.ensuring(Effect.sync(() => this.options.onLaunchSettled?.())),
+    );
   }
 }

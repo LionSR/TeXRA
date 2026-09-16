@@ -96,6 +96,11 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
       }
     }
 
+    const missingBibliographyNote =
+      missingBibliographyFiles.length > 0
+        ? `Missing bibliography files: ${call.inScope(() => formatPathList(missingBibliographyFiles))}.`
+        : undefined;
+
     if (
       citationKeys.length === 0 &&
       bibliographyFiles.length === 0 &&
@@ -108,10 +113,9 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
     }
 
     if (citationKeys.length === 0) {
-      const missingNote =
-        missingBibliographyFiles.length > 0
-          ? `\n\nNote: Missing bibliography files: ${call.inScope(() => formatPathList(missingBibliographyFiles))}.`
-          : '';
+      const missingNote = missingBibliographyNote
+        ? `\n\nNote: ${missingBibliographyNote}`
+        : '';
       const result = emptyExtractionResult(
         `BibTeX entries in ${display}`,
         `No citation commands found in ${display}.`,
@@ -146,8 +150,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
         : `Resolved ${formatResultCount(entryCount, 'bibliography entry', 'bibliography entries')} for ${citationKeyCount} in ${display}.`;
 
     const instructions = [
-      missingBibliographyFiles.length > 0 &&
-        `Missing bibliography files: ${call.inScope(() => formatPathList(missingBibliographyFiles))}.`,
+      missingBibliographyNote,
       missingKeys.length > 0 &&
         `Missing citation keys: ${missingKeys.map((k) => `\`${k}\``).join(', ')}.`,
       entryCount > DEFAULT_MAX_ENTRIES &&

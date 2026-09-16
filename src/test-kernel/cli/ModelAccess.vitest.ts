@@ -64,17 +64,23 @@ async function seedGlmRouting(settings: {
   readonly providerEndpoint?: string;
   readonly useOpenRouter?: boolean;
 }): Promise<void> {
-  await routingSettings.update(
-    GlobalStateKey.GLM_CODING_PLAN,
-    settings.codingPlan ?? false,
+  await Effect.runPromise(
+    routingSettings.update(
+      GlobalStateKey.GLM_CODING_PLAN,
+      settings.codingPlan ?? false,
+    ),
   );
-  await routingSettings.update(
-    GlobalStateKey.ENDPOINT_GLM,
-    settings.providerEndpoint ?? '',
+  await Effect.runPromise(
+    routingSettings.update(
+      GlobalStateKey.ENDPOINT_GLM,
+      settings.providerEndpoint ?? '',
+    ),
   );
-  await routingSettings.update(
-    GlobalStateKey.USE_OPENROUTER,
-    settings.useOpenRouter ?? false,
+  await Effect.runPromise(
+    routingSettings.update(
+      GlobalStateKey.USE_OPENROUTER,
+      settings.useOpenRouter ?? false,
+    ),
   );
 }
 

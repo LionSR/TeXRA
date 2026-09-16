@@ -74,6 +74,11 @@ const NOT_YET_RUN_BUTTONS = new Set<string>([
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ]);
 
+/** Interrupted rows get the terminal set whatever their display key. */
+const INTERRUPTED_BUTTONS: ReadonlySet<string> = new Set(
+  TERMINAL_STATE_BUTTONS,
+);
+
 const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   RunStatusDisplayKey,
   Set<string>
@@ -114,7 +119,7 @@ function enabledToolbarButtons(
   displayKey: RunStatusDisplayKey,
 ): ReadonlySet<string> | undefined {
   if (run.readOnly) return READ_ONLY_BUTTONS;
-  if (run.group === 'interrupted') return new Set(TERMINAL_STATE_BUTTONS);
+  if (run.group === 'interrupted') return INTERRUPTED_BUTTONS;
   return ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey];
 }
 
@@ -474,6 +479,7 @@ export class RunHeader extends LitElement {
     const enabledButtons = enabledToolbarButtons(run, displayKey);
     const runContext = this.runContextText(run);
     const toolbarButtonViews = toolbarButtons.map((btn) => {
+      const bypassKind = btn.bypassKind;
       const hidden = NATIVE_AGENT_ONLY_BUTTONS.has(btn.id) && !isNativeAgentRun;
       const isCopyRunContext = btn.localAction === 'copyRunContext';
       const disabled =
@@ -481,7 +487,7 @@ export class RunHeader extends LitElement {
         !enabledButtons?.has(btn.id) ||
         (isCopyRunContext && runContext === '');
       const isActive =
-        btn.bypassKind !== undefined && this.bypassActive(run, btn.bypassKind);
+        bypassKind !== undefined && this.bypassActive(run, bypassKind);
       const copied = isCopyRunContext && this.copyRunContext.state.copied;
       const restingTooltip =
         isActive && btn.titleActive ? btn.titleActive : btn.title;
@@ -511,14 +517,14 @@ export class RunHeader extends LitElement {
         className,
         size: 'm',
         disabled,
-        pressed: btn.bypassKind === undefined ? undefined : isActive,
+        pressed: bypassKind === undefined ? undefined : isActive,
         ariaHidden: hidden,
         onClick: activate,
       });
       // The same action as one menu row, for the folded toolbar.
       const item = html`<wa-dropdown-item
         value=${btn.id}
-        type=${btn.bypassKind === undefined ? 'normal' : 'checkbox'}
+        type=${bypassKind === undefined ? 'normal' : 'checkbox'}
         ?checked=${isActive}
         ?disabled=${disabled}
         >${waIcon(copied ? 'check' : btn.icon, { slot: 'icon' })}${

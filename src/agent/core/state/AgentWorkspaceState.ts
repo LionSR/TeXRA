@@ -53,11 +53,8 @@ export class FileInteractionState {
     for (const filePath of parsed.readFiles) {
       state.readFiles.add(filePath);
     }
-    for (const entry of parsed.edits) {
-      state.edits.set(entry.path, {
-        added: entry.added,
-        removed: entry.removed,
-      });
+    for (const { path, added, removed } of parsed.edits) {
+      state.edits.set(path, { added, removed });
     }
     state._toolCallCount = parsed.toolCallCount;
     return state;
@@ -109,13 +106,10 @@ export class FileInteractionState {
       const added = entry.lineChanges?.added ?? 0;
       const removed = entry.lineChanges?.removed ?? 0;
 
-      const existing = this.edits.get(path);
-      if (existing) {
-        existing.added += added;
-        existing.removed += removed;
-      } else {
-        this.edits.set(path, { added, removed });
-      }
+      const totals = this.edits.get(path) ?? { added: 0, removed: 0 };
+      totals.added += added;
+      totals.removed += removed;
+      this.edits.set(path, totals);
       touchedPaths.add(path);
     }
 

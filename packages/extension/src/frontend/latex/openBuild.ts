@@ -1,8 +1,8 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 
 import * as vscode from 'vscode';
+import { Effect, FileSystem } from 'effect';
 
 import { defaultSession } from '@agent/runtime';
 import { isLatexFile } from '@common/files/fileTypeUtils';
@@ -19,12 +19,20 @@ import {
 
 // Local imports - utilities
 import { getFileStem } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'OpenBuildUtils';
 const log = createLog(CHANNEL);
+
+/**
+ * A VS Code command as an Effect. `executeCommand` rejects with an arbitrary
+ * value and can throw synchronously, neither of which is a typed failure, so
+ * this is the module's single adapter onto the editor's command API — the
+ * programs below recover through ordinary combinators.
+ */
+const vscodeCommand = <A>(call: () => Thenable<A>): Effect.Effect<A, Error> =>
+  Effect.tryPromise({ try: () => Promise.resolve(call()), catch: ensureError });
 
 /**
  * Resolve `latex-workshop.latex.outDir` by expanding all LaTeX Workshop
@@ -68,10 +76,10 @@ function resolveLatexWorkshopOutDir(filePath: string): string {
     ['%TMPDIR%', os.tmpdir()],
   ];
 
-  let resolved = normalizedRaw;
-  for (const [placeholder, value] of replacements) {
-    resolved = resolved.replaceAll(placeholder, value);
-  }
+  const resolved = replacements.reduce(
+    (acc, [placeholder, value]) => acc.replaceAll(placeholder, value),
+    normalizedRaw,
+  );
 
   return path.isAbsolute(resolved) ? resolved : path.resolve(dir, resolved);
 }
@@ -80,18 +88,20 @@ function resolveLatexWorkshopOutDir(filePath: string): string {
  * Invoke the LaTeX Workshop build command for a file, warn-logging on failure.
  * `warnLabel` prefixes the failure message so callers keep their diagnostic context.
  */
-export async function invokeLatexWorkshopBuild(
+export const invokeLatexWorkshopBuild = (
   uri: vscode.Uri,
   channel: string,
   warnLabel: string,
-): Promise<void> {
-  try {
-    await vscode.commands.executeCommand('latex-workshop.build', uri);
-  } catch (err) {
-    const log = createLog(channel);
-    log.warn(`${warnLabel}: ${toErrorMessage(err)}`);
-  }
-}
+): Effect.Effect<void> =>
+  vscodeCommand(() =>
+    vscode.commands.executeCommand('latex-workshop.build', uri),
+  ).pipe(
+    Effect.catch((err) =>
+      Effect.sync(() => {
+        createLog(channel).warn(`${warnLabel}: ${toErrorMessage(err)}`);
+      }),
+    ),
+  );
 
 /**
  * Open a file, compile if it is TeX, and display the resulting PDF.
@@ -119,7 +129,7 @@ export async function openBuildDisplayIfTex(
     runtime,
   );
   if (prepared.kind !== 'latex-ready') return prepared.delivered;
-  return scheduleViewerDisplay();
+  return runtime.runPromise(scheduleViewerDisplay);
 }
 
 /**
@@ -146,9 +156,9 @@ export async function prepareBuildDisplay(
   if (prepared.kind !== 'latex-ready') return prepared.delivered;
 
   if (options.scheduleViewer !== false) {
-    // `scheduleViewerDisplay` always settles to a boolean, so this is a
-    // deliberate detached side effect rather than an unhandled promise.
-    void scheduleViewerDisplay();
+    // `scheduleViewerDisplay` never fails, so this is a deliberate detached
+    // side effect rather than an unhandled promise.
+    runtime.runFork(scheduleViewerDisplay);
   }
   return true;
 }
@@ -163,7 +173,8 @@ async function prepareFileForDisplay(
 ): Promise<PrepareFileForDisplayResult> {
   const absolutePath = fileLocation.absolutePath;
 
-  const exists = await AbsoluteFS.exists(absolutePath);
+  const fs = await runtime.runPromise(Effect.service(FileSystem.FileSystem));
+  const exists = await runtime.runPromise(fs.exists(absolutePath));
   if (!exists) {
     void showLoggedMessage(CHANNEL, `File not found: ${absolutePath}`);
     return { kind: 'done', delivered: false };
@@ -210,7 +221,9 @@ async function prepareLatexBuild(
   await vscode.window.showTextDocument(doc, { preview: true, preserveFocus });
 
   if (fileLocation.kind === 'workspace') {
-    await invokeLatexWorkshopBuild(uri, CHANNEL, 'LaTeX Workshop build failed');
+    await runtime.runPromise(
+      invokeLatexWorkshopBuild(uri, CHANNEL, 'LaTeX Workshop build failed'),
+    );
     return true;
   }
 
@@ -243,29 +256,53 @@ async function prepareLatexBuild(
 }
 
 /**
+ * The refresh that follows a successful viewer open, delayed so LaTeX Workshop
+ * has rendered the PDF it was asked for. Detached when scheduled: it fires
+ * long after the caller that scheduled it has moved on.
+ */
+const scheduleViewerRefresh: Effect.Effect<void> = Effect.gen(function* () {
+  yield* Effect.sleep(LATEX_VIEWER_REFRESH_DELAY_MS);
+  yield* vscodeCommand(() =>
+    vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
+  ).pipe(
+    Effect.catch((err) =>
+      Effect.sync(() => {
+        log.warn(`Viewer refresh failed: ${toErrorMessage(err)}`);
+      }),
+    ),
+  );
+});
+
+/**
  * Schedule the PDF viewer open for the current LaTeX Workshop document/root.
  *
  * `latex-workshop.view` is argument-free and acts on LaTeX Workshop's current
  * context, so callers that prepare a batch of files should schedule this only
  * once, after the intended final file has been shown and built.
  *
- * Resolves `true` when `latex-workshop.view` accepts the open request, and
+ * Settles to `true` when `latex-workshop.view` accepts the open request, and
  * `false` when it rejects, so the caller can report viewer non-delivery.
  */
-export async function scheduleViewerDisplay(): Promise<boolean> {
-  await sleep(LATEX_VIEWER_OPEN_DELAY_MS);
-  try {
-    await vscode.commands.executeCommand('latex-workshop.view');
-    void sleep(LATEX_VIEWER_REFRESH_DELAY_MS).then(async () => {
-      try {
-        await vscode.commands.executeCommand('latex-workshop.refresh-viewer');
-      } catch (err) {
-        log.warn(`Viewer refresh failed: ${toErrorMessage(err)}`);
-      }
-    });
-    return true;
-  } catch (err) {
-    log.warn(`Viewer display failed: ${toErrorMessage(err)}`);
-    return false;
-  }
-}
+export const scheduleViewerDisplay: Effect.Effect<boolean> = Effect.gen(
+  function* () {
+    yield* Effect.sleep(LATEX_VIEWER_OPEN_DELAY_MS);
+    return yield* vscodeCommand(() =>
+      vscode.commands.executeCommand('latex-workshop.view'),
+    ).pipe(
+      // The refresh is scheduled only once the open has settled: a viewer that
+      // never opened has nothing to refresh (#10556). It starts immediately so
+      // its delay runs from the settlement, as the detached timer it replaces
+      // did, rather than from whenever a fiber next gets the scheduler.
+      Effect.tap(() =>
+        Effect.forkDetach(scheduleViewerRefresh, { startImmediately: true }),
+      ),
+      Effect.as(true),
+      Effect.catch((err) =>
+        Effect.sync((): boolean => {
+          log.warn(`Viewer display failed: ${toErrorMessage(err)}`);
+          return false;
+        }),
+      ),
+    );
+  },
+);

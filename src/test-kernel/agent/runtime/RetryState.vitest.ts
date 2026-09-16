@@ -72,6 +72,8 @@ import {
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -377,7 +379,14 @@ const invokeOn = ({ layer, state }: InvokerKit) =>
   Effect.gen(function* () {
     const invoker = yield* ModelInvoker;
     return yield* invoker.invoke(state, REQUEST);
-  }).pipe(Effect.provide(layer));
+  }).pipe(
+    // `invoke`'s debug-object sink writes through the process `FileSystem`;
+    // this suite runs on `it.effect`'s own runtime, so the service comes from
+    // the Node layer rather than the installed platform.
+    Effect.provide(layer),
+    Effect.provide(nodePlatformLayer),
+    Effect.provide(testHttpClientLayer),
+  );
 
 /** An Error carrying the HTTP status/body shape the classifiers read. */
 function httpError(

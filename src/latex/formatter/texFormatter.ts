@@ -51,18 +51,3 @@ export function resolveLatexFormatter(): LatexFormatter | null {
   const selected = LATEX_FORMATTERS[formatter] ?? LATEX_FORMATTERS.latexindent;
   return { ...selected, configPath: getConfig<string>(selected.configKey, '') };
 }
-
-/**
- * Format one file with the configured formatter. `workspaceRoot` is the root
- * a relative `filePath` resolves against and the cwd the tool runs in — the
- * caller's session root, held as data.
- */
-export async function runLatexFormatter(
-  filePath: string,
-  workspaceRoot: string | undefined,
-): Promise<boolean> {
-  const formatter = resolveLatexFormatter();
-  return formatter
-    ? formatter.run(filePath, workspaceRoot, formatter.configPath)
-    : true;
-}

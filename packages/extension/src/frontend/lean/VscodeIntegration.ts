@@ -12,7 +12,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { Data, Effect, Result } from 'effect';
-import { currentSession } from '@agent/runtime';
 
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -31,12 +30,12 @@ import {
   type PlainTermGoal,
 } from '@tools/lean/leanTypes';
 import {
+  listLeanServers,
   registerLeanServer,
   unregisterLeanServer,
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
 import type { LeanLanguageServicesShape } from '@tools/lean/leanLanguageServices';
-import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -109,21 +108,21 @@ const LEAN_FEATURE_PROJECT_COMMANDS = new Set<LeanProjectCommand>([
   'fetch_file_cache',
 ]);
 
-const knownExtensionServers = new Set<string>();
-
 /**
  * Record a workspace folder as having an active VS Code-mediated Lean
  * server. Idempotent — called from every code path that successfully
  * reaches the leanprover.lean4 client provider, so the dashboard reflects
- * actual usage rather than a one-shot snapshot.
+ * actual usage rather than a one-shot snapshot. The registry is the one
+ * store of which servers exist: an entry already there is refreshed rather
+ * than registered again (registering restarts its uptime clock), and an
+ * entry dropped elsewhere is registered afresh.
  */
 function noteVscodeLeanServer(workspaceRoot: string): void {
   const id = `vscode:${workspaceRoot}`;
-  if (knownExtensionServers.has(id)) {
+  if (listLeanServers().some((server) => server.id === id)) {
     updateLeanServer(id, { status: 'running' });
     return;
   }
-  knownExtensionServers.add(id);
   registerLeanServer({
     id,
     workspaceRoot,
@@ -143,10 +142,9 @@ function workspaceRootForFile(absolutePath: string): string {
  * Clear all VS Code-mediated entries — called on extension deactivation.
  */
 export function clearVscodeLeanServerEntries(): void {
-  for (const id of knownExtensionServers) {
-    unregisterLeanServer(id);
+  for (const server of listLeanServers()) {
+    if (server.mode === 'vscode-extension') unregisterLeanServer(server.id);
   }
-  knownExtensionServers.clear();
 }
 
 /**
@@ -221,10 +219,8 @@ function toLeanDiagnostic(d: vscode.Diagnostic): LeanDiagnostic {
  * Get diagnostics for a Lean file using VS Code's diagnostics API.
  * This returns diagnostics from the Lean 4 extension's LSP.
  */
-function getDiagnostics(filePath: string): LeanDiagnostic[] {
-  const uri = vscode.Uri.file(
-    workspaceAbsolutePath(currentSession().roots.workspace, filePath),
-  );
+function getDiagnostics(absolutePath: string): LeanDiagnostic[] {
+  const uri = vscode.Uri.file(absolutePath);
   const directLookup = vscode.languages.getDiagnostics(uri);
   if (directLookup.length > 0) {
     return directLookup.map(toLeanDiagnostic);
@@ -295,11 +291,7 @@ function executeFileCommand(
   filePath: string,
 ): Effect.Effect<boolean> {
   return Effect.gen(function* () {
-    yield* openInEditor(
-      vscode.Uri.file(
-        workspaceAbsolutePath(currentSession().roots.workspace, filePath),
-      ),
-    );
+    yield* openInEditor(vscode.Uri.file(filePath));
     yield* getClientProvider(globalState);
     yield* executeLeanCommand(FILE_COMMAND_VSCODE_IDS[command]);
     return true;
@@ -375,16 +367,12 @@ function getClientProvider(
  */
 function sendPositionRequest<T>(
   globalState: StateStore,
-  filePath: string,
+  absolutePath: string,
   line: number,
   column: number,
   method: string,
 ): Effect.Effect<LspResult<T>> {
   return Effect.gen(function* () {
-    const absolutePath = workspaceAbsolutePath(
-      currentSession().roots.workspace,
-      filePath,
-    );
     const uri = vscode.Uri.file(absolutePath);
     const leanUri = createLeanFileUri(absolutePath);
 
@@ -441,78 +429,14 @@ function sendPositionRequest<T>(
 }
 
 /**
- * Get the proof goal state at a specific position in a Lean file.
- * @param line - 0-indexed line number
- * @param column - 0-indexed column number
- */
-function getGoalState(
-  globalState: StateStore,
-  filePath: string,
-  line: number,
-  column: number,
-): Effect.Effect<LspResult<PlainGoal>> {
-  return sendPositionRequest<PlainGoal>(
-    globalState,
-    filePath,
-    line,
-    column,
-    '$/lean/plainGoal',
-  );
-}
-
-/**
- * Get the expected type (term goal) at a specific position in a Lean file.
- * @param line - 0-indexed line number
- * @param column - 0-indexed column number
- */
-function getTermGoal(
-  globalState: StateStore,
-  filePath: string,
-  line: number,
-  column: number,
-): Effect.Effect<LspResult<PlainTermGoal>> {
-  return sendPositionRequest<PlainTermGoal>(
-    globalState,
-    filePath,
-    line,
-    column,
-    '$/lean/plainTermGoal',
-  );
-}
-
-/**
- * Get hover information (type + docs) at a specific position in a Lean file.
- * @param line - 0-indexed line number
- * @param column - 0-indexed column number
- */
-function getHoverInfo(
-  globalState: StateStore,
-  filePath: string,
-  line: number,
-  column: number,
-): Effect.Effect<LspResult<LspHover>> {
-  return sendPositionRequest<LspHover>(
-    globalState,
-    filePath,
-    line,
-    column,
-    'textDocument/hover',
-  );
-}
-
-/**
  * Open a Lean file, wait for diagnostics, and return them.
  * The file that could not be opened is the `file_missing` answer; a rejected
  * host call fails the effect.
  */
 function fetchDiagnosticsForFile(
-  file: string,
+  absolutePath: string,
 ): Effect.Effect<FetchDiagnosticsResult> {
   return Effect.gen(function* () {
-    const absolutePath = workspaceAbsolutePath(
-      currentSession().roots.workspace,
-      file,
-    );
     // Subscribed before the file is opened, so an update the open itself
     // triggers is not missed. `Effect.sync` starts that wait here; the
     // program awaits the same promise below.
@@ -553,12 +477,9 @@ function navigateToFirstError(
   if (!firstError) return Effect.void;
   // `openFileInEditor` reports a refusal by returning nothing, having
   // already logged it, so this navigation has no failure of its own.
-  return Effect.promise(async () => {
-    await openFileInEditor(
-      workspaceAbsolutePath(currentSession().roots.workspace, filePath),
-      { line: firstError.range.start.line + 1 },
-    );
-  });
+  return Effect.promise(() =>
+    openFileInEditor(filePath, { line: firstError.range.start.line + 1 }),
+  );
 }
 
 function executeProjectCommand(
@@ -593,12 +514,32 @@ export function createVscodeLeanLanguageServices(
   return Object.freeze({
     executeFileCommand: (command, filePath) =>
       executeFileCommand(globalState, command, filePath),
+    // Positions are 0-indexed line and column; each of the three position
+    // queries below names the Lean 4 extension's own LSP method.
     getGoalState: (filePath, line, column) =>
-      getGoalState(globalState, filePath, line, column),
+      sendPositionRequest<PlainGoal>(
+        globalState,
+        filePath,
+        line,
+        column,
+        '$/lean/plainGoal',
+      ),
     getTermGoal: (filePath, line, column) =>
-      getTermGoal(globalState, filePath, line, column),
+      sendPositionRequest<PlainTermGoal>(
+        globalState,
+        filePath,
+        line,
+        column,
+        '$/lean/plainTermGoal',
+      ),
     getHoverInfo: (filePath, line, column) =>
-      getHoverInfo(globalState, filePath, line, column),
+      sendPositionRequest<LspHover>(
+        globalState,
+        filePath,
+        line,
+        column,
+        'textDocument/hover',
+      ),
     fetchDiagnosticsForFile,
     navigateToFirstError,
     executeProjectCommand: (command) =>

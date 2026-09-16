@@ -36,8 +36,6 @@ export {
   invalidateRemoteAgentsAfterSignOut,
   // Typed data options
   computeAgentOptionsData,
-  // Key helpers
-  getRosterAgent,
   // Source helpers
   isRemoteAgent,
   // Visible agents (for dropdowns and tools)

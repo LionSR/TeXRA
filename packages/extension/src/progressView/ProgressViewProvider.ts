@@ -21,7 +21,7 @@ import {
   PdfOpenFailed,
   type SessionHandle,
 } from '@agent/runtime';
-import { getAuthStatus } from '@commands/auth/authCommands';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import {
   BundledViewContentProvider,
@@ -64,6 +64,7 @@ import { getLinterMessages } from '@frontend/latex/linter';
 import { AgentReviewService } from '@frontend/review/AgentReviewService';
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
@@ -135,6 +136,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
+    /** The platform state port, wrapped once by the extension root from the
+     *  editor's global `Memento`. */
+    private readonly globalState: StateStore,
     private readonly secrets: PlatformSecrets,
     /** This view's handle on the process runtime, handed down by the host
      *  entry for the session edges below. */
@@ -151,7 +155,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
     this.onboardingFunnel = new OnboardingFunnelRefresher({
       hasCredential: () => hasAnyUsableSetupCredential(secrets),
-      flags: context.globalState,
+      flags: globalState,
       apply: (transition) => {
         this.snapshot.setOnboarding(transition.state);
         if (!transition.selectSetupAgent) return;
@@ -181,7 +185,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const roots = session.roots;
     this.snapshot = createHostSnapshotSource({
       project: projectDisplayOf(session.roots.storage, roots.workspace),
-      globalState: context.globalState,
+      globalState,
       workspaceState: roots.workspaceState,
       secrets,
       // One session per extension host: the calling frame is this session's.
@@ -218,9 +222,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               cause,
             }),
         }),
+      // Only the authenticated flag feeds the login banner, so this
+      // deliberately skips the profile and tier round-trips the settings view's
+      // profile message makes.
       isAuthenticated: () =>
         Effect.tryPromise({
-          try: async () => (await getAuthStatus()).authenticated,
+          try: () => SupabaseClient.isAuthenticated(),
           catch: (cause) =>
             new HostSnapshotReadFailed({
               member: 'isAuthenticated',
@@ -323,7 +330,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       session,
       runtime: this.runtime,
       extensionPath: context.extensionPath,
-      globalState: context.globalState,
+      globalState,
       secrets,
       snapshot: this.snapshot,
       draftRequests: new HostDraftRequests(),
@@ -340,7 +347,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // proposal, retry, question) stay pending in the fold until the view's
     // request row decides them.
     const detachHostInteractions = session.interactions.use({
-      ...createAgentPresentationHost(this, context.globalState, this.runtime),
+      ...createAgentPresentationHost(this, globalState, this.runtime),
       readDiagnostics: getLinterMessages,
       addCriticism: (payload) => ({
         accepted: pushManualCriticism(payload),

@@ -258,23 +258,6 @@ export function assertWritable(
 }
 
 /**
- * Join a workspace-relative base path with a child segment and ensure the
- * result stays within the root directory.
- */
-export function joinWorkspaceRelativePath(
-  baseRelative: string,
-  child: string,
-  root?: string,
-): WorkspacePathResolution {
-  // Use posix.join since baseRelative and child are POSIX-normalized.
-  // path.join would reintroduce backslashes on Windows.
-  return resolveWorkspaceRelativePath(
-    path.posix.join(baseRelative || '.', child),
-    root,
-  );
-}
-
-/**
  * Common pattern for resolving and formatting paths.
  * Returns `path` (resolution with relative/absolute) and `display` (formatted string).
  */

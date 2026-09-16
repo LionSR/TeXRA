@@ -31,18 +31,12 @@ function parseGraphicspath(content: string): string[] {
   const graphicspathPattern = /\\graphicspath\s*\{((?:\s*\{[^{}]+\}\s*)+)\}/g;
   const pathPattern = /\{([^{}]+)\}/g;
 
-  const extractedPaths: string[] = [];
-  for (const outerMatch of content.matchAll(graphicspathPattern)) {
-    for (const pathMatch of outerMatch[1].matchAll(pathPattern)) {
-      const trimmed = pathMatch[1].trim();
-      if (!trimmed) {
-        continue;
-      }
-      extractedPaths.push(trimmed.endsWith('/') ? trimmed : `${trimmed}/`);
-    }
-  }
-
-  return extractedPaths;
+  return [...content.matchAll(graphicspathPattern)].flatMap((outerMatch) =>
+    [...outerMatch[1].matchAll(pathPattern)]
+      .map((pathMatch) => pathMatch[1].trim())
+      .filter((trimmed) => trimmed !== '')
+      .map((trimmed) => (trimmed.endsWith('/') ? trimmed : `${trimmed}/`)),
+  );
 }
 
 /**
@@ -73,7 +67,6 @@ export const extractFigurePathsFromLatex = Effect.fn(
   'latex.extractFigurePathsFromLatex',
 )(function* (latexFileLocation: FileLocation) {
   const latexDir = yield* resolveLatexDir(latexFileLocation.absolutePath);
-  const graphicspaths = [latexDir]; // Start with the directory of the LaTeX file
 
   // Regular expressions to match figure inclusion commands
   const figurePatterns = [
@@ -93,10 +86,13 @@ export const extractFigurePathsFromLatex = Effect.fn(
   // comments and escaped `\%`, unlike a naive whole-line strip).
   const processedContent = stripLatexComments(content);
 
-  // Parse graphicspaths
-  for (const p of parseGraphicspath(processedContent)) {
-    graphicspaths.push(joinLatexPath(latexDir, p));
-  }
+  // The LaTeX file's own directory first, then its \graphicspath entries.
+  const graphicspaths = [
+    latexDir,
+    ...parseGraphicspath(processedContent).map((p) =>
+      joinLatexPath(latexDir, p),
+    ),
+  ];
 
   const referenced = figurePatterns.flatMap((pattern) =>
     [...processedContent.matchAll(pattern)].map((match) => match[1]),

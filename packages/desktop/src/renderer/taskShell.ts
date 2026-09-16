@@ -95,22 +95,18 @@ function sidebarAction(options: {
  */
 function projectBadge(view: SessionView): TemplateResult | typeof nothing {
   const { waiting, interrupted, running } = view.rollup;
-  if (waiting > 0) {
-    return html`<wa-badge class="task-project-badge" variant="warning" pill
-      >${waiting}</wa-badge
-    >`;
-  }
-  if (interrupted > 0) {
-    return html`<wa-badge class="task-project-badge" variant="danger" pill
-      >${interrupted}</wa-badge
-    >`;
-  }
-  if (running > 0) {
-    return html`<wa-badge class="task-project-badge" variant="success" pill
-      >${running}</wa-badge
-    >`;
-  }
-  return nothing;
+  const badge = (
+    [
+      ['warning', waiting],
+      ['danger', interrupted],
+      ['success', running],
+    ] as const
+  ).find(([, count]) => count > 0);
+  if (!badge) return nothing;
+  const [variant, count] = badge;
+  return html`<wa-badge class="task-project-badge" variant=${variant} pill
+    >${count}</wa-badge
+  >`;
 }
 
 function runTabsTemplate(
@@ -490,12 +486,10 @@ export function workbenchPanelDomId(
 
 /** Moves focus to a tab's activate button within its tab strip. */
 function focusTabButton(tablist: HTMLElement, tabId: string): void {
-  for (const tab of tablist.querySelectorAll('.task-workbench-tab')) {
-    if ((tab as HTMLElement).dataset.tabId === tabId) {
-      tab.querySelector<HTMLElement>('.task-workbench-tab-activate')?.focus();
-      return;
-    }
-  }
+  const tab = [
+    ...tablist.querySelectorAll<HTMLElement>('.task-workbench-tab'),
+  ].find((candidate) => candidate.dataset.tabId === tabId);
+  tab?.querySelector<HTMLElement>('.task-workbench-tab-activate')?.focus();
 }
 
 /**

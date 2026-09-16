@@ -11,6 +11,7 @@ import type { DiffSource } from '@hosts/uiHosts';
 import { effectRuntime } from '@platform/processRuntime';
 
 import type { RunId } from '@shared/schemas';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -194,6 +195,13 @@ function createApprovalFixture(
           return yield* modules.requestToolEditApproval(request).pipe(
             Effect.provide(
               nativeToolTestLayer({
+                // The run's roots, as a dispatched tool call carries them. The
+                // workspace is this suite's own: its resolution is mocked to
+                // `/workspace`, and the display path an edit is titled with is
+                // relative to the call's root.
+                roots: createFakeWorkspaceRoots({
+                  workspacePath: options.workspacePath ?? '/workspace',
+                }),
                 workingDirectory: options.workspacePath ?? '/workspace',
                 run: { runId, session, toolPolicy: {} },
               }),
@@ -565,12 +573,15 @@ describe('desktop tool edit approval', () => {
         yield* Effect.tryPromise(() =>
           vi.waitFor(() => expect(runLatexdiff).toHaveBeenCalledOnce()),
         );
+        // The controller injects its own display callback so it can register
+        // the host build and join it at release, so the second argument is
+        // checked structurally instead of against the host stub by identity.
         expect(runLatexdiff).toHaveBeenCalledWith(
           expect.objectContaining({ requestId: request.requestId }),
-          {
+          expect.objectContaining({
             subtype: 'ONLYCHANGEDPAGE',
-            openBuildDisplay,
-          },
+            openBuildDisplay: expect.any(Function),
+          }),
         );
         expect(result.pollUnsafe()).toBeUndefined();
 

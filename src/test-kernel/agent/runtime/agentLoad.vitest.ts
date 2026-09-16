@@ -18,7 +18,10 @@ import {
   loadAgentSettingAndPrompts,
   validateAgentYamlContent,
 } from '@agent/runtime/agentLoad';
-import type { AgentDirectoriesPort } from '@platform/interfaces';
+import {
+  AgentDirectoriesFailed,
+  type AgentDirectoriesPort,
+} from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { AgentCategory } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -221,12 +224,13 @@ describe('agent registry load state', () => {
     scans: number;
   }): AgentDirectoriesPort {
     return {
-      custom: async () => {
-        counter.scans += 1;
-        return agentDir;
-      },
-      builtIn: async () => agentDir,
-      builtInToolUse: async () => agentDir,
+      custom: () =>
+        Effect.sync(() => {
+          counter.scans += 1;
+          return agentDir;
+        }),
+      builtIn: () => Effect.sync(() => agentDir),
+      builtInToolUse: () => Effect.sync(() => agentDir),
     };
   }
 
@@ -281,11 +285,16 @@ describe('agent registry load state', () => {
       const scanFailure = new Error('agent directory unavailable');
       yield* Effect.promise(() =>
         installDirectories({
-          custom: async () => {
-            throw scanFailure;
-          },
-          builtIn: async () => agentDir,
-          builtInToolUse: async () => agentDir,
+          custom: () =>
+            Effect.fail(
+              new AgentDirectoriesFailed({
+                source: 'custom',
+                message: scanFailure.message,
+                cause: scanFailure,
+              }),
+            ),
+          builtIn: () => Effect.sync(() => agentDir),
+          builtInToolUse: () => Effect.sync(() => agentDir),
         }),
       );
 

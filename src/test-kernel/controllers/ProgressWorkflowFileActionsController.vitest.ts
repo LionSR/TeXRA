@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  ProgressWorkflowFileActionsController,
-  type ProgressWorkflowFileActionsControllerDeps,
-} from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import type { RunId } from '@shared/schemas';
 
 const RUN = 'ab12cd' as RunId;
 
 type LogEntry = { message: string; error: unknown };
+
+/** The controller's deps are file-local; derive them from its constructor. */
+type ProgressWorkflowFileActionsControllerDeps = ConstructorParameters<
+  typeof ProgressWorkflowFileActionsController
+>[0];
 
 type RecordingHost = ProgressWorkflowFileActionsControllerDeps['host'] & {
   infos: string[];

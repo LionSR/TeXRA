@@ -2,8 +2,8 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
-import { Context, Data, Layer } from 'effect';
-import type { RunId } from '@shared/schemas';
+import { Context, Data, Effect, Layer } from 'effect';
+import type { AgentSource, RunId } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
 // Disposable
@@ -36,11 +36,9 @@ export interface ConfigInspection<T = unknown> {
  * store's: a filesystem error under the config path, or a config file whose
  * contents are no longer a JSON object.
  *
- * {@link ConfigProvider.update} itself is still `Promise`-shaped, because a
- * settings slot write travels with the state slot beside it
- * (`settingsAccess.writeSlot`) and with the provider routing that reads it —
- * the same fifty-file plane the credential lane measured and stopped at. This
- * is the tag its Effect-side callers raise until that plane moves.
+ * {@link ConfigProvider.update} raises it as the failure of the write itself,
+ * so a caller inside a program composes the write rather than adopting a
+ * rejection it cannot type.
  */
 export class ConfigWriteFailed extends Data.TaggedError('ConfigWriteFailed')<{
   readonly key: string;
@@ -61,7 +59,17 @@ export interface ConfigProvider {
    * for keys the catalog does not own.
    */
   get<T>(key: string, defaultValue?: T): T;
-  update<T>(key: string, value: T, target?: ConfigTarget): Promise<void>;
+  /**
+   * Persist one value to the target's store. The write is an `Effect` so it
+   * composes directly into the caller's program: the store's own write is an
+   * Effect, and a Promise face here could only be an injected runner that
+   * executes that Effect on the caller's behalf.
+   */
+  update<T>(
+    key: string,
+    value: T,
+    target?: ConfigTarget,
+  ): Effect.Effect<void, ConfigWriteFailed>;
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined;
   isExplicitlySet(key: string): boolean;
 }
@@ -75,9 +83,10 @@ export interface ConfigProvider {
  * extension, and the shared `JsonStore`'s filesystem or not-JSON failure on
  * the desktop, the CLI and the agent package.
  *
- * {@link StateStore.update} keeps `vscode.Memento`'s `PromiseLike` shape for
+ * {@link StateStore.update} raises it as the failure of the write itself, for
  * the same reason {@link ConfigWriteFailed} exists: the writes travel with the
- * config slots beside them. This is the tag its Effect-side callers raise.
+ * config slots beside them, so a caller inside a program composes the write
+ * rather than adopting a rejection it cannot type.
  */
 export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
   readonly key: string;
@@ -87,18 +96,22 @@ export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
 
 /**
  * Platform key-value state store interface.
- * Matches the vscode.Memento surface for compatibility.
+ *
+ * `get` keeps `vscode.Memento`'s synchronous shape. `update` does not: it is
+ * an `Effect` so it composes directly into the caller's program, for the same
+ * reason {@link ConfigProvider.update} is one. An implementation wrapping a
+ * host `Memento`, whose own `update` is a `PromiseLike`, is the one place that
+ * adopts the promise and raises {@link StateWriteFailed} for it.
  */
 export interface StateStore {
   get<T>(key: string, defaultValue?: T): T;
-  update(key: string, value: unknown): PromiseLike<void>;
+  update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
 }
 
 /**
  * The process's global state store as an Effect service
  * (`@texra/platform/AppState`, injection plan §5 row 2), provided once by the
- * composition root through `installProcessRuntime`. The shape stays the
- * synchronous `StateStore`; Effect-typing it is its own step.
+ * composition root through `installProcessRuntime`.
  *
  * `layer` takes the store itself, for the same reason `Secrets.layer` does:
  * every root opens its state store before installing the runtime that serves
@@ -164,14 +177,6 @@ export interface FileSystemProvider {
    * files (where atomic rename would replace a user's symlink).
    */
   writeFileAtomic(path: string, content: Uint8Array): Promise<void>;
-  /**
-   * Make `path` appear complete and durable in one step: stage the content
-   * beside it, fsync, then rename into place. For names that belong to
-   * exactly one writer (a run-lease claim), where `writeFileAtomic`'s
-   * replace-existing semantics are not wanted and a torn file must never be
-   * observable.
-   */
-  publishFile(path: string, content: Uint8Array): Promise<void>;
   /** Remove a directory only if it is empty; rejects with `ENOTEMPTY`. */
   removeEmptyDirectory(path: string): Promise<void>;
   appendFile(path: string, content: Uint8Array): Promise<void>;
@@ -240,11 +245,35 @@ export type ToolMissingHandler = (
 // Agent directories
 // ---------------------------------------------------------------------------
 
-/** Host-provided agent directory paths. */
+/**
+ * A host could not resolve one of its agent directories: the configured
+ * custom directory is not an absolute path, its parent is gone, it cannot be
+ * created, or the platform refused the filesystem call behind either.
+ *
+ * {@link AgentDirectoriesPort}'s three readers raise it as the failure of the
+ * read itself, for the same reason {@link StateWriteFailed} exists: the reads
+ * travel with the agent-catalog load beside them, so a caller inside a program
+ * composes the read rather than adopting a rejection it cannot type.
+ */
+export class AgentDirectoriesFailed extends Data.TaggedError(
+  'AgentDirectoriesFailed',
+)<{
+  /** Which of the port's readers failed. */
+  readonly source: AgentSource;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/**
+ * Host-provided agent directory paths. All three are `Effect`s (not Promises)
+ * so the one reader that can fault — `custom`, which creates the directory it
+ * resolves — carries its failure into the catalog load that asked for it
+ * instead of rejecting an await that cannot name it.
+ */
 export interface AgentDirectoriesPort {
-  custom(): Promise<string>;
-  builtIn(): Promise<string>;
-  builtInToolUse(): Promise<string>;
+  custom(): Effect.Effect<string, AgentDirectoriesFailed>;
+  builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
+  builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,15 +292,53 @@ export interface RecoveryContinuation {
   readonly kind: 'recovery';
 }
 
+/**
+ * A host's resume attempt faulted before it could answer. Distinct from the
+ * `false` {@link AgentResumePort.tryResumeRun} answers: `false` is this
+ * process declining a run it can classify, while this is the attempt itself
+ * failing, which the caller cannot read off the boolean.
+ */
+export class AgentResumeFailed extends Data.TaggedError('AgentResumeFailed')<{
+  readonly runId: RunId;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 export interface AgentResumePort {
   /**
    * Attempt to resume a WAITING / children-running stream from its
-   * persisted snapshot. Returns true if the host accepted the request
+   * persisted snapshot. Resolves true if the host accepted the request
    * (i.e. the resume command dispatched successfully).
    *
-   * Returns false if the stream cannot be resumed (no snapshot found,
+   * Resolves false if the stream cannot be resumed (no snapshot found,
    * already active/resuming, etc.) — callers should fall back to leaving
-   * the message queued for the next manual resume.
+   * the message queued for the next manual resume. The failure channel is
+   * reserved for the attempt faulting, so a caller that only wants the
+   * retry decision still learns when the decision itself could not be made.
    */
-  tryResumeRun(runId: RunId, recovery?: RecoveryContinuation): Promise<boolean>;
+  tryResumeRun(
+    runId: RunId,
+    recovery?: RecoveryContinuation,
+  ): Effect.Effect<boolean, AgentResumeFailed>;
+}
+
+/**
+ * The process's agent-resume port as an Effect service
+ * (`@texra/platform/AgentResume`), provided once by the composition root
+ * through `installProcessRuntime`. The shape is the port itself: a program
+ * that resumes a persisted run yields the port's own Effect and matches
+ * {@link AgentResumeFailed}.
+ *
+ * `layer` takes the port itself, for the same reason `Secrets.layer` does:
+ * every root builds its resume port before it installs the runtime that
+ * serves it, so the service is the value the root already holds, not a thunk
+ * resolved per member call.
+ */
+export class AgentResume extends Context.Service<
+  AgentResume,
+  AgentResumePort
+>()('@texra/platform/AgentResume') {
+  static layer(port: AgentResumePort): Layer.Layer<AgentResume> {
+    return Layer.succeed(AgentResume)(port);
+  }
 }

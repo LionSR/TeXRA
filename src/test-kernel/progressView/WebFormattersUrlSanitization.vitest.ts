@@ -1,5 +1,5 @@
-// Regression coverage for issue #7230 at the rendering layer: the web
-// formatters must never emit a live anchor for a dangerous scheme even when
+// Regression coverage for issue #7230 at the rendering layer: the web-search
+// formatter must never emit a live anchor for a dangerous scheme even when
 // the schema layer has already been sanitized.
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -7,11 +7,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
 } from '@shared/schemas';
-import {
-  projectTranscriptRow,
-  type WebFetchRow,
-  type WebSearchRow,
-} from '@shared/transcript';
+import { projectTranscriptRow, type WebSearchRow } from '@shared/transcript';
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 type WebFormatters =
@@ -23,11 +19,10 @@ useLitComponentTestDom(
 );
 
 let formatWebSearchTemplate: WebFormatters['formatWebSearchTemplate'];
-let formatWebFetchTemplate: WebFormatters['formatWebFetchTemplate'];
 let render: typeof import('lit').render;
 
 beforeAll(async () => {
-  ({ formatWebSearchTemplate, formatWebFetchTemplate } =
+  ({ formatWebSearchTemplate } =
     await import('@progressView/frontend/formatters/logFormatters/toolFormatters/webFormatters'));
   ({ render } = await import('lit'));
 });
@@ -51,24 +46,6 @@ function webSearchRow(url: string): WebSearchRow {
   return projectTranscriptRow(entry) as WebSearchRow;
 }
 
-function webFetchRow(url: string): WebFetchRow {
-  const entry = StreamLogEntrySchema.parse({
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    seqNo: 1,
-    id: 'web-fetch-1',
-    text: '',
-    level: LOG_LEVELS.INFO,
-    timestamp: 1,
-    messageType: 'webFetch',
-    data: {
-      url,
-      title: 'Fetched page',
-      status: 'completed',
-    },
-  });
-  return projectTranscriptRow(entry) as WebFetchRow;
-}
-
 function renderTemplate(template: Parameters<typeof render>[0]): HTMLElement {
   const container = document.createElement('div');
   render(template, container);
@@ -82,7 +59,7 @@ const DANGEROUS_URLS = [
   'file:///etc/passwd',
 ];
 
-describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
+describe('web-search formatter: URL scheme sanitization', () => {
   describe('web_search results', () => {
     it.each(DANGEROUS_URLS)('never renders %s as a clickable href', (url) => {
       const container = renderTemplate(
@@ -127,31 +104,6 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
 
       const anchor = container.querySelector('a.web-search-link');
       expect(anchor?.getAttribute('href')).toBe(url);
-    });
-  });
-
-  describe('web_fetch payloads', () => {
-    it.each(DANGEROUS_URLS)('never renders %s as a clickable href', (url) => {
-      const container = renderTemplate(
-        formatWebFetchTemplate(webFetchRow(url)),
-      );
-
-      // The "URL:" section is only rendered when a safe URL survives
-      // sanitization, so a dangerous URL must produce no anchor at all.
-      expect(container.querySelectorAll('a').length).toBe(0);
-    });
-
-    it('renders a legitimate https URL as a real clickable href', () => {
-      const url = 'https://example.com/doc.pdf';
-
-      const container = renderTemplate(
-        formatWebFetchTemplate(webFetchRow(url)),
-      );
-
-      const anchor = container.querySelector('a.web-search-link');
-      expect(anchor).not.toBeNull();
-      expect(anchor?.getAttribute('href')).toBe(url);
-      expect(anchor?.textContent).toBe(url);
     });
   });
 });

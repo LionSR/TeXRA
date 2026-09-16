@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
 import * as agentRegistry from '@agent/index/agentRegistry';
+import { AuthPortError } from '@auth/authProgram';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
@@ -30,15 +31,19 @@ function createCoordinator() {
   const storedSession: { current: SupabaseSession | null } = { current: null };
   const createSessionFromCallback = vi.fn<
     DesktopAuthCoordinator['createSessionFromCallback']
-  >(async () => callbackSessionResult());
+  >(() => Effect.succeed(callbackSessionResult()));
   return {
     loadSession: vi.fn(async () => storedSession.current),
-    storeSession: vi.fn(async (session: SupabaseSession) => {
-      storedSession.current = session;
-    }),
-    clearSession: vi.fn(async () => {
-      storedSession.current = null;
-    }),
+    storeSession: vi.fn((session: SupabaseSession) =>
+      Effect.sync(() => {
+        storedSession.current = session;
+      }),
+    ),
+    clearSession: vi.fn(() =>
+      Effect.sync(() => {
+        storedSession.current = null;
+      }),
+    ),
     createSessionFromCallback,
     whenReady: vi.fn(async () => {}),
     ensureFreshToken: vi.fn(
@@ -151,10 +156,12 @@ function gateNextStoreSession(
 ) {
   const gate = createDeferred<void>();
   const storeSession = coordinator.storeSession.getMockImplementation();
-  coordinator.storeSession.mockImplementationOnce(async (session) => {
-    await gate.promise;
-    await storeSession?.(session);
-  });
+  coordinator.storeSession.mockImplementationOnce((session) =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => gate.promise);
+      if (storeSession) yield* storeSession(session);
+    }),
+  );
   return gate;
 }
 
@@ -163,10 +170,12 @@ function gateNextCallbackProcessing(
   coordinator: ReturnType<typeof createCoordinator>,
 ) {
   const gate = createDeferred<void>();
-  coordinator.createSessionFromCallback.mockImplementationOnce(async () => {
-    await gate.promise;
-    return callbackSessionResult();
-  });
+  coordinator.createSessionFromCallback.mockImplementationOnce(() =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => gate.promise);
+      return callbackSessionResult();
+    }),
+  );
   return gate;
 }
 
@@ -255,12 +264,14 @@ describe('desktop Supabase auth', () => {
     const events: string[] = [];
     const callbackState: DesktopAuthCallbackState = {
       hasPendingSignIn: vi.fn(() => false),
-      beginAuthAttempt: vi.fn(async () => {
+      beginAuthAttempt: vi.fn(() => {
         events.push('begin');
+        return Effect.void;
       }),
       matchesPendingNonce: vi.fn(() => false),
-      clearAwaitingCallback: vi.fn(async () => {
+      clearAwaitingCallback: vi.fn(() => {
         events.push('clear');
+        return Effect.void;
       }),
     };
     const oauthClient: DesktopOAuthClient = {
@@ -358,11 +369,13 @@ describe('desktop Supabase auth', () => {
       showErrorMessage,
       log,
     });
-    coordinator.createSessionFromCallback.mockResolvedValueOnce({
-      success: false,
-      error: 'The user closed the authorization page',
-      isAuthError: true,
-    });
+    coordinator.createSessionFromCallback.mockReturnValueOnce(
+      Effect.succeed({
+        success: false,
+        error: 'The user closed the authorization page',
+        isAuthError: true,
+      }),
+    );
     const completion = auth.signInAndWaitForSession(undefined, {
       timeoutMs: 1_000,
     });
@@ -397,8 +410,8 @@ describe('desktop Supabase auth', () => {
       ),
       log,
     });
-    coordinator.createSessionFromCallback.mockRejectedValueOnce(
-      new Error('callback failure'),
+    coordinator.createSessionFromCallback.mockReturnValueOnce(
+      Effect.fail(new AuthPortError({ cause: new Error('callback failure') })),
     );
     const completion = auth.signInAndWaitForSession(undefined, {
       timeoutMs: 1_000,
@@ -546,16 +559,18 @@ describe('desktop Supabase auth', () => {
         createLog(),
         stateStore,
       );
-      await initialState.beginAuthAttempt('11111111111111111111111111111111');
+      await effectRuntime().runPromise(
+        initialState.beginAuthAttempt('11111111111111111111111111111111'),
+      );
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
 
       const cleanup = createDeferred<void>();
       const update = stateStore.update.bind(stateStore);
-      vi.spyOn(stateStore, 'update').mockImplementationOnce(
-        async (key, value) => {
-          await cleanup.promise;
-          await update(key, value);
-        },
+      vi.spyOn(stateStore, 'update').mockImplementationOnce((key, value) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() => cleanup.promise);
+          yield* update(key, value);
+        }),
       );
 
       const recreatedState = createDesktopAuthCallbackState(
@@ -563,8 +578,8 @@ describe('desktop Supabase auth', () => {
         createLog(),
         stateStore,
       );
-      const beginNewAttempt = recreatedState.beginAuthAttempt(
-        '22222222222222222222222222222222',
+      const beginNewAttempt = effectRuntime().runPromise(
+        recreatedState.beginAuthAttempt('22222222222222222222222222222222'),
       );
       await vi.waitFor(() => {
         expect(stateStore.update).toHaveBeenCalledOnce();
@@ -820,8 +835,8 @@ describe('desktop Supabase auth', () => {
       showErrorMessage,
       log,
     });
-    coordinator.createSessionFromCallback.mockRejectedValueOnce(
-      new Error('network down'),
+    coordinator.createSessionFromCallback.mockReturnValueOnce(
+      Effect.fail(new AuthPortError({ cause: new Error('network down') })),
     );
 
     await auth.signIn();

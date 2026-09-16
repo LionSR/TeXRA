@@ -31,7 +31,7 @@ interface ProgressWorkflowFileActionsHost {
   logError?(message: string, error: unknown): void;
 }
 
-export interface ProgressWorkflowFileActionsControllerDeps {
+interface ProgressWorkflowFileActionsControllerDeps {
   state: ProgressWorkflowFileActionsState;
   host: ProgressWorkflowFileActionsHost;
   sendFollowUp(stream: RunId, text: string): Promise<void>;
@@ -199,14 +199,6 @@ export class ProgressWorkflowFileActionsController {
     if (!opened) {
       await this.deps.host.showInfo(`Label "${label}" not found.`);
     }
-  }
-
-  clearRunBackups(stream: RunId): void {
-    this.modelOutputBackups.delete(stream);
-  }
-
-  clearAllBackups(): void {
-    this.modelOutputBackups.clear();
   }
 
   private async executeWithBaseFile(

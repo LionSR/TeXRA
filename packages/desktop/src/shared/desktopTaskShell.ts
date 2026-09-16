@@ -177,8 +177,9 @@ function activateWorkbenchTab(
 }
 
 function tabId(kind: WorkbenchKind, target?: string): string {
-  if (WORKBENCH_KIND_META[kind].singleton) return `workbench:${kind}`;
-  return target ? `workbench:${kind}:${target}` : `workbench:${kind}`;
+  if (WORKBENCH_KIND_META[kind].singleton || !target)
+    return `workbench:${kind}`;
+  return `workbench:${kind}:${target}`;
 }
 
 function titleFor(kind: WorkbenchKind, target?: string): string {

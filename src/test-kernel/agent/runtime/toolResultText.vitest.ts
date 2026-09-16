@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - utils
 import {
+  formatAttachmentSummary,
   formatToolResultAsText,
-  formatToolResultTextWithAttachments,
 } from '@agent/runtime/run/toolResultText';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { ToolFileAttachment } from '@shared/schemas';
@@ -59,16 +59,14 @@ describe('formatToolResultAsText', () => {
   });
 });
 
-describe('formatToolResultTextWithAttachments', () => {
-  const attachments: ToolFileAttachment[] = [
-    { path: 'chart.png', mimeType: 'image/png' },
-  ];
-
-  it('appends the attachment summary when the handler can process attachments', () => {
-    const result = formatToolResultTextWithAttachments(
+describe('formatAttachmentSummary', () => {
+  it('appends the attachment summary to the result text', () => {
+    const attachments: ToolFileAttachment[] = [
+      { path: 'chart.png', mimeType: 'image/png' },
+    ];
+    const result = formatToolResultAsText(
       { status: 'executed', output: 'done' },
-      attachments,
-      true,
+      formatAttachmentSummary(attachments),
     );
     expect(result).toContain('done');
     expect(result).toContain('chart.png (image/png)');

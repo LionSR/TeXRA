@@ -42,6 +42,7 @@ import {
   isPreferXaiSubscription,
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
+import type { ConfigWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/unstable/http';
@@ -121,13 +122,25 @@ export interface SubscriptionProvider {
     unknown,
     HttpClient.HttpClient | Secrets
   >;
-  /** Promise-shaped, so the caller hands over the secret store it holds. */
-  signOut(secrets: PlatformSecrets): Promise<void>;
-  getStatus(secrets: PlatformSecrets): Promise<SubscriptionAccount>;
+  /**
+   * The sign-out program. A host runs it at its own edge; a failure is the
+   * provider's own auth error or the secret store's rejection.
+   */
+  signOut(secrets: PlatformSecrets): Effect.Effect<void, unknown>;
+  /**
+   * The signed-in status. Infallible: an unreadable store reports
+   * signed-out, with the cause logged by the probe.
+   */
+  getStatus(secrets: PlatformSecrets): Effect.Effect<SubscriptionAccount>;
   isPreferSubscription(): boolean;
+  /**
+   * Persist the preference and report the scope it landed in. An `Effect`, like
+   * every other write of a catalog-backed setting, so a host runs it at its own
+   * edge and owns the failure.
+   */
   setPreferSubscription(
     enabled: boolean,
-  ): Promise<SubscriptionPreferenceUpdate>;
+  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed>;
 }
 
 /** Fields the flow reads off a provider session; providers carry more. */
@@ -143,11 +156,11 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   readonly copyTarget: string;
   readonly modelFamily: string;
   readonly coordinator: (secrets: PlatformSecrets) => Coordinator & {
-    signOut(): Promise<void>;
+    signOut(): Effect.Effect<void, unknown>;
   };
   readonly getStatus: (
     secrets: PlatformSecrets,
-  ) => Promise<SubscriptionSessionStatus>;
+  ) => Effect.Effect<SubscriptionSessionStatus>;
   readonly loginWithDeviceCode: (options: {
     coordinator: Coordinator;
     onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
@@ -165,7 +178,7 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   readonly isPrefer: () => boolean;
   readonly setPrefer: (
     enabled: boolean,
-  ) => Promise<SubscriptionPreferenceUpdate>;
+  ) => Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed>;
 }
 
 /**
@@ -234,10 +247,11 @@ function defineSubscriptionProvider<
     signIn,
     signOut: (secrets: PlatformSecrets) =>
       bindings.coordinator(secrets).signOut(),
-    async getStatus(secrets: PlatformSecrets) {
-      const status = await bindings.getStatus(secrets);
-      return { ...status, label: bindings.accountLabel(status) };
-    },
+    getStatus: (secrets: PlatformSecrets) =>
+      Effect.map(bindings.getStatus(secrets), (status) => ({
+        ...status,
+        label: bindings.accountLabel(status),
+      })),
     isPreferSubscription: bindings.isPrefer,
     setPreferSubscription: bindings.setPrefer,
   });

@@ -38,15 +38,10 @@ export const INHERITED_AGENT_ROSTER: AgentRosterSelection = Object.freeze({
   kind: 'inherit',
 });
 
-/** Canonical delegation catalog shape: agent keys keyed by category. */
-const AgentDelegationScopeCanonicalSchema = z.record(
+/** Exact delegation catalog attached to a run, independent of durable UI state. */
+export const AgentDelegationScopeSchema = z.record(
   AgentCategorySchema,
   AgentKeyListSchema,
 );
 
-/** Exact delegation catalog attached to a run, independent of durable UI state. */
-export const AgentDelegationScopeSchema = AgentDelegationScopeCanonicalSchema;
-
-export type AgentDelegationScope = z.infer<
-  typeof AgentDelegationScopeCanonicalSchema
->;
+export type AgentDelegationScope = z.infer<typeof AgentDelegationScopeSchema>;

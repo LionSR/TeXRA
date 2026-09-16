@@ -53,7 +53,7 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
-import { defaultSession, type SessionHandle } from './SessionHandle';
+import type { SessionHandle } from './SessionHandle';
 import type { AgentRunServices } from './toolInjection';
 
 /**
@@ -78,11 +78,12 @@ export type ResumeRunResult =
 
 export interface ResumeRunOptions extends Pick<
   SubagentRunOptions,
-  | 'session'
   | 'approvalPromptsUnavailable'
   | 'onApprovalPolicyDenial'
   | 'runtimeUnavailableTools'
 > {
+  /** Session owning the resumed run's coordination state. */
+  readonly session: SessionHandle;
   /** Recovery ownership synchronously claimed by the submission boundary. */
   readonly recovery?: RecoveryContinuation;
   /** Monotone per-attempt cancellation signal: once true it stays true. */
@@ -139,7 +140,7 @@ export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
   runId: RunId,
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeRunResult, Error, ProcessServices> {
-  const session = options.session ?? defaultSession();
+  const session = options.session;
   const { runs } = session;
   if (
     options.isCancellationRequested?.() === true ||
@@ -155,7 +156,7 @@ export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
   }
   return yield* resumeRunWithRecoveryProvenance(
     runId,
-    { ...options, session, recovery },
+    { ...options, recovery },
     options.recovery == null,
   ).pipe(Effect.provideService(Runs, runs));
 }, Effect.uninterruptible);
@@ -195,12 +196,9 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
   runId: RunId,
   options: ResumeRunOptions,
 ) {
-  const session = options.session ?? defaultSession();
-  return yield* resumeRunWithRecoveryProvenance(
-    runId,
-    { ...options, session },
-    false,
-  ).pipe(Effect.provideService(Runs, session.runs));
+  return yield* resumeRunWithRecoveryProvenance(runId, options, false).pipe(
+    Effect.provideService(Runs, options.session.runs),
+  );
 }, Effect.uninterruptible);
 
 /** Resume preparation is one ordered program; checkpoint interpretation is unchanged. */
@@ -211,7 +209,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   options: ResumeRunOptions,
   recoveryIsProvisional: boolean,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
-  const session = options.session ?? defaultSession();
+  const session = options.session;
   const runs = yield* Runs;
   const cancelled = () => options.isCancellationRequested?.() === true;
   const suppliedRecovery = options.recovery
@@ -244,10 +242,10 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     queueLease = options.recovery
       ? session.followUps.useRecovery(options.recovery)
       : session.followUps.claimRecovery(runId, true);
+    if (!queueLease) return REFUSED;
+  } else {
+    yield* abandonSupplied();
   }
-  if (config.agentCategory === AgentCategory.ToolUse && !queueLease)
-    return REFUSED;
-  if (config.agentCategory !== AgentCategory.ToolUse) yield* abandonSupplied();
   const releaseQueue = (): void => {
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
   };
@@ -344,25 +342,24 @@ const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
     provisional: boolean,
   ) {
     if (!session.followUps.useRecovery(recovery)) return;
+    const warnUnreadable = (failure: unknown): void =>
+      log.warn(
+        `Run ${recovery.runId}: its queued follow-ups could not be read; keeping it recoverable`,
+        { data: failure },
+      );
     let queued = true;
     if (provisional) {
       const rows = yield* Effect.result(
         session.readAggregate(aggregateId('run', recovery.runId)),
       );
       if (Result.isFailure(rows)) {
-        log.warn(
-          `Run ${recovery.runId}: its queued follow-ups could not be read; keeping it recoverable`,
-          { data: rows.failure },
-        );
+        warnUnreadable(rows.failure);
       } else {
         const folded = foldRunState(null, rows.success);
         if (Result.isSuccess(folded)) {
           queued = (folded.success?.followUps.length ?? 0) > 0;
         } else {
-          log.warn(
-            `Run ${recovery.runId}: its queued follow-ups could not be read; keeping it recoverable`,
-            { data: folded.failure },
-          );
+          warnUnreadable(folded.failure);
         }
       }
     }

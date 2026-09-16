@@ -100,7 +100,6 @@ vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
   initInteractiveCliPlatform: mocks.initInteractiveCliPlatform,
   runCliPlatformShutdownSequence: mocks.runCliPlatformShutdownSequence,
-  setCliAgentResumeHandler: vi.fn(() => () => {}),
   setCliHelperModel: mocks.setCliHelperModel,
 }));
 
@@ -288,7 +287,7 @@ describe('runChat signal ownership wiring', () => {
       mocks.callOrder.push('handOffCliShutdownSignalHandlers');
     });
     mocks.runCliPlatformShutdownSequence.mockResolvedValue(undefined);
-    mocks.setCliHelperModel.mockResolvedValue(undefined);
+    mocks.setCliHelperModel.mockReturnValue(Effect.void);
     mocks.maybeRunCliOnboarding.mockReturnValue(
       Effect.succeed({
         configured: false,

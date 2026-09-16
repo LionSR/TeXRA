@@ -7,6 +7,8 @@
  */
 import { z } from 'zod';
 
+import { isObject } from '@utils/core';
+
 /** Non-empty string claim; any other shape degrades to undefined. */
 export const NonEmptyJwtClaim = z.string().min(1).optional().catch(undefined);
 
@@ -22,10 +24,7 @@ function decodeUnverifiedJwtPayload(
     if (parts.length !== 3) return null;
     const json = Buffer.from(parts[1], 'base64url').toString('utf-8');
     const raw: unknown = JSON.parse(json);
-    if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-      return null;
-    }
-    return raw as Record<string, unknown>;
+    return isObject(raw) ? raw : null;
   } catch {
     return null;
   }

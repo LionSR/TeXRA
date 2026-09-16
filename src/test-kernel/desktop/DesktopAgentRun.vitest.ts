@@ -2,6 +2,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
@@ -51,7 +52,7 @@ describe('desktop agent run completion hook', () => {
     });
     const launch = vi
       .spyOn(DesktopAgentLaunch, 'launchDesktopAgent')
-      .mockReturnValue(launchSettled);
+      .mockReturnValue(Effect.promise(() => launchSettled));
     onTestFinished(() => {
       launch.mockRestore();
     });
@@ -68,9 +69,9 @@ describe('desktop agent run completion hook', () => {
       showAgentConfigBanner: () => undefined,
       onRunCompleted,
     });
-    onTestFinished(() => {
+    onTestFinished(async () => {
       run.dispose();
-      session.dispose();
+      await effectRuntime().runPromise(session.dispose());
     });
 
     const settled = run.runValidated({
@@ -82,7 +83,7 @@ describe('desktop agent run completion hook', () => {
     });
     const completedRun = publishTestRunStart(session, generateRunId());
     session.publish([completedRunEnd(completedRun)]);
-    await session.settlePublications();
+    await effectRuntime().runPromise(session.settlePublications());
     expect(onRunCompleted).not.toHaveBeenCalled();
 
     resolveLaunch();

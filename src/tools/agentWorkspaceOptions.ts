@@ -1,6 +1,8 @@
 // Standard library imports
 import * as path from 'node:path';
 
+import { escapesRoot } from '@utils/core/pathCore';
+
 export interface AgentWorkspaceOptions {
   workingDirectory?: string;
   additionalDirectories?: string[];
@@ -50,7 +52,7 @@ export function buildAgentWorkspaceOptions(
   );
   const isInsideWorkspace =
     relativeToWorkspace.length > 0 &&
-    !relativeToWorkspace.startsWith('..') &&
+    !escapesRoot(relativeToWorkspace) &&
     !path.isAbsolute(relativeToWorkspace);
 
   return isInsideWorkspace

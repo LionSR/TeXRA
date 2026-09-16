@@ -6,7 +6,7 @@
  */
 import * as path from 'node:path';
 
-import { Data, Effect, FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import {
@@ -20,13 +20,13 @@ import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentNamePrompt,
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
-import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
@@ -82,8 +82,10 @@ export class AgentHandlers {
     const controllers = createSettingsAgentControllers({
       workspaceState: workspaceRoots().workspaceState,
       globalState,
-      getCustomAgentDirectory: () => agentDirectories.custom(),
-      getSourceDirectory: (source) => agentDirectories.getDirectory(source),
+      getCustomAgentDirectory: () =>
+        this.runtime.runPromise(agentDirectories.custom()),
+      getSourceDirectory: (source) =>
+        this.runtime.runPromise(agentDirectories.getDirectory(source)),
     });
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
@@ -91,8 +93,10 @@ export class AgentHandlers {
     this.agentActions = createSettingsAgentActions({
       directoryController: this.directoryController,
       findAgent: (source, name) => getAgent(agentKey(source, name)),
-      getCustomAgentDirectory: () => agentDirectories.custom(),
-      getSourceDirectory: (source) => agentDirectories.getDirectory(source),
+      getCustomAgentDirectory: () =>
+        this.runtime.runPromise(agentDirectories.custom()),
+      getSourceDirectory: (source) =>
+        this.runtime.runPromise(agentDirectories.getDirectory(source)),
       openDocument: async (filePath) => {
         const doc = await vscode.workspace.openTextDocument(filePath);
         await vscode.window.showTextDocument(doc, { preview: false });
@@ -117,21 +121,8 @@ export class AgentHandlers {
         );
       },
       confirmAction: confirmModal,
-      // The info notice stays non-blocking, as the `void` toast was; a
-      // dialog fault is logged on its own fiber rather than failing the
-      // mutation that asked for the notice.
       showInfoMessage: (message) =>
-        Effect.forkDetach(
-          messages.showInfoMessage(message).pipe(
-            Effect.catchTag('NotificationFailed', (failure) =>
-              Effect.sync(() => {
-                this.ctx.log.warn(
-                  `Agent settings notice failed: ${failure.message}`,
-                );
-              }),
-            ),
-          ),
-        ).pipe(Effect.asVoid),
+        this.forkInfoNotice(message, 'Agent settings'),
       showErrorMessage: (message) =>
         Effect.tryPromise({
           try: () => showLoggedMessage(this.ctx.channel, message),
@@ -171,12 +162,14 @@ export class AgentHandlers {
       this.ctx,
       'Failed to update agent visibility',
       async () => {
-        await this.roster.setAgentEnabled({
-          category: data.category,
-          source: data.agentSource,
-          name: data.agentName,
-          enabled: data.enabled,
-        });
+        await this.runtime.runPromise(
+          this.roster.setAgentEnabled({
+            category: data.category,
+            source: data.agentSource,
+            name: data.agentName,
+            enabled: data.enabled,
+          }),
+        );
         await this.refreshAfterAgentMutation();
       },
     );
@@ -189,11 +182,13 @@ export class AgentHandlers {
       this.ctx,
       'Failed to update agent visibility',
       async () => {
-        await this.catalogController.setAllAgentsEnabled({
-          category: data.category,
-          source: data.source,
-          enabled: data.enabled,
-        });
+        await this.runtime.runPromise(
+          this.catalogController.setAllAgentsEnabled({
+            category: data.category,
+            source: data.source,
+            enabled: data.enabled,
+          }),
+        );
         await this.refreshAfterAgentMutation();
       },
     );
@@ -231,14 +226,17 @@ export class AgentHandlers {
       this.ctx,
       'Failed to view remote agent prompt',
       async () => {
-        const result = await getRemoteAgentPromptConfig(data.agentName);
-        if (!result.ok) {
-          await showLoggedMessage(this.ctx.channel, result.message);
+        const config = await fetchRemoteAgentPromptYaml(data.agentName);
+        if (config == null) {
+          await showLoggedMessage(
+            this.ctx.channel,
+            'Authentication required. Sign in using "TeXRA: Sign In".',
+          );
           return;
         }
 
         const doc = await vscode.workspace.openTextDocument({
-          content: result.config,
+          content: config,
           language: 'yaml',
         });
         await vscode.window.showTextDocument(doc, { preview: false });
@@ -301,7 +299,9 @@ export class AgentHandlers {
       this.ctx,
       'Failed to reset custom agent directory',
       async () => {
-        await this.directoryController.resetCustomDir();
+        await this.runtime.runPromise(
+          this.directoryController.resetCustomDir(),
+        );
         await this.refreshAgentDirUI();
       },
     );
@@ -347,17 +347,7 @@ export class AgentHandlers {
                 // on a toast, and a dialog fault is logged rather than
                 // failing the apply that asked for the notice.
                 showInfoMessage: (message) =>
-                  Effect.forkDetach(
-                    messages.showInfoMessage(message).pipe(
-                      Effect.catchTag('NotificationFailed', (failure) =>
-                        Effect.sync(() => {
-                          this.ctx.log.warn(
-                            `Team notice failed: ${failure.message}`,
-                          );
-                        }),
-                      ),
-                    ),
-                  ).pipe(Effect.asVoid),
+                  this.forkInfoNotice(message, 'Team'),
                 showErrorMessage: (message) =>
                   Effect.forkDetach(
                     Effect.tryPromise({
@@ -402,7 +392,9 @@ export class AgentHandlers {
 
         await this.runtime.runPromise(loadAgents());
 
-        await this.catalogController.saveCurrentPreset(name);
+        await this.runtime.runPromise(
+          this.catalogController.saveCurrentPreset(name),
+        );
 
         await this.refreshAfterAgentMutation(undefined, true);
 
@@ -429,7 +421,9 @@ export class AgentHandlers {
         );
         if (!confirmed) return;
 
-        await this.catalogController.deleteCustomPreset(data.presetId);
+        await this.runtime.runPromise(
+          this.catalogController.deleteCustomPreset(data.presetId),
+        );
 
         await this.refreshAfterAgentMutation(undefined, true);
       },
@@ -437,6 +431,23 @@ export class AgentHandlers {
   }
 
   // ── Private helpers ──
+
+  /**
+   * Show an info notice on a detached fiber, as the `void` toast was: the
+   * caller does not wait on it, and a notification fault is logged rather
+   * than failing the mutation that asked for the notice.
+   */
+  private forkInfoNotice(message: string, scope: string) {
+    return Effect.forkDetach(
+      messages.showInfoMessage(message).pipe(
+        Effect.catchTag('NotificationFailed', (failure) =>
+          Effect.sync(() => {
+            this.ctx.log.warn(`${scope} notice failed: ${failure.message}`);
+          }),
+        ),
+      ),
+    ).pipe(Effect.asVoid);
+  }
 
   private async chooseTeamAvailability(prompt: TeamAvailabilityPrompt) {
     return chooseTeamAvailabilityViaDialog(prompt, { modal: true });
@@ -457,7 +468,9 @@ export class AgentHandlers {
         });
         if (!name) return;
 
-        const customDir = await agentDirectories.custom();
+        const customDir = await this.runtime.runPromise(
+          agentDirectories.custom(),
+        );
         await this.runtime.runPromise(
           Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
             fs.makeDirectory(customDir, { recursive: true }),
@@ -491,7 +504,7 @@ export class AgentHandlers {
   private async refreshAgentDirUI(): Promise<void> {
     await agentDirectories.refreshAfterDirChange();
     const { refreshCustomAgentRoot } = await import('@frontend/setup');
-    await refreshCustomAgentRoot();
+    await this.runtime.runPromise(refreshCustomAgentRoot());
     await Promise.all([
       this.ctx.withActiveWebview(async (w) => {
         await Promise.all([

@@ -94,10 +94,11 @@ export function buildCodexFileChangeToolLog(
     return null;
   }
 
+  const patchFailed = item.status === 'failed';
   const summary =
     dedupedChanges.length === 1
-      ? `${item.status === 'failed' ? 'failed ' : ''}${dedupedChanges[0].kind} ${getBasename(dedupedChanges[0].path)}`
-      : `${dedupedChanges.length} file changes${item.status === 'failed' ? ' failed' : ''}`;
+      ? `${patchFailed ? 'failed ' : ''}${dedupedChanges[0].kind} ${getBasename(dedupedChanges[0].path)}`
+      : `${dedupedChanges.length} file changes${patchFailed ? ' failed' : ''}`;
 
   return {
     toolName: CODEX_FILE_CHANGE_TOOL,
@@ -106,8 +107,8 @@ export function buildCodexFileChangeToolLog(
       changes: dedupedChanges,
       patchStatus: item.status,
     } satisfies CodexFileChangeToolInput,
-    ...(item.status === 'failed' && { error: 'Patch apply failed' }),
-    status: item.status === 'failed' ? 'failed' : 'completed',
+    ...(patchFailed && { error: 'Patch apply failed' }),
+    status: patchFailed ? 'failed' : 'completed',
   };
 }
 

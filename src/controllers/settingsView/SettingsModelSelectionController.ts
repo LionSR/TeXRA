@@ -1,3 +1,5 @@
+// Third-party imports
+import { Effect } from 'effect';
 import {
   MODEL_CONFIGS,
   ModelProvider,
@@ -5,6 +7,7 @@ import {
   type ReasoningEffort,
 } from 'llm-zoo';
 
+// Local imports
 import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
@@ -21,7 +24,7 @@ import {
   setModelEnabled,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import type { StateStore } from '@platform/interfaces';
+import { StateWriteFailed, type StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -37,7 +40,7 @@ import {
 } from '@shared/constants/providers';
 import { byName } from '@utils/core';
 
-export interface SettingsModelSelectionControllerDeps {
+interface SettingsModelSelectionControllerDeps {
   /** Persisted picker state: enabled models, helper model, reasoning levels. */
   globalState: StateStore;
   /** Provider credentials behind the availability decoration on each option. */
@@ -81,7 +84,12 @@ export class SettingsModelSelectionController {
     );
     return {
       models: await this.buildSelectionItems(routes, preferredModels),
-      helperModel: this.getEffectiveHelperModel(visibleModels),
+      helperModel: resolveEffectiveHelperModel(
+        this.deps.globalState.get<string | undefined>(
+          GlobalStateKey.HELPER_MODEL,
+        ),
+        visibleModels,
+      ),
       preferShortModelNames: this.deps.globalState.get<boolean>(
         GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
         false,
@@ -118,42 +126,38 @@ export class SettingsModelSelectionController {
     }));
   }
 
-  async setModelEnabled(input: {
+  setModelEnabled(input: {
     modelName: string;
     enabled: boolean;
-  }): Promise<void> {
-    await setModelEnabled({
+  }): Effect.Effect<void, StateWriteFailed> {
+    return setModelEnabled({
       model: input.modelName,
       enabled: input.enabled,
       state: this.deps.globalState,
-    });
+    }).pipe(Effect.asVoid);
   }
 
-  async setReasoningLevel(input: {
+  setReasoningLevel(input: {
     modelName: string;
     level: ReasoningEffort | null;
-  }): Promise<void> {
-    const overrides = { ...this.getStoredReasoningLevels() };
+  }): Effect.Effect<void, StateWriteFailed> {
+    // The stored override record as written, so a rewrite carries every entry
+    // back to storage. Reads that need the effort go through
+    // `reasoningEffortOverrides`.
+    const overrides = {
+      ...this.deps.globalState.get<Record<string, string>>(
+        GlobalStateKey.REASONING_LEVELS,
+        {},
+      ),
+    };
     if (input.level == null) {
       delete overrides[input.modelName];
     } else {
       overrides[input.modelName] = input.level;
     }
-    await this.deps.globalState.update(
+    return this.deps.globalState.update(
       GlobalStateKey.REASONING_LEVELS,
       overrides,
-    );
-  }
-
-  /**
-   * The stored override record as written, so a rewrite carries every entry
-   * back to storage. Reads that need the effort go through
-   * `reasoningEffortOverrides`.
-   */
-  private getStoredReasoningLevels(): Record<string, string> {
-    return this.deps.globalState.get<Record<string, string>>(
-      GlobalStateKey.REASONING_LEVELS,
-      {},
     );
   }
 
@@ -224,15 +228,6 @@ export class SettingsModelSelectionController {
     }
 
     return items.sort(byName);
-  }
-
-  private getEffectiveHelperModel(visibleModels: readonly string[]): string {
-    return resolveEffectiveHelperModel(
-      this.deps.globalState.get<string | undefined>(
-        GlobalStateKey.HELPER_MODEL,
-      ),
-      visibleModels,
-    );
   }
 
   private addReasoningLevelData(

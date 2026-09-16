@@ -22,6 +22,7 @@ import {
   Context,
   Effect,
   Exit,
+  type FileSystem,
   Layer,
   Ref,
   Result,
@@ -72,7 +73,7 @@ import {
   type RunState,
 } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
-import { getValidatedConfig } from '@utils/config/configUtils';
+import { readValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
@@ -93,6 +94,7 @@ import {
   runtimeSnapshotRow,
   stepRow,
 } from './loop/rows';
+import type { HttpClient } from 'effect/unstable/http';
 import type { RoutePolicy } from './ModelRetryGate';
 
 /**
@@ -140,22 +142,6 @@ const EMPTY_RESPONSE_ERROR_MESSAGE =
  */
 const PARTIAL_TEXT_TAIL_MAX = 4096;
 
-/**
- * One initial attempt plus the configured number of automatic retries. The
- * schema bounds the setting to [0, 5] and falls back to the default on
- * anything else, so the result is always >= 1.
- */
-function automaticAttemptLimit(): number {
-  return (
-    1 +
-    getValidatedConfig(
-      'texra.model.retry.maxAttempts',
-      ModelRetryMaxAttemptsSchema,
-      MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
-    )
-  );
-}
-
 export interface InvokeRequest {
   readonly system: string | undefined;
   /** The tools this turn advertises; a reflection turn advertises none. */
@@ -179,7 +165,7 @@ interface InvocationResponse {
   readonly responseTimeMs: number;
 }
 
-export type InvocationOutcome =
+type InvocationOutcome =
   | InvocationResponse
   | {
       readonly kind: 'failed';
@@ -188,6 +174,11 @@ export type InvocationOutcome =
     }
   | { readonly kind: 'cancelled'; readonly state: RunState };
 
+/**
+ * The ledger failures `invoke` can hand back. One definition: the dispatch
+ * path in `loop/toolUseDispatch` branches on the same union, so it imports
+ * this rather than re-declaring the alias.
+ */
 export type InvokeError = RunLedgerRefused | DatabaseWriteFailed;
 
 export class ModelInvoker extends Context.Service<
@@ -196,7 +187,11 @@ export class ModelInvoker extends Context.Service<
     readonly invoke: (
       state: RunState,
       request: InvokeRequest,
-    ) => Effect.Effect<InvocationOutcome, InvokeError>;
+    ) => Effect.Effect<
+      InvocationOutcome,
+      InvokeError,
+      FileSystem.FileSystem | HttpClient.HttpClient
+    >;
   }
 >()('@texra/agent/ModelInvoker') {}
 
@@ -271,27 +266,18 @@ export const modelInvokerLayer = (): Layer.Layer<
         round: number,
         baseName: string,
       ) =>
-        Effect.tryPromise({
-          try: () =>
-            maybeSaveDebugObject({
-              object,
-              objectType,
-              context: {
-                logger,
-                runId,
-                modelName: run.config.model,
-                isRemote: isRemoteAgent(run.config.agent),
-              },
-              fileOptions: { continuationCount: round, baseName },
-            }),
-          catch: ensureError,
-        }).pipe(
-          Effect.catch((error) =>
-            Effect.sync(() =>
-              logger.debug('Debug object save failed', { data: error }),
-            ),
-          ),
-        );
+        maybeSaveDebugObject({
+          object,
+          objectType,
+          context: {
+            logger,
+            runId,
+            modelName: run.config.model,
+            isRemote: isRemoteAgent(run.config.agent),
+            roots: session.roots,
+          },
+          fileOptions: { continuationCount: round, baseName },
+        });
 
       /** The snapshot the retry protocol commits: runtime fields on the last
        *  written family state, references from the folded rows. */
@@ -358,6 +344,25 @@ export const modelInvokerLayer = (): Layer.Layer<
             at,
           ),
         );
+
+      /**
+       * Prepare one attempt's turn. A preparation that fails is this
+       * attempt's own failure, carrying the state its rows left; an
+       * interruption stays an interruption.
+       */
+      const prepareAttempt = Effect.fn('ModelInvoker.prepare')(function* (
+        bound: BoundModel,
+        request: TurnRequest,
+        at: RunState,
+      ): Effect.fn.Return<ResolvedTurn, AttemptFailed> {
+        const prepared = yield* Effect.exit(bound.model.prepareTurn(request));
+        if (Exit.isFailure(prepared)) {
+          if (Cause.hasInterrupts(prepared.cause))
+            return yield* Effect.interrupt;
+          return yield* failAttempt(Cause.squash(prepared.cause), at, bound);
+        }
+        return prepared.value;
+      });
 
       interface AttemptTrace {
         readonly thinking: StreamHandle;
@@ -453,7 +458,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         started: number,
         streamed: Exit.Exit<void, unknown>,
         completed: AttemptOutcome,
-      ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
+      ): Effect.fn.Return<
+        InvocationResponse,
+        AttemptFailed | InvokeError,
+        FileSystem.FileSystem
+      > {
         if (Exit.isFailure(streamed)) {
           trace.thinking.finalize(undefined);
           trace.output.finalize();
@@ -624,7 +633,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         request: InvokeRequest,
         bound: BoundModel,
         operationId: string,
-      ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
+      ): Effect.fn.Return<
+        InvocationResponse,
+        AttemptFailed | InvokeError,
+        FileSystem.FileSystem
+      > {
         let state = initial;
         const turnRequest = turnRequestFor(
           state,
@@ -632,15 +645,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           bound,
           backgroundRequested(bound) ? 'background' : 'foreground',
         );
-        const prepared = yield* Effect.exit(
-          bound.model.prepareTurn(turnRequest),
-        );
-        if (Exit.isFailure(prepared)) {
-          if (Cause.hasInterrupts(prepared.cause))
-            return yield* Effect.interrupt;
-          return yield* failAttempt(Cause.squash(prepared.cause), state, bound);
-        }
-        let resolved = prepared.value;
+        let resolved = yield* prepareAttempt(bound, turnRequest, state);
         yield* saveDebug(
           state.messages,
           'messages',
@@ -702,23 +707,11 @@ export const modelInvokerLayer = (): Layer.Layer<
               // The clamp is part of the request, so the request is prepared
               // again with it: execution never reapplies defaults over a
               // resolved turn.
-              const clamped = yield* Effect.exit(
-                bound.model.prepareTurn({
-                  ...turnRequest,
-                  maxOutputTokens: reduced,
-                }),
+              resolved = yield* prepareAttempt(
+                bound,
+                { ...turnRequest, maxOutputTokens: reduced },
+                state,
               );
-              if (Exit.isFailure(clamped)) {
-                if (Cause.hasInterrupts(clamped.cause)) {
-                  return yield* Effect.interrupt;
-                }
-                return yield* failAttempt(
-                  Cause.squash(clamped.cause),
-                  state,
-                  bound,
-                );
-              }
-              resolved = clamped.value;
             }
           }
         }
@@ -791,7 +784,11 @@ export const modelInvokerLayer = (): Layer.Layer<
           accepted: NonNullable<
             NonNullable<RunState['openAttempt']>['accepted']
           >,
-        ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
+        ): Effect.fn.Return<
+          InvocationResponse,
+          AttemptFailed | InvokeError,
+          FileSystem.FileSystem
+        > {
           const background = bound.model.background;
           if (background === undefined) {
             return yield* failAttempt(
@@ -816,22 +813,11 @@ export const modelInvokerLayer = (): Layer.Layer<
             bound,
             'background',
           );
-          const prepared = yield* Effect.exit(
-            bound.model.prepareTurn({
-              ...admitted,
-              store: accepted.operation.store,
-            }),
+          const resolved = yield* prepareAttempt(
+            bound,
+            { ...admitted, store: accepted.operation.store },
+            initial,
           );
-          if (Exit.isFailure(prepared)) {
-            if (Cause.hasInterrupts(prepared.cause))
-              return yield* Effect.interrupt;
-            return yield* failAttempt(
-              Cause.squash(prepared.cause),
-              initial,
-              bound,
-            );
-          }
-          const resolved = prepared.value;
           if (resolved.mode !== 'background') {
             return yield* failAttempt(
               new ModelError({
@@ -887,7 +873,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         request: InvokeRequest,
         bound: BoundModel,
         operationId: string,
-      ): Effect.Effect<InvocationResponse, AttemptFailed | InvokeError> => {
+      ): Effect.Effect<
+        InvocationResponse,
+        AttemptFailed | InvokeError,
+        FileSystem.FileSystem
+      > => {
         const verdictFor = (error: Error) =>
           error instanceof AttemptFailed
             ? error.failure.verdict
@@ -996,7 +986,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         failedAttempt: InvocationRef,
         operationId: string,
         outstanding: string | null,
-      ): Effect.fn.Return<Decision, InvokeError> {
+      ): Effect.fn.Return<Decision, InvokeError, HttpClient.HttpClient> {
         let state = initial;
         const requestId = outstanding ?? `retry-${generateShortId()}`;
         const info = toRetryErrorInfo(recorded);
@@ -1121,31 +1111,44 @@ export const modelInvokerLayer = (): Layer.Layer<
           );
           return { kind: 'retry', state };
         }
-        if (decision.action === 'deny') {
-          logProgressStatus(logger, decision.reason);
-          state = yield* Effect.uninterruptible(
-            ledger.appendBatch(runId, state, [
-              retrySnapshot(state, { pendingRetry: null, lastError: info }),
-            ]),
-          );
-          return { kind: 'deny', state };
-        }
-        logProgressStatus(logger, 'Retry cancelled by user');
+        logProgressStatus(
+          logger,
+          decision.action === 'deny'
+            ? decision.reason
+            : 'Retry cancelled by user',
+        );
+        // Either answer clears the gate, keeping the failure it recorded.
         state = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
             retrySnapshot(state, { pendingRetry: null, lastError: info }),
           ]),
         );
-        return { kind: 'cancel', state };
+        return decision.action === 'deny'
+          ? { kind: 'deny', state }
+          : { kind: 'cancel', state };
       });
 
       const invoke = Effect.fn('ModelInvoker.invoke')(function* (
         initial: RunState,
         request: InvokeRequest,
-      ): Effect.fn.Return<InvocationOutcome, InvokeError> {
+      ): Effect.fn.Return<
+        InvocationOutcome,
+        InvokeError,
+        FileSystem.FileSystem | HttpClient.HttpClient
+      > {
         let state = initial;
         const operationId = `model-operation-${generateShortId()}`;
-        const limit = automaticAttemptLimit();
+        // One initial attempt plus the configured number of automatic
+        // retries; the schema bounds the setting to [0, 5] and falls back to
+        // the default on anything else, so the limit is always >= 1.
+        const limit =
+          1 +
+          readValidatedConfig(
+            session.roots.config,
+            MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+            ModelRetryMaxAttemptsSchema,
+            MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+          );
         let automaticAttempts = 0;
         // An open attempt with no response is an invocation whose outcome the
         // process never saw: the next attempt continues its numbering, and its

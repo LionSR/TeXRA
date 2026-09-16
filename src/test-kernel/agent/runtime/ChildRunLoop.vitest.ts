@@ -69,6 +69,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentResume } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
@@ -292,7 +293,13 @@ const startLoop = (
     agentName: 'fake',
     strategy,
     ...extras,
-  }).pipe(Effect.provideService(Runs, session.runs));
+  }).pipe(
+    Effect.provideService(Runs, session.runs),
+    // No host resume in these fixtures: the port declines every wake.
+    Effect.provideService(AgentResume, {
+      tryResumeRun: () => Effect.succeed(false),
+    }),
+  );
 
 beforeEach(async () => {
   session = await Effect.runPromise(createProcessSession());
@@ -610,8 +617,7 @@ describe('childRunLoop E2E fixtures', () => {
         const loop = yield* startLoop(runId, strategy, {
           childRun,
         });
-        const tryResumeRun = vi.fn(async () => false);
-        const resumePort = { tryResumeRun };
+        const tryResumeRun = vi.fn(() => Effect.succeed(false));
         yield* Deferred.await(launchStarted);
 
         try {
@@ -619,8 +625,7 @@ describe('childRunLoop E2E fixtures', () => {
           expect(
             yield* realSubmitFollowUp(PARENT_RUN_ID, 'active parent', {
               session,
-              resumePort,
-            }),
+            }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
           ).toEqual({ status: 'queued', wake: 'failed' });
 
           yield* foldParentPhase(false);
@@ -628,17 +633,16 @@ describe('childRunLoop E2E fixtures', () => {
           expect(
             yield* realSubmitFollowUp(PARENT_RUN_ID, 'restore me', {
               session,
-              resumePort,
               onAdmitted: userAdmission,
-            }),
+            }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
           ).toMatchObject({ status: 'failed' });
           expect(userAdmission).toHaveBeenCalledWith(false);
           expect(
             yield* realSubmitFollowUp(
               PARENT_RUN_ID,
               { text: 'late child result', origin: 'subagent_result' },
-              { session, resumePort },
-            ),
+              { session },
+            ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
           ).toMatchObject({ status: 'failed' });
           expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(['active parent']);
 
@@ -653,8 +657,7 @@ describe('childRunLoop E2E fixtures', () => {
             expect(
               yield* realSubmitFollowUp(PARENT_RUN_ID, 'native child result', {
                 session,
-                resumePort,
-              }),
+              }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
             ).toEqual({ status: 'queued', wake: 'failed' });
           } finally {
             releaseNativeChild();

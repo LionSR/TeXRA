@@ -120,8 +120,9 @@ export class LaTeXdiffService {
       const editedFile = editedLocation.absolutePath;
 
       if (!inputFile) {
-        yield* Effect.logWarning('Input file is empty or undefined');
-        return failed('Input file is empty or undefined');
+        const message = 'Input file is empty or undefined';
+        yield* Effect.logWarning(message);
+        return failed(message);
       }
 
       // Direct callers use one read pass for both existence and document

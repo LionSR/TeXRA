@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, type Scope } from 'effect';
+import { Cause, Effect, FileSystem, type Scope } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -103,7 +103,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
   ): Effect.fn.Return<
     { configPayload: AgentConfigPayload; agentName: string },
     Error,
-    Secrets | AppState
+    Secrets | AppState | FileSystem.FileSystem
   > {
     const { session } = parent.run;
     const sharedConfigFields = {
@@ -115,9 +115,6 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         delegationAgentScope: parent.delegationAgentScope,
       }),
     };
-    let configPayload: AgentConfigPayload;
-    let agentName: string;
-
     if (call.options.schema !== undefined) {
       const requestedAgentName = call.options.agentName;
       if (requestedAgentName === undefined) {
@@ -133,14 +130,16 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         ),
       );
       const model = yield* workflowScriptModelSelection(call, parent);
-      agentName = agent.name;
-      configPayload = {
-        ...sharedConfigFields,
-        agent: agent.name,
-        agentSource: agent.source,
-        model,
-        agentCategory: AgentCategory.ToolUse,
-        outputSchema: call.options.schema,
+      return {
+        configPayload: {
+          ...sharedConfigFields,
+          agent: agent.name,
+          agentSource: agent.source,
+          model,
+          agentCategory: AgentCategory.ToolUse,
+          outputSchema: call.options.schema,
+        },
+        agentName: agent.name,
       };
     } else {
       const requestedAgentName = call.options.agentName;
@@ -186,27 +185,27 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       const inputFiles = inputs.map(({ file }) => file);
       const contextFiles = context.map(({ file }) => file);
       const mediaFiles = media.map(({ file }) => file);
-      const oversizedBibRejection = yield* Effect.tryPromise({
-        try: () =>
-          parent.inScope(() => rejectOversizedBibAttachments(contextFiles)),
-        catch: ensureError,
-      });
+      const oversizedBibRejection = yield* rejectOversizedBibAttachments(
+        parent.roots.workspace,
+        contextFiles,
+      ).pipe(Effect.mapError(ensureError));
       if (oversizedBibRejection) {
         throw new WorkflowRunAbortError(oversizedBibRejection.error);
       }
-      agentName = agent.name;
-      configPayload = {
-        ...sharedConfigFields,
-        agent: agent.name,
-        agentSource: agent.source,
-        model,
-        inputFiles,
-        contextFiles,
-        mediaFiles,
-        agentCategory: AgentCategory.Workflow,
+      return {
+        configPayload: {
+          ...sharedConfigFields,
+          agent: agent.name,
+          agentSource: agent.source,
+          model,
+          inputFiles,
+          contextFiles,
+          mediaFiles,
+          agentCategory: AgentCategory.Workflow,
+        },
+        agentName: agent.name,
       };
     }
-    return { configPayload, agentName };
   },
 );
 
@@ -857,7 +856,7 @@ export function createWorkflowScriptAgentRunner(
                 // failed/cancelled/retried attempt still shows what it consumed
                 // even when run never reaches the success path below.
                 if (costUsd !== undefined) {
-                  invocation.report({ costUsd: costUsd });
+                  invocation.report({ costUsd });
                 }
               },
             };

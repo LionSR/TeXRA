@@ -29,23 +29,21 @@ export class StatusBarUsageTracker {
   constructor(private readonly session: Pick<SessionHandle, 'view'>) {}
 
   public get activeRunCount(): number {
-    let count = 0;
-    for (const run of SubscriptionRef.getUnsafe(
-      this.session.view,
-    ).runs.values()) {
-      if (isActivePhase(run.status) && !ownerLost(run)) count += 1;
-    }
-    return count;
+    return this.runs.filter(
+      (run) => isActivePhase(run.status) && !ownerLost(run),
+    ).length;
   }
 
   public get totalUsage(): TokenUsageStats {
-    const usages: TokenUsageStats[] = [];
-    for (const run of SubscriptionRef.getUnsafe(
-      this.session.view,
-    ).runs.values()) {
-      if (isInFlightPhase(run.status) && !ownerLost(run))
-        usages.push(run.usage);
-    }
-    return sumUsageStats(usages);
+    return sumUsageStats(
+      this.runs
+        .filter((run) => isInFlightPhase(run.status) && !ownerLost(run))
+        .map((run) => run.usage),
+    );
+  }
+
+  /** The view's runs, in fold order. */
+  private get runs(): RunView[] {
+    return [...SubscriptionRef.getUnsafe(this.session.view).runs.values()];
   }
 }

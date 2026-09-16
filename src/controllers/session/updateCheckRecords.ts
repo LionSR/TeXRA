@@ -4,8 +4,7 @@ import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ensureError } from '@utils/errors/errorMessage';
-import { databaseLayer } from './Database';
-import { WorkspaceRoots } from './WorkspaceRoots';
+import { withScopedDatabase } from './Database';
 
 export const updateCheckRecordsLayer = (storagePath: () => string) =>
   Layer.effect(
@@ -13,22 +12,17 @@ export const updateCheckRecordsLayer = (storagePath: () => string) =>
     Effect.gen(function* () {
       const identity = yield* ProcessIdentity;
       const withDatabase = <A, E>(operation: Effect.Effect<A, E, Database>) =>
-        Effect.scoped(
-          Effect.gen(function* () {
-            const storage = yield* Effect.try({
-              try: storagePath,
-              catch: ensureError,
-            });
-            return yield* operation.pipe(
-              Effect.provide(
-                databaseLayer('persistent').pipe(
-                  Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
-                  Layer.provide(Layer.succeed(ProcessIdentity)(identity)),
-                ),
-              ),
-            );
-          }),
-        );
+        Effect.gen(function* () {
+          const storage = yield* Effect.try({
+            try: storagePath,
+            catch: ensureError,
+          });
+          return yield* withScopedDatabase(
+            storage,
+            identity.ownerId,
+            operation,
+          );
+        });
       return {
         read: (host) =>
           withDatabase(

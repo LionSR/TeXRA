@@ -11,6 +11,7 @@ import { z } from 'zod';
 
 import { Result } from 'effect';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
+import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 
 /**
  * Attribution metadata schema. Source of truth for the {@link MemoryFileMeta}
@@ -52,27 +53,19 @@ export function parseFrontmatter(raw: string): {
   meta: MemoryFileMeta | null;
   content: string;
 } {
-  if (!raw.startsWith(`${FRONTMATTER_FENCE}\n`)) {
+  const split = splitFrontmatterFence(raw);
+  if (split.kind !== 'ok') {
     return { meta: null, content: raw };
   }
 
-  const endIdx = raw.indexOf(
-    `\n${FRONTMATTER_FENCE}\n`,
-    FRONTMATTER_FENCE.length,
-  );
-  if (endIdx === -1) {
-    return { meta: null, content: raw };
-  }
-
-  const block = raw.slice(FRONTMATTER_FENCE.length + 1, endIdx);
-  const parsed = parseYamlWith(block, MemoryFileMetaSchema);
+  const parsed = parseYamlWith(split.frontmatterText, MemoryFileMetaSchema);
   if (Result.isFailure(parsed)) {
     return { meta: null, content: raw };
   }
 
   return {
     meta: parsed.success,
-    content: raw.slice(endIdx + FRONTMATTER_FENCE.length + 2), // skip "\n---\n"
+    content: split.body,
   };
 }
 
@@ -81,12 +74,12 @@ export function parseFrontmatter(raw: string): {
 function buildFrontmatter(meta: MemoryFileMeta): string {
   // Build the object explicitly so only set fields are serialized, in a
   // stable key order.
-  const fields: Record<string, string | boolean> = {
+  const fields = {
     modifiedBy: meta.modifiedBy,
+    ...(meta.runId ? { runId: meta.runId } : {}),
+    modifiedAt: meta.modifiedAt,
+    ...(meta.pinned ? { pinned: true } : {}),
   };
-  if (meta.runId) fields.runId = meta.runId;
-  fields.modifiedAt = meta.modifiedAt;
-  if (meta.pinned) fields.pinned = true;
 
   // yaml.stringify ends with a trailing newline, so the closing fence sits on
   // its own line: "---\n<fields>---".

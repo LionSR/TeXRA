@@ -66,6 +66,7 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
+import { descendantRuns } from '@shared/session/sessionView';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   buildScenario,
@@ -331,6 +332,7 @@ if (RESET_WORKFLOW_SCRIPT_DISABLED) {
     HARNESS_PLATFORM_SERVICES.globalState,
     'workflow-script',
     false,
+    HARNESS_PLATFORM_SERVICES.runtime,
   );
 }
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
@@ -356,30 +358,34 @@ if (
   process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined ||
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
-  await workspaceRoots().workspaceState.update(
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    {
-      kind: 'custom',
-      agentKeys: {
-        workflow:
-          process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
-            ? HARNESS_VISIBLE_WORKFLOW_AGENTS
-            : 'all',
-        toolUse:
-          process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
-            ? HARNESS_VISIBLE_TOOL_USE_AGENTS
-            : 'all',
+  await effectRuntime().runPromise(
+    workspaceRoots().workspaceState.update(
+      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      {
+        kind: 'custom',
+        agentKeys: {
+          workflow:
+            process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
+              ? HARNESS_VISIBLE_WORKFLOW_AGENTS
+              : 'all',
+          toolUse:
+            process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
+              ? HARNESS_VISIBLE_TOOL_USE_AGENTS
+              : 'all',
+        },
       },
-    },
+    ),
   );
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
-  await workspaceRoots().globalState.update(GlobalStateKey.MODEL_SELECTION, {
-    enabledExtras: HARNESS_VISIBLE_MODELS,
-    disabledDefaults: DEFAULT_MODELS.filter(
-      (model) => !HARNESS_VISIBLE_MODELS.includes(model),
-    ),
-  });
+  await effectRuntime().runPromise(
+    workspaceRoots().globalState.update(GlobalStateKey.MODEL_SELECTION, {
+      enabledExtras: HARNESS_VISIBLE_MODELS,
+      disabledDefaults: DEFAULT_MODELS.filter(
+        (model) => !HARNESS_VISIBLE_MODELS.includes(model),
+      ),
+    }),
+  );
 }
 await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
 
@@ -429,6 +435,7 @@ const harnessRuntimeHost: CliRuntimeHost = createCliRuntimeHost(
 HARNESS_DISPOSERS.push(
   session().interactions.use(
     createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
+      session: session(),
       secrets: HARNESS_PLATFORM_SERVICES.secrets,
       runtime: effectRuntime(),
     }),
@@ -589,21 +596,6 @@ function seedRows(
       verbose: entry.verbose,
     })),
   );
-}
-
-/** Every run under `rootId`, the root first. */
-function descendantsOf(rootId: RunId): RunId[] {
-  const view = currentView();
-  const out: RunId[] = [];
-  const pending = [rootId];
-  while (pending.length > 0) {
-    const id = pending.shift()!;
-    const run = view.runs.get(id);
-    if (!run) continue;
-    out.push(id);
-    pending.push(...run.childIds);
-  }
-  return out;
 }
 
 /** A text entry the transcript store settles and the fold projects. */
@@ -1451,7 +1443,9 @@ function markHarnessInterrupted(): void {
     'Harness interrupt requested.',
     HARNESS_RUN_ID,
   );
-  for (const runId of descendantsOf(HARNESS_RUN_ID)) {
+  for (const runId of descendantRuns(currentView(), HARNESS_RUN_ID, {
+    includeRoot: true,
+  })) {
     const run = runViewOf(currentView(), runId);
     if (run && isInFlightPhase(run.status)) {
       seedRunEnd(runId, RUN_OUTCOME.CANCELLED);
@@ -1629,7 +1623,7 @@ function handleHarnessSlashCommand(line: string): boolean {
       appendHarnessStatus();
       return true;
     case 'plan':
-      void showCliWorkPlan();
+      void showCliWorkPlan(session());
       return true;
     case 'goal':
     case 'goals':
@@ -1744,6 +1738,7 @@ function renderHarnessApp(): React.JSX.Element {
     <App
       secrets={HARNESS_PLATFORM_SERVICES.secrets}
       runtime={effectRuntime()}
+      session={session()}
       onSubmit={handleHarnessSubmit}
       onKillRun={markHarnessRunStopped}
       onWorkflowControl={() => undefined}

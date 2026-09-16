@@ -43,12 +43,9 @@ import {
 import {
   AgentCategory,
   INSTRUCTION_ACTION,
-  ModelCompatibilityKeySchema,
   RUN_OUTCOME,
-  RUN_PHASE,
 } from '@shared/schemas';
 import { createRunTrace, type RunTrace } from '@transcript';
-import { isObject } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, runInSession, withRunContext } from './RunContext';
@@ -163,7 +160,7 @@ interface AgentLaunchInput {
    * launch warnings.
    */
   onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
-  /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
+  /** Session owning this run's coordination state; every launch supplies it. */
   session?: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelCompatibilityKey?: ModelCompatibilityKey | null;
@@ -682,17 +679,19 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
             logger.warn('Failed to persist the launch failure', {
               data: finalization.error,
             });
-          const failures: unknown[] = [];
-          for (const dispose of resources.toReversed()) {
-            const disposed = yield* Effect.exit(
-              Effect.tryPromise({
-                try: async () => dispose(),
-                catch: ensureError,
-              }),
-            );
-            if (Exit.isFailure(disposed))
-              failures.push(Cause.squash(disposed.cause));
-          }
+          const disposals = yield* Effect.forEach(
+            resources.toReversed(),
+            (dispose) =>
+              Effect.exit(
+                Effect.tryPromise({
+                  try: async () => dispose(),
+                  catch: ensureError,
+                }),
+              ),
+          );
+          const failures = disposals.flatMap((disposed) =>
+            Exit.isFailure(disposed) ? [Cause.squash(disposed.cause)] : [],
+          );
           if (failures.length) {
             logger.warn(
               'Failed to release launch resources after a failed launch',

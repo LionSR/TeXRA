@@ -198,7 +198,6 @@ export class UsageMonitor {
       this.logToBackend(
         stateGlobal.totalResponseTimeMs,
         {
-          inputTokens: roundInputTokens,
           outputTokens: roundOutputTokens,
           cachedInputTokens: roundCacheReadTokens,
           cacheMissInputTokens: roundCacheMissTokens,
@@ -240,11 +239,7 @@ export class UsageMonitor {
     totalResponseTimeMs: number,
     usage: Pick<
       UsageLogStats,
-      | 'inputTokens'
-      | 'outputTokens'
-      | 'cachedInputTokens'
-      | 'reasoningTokens'
-      | 'cost'
+      'outputTokens' | 'cachedInputTokens' | 'reasoningTokens' | 'cost'
     > & { cacheMissInputTokens: number; usageRoute?: UsageRoute },
     provider: NonNullable<
       AgentRunStateSnapshot['usageAccumulator']['latestUsage']

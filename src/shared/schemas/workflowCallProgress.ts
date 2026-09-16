@@ -21,14 +21,23 @@ export const WORKFLOW_CALL_STATUS = {
 const WorkflowCallStatusSchema = z.enum(WORKFLOW_CALL_STATUS);
 export type WorkflowCallStatus = z.infer<typeof WorkflowCallStatusSchema>;
 
-const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowCallStatus> =
-  new Set([
-    WORKFLOW_CALL_STATUS.COMPLETED,
-    WORKFLOW_CALL_STATUS.FAILED,
-    WORKFLOW_CALL_STATUS.CANCELLED,
-    WORKFLOW_CALL_STATUS.SKIPPED,
-    WORKFLOW_CALL_STATUS.CACHED,
-  ]);
+// One statement of which statuses are terminal, in the one place both readers
+// can reach: the runtime membership test below and the type-level exclusions
+// near `WorkflowCallLiveStatus`. A tuple, not a bare Set, so the derived union
+// member cannot drift from the five literals the Set holds.
+const TERMINAL_WORKFLOW_CALL_STATUSES = [
+  WORKFLOW_CALL_STATUS.COMPLETED,
+  WORKFLOW_CALL_STATUS.FAILED,
+  WORKFLOW_CALL_STATUS.CANCELLED,
+  WORKFLOW_CALL_STATUS.SKIPPED,
+  WORKFLOW_CALL_STATUS.CACHED,
+] as const satisfies readonly WorkflowCallStatus[];
+
+type TerminalWorkflowCallStatus =
+  (typeof TERMINAL_WORKFLOW_CALL_STATUSES)[number];
+
+const TERMINAL_WORKFLOW_CALL_STATUS_SET: ReadonlySet<WorkflowCallStatus> =
+  new Set(TERMINAL_WORKFLOW_CALL_STATUSES);
 
 /**
  * What an interactive control request does to the workflow-script `agent()`
@@ -196,7 +205,7 @@ export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
 export type WorkflowCallProgress = z.infer<typeof WorkflowCallProgressSchema>;
 type WorkflowCallLiveStatus = Exclude<
   WorkflowCallStatus,
-  'completed' | 'cached' | 'cancelled' | 'skipped' | 'failed'
+  TerminalWorkflowCallStatus
 >;
 type WorkflowCallTerminalProgress = Exclude<
   WorkflowCallProgress,
@@ -212,7 +221,7 @@ export type WorkflowCallLiveProgress = Extract<
 export function isTerminalWorkflowCallStatus(
   status: WorkflowCallStatus,
 ): status is WorkflowCallTerminalProgress['status'] {
-  return TERMINAL_WORKFLOW_CALL_STATUSES.has(status);
+  return TERMINAL_WORKFLOW_CALL_STATUS_SET.has(status);
 }
 
 export function isTerminalWorkflowCallProgress(

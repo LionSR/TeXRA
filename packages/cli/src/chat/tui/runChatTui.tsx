@@ -16,10 +16,10 @@ import {
   SETUP_AGENT_HANDOFF_NOTICE,
 } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
+import { setCliAgentResumeHandler } from '@cli/runtime/cliAgentResume';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   initInteractiveCliPlatform,
-  setCliAgentResumeHandler,
   setCliHelperModel,
 } from '@cli/runtime/initPlatform';
 import {
@@ -235,10 +235,7 @@ export async function runChat(
       catch: (error: unknown) => error,
     }).pipe(
       Effect.tap((selection) =>
-        Effect.tryPromise({
-          try: () => setCliHelperModel(services.globalState, selection.model),
-          catch: (error: unknown) => error,
-        }),
+        setCliHelperModel(services.globalState, selection.model),
       ),
     ),
   );
@@ -267,6 +264,7 @@ export async function runChat(
   const slashCommandContext = (): SlashCommandContext => ({
     cliContext: context,
     session,
+    runtimeSession,
     secrets: services.secrets,
     state: services.globalState,
     runtime: services.runtime,
@@ -522,6 +520,7 @@ export async function runChat(
     <App
       secrets={services.secrets}
       runtime={runtime}
+      session={runtimeSession}
       onSubmit={(line, mediaFiles, images) =>
         void chatController.submit(line, mediaFiles, images)
       }

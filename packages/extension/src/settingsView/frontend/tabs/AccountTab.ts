@@ -71,21 +71,13 @@ export class AccountTab extends LitElement {
     const hasStoredAccount = this.authenticated || expired || unavailable;
     const title =
       hasStoredAccount && this.userEmail ? this.userEmail : 'TeXRA account';
-    let description: TemplateResult | string =
-      'Sign in to use the hosted research-agent catalog.';
+    // An expired session offers explicit recovery and cleanup. A transient
+    // outage offers neither action, because the stored credential is retained.
+    let description: string;
+    let actions: TemplateResult | typeof nothing;
     if (expired) {
       description =
         'Your session has expired. Sign in again to restore your account connection.';
-    } else if (unavailable) {
-      description =
-        'The authentication service is temporarily unavailable. Your stored session has not been removed.';
-    } else if (this.authenticated) {
-      description = 'Signed in.';
-    }
-    // An expired session offers explicit recovery and cleanup. A transient
-    // outage offers neither action, because the stored credential is retained.
-    let actions: TemplateResult | typeof nothing;
-    if (expired) {
       actions = html`
         <wa-tag variant="warning" size="s">Session expired</wa-tag>
         ${renderLabeledActionButton({
@@ -104,8 +96,11 @@ export class AccountTab extends LitElement {
         })}
       `;
     } else if (unavailable) {
+      description =
+        'The authentication service is temporarily unavailable. Your stored session has not been removed.';
       actions = nothing;
     } else if (this.authenticated) {
+      description = 'Signed in.';
       actions = html`
         <wa-tag variant="success" size="s">Connected</wa-tag>
         ${renderLabeledActionButton({
@@ -117,6 +112,7 @@ export class AccountTab extends LitElement {
         })}
       `;
     } else {
+      description = 'Sign in to use the hosted research-agent catalog.';
       actions = renderLabeledActionButton({
         icon: 'right-to-bracket',
         text: 'Sign in',

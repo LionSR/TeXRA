@@ -14,10 +14,7 @@ const log = createLog('LeftoverRunSweep');
 
 /** Runs this process is running right now, by handle or by in-flight phase. */
 function runningRuns(session: SessionHandle, runs: RunRegistry): Set<RunId> {
-  const running = new Set<RunId>();
-  for (const handle of runs.getAgentHandles()) {
-    running.add(handle.runId);
-  }
+  const running = new Set(runs.getAgentHandles().map((handle) => handle.runId));
   for (const run of SubscriptionRef.getUnsafe(session.view).runs.values()) {
     if (isInFlightPhase(run.status)) running.add(run.id);
   }

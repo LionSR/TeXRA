@@ -12,7 +12,6 @@ import {
   ToolError,
   type FileLocation,
   type RunStorageFileLocation,
-  type ToolResult,
 } from '@shared/schemas';
 import {
   resolveWorkspaceRelativePath,

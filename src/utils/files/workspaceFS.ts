@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { normalizeFilePath } from '@utils/core';
+import { escapesRoot } from '@utils/core/pathCore';
 
 // Local file imports
 import { RelativeFS } from './relativeFS';
@@ -101,7 +102,7 @@ export function locateInWorkspace(
   // Absolute paths: platform's asRelativePath for symlink handling
   if (path.isAbsolute(inputPath)) {
     const relativePath = workspaceRelativePath(root, inputPath);
-    if (!path.isAbsolute(relativePath) && !relativePath.startsWith('..')) {
+    if (!path.isAbsolute(relativePath) && !escapesRoot(relativePath)) {
       return { kind: 'workspace', absolutePath: inputPath, relativePath };
     }
     return annotateExternal({ kind: 'external', absolutePath: inputPath });

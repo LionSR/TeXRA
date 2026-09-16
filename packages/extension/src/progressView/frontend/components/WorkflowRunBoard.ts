@@ -156,6 +156,18 @@ function blockKey(block: Block, index: number): string {
   }
 }
 
+/** The bucket a task row leads under: a card whose child is asking reads as
+ *  waiting, then its own status; quiet rows carry none. */
+function bucketOf(
+  row: WorkflowTaskRow,
+  waiting: ReadonlySet<string>,
+): Bucket | undefined {
+  if (waiting.has(row.id)) return 'waiting';
+  if (row.call.status === 'failed') return 'failed';
+  if (row.call.status === 'running') return 'running';
+  return undefined;
+}
+
 /** A group's surface key: the phase, then the group, so two phases keep
  *  their own folds. */
 function groupKey(phaseKey: string, group: WorkflowRowGroup): string {
@@ -222,36 +234,27 @@ export class WorkflowRunBoard extends LitElement {
     return this.requestOf(rowId) !== undefined;
   }
 
-  private bucketOf(row: WorkflowTaskRow): Bucket | undefined {
-    if (this.waiting(row.id)) return 'waiting';
-    if (row.call.status === 'failed') return 'failed';
-    if (row.call.status === 'running') return 'running';
-    return undefined;
-  }
-
   private expandedGroups(phaseKey: string): ReadonlySet<WorkflowRowGroup> {
     const groups = this.surface.groups.get(this.run.id);
-    const expanded = new Set<WorkflowRowGroup>();
-    for (const group of ['finished', 'queued', 'declared'] as const) {
-      if (groups?.get(groupKey(phaseKey, group)) === true) expanded.add(group);
-    }
-    return expanded;
+    return new Set(
+      (['finished', 'queued', 'declared'] as const).filter(
+        (group) => groups?.get(groupKey(phaseKey, group)) === true,
+      ),
+    );
   }
 
-  private rowsOf(phase: WorkflowPhaseModel): readonly WorkflowPhaseRow[] {
+  private blocksOf(phase: WorkflowPhaseModel): readonly Block[] {
+    // One waiting set per phase: the model ranks by it, the section
+    // headings below read it, and both answers must be the same one.
     const waiting = new Set(
       phase.tasks
         .filter((task) => this.waiting(task.id))
         .map((task) => task.id),
     );
-    return workflowPhaseRows(phase, {
+    const rows = workflowPhaseRows(phase, {
       expanded: this.expandedGroups(phase.key),
       waiting,
     });
-  }
-
-  private blocksOf(phase: WorkflowPhaseModel): readonly Block[] {
-    const rows = this.rowsOf(phase);
     const blocks: Block[] = [];
     let bucket: Bucket | undefined;
     for (let index = 0; index < rows.length; index += 1) {
@@ -269,13 +272,13 @@ export class WorkflowRunBoard extends LitElement {
         bucket = undefined;
         continue;
       }
-      const next = row.kind === 'task' ? this.bucketOf(row.row) : undefined;
+      const next = row.kind === 'task' ? bucketOf(row.row, waiting) : undefined;
       if (next !== undefined && next !== bucket) {
         let count = 0;
         for (let peek = index; peek < rows.length; peek += 1) {
           const candidate = rows[peek]!;
           if (candidate.kind !== 'task') break;
-          if (this.bucketOf(candidate.row) !== next) break;
+          if (bucketOf(candidate.row, waiting) !== next) break;
           count += 1;
         }
         blocks.push({ kind: 'section', bucket: next, count });

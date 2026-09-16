@@ -4,6 +4,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { TickerController } from '@shared/litControllers/TickerController';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { goalElapsedMs, type Goal } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
@@ -94,6 +95,10 @@ export class GoalTab extends LitElement {
   ];
 
   @property({ attribute: false }) items: readonly Goal[] = [];
+
+  // Ticks the rows' `duration` readings: `goalElapsedMs` reads the clock when
+  // the row renders, so a re-render is what keeps it current.
+  private readonly _ticker = new TickerController(this, 1000);
 
   private handleRefresh = (): void => {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST, {});

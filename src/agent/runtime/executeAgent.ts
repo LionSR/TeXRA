@@ -7,7 +7,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
-import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
+import { persistedParentRunId } from '@agent/storage/runRecords';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -389,7 +389,7 @@ export interface SubagentRunOptions {
   onApprovalPolicyDenial?: () => void;
   /** Hide tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
-  /** Session owning this run's coordination state. Defaults to the process session. */
+  /** Session owning this run's coordination state; run entry points require it. */
   session?: SessionHandle;
   /**
    * Fires when a subagent fails with a provider/runtime error that the caller

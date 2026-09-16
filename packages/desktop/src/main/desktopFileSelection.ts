@@ -142,12 +142,13 @@ export function createDesktopFileSelection(
       );
     },
     async attachDroppedFiles(paths, category) {
-      const root = workspacePath;
-      const resolved = root
+      const resolved = workspacePath
         ? await options.runtime.runPromise(
-            Effect.forEach(paths, (raw) => droppedWorkspaceFile(root, raw), {
-              concurrency: 'unbounded',
-            }),
+            Effect.forEach(
+              paths,
+              (raw) => droppedWorkspaceFile(workspacePath, raw),
+              { concurrency: 'unbounded' },
+            ),
           )
         : paths.map(() => null);
       return attachDroppedPaths(resolved, getIncludedExtensions(category))
