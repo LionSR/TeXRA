@@ -149,9 +149,9 @@ function runCleanupDetached(
  * error when the dialog host is already gone. `notify` is the Effect-shaped
  * host call (a `MessageHost` member, or a wrapped `onSessionChanged`).
  */
-function warnOnNotificationFailure<E>(
+function warnOnNotificationFailure(
   log: DesktopAuthLog,
-  notify: Effect.Effect<unknown, E>,
+  notify: Effect.Effect<unknown, unknown>,
   failureMessage: string,
 ): Effect.Effect<void> {
   return notify.pipe(
