@@ -281,6 +281,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const next = yield* bindModel({
         config: nextConfig,
         stores: run.stores,
+        roots: run.session.roots,
         compatibilityKey: current.compatibilityKey,
         declinedRoutes: state.declinedRoutes,
         agentCategory: run.config.agentCategory,

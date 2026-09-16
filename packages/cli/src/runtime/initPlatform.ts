@@ -463,10 +463,13 @@ export async function initCliPlatform(
         Effect.cached(
           initializeDefaultSession({
             responseTextProcessing: createTexraResponseTextProcessing(
-              createAgentResponseTextConnector({
-                secrets: cliSecrets,
-                globalState,
-              }),
+              createAgentResponseTextConnector(
+                {
+                  secrets: cliSecrets,
+                  globalState,
+                },
+                roots,
+              ),
             ),
           }).pipe(
             Effect.tap((session) =>

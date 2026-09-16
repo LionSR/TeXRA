@@ -74,7 +74,10 @@ import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { tryProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
+import {
+  initProcessWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
 import {
   createNodePlatform,
   createNodeWorkspaceRoots,
@@ -151,9 +154,10 @@ let extensionShutdownPromise: Promise<void> | undefined;
  * both activation paths: the credential-only path without a folder and the
  * workspace path, which adds the ports only a folder can answer.
  *
- * Returns the secrets port and the process runtime it built, so the surfaces
- * registered below take both as arguments instead of reading either back off
- * an ambient locator (PRD R1: each composition root holds its runtime).
+ * Returns the secrets port, the process runtime and the process roots it
+ * built, so the surfaces registered below take them as arguments instead of
+ * reading either back off an ambient locator (PRD R1: each composition root
+ * holds its runtime).
  */
 async function initVscodePlatform(
   context: vscode.ExtensionContext,
@@ -164,7 +168,11 @@ async function initVscodePlatform(
     NodePlatformServices,
     'languageModel' | 'toolMissingHandler'
   > = {},
-): Promise<{ secrets: PlatformSecrets; runtime: ProcessRuntime }> {
+): Promise<{
+  secrets: PlatformSecrets;
+  runtime: ProcessRuntime;
+  roots: WorkspaceRoots;
+}> {
   // The process runtime comes first: the config stores below are opened as
   // Effect programs, so it must exist before the platform this host wires.
   // The process identity is read before installing: an opener that uses the
@@ -217,17 +225,16 @@ async function initVscodePlatform(
       ...extras,
     }),
   );
-  initProcessWorkspaceRoots(
-    createNodeWorkspaceRoots({
-      workspacePath: workspaceRoot,
-      storage: storage.getStoragePath(),
-      globalStorage: storage.getGlobalStoragePath(),
-      config,
-      workspaceState,
-      globalState,
-    }),
-  );
-  return { secrets, runtime };
+  const roots = createNodeWorkspaceRoots({
+    workspacePath: workspaceRoot,
+    storage: storage.getStoragePath(),
+    globalStorage: storage.getGlobalStoragePath(),
+    config,
+    workspaceState,
+    globalState,
+  });
+  initProcessWorkspaceRoots(roots);
+  return { secrets, runtime, roots };
 }
 
 function shutdownExtension(): Promise<void> {
@@ -547,7 +554,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
-  const { secrets, runtime } = await initVscodePlatform(
+  const { secrets, runtime, roots } = await initVscodePlatform(
     context,
     lifecycle,
     workspaceRoot,
@@ -589,7 +596,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const runtimeSession = await runtime.runPromise(
     initializeDefaultSession({
       responseTextProcessing: createTexraResponseTextProcessing(
-        createAgentResponseTextConnector({ secrets, globalState }),
+        createAgentResponseTextConnector({ secrets, globalState }, roots),
       ),
     }),
   );
@@ -707,6 +714,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     progressViewProvider,
     secrets,
     runtime,
+    roots,
   );
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context, runtime);

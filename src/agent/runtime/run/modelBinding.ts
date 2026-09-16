@@ -54,7 +54,7 @@ import {
   resolveKimiCodeRoutingFacts,
 } from '@model/kimiCodeSubscriptionRouting';
 import { isOpenRouterRoutingUnsupported } from '@model/openRouterRouting';
-import type { StateStore } from '@platform/interfaces';
+import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import {
   AgentCategory,
   type DeclinableUsageRoute,
@@ -65,9 +65,10 @@ import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { getConfig } from '@utils/config/configUtils';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
+import { readConfig } from '@utils/config/configUtils';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { validationModel } from './validationModel';
 import type { HttpClient } from 'effect/unstable/http';
@@ -152,6 +153,14 @@ interface BindModelInput {
   readonly config: ModelConfig;
   /** The run's process secret store and global state, from the launch. */
   readonly stores: ModelOptionStores;
+  /**
+   * The session's three setting slots, as data like {@link stores}: the
+   * Models-tab toggles read live from `roots.config` on every bind, and the
+   * OpenRouter preference resolves through the catalog against
+   * `roots.globalState`, so a contended multi-session run reads its own
+   * session's values, never the ambient process frame.
+   */
+  readonly roots: SettingsStores;
   /** A persisted conversation format wins over today's default route. */
   readonly compatibilityKey?: ModelCompatibilityKey | null;
   /**
@@ -333,7 +342,8 @@ function configurationFor(
   // arm, the DeepSeek, Kimi and GLM reasoning routes included, matching what
   // the retired OpenAI handler base sent. The Anthropic arm never read the
   // setting and keeps the provider default.
-  const parallelToolCalls = getConfig<boolean>(
+  const parallelToolCalls = readConfig<boolean>(
+    input.roots.config,
     'texra.model.openaiParallelToolCalls',
   );
   const base = binding(config, credential);
@@ -378,7 +388,11 @@ function configurationFor(
       const isGpt5 =
         config.name.startsWith('gpt5') || config.fullName.startsWith('gpt-5');
       const summary: 'auto' | null =
-        !isGpt5 || getConfig<boolean>('texra.model.gpt5ReasoningSummary')
+        !isGpt5 ||
+        readConfig<boolean>(
+          input.roots.config,
+          'texra.model.gpt5ReasoningSummary',
+        )
           ? 'auto'
           : null;
       if (credential.route === 'chatgpt-subscription') {
@@ -467,7 +481,8 @@ function configurationFor(
           // holds the conversation and each round sends only the new turn
           // (and background execution becomes reachable); off, every round
           // resends the full transcript and nothing is retained.
-          store: getConfig<boolean>(
+          store: readConfig<boolean>(
+            input.roots.config,
             'texra.model.useGoogleInteractionsServerState',
           ),
           thinkingLevel:
@@ -671,22 +686,30 @@ function constructModel(
  * Whether a binding delivers its turns as background work: the run's
  * category and the provider's own toggle over a configuration that supports
  * it. One owner for the choice — the loop asks it per turn, and the binding
- * asks it to decide whether the Responses WebSocket applies.
+ * asks it to decide whether the Responses WebSocket applies. The toggles read
+ * live from `config` on every call, so a flip mid-run takes effect on the
+ * next turn.
  */
-export function backgroundDelivery(bound: {
-  readonly backgroundCapable: boolean;
-  readonly protocol: ModelOrigin['protocol'];
-  readonly modelName: string;
-  readonly agentCategory: AgentCategory;
-}): boolean {
+export function backgroundDelivery(
+  bound: {
+    readonly backgroundCapable: boolean;
+    readonly protocol: ModelOrigin['protocol'];
+    readonly modelName: string;
+    readonly agentCategory: AgentCategory;
+  },
+  config: ConfigProvider,
+): boolean {
   if (!bound.backgroundCapable) return false;
   if (bound.agentCategory !== AgentCategory.Workflow) return false;
   if (bound.protocol === 'google-interactions') {
-    return getConfig<boolean>('texra.model.useGoogleBackgroundResponses');
+    return readConfig<boolean>(
+      config,
+      'texra.model.useGoogleBackgroundResponses',
+    );
   }
   return (
     bound.modelName.toLowerCase().startsWith('gpt') &&
-    getConfig<boolean>('texra.model.useBackgroundResponses')
+    readConfig<boolean>(config, 'texra.model.useBackgroundResponses')
   );
 }
 
@@ -831,7 +854,10 @@ export function releaseBindingUploads(
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope | HttpClient.HttpClient> {
-  const useOpenRouter = getUseOpenRouter();
+  const useOpenRouter = readSettingFrom<boolean>(
+    input.roots,
+    GlobalStateKey.USE_OPENROUTER,
+  );
   // The wire identity the preference promises, applied to the bound config
   // and not only to the route decision below (which re-applies it as
   // identity), so the request carries the unpinned identifier.
@@ -953,12 +979,15 @@ export const bindModel = Effect.fn('bindModel')(function* (
   // Responses protocol, and background wins where the user selected both.
   const onWebSocket =
     configuration.protocol === 'openai-responses' &&
-    !backgroundDelivery({
-      backgroundCapable: backgroundCapable(configuration),
-      protocol: configuration.protocol,
-      modelName: config.name,
-      agentCategory: input.agentCategory,
-    }) &&
+    !backgroundDelivery(
+      {
+        backgroundCapable: backgroundCapable(configuration),
+        protocol: configuration.protocol,
+        modelName: config.name,
+        agentCategory: input.agentCategory,
+      },
+      input.roots.config,
+    ) &&
     responsesWebSocketSelected(credential, input.stores.globalState);
   const model =
     configuration.protocol === 'openai-responses' && onWebSocket

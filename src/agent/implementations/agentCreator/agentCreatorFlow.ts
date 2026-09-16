@@ -14,6 +14,7 @@ import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
@@ -396,11 +397,12 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
   blueprint: AgentBlueprint,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
+  roots: SettingsStores,
 ): Effect.fn.Return<string, unknown, HttpClient.HttpClient> {
   let lastValidationError: string | undefined;
 
   const attempt = Effect.gen(function* () {
-    const bound = yield* helperModel(stores);
+    const bound = yield* helperModel(stores, roots);
 
     const prompts = config[blueprint.category];
     const schemaRef = getSchemaReference(blueprint.category);
@@ -473,13 +475,15 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
  *
  * `stores` are the process secret store and global state (`Secrets` /
  * `AppState`) the host command already holds; the helper model that drafts the
- * YAML is resolved against them.
+ * YAML is resolved against them, with `roots` (the host's setting slots)
+ * supplying the bind's toggles.
  */
 export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   config: CreatorConfig,
   category: AgentCategory,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
+  roots: SettingsStores,
 ): Effect.fn.Return<
   void,
   unknown,
@@ -504,7 +508,13 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   );
   if (!blueprint) return;
 
-  const yamlContent = yield* generateAgentYaml(config, blueprint, ui, stores);
+  const yamlContent = yield* generateAgentYaml(
+    config,
+    blueprint,
+    ui,
+    stores,
+    roots,
+  );
   // The blueprint's path is absolute and its directory is the one the UI
   // just answered with, so the write goes through the process filesystem.
   const fs = yield* FileSystem.FileSystem;

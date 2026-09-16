@@ -20,6 +20,7 @@ import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { fakeStores } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const mocks = vi.hoisted(() => ({
   helperModel: vi.fn(),
@@ -39,10 +40,12 @@ vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
 }));
 
 /**
- * The creator only forwards its stores to `helperModel`, which this suite
- * mocks, so empty stores are enough to exercise the orchestration.
+ * The creator only forwards its stores and setting slots to `helperModel`,
+ * which this suite mocks, so empty ones are enough to exercise the
+ * orchestration.
  */
 const STORES = fakeStores();
+const ROOTS = makeFakeSettingsStores().stores;
 
 const CONFIG: CreatorConfig = {
   workflow: {
@@ -70,7 +73,7 @@ const agentPath = (): string => join(agentDir, 'editor.yaml');
 
 /** The creator program with the `FileSystem` its YAML write requires. */
 const createAgent = (ui: AgentCreatorUI): Effect.Effect<void, unknown> =>
-  runAgentCreator(CONFIG, 'workflow', ui, STORES).pipe(
+  runAgentCreator(CONFIG, 'workflow', ui, STORES, ROOTS).pipe(
     Effect.provide(Layer.mergeAll(nodePlatformLayer, testHttpClientLayer)),
   );
 

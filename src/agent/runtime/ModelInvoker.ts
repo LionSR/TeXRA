@@ -323,15 +323,19 @@ export const modelInvokerLayer = (): Layer.Layer<
        * Whether a turn runs as background work: a workflow turn on a binding
        * that supports it, under the provider's toggle. The binding owns the
        * rule (it decides the Responses transport by the same answer); this
-       * asks it per turn with the run's category.
+       * asks it per turn with the run's category, reading the toggle live
+       * from the session's own config provider.
        */
       const backgroundRequested = (bound: BoundModel): boolean =>
-        backgroundDelivery({
-          backgroundCapable: bound.backgroundCapable,
-          protocol: bound.origin.protocol,
-          modelName: bound.config.name,
-          agentCategory: run.config.agentCategory,
-        });
+        backgroundDelivery(
+          {
+            backgroundCapable: bound.backgroundCapable,
+            protocol: bound.origin.protocol,
+            modelName: bound.config.name,
+            agentCategory: run.config.agentCategory,
+          },
+          session.roots.config,
+        );
 
       /**
        * The semantic request an attempt admits: this run's history as the
@@ -985,6 +989,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             const next = yield* bindModel({
               config,
               stores: run.stores,
+              roots: session.roots,
               compatibilityKey: failed.compatibilityKey,
               declinedRoutes,
               agentCategory: run.config.agentCategory,

@@ -237,9 +237,10 @@ export function openDesktopProjectRegistry(
 ): Effect.Effect<DesktopProjectRegistry, Error> {
   return Effect.gen(function* () {
     // One connector for every project session: the helper model it asks
-    // resolves against the process stores the root opened, not per project.
+    // resolves against the process stores and setting slots the root opened,
+    // not per project.
     const responseTextProcessing = createTexraResponseTextProcessing(
-      createAgentResponseTextConnector(options.stores),
+      createAgentResponseTextConnector(options.stores, options.processRoots),
     );
     const projects = new Map<string, DesktopProject>();
     const lanes = new Map<string | symbol, PerKeyLane>();
