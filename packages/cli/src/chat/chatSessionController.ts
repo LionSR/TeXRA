@@ -518,6 +518,7 @@ export function createChatSessionController(
   disposables.add(
     runtimeSession.interactions.use(
       createTuiHostInteractions(presentationHost, sessionContext, {
+        session: runtimeSession,
         secrets,
         runtime,
       }),
@@ -539,7 +540,12 @@ export function createChatSessionController(
     session: runtimeSession,
     approvalPromptsUnavailable: approvalsUnavailable,
     onApprovalPolicyDenial: () =>
-      warnApprovalDenied(sessionContext, 'Tool or edit approval', launchRunId),
+      warnApprovalDenied(
+        runtimeSession,
+        sessionContext,
+        'Tool or edit approval',
+        launchRunId,
+      ),
     runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
     executeWorkflow: async (_config, runId) => {
       throw new Error(
@@ -606,6 +612,7 @@ export function createChatSessionController(
                   approvalPromptsUnavailable: approvalsUnavailable,
                   onApprovalPolicyDenial: () =>
                     warnApprovalDenied(
+                      runtimeSession,
                       sessionContext,
                       'Tool or edit approval',
                       runId,

@@ -14,6 +14,7 @@ import { Effect } from 'effect';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
+import { AgentResume } from '@platform/interfaces';
 
 // Local imports - shared
 import {
@@ -158,7 +159,7 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
     permission: ExternalInquiryPermission,
     decision: RequestDecision,
     session: SessionHandle,
-  ): Effect.fn.Return<void, Error, InquiryRecords> {
+  ): Effect.fn.Return<void, Error, InquiryRecords | AgentResume> {
     const records = yield* InquiryRecords;
     const { threadId } = permission;
     const turnIndex = permission.transcript?.at(-1)?.turnIndex ?? 1;

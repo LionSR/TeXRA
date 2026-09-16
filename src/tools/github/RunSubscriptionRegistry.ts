@@ -19,7 +19,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
-import type { Disposable } from '@platform/interfaces';
+import { AgentResume, type Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 
@@ -94,65 +94,70 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     runId: RunId,
     input: Input,
     session: SessionHandle,
-  ): Effect.Effect<boolean, never, Secrets> {
-    return Effect.suspend(() => {
-      const key = this.opts.keyOf(input);
-      const bound = this.perRun.get(runId) ?? new Map<K, BoundSubscription>();
-      const existing = bound.get(key);
-      if (existing) {
-        this.ensureReleaseHook(session);
-        const previousOwner = existing.owner;
-        existing.owner = session;
-        if (previousOwner !== session) {
-          this.decrementSessionRefCount(previousOwner);
-          this.incrementSessionRefCount(session);
-          this.detachReleaseHookIfUnused(previousOwner);
-        }
-        this.opts.source.updateSubscription?.(input, existing.onEvent);
-        return Effect.succeed(false);
-      }
-      const onEvent = (text: string): Effect.Effect<void> => {
-        // Invoked synchronously on the emit turn (see PollEventListener):
-        // capture the binding and its owner now — bind() reassigns the owner
-        // on rebind, and the delivery belongs to the session the event came
-        // through. Only the delivery itself runs detached.
-        const subscription = bound.get(key);
-        if (!subscription) return Effect.void;
-        const owner = subscription.owner;
-        const reportDeliveryFailure = (err: unknown) =>
-          Effect.sync(() => {
-            this.logger.warn('Failed to deliver subscription follow-up', {
-              data: { key, runId, err },
-            });
-          });
-        return submitFollowUp(runId, text, {
-          session: owner,
-          mode: 'live_notification',
-        }).pipe(
-          Effect.asVoid,
-          Effect.catch(reportDeliveryFailure),
-          // A defect (e.g. publish throwing) got the same warn through the old
-          // promise chain's .catch; keep one message for both channels.
-          Effect.catchDefect(reportDeliveryFailure),
-        );
-      };
-      return this.opts.source.subscribe(input, onEvent).pipe(
-        Effect.map((disposable) => {
-          const subscription: BoundSubscription = {
-            disposable,
-            onEvent,
-            owner: session,
-          };
-          bound.set(key, subscription);
-          this.perRun.set(runId, bound);
-          this.incrementSessionRefCount(session);
+  ): Effect.Effect<boolean, never, Secrets | AgentResume> {
+    // The resume port is captured now: onEvent fires from the detached poll
+    // loop, whose context has no AgentResume.
+    return Effect.flatMap(AgentResume, (agentResume) =>
+      Effect.suspend(() => {
+        const key = this.opts.keyOf(input);
+        const bound = this.perRun.get(runId) ?? new Map<K, BoundSubscription>();
+        const existing = bound.get(key);
+        if (existing) {
           this.ensureReleaseHook(session);
-          this.logger.info(`Bound subscription ${key} → run ${runId}`);
-          this.emitBindingsChanged();
-          return true;
-        }),
-      );
-    });
+          const previousOwner = existing.owner;
+          existing.owner = session;
+          if (previousOwner !== session) {
+            this.decrementSessionRefCount(previousOwner);
+            this.incrementSessionRefCount(session);
+            this.detachReleaseHookIfUnused(previousOwner);
+          }
+          this.opts.source.updateSubscription?.(input, existing.onEvent);
+          return Effect.succeed(false);
+        }
+        const onEvent = (text: string): Effect.Effect<void> => {
+          // Invoked synchronously on the emit turn (see PollEventListener):
+          // capture the binding and its owner now — bind() reassigns the owner
+          // on rebind, and the delivery belongs to the session the event came
+          // through. Only the delivery itself runs detached.
+          const subscription = bound.get(key);
+          if (!subscription) return Effect.void;
+          const owner = subscription.owner;
+          const reportDeliveryFailure = (err: unknown) =>
+            Effect.sync(() => {
+              this.logger.warn('Failed to deliver subscription follow-up', {
+                data: { key, runId, err },
+              });
+            });
+          return submitFollowUp(runId, text, {
+            session: owner,
+            mode: 'live_notification',
+          }).pipe(
+            Effect.provideService(AgentResume, agentResume),
+            Effect.asVoid,
+            Effect.catch(reportDeliveryFailure),
+            // A defect (e.g. publish throwing) got the same warn through the old
+            // promise chain's .catch; keep one message for both channels.
+            Effect.catchDefect(reportDeliveryFailure),
+          );
+        };
+        return this.opts.source.subscribe(input, onEvent).pipe(
+          Effect.map((disposable) => {
+            const subscription: BoundSubscription = {
+              disposable,
+              onEvent,
+              owner: session,
+            };
+            bound.set(key, subscription);
+            this.perRun.set(runId, bound);
+            this.incrementSessionRefCount(session);
+            this.ensureReleaseHook(session);
+            this.logger.info(`Bound subscription ${key} → run ${runId}`);
+            this.emitBindingsChanged();
+            return true;
+          }),
+        );
+      }),
+    );
   }
 
   /** Returns true if a subscription existed and was removed. */

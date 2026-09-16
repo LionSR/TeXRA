@@ -25,7 +25,9 @@ const logger = createLog('SessionHostInteractions');
 const MAX_PENDING_PRESENTATION_REPLAYS = 256;
 
 /**
- * Read a file's diagnostics from the host's own language tooling. An `Effect`:
+ * Read a file's diagnostics from the host's own language tooling. `path` is
+ * absolute — the diagnostics tool resolves the model's input against its tool
+ * root before calling. An `Effect`:
  * a host that could not produce them reaches the diagnostics tool as
  * {@link DiagnosticsReadFailed} instead of as `unknown`, and a tool call that
  * is interrupted while the host rebuilds stops waiting on it.

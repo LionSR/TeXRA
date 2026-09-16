@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
 import { describe, it } from 'vitest';
+import { Effect } from 'effect';
 
 // Local imports - auth
 import { callPort, runAuthProgram } from '@auth/authProgram';
@@ -92,16 +93,19 @@ function createMemoryStorage(initial?: SupabaseSession): {
   let readCount = 0;
   return {
     storage: {
-      get: async () => {
-        readCount += 1;
-        return value;
-      },
-      store: async (sessionData) => {
-        value = sessionData;
-      },
-      delete: async () => {
-        value = undefined;
-      },
+      get: () =>
+        Effect.sync(() => {
+          readCount += 1;
+          return value;
+        }),
+      store: (sessionData) =>
+        Effect.sync(() => {
+          value = sessionData;
+        }),
+      delete: () =>
+        Effect.sync(() => {
+          value = undefined;
+        }),
     },
     read: () => parseStoredSupabaseSession(value),
     getReadCount: () => readCount,
@@ -174,22 +178,26 @@ function createClearingStorageCoordinator(options: {
   let readCount = 0;
   let clearDuringFirstRead = true;
   const storage: SupabaseSessionStorage = {
-    get: async () => {
-      readCount += 1;
-      const snapshot = value;
-      if (clearDuringFirstRead) {
-        clearDuringFirstRead = false;
-        await options.onFirstRead(coordinator);
-      }
-      return snapshot;
-    },
-    store: async (sessionData) => {
-      value = sessionData;
-    },
-    delete: async () => {
-      await options.onDelete?.();
-      value = undefined;
-    },
+    get: () =>
+      Effect.gen(function* () {
+        readCount += 1;
+        const snapshot = value;
+        if (clearDuringFirstRead) {
+          clearDuringFirstRead = false;
+          const outcome = options.onFirstRead(coordinator);
+          if (outcome) yield* Effect.promise(() => outcome);
+        }
+        return snapshot;
+      }),
+    store: (sessionData) =>
+      Effect.sync(() => {
+        value = sessionData;
+      }),
+    delete: () =>
+      Effect.gen(function* () {
+        if (options.onDelete) yield* Effect.promise(options.onDelete);
+        value = undefined;
+      }),
   };
   const coordinator = new SupabaseSessionCoordinator({
     ...COORDINATOR_CONFIG,
@@ -458,15 +466,17 @@ describe('SupabaseSession', () => {
       const allowStore = createDeferred();
       let value: string | undefined = JSON.stringify(expiredSession());
       const storage: SupabaseSessionStorage = {
-        get: async () => value,
-        store: async (sessionData) => {
-          storeStarted.resolve();
-          await allowStore.promise;
-          value = sessionData;
-        },
-        delete: async () => {
-          value = undefined;
-        },
+        get: () => Effect.sync(() => value),
+        store: (sessionData) =>
+          Effect.gen(function* () {
+            storeStarted.resolve();
+            yield* Effect.promise(() => allowStore.promise);
+            value = sessionData;
+          }),
+        delete: () =>
+          Effect.sync(() => {
+            value = undefined;
+          }),
       };
       const coordinator = new SupabaseSessionCoordinator({
         ...COORDINATOR_CONFIG,

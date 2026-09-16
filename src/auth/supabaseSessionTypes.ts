@@ -1,7 +1,9 @@
 import { z } from 'zod';
-import { Result } from 'effect';
+import { Effect, Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+import type { AuthPortError } from './authProgram';
 
 export const DEFAULT_SUPABASE_SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
@@ -42,9 +44,9 @@ export interface SupabaseSessionParseOptions {
 
 /** Storage boundary for persisted Supabase session data. */
 export interface SupabaseSessionStorage {
-  get(): Promise<string | undefined>;
-  store(sessionData: string): Promise<void>;
-  delete(): Promise<void>;
+  get(): Effect.Effect<string | undefined, AuthPortError>;
+  store(sessionData: string): Effect.Effect<void, AuthPortError>;
+  delete(): Effect.Effect<void, AuthPortError>;
 }
 
 export interface SupabaseSessionLog {

@@ -243,18 +243,18 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
   // The token endpoint mints a native GoTrue session, so
   // standard Supabase refresh applies — no custom refresh flag.
   const session: SupabaseSession = toStorableSupabaseSession(exchange);
-  yield* completeDeviceSession(() =>
-    runAuthProgram(authCoordinator.storeSession(session)),
-  );
+  yield* completeDeviceSession(() => authCoordinator.storeSession(session));
   return session;
 });
 
 export async function signOutCliSupabase(): Promise<void> {
   const authCoordinator = cliAuthCoordinator();
   await runAuthProgram(authCoordinator.clearSession());
-  await refreshRemoteAgentCatalogAfterSignOut(
-    () => runAuthProgram(invalidateRemoteAgentsAfterSignOut()),
-    (message) => activeAuthLog?.warn?.('cli-auth', message),
+  await runAuthProgram(
+    refreshRemoteAgentCatalogAfterSignOut(
+      invalidateRemoteAgentsAfterSignOut(),
+      (message) => activeAuthLog?.warn?.('cli-auth', message),
+    ),
   );
 }
 
