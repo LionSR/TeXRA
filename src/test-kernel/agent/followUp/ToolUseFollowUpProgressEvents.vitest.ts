@@ -10,6 +10,7 @@ import {
   notifyFollowUpSent,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
+import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -17,6 +18,7 @@ import {
 } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { fakeHostAgentResume } from '@test/support/setupPlatform';
 import {
   createTestSession,
   publishTestRunStart,
@@ -103,7 +105,7 @@ describe('tool-use follow-up progress events', () => {
     const result = await Effect.runPromise(
       submitFollowUp(runId, 'please continue', {
         session,
-      }),
+      }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
     );
 
     expect(result).toEqual({ status: 'sent' });
@@ -177,7 +179,9 @@ describe('tool-use follow-up progress events', () => {
     trackToolUseFlow();
 
     const result = await Effect.runPromise(
-      submitFollowUp(runId, 'late follow-up', { session: defaultSession() }),
+      submitFollowUp(runId, 'late follow-up', {
+        session: defaultSession(),
+      }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
     );
 
     // The run's own terminal row is the refusal: it finished.
@@ -197,7 +201,7 @@ describe('tool-use follow-up progress events', () => {
       const result = await Effect.runPromise(
         submitFollowUp(resumingRunId, 'queued while resuming', {
           session: defaultSession(),
-        }),
+        }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
       );
 
       // The fake platform's resume port refuses, so the input stays queued

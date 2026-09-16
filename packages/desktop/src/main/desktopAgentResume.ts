@@ -110,10 +110,14 @@ export class DesktopProcessResumeOwner {
         runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
         isCancellationRequested,
         executeWorkflow: (config, id, modelCompatibilityKey) =>
-          launchDesktopAgent(
-            { kind: 'resume', config, runId: id },
-            { session, runtime },
-            { modelCompatibilityKey },
+          // `executeWorkflow` is the one Promise-typed hook in the resume
+          // contract; the launch itself is the Effect this runs.
+          runtime.runPromise(
+            launchDesktopAgent(
+              { kind: 'resume', config, runId: id },
+              { session, runtime },
+              { modelCompatibilityKey },
+            ),
           ),
       });
     });
