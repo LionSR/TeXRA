@@ -13,6 +13,7 @@ import {
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
+  type SessionHandle,
   type SessionHostInteractions,
 } from '@agent/runtime';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -36,10 +37,11 @@ const CHANNEL = 'agentEventListeners';
 const log = createLog(CHANNEL);
 
 function handleRequestOpenFile(
+  session: SessionHandle,
   runtime: ProcessRuntime,
   payload: RequestOpenFilePayload,
 ): Promise<boolean> {
-  return openBuildDisplayIfTex(payload.location, runtime, {
+  return openBuildDisplayIfTex(session, payload.location, runtime, {
     preserveFocus: payload.preserveFocus,
   }).catch((err) => {
     log.warn(
@@ -203,10 +205,12 @@ export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
   globalState: StateStore,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): Pick<SessionHostInteractions, 'emit'> {
   const handlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
     {
-      requestOpenFile: (payload) => handleRequestOpenFile(runtime, payload),
+      requestOpenFile: (payload) =>
+        handleRequestOpenFile(session, runtime, payload),
       requestShowInstruction: (payload) =>
         handleRequestShowInstruction(globalState, payload),
       showAgentConfigBanner: (payload) =>

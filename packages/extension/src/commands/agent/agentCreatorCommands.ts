@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
+import type { SessionHandle } from '@agent/runtime';
 import { renderAgentTemplateString } from '@agent/templates';
 import {
   AgentCreatorUiFailed,
@@ -178,7 +179,10 @@ function pickToolGroups(
   );
 }
 
-function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
+function buildVSCodeUI(
+  runtime: ProcessRuntime,
+  session: SessionHandle,
+): AgentCreatorUI {
   return {
     promptAgentName(categoryLabel) {
       return askForInput({
@@ -243,7 +247,13 @@ function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
     promptAddToConfig(agentName, category) {
       return Effect.tryPromise({
         try: () =>
-          promptToAddAgentToConfig(agentName, 'custom', category, runtime),
+          promptToAddAgentToConfig(
+            agentName,
+            'custom',
+            category,
+            runtime,
+            session,
+          ),
         catch: (cause) =>
           new AgentCreatorUiFailed({
             reason: 'config-update-failed',
@@ -288,10 +298,11 @@ export function handleCreateAgentWithAI(
   category: AgentCategory,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ) {
   return Effect.gen(function* () {
     const config = yield* loadCreatorConfig(context);
-    yield* runAgentCreator(config, category, buildVSCodeUI(runtime), {
+    yield* runAgentCreator(config, category, buildVSCodeUI(runtime, session), {
       secrets,
       globalState,
     });

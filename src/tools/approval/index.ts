@@ -3,15 +3,10 @@
  *
  * Approval queues, pending registries, and bypass state are owned per session
  * (`session.approvals`, #8144). The cleanup helpers here sweep exactly one
- * session's state; hosts pass their own session (desktop windows), while the
- * single-session hosts (extension, CLI) rely on the default session.
+ * session's state; every caller passes the session that owns the run.
  */
 
-import {
-  currentSession,
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunApprovalBypass } from '@agent/runtime/runApprovalQueue';
 import type { RunId } from '@shared/schemas';
 
@@ -21,13 +16,9 @@ import type { RunId } from '@shared/schemas';
  *
  * Proposals settle through the run coordinators rather than a stream approval
  * queue, so unlike bash / tool-edit there is no controller here — only the
- * session's bypass state. Resolves the calling context's session by default
- * (run session inside a run, otherwise the process default session);
- * multi-session hosts pass their own session explicitly.
+ * session's bypass state. Every caller passes the session that owns the run.
  */
-export function proposalApprovals(
-  session: SessionHandle = currentSession(),
-): RunApprovalBypass {
+export function proposalApprovals(session: SessionHandle): RunApprovalBypass {
   return session.approvals.proposal;
 }
 
@@ -49,9 +40,9 @@ export function proposalApprovals(
  */
 export function configureDelegatedChildApprovals(
   childRunId: RunId,
-  parentRunId?: RunId,
+  parentRunId: RunId | undefined,
   policy: 'inherit' | 'auto-approved' = 'inherit',
-  session: SessionHandle = currentSession(),
+  session: SessionHandle,
 ): void {
   if (parentRunId) {
     session.approvals.registerRunParent(childRunId, parentRunId);
@@ -77,7 +68,7 @@ export function configureDelegatedChildApprovals(
  */
 export function releaseRunResources(
   runId: RunId,
-  session: SessionHandle = defaultSession(),
+  session: SessionHandle,
 ): void {
   session.approvals.forgetRunAncestry(runId);
   session.followUps.terminalize(runId);

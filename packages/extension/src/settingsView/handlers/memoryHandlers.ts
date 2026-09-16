@@ -8,7 +8,7 @@
 import { Cause, Data, Effect, Exit } from 'effect';
 import * as vscode from 'vscode';
 
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -37,6 +37,7 @@ export class MemoryHandlers {
     private readonly memory: SettingsMemoryController,
     private readonly viewName: string,
     private readonly runtime: ProcessRuntime,
+    private readonly session: SessionHandle,
   ) {}
 
   async sendMemoryData(webview: vscode.Webview): Promise<void> {
@@ -93,7 +94,7 @@ export class MemoryHandlers {
         const resolvedPath = resolveMemoryStoragePath(data.storagePath);
         const absolutePath = await this.runtime.runPromise(
           withSessionFs(
-            defaultSession().roots,
+            this.session.roots,
             Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
               storageFs.resolve(resolvedPath),
             ),
@@ -126,7 +127,7 @@ export class MemoryHandlers {
         // hand back the same view's absolute path for it.
         const absolutePath = await this.runtime.runPromise(
           withSessionFs(
-            defaultSession().roots,
+            this.session.roots,
             Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
               Effect.flatMap(
                 storageFs.makeDirectory(resolvedPath, { recursive: true }),

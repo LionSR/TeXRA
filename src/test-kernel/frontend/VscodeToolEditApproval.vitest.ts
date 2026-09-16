@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SessionHandle } from '@agent/runtime';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { effectRuntime } from '@platform/processRuntime';
@@ -128,7 +129,14 @@ let storageRoot: string;
 function createApprovalHarness(): ApprovalHarness {
   const decide = createDecideSpy();
   const controller = new ToolEditApprovalController({
-    host: new VscodeToolEditApprovalHost(storageRoot, decide, effectRuntime()),
+    host: new VscodeToolEditApprovalHost(
+      storageRoot,
+      decide,
+      effectRuntime(),
+      // The session only backs `openBuildDisplay`, which this suite never
+      // invokes; no shared fake exists that builds without a platform host.
+      { roots: {} } as unknown as SessionHandle,
+    ),
   });
   const harness = { controller, decide };
   harnesses.push(harness);

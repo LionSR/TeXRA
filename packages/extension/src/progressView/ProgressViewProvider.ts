@@ -17,7 +17,6 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
   attachTerminalResultToast,
-  defaultSession,
   PdfOpenFailed,
   type SessionHandle,
 } from '@agent/runtime';
@@ -143,9 +142,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     /** This view's handle on the process runtime, handed down by the host
      *  entry for the session edges below. */
     private readonly runtime: ProcessRuntime,
+    /** The extension host's one session, created in `activate` and handed
+     *  down to every surface that needs it. */
+    session: SessionHandle,
   ) {
     this.logger = createChannelTrace('ProgressViewProvider');
-    const session = defaultSession();
     this.session = session;
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -301,6 +302,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
         decideRequest,
         this.runtime,
+        session,
       ),
     });
     // A workflow run's `run.end` is the completion chime, one per process
@@ -347,7 +349,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // proposal, retry, question) stay pending in the fold until the view's
     // request row decides them.
     const detachHostInteractions = session.interactions.use({
-      ...createAgentPresentationHost(this, globalState, this.runtime),
+      ...createAgentPresentationHost(this, globalState, this.runtime, session),
       readDiagnostics: getLinterMessages,
       addCriticism: (payload) => ({
         accepted: pushManualCriticism(payload),

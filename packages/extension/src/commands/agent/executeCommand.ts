@@ -3,7 +3,11 @@ import * as vscode from 'vscode';
 import { z, ZodError } from 'zod';
 
 // Local imports
-import { AgentConfigSchema, runAgent, defaultSession } from '@agent/runtime';
+import {
+  AgentConfigSchema,
+  runAgent,
+  type SessionHandle,
+} from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -39,6 +43,7 @@ const WrappedExecuteInputSchema = z.object({
 export async function runExecuteCommand(
   input: unknown,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): Promise<void> {
   try {
     const isWrapped =
@@ -55,7 +60,7 @@ export async function runExecuteCommand(
       : ({ kind: 'fresh', config } as const);
     await runtime.runPromise(
       runAgent(request, {
-        session: defaultSession(),
+        session,
         openWorkflowOutput: openFinalOutputIfAvailable,
         // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
         // progress-view compile fixer); a direct main-view launch omits it and

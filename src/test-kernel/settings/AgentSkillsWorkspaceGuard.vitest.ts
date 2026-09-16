@@ -32,6 +32,7 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
 
 // Local imports
 import {
+  defaultSession,
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
@@ -74,6 +75,9 @@ function createHarness(): AgentSkillsHarness {
   const handler = Object.create(SettingsViewMessageHandler.prototype);
   Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
   Reflect.set(handler, 'postStateSettingSnapshot', vi.fn());
+  // The guard reads the window's session for its workspace root; the suite's
+  // beforeEach reopens the process default against the folderless roots.
+  Reflect.set(handler, 'session', defaultSession());
   // The shared write path is an Effect program now, settled on the same
   // process runtime the real constructor is handed.
   Reflect.set(handler, 'runtime', effectRuntime());

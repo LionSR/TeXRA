@@ -6,6 +6,8 @@ import { Cause } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
+import { defaultSession } from '@agent/runtime/SessionHandle';
+
 const mocks = vi.hoisted(() => ({
   selectChatModels: vi.fn(),
   canSendRequest: vi.fn(),
@@ -133,6 +135,7 @@ function createHandler(): SettingsViewMessageHandler {
     globalState,
     secrets,
     effectRuntime(),
+    defaultSession(),
   );
   vi.spyOn(
     handler as unknown as RefreshSurface,

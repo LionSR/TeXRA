@@ -75,7 +75,9 @@ describe('createSecretBackedCoordinator', () => {
     expect(access(first.secrets)).toBe(coordinator);
     expect(access(second.secrets)).not.toBe(coordinator);
 
-    await coordinator.storage.store('{"accessToken":"first"}');
+    await Effect.runPromise(
+      coordinator.storage.store('{"accessToken":"first"}'),
+    );
     expect(first.values.session).toBe('{"accessToken":"first"}');
     expect(second.values.session).toBeUndefined();
   });

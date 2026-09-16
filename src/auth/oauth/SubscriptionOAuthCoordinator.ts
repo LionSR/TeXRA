@@ -22,7 +22,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   AuthPortError,
-  callPort,
   runAuthProgram,
   SerializedWrites,
 } from '../authProgram';
@@ -40,9 +39,9 @@ const log = createLog('SubscriptionOAuth');
 
 /** Secret-backed persistence for one session bundle. */
 export interface SubscriptionSessionStorage {
-  get(): Promise<string | undefined>;
-  store(value: string): Promise<void>;
-  delete(): Promise<void>;
+  get(): Effect.Effect<string | undefined, AuthPortError>;
+  store(value: string): Effect.Effect<void, AuthPortError>;
+  delete(): Effect.Effect<void, AuthPortError>;
 }
 
 /** Raw token-endpoint shape shared by authorization-code and refresh grants. */
@@ -263,7 +262,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
 
   private readonly load = Effect.fn('SubscriptionOAuthCoordinator.loadSession')(
     function* (this: SubscriptionOAuthCoordinator<S>) {
-      const raw = yield* callPort(() => this.storage.get());
+      const raw = yield* this.storage.get();
       if (!raw) return null;
       const parsedJson = safeParseJson(raw);
       if (Result.isFailure(parsedJson)) {
@@ -285,7 +284,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   );
 
   private store(session: S): Effect.Effect<void, AuthPortError> {
-    return callPort(() => this.storage.store(JSON.stringify(session)));
+    return this.storage.store(JSON.stringify(session));
   }
 
   private buildSession(
@@ -361,7 +360,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     'SubscriptionOAuthCoordinator.signOut',
   )(function* (this: SubscriptionOAuthCoordinator<S>) {
     yield* this.sessionMutations.run(
-      callPort(() => this.storage.delete()),
+      this.storage.delete(),
       this.supersedeInFlightRefresh,
     );
   });
@@ -446,7 +445,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
           ? this.sessionMutations.run(
               Effect.suspend(() =>
                 generation === this.sessionGeneration
-                  ? callPort(() => this.storage.delete())
+                  ? this.storage.delete()
                   : Effect.void,
               ),
             )

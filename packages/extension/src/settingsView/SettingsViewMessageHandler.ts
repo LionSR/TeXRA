@@ -14,7 +14,7 @@ import { ZodError } from 'zod';
 import { ModelError } from '@texra-ai/llm/turn';
 
 // Shared schemas and dispatchers
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
@@ -152,6 +152,7 @@ export class SettingsViewMessageHandler {
     private readonly globalState: StateStore,
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
+    private readonly session: SessionHandle,
   ) {
     const ctx: SettingsHandlerContext = this.handlerContext();
 
@@ -213,6 +214,7 @@ export class SettingsViewMessageHandler {
       this.memoryController,
       this.viewName,
       this.runtime,
+      session,
     );
     this.githubHandlers = new GitHubSubscriptionHandlers(
       ctx,
@@ -278,7 +280,7 @@ export class SettingsViewMessageHandler {
       },
     );
     const unsubscribeGoals = subscribeGoalStateChanges(
-      defaultSession(),
+      session,
       () => {
         void this.withActiveWebview((w) => this.sendGoalList(w));
       },
@@ -435,7 +437,7 @@ export class SettingsViewMessageHandler {
         try: () =>
           webview.postMessage({
             command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-            items: goalList(defaultSession()),
+            items: goalList(this.session),
           }),
         catch: (error) => error,
       }).pipe(
@@ -716,9 +718,9 @@ export class SettingsViewMessageHandler {
         stores: platformSettingsStores(),
         // The shared function already gates this hook on
         // `configTarget !== 'global'`; this checks only the workspace half.
-        requiresOpenWorkspace: () => !defaultSession().roots.workspace,
+        requiresOpenWorkspace: () => !this.session.roots.workspace,
         onApprovalPolicyChanged: (policy) => {
-          defaultSession().setApprovalPolicy(policy);
+          this.session.setApprovalPolicy(policy);
           appSignals.emit('approvalPolicyChanged', undefined);
         },
       }),

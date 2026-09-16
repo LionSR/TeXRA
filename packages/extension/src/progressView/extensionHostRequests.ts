@@ -20,11 +20,8 @@ import {
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
+  createFileSelectionPickers,
   getCurrentFile,
-  selectContextFiles,
-  selectInputFiles,
-  selectMediaFiles,
-  selectOutputFiles,
 } from '@commands/files/fileSelectionCommands';
 import { setActiveSidebarView } from '@common/webview';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
@@ -117,17 +114,6 @@ class FilePickerFailed extends Data.TaggedError('FilePickerFailed')<{
   readonly message: string;
 }> {}
 
-/** The native picker of each multi-file launcher list. */
-const MULTIPLE_FILE_PICKERS: Record<
-  MultipleDocumentFileType,
-  () => Promise<string[] | null>
-> = {
-  input: selectInputFiles,
-  context: selectContextFiles,
-  media: selectMediaFiles,
-  output: selectOutputFiles,
-};
-
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
   readonly extensionPath: string;
@@ -201,6 +187,12 @@ export function createExtensionHostRequests(
   const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
+
+  /** The native picker of each multi-file launcher list. */
+  const multipleFilePickers: Record<
+    MultipleDocumentFileType,
+    () => Promise<string[] | null>
+  > = createFileSelectionPickers(session);
 
   /** Validate an agent request and run it through the one launch command. */
   async function runAgentRequest(
@@ -554,7 +546,7 @@ export function createExtensionHostRequests(
   async function useCurrentFile(
     request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
   ): Promise<HostOutcome> {
-    const currentOpenFile = await getCurrentFile();
+    const currentOpenFile = await getCurrentFile(session);
     if (!currentOpenFile) {
       throw new Rejected({
         reason:
@@ -612,7 +604,7 @@ export function createExtensionHostRequests(
   ): Effect.Effect<HostOutcome, Rejected | Cancelled> {
     const { fileType } = request;
     const pick = isMultipleDocumentFileType(fileType)
-      ? MULTIPLE_FILE_PICKERS[fileType]
+      ? multipleFilePickers[fileType]
       : undefined;
     if (!pick) {
       return Effect.fail(
