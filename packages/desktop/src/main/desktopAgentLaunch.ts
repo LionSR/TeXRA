@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import {
   selectAutoOpenFinalOutput,
   type RunAgentOptions,
@@ -6,6 +8,7 @@ import {
 } from '@agent/runtime';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RequestOpenFilePayload } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -28,18 +31,25 @@ export type DesktopAgentLaunchOptions = Pick<
   | 'onRunResolved'
 >;
 
-/** Start a desktop run; its awaiting host owns failure presentation. */
-export async function launchDesktopAgent(
+/**
+ * Start a desktop run; its awaiting host owns failure presentation. The
+ * returned Effect settles with the run itself. Its program takes the process
+ * services from the runtime's own context on the fiber that runs it, as the
+ * resume port's program does, so the effect itself requires nothing.
+ */
+export function launchDesktopAgent(
   request: RunAgentRequest,
   context: DesktopAgentLaunchContext,
   options: DesktopAgentLaunchOptions = {},
-): Promise<void> {
-  const [{ runAgent }, { getDefaultUnavailableToolNames }] = await Promise.all([
-    import('@agent/runtime'),
-    import('@tools/registry'),
-  ]);
-  await context.runtime.runPromise(
-    runAgent(request, {
+): Effect.Effect<void, Error> {
+  const launch = Effect.gen(function* () {
+    const [{ runAgent }, { getDefaultUnavailableToolNames }] =
+      yield* Effect.tryPromise({
+        try: () =>
+          Promise.all([import('@agent/runtime'), import('@tools/registry')]),
+        catch: ensureError,
+      });
+    yield* runAgent(request, {
       session: context.session,
       runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
       modelCompatibilityKey: options.modelCompatibilityKey,
@@ -72,6 +82,9 @@ export async function launchDesktopAgent(
           { replayWhenAttached: true },
         );
       },
-    }),
+    }).pipe(Effect.asVoid);
+  });
+  return Effect.flatMap(context.runtime.contextEffect, (runtimeContext) =>
+    Effect.provideContext(launch, runtimeContext),
   );
 }

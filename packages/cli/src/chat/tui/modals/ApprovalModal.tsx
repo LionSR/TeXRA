@@ -4,6 +4,7 @@
 // `useSignal(currentApproval)` subscription — avoids a second store read
 // every render.
 
+import type { SessionHandle } from '@agent/runtime';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { assertNever } from '@utils/core';
@@ -19,6 +20,8 @@ export interface ApprovalModalProps {
   readonly availableRows?: number;
   readonly goalAutoApproveAll: boolean;
   readonly pending: PendingApproval | undefined;
+  /** The session the answered decision lands on, from the App that holds it. */
+  readonly session: SessionHandle;
   /** The process runtime the answered decision is issued on, from the App
    *  that already holds it. */
   readonly runtime: ProcessRuntime;
@@ -31,7 +34,7 @@ export function ApprovalModal(
   const { payload, decide } = props.pending;
   const availableRows = props.availableRows;
   const onDecide = (decision: SurfaceDecision): void =>
-    decide(props.runtime, decision);
+    decide(props.session, props.runtime, decision);
   switch (payload.kind) {
     case 'bash':
       return (

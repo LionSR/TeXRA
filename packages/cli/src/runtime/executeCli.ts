@@ -288,7 +288,7 @@ export function executeCliRequest(
         runId: request.runId,
       });
     const detachHostInteractions = session.interactions.use(
-      createHeadlessCliHostInteractions(options.runtime, runContext, {
+      createHeadlessCliHostInteractions(session, options.runtime, runContext, {
         beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
         emit: (event, payload) => {
           if (event === 'requestShowError') failurePresented = true;
@@ -553,7 +553,7 @@ export function executeCliRequest(
           runContext.approvalPolicy,
         ),
         onApprovalPolicyDenial: () =>
-          warnApprovalDenied(runContext, 'Tool or edit approval'),
+          warnApprovalDenied(session, runContext, 'Tool or edit approval'),
         runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
       });
 

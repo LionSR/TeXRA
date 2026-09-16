@@ -1,12 +1,12 @@
 /**
  * Shared platform-backed access helpers for subscription OAuth coordinators.
  *
- * The secret-backed storage adapter and singleton coordinator factory live
+ * The secret-backed session storage and singleton coordinator factory live
  * here (with the status probe) so a provider does not re-copy the platform
  * dance.
  */
 import { Effect } from 'effect';
-import { callPort, runAuthProgram, settleFailure } from '@auth/authProgram';
+import { AuthPortError, settleFailure } from '@auth/authProgram';
 import { createLog } from '@logger/logUtils';
 import type { SecretsFailed } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -16,7 +16,7 @@ import type {
   SubscriptionSessionStorage,
 } from './SubscriptionOAuthCoordinator';
 
-/** Secret-store slice the session-storage adapter needs. */
+/** Secret-store slice the session storage needs. */
 export interface SessionSecretStore {
   get(key: string): Effect.Effect<string | undefined, SecretsFailed>;
   set(key: string, value: string): Effect.Effect<void, SecretsFailed>;
@@ -24,20 +24,20 @@ export interface SessionSecretStore {
 }
 
 /**
- * Session storage over one key of a secret store.
- * {@link SubscriptionSessionStorage} is the coordinator's Promise-shaped
- * surface, so every one of the store's programs settles on the auth
- * subsystem's installed run edge, which re-throws the {@link SecretsFailed}
- * unchanged.
+ * Session storage over one key of a secret store. The store's
+ * {@link SecretsFailed} travels as {@link AuthPortError} — the failure shape
+ * the coordinators match on for any port rejection.
  */
 export function secretBackedSessionStorage(
   secrets: SessionSecretStore,
   key: string,
 ): SubscriptionSessionStorage {
+  const toPortError = (cause: SecretsFailed) => new AuthPortError({ cause });
   return {
-    get: () => runAuthProgram(secrets.get(key)),
-    store: (value) => runAuthProgram(secrets.set(key, value)),
-    delete: () => runAuthProgram(secrets.delete(key)),
+    get: () => secrets.get(key).pipe(Effect.mapError(toPortError)),
+    store: (value) =>
+      secrets.set(key, value).pipe(Effect.mapError(toPortError)),
+    delete: () => secrets.delete(key).pipe(Effect.mapError(toPortError)),
   };
 }
 
@@ -72,30 +72,27 @@ export function createSecretBackedCoordinator<C>(init: {
 
 /** Minimal coordinator surface used for the status probe. */
 export interface SessionAccessCoordinator {
-  getStatus(): Promise<SubscriptionSessionStatus>;
+  getStatus(): Effect.Effect<SubscriptionSessionStatus, unknown>;
 }
 
 /**
- * Read signed-in status without throwing: a store the caller could not open
+ * Read signed-in status without failing: a store the caller could not open
  * reports signed-out, with the cause logged. The probe's recovery is part of
- * the program; only its settled answer crosses the Promise surface, on the
- * auth subsystem's installed run edge.
+ * the program; the caller yields it or settles it at its own edge.
  */
 export function getSubscriptionSessionStatus(
   getCoordinator: () => SessionAccessCoordinator,
   channel: string,
   displayName: string,
-): Promise<SubscriptionSessionStatus> {
-  return runAuthProgram(
-    callPort(() => getCoordinator().getStatus()).pipe(
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          createLog(channel).warn(
-            `Failed to read ${displayName} session status: ${toErrorMessage(settleFailure(cause))}`,
-          );
-          return { signedIn: false };
-        }),
-      ),
+): Effect.Effect<SubscriptionSessionStatus> {
+  return Effect.suspend(() => getCoordinator().getStatus()).pipe(
+    Effect.catchCause((cause) =>
+      Effect.sync(() => {
+        createLog(channel).warn(
+          `Failed to read ${displayName} session status: ${toErrorMessage(settleFailure(cause))}`,
+        );
+        return { signedIn: false };
+      }),
     ),
   );
 }

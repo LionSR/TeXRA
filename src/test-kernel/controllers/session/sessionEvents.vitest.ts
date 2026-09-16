@@ -680,6 +680,7 @@ describe('Sessions owner', () => {
           db,
           local,
           yield* InquiryRecords,
+          { tryResumeRun: () => Effect.succeed(false) },
         );
         // The displayed fold was built as SELF and considers this run writable.
         // This requesting process is OTHER; it must respect the current claim.

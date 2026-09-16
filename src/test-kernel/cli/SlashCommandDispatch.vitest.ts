@@ -202,6 +202,7 @@ function createContext(
   return {
     cliContext: createCliContext(),
     session,
+    runtimeSession: stores.runtimeSession,
     secrets: stores.secrets,
     state: stores.state,
     runtime: effectRuntime(),

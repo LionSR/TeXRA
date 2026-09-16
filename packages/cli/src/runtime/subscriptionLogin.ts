@@ -139,10 +139,7 @@ export const signOutCliSubscription = Effect.fn(
 )(function* (providerId: SubscriptionProviderId) {
   const provider = subscriptionProvider(providerId);
   const secrets = yield* Secrets;
-  yield* Effect.tryPromise({
-    try: () => provider.signOut(secrets),
-    catch: (cause) => ensureError(cause),
-  });
+  yield* provider.signOut(secrets).pipe(Effect.mapError(ensureError));
   return yield* provider.setPreferSubscription(false).pipe(
     Effect.mapError(ensureError),
     Effect.match({

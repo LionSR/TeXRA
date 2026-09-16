@@ -128,6 +128,7 @@ import {
   type ReflectionFlowState,
   type ReflectionSnapshotPatch,
 } from './rows';
+import type { HttpClient } from 'effect/unstable/http';
 import type { BoundModel } from '../run/modelBinding';
 
 // Reflection owns conversation limits and document completion, not the provider.
@@ -197,7 +198,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 ): Effect.fn.Return<
   ReflectionResult,
   Error,
-  AgentRun | RunLedger | ModelInvoker | FileSystem.FileSystem | WorkspaceFs
+  | AgentRun
+  | RunLedger
+  | ModelInvoker
+  | FileSystem.FileSystem
+  | WorkspaceFs
+  | HttpClient.HttpClient
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -653,7 +659,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
    */
   const processResponse = Effect.fn('reflection.processResponse')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem> {
+  ): Effect.fn.Return<
+    RunState,
+    Error,
+    FileSystem.FileSystem | HttpClient.HttpClient
+  > {
     const turn = initial.lastTurn;
     const location = flow.outputLocation;
     if (turn === null || location === null) {
@@ -712,6 +722,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             ledger,
             logger,
             bound,
+            config: session.roots.config,
             system: undefined,
             tools: [],
             force: true,
@@ -1042,7 +1053,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** One round inside its trace stage: prompt, response cycles, output. */
   const runRound = Effect.fn('reflection.round')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RoundExit, Error, FileSystem.FileSystem | WorkspaceFs> {
+  ): Effect.fn.Return<
+    RoundExit,
+    Error,
+    FileSystem.FileSystem | WorkspaceFs | HttpClient.HttpClient
+  > {
     const round = flow.currentRound;
     // The stage closes with the round's own verdict; an exit that never set
     // one is a stop (interrupt) or a defect.

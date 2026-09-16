@@ -321,3 +321,24 @@ export interface AgentResumePort {
     recovery?: RecoveryContinuation,
   ): Effect.Effect<boolean, AgentResumeFailed>;
 }
+
+/**
+ * The process's agent-resume port as an Effect service
+ * (`@texra/platform/AgentResume`), provided once by the composition root
+ * through `installProcessRuntime`. The shape is the port itself: a program
+ * that resumes a persisted run yields the port's own Effect and matches
+ * {@link AgentResumeFailed}.
+ *
+ * `layer` takes the port itself, for the same reason `Secrets.layer` does:
+ * every root builds its resume port before it installs the runtime that
+ * serves it, so the service is the value the root already holds, not a thunk
+ * resolved per member call.
+ */
+export class AgentResume extends Context.Service<
+  AgentResume,
+  AgentResumePort
+>()('@texra/platform/AgentResume') {
+  static layer(port: AgentResumePort): Layer.Layer<AgentResume> {
+    return Layer.succeed(AgentResume)(port);
+  }
+}

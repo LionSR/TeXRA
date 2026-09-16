@@ -7,6 +7,7 @@
  */
 import { Effect } from 'effect';
 
+import { AuthPortError } from '../authProgram';
 import { providerAuthError } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
@@ -31,6 +32,7 @@ import {
   CodexSessionSchema,
   type CodexSession,
 } from './codexSessionTypes';
+import type { HttpClient } from 'effect/unstable/http';
 
 export type CodexSessionStorage = SubscriptionSessionStorage;
 export type CodexOAuthClient = SubscriptionOAuthClient;
@@ -114,18 +116,20 @@ export class CodexSessionCoordinator extends SubscriptionOAuthCoordinator<CodexS
     });
   }
 
-  async completeDeviceLogin(params: {
+  /** The device-grant code exchange, on the caller's fiber. */
+  completeDeviceLogin(params: {
     authorizationCode: string;
     codeVerifier: string;
-  }): Promise<CodexSession> {
-    return this.completeLoginWithCode({
+  }): Effect.Effect<CodexSession, unknown, HttpClient.HttpClient> {
+    return this.loginWithCode({
       code: params.authorizationCode,
       verifier: params.codeVerifier,
       redirectUri: CODEX_DEVICE_REDIRECT_URI,
     });
   }
 
-  async getAccountId(): Promise<string | undefined> {
-    return (await this.loadSession())?.accountId;
+  /** The stored session's account id, when signed in. */
+  getAccountId(): Effect.Effect<string | undefined, AuthPortError> {
+    return Effect.map(this.loadSession(), (session) => session?.accountId);
   }
 }

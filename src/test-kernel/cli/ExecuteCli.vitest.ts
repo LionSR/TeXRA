@@ -739,7 +739,7 @@ describe('executeCliRequest', () => {
         const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
         mocks.runAgent.mockImplementationOnce(async () => {
           const hooks =
-            mocks.createHeadlessCliHostInteractions.mock.calls[0]?.[2];
+            mocks.createHeadlessCliHostInteractions.mock.calls[0]?.[3];
           hooks.emit('requestShowError', { message: 'Agent not found.' });
           throw new AgentError('Agent not found.');
         });

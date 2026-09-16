@@ -75,7 +75,7 @@ export class SubscriptionHandlers {
       this.ctx,
       ACCOUNT_OUTCOME.signOutFailed(displayName),
       async () => {
-        await this.provider.signOut(this.secrets);
+        await this.runtime.runPromise(this.provider.signOut(this.secrets));
         void vscode.window.showInformationMessage(
           ACCOUNT_OUTCOME.signedOut(displayName),
         );

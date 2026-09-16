@@ -8,7 +8,7 @@ import { join } from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { openaiChatModel } from '@texra-ai/llm/openai-chat';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
@@ -18,6 +18,7 @@ import {
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { fakeStores } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 const mocks = vi.hoisted(() => ({
@@ -70,7 +71,7 @@ const agentPath = (): string => join(agentDir, 'editor.yaml');
 /** The creator program with the `FileSystem` its YAML write requires. */
 const createAgent = (ui: AgentCreatorUI): Effect.Effect<void, unknown> =>
   runAgentCreator(CONFIG, 'workflow', ui, STORES).pipe(
-    Effect.provide(nodePlatformLayer),
+    Effect.provide(Layer.mergeAll(nodePlatformLayer, testHttpClientLayer)),
   );
 
 function createUi(

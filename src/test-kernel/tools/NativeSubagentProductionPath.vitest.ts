@@ -58,6 +58,7 @@ import {
 } from '@llm/turn';
 import { effectRuntime } from '@platform/processRuntime';
 import {
+  AgentResume,
   AgentResumeFailed,
   type RecoveryContinuation,
 } from '@platform/interfaces';
@@ -75,7 +76,11 @@ import {
   makeTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { setupPlatform, type FakeHost } from '@test/support/setupPlatform';
+import {
+  fakeHostAgentResume,
+  setupPlatform,
+  type FakeHost,
+} from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentRun';
@@ -800,7 +805,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             deliveryId,
           },
           { session },
-        ),
+        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
       );
     }
     await Effect.runPromise(session.settlePublications());
@@ -825,7 +830,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           deliveryId: `${deliveryId}:other`,
         },
         { session },
-      ),
+      ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
     );
     await waitForCompletedResumes(2);
     await Effect.runPromise(session.settlePublications());
