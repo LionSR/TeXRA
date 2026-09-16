@@ -15,7 +15,7 @@ export function createFakeSetupPlatform(
 ): SetupPlatformShape {
   return {
     host: overrides.host ?? 'cli',
-    signIn: overrides.signIn ?? (async () => false),
+    signIn: overrides.signIn ?? (() => Effect.succeed(false)),
     commands: {
       invoke: () => Effect.void,
       ...overrides.commands,

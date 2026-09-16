@@ -401,7 +401,7 @@ describe('CLI platform init', () => {
       Effect.service(SetupPlatform),
     );
     expect(setup.host).toBe('cli');
-    await expect(setup.signIn()).resolves.toBe(true);
+    expect(await effectRuntime().runPromise(setup.signIn())).toBe(true);
     expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
     expect(mocks.signInCliSupabase).toHaveBeenCalledWith(effectRuntime(), {
       openBrowser: true,

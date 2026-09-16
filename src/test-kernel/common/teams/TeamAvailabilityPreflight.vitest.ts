@@ -21,7 +21,7 @@ function options(overrides: {
   remoteCatalogRefreshAttempted?: boolean;
 }) {
   const refresh = vi.fn(() => undefined);
-  const signIn = vi.fn(async () => overrides.signedIn ?? true);
+  const signIn = vi.fn(() => Effect.succeed(overrides.signedIn ?? true));
   const choose = vi.fn(async () =>
     overrides.choiceRequired ? undefined : (overrides.choice ?? 'cancel'),
   );

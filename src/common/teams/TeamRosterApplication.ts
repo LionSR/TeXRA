@@ -7,6 +7,7 @@ import type {
   TeamRosterCatalog,
   TeamRosterResolution,
 } from '@common/teams/TeamRoster';
+import type { SignInFailed } from '@common/errors/signInFailed';
 import type { AgentModePreset } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -45,7 +46,7 @@ export interface TeamRosterApplicationDeps {
     preset: AgentModePreset,
     unavailableNames: readonly string[],
   ) => Promise<TeamAvailabilityChoice | undefined>;
-  readonly signIn: () => Promise<boolean>;
+  readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
   readonly forceRefreshRemoteCatalog: () => Effect.Effect<void, unknown>;
 }
 

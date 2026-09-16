@@ -164,7 +164,7 @@ async function loadSupabaseAuth() {
       Layer.mock(Secrets, { getEnv: unreadProcessService }),
       Layer.mock(AppState, { update: unreadProcessService }),
       Layer.mock(AgentResume, { tryResumeRun: unreadProcessService }),
-      SetupPlatform.layer({ host: 'cli', signIn: async () => false }),
+      SetupPlatform.layer({ host: 'cli', signIn: () => Effect.succeed(false) }),
       ToolInjections.layer([]),
     ),
   );

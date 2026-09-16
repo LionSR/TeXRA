@@ -48,7 +48,10 @@ import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { desktopSetupPlatform } from '../desktopSetupAuth.js';
+import {
+  createDesktopSetupAuth,
+  type DesktopSetupAuth,
+} from '../desktopSetupAuth.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveDesktopDataRoot, resolveResourcesPath } from './paths.js';
@@ -96,6 +99,12 @@ export interface ElectronPlatformInitResult {
    * process-global locator.
    */
   runtime: ProcessRuntime;
+  /**
+   * The setup sign-in registration installed with the runtime. Each window
+   * registers its own sign-in flow here, since the flow needs the window to
+   * anchor its dialogs to and no window exists at install time.
+   */
+  setupAuth: DesktopSetupAuth;
 }
 
 export async function initializeElectronPlatform(
@@ -170,6 +179,7 @@ export async function initializeElectronPlatform(
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeProcessRuntime`), after run
   // settlement and the projects' release of their graphs.
+  const setupAuth = createDesktopSetupAuth();
   const runtime = installProcessRuntime({
     processStart,
     globalStorage: () => storage.getGlobalStoragePath(),
@@ -177,7 +187,7 @@ export async function initializeElectronPlatform(
     secrets,
     appState: globalStateStore,
     agentResume,
-    setup: desktopSetupPlatform,
+    setup: setupAuth.platform,
     lean: directLeanLanguageServices(),
   });
 
@@ -244,5 +254,6 @@ export async function initializeElectronPlatform(
     dataRoot,
     resourcesPath,
     runtime,
+    setupAuth,
   };
 }
