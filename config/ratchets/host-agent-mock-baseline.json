@@ -19,11 +19,6 @@
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
       "form": "mock",
-      "specifier": "@agent/runtime/SessionHandle"
-    },
-    {
-      "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
-      "form": "mock",
       "specifier": "@agent/runtime/terminalResultToast"
     },
     {

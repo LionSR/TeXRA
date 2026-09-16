@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import {
   getFileListConfig,
   type FileFilterConfig,
@@ -13,7 +13,11 @@ import { getFilesRecursively } from './listing';
 const log = createLog('FileLister');
 
 export class FileLister {
-  public static initialize(context: vscode.ExtensionContext): void {
+  public static initialize(
+    context: vscode.ExtensionContext,
+    session: SessionHandle,
+  ): void {
+    instance = new FileLister(session);
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() =>
         getFileLister().refresh(),
@@ -21,10 +25,14 @@ export class FileLister {
     );
   }
 
-  private workspacePath = defaultSession().roots.workspace;
+  private workspacePath: string | undefined;
+
+  constructor(private readonly session: SessionHandle) {
+    this.refresh();
+  }
 
   public refresh(): void {
-    this.workspacePath = defaultSession().roots.workspace;
+    this.workspacePath = this.session.roots.workspace;
   }
 
   public list(fileType: ListableFileType): Promise<string[]> {
@@ -42,8 +50,12 @@ export class FileLister {
 
 let instance: FileLister | undefined;
 
-/** Lazy accessor — the singleton is constructed on first use, not at import time. */
+/** The lister created by {@link FileLister.initialize} during activation. */
 export function getFileLister(): FileLister {
-  instance ??= new FileLister();
+  if (!instance) {
+    throw new Error(
+      'FileLister has not been initialized. Call FileLister.initialize() during activation.',
+    );
+  }
   return instance;
 }

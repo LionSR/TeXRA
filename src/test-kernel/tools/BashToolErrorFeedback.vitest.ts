@@ -1,12 +1,9 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { it } from '@effect/vitest';
 // Test composition imports
 
 // Third-party imports
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 
 // Local imports
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
@@ -16,6 +13,7 @@ import {
 } from '@agent/runtime/run/toolResultText';
 import type { RunId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY, type ToolResult } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { BashTool } from '@tools/bash';
 import { requestBashApproval } from '@tools/approval/bashApproval';
@@ -88,7 +86,7 @@ describe('BashTool error feedback', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -130,7 +128,7 @@ describe('BashTool error feedback', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -157,7 +155,7 @@ describe('BashTool error feedback', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },
@@ -189,7 +187,7 @@ describe('BashTool error feedback', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },
@@ -211,7 +209,7 @@ describe('BashTool error feedback', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },
@@ -243,7 +241,7 @@ describe('BashTool error feedback', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -276,7 +274,7 @@ describe('BashTool error feedback', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },
@@ -300,7 +298,7 @@ describe('BashTool error feedback', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },
@@ -324,7 +322,7 @@ describe('BashTool error feedback', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },

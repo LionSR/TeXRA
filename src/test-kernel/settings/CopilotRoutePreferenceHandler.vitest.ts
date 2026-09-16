@@ -1,6 +1,3 @@
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
 import { Cause } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -85,6 +82,7 @@ import type {
 import { effectRuntime } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { installedHost, installPlatform } from '@test/support/setupPlatform';
 
@@ -133,6 +131,7 @@ function createHandler(): SettingsViewMessageHandler {
     globalState,
     secrets,
     effectRuntime(),
+    testDefaultSession(),
   );
   vi.spyOn(
     handler as unknown as RefreshSurface,

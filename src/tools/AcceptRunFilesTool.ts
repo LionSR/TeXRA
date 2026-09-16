@@ -17,7 +17,6 @@ import { Effect, FileSystem } from 'effect';
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
-import { currentSession } from '@agent/runtime/SessionHandle';
 import { appSignals } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
@@ -203,7 +202,12 @@ Parameters map directly to subagent-result delivery attributes:
     const acceptFiles = (call: ToolCallShape) => this.acceptFiles(input, call);
     return Effect.gen(function* () {
       const call = yield* ToolCall;
-      const session = call.run?.session ?? call.inScope(currentSession);
+      if (!call.run) {
+        return yield* Effect.fail(
+          new ToolError('This tool requires an active agent session.'),
+        );
+      }
+      const session = call.run.session;
       const directory = yield* Effect.tryPromise({
         try: () =>
           call.inScope(() => findExistingRunStoragePath(input.execution_id)),

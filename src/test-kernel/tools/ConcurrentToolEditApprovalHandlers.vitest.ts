@@ -1,5 +1,4 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -7,7 +6,8 @@ import { Effect, Fiber, Stream } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
 // Local imports
-import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -25,7 +25,7 @@ describe('Concurrent session tool edit approval handlers', () => {
   setupPlatform({ workspacePath: '/workspace', config: {}, files: {} });
 
   beforeEach(() => {
-    defaultSession().approvals.clearAll();
+    testDefaultSession().approvals.clearAll();
   });
 
   it.effect('routes each in-flight request through its owning session', () =>

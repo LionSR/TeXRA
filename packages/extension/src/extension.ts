@@ -9,9 +9,9 @@ import { Cause, Data, Effect, Exit } from 'effect';
 import { loadAgents } from '@agent/index';
 import {
   createAgentResponseTextConnector,
-  defaultSession,
   initializeDefaultSession,
   teardownDefaultSession,
+  type SessionHandle,
 } from '@agent/runtime';
 import { installAuthProgramEdge } from '@auth/authProgram';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
@@ -187,6 +187,10 @@ async function initVscodePlatform(
   lifecycle: LifecycleHost,
   workspaceRoot: string | undefined,
   workspaceState: NodeWorkspaceRootsInit['workspaceState'],
+  /** The session a resume request targets, read at request time: the
+   *  platform must exist before `initializeDefaultSession` can run, so the
+   *  session cannot be a value here. */
+  getSession: () => SessionHandle,
   extras: Pick<
     NodePlatformServices,
     'languageModel' | 'toolMissingHandler'
@@ -236,7 +240,7 @@ async function initVscodePlatform(
   // the platform port.
   const agentResume: AgentResumePort = {
     tryResumeRun: (runId, recovery) =>
-      tryResumeFromResumeData(runId, runtime, recovery),
+      tryResumeFromResumeData(runId, runtime, getSession(), recovery),
   };
   const runtime = installProcessRuntime({
     processStart: await nodeProcesses.selfIdentity(),
@@ -553,6 +557,13 @@ async function activateExtension(context: vscode.ExtensionContext) {
       lifecycle,
       undefined,
       mementoStateStore(context.workspaceState),
+      // The credential-only path never initializes a session; a resume
+      // request cannot arrive here because every run belongs to one.
+      () => {
+        throw new Error(
+          'The credential-only activation has no session to resume into.',
+        );
+      },
     );
     wirePostPlatform(secrets, runtime, auth, authReadiness);
     // The full command surface (including the workspace-backed
@@ -627,6 +638,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
       lifecycle,
       workspaceRoot,
       workspaceState,
+      // `runtimeSession` is created below; resume requests only arrive after
+      // activation has composed it.
+      () => runtimeSession,
       {
         languageModel,
         toolMissingHandler: async (message, openDocsCommand) => {
@@ -710,7 +724,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ),
     ),
   );
-  FileLister.initialize(context);
+  FileLister.initialize(context, runtimeSession);
 
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
@@ -770,6 +784,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     globalState,
     secrets,
     runtime,
+    runtimeSession,
   );
   await progressViewProvider.initialize();
 
@@ -786,10 +801,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
     progressViewProvider,
     secrets,
     runtime,
-    roots,
+    runtimeSession,
   );
   registerWalkthroughWorkspaceAction(context, true);
-  registerFileDecorations(context, runtime);
+  registerFileDecorations(context, runtime, runtimeSession);
 
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this program, which logs a failed
@@ -843,7 +858,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     },
   );
   context.subscriptions.push({ dispose: disposeGitHubAuthListener });
-  registerInlineCriticism(context, runtime);
+  registerInlineCriticism(context, runtime, runtimeSession);
   registerInlineComments(context);
   setInlineCommentProvider(getInlineCommentProvider());
 
@@ -899,11 +914,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
     void safeRefreshApiKeyStatus();
   });
 
-  const statusBarSession = defaultSession();
-  const statusBarUsageTracker = new StatusBarUsageTracker(statusBarSession);
+  const statusBarUsageTracker = new StatusBarUsageTracker(runtimeSession);
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;
-    const policy = statusBarSession.approvalPolicy;
+    const policy = runtimeSession.approvalPolicy;
     const policyLabel =
       TEXRA_APPROVAL_POLICY_OPTIONS.find((option) => option.value === policy)
         ?.label ?? policy;
@@ -952,7 +966,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   };
 
   const disposeStatusListener = subscribeStatusBarSessionEvents({
-    session: statusBarSession,
+    session: runtimeSession,
     tracker: statusBarUsageTracker,
     onStatusChanged: () => {
       updateStatusBarTooltip();
@@ -976,7 +990,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   // Surface curated research tools to VS Code's Language Model Tool API
   // (Copilot Chat `#texra_*` references).
-  registerLanguageModelTools(context, runtime, statusBarSession);
+  registerLanguageModelTools(context, runtime, runtimeSession);
 
   context.subscriptions.push(
     { dispose: disposeStatusListener },

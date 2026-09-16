@@ -14,7 +14,6 @@ import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
-  defaultSession,
   initializeDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
@@ -42,6 +41,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { ensureError } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
@@ -229,7 +229,7 @@ describe('ExecutionsTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },
@@ -310,7 +310,7 @@ describe('ExecutionsTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'tool-test' as RunId,
               toolPolicy: {},
             },
@@ -378,7 +378,7 @@ describe('ExecutionsTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },
@@ -435,7 +435,7 @@ describe('ExecutionsTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'tool-test' as RunId,
               toolPolicy: {},
             },
@@ -500,7 +500,7 @@ describe('ExecutionsTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },
@@ -529,7 +529,7 @@ describe('ExecutionsTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },
@@ -585,7 +585,7 @@ describe('ExecutionsTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'tool-test' as RunId,
               toolPolicy: {},
             },
@@ -628,7 +628,7 @@ describe('ExecutionsTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'tool-test' as RunId,
               toolPolicy: {},
             },
@@ -662,7 +662,7 @@ describe('ExecutionsTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },
@@ -714,7 +714,7 @@ describe('ExecutionsTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },
@@ -755,7 +755,7 @@ describe('ExecutionsTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },

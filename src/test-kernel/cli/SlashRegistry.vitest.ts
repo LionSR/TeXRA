@@ -1,10 +1,8 @@
 // Slash command registry and parse helpers.
 
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 
 import {
   findSlashCommand,
@@ -37,6 +35,7 @@ import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import { effectRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import {
@@ -87,7 +86,7 @@ function registerBuiltins(
     secrets: new FakeSecrets(),
     state: new FakeStateStore(),
     runtime: effectRuntime(),
-    runtimeSession: defaultSession(),
+    runtimeSession: testDefaultSession(),
     ...options,
   });
 }

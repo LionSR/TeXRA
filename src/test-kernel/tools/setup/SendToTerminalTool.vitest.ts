@@ -1,5 +1,4 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 // Node imports
 import { strict as assert } from 'node:assert';
@@ -10,11 +9,12 @@ import { Effect } from 'effect';
 import { describe } from 'vitest';
 
 // Local imports
-import { defaultSession } from '@agent/runtime/SessionHandle';
+
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import type { ConfigProvider } from '@platform/interfaces';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -75,8 +75,8 @@ async function setupTool(
       }),
     },
   );
-  const runId = publishTestRunStart(defaultSession());
-  await Effect.runPromise(defaultSession().settlePublications());
+  const runId = publishTestRunStart(testDefaultSession());
+  await Effect.runPromise(testDefaultSession().settlePublications());
   return { tool: new SendToTerminalTool(), runs, runId };
 }
 
@@ -88,7 +88,7 @@ const callTool = (
   tool.call(input).pipe(
     Effect.provide(
       nativeToolTestLayer({
-        run: { runId, session: defaultSession(), toolPolicy: {} },
+        run: { runId, session: testDefaultSession(), toolPolicy: {} },
       }),
     ),
   );

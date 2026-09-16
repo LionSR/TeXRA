@@ -4,8 +4,8 @@ import * as vscode from 'vscode';
 import { Cause, Effect } from 'effect';
 
 import {
-  defaultSession,
   trackTerminalResultPresentation,
+  type SessionHandle,
 } from '@agent/runtime';
 import {
   resumeCancellationLatch,
@@ -27,9 +27,9 @@ const logger = createLog('resumeFromResumeData');
 export function tryResumeFromResumeData(
   runId: RunId,
   runtime: ProcessRuntime,
+  session: SessionHandle,
   recovery?: RecoveryContinuation,
 ): Effect.Effect<boolean, AgentResumeFailed> {
-  const session = defaultSession();
   const terminalResult = trackTerminalResultPresentation(
     session,
     (event) => event.runId === runId,
@@ -49,6 +49,7 @@ export function tryResumeFromResumeData(
             modelCompatibilityKey,
           },
           runtime,
+          session,
         ),
     },
     (failure) => {

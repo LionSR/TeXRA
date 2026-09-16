@@ -1,6 +1,3 @@
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
@@ -20,7 +17,6 @@ vi.mock('@cli/runtime/approval/approvalSummaries', async (importOriginal) => {
   };
 });
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -48,6 +44,7 @@ import {
   type RetryPermission,
   type RunId,
 } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -61,7 +58,7 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
     version: 'test',
     ...overrides,
   });
-  defaultSession().setApprovalPolicy(ctx.approvalPolicy);
+  testDefaultSession().setApprovalPolicy(ctx.approvalPolicy);
   return ctx;
 }
 
@@ -74,10 +71,10 @@ function useCliHostInteractions(
   hooks: CliApprovalPromptHooks = {},
 ): void {
   detachHostInteractions();
-  defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
-  detachHostInteractions = defaultSession().interactions.use(
+  testDefaultSession().setApprovalPolicy(cliContext.approvalPolicy);
+  detachHostInteractions = testDefaultSession().interactions.use(
     createHeadlessCliHostInteractions(
-      defaultSession(),
+      testDefaultSession(),
       effectRuntime(),
       cliContext,
       hooks,
@@ -94,15 +91,15 @@ function ensureRun(runId: RunId) {
   return Effect.gen(function* () {
     if (started.has(runId)) return;
     started.add(runId);
-    publishTestRunStart(defaultSession(), runId);
-    yield* defaultSession().settlePublications();
+    publishTestRunStart(testDefaultSession(), runId);
+    yield* testDefaultSession().settlePublications();
   });
 }
 
 function approvalLayer(runId: RunId, onApprovalPolicyDenial?: () => void) {
   return nativeToolTestLayer({
     workingDirectory: '/tmp',
-    run: { runId, session: defaultSession(), toolPolicy: {} },
+    run: { runId, session: testDefaultSession(), toolPolicy: {} },
     onApprovalPolicyDenial,
   });
 }
@@ -130,7 +127,7 @@ function openRequestOn(
   payload: PermissionPayload,
 ): Effect.Effect<RequestDecision, Error> {
   return Effect.gen(function* () {
-    const session = defaultSession();
+    const session = testDefaultSession();
     yield* ensureRun(runId);
     return yield* session.openRequest(runId, payload);
   }).pipe(Effect.mapError((cause) => new Error(String(cause))));

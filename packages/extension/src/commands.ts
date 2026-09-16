@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - commands
+import type { SessionHandle } from '@agent/runtime';
 import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
@@ -17,7 +18,6 @@ import { registerAgentReviewCommands } from '@commands/review/agentReviewCommand
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 
@@ -27,19 +27,20 @@ export function registerCommands(
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
-  roots: WorkspaceRoots,
+  session: SessionHandle,
 ): void {
-  registerLatexdiffCommands(context, runtime);
-  registerGitCommands(context);
-  registerAgentReviewCommands(context, runtime);
+  registerLatexdiffCommands(context, runtime, session);
+  registerGitCommands(context, session);
+  registerAgentReviewCommands(context, runtime, session);
   registerMergeCommands(context, globalState);
   const settingsViewProvider = new SettingsViewProvider(
     context,
     globalState,
     secrets,
     runtime,
+    session,
   );
-  registerOpenFileCommands(context, runtime);
+  registerOpenFileCommands(context, runtime, session);
   registerMainViewCommands(context, progressViewProvider);
 
   // The shared registry owns every command whose handler map lives in
@@ -56,7 +57,7 @@ export function registerCommands(
       progressViewProvider,
       secrets,
       runtime,
-      roots,
+      session,
     ),
   );
 

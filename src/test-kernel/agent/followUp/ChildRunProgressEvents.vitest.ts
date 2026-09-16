@@ -1,5 +1,4 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -10,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { getRunRecords, registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { Runs } from '@agent/runtime/runRegistry';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
@@ -21,6 +19,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { fakeHostAgentResume } from '@test/support/setupPlatform';
 import {
   createProcessSession,
@@ -92,7 +91,7 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
 
 function startBashChild(runId: RunId) {
   return Effect.runPromise(
-    createRegisteredChildRun(defaultSession(), runId, parentRunId, {
+    createRegisteredChildRun(testDefaultSession(), runId, parentRunId, {
       run: { kind: 'process', tool: 'bash' },
       userFollowUpSupport: 'unsupported',
       description: 'Run a background bash command',
@@ -103,7 +102,7 @@ function startBashChild(runId: RunId) {
 
 function startCodexChild(runId: RunId, description: string) {
   return Effect.runPromise(
-    createRegisteredChildRun(defaultSession(), runId, parentRunId, {
+    createRegisteredChildRun(testDefaultSession(), runId, parentRunId, {
       run: { kind: 'agent', agent: 'codex', tool: 'codex' },
       userFollowUpSupport: 'terminalBacked',
       description,
@@ -120,8 +119,8 @@ describe('child run progress events', () => {
   });
 
   it('publishes child run lifecycle events through the session hub', async () => {
-    const recorded = recordSessionEvents(defaultSession());
-    const rosters = recordChildRosters(defaultSession().runs);
+    const recorded = recordSessionEvents(testDefaultSession());
+    const rosters = recordChildRosters(testDefaultSession().runs);
 
     const childRun = await startBashChild(runId);
 
@@ -198,7 +197,7 @@ describe('child run progress events', () => {
   it('marks a deterministic child-run relaunch as running', async () => {
     const firstRun = await Effect.runPromise(
       createRegisteredChildRun(
-        defaultSession(),
+        testDefaultSession(),
         workflowRelaunchRunId,
         parentRunId,
         {
@@ -212,14 +211,14 @@ describe('child run progress events', () => {
     await Effect.runPromise(
       firstRun.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
     );
-    expect(defaultSession().runView(workflowRelaunchRunId)?.status).toBe(
+    expect(testDefaultSession().runView(workflowRelaunchRunId)?.status).toBe(
       RUN_PHASE.COMPLETED,
     );
 
-    const recorded = recordSessionEvents(defaultSession());
+    const recorded = recordSessionEvents(testDefaultSession());
     const relaunched = await Effect.runPromise(
       createRegisteredChildRun(
-        defaultSession(),
+        testDefaultSession(),
         workflowRelaunchRunId,
         parentRunId,
         {
@@ -232,11 +231,11 @@ describe('child run progress events', () => {
     );
 
     try {
-      expect(defaultSession().runView(workflowRelaunchRunId)?.status).toBe(
+      expect(testDefaultSession().runView(workflowRelaunchRunId)?.status).toBe(
         RUN_PHASE.RUNNING,
       );
       expect(
-        defaultSession().runs.getActiveChildren(parentRunId),
+        testDefaultSession().runs.getActiveChildren(parentRunId),
       ).toContainEqual(
         expect.objectContaining({
           childRunId: workflowRelaunchRunId,
@@ -260,9 +259,9 @@ describe('child run progress events', () => {
   it.effect(
     'rolls back a failed rehydrated setup so the same run can retry',
     () => {
-      const recorded = recordSessionEvents(defaultSession());
+      const recorded = recordSessionEvents(testDefaultSession());
       const trackRun = vi
-        .spyOn(defaultSession().runs, 'track')
+        .spyOn(testDefaultSession().runs, 'track')
         .mockImplementationOnce(() => {
           throw new Error('run setup failed');
         });
@@ -279,7 +278,7 @@ describe('child run progress events', () => {
       return Effect.gen(function* () {
         const error = yield* Effect.flip(
           createRegisteredChildRun(
-            defaultSession(),
+            testDefaultSession(),
             setupRetryRunId,
             parentRunId,
             options,
@@ -304,7 +303,7 @@ describe('child run progress events', () => {
         );
 
         const retried = yield* createRegisteredChildRun(
-          defaultSession(),
+          testDefaultSession(),
           setupRetryRunId,
           parentRunId,
           options,
@@ -334,7 +333,7 @@ describe('child run progress events', () => {
   );
 
   it('emits workflow-script identity independently of its worker config', async () => {
-    const recorded = recordSessionEvents(defaultSession());
+    const recorded = recordSessionEvents(testDefaultSession());
     const workerConfig = {
       ...config,
       agent: 'generic',
@@ -343,7 +342,7 @@ describe('child run progress events', () => {
 
     const childRun = await Effect.runPromise(
       createRegisteredChildRun(
-        defaultSession(),
+        testDefaultSession(),
         workflowRelaunchRunId,
         parentRunId,
         {
@@ -367,7 +366,7 @@ describe('child run progress events', () => {
       }),
     );
     expect(
-      defaultSession().runs.getHandle(workflowRelaunchRunId),
+      testDefaultSession().runs.getHandle(workflowRelaunchRunId),
     ).toMatchObject({
       agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
       category: AgentCategory.Workflow,
@@ -380,7 +379,7 @@ describe('child run progress events', () => {
 
   it('publishes child run existence as a run fact without direct host emission', async () => {
     const active = createRecordingHost();
-    const recorded = recordSessionEvents(defaultSession());
+    const recorded = recordSessionEvents(testDefaultSession());
 
     const childRun = await startBashChild(runId);
 
@@ -400,7 +399,7 @@ describe('child run progress events', () => {
   });
 
   it('retains completed command history after automatic presentation release', async () => {
-    const recorded = recordSessionEvents(defaultSession());
+    const recorded = recordSessionEvents(testDefaultSession());
 
     const childRun = await startBashChild(runId);
     childRun.logger.info('retained command output');
@@ -414,7 +413,7 @@ describe('child run progress events', () => {
 
     expect(eventsOfType(await recorded.read(), 'run.removed')).toEqual([]);
     const entries = await Effect.runPromise(
-      defaultSession().transcripts.readEntries(runId),
+      testDefaultSession().transcripts.readEntries(runId),
     );
     expect(
       entries.some((entry) => entry.text === 'retained command output'),
@@ -425,7 +424,7 @@ describe('child run progress events', () => {
     'cancels committed admission before launching detached work and releases both claims',
     () =>
       Effect.gen(function* () {
-        const session = defaultSession();
+        const session = testDefaultSession();
         const committed = yield* Deferred.make<RunId>();
         const releasePublication = yield* Deferred.make<void>();
         const commit = session.commitRegistration.bind(session);
@@ -497,7 +496,7 @@ describe('child run progress events', () => {
     () =>
       Effect.gen(function* () {
         const setupError = new Error('child loop setup failed');
-        const session = defaultSession();
+        const session = testDefaultSession();
         const recorded = recordSessionEvents(session);
         let childRun: ChildRun | undefined;
         let childRunId: RunId | undefined;
@@ -507,7 +506,7 @@ describe('child run progress events', () => {
         const defect = yield* Effect.flip(
           reraiseAgentCliCallFailure(
             launchAgentCliSession({
-              session: defaultSession(),
+              session: testDefaultSession(),
               parentRunId,
               agentName: 'codex',
               description: 'Fail during synchronous loop setup',
@@ -550,18 +549,18 @@ describe('child run progress events', () => {
       stoppedRunId,
       'Run a stopped Codex child loop',
     );
-    const handle = defaultSession().runs.getHandle(stoppedRunId);
+    const handle = testDefaultSession().runs.getHandle(stoppedRunId);
     expect(handle).toBeDefined();
     handle?.interrupt();
 
     await Effect.runPromise(childRun.finalize({ outcome: RUN_OUTCOME.FAILED }));
 
-    expect(defaultSession().runView(stoppedRunId)?.status).toBe(
+    expect(testDefaultSession().runView(stoppedRunId)?.status).toBe(
       RUN_PHASE.CANCELLED,
     );
     await expect(
       Effect.runPromise(
-        getRunRecords(defaultSession(), stoppedRunId).readRunEnd(),
+        getRunRecords(testDefaultSession(), stoppedRunId).readRunEnd(),
       ),
     ).resolves.toMatchObject({ outcome: 'cancelled' });
   });
@@ -571,7 +570,7 @@ describe('child run progress events', () => {
       failedRunId,
       'Run a failing Codex child loop',
     );
-    expect(defaultSession().runs.getHandle(failedRunId)).toBeDefined();
+    expect(testDefaultSession().runs.getHandle(failedRunId)).toBeDefined();
 
     await Effect.runPromise(
       childRun.finalize({
@@ -580,12 +579,12 @@ describe('child run progress events', () => {
       }),
     );
 
-    expect(defaultSession().runView(failedRunId)?.status).toBe(
+    expect(testDefaultSession().runView(failedRunId)?.status).toBe(
       RUN_PHASE.FAILED,
     );
     await expect(
       Effect.runPromise(
-        getRunRecords(defaultSession(), failedRunId).readRunEnd(),
+        getRunRecords(testDefaultSession(), failedRunId).readRunEnd(),
       ),
     ).resolves.toMatchObject({
       outcome: 'failed',
