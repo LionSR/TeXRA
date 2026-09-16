@@ -27,51 +27,46 @@ export interface WorkspaceFileListingOptions {
  * and a dangling link, like an entry that vanished between the listing and
  * the probe, is skipped.
  */
-export function listWorkspaceFiles(
-  options: WorkspaceFileListingOptions,
-): Effect.Effect<string[], PlatformError.PlatformError, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const filters = prepareFileFilters(options.config);
-    const results: string[] = [];
+export const listWorkspaceFiles = Effect.fn(
+  'workspaceFileListing.listWorkspaceFiles',
+)(function* (options: WorkspaceFileListingOptions) {
+  const fs = yield* FileSystem.FileSystem;
+  const filters = prepareFileFilters(options.config);
+  const results: string[] = [];
 
-    function visit(
-      directory: string,
-      relativeDirectory: string,
-    ): Effect.Effect<void, PlatformError.PlatformError> {
-      return Effect.gen(function* () {
-        const entries = yield* fs.readDirectory(directory);
+  function visit(
+    directory: string,
+    relativeDirectory: string,
+  ): Effect.Effect<void, PlatformError.PlatformError> {
+    return Effect.gen(function* () {
+      const entries = yield* fs.readDirectory(directory);
 
-        for (const name of entries) {
-          const relativePath = normalizeFilePath(
-            relativeDirectory ? `${relativeDirectory}/${name}` : name,
-          );
-          const absolutePath = join(directory, name);
-          const info = yield* fs.stat(absolutePath).pipe(
-            Effect.catchIf(
-              (error) => error.reason._tag === 'NotFound',
-              () => Effect.succeed(undefined),
-            ),
-          );
+      for (const name of entries) {
+        const relativePath = normalizeFilePath(
+          relativeDirectory ? `${relativeDirectory}/${name}` : name,
+        );
+        const absolutePath = join(directory, name);
+        const info = yield* fs.stat(absolutePath).pipe(
+          Effect.catchIf(
+            (error) => error.reason._tag === 'NotFound',
+            () => Effect.succeed(undefined),
+          ),
+        );
 
-          if (info?.type === 'Directory') {
-            if (shouldVisitDirectory(relativePath, filters)) {
-              yield* visit(absolutePath, relativePath);
-            }
-            continue;
+        if (info?.type === 'Directory') {
+          if (shouldVisitDirectory(relativePath, filters)) {
+            yield* visit(absolutePath, relativePath);
           }
-
-          if (
-            info?.type === 'File' &&
-            passesFileFilters(relativePath, filters)
-          ) {
-            results.push(relativePath);
-          }
+          continue;
         }
-      });
-    }
 
-    yield* visit(options.root, '');
-    return results.sort(byString);
-  });
-}
+        if (info?.type === 'File' && passesFileFilters(relativePath, filters)) {
+          results.push(relativePath);
+        }
+      }
+    });
+  }
+
+  yield* visit(options.root, '');
+  return results.sort(byString);
+});
