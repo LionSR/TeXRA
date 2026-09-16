@@ -1,5 +1,4 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -14,7 +13,7 @@ import {
   type ChildRunLoopParams,
 } from '@agent/runtime/childRunLoop';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   aggregateId,
@@ -25,6 +24,7 @@ import {
   type FlowStep,
   type RunId,
 } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const mocks = vi.hoisted(() => ({
   submitFollowUp: vi.fn(),
@@ -117,7 +117,7 @@ function runOnFakeHost<A, E>(
   // The engine is mocked, so a turn admits nothing on these runs.
   return turn.pipe(
     Effect.provide(fakeProcessServices()),
-    Effect.provideService(Runs, defaultSession().runs),
+    Effect.provideService(Runs, testDefaultSession().runs),
   );
 }
 
@@ -188,7 +188,7 @@ function baseParams(
   parentSession = createTestSession(),
   agentCategory: 'toolUse' | 'workflow' = 'toolUse',
 ) {
-  if (parentSession !== defaultSession()) ownedSessions.add(parentSession);
+  if (parentSession !== testDefaultSession()) ownedSessions.add(parentSession);
   return {
     definition: {
       config: AgentConfigSchema.parse({
@@ -714,7 +714,7 @@ describe('NativeSubagentStrategy', () => {
     'keeps a second child follow-up available after two resumed WAITING turns',
     () =>
       Effect.gen(function* () {
-        const session = defaultSession();
+        const session = testDefaultSession();
         const parentRunId = RunIdSchema.parse('fa110002');
         const childRunId = RunIdSchema.parse('fa110001');
         publishTestRunStart(session, childRunId);
@@ -902,7 +902,7 @@ describe('NativeSubagentStrategy', () => {
     'never reaches runTurn for a workflow child — the loop breaks on the first terminal turn',
     () =>
       Effect.gen(function* () {
-        const session = defaultSession();
+        const session = testDefaultSession();
         const parentRunId = RunIdSchema.parse('f10a00000002');
         const childRunId = RunIdSchema.parse('f10a00000001');
         const interactions = { emit: vi.fn() } as never;

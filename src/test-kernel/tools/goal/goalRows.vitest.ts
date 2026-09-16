@@ -1,17 +1,13 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
-import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
   RunIdSchema,
 } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {
   createTestSession,
@@ -211,7 +207,7 @@ describe('goalStateChanges', () => {
       publishTestRunStart(runSession, SUBSCRIPTION_RUN);
       const run = yield* collectGoalChanges(runSession);
       const other = yield* collectGoalChanges(otherSession);
-      const fallback = yield* collectGoalChanges(defaultSession());
+      const fallback = yield* collectGoalChanges(testDefaultSession());
 
       yield* startGoal(runSession, SUBSCRIPTION_RUN, 'prove the estimate');
       yield* pauseGoal(runSession, SUBSCRIPTION_RUN);

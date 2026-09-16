@@ -1,5 +1,3 @@
-import '@test/support/defaultSessionTestSetup';
-
 // Test composition imports
 
 // Node imports
@@ -15,7 +13,7 @@ import { registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+
 import {
   aggregateId,
   LOG_LEVELS,
@@ -26,6 +24,7 @@ import {
   type WorkflowCallProgress,
   AgentCategory,
 } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createProcessSession,
@@ -51,7 +50,7 @@ function publishWorkflowBoard(
   },
 ) {
   return Effect.promise(async () => {
-    const session = defaultSession();
+    const session = testDefaultSession();
     session.publishRunEvent(runId, {
       type: 'workflow.plan',
       attemptId: WORKFLOW_ATTEMPT_ID,
@@ -125,8 +124,8 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
       .mockReturnValue(Effect.succeed({ status: 'sent' }));
 
     const { host } = createRecordingHost();
-    const recorded = recordSessionEvents(defaultSession());
-    publishTestRunStart(defaultSession(), PARENT_RUN_ID);
+    const recorded = recordSessionEvents(testDefaultSession());
+    publishTestRunStart(testDefaultSession(), PARENT_RUN_ID);
     // No settle before the launch. `registerRun` opens the parent check with an
     // empty batch on the session's publisher, so the child's admission read
     // runs after the parent's queued `run.start`. Settling here instead would
@@ -141,7 +140,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
           nativeToolTestLayer({
             tracker: new FileInteractionState(),
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: PARENT_RUN_ID,
               toolPolicy: {},
             },
@@ -151,7 +150,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
 
     assert.equal(launched.status, 'executed');
     yield* Effect.promise(() => outputEmitted);
-    yield* defaultSession().settlePublications();
+    yield* testDefaultSession().settlePublications();
     const reported = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
     assert.ok(reported, 'Background launch should report its run ID');
     const runId = RunIdSchema.parse(reported);
@@ -179,7 +178,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
 
 function readOutput(runId: RunId, viewRange?: [number, number]) {
   return Effect.gen(function* () {
-    yield* defaultSession().settlePublications();
+    yield* testDefaultSession().settlePublications();
     return yield* new ExecutionsTool().call({
       path: `/executions/${runId}/output`,
       ...(viewRange ? { view_range: viewRange } : {}),
@@ -192,7 +191,7 @@ function registerProcessRun(instruction: string) {
   return Effect.gen(function* () {
     const runId = generateRunId();
     yield* registerRun(
-      defaultSession(),
+      testDefaultSession(),
       runId,
       AgentConfigSchema.parse({
         agent: 'bash',
@@ -211,7 +210,7 @@ function registerWorkflowRun(name: string, model?: string) {
   return Effect.gen(function* () {
     const runId = generateRunId();
     yield* registerRun(
-      defaultSession(),
+      testDefaultSession(),
       runId,
       {
         name,
@@ -276,7 +275,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: PARENT_RUN_ID,
               toolPolicy: {},
             },
@@ -306,7 +305,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: PARENT_RUN_ID,
               toolPolicy: {},
             },
@@ -351,7 +350,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: PARENT_RUN_ID,
               toolPolicy: {},
             },
@@ -390,7 +389,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: PARENT_RUN_ID,
               toolPolicy: {},
             },
@@ -402,7 +401,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   it.live('renders consecutive untagged legacy rows standalone', () =>
     Effect.gen(function* () {
       const runId = yield* registerProcessRun('legacy command');
-      const session = defaultSession();
+      const session = testDefaultSession();
       const append = (
         text: string,
         level:
@@ -437,7 +436,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: PARENT_RUN_ID,
             toolPolicy: {},
           },
@@ -467,7 +466,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: PARENT_RUN_ID,
             toolPolicy: {},
           },
@@ -513,7 +512,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: PARENT_RUN_ID,
               toolPolicy: {},
             },
@@ -544,7 +543,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: PARENT_RUN_ID,
             toolPolicy: {},
           },
@@ -567,7 +566,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: PARENT_RUN_ID,
             toolPolicy: {},
           },
@@ -582,7 +581,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       Effect.gen(function* () {
         const runId = generateRunId();
         yield* registerRun(
-          defaultSession(),
+          testDefaultSession(),
           runId,
           AgentConfigSchema.parse({
             agent: 'chat',
@@ -603,7 +602,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: PARENT_RUN_ID,
               toolPolicy: {},
             },
@@ -692,7 +691,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: PARENT_RUN_ID,
             toolPolicy: {},
           },
@@ -730,7 +729,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: PARENT_RUN_ID,
             toolPolicy: {},
           },
@@ -768,7 +767,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: PARENT_RUN_ID,
               toolPolicy: {},
             },
@@ -812,7 +811,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: PARENT_RUN_ID,
               toolPolicy: {},
             },
@@ -831,7 +830,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: PARENT_RUN_ID,
             toolPolicy: {},
           },

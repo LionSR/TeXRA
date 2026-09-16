@@ -1,17 +1,17 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
 import type { RunListingEntry } from '@agent/storage';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+
 import { Runs } from '@agent/runtime/runRegistry';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { STATUS_DISPLAY, TODO_STATUS, type RunId } from '@shared/schemas';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
   formatListingLine,
   formatTodoSection,
@@ -60,8 +60,8 @@ describe('tool status formatting', () => {
     // columns under test are the `process` category and the suppressed model.
     await expect(
       Effect.runPromise(
-        formatListingLine(entry, defaultSession()).pipe(
-          Effect.provideService(Runs, defaultSession().runs),
+        formatListingLine(entry, testDefaultSession()).pipe(
+          Effect.provideService(Runs, testDefaultSession().runs),
         ),
       ),
     ).resolves.toBe(

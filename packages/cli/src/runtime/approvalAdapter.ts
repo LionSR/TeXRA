@@ -12,9 +12,9 @@
 import { Effect, Exit, Fiber, Result, Stream, SubscriptionRef } from 'effect';
 
 import {
-  defaultSession,
   type HostApprovalBypassStateUpdate,
   type HostInteractions,
+  type SessionHandle,
 } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -143,8 +143,10 @@ const askHeadlessUserQuestion = Effect.fn(
 });
 
 /** `runtime` is the process runtime the headless run holds: the view
- *  subscription below is a fiber of it, interrupted on dispose. */
+ *  subscription below is a fiber of it, interrupted on dispose. `session` is
+ *  the headless run's session, threaded from the composition that opened it. */
 export function createHeadlessCliHostInteractions(
+  session: SessionHandle,
   runtime: ProcessRuntime,
   context: CliContext,
   hooks: HeadlessCliHostInteractionHooks = {},
@@ -152,7 +154,6 @@ export function createHeadlessCliHostInteractions(
   // Headless composition seeds the session before attaching; tests often attach
   // without that step, so mirror the seed here. TUI uses a different adapter
   // and keeps the live session value from `/approval`.
-  const session = defaultSession();
   session.setApprovalPolicy(context.approvalPolicy);
   /** Requests this host has taken on, pruned as the fold drops them. */
   const acted = new Set<string>();
@@ -223,7 +224,7 @@ export function createHeadlessCliHostInteractions(
           yield* ask(toolEditContent(payload)),
         );
       case 'planApproval': {
-        const settled = settleExecutable(context, runId);
+        const settled = settleExecutable(session, context, runId);
         return yield* decide(
           runId,
           requestId,
@@ -234,7 +235,7 @@ export function createHeadlessCliHostInteractions(
         );
       }
       case 'proposal': {
-        const settled = settleExecutable(context, runId);
+        const settled = settleExecutable(session, context, runId);
         return yield* decide(
           runId,
           requestId,
@@ -243,7 +244,7 @@ export function createHeadlessCliHostInteractions(
         );
       }
       case 'retry': {
-        const settled = settleRetry(payload.data, context);
+        const settled = settleRetry(session, payload.data, context);
         if (settled) return yield* decide(runId, requestId, settled);
         // The pre-prompt hook fires here and again inside `askApproval`; that
         // double call is pre-existing retry behavior, not a bug to "fix".
@@ -269,7 +270,7 @@ export function createHeadlessCliHostInteractions(
         });
       }
       case 'userQuestion': {
-        const denial = settleHumanInputDenial(context, runId);
+        const denial = settleHumanInputDenial(session, context, runId);
         return yield* decide(
           runId,
           requestId,

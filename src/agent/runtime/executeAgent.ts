@@ -389,7 +389,7 @@ export interface SubagentRunOptions {
   onApprovalPolicyDenial?: () => void;
   /** Hide tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
-  /** Session owning this run's coordination state. Defaults to the process session. */
+  /** Session owning this run's coordination state; run entry points require it. */
   session?: SessionHandle;
   /**
    * Fires when a subagent fails with a provider/runtime error that the caller

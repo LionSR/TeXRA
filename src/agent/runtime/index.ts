@@ -20,8 +20,6 @@
 // SessionHandle
 export {
   SessionHandle,
-  currentSession,
-  defaultSession,
   initializeDefaultSession,
   teardownDefaultSession,
   tryDefaultSession,

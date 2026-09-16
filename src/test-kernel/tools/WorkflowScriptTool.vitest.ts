@@ -11,7 +11,6 @@ import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { getRunRecords } from '@agent/storage';
 import {
-  currentSession,
   initializeDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
@@ -142,6 +141,7 @@ vi.mock('@tools/delegation/delegationAvailability', async (importOriginal) => ({
 
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
 import { getDefaultToolRegistry } from '@tools/registry';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const parentRunId = '7154c4700700' as RunId;
 let session: SessionHandle;
@@ -160,7 +160,7 @@ function toolLayer(stopAfterCycle = false) {
     hooks: { recordSubagentCost: vi.fn() },
     run: {
       runId: parentRunId,
-      session: currentSession(),
+      session: testDefaultSession(),
       toolPolicy: { stopAfterCycle },
     },
   });
@@ -213,7 +213,7 @@ function mockPersistedReport(
   report: string,
   outcome: (typeof RUN_OUTCOME)[keyof typeof RUN_OUTCOME],
 ): void {
-  const store = getRunRecords(currentSession(), runIdFor(name));
+  const store = getRunRecords(testDefaultSession(), runIdFor(name));
   vi.spyOn(store, 'readReport').mockReturnValue(Effect.succeed(report));
   vi.spyOn(store, 'readRunEnd').mockReturnValue(
     Effect.succeed({ outcome, output: emptyRunEndOutput('workflow') }),
@@ -228,7 +228,7 @@ function publishWorkflowBoard(
   label: string,
 ): Effect.Effect<void, never> {
   return Effect.promise(async () => {
-    const session = currentSession();
+    const session = testDefaultSession();
     session.publishRunEvent(runId, {
       type: 'workflow.plan',
       attemptId: WORKFLOW_ATTEMPT_ID,
@@ -397,7 +397,7 @@ describe('WorkflowScriptTool', () => {
           runIdFor('tool-test'),
           parentRunId,
           'auto-approved',
-          currentSession(),
+          testDefaultSession(),
         );
       }),
   );
@@ -582,7 +582,7 @@ return null`;
         // relaunch with the same meta.name re-roots at the same anchor and resume
         // still works (#8712).
         expect(mocks.registerRun).toHaveBeenCalledWith(
-          currentSession(),
+          testDefaultSession(),
           runId,
           // The durable record is honest: workflow name, launch summary, and the
           // real delegation model. It has no fabricated agent identity or category.
@@ -591,7 +591,7 @@ return null`;
           registrationOptionsFor('tool-test'),
         );
         expect(mocks.createChildRun).toHaveBeenCalledWith(
-          currentSession(),
+          testDefaultSession(),
           runId,
           parentRunId,
           expect.objectContaining({
@@ -603,7 +603,7 @@ return null`;
           runId,
           parentRunId,
           'inherit',
-          currentSession(),
+          testDefaultSession(),
         );
         expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
         const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
@@ -680,7 +680,7 @@ return null`;
       });
       expect(result.output).toContain(`Script file: ${scriptPath}`);
       expect(mocks.registerRun).toHaveBeenCalledWith(
-        currentSession(),
+        testDefaultSession(),
         runIdFor('edited-tool-test'),
         registrationRecordFor('edited-tool-test'),
         'edited-tool-test',
@@ -861,7 +861,7 @@ return null`;
           "name: 'interrupted-resume'",
         );
         const runId = runIdFor('interrupted-resume');
-        const store = getRunRecords(currentSession(), runId);
+        const store = getRunRecords(testDefaultSession(), runId);
         yield* store.writeReport('stale success from the prior attempt');
         vi.spyOn(store, 'readRunEnd').mockReturnValue(
           Effect.succeed({
@@ -922,7 +922,7 @@ return null`;
         withScope: expect.any(Function),
       });
       expect(mocks.registerRun).toHaveBeenCalledWith(
-        currentSession(),
+        testDefaultSession(),
         runIdFor('tool-test'),
         registrationRecordFor('tool-test', 'served-model'),
         'tool-test',
@@ -969,7 +969,7 @@ return null`;
       // The durable record stays honest (no file lists); the binding rides the
       // checkpoint and the live run config the agent steps consume.
       expect(mocks.createChildRun).toHaveBeenCalledWith(
-        currentSession(),
+        testDefaultSession(),
         runIdFor('tool-test'),
         expect.anything(),
         expect.objectContaining({
@@ -1025,7 +1025,7 @@ return null`;
       } as const satisfies WorkflowScriptFiles;
       // The checkpoint's source of record: one `workflow.script` row on the
       // aggregate the run's `checkpointId` names, with no journal behind it.
-      yield* currentSession().commit([
+      yield* testDefaultSession().commit([
         {
           type: 'workflow.script',
           aggregateId: aggregateId(
@@ -1043,7 +1043,7 @@ return null`;
 
       expect(result.status).toBe('executed');
       expect(mocks.createChildRun).toHaveBeenCalledWith(
-        currentSession(),
+        testDefaultSession(),
         runIdFor('resume'),
         expect.anything(),
         expect.objectContaining({
@@ -1082,7 +1082,7 @@ return null`;
         const phase = 'Research';
         const label = 'Interrupted call';
         let reopenedTasks: unknown;
-        yield* currentSession().commit([
+        yield* testDefaultSession().commit([
           {
             type: 'run.start',
             aggregateId: aggregateId('run', runId),
@@ -1112,7 +1112,7 @@ return null`;
         mocks.createChildRun.mockImplementationOnce(
           (_session: unknown, childRunId: RunId) =>
             Effect.gen(function* () {
-              const view = yield* currentSession().readView([childRunId]);
+              const view = yield* testDefaultSession().readView([childRunId]);
               reopenedTasks = view.runs.get(childRunId)?.transcript.run?.tasks;
               const logger = new TraceEmitter();
               vi.spyOn(logger, 'error').mockImplementation(
@@ -1138,7 +1138,7 @@ return null`;
           }),
         ]);
         expect(mocks.createChildRun).toHaveBeenCalledWith(
-          currentSession(),
+          testDefaultSession(),
           runId,
           expect.anything(),
           expect.anything(),
