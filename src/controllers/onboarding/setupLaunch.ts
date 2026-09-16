@@ -19,6 +19,7 @@ import {
   setupCredentialProbeFailed,
   setupSubscriptionModel,
 } from '@model/setupCredentialAccess';
+import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
@@ -37,7 +38,7 @@ export const SETUP_INSTRUCTION =
 export function selectSetupCredentialModelExcludingOpenRouter(
   secrets: PlatformSecrets,
   useOpenRouter = false,
-): Effect.Effect<string | null> {
+): Effect.Effect<string | null, never, LanguageModel> {
   return Effect.gen(function* () {
     // Subscription routes follow the global OpenRouter selection.
     // When it is enabled, only managed direct credentials can bypass it.
@@ -85,7 +86,7 @@ interface SetupModelResolution {
 export function resolveSetupLaunchModel(
   secrets: PlatformSecrets,
   includeAccessListFallback: boolean,
-): Effect.Effect<SetupModelResolution | null> {
+): Effect.Effect<SetupModelResolution | null, never, LanguageModel> {
   return Effect.gen(function* () {
     const useOpenRouter = getUseOpenRouter();
     const hasOpenRouterKey = yield* probeSetupCredential(
@@ -137,7 +138,7 @@ export function resolveSetupLaunchModel(
  */
 export function buildDesktopSetupRunRequest(
   secrets: PlatformSecrets,
-): Effect.Effect<ValidatedRunRequest | null, Error> {
+): Effect.Effect<ValidatedRunRequest | null, Error, LanguageModel> {
   return Effect.gen(function* () {
     const model =
       (yield* resolveSetupLaunchModel(secrets, false))?.model ?? null;

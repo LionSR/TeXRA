@@ -79,7 +79,7 @@ describe('shared setup capabilities', () => {
         vi.spyOn(
           providerCapabilities,
           'isCodexSubscriptionActive',
-        ).mockResolvedValue(false);
+        ).mockReturnValue(Effect.succeed(false));
 
         expect(yield* getChatGptSubscriptionStatus()).toEqual({
           signedIn: true,

@@ -268,25 +268,31 @@ async function getAgentPath(
   );
 }
 
-async function validateModelExists(
-  modelName: string,
-  interactions: Pick<SessionHostInteractions, 'emit'>,
-): Promise<ModelConfig> {
-  const modelConfig = await resolveRuntimeModelConfig(modelName);
-  if (modelConfig) return modelConfig;
+const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
+  function* (
+    modelName: string,
+    interactions: Pick<SessionHostInteractions, 'emit'>,
+  ) {
+    const modelConfig = yield* resolveRuntimeModelConfig(modelName);
+    if (modelConfig) return modelConfig;
 
-  return presentLaunchError(
-    interactions,
-    new AgentError(`Model ${modelName} is not registered`),
-    'requestShowInstruction',
-    {
-      key: 'modelNotRecognized',
-      message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-      actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
-      showSuppress: false,
-    },
-  );
-}
+    return yield* Effect.try({
+      try: () =>
+        presentLaunchError(
+          interactions,
+          new AgentError(`Model ${modelName} is not registered`),
+          'requestShowInstruction',
+          {
+            key: 'modelNotRecognized',
+            message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+            actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
+            showSuppress: false,
+          },
+        ),
+      catch: ensureError,
+    });
+  },
+);
 
 /**
  * The conversation format a resumed run's rows are in, read off its latest
@@ -395,10 +401,10 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
 
     // Validated before registration, so a typo'd model name registers no
     // FAILED execution and surfaces only its targeted instruction.
-    const modelConfig = yield* Effect.tryPromise({
-      try: () => validateModelExists(fullConfig.model, interactions),
-      catch: ensureError,
-    });
+    const modelConfig = yield* validateModelExists(
+      fullConfig.model,
+      interactions,
+    );
     yield* failIfAborted(input.signal);
     yield* failIfLaunchStopped(input.stopped);
 

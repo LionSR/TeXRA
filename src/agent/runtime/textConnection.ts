@@ -11,6 +11,11 @@ import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import type { ResponseTextConnector } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelPort,
+} from '@platform/languageModel';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 
 const CASE_CONNECTORS: Record<string, string> = {
@@ -43,12 +48,14 @@ const SYSTEM_PROMPT =
  * the helper-model call out of the latex layer.
  *
  * A {@link ResponseTextConnector} takes only the two strings, so the process
- * stores and setting slots the helper model is resolved against are bound
+ * stores and setting slots the helper model is resolved against — and the
+ * host's language-model bridge its catalogue discovery reads — are bound
  * here, at the host root that owns them, rather than looked up per call.
  */
 export function createAgentResponseTextConnector(
   stores: ModelOptionStores,
   roots: SettingsStores,
+  languageModel: LanguageModelPort = UNAVAILABLE_LANGUAGE_MODEL_PORT,
 ): ResponseTextConnector {
   return (previous, next) =>
     Effect.gen(function* () {
@@ -65,6 +72,7 @@ export function createAgentResponseTextConnector(
       }
       return connector;
     }).pipe(
+      Effect.provideService(LanguageModel, languageModel),
       Effect.scoped,
       Effect.catch((err) => {
         if (err instanceof HelperModelUnavailable) {

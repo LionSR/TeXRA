@@ -196,6 +196,7 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // The package has no TeXRA account plane of its own: every probe answers
     // signed-out, as the uninitialized facade did for an embedder.
     auth: unavailableSupabaseAuth(),
+    languageModel: platform.languageModel,
     agentResume: platform.agentResume,
     setup: PACKAGE_SETUP,
   };

@@ -25,13 +25,33 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
+import { LanguageModel } from '@platform/languageModel';
+import { effectRuntime } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
+  fakeHostLanguageModel,
   hostStores,
   installedHost,
   installPlatform,
 } from '@test/support/setupPlatform';
+
+/** Run a registry program on the fake host's process runtime, which carries
+ *  the `LanguageModel` service the discovery path yields. */
+const runRegistry = <A, E>(effect: Effect.Effect<A, E, LanguageModel>) =>
+  effectRuntime().runPromise(effect);
+
+/**
+ * The availability read over the installed fake host's language-model port,
+ * provided explicitly because the bare `it.effect` runtime does not carry the
+ * process services.
+ */
+const availabilityInputs = (
+  ...args: Parameters<typeof readModelAvailabilityInputs>
+) =>
+  readModelAvailabilityInputs(...args).pipe(
+    Effect.provide(LanguageModel.layer(fakeHostLanguageModel)),
+  );
 
 // The discovered-editor-model fixture must track an llm-zoo base model that
 // is active (neither deprecated nor retired) and Copilot-documented (carries
@@ -102,7 +122,7 @@ describe('runtime model registry', () => {
   it('maps a discovered editor model to a route on its canonical base model', async () => {
     const port = await installModels(GEMINI_PRO);
 
-    await refreshRuntimeModelRegistry();
+    await runRegistry(refreshRuntimeModelRegistry());
 
     expect(port.selectModels).toHaveBeenCalledWith({ vendor: 'copilot' });
     expect(copilotRouteForModel('gemini31p')).toEqual(
@@ -130,7 +150,7 @@ describe('runtime model registry', () => {
       { ...GEMINI_PRO, id: 'gemini-3.1-pro-preview', version: '2026-07' },
     );
 
-    await refreshRuntimeModelRegistry();
+    await runRegistry(refreshRuntimeModelRegistry());
 
     expect(copilotRouteForModel('gemini31p')?.reference).toEqual({
       vendor: 'copilot',
@@ -146,15 +166,17 @@ describe('runtime model registry', () => {
       name: 'Future model',
     });
 
-    await refreshRuntimeModelRegistry();
+    await runRegistry(refreshRuntimeModelRegistry());
 
     expect(copilotRouteForModel('future-model')).toBeUndefined();
-    expect([...(await discoveredCopilotRoutes()).keys()]).toEqual([]);
+    expect([...(await runRegistry(discoveredCopilotRoutes())).keys()]).toEqual(
+      [],
+    );
   });
 
   it('reports the direct fallback for a base model and a legacy copilot id', async () => {
     await installModels(GEMINI_PRO, GPT_56);
-    await refreshRuntimeModelRegistry();
+    await runRegistry(refreshRuntimeModelRegistry());
 
     expect(getRuntimeModelDirectFallback('gemini31p', false)).toEqual({
       model: 'gemini31p',
@@ -181,7 +203,7 @@ describe('runtime model registry', () => {
       { languageModel: port },
     );
 
-    await refreshRuntimeModelRegistry();
+    await runRegistry(refreshRuntimeModelRegistry());
     const { globalState } = installedHost().roots;
     expect(
       copilotRouteUnavailableReason('gemini31p', globalState),
@@ -201,13 +223,13 @@ describe('runtime model registry', () => {
 
   it('replaces route state after invalidation', async () => {
     await installModels(GEMINI_PRO);
-    await refreshRuntimeModelRegistry();
+    await runRegistry(refreshRuntimeModelRegistry());
     expect(copilotRouteForModel('gemini31p')).toBeDefined();
 
     invalidateRuntimeModelRegistry();
     expect(copilotRouteForModel('gemini31p')).toBeDefined();
     await installModels();
-    await refreshRuntimeModelRegistry();
+    await runRegistry(refreshRuntimeModelRegistry());
 
     expect(copilotRouteForModel('gemini31p')).toBeUndefined();
   });
@@ -224,7 +246,7 @@ describe('runtime model registry', () => {
       },
     );
 
-    const inFlight = refreshRuntimeModelRegistry();
+    const inFlight = runRegistry(refreshRuntimeModelRegistry());
     invalidateRuntimeModelRegistry();
     discovery.resolve([GEMINI_PRO]);
     await inFlight;
@@ -234,7 +256,7 @@ describe('runtime model registry', () => {
     expect(copilotRouteForModel('gemini31p')).toBeUndefined();
 
     const port = await installModels(GPT_56);
-    await refreshRuntimeModelRegistry();
+    await runRegistry(refreshRuntimeModelRegistry());
 
     expect(port.selectModels).toHaveBeenCalledWith({ vendor: 'copilot' });
     expect(copilotRouteForModel('gpt56')).toBeDefined();
@@ -243,19 +265,21 @@ describe('runtime model registry', () => {
   it('does not make static models depend on native discovery', async () => {
     await installPlatform({}, { languageModel: failingDiscoveryPort() });
 
-    await expect(resolveRuntimeModelConfig('gpt55')).resolves.toBeDefined();
+    await expect(
+      runRegistry(resolveRuntimeModelConfig('gpt55')),
+    ).resolves.toBeDefined();
   });
 
   it('returns the last-known route catalogue when rediscovery fails', async () => {
     await installModels(GEMINI_PRO);
-    await refreshRuntimeModelRegistry();
+    await runRegistry(refreshRuntimeModelRegistry());
 
     invalidateRuntimeModelRegistry();
     await installPlatform({}, { languageModel: failingDiscoveryPort() });
 
-    expect((await discoveredCopilotRoutes()).get('gemini31p')?.access).toBe(
-      'allowed',
-    );
+    expect(
+      (await runRegistry(discoveredCopilotRoutes())).get('gemini31p')?.access,
+    ).toBe('allowed');
   });
 });
 
@@ -282,7 +306,7 @@ describe('Copilot route in model pickers', () => {
         );
 
         const options = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+          yield* availabilityInputs(hostStores(), ['gemini31p']),
         );
 
         expect(options).toHaveLength(1);
@@ -317,7 +341,7 @@ describe('Copilot route in model pickers', () => {
       );
 
       const options = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores(), undefined),
+        yield* availabilityInputs(hostStores(), undefined),
       );
 
       expect(options.map((option) => option.value)).toEqual(['gpt55']);
@@ -349,7 +373,7 @@ describe('Copilot route in model pickers', () => {
         );
 
         const options = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), undefined),
+          yield* availabilityInputs(hostStores(), undefined),
         );
 
         expect(options).toHaveLength(1);
@@ -382,7 +406,7 @@ describe('Copilot route in model pickers', () => {
         );
 
         const options = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+          yield* availabilityInputs(hostStores(), ['gemini31p']),
         );
 
         expect(options).toHaveLength(1);
@@ -406,7 +430,7 @@ describe('Copilot route in model pickers', () => {
       );
 
       const options = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+        yield* availabilityInputs(hostStores(), ['gemini31p']),
       );
 
       expect(options[0]).toEqual(

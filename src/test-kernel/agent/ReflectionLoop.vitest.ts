@@ -39,6 +39,10 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { Model, TurnResult } from '@llm/turn';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
@@ -476,6 +480,9 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
         Layer.provideMerge(rootedFsLayer(init.session.roots)),
+        Layer.provideMerge(
+          LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+        ),
         Layer.provideMerge(testHttpClientLayer),
       ),
     ),

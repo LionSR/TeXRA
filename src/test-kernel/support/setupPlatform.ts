@@ -32,6 +32,7 @@ import type {
   AppState,
   StateStore,
 } from '@platform/interfaces';
+import type { LanguageModelPort } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -253,6 +254,19 @@ export const fakeHostAuth: SupabaseAuthShape = {
   setInitError: (error) => installedAuth().setInitError(error),
 };
 
+/**
+ * The `LanguageModel` service of every test runtime, delegating per call for
+ * the same reason `fakeHostSecrets` does: the runtime is built once per
+ * module instance while the host's port is swapped per test.
+ */
+export const fakeHostLanguageModel: LanguageModelPort = {
+  isAvailable: () => installedHost().platform.languageModel.isAvailable(),
+  selectModels: (selector) =>
+    installedHost().platform.languageModel.selectModels(selector),
+  onDidChange: (listener) =>
+    installedHost().platform.languageModel.onDidChange(listener),
+};
+
 /** The `AgentResume` service of every test runtime, delegating per call for
  *  the same reason `fakeHostSecrets` does: hosts change per test, the
  *  runtime does not. */
@@ -306,6 +320,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { testHttpClientLayer },
     { Secrets },
     { AgentResume, AppState },
+    { LanguageModel },
     { SetupPlatform },
     { ToolInjections },
     { SupabaseAuth },
@@ -318,6 +333,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@test/support/fetchTestUtils'),
     import('@platform/secrets'),
     import('@platform/interfaces'),
+    import('@platform/languageModel'),
     import('@tools/setup/platform'),
     import('@agent/runtime/toolInjection'),
     import('@auth/SupabaseAuth'),
@@ -343,6 +359,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     Secrets.layer(fakeHostSecrets),
     AppState.layer(fakeHostAppState),
     SupabaseAuth.layer(fakeHostAuth),
+    LanguageModel.layer(fakeHostLanguageModel),
     AgentResume.layer(fakeHostAgentResume),
     SetupPlatform.layer(fakeSetupPlatform),
     // No conditional injections on the bare fake host: a suite that

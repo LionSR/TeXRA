@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { LanguageModel } from '@platform/languageModel';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -26,7 +27,7 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
   text: string,
   stores: ModelOptionStores,
   roots: SettingsStores,
-): Effect.fn.Return<string, Error, HttpClient.HttpClient> {
+): Effect.fn.Return<string, Error, LanguageModel | HttpClient.HttpClient> {
   return yield* Effect.gen(function* () {
     const bound = yield* helperModel(stores, roots);
     const responseText = yield* helperCompletion(bound, {

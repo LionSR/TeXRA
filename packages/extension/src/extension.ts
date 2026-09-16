@@ -84,6 +84,7 @@ import { installLongRunningModelDispatcher } from '@platform/defaults/longRunnin
 import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { tryProcessRuntime } from '@platform/processRuntime';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   initProcessWorkspaceRoots,
@@ -244,6 +245,10 @@ async function initVscodePlatform(
     secrets,
     appState: globalState,
     auth,
+    // The same bridge the platform wires below (nodeHost applies the same
+    // fallback): the editor's LM API on the workspace path, unavailable on
+    // the credential-only one.
+    languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`
@@ -659,7 +664,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const runtimeSession = await runtime.runPromise(
     initializeDefaultSession({
       responseTextProcessing: createTexraResponseTextProcessing(
-        createAgentResponseTextConnector({ secrets, globalState }, roots),
+        createAgentResponseTextConnector(
+          { secrets, globalState },
+          roots,
+          languageModel,
+        ),
       ),
     }),
   );

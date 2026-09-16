@@ -15,17 +15,18 @@ import type { SetupPlatform } from '@tools/setup/platform';
 import type { FileSystem, ManagedRuntime, Path } from 'effect';
 import type { HttpClient } from 'effect/unstable/http';
 
-import type { AppState, AgentResume } from './interfaces';
+import type { AgentResume, AppState } from './interfaces';
+import type { LanguageModel } from './languageModel';
 import type { Secrets } from './secrets';
 
 /**
  * The runtime over the process-lifetime services every entry provides: the
  * cohort-A tags beside the records, the account plane, the resume port, the
- * Lean port and the HTTP client, merged once in `installProcessRuntime`'s
- * `services` layer, plus the standard library's `FileSystem` and `Path`, which
- * the same install provides from `@effect/platform-node` so a program that
- * reads or resolves a file takes them from context instead of building a Node
- * layer of its own.
+ * language-model bridge, the Lean port and the HTTP client, merged once in
+ * `installProcessRuntime`'s `services` layer, plus the standard library's
+ * `FileSystem` and `Path`, which the same install provides from
+ * `@effect/platform-node` so a program that reads or resolves a file takes
+ * them from context instead of building a Node layer of its own.
  */
 export type ProcessServices =
   | FileSystem.FileSystem
@@ -35,6 +36,7 @@ export type ProcessServices =
   | UpdateCheckRecords
   | Secrets
   | AppState
+  | LanguageModel
   | AgentResume
   | SetupPlatform
   | ToolInjections

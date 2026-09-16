@@ -148,6 +148,7 @@ async function loadSupabaseAuth() {
   ]);
   const { SupabaseAuth, unavailableSupabaseAuth } =
     await import('@auth/SupabaseAuth');
+  const { LanguageModel } = await import('@platform/languageModel');
   const { createFakeWorkspaceRoots } =
     await import('@test/support/FakePlatform');
   const { globalStorage } = createFakeWorkspaceRoots();
@@ -168,6 +169,11 @@ async function loadSupabaseAuth() {
       // The account plane the module under test serves is its own module
       // state; this one only satisfies the process-runtime type.
       SupabaseAuth.layer(unavailableSupabaseAuth()),
+      Layer.mock(LanguageModel, {
+        isAvailable: unreadProcessService,
+        selectModels: unreadProcessService,
+        onDidChange: unreadProcessService,
+      }),
       Layer.mock(AgentResume, { tryResumeRun: unreadProcessService }),
       SetupPlatform.layer({ host: 'cli', signIn: () => Effect.succeed(false) }),
       ToolInjections.layer([]),

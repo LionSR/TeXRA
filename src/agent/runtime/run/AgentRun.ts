@@ -24,6 +24,7 @@ import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import type { LanguageModel } from '@platform/languageModel';
 import {
   AgentCategory,
   DeclinableUsageRouteSchema,
@@ -166,7 +167,11 @@ interface AgentRunLayerInput {
 export const agentRunLayer = (
   ctx: AgentLaunchContext,
   input: AgentRunLayerInput,
-): Layer.Layer<AgentRun, Error, RunLedger | HttpClient.HttpClient> =>
+): Layer.Layer<
+  AgentRun,
+  Error,
+  RunLedger | LanguageModel | HttpClient.HttpClient
+> =>
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
@@ -254,10 +259,7 @@ export const agentRunLayer = (
       const modelConfig =
         modelId === config.model
           ? ctx.modelConfig
-          : yield* Effect.tryPromise({
-              try: () => resolveRuntimeModelConfig(modelId),
-              catch: ensureError,
-            });
+          : yield* resolveRuntimeModelConfig(modelId);
       if (!modelConfig) {
         return yield* Effect.fail(
           new Error(`Model ${modelId} is not registered`),

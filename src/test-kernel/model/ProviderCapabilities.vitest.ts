@@ -14,8 +14,16 @@ import {
   isCodexSubscriptionActive,
   resolveCodexSubscriptionCapabilities,
 } from '@model/providerCapabilities';
+import type { LanguageModel } from '@platform/languageModel';
+import { effectRuntime } from '@platform/processRuntime';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import type { Effect } from 'effect';
+
+/** Run a subscription probe on the fake host's process runtime, which
+ *  carries the `LanguageModel` service the probe's catalogue read yields. */
+const run = <A, E>(effect: Effect.Effect<A, E, LanguageModel>) =>
+  effectRuntime().runPromise(effect);
 
 const gpt55Config: ModelConfig = {
   name: 'gpt55',
@@ -173,27 +181,27 @@ describe('ChatGPT subscription model routing', () => {
     await installSubscriptionPlatform({ useOpenRouter: true });
 
     expect(subscriptionCapabilities(true)).toBeNull();
-    await expect(isCodexSubscriptionActive('gpt55')).resolves.toBe(false);
+    await expect(run(isCodexSubscriptionActive('gpt55'))).resolves.toBe(false);
   });
 
   it('routes an eligible direct OpenAI model through the preferred subscription', async () => {
     await installSubscriptionPlatform();
 
     expect(subscriptionCapabilities(false)).not.toBeNull();
-    await expect(isCodexSubscriptionActive('gpt55')).resolves.toBe(true);
+    await expect(run(isCodexSubscriptionActive('gpt55'))).resolves.toBe(true);
   });
 
   it('reports eligible models inactive while signed out', async () => {
     await installSubscriptionPlatform({ signedIn: false });
 
-    await expect(isCodexSubscriptionActive('gpt55')).resolves.toBe(false);
+    await expect(run(isCodexSubscriptionActive('gpt55'))).resolves.toBe(false);
   });
 
   it('reports unknown model identifiers inactive', async () => {
     await installSubscriptionPlatform();
 
     await expect(
-      isCodexSubscriptionActive('unknown-subscription-model'),
+      run(isCodexSubscriptionActive('unknown-subscription-model')),
     ).resolves.toBe(false);
   });
 });

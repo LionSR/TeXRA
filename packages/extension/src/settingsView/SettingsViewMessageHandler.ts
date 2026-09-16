@@ -55,6 +55,7 @@ import {
 import {
   invalidateRuntimeModelRegistry,
   copilotRouteForModel,
+  discoveredCopilotRoutes,
   refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
@@ -169,6 +170,9 @@ export class SettingsViewMessageHandler {
             readModelAvailabilityInputs(stores, models),
           ),
         ),
+      // The route catalogue read is an Effect for the same reason.
+      getCopilotRoutes: () =>
+        this.runtime.runPromise(discoveredCopilotRoutes()),
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',
@@ -854,11 +858,12 @@ export class SettingsViewMessageHandler {
       const discovery = await this.runtime.runPromiseExit(
         Effect.gen(function* () {
           // Retry one superseded discovery, then fail closed rather than
-          // authorize from the retained presentation catalogue.
+          // authorize from the retained presentation catalogue. A failed
+          // probe fails the program: authorization never falls back to the
+          // retained catalogue.
           for (let attempt = 0; attempt < 2; attempt += 1) {
-            const result = yield* Effect.tryPromise({
-              try: () => refreshRuntimeModelRegistry({ forceDiscovery: true }),
-              catch: (error) => error,
+            const result = yield* refreshRuntimeModelRegistry({
+              forceDiscovery: true,
             });
             if (result === 'current') return copilotRouteForModel(modelName);
           }

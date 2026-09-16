@@ -9,6 +9,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import { createLog } from '@logger/logUtils';
 import { AppState } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -160,7 +161,11 @@ export class HostDraftRequests {
   ): Effect.fn.Return<
     HostOutcome,
     unknown,
-    AppState | Secrets | FileSystem.FileSystem | HttpClient.HttpClient
+    | AppState
+    | Secrets
+    | FileSystem.FileSystem
+    | LanguageModel
+    | HttpClient.HttpClient
   > {
     switch (request.kind) {
       case 'polish': {
