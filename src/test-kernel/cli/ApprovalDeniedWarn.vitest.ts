@@ -28,8 +28,8 @@ describe('warnApprovalDenied', () => {
     defaultSession().setApprovalPolicy('never');
     const context = createTestCliContext({ approvalPolicy: 'never' });
 
-    warnApprovalDenied(context, 'Tool or edit approval');
-    warnApprovalDenied(context, 'Tool or edit approval');
+    warnApprovalDenied(defaultSession(), context, 'Tool or edit approval');
+    warnApprovalDenied(defaultSession(), context, 'Tool or edit approval');
 
     expect(writeTextStderrMock).toHaveBeenCalledTimes(1);
     expect(writeTextStderrMock).toHaveBeenCalledWith(
@@ -40,10 +40,30 @@ describe('warnApprovalDenied', () => {
     // child outliving its root beside a new root): each run warns once, and
     // neither run's warning suppresses the other's.
     const [first, second] = ['a0000a', 'b0000b'] as RunId[];
-    warnApprovalDenied(context, 'Tool or edit approval', first);
-    warnApprovalDenied(context, 'Tool or edit approval', second);
-    warnApprovalDenied(context, 'Tool or edit approval', first);
-    warnApprovalDenied(context, 'Tool or edit approval', second);
+    warnApprovalDenied(
+      defaultSession(),
+      context,
+      'Tool or edit approval',
+      first,
+    );
+    warnApprovalDenied(
+      defaultSession(),
+      context,
+      'Tool or edit approval',
+      second,
+    );
+    warnApprovalDenied(
+      defaultSession(),
+      context,
+      'Tool or edit approval',
+      first,
+    );
+    warnApprovalDenied(
+      defaultSession(),
+      context,
+      'Tool or edit approval',
+      second,
+    );
 
     expect(writeTextStderrMock).toHaveBeenCalledTimes(3);
   });
@@ -51,7 +71,7 @@ describe('warnApprovalDenied', () => {
   it('falls back to a generic gate label when none is given', () => {
     const context = createTestCliContext({ approvalPolicy: 'ask' });
 
-    warnApprovalDenied(context);
+    warnApprovalDenied(defaultSession(), context);
 
     expect(writeTextStderrMock).toHaveBeenCalledWith(
       '[warn] [cli-approval] Approval gate denied under policy "ask".',
@@ -64,7 +84,7 @@ describe('warnApprovalDenied', () => {
     defaultSession().setApprovalPolicy('never');
     const context = createTestCliContext({ approvalPolicy: 'ask' });
 
-    warnApprovalDenied(context, 'Tool or edit approval');
+    warnApprovalDenied(defaultSession(), context, 'Tool or edit approval');
 
     expect(writeTextStderrMock).toHaveBeenCalledWith(
       '[warn] [cli-approval] Tool or edit approval denied under policy "never".',

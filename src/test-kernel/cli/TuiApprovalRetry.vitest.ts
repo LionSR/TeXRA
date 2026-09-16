@@ -135,6 +135,7 @@ function tui(
   detachHost();
   detachHost = defaultSession().interactions.use(
     createTuiHostInteractions(presentationHost, cliContext, {
+      session: defaultSession(),
       secrets,
       runtime: effectRuntime(),
     }),
@@ -303,7 +304,7 @@ function glmCodingPlanRetry(label: string): RetryPermission {
 function decideCurrent(decision: SurfaceDecision): void {
   const pending = currentApproval.get();
   expect(pending).toBeDefined();
-  pending?.decide(effectRuntime(), decision);
+  pending?.decide(defaultSession(), effectRuntime(), decision);
 }
 
 function decideRetry(decision: SurfaceDecision): void {

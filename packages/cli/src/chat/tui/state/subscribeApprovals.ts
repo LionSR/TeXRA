@@ -14,7 +14,7 @@
 
 import { computed } from '@lit-labs/signals';
 
-import type { HostInteractions } from '@agent/runtime';
+import type { HostInteractions, SessionHandle } from '@agent/runtime';
 import {
   cliRetryQuotaRoute,
   isCliApiSwitchableRetry,
@@ -56,11 +56,16 @@ import {
 import { currentView } from './sessionView';
 
 /**
- * The process services this host holds for its lifetime: the secret store a
- * retry's key checks go through, and the runtime its decisions are issued
- * on. Both come from the chat session's caller, which holds them already.
+ * What this host holds for its lifetime: the session its policy settlements
+ * read and its decisions land on, the secret store a retry's key checks go
+ * through, and the runtime its decisions are issued on. All three come from
+ * the chat session's caller, which holds them already.
  */
 interface TuiApprovalStores {
+  /** The chat's session: `/approval` writes land here between turns, so a
+   *  settlement reads the live policy from it rather than the launch-time
+   *  CliContext value. */
+  readonly session: SessionHandle;
   readonly secrets: PlatformSecrets;
   /** The process runtime this attachment's decisions are issued on, held for
    *  the host's lifetime rather than looked up per decision. */
@@ -139,6 +144,7 @@ export function createTuiHostInteractions(
       // This capability already selected the credential route; decomposing
       // the decision again would call the capability recursively.
       landRequestDecision(
+        stores.session,
         stores.runtime,
         permission.runId,
         requestId,
@@ -266,10 +272,15 @@ export function createTuiHostInteractions(
           continue;
         case 'planApproval':
         case 'proposal': {
-          const settled = settleExecutable(context, request.runId);
+          const settled = settleExecutable(
+            stores.session,
+            context,
+            request.runId,
+          );
           if (settled) {
             acted.add(request.requestId);
             decidePendingRequest(
+              stores.session,
               stores.runtime,
               request.requestId,
               settled,
@@ -279,10 +290,15 @@ export function createTuiHostInteractions(
           continue;
         }
         case 'userQuestion': {
-          const denial = settleHumanInputDenial(context, request.runId);
+          const denial = settleHumanInputDenial(
+            stores.session,
+            context,
+            request.runId,
+          );
           if (denial) {
             acted.add(request.requestId);
             decidePendingRequest(
+              stores.session,
               stores.runtime,
               request.requestId,
               { action: 'deny', reason: denial.reason },
@@ -293,9 +309,10 @@ export function createTuiHostInteractions(
         }
         case 'retry': {
           acted.add(request.requestId);
-          const settled = settleRetry(payload.data, context);
+          const settled = settleRetry(stores.session, payload.data, context);
           if (settled) {
             decidePendingRequest(
+              stores.session,
               stores.runtime,
               request.requestId,
               settled,
