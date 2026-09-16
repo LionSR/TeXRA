@@ -31,7 +31,7 @@ const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
       });
       return yield* program.pipe(
         Effect.provide(
-          updateCheckRecordsLayer(() => storage).pipe(
+          updateCheckRecordsLayer(storage).pipe(
             Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
           ),
         ),

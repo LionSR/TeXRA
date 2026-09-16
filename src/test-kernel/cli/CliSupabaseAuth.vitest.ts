@@ -158,7 +158,7 @@ async function loadSupabaseAuth() {
       nodePlatformLayer,
       Layer.mock(UpdateCheckRecords, {}),
       Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
-      inquiryRecordsLayer(() => globalStorage).pipe(
+      inquiryRecordsLayer(globalStorage).pipe(
         Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
       ),
       // The process services this suite's runtime carries: the auth run edge

@@ -53,8 +53,12 @@ import {
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
+import {
+  createNodeStorageProvider,
+  DEFAULT_NODE_STORAGE_ROOT,
+} from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -121,6 +125,14 @@ export function installCliProcessRuntime(
   const storage = createNodeStorageProvider({ storageRoot });
   pending = (async () => {
     const processStart = await nodeProcesses.selfIdentity();
+    // The records layers take the path as a value, so it resolves here, at
+    // install. The default entry already pays the getter's `mkdirSync` opening
+    // the state store below; clone's omit entry must not — its storage root
+    // may be read-only and it runs no records operation — so it resolves the
+    // same path with the pure calculator, as `initCliPlatform` does.
+    const globalStoragePath = omitAppState
+      ? resolveGlobalStoragePath(storageRoot ?? DEFAULT_NODE_STORAGE_ROOT)
+      : storage.getGlobalStoragePath();
     // Both stores this entry provides exist before the runtime that serves
     // them. Opening the state store needs the filesystem and nothing else —
     // it provides its own database layer — so it runs here, on a bootstrap
@@ -130,7 +142,7 @@ export function installCliProcessRuntime(
     const globalState = omitAppState
       ? undefined
       : await Effect.runPromise(
-          openAppStateStore(storage.getGlobalStoragePath()).pipe(
+          openAppStateStore(globalStoragePath).pipe(
             Effect.provide(nodeFileServices),
           ),
         );
@@ -141,8 +153,8 @@ export function installCliProcessRuntime(
     const auth = ensureCliSupabaseAuth(secrets);
     const runtime: ProcessRuntime = installProcessRuntime({
       processStart,
-      globalStorage: () => storage.getGlobalStoragePath(),
-      updateCheckStorage: () => storage.getGlobalStoragePath(),
+      globalStorage: globalStoragePath,
+      updateCheckStorage: globalStoragePath,
       secrets,
       ...(globalState === undefined ? {} : { appState: globalState }),
       auth,

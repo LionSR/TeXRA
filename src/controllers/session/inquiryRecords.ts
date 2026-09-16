@@ -23,18 +23,12 @@ const QUESTION_PREVIEW_CHARS = 200;
 
 /** The global inquiry owner is configured once; database connections are operation-scoped. */
 function inquiryOperations(
-  globalStorage: () => string,
+  globalStorage: string,
   ownerId: OwnerId,
 ): Context.Service.Shape<typeof InquiryRecords> {
   /** Each operation owns its connection; SQLite serializes transitions across processes. */
   const inGlobalDatabase = <A, E>(operation: Effect.Effect<A, E, Database>) =>
-    Effect.gen(function* () {
-      const storage = yield* Effect.try({
-        try: globalStorage,
-        catch: ensureError,
-      });
-      return yield* withScopedDatabase(storage, ownerId, operation);
-    });
+    withScopedDatabase(globalStorage, ownerId, operation);
 
   const changeThread = <A extends InquiryThreadRecord | null>(
     id: InquiryThreadId,
@@ -308,7 +302,7 @@ function inquiryOperations(
 }
 
 /** Provide the inquiry owner without opening a connection until an operation runs. */
-export const inquiryRecordsLayer = (globalStorage: () => string) =>
+export const inquiryRecordsLayer = (globalStorage: string) =>
   Layer.effect(
     InquiryRecords,
     Effect.map(ProcessIdentity, ({ ownerId }) =>

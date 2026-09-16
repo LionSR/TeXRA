@@ -38,7 +38,7 @@ describe('runDailyUpdateCheck', () => {
         yield* TestClock.setTime(nowMs);
         return yield* program.pipe(
           Effect.provide(
-            updateCheckRecordsLayer(() => storage).pipe(
+            updateCheckRecordsLayer(storage).pipe(
               Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
             ),
           ),

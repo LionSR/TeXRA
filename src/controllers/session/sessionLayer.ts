@@ -1034,8 +1034,8 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  */
 export interface ProcessRuntimeOptions {
   readonly processStart: string | undefined | Promise<string | undefined>;
-  readonly globalStorage: () => string;
-  readonly updateCheckStorage: () => string;
+  readonly globalStorage: string;
+  readonly updateCheckStorage: string;
   readonly secrets: PlatformSecrets;
   /**
    * The root's agent-resume port, served as `AgentResume`. The same value
@@ -1086,48 +1086,6 @@ export interface ProcessRuntimeOptions {
   >;
 }
 
-/**
- * The cohort-A process services over a root's own stores, account plane,
- * language-model bridge, resume port, and setup platform: what
- * {@link installProcessRuntime} merges into the process runtime, and what the
- * agent package provides around the launches it runs on an embedder's runtime
- * (its `Sessions` API keeps them off its types).
- */
-function processServicesLayer({
-  secrets,
-  appState,
-  auth,
-  languageModel,
-  agentResume,
-  setup,
-}: Pick<
-  ProcessRuntimeOptions,
-  'secrets' | 'appState' | 'auth' | 'languageModel' | 'agentResume' | 'setup'
->): Layer.Layer<
-  | Secrets
-  | AppState
-  | SupabaseAuth
-  | LanguageModel
-  | AgentResume
-  | SetupPlatform
-  | ToolInjections
-> {
-  return Layer.mergeAll(
-    Secrets.layer(secrets),
-    // `Layer.empty` satisfies the `AppState` arm of the declared type without
-    // serving it — the one omitting entry (the CLI's `clone`) runs no program
-    // that yields `AppState`.
-    appState === undefined
-      ? (Layer.empty as Layer.Layer<AppState>)
-      : AppState.layer(appState),
-    SupabaseAuth.layer(auth),
-    LanguageModel.layer(languageModel),
-    AgentResume.layer(agentResume),
-    SetupPlatform.layer(setup),
-    ToolInjections.layer(AGENT_TOOL_INJECTIONS),
-  );
-}
-
 export function installProcessRuntime({
   processStart,
   globalStorage,
@@ -1157,14 +1115,18 @@ export function installProcessRuntime({
   const services = Layer.mergeAll(
     inquiryRecordsLayer(globalStorage),
     updateCheckRecordsLayer(updateCheckStorage),
-    processServicesLayer({
-      secrets,
-      appState,
-      auth,
-      languageModel,
-      agentResume,
-      setup,
-    }),
+    Secrets.layer(secrets),
+    // `Layer.empty` satisfies the `AppState` arm of the declared type without
+    // serving it — the one omitting entry (the CLI's `clone`) runs no program
+    // that yields `AppState`.
+    appState === undefined
+      ? (Layer.empty as Layer.Layer<AppState>)
+      : AppState.layer(appState),
+    SupabaseAuth.layer(auth),
+    LanguageModel.layer(languageModel),
+    AgentResume.layer(agentResume),
+    SetupPlatform.layer(setup),
+    ToolInjections.layer(AGENT_TOOL_INJECTIONS),
     editorModel === undefined
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),

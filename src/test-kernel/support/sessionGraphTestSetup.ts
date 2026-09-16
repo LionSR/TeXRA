@@ -1,5 +1,6 @@
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
+import { createFakeWorkspaceRoots } from './FakePlatform';
 import {
   fakeHostAgentResume,
   fakeHostAppState,
@@ -7,7 +8,6 @@ import {
   fakeHostLanguageModel,
   fakeHostSecrets,
   fakeSetupPlatform,
-  installedHost,
 } from './setupPlatform';
 
 /**
@@ -30,16 +30,22 @@ let installed = false;
  * the runtime they run on. A graph is released when its last session is
  * disposed, so suites that dispose their sessions get fresh graphs.
  *
- * The process services read the fake host installed at call time, as the
- * bare runtime's do: this runtime outlives the per-test hosts.
+ * The storage paths resolve at install to the worker's shared default rather
+ * than the installed host's: this module evaluates before any host exists
+ * for the host-free suites that reach it through a fixture, and every
+ * default fake host answers that same directory — a suite with its own
+ * storage root passes the records layers its path directly. The other
+ * process services read the fake host installed at call time, as the bare
+ * runtime's do: this runtime outlives the per-test hosts.
  */
 export function installTestSessionGraphs(): void {
   if (installed) return;
   installed = true;
+  const { globalStorage } = createFakeWorkspaceRoots();
   installProcessRuntime({
     processStart: 'vitest',
-    globalStorage: () => installedHost().roots.globalStorage,
-    updateCheckStorage: () => installedHost().roots.globalStorage,
+    globalStorage,
+    updateCheckStorage: globalStorage,
     secrets: fakeHostSecrets,
     appState: fakeHostAppState,
     // Suites swap the account plane with their host; the default host's
