@@ -58,6 +58,7 @@ import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   attachTestTranscriptFold,
@@ -482,6 +483,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
         Layer.provideMerge(
           LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
         ),
+        Layer.provideMerge(testHttpClientLayer),
       ),
     ),
   );

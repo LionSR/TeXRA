@@ -129,6 +129,7 @@ import {
   type ReflectionFlowState,
   type ReflectionSnapshotPatch,
 } from './rows';
+import type { HttpClient } from 'effect/unstable/http';
 import type { BoundModel } from '../run/modelBinding';
 
 // Reflection owns conversation limits and document completion, not the provider.
@@ -204,6 +205,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   | FileSystem.FileSystem
   | WorkspaceFs
   | LanguageModel
+  | HttpClient.HttpClient
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -659,7 +661,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
    */
   const processResponse = Effect.fn('reflection.processResponse')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem> {
+  ): Effect.fn.Return<
+    RunState,
+    Error,
+    FileSystem.FileSystem | HttpClient.HttpClient
+  > {
     const turn = initial.lastTurn;
     const location = flow.outputLocation;
     if (turn === null || location === null) {
@@ -1052,7 +1058,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   ): Effect.fn.Return<
     RoundExit,
     Error,
-    FileSystem.FileSystem | WorkspaceFs | LanguageModel
+    FileSystem.FileSystem | WorkspaceFs | LanguageModel | HttpClient.HttpClient
   > {
     const round = flow.currentRound;
     // The stage closes with the round's own verdict; an exit that never set

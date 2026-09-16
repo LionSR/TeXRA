@@ -191,15 +191,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // One session per extension host: the calling frame is this session's.
       inScope: (read) => read(),
       fileOptions: () =>
-        Effect.tryPromise({
-          try: () => workspaceFileOptions(roots.workspace),
-          catch: (cause) =>
-            new HostSnapshotReadFailed({
-              member: 'fileOptions',
-              message: 'The workspace file lists could not be read.',
-              cause,
-            }),
-        }),
+        workspaceFileOptions(roots.workspace).pipe(
+          Effect.mapError(
+            (cause) =>
+              new HostSnapshotReadFailed({
+                member: 'fileOptions',
+                message: 'The workspace file lists could not be read.',
+                cause,
+              }),
+          ),
+        ),
       readRecentCommits: () =>
         Effect.tryPromise({
           try: async () => {

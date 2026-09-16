@@ -4,10 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { SupabaseClient } from '@auth/SupabaseClient';
-import {
-  initCliPlatform,
-  setCliAgentResumeHandler,
-} from '@cli/runtime/initPlatform';
+import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { StateWriteFailed } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
@@ -404,7 +401,7 @@ describe('CLI platform init', () => {
       Effect.service(SetupPlatform),
     );
     expect(setup.host).toBe('cli');
-    await expect(setup.signIn()).resolves.toBe(true);
+    expect(await effectRuntime().runPromise(setup.signIn())).toBe(true);
     expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
     expect(mocks.signInCliSupabase).toHaveBeenCalledWith(effectRuntime(), {
       openBrowser: true,

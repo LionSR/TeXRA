@@ -15,6 +15,7 @@ import {
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { fakeStores } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
   createTestSession,
   publishTestRunStart,
@@ -65,6 +66,7 @@ function runDescription(
       // `helperModel` is mocked, but the program's type keeps the real
       // signature's `LanguageModel` requirement.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+      Effect.provide(testHttpClientLayer),
     ),
   );
 }

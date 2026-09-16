@@ -45,6 +45,7 @@ import {
   type WorkspaceFs,
 } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
@@ -63,6 +64,7 @@ export function createExtensionCommandActions(
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
+  roots: WorkspaceRoots,
 ): ExtensionCommandActions {
   const refreshAfterProviderKeyChange = (provider: string) =>
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
@@ -142,6 +144,7 @@ export function createExtensionCommandActions(
           category,
           secrets,
           runtime,
+          roots,
         ),
       ),
     // Without a configuration the command is the composer's accelerator

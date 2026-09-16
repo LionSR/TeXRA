@@ -17,6 +17,7 @@ import { registerAgentReviewCommands } from '@commands/review/agentReviewCommand
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 
@@ -26,6 +27,7 @@ export function registerCommands(
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
+  roots: WorkspaceRoots,
 ): void {
   registerLatexdiffCommands(context, runtime);
   registerGitCommands(context);
@@ -54,6 +56,7 @@ export function registerCommands(
       progressViewProvider,
       secrets,
       runtime,
+      roots,
     ),
   );
 

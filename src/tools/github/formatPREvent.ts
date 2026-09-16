@@ -22,7 +22,10 @@ import {
   wrapWebhookEvent as wrap,
 } from './formatUtils';
 import { prRef } from './githubPaths';
-import { formatCheckAnnotationLevelList } from './checkAnnotationLevels';
+import {
+  formatCheckAnnotationLevelList,
+  normalizeCheckAnnotationLevel,
+} from './checkAnnotationLevels';
 import { isPassingConclusion } from './prCheckRunDomain';
 import type {
   GhCheckAnnotation,
@@ -81,7 +84,7 @@ const annotationLocation = (a: GhCheckAnnotation): string => {
 };
 
 const annotationBlock = (a: GhCheckAnnotation): string => {
-  const level = (a.annotation_level ?? 'notice').toUpperCase();
+  const level = normalizeCheckAnnotationLevel(a.annotation_level).toUpperCase();
   const title = a.title ? `${a.title}: ` : '';
   const message = truncateBody(a.message, MAX_ANNOTATION_MESSAGE);
   return `[${level}] ${annotationLocation(a)}\n${title}${message}`;

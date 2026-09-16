@@ -1,3 +1,4 @@
+import { type SessionHandle } from '@agent/runtime';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAccess';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
@@ -13,6 +14,9 @@ import { type RunId } from '@shared/schemas';
 export interface SlashCommandContext {
   readonly cliContext: CliContext;
   readonly session: TuiSession;
+  /** The chat's runtime session: the session commands read run state and land
+   *  requests on it, threaded from the chat entry point that opened it. */
+  readonly runtimeSession: SessionHandle;
   /**
    * The process secret store and global state the account, model-access and
    * model-selection commands read, filled from the `CliPlatformServices` the

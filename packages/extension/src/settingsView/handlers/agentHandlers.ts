@@ -16,20 +16,20 @@ import {
   loadAgents,
   refresh as refreshAgents,
 } from '@agent/index';
-import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentNamePrompt,
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
-import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
+import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
 import {
@@ -226,14 +226,17 @@ export class AgentHandlers {
       this.ctx,
       'Failed to view remote agent prompt',
       async () => {
-        const result = await getRemoteAgentPromptConfig(data.agentName);
-        if (!result.ok) {
-          await showLoggedMessage(this.ctx.channel, result.message);
+        const config = await fetchRemoteAgentPromptYaml(data.agentName);
+        if (config == null) {
+          await showLoggedMessage(
+            this.ctx.channel,
+            'Authentication required. Sign in using "TeXRA: Sign In".',
+          );
           return;
         }
 
         const doc = await vscode.workspace.openTextDocument({
-          content: result.config,
+          content: config,
           language: 'yaml',
         });
         await vscode.window.showTextDocument(doc, { preview: false });
@@ -330,10 +333,7 @@ export class AgentHandlers {
               catalog: this.catalogController,
               loadLocalCatalog: () => loadAgents({ includeRemote: false }),
               canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
-              signIn: async () =>
-                (await vscode.commands.executeCommand<boolean>(
-                  AUTH_COMMANDS.SIGN_IN,
-                )) === true,
+              signIn: runSignInCommand,
               forceRefreshRemoteCatalog: () =>
                 refreshAgents({ includeRemote: true }),
               presentation: {

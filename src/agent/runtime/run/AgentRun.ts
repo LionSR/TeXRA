@@ -44,6 +44,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
+import type { HttpClient } from 'effect/unstable/http';
 import type { AgentLaunchContext, ToolPolicy } from '../AgentLaunchContext';
 import type { RunScope } from '../RunScope';
 import type { SessionHandle } from '../SessionHandle';
@@ -166,7 +167,11 @@ interface AgentRunLayerInput {
 export const agentRunLayer = (
   ctx: AgentLaunchContext,
   input: AgentRunLayerInput,
-): Layer.Layer<AgentRun, Error, RunLedger | LanguageModel> =>
+): Layer.Layer<
+  AgentRun,
+  Error,
+  RunLedger | LanguageModel | HttpClient.HttpClient
+> =>
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
@@ -269,6 +274,7 @@ export const agentRunLayer = (
       const bound = yield* bindModel({
         config: modelConfig,
         stores: ctx.stores,
+        roots: session.roots,
         compatibilityKey,
         ownApiKeyFallback: ctx.ownApiKeyFallback,
         declinedRoutes,

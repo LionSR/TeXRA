@@ -25,6 +25,7 @@ import {
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -124,6 +125,7 @@ describe('run-scoped tool resolution', () => {
               Layer.provideMerge(
                 LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
               ),
+              Layer.provideMerge(testHttpClientLayer),
             ),
           ),
           Effect.orDie,

@@ -105,9 +105,9 @@ import {
 import { redactedForFact } from './loop/rows';
 import { runEventDraft } from './SessionEvents';
 import {
-  defaultRootSession,
   heldSessions,
   openSessionEffect,
+  tryDefaultSession,
   type SessionGraph,
 } from './sessionGraph';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
@@ -1440,22 +1440,17 @@ export function initializeDefaultSession(
   init: SessionHandleInit,
 ): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.suspend(() => {
-    if (defaultRootSession()) {
+    if (tryDefaultSession()) {
       throw new Error('The default session has already been initialized.');
     }
     return openSessionEffect(init);
   });
 }
 
-/** Inspect whether the host has installed its process-default session. */
-export function tryDefaultSession(): SessionHandle | undefined {
-  return defaultRootSession();
-}
-
 /** Dispose the process-default session during host teardown; nothing to
  *  do when none is open. */
 export function teardownDefaultSession(): Effect.Effect<void> {
-  return Effect.suspend(() => defaultRootSession()?.dispose() ?? Effect.void);
+  return Effect.suspend(() => tryDefaultSession()?.dispose() ?? Effect.void);
 }
 
 /**
@@ -1472,7 +1467,7 @@ export function teardownDefaultSession(): Effect.Effect<void> {
  * teardown and reinitialization of the default session.
  */
 export function defaultSession(): SessionHandle {
-  const processDefault = defaultRootSession();
+  const processDefault = tryDefaultSession();
   if (!processDefault) {
     throw new Error(
       'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.',

@@ -23,7 +23,11 @@ import { afterEach, beforeEach } from 'vitest';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { AppState, StateStore } from '@platform/interfaces';
+import type {
+  AgentResumePort,
+  AppState,
+  StateStore,
+} from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
@@ -202,6 +206,16 @@ export const fakeHostLanguageModel: LanguageModelPort = {
     installedHost().platform.languageModel.onDidChange(listener),
 };
 
+/** The `AgentResume` service of every test runtime, delegating per call for
+ *  the same reason `fakeHostSecrets` does: hosts change per test, the
+ *  runtime does not. */
+export const fakeHostAgentResume: AgentResumePort = {
+  tryResumeRun: (runId, recovery) =>
+    Effect.suspend(() =>
+      installedHost().platform.agentResume.tryResumeRun(runId, recovery),
+    ),
+};
+
 /** The process services a fake host provides to a program. */
 export type FakeProcessServices = ProcessServices;
 
@@ -244,7 +258,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
     { Secrets },
-    { AppState },
+    { AgentResume, AppState },
     { LanguageModel },
     { SetupPlatform },
     { ToolInjections },
@@ -282,6 +296,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     Secrets.layer(fakeHostSecrets),
     AppState.layer(fakeHostAppState),
     LanguageModel.layer(fakeHostLanguageModel),
+    AgentResume.layer(fakeHostAgentResume),
     SetupPlatform.layer(fakeSetupPlatform),
     // No conditional injections on the bare fake host: a suite that
     // exercises them passes its own list to `resolveAgentTools`.

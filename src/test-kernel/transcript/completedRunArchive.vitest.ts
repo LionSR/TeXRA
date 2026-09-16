@@ -267,7 +267,7 @@ describe('completedRunArchive facade', () => {
     // The run's one `run.description` row is redacted on the way into the
     // event table, so every reader of it — the view's fold included, asserted
     // below — sees the redacted text; the private sidecars above stay exact.
-    const runAgentRequest = vi.fn(async () => undefined);
+    const runAgentRequest = vi.fn(() => Effect.void);
     const actions = await Effect.runPromise(
       createHostRunActions({
         session: taskSession,

@@ -15,6 +15,7 @@ import {
 } from '@platform/languageModel';
 import { Secrets } from '@platform/secrets';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 const audio = vi.hoisted(() => ({
   startRecording: vi.fn(),
@@ -41,6 +42,7 @@ const processStores = Layer.mergeAll(
   // `polishTextWithAI` is mocked, but the request handler's type keeps the
   // real signature's `LanguageModel` requirement.
   LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+  testHttpClientLayer,
 );
 
 /** The same pair with no saved OpenAI key, so the take's credential read
@@ -50,6 +52,7 @@ const storesWithoutCredential = Layer.mergeAll(
   AppState.layer(new FakeStateStore()),
   FileSystem.layerNoop({}),
   LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+  testHttpClientLayer,
 );
 
 it.effect(

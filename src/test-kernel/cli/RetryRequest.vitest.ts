@@ -1,5 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 import { describe, expect, it, vi } from 'vitest';
 
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { ApprovalModal } from '@cli/chat/tui/modals/ApprovalModal';
 import { RetryRequest } from '@cli/chat/tui/modals/RetryRequest';
 import type {
@@ -24,7 +28,7 @@ function pendingFor(payload: ApprovalPayload): {
 } {
   let decide!: PendingApproval['decide'];
   const decision = new Promise<SurfaceDecision>((resolve) => {
-    decide = (_runtime, next) => resolve(next);
+    decide = (_session, _runtime, next) => resolve(next);
   });
   return { pending: { payload, decide }, decision };
 }
@@ -64,7 +68,11 @@ describe('CLI retry request', () => {
     });
     const { instance, stdin } = renderInteractive(
       ink,
-      React.createElement(ApprovalModal, { pending, runtime: effectRuntime() }),
+      React.createElement(ApprovalModal, {
+        pending,
+        runtime: effectRuntime(),
+        session: defaultSession(),
+      }),
       { columns: 100 },
     );
 
@@ -113,7 +121,11 @@ describe('CLI retry request', () => {
     const { pending, decision } = pendingFor(subscriptionLimitPayload(true));
     const { instance, stdin } = renderInteractive(
       ink,
-      React.createElement(ApprovalModal, { pending, runtime: effectRuntime() }),
+      React.createElement(ApprovalModal, {
+        pending,
+        runtime: effectRuntime(),
+        session: defaultSession(),
+      }),
       { columns: 100 },
     );
 

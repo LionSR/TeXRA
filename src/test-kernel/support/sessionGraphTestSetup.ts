@@ -1,6 +1,7 @@
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import {
+  fakeHostAgentResume,
   fakeHostAppState,
   fakeHostLanguageModel,
   fakeHostSecrets,
@@ -40,6 +41,7 @@ export function installTestSessionGraphs(): void {
     secrets: fakeHostSecrets,
     appState: fakeHostAppState,
     languageModel: fakeHostLanguageModel,
+    agentResume: fakeHostAgentResume,
     setup: fakeSetupPlatform,
     // The Node hosts' layer: inert until a Lean tool is invoked.
     lean: directLeanLanguageServices(),

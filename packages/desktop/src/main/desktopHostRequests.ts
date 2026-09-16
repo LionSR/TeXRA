@@ -214,11 +214,13 @@ export function createDesktopHostRequests(
   const listWorkspaceCandidateFiles = async (): Promise<string[]> => {
     const workspacePath = options.workspacePath;
     if (!workspacePath) return [];
-    const files = [
-      ...(await listWorkspaceFilesOfType('input', workspacePath)),
-      ...(await listWorkspaceFilesOfType('context', workspacePath)),
-    ];
-    return files.map((file) => path.resolve(workspacePath, file));
+    const files = await runtime.runPromise(
+      Effect.all([
+        listWorkspaceFilesOfType('input', workspacePath),
+        listWorkspaceFilesOfType('context', workspacePath),
+      ]),
+    );
+    return files.flat().map((file) => path.resolve(workspacePath, file));
   };
 
   const fileActions = new DesktopProgressFileActions(

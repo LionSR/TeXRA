@@ -39,7 +39,7 @@ interface ControllerFixtureOptions {
     'cancel' | 'continue' | 'sign-in'
   >;
   readonly canAccessRemoteCatalog?: () => Promise<boolean>;
-  readonly signInForRemoteCatalog?: () => Promise<boolean>;
+  readonly signInForRemoteCatalog?: () => Effect.Effect<boolean>;
   readonly getCustomAgentDirectory?: () => Promise<string>;
   readonly selectCustomAgentDirectory?: () => Promise<string | undefined>;
 }
@@ -120,7 +120,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
     },
     remoteCatalog: {
       canAccess: options.canAccessRemoteCatalog ?? (async () => false),
-      signIn: options.signInForRemoteCatalog ?? (async () => false),
+      signIn: options.signInForRemoteCatalog ?? (() => Effect.succeed(false)),
     },
     notifications: {
       showInfoMessage: (message) =>
@@ -282,10 +282,11 @@ describe('DefaultDesktopAgentSettingsController', () => {
       catalog,
       canAccessRemoteCatalog: async () => false,
       chooseTeamAvailability: async () => 'sign-in',
-      signInForRemoteCatalog: async () => {
-        order.push('sign-in');
-        return true;
-      },
+      signInForRemoteCatalog: () =>
+        Effect.sync(() => {
+          order.push('sign-in');
+          return true;
+        }),
       refreshAgents,
     });
     update.mockClear();

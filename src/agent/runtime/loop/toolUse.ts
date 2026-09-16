@@ -75,6 +75,7 @@ import {
   type ToolUseFlowState,
 } from './rows';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
+import type { HttpClient } from 'effect/unstable/http';
 import type { SessionHandle } from '../SessionHandle';
 
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
@@ -263,7 +264,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     function* (
       state: RunState,
-    ): Effect.fn.Return<RunState, Error, LanguageModel> {
+    ): Effect.fn.Return<
+      RunState,
+      Error,
+      LanguageModel | HttpClient.HttpClient
+    > {
       const model = run.pendingModelSwitch.value;
       run.pendingModelSwitch.value = null;
       if (model === null) return state;
@@ -278,6 +283,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const next = yield* bindModel({
         config: nextConfig,
         stores: run.stores,
+        roots: run.session.roots,
         compatibilityKey: current.compatibilityKey,
         declinedRoutes: state.declinedRoutes,
         agentCategory: run.config.agentCategory,
