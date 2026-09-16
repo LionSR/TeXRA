@@ -13,8 +13,11 @@ development branch. It is an implementation proposal under the accepted
 that the conversion or release is complete.
 
 The source baseline is GitHub `main` at
-`2c9898445d809b98b038ca9b133b16b57ef7794a`, inspected on 2026-09-15.
-The manifests pin Effect to `4.0.0-rc.115`. Issue discussions supply decisions
+`697663eff19ab67384b65a33a79d06507531431b`, re-pinned on 2026-09-15 after the
+roughly thirty pull requests that landed later that day; the first audit was
+pinned at `2c9898445d809b98b038ca9b133b16b57ef7794a`, and every finding below
+was re-verified against the new baseline. The manifests pin Effect to
+`4.0.0-rc.115`. Issue discussions supply decisions
 and reported defects; source inspection determines what has actually landed.
 An open pull request is not counted as completed work.
 
@@ -29,6 +32,12 @@ entire execution.** Two related obstacles remain:
    another Effect through a supplied host runner. Moving the runner out of
    the shared module does not establish direct composition.
 
+The second obstacle has narrowed sharply since the first audit: the
+configuration and state write contracts, the store construction order, the
+message-notification host, and the session request registry are all converted.
+What remains of it is the account/OAuth group and the host run-launch port.
+The first obstacle is now the larger half of the work.
+
 Consequently, neither the number of Effect imports nor a zero execution count
 in the migration check is a sufficient completion criterion.
 
@@ -41,17 +50,18 @@ and superseded deferrals must not be used as current implementation orders.
 The old flow engine and model-handler hierarchy are retired. The production
 loops use the ledger and the native model contract; built-in tool executors
 return Effects. The run file lease and `hostPort` have been deleted. `Runs`
-is already a session service. These components are the starting point, not
+is already a session service, and since the first audit `Requests` is one too
+(#12577). These components are the starting point, not
 replacement targets.
 
 Running `node scripts/check-effect-migration-ratchet.mjs` against the pinned
-source passed over **1,413 production files**:
+source passed over **1,410 production files**:
 
 | Survey category                             | Files | Sites |
 | ------------------------------------------- | ----: | ----: |
-| `platform()`                                |    10 |    27 |
+| `platform()`                                |     9 |    19 |
 | `effectRuntime()`                           |     0 |     0 |
-| Surveyed async-local operations and readers |    20 |    30 |
+| Surveyed async-local operations and readers |    19 |    29 |
 | `new AbortController()`                     |     4 |     4 |
 | `p-queue` imports                           |     0 |     0 |
 | `p-defer` imports                           |     0 |     0 |
@@ -66,13 +76,13 @@ inventories, not percentages of completion or measurements of performance.
 
 ### Current distinctions that affect the work order
 
-| Area               | Merged state                                                                                       | Remaining requirement                                                                                                                               |
-| ------------------ | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Filesystem         | Effect `FileSystem`/`Path` and rooted session views exist; several consumer groups have converted. | Convert remaining consumers, preserve symlink-sensitive operations, then delete statics, the old port, and ambient roots.                           |
-| Session execution  | `Runs` has one session owner.                                                                      | Complete `Requests`, SDK consumption, and removal of independent process-wide session/request registries.                                           |
-| Host contracts     | `hostPort` is deleted; preparatory catch conversions have landed.                                  | Convert remaining internal settings, account, and request operations through their callers to genuine external boundaries.                          |
-| Store construction | `Secrets` and `AppState` still accept deferred store getters on the pinned main.                   | PR [#12553](https://github.com/LionSR/TeXRA/pull/12553) opens stores before installing their runtime and supplies values; it is open at this audit. |
-| Verification       | Existing behavioral suites and architecture checks cover substantial parts of the runtime.         | Reconcile crash-recovery claims with shipped records; verify remaining ownership and release defects; obtain valid performance measurements.        |
+| Area               | Merged state                                                                                                                                                                                     | Remaining requirement                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Filesystem         | Effect `FileSystem`/`Path` and rooted session views exist; the tool layer (#12573, #12617), host callers (#12575), the reflection pipeline (#12619), and the core lane (#12621) have converted.  | Convert remaining consumers, preserve symlink-sensitive operations, then delete statics, the old port, and ambient roots.                    |
+| Session execution  | `Runs` has one session owner; `Requests` is now a session service built by the session layer (#12577), with per-session decision lanes and no global live-session registry.                      | Complete SDK consumption and remove the ambient session fallback (`currentSession`/`defaultSession`).                                        |
+| Host contracts     | `hostPort` is deleted; configuration and state writes (#12615, #12624), `MessageHost` (#12584), `ExternalOpener` (#12560), and the agent-directory/agent-resume ports (#12628) are Effect-typed. | Convert the remaining account/OAuth and run-launch operations through their callers to genuine external boundaries.                          |
+| Store construction | Landed (#12553): every root opens its stores before installing its runtime, and the `Secrets` and `AppState` layers take values.                                                                 | None here; the write-contract conversion it enabled is package C.                                                                            |
+| Verification       | Existing behavioral suites and architecture checks cover substantial parts of the runtime; the contended-commit recovery pins have landed (#12578).                                              | Reconcile crash-recovery claims with shipped records; verify remaining ownership and release defects; obtain valid performance measurements. |
 
 The filesystem decision is settled: adopt Effect's facilities, retaining
 small helpers only for concrete missing semantics. The September 11 deferral
@@ -119,10 +129,14 @@ are not automatically converted to SQLite merely because they use JSON.
 [#12433](https://github.com/LionSR/TeXRA/issues/12433).
 
 Start with run-reachable readers. `run/modelBinding.ts` still reads model
-options through `getConfig`; `debugMessageSaver.ts` reads configuration and
-uses filesystem statics; `RunSubscriptionRegistry.bind` still resolves
-`currentSession()`. Retry configuration in `ModelInvoker`, compaction, and
-approval helpers belong in this inventory too. The reported contention failure explains why these reads
+options through `getConfig` (:335, :380, :469, :684); `ModelInvoker`'s
+automatic-attempt limit still reads `getValidatedConfig` at invoke time (:149);
+compaction still reads its threshold the same way (`run/compaction.ts:119`).
+`debugMessageSaver.ts` has moved to `src/agent/debug/` and now takes the
+process filesystem from context and the run's roots as data, but it still
+gates on an ambient `getConfig` read (:66). `RunSubscriptionRegistry.bind`
+still resolves `currentSession()` (:106). Approval helpers belong in this
+inventory too. The reported contention failure explains why these reads
 are consequential, rather than merely stylistic.
 
 Provide project configuration and rooted filesystem values when acquiring the
@@ -130,7 +144,10 @@ session or run. Read changing configuration from the explicitly selected
 provider; do not accidentally change live-read semantics into a launch-time
 snapshot. Supply the owning session to callbacks that outlive their caller.
 Convert the remaining LaTeX, utility, tool, controller, and host consumers
-against the existing services.
+against the existing services; the tool layer, host callers, the reflection
+pipeline, and the core lane have already converted (#12573, #12575, #12617,
+#12619, #12621), so the remaining consumers convert against established
+services rather than new ones.
 
 Preserve symlink identity, typed directory entries, publication and atomic-write
 semantics where the operation requires them. A rooted path resolver does not
@@ -156,13 +173,16 @@ to retain the obsolete ambient filesystem interface.
 
 **Existing tracker:** [#12425](https://github.com/LionSR/TeXRA/issues/12425).
 
-Retain the landed `Runs` service. Put request admission, waiting, approval
-coordination, and decision serialization under the session's `Requests`
-service. `SessionRequests.ts` still has module-level `decisionLanes`;
-`SessionHandle.ts` still maintains `liveSessions`. Approval state is already
-partly session-owned, and each session already has a request handler. This
-step changes ownership and access to that implementation, not the existence
-of request handling. Do not create a duplicate owner while converting access.
+Retain the landed `Runs` and `Requests` services. The first ownership step
+has landed: #12577 made the approval queues and the request protocol the
+session's `Requests` service, built by the session layer; the decision lanes
+are one map per session held in that service's closure, and the global
+`liveSessions` enumeration is gone. What remains is consumption and the
+ambient fallback: run-scoped code still resolves its session through
+`currentSession()` / `defaultSession()` (`SessionHandle.ts:1500`), which falls
+back to the process session when no run context is present, and the SDK must
+reach these same services rather than a parallel path. Do not create a
+duplicate owner while converting access.
 
 The SDK should reach these same services. The host's session map is the
 authority for enumeration and disposal. Run-owned capabilities remain inside
@@ -177,7 +197,8 @@ waiting lifecycle.
 **Acceptance:** decisions and waiting callers belong to the same session;
 one session's teardown cannot affect another's requests. Required request
 settlement and child drain precede storage release. The independent registries
-and obsolete entry paths are removed in the same change.
+and obsolete entry paths — including the ambient session fallback — are
+removed in the same change.
 
 A and B can proceed concurrently in disjoint files. Coordinate explicitly
 before either changes `SessionHandle`, `sessionLayer`, launch code, or SDK
@@ -187,59 +208,52 @@ composition; independent edits to those shared files are not independent work.
 
 **Existing tracker:** [#12424](https://github.com/LionSR/TeXRA/issues/12424).
 
-First resolve the in-flight store-construction change in #12553 against its
-actual reviewed result. This removes deferred construction; it does not finish
-Effect-typing `StateStore` or configuration writes.
+The store-construction change has landed: #12553 made every root open its
+stores before installing its runtime, and the `Secrets` and `AppState` layers
+take values, so deferred construction is gone. The bootstrap boundary it
+established is narrow — a root's opener runs on a bootstrap fiber providing
+all of the opener's requirements before a process runtime exists — and is not
+permission for a second internal execution system.
 
-For this construction change, verify that each root opens its intended stores
-once and provides those exact values. Any bare bootstrap execution must be
-enumerated at the root and provide all of the opener's requirements before a
-process runtime exists. No opener may invoke a captured write runner before
-runtime installation. Production store thunks and the CLI state latch must
-disappear. This is a narrowly justified bootstrap boundary, not permission
-for a second internal execution system.
+The counterexamples the first audit named are converted end to end.
+`ConfigProvider.update` is `Effect.Effect<void, ConfigWriteFailed>`
+(`interfaces.ts`) via #12615; `StateStore.update` is
+`Effect.Effect<void, StateWriteFailed>` via #12624; `JsonStore.update`
+composes the store's own Effect `set`; `SqliteStateStore.update`
+(`appStateStore.ts`) composes `set` directly with no injected write runner;
+`settingsAccess.writeSlot` composes the stores' Effect writes with no
+`Promise.resolve` normalization; `RunStateWrite` is deleted. The settings
+decomposition sequence — `JsonConfigProvider`, then `ConfigProvider` with its
+consumer group, then the state-store group — has run its course.
 
-Next convert each remaining operation together with its callers and host
-implementations. Prioritize settings writes and run/request operations, then
-account and presentation operations by their dependency graph. Preserve
-configuration precedence, write targets, credential protection, and the
-existing commit regions that must not be interrupted halfway through.
+Convert each remaining operation together with its callers and host
+implementations. Preserve configuration precedence, write targets, credential
+protection, and the existing commit regions that must not be interrupted
+halfway through.
 
-The concrete counterexample to counting only execution sites is
-`JsonStore.update`: it delegates its Effect `set` operation to `RunStateWrite`.
-`SqliteStateStore.update` likewise delegates to an injected write runner.
-Meanwhile `settingsAccess.writeSlot` normalizes Promise-shaped configuration
-and state writes with `Promise.resolve`. The internal write should become a
-directly composed Effect; only the actual foreign host API needs a Promise
-adapter. Remove `RunStateWrite` and other obsolete forwarding machinery when
-their last legitimate uses disappear, rather than retaining them as the final
-internal contract.
-
-Use the existing settings decomposition: make `JsonConfigProvider` compose the
-store's Effect write, convert `ConfigProvider` with its complete consumer
-group, then convert the state-store group and the actual VS Code `Memento`
-adapter. Overlapping callers may require one combined change; do not preserve
-a dual interface solely to make smaller commits. Account/OAuth, message
-presentation, run-action prompts, `runAgentRequest`, and external opening are
-separate caller groups. Pasted-image cleanup depends on the corresponding
-rooted filesystem operation. Recount each group from source before assigning
-work; historical file counts are not a complete change list.
-
-`SetupPlatform.layer` already accepts a value, but `signIn` remains a Promise
-contract. It belongs with account/OAuth conversion, independently of #12553.
-`PromptHost` is already Effect-typed; `MessageHost` is not. Preserve the
-difference between a notification and a prompt awaiting a choice, including
-dismissal behavior. Convert `runAgentRequest` with its session-owned admission
-and settlement path. A genuinely non-cancellable shell opening remains so;
-the internal `ExternalOpener` contract need not remain Promise-shaped for that
-reason.
+The remaining caller groups are account/OAuth, run-action prompts, and run
+launch. `SetupPlatform.layer` accepts a value, but `signIn` remains a
+`() => Promise<boolean>` contract (`src/tools/setup/platform.ts:81`); it
+belongs with account/OAuth conversion. `runAgentRequest` is still a
+Promise-returning port (`hostRunActions.ts:98`); convert it with its
+session-owned admission and settlement path. `PromptHost` and `MessageHost`
+are both Effect-typed now (#12584) — preserve the difference between a
+notification and a prompt awaiting a choice, including dismissal behavior —
+and `ExternalOpener` is a typed Effect port (#12560); a genuinely
+non-cancellable shell opening remains so, and its adapter says so.
+Pasted-image cleanup depends on the corresponding rooted filesystem
+operation. Recount each group from source before assigning work; historical
+file counts are not a complete change list.
 
 Finally inspect the remaining internal collaborators reached by the native
 loops: model-configuration resolution, prompt preparation, goal continuation,
 reflection output, and usage recording. For example, `toolUse.ts` still wraps
-`resolveRuntimeModelConfig`, `buildInitialToolUsePrompts`, `recordUsage`, and
-`maybeBuildGoalContinuation` in `Effect.tryPromise`; reflection has corresponding
-calls and a Promise-based raw-output writer. Trace each to its implementation.
+`resolveRuntimeModelConfig` (:269), `buildInitialToolUsePrompts` (:337),
+`recordUsage` (:671), and `maybeBuildGoalContinuation` (:770) in
+`Effect.tryPromise`; reflection has corresponding `tryPromise` calls (:494,
+:502, :527, :674, :1083, :1139, :1186). Reflection's raw-output writer is now
+an Effect over the context filesystem (#12619); the open question there is
+durability, treated in §5. Trace each collaborator to its implementation.
 Keep synchronous work synchronous, make internal I/O compose directly, and
 retain an adapter only where a real foreign API is reached. A native outer
 loop is not evidence that all of its collaborators are native. Use the
@@ -248,10 +262,11 @@ existing [model execution](https://github.com/LionSR/TeXRA/issues/12070) and
 their remaining requirements.
 
 **Acceptance:** an internal settings write has one execution owner from the
-caller through persistence and required post-write effects. A converted
-operation is not executed by an injected runner hidden behind its old Promise
-signature. Host callbacks still settle the UI operation once, with interruption
-and failure represented correctly.
+caller through persistence and required post-write effects — now true for the
+configuration and state writes; the same shape must hold for each remaining
+group. A converted operation is not executed by an injected runner hidden
+behind its old Promise signature. Host callbacks still settle the UI
+operation once, with interruption and failure represented correctly.
 
 ### D. Finish resource and concurrency ownership
 
@@ -266,9 +281,27 @@ deliberately admitted to a longer-lived session. Queued work, preview builds,
 provider requests, and subprocess descendants must finish or be terminated
 before dependent temporary files or handles are released.
 
+Two findings filed on 2026-09-15 belong to this package.
+[#12613](https://github.com/LionSR/TeXRA/issues/12613) shows that in the
+pinned Effect rc.115 an unhandled failure inside a forked fiber is reported
+nowhere — no log line, no exit — and counts 71 production
+`runFork`/`runCallback` sites across the three hosts (desktop main 36,
+extension 20, CLI 15). Its proposed closure is failure reporting at the
+shared runtime boundary (`src/platform/processRuntime.ts`), which covers
+every site at once, with site-local return-type pinning to
+`Effect.Effect<void, never, never>` as the narrower fallback.
+[#12612](https://github.com/LionSR/TeXRA/issues/12612) is the residual gap
+#12608 recorded: `catchTag` recovery is not exhaustive, so a channel that
+later gains a second failure tag recovers nothing and — per #12613 — fails
+silently at exactly those converted sites. Together they set this package's
+failure-visibility requirement: a forked or converted site must either carry
+an exhaustive typed channel or run under a runtime that reports what it
+drops.
+
 **Acceptance:** stopping or closing the owner leaves no admitted work using a
 released resource. Expected per-tool failures preserve the dispatcher's
-ordering and continuation policy; interruption remains interruption. Do not
+ordering and continuation policy; interruption remains interruption. An
+unhandled forked failure is reported, not dropped. Do not
 introduce retries for mutating tools as part of the conversion.
 
 This work can run alongside A–C where files and resource owners are disjoint.
@@ -293,7 +326,8 @@ Promises or `Effect.tryPromise`.
 
 Use existing suites and the narrowest boundary that exposes a consequential
 defect. A behavior-preserving refactor adds no tests merely to demonstrate
-activity. For changed ownership or recovery behavior, concentrate on:
+activity. The contended-commit scope-loss pins of #12578 are landed examples
+of this evidence. For changed ownership or recovery behavior, concentrate on:
 
 - project isolation across contended commits and resumed operations;
 - request isolation and settlement during session shutdown;
@@ -316,9 +350,11 @@ attempt, or refuses to guess. Do not test record names from an unimplemented
 proposal as though they were the durable contract.
 
 One concrete design difference needs resolution. The reflection loop commits
-a `flow.snapshot` whose phase is `output.pending`, then resumes by running
-`produceOutput`. Its separate raw-output writer uses `rawOutputBytes` and
-file length to avoid a repeated append or rewrite from the recorded offset.
+a `flow.snapshot` whose phase is `output.pending` before any output file is
+touched (`reflection.ts:816`), then resumes by running `produceOutput`
+(:1150). Its raw-output writer — an Effect over the context filesystem since
+#12619 — uses `rawOutputBytes` and file length to avoid a repeated append or
+to rewrite from the recorded offset (:588-647).
 This is not the design's proposed `output.pending` record with a content
 digest. Equal file length alone does not verify matching content. Specify
 the intended treatment of complete, partial, and conflicting output, then
@@ -379,28 +415,30 @@ completion, and the wider TeXRA 1.0 release decision distinct.
 ## 7. Source evidence
 
 These links fix the source revision, so later line movements do not change the
-evidence on which the protocol was based.
+evidence on which the protocol was based. Rows from the first audit whose
+findings have since landed were removed; the landing PRs are named in §2
+and §4.
 
-| Finding                                                     | Source at the audited revision                                                                                                                                                                                                                                                                     |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ambient configuration comes from selected workspace roots   | [`configUtils.ts:28`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/utils/config/configUtils.ts#L28)                                                                                                                                                           |
-| Model configuration still reads that ambient source         | [`modelBinding.ts:335`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/agent/runtime/run/modelBinding.ts#L335)                                                                                                                                                  |
-| GitHub subscription binding resolves a session at call time | [`RunSubscriptionRegistry.ts:106`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/tools/github/RunSubscriptionRegistry.ts#L106)                                                                                                                                 |
-| Request decision lanes are module state                     | [`SessionRequests.ts:69`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/controllers/session/SessionRequests.ts#L69)                                                                                                                                            |
-| Global live-session enumeration remains                     | [`SessionHandle.ts:1273`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/agent/runtime/SessionHandle.ts#L1273)                                                                                                                                                  |
-| Configuration and state writes retain Promise contracts     | [`interfaces.ts:64`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/platform/interfaces.ts#L64), [`interfaces.ts:94`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/platform/interfaces.ts#L94)                             |
-| JSON and SQLite writes enter an injected runner             | [`jsonStore.ts:273`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/platform/defaults/jsonStore.ts#L273), [`appStateStore.ts:107`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/controllers/session/appStateStore.ts#L107) |
-| Settings normalize writes with `Promise.resolve`            | [`settingsAccess.ts:109`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/shared/config/settingsAccess.ts#L109)                                                                                                                                                  |
-| Session publication settlement is already an Effect         | [`SessionHandle.ts:1076`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/agent/runtime/SessionHandle.ts#L1076)                                                                                                                                                  |
-| Retry tests already use Effect's test clock                 | [`ModelRetryGate.vitest.ts:83`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts#L83)                                                                                                                          |
+| Finding                                                          | Source at the audited revision                                                                                                                                                                                                                                                               |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ambient configuration comes from selected workspace roots        | [`configUtils.ts:28`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/utils/config/configUtils.ts#L28)                                                                                                                                                     |
+| Model configuration still reads that ambient source              | [`modelBinding.ts:335`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/agent/runtime/run/modelBinding.ts#L335)                                                                                                                                            |
+| The invoker's retry limit and compaction threshold read it too   | [`ModelInvoker.ts:149`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/agent/runtime/ModelInvoker.ts#L149), [`compaction.ts:119`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/agent/runtime/run/compaction.ts#L119) |
+| The debug saver gates on an ambient read                         | [`debugMessageSaver.ts:66`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/agent/debug/debugMessageSaver.ts#L66)                                                                                                                                          |
+| GitHub subscription binding resolves a session at call time      | [`RunSubscriptionRegistry.ts:106`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/tools/github/RunSubscriptionRegistry.ts#L106)                                                                                                                           |
+| The ambient session fallback remains the single resolution point | [`SessionHandle.ts:1500`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/agent/runtime/SessionHandle.ts#L1500)                                                                                                                                            |
+| Account sign-in retains a Promise contract                       | [`platform.ts:81`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/tools/setup/platform.ts#L81)                                                                                                                                                            |
+| Run launch retains a Promise port                                | [`hostRunActions.ts:98`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/controllers/session/hostRunActions.ts#L98)                                                                                                                                        |
+| Session publication settlement is already an Effect              | [`SessionHandle.ts:1066`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/agent/runtime/SessionHandle.ts#L1066)                                                                                                                                            |
+| Retry tests already use Effect's test clock                      | [`ModelRetryGate.vitest.ts:83`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts#L83)                                                                                                                    |
 
 The remaining loop collaborators are visible in
-[`toolUse.ts:261`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/agent/runtime/loop/toolUse.ts#L261)
-and [`toolUse.ts:659`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/agent/runtime/loop/toolUse.ts#L659).
+[`toolUse.ts:269`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/agent/runtime/loop/toolUse.ts#L269)
+and [`toolUse.ts:671`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/agent/runtime/loop/toolUse.ts#L671).
 The reflection recovery comparison rests on the offset-and-length writer at
-[`reflection.ts:575`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/agent/runtime/loop/reflection.ts#L575)
+[`reflection.ts:594`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/agent/runtime/loop/reflection.ts#L594)
 and the later pending phase at
-[`reflection.ts:790`](https://github.com/LionSR/TeXRA/blob/2c9898445d809b98b038ca9b133b16b57ef7794a/src/agent/runtime/loop/reflection.ts#L790).
+[`reflection.ts:816`](https://github.com/LionSR/TeXRA/blob/697663eff19ab67384b65a33a79d06507531431b/src/agent/runtime/loop/reflection.ts#L816).
 
 ## 8. Audit method and limits
 
@@ -408,7 +446,9 @@ The audit used a fetched, isolated archive of the pinned main revision, source
 inspection, live GitHub issue and pull-request records, and the repository's
 binding-aware migration check. Parallel audits examined session/runtime
 ownership, host contracts, and verification coverage. The original checkout
-and its pre-existing untracked files were left intact.
+and its pre-existing untracked files were left intact. The 2026-09-15 re-pin
+re-verified each finding against the new baseline with direct source reads
+and reran the migration check; its updated counts appear in §2.
 
 This is a source-based protocol draft. It does not claim that the complete
 test suite, real desktop contention scenario, crash experiments, or performance
