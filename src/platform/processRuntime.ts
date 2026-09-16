@@ -97,14 +97,11 @@ export function effectRuntime(): ProcessRuntime {
 }
 
 /**
- * A runtime whose `runFork` reports what a forked fiber leaves unhandled
- * (#12613). A bare `runFork` announces nothing for a fiber that fails or
- * dies unobserved, so every fiber this runtime forks gets an exit observer:
- * a failure or defect surfaces once, as an error entry through the runtime's
- * own logger (`@logger/effectDiagnostics`, then the host's installed sink),
- * while a success or an interrupts-only exit — the fiber's own control
- * flow, not a failure — stays silent. `runPromise` and `runSync` hand their
- * exits to the caller already and need no seam.
+ * A runtime whose `runFork` reports a fiber's failure or defect on exit
+ * (#12613). `Fiber.addObserver` fires on every exit, including fibers a
+ * caller later `Fiber.join`s, so a joined failure is logged here and still
+ * delivered to the joiner. A success or an interrupts-only exit stays silent.
+ * `runPromise` and `runSync` hand their exits to the caller already.
  */
 export function withForkFailureReporting<R, ER>(
   runtime: ManagedRuntime.ManagedRuntime<R, ER>,

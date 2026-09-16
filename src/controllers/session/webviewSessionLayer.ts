@@ -12,8 +12,16 @@
  * that installed the runtime disposes it, once, on the shutdown path its
  * entry drives.
  */
-import { Context, Effect, Layer, LayerMap, ManagedRuntime } from 'effect';
+import {
+  Context,
+  Effect,
+  Layer,
+  LayerMap,
+  Logger,
+  ManagedRuntime,
+} from 'effect';
 
+import { writeLogEntry } from '@logger/logSink';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { SessionFrames } from '@shared/session/sessionFrames';
@@ -73,15 +81,31 @@ export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
 type WebviewRuntime = ManagedRuntime.ManagedRuntime<WebviewSessions, never>;
 
 /**
+ * Secret-redacting Effect logger for the webview runtime. The process
+ * diagnostics layer pulls Node-only `logUtils`, so this writes the same
+ * structured entry through `logSink` (redacted unless a host marked the sink
+ * trusted) instead of Effect's default console logger.
+ */
+const webviewDiagnosticsLayer = Logger.layer([
+  Logger.make((options) => {
+    if (options.logLevel === 'None') return;
+    writeLogEntry(Logger.formatStructured.log(options));
+  }),
+]);
+
+/**
  * Make the one Effect runtime of this webview over its session family (PRD
  * 7.7): called by the webview transport exactly once per module evaluation
  * and disposed by it, on the one shutdown path the entry drives. Fork
- * reporting applies here as it does to the process runtime: this runtime
- * has no logger layer, so an unhandled forked failure lands on the default
- * console logger of the webview's devtools.
+ * reporting applies here as it does to the process runtime; the logger
+ * layer above is the redacting sink, not the default console logger.
  */
 export function installWebviewRuntime(): WebviewRuntime {
   return withForkFailureReporting(
-    ManagedRuntime.make(WebviewSessions.layerNoDeps),
+    ManagedRuntime.make(
+      WebviewSessions.layerNoDeps.pipe(
+        Layer.provideMerge(webviewDiagnosticsLayer),
+      ),
+    ),
   );
 }
