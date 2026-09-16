@@ -17,6 +17,10 @@ import {
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { fakeStores } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -74,7 +78,13 @@ const agentPath = (): string => join(agentDir, 'editor.yaml');
 /** The creator program with the `FileSystem` its YAML write requires. */
 const createAgent = (ui: AgentCreatorUI): Effect.Effect<void, unknown> =>
   runAgentCreator(CONFIG, 'workflow', ui, STORES, ROOTS).pipe(
-    Effect.provide(Layer.mergeAll(nodePlatformLayer, testHttpClientLayer)),
+    Effect.provide(
+      Layer.mergeAll(
+        nodePlatformLayer,
+        testHttpClientLayer,
+        LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+      ),
+    ),
   );
 
 function createUi(

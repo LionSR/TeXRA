@@ -81,6 +81,7 @@ import { isNotADirectoryError } from '@common/errors';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import type { WorkspaceFs } from '@platform/rootedFs';
+import type { LanguageModel } from '@platform/languageModel';
 import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
@@ -203,6 +204,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   | ModelInvoker
   | FileSystem.FileSystem
   | WorkspaceFs
+  | LanguageModel
   | HttpClient.HttpClient
 > {
   const run = yield* AgentRun;
@@ -1056,7 +1058,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   ): Effect.fn.Return<
     RoundExit,
     Error,
-    FileSystem.FileSystem | WorkspaceFs | HttpClient.HttpClient
+    FileSystem.FileSystem | WorkspaceFs | LanguageModel | HttpClient.HttpClient
   > {
     const round = flow.currentRound;
     // The stage closes with the round's own verdict; an exit that never set

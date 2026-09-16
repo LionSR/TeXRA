@@ -3,6 +3,7 @@ import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter'
 import {
   fakeHostAgentResume,
   fakeHostAppState,
+  fakeHostLanguageModel,
   fakeHostSecrets,
   fakeSetupPlatform,
   installedHost,
@@ -39,6 +40,7 @@ export function installTestSessionGraphs(): void {
     updateCheckStorage: () => installedHost().roots.globalStorage,
     secrets: fakeHostSecrets,
     appState: fakeHostAppState,
+    languageModel: fakeHostLanguageModel,
     agentResume: fakeHostAgentResume,
     setup: fakeSetupPlatform,
     // The Node hosts' layer: inert until a Lean tool is invoked.

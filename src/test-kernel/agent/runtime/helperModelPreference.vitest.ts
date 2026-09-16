@@ -5,6 +5,10 @@ import { Effect } from 'effect';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { fakeStores } from '@test/support/FakePlatform';
 
 const getHelperModelName = vi.hoisted(() => vi.fn());
@@ -50,10 +54,12 @@ describe('applyHelperModelPreference', () => {
     getHelperModelName.mockReset();
     readModelAvailabilityInputs.mockClear();
     modelUnavailableReasonFrom.mockReset();
-    resolveRuntimeModelConfig.mockImplementation(async (model: string) =>
-      Object.hasOwn(MODEL_CONFIGS, model)
-        ? MODEL_CONFIGS[model as keyof typeof MODEL_CONFIGS]
-        : undefined,
+    resolveRuntimeModelConfig.mockImplementation((model: string) =>
+      Effect.succeed(
+        Object.hasOwn(MODEL_CONFIGS, model)
+          ? MODEL_CONFIGS[model as keyof typeof MODEL_CONFIGS]
+          : undefined,
+      ),
     );
   });
 
@@ -66,6 +72,9 @@ describe('applyHelperModelPreference', () => {
       Effect.flatMap(({ applyHelperModelPreference }) =>
         applyHelperModelPreference(config, STORES),
       ),
+      // The real `resolveRuntimeModelConfig` requires the service; the mock
+      // replaces it, but the requirement stays on the program's type.
+      Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     );
   }
 

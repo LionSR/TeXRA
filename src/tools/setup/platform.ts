@@ -19,6 +19,7 @@ import type { SignInFailed } from '@common/errors/signInFailed';
 import type { TerminalRunner } from '@hosts/uiHosts';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
+import type { LanguageModel } from '@platform/languageModel';
 import { Secrets } from '@platform/secrets';
 
 /**
@@ -182,20 +183,21 @@ export const getChatGptSubscriptionStatus = Effect.fn(
 )(function* (): Effect.fn.Return<
   { signedIn: boolean; enabled: boolean },
   SubscriptionProbeFailed,
-  Secrets
+  Secrets | LanguageModel
 > {
   const secrets = yield* Secrets;
   const status = yield* getCodexStatus(secrets);
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
-  const enabled = yield* Effect.tryPromise({
-    try: () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
-    catch: (cause) =>
-      new SubscriptionProbeFailed({
-        member: 'isCodexSubscriptionActive',
-        message: 'ChatGPT subscription routing could not be resolved.',
-        cause,
-      }),
-  });
+  const enabled = yield* isCodexSubscriptionActive(CHATGPT_SETUP_MODEL).pipe(
+    Effect.mapError(
+      (cause) =>
+        new SubscriptionProbeFailed({
+          member: 'isCodexSubscriptionActive',
+          message: 'ChatGPT subscription routing could not be resolved.',
+          cause,
+        }),
+    ),
+  );
   return { signedIn: true, enabled };
 });

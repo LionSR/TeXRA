@@ -20,6 +20,7 @@ import {
   type ModelAvailabilityScope,
 } from '@model/computeModelOptions';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { FileOptions, SessionType } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -90,7 +91,11 @@ interface HostSnapshotSourceOptions {
   debugMode?: () => boolean;
   /** Hosts that surface these outside Settings answer them; absent means
    *  never shown. */
-  apiKeyBanner?: () => Effect.Effect<Banners['apiKey'], HostSnapshotReadFailed>;
+  apiKeyBanner?: () => Effect.Effect<
+    Banners['apiKey'],
+    HostSnapshotReadFailed,
+    LanguageModel
+  >;
   dependencyBanner?: () => Effect.Effect<
     Banners['dependency'],
     HostSnapshotReadFailed
@@ -102,17 +107,21 @@ interface HostSnapshotSourceOptions {
 
 export interface HostSnapshotSource {
   /** Reassemble every catalog and publish the result. */
-  readonly refresh: Effect.Effect<void, never, FileSystem.FileSystem>;
+  readonly refresh: Effect.Effect<
+    void,
+    never,
+    LanguageModel | FileSystem.FileSystem
+  >;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
-  readonly refreshCatalogs: Effect.Effect<void>;
+  readonly refreshCatalogs: Effect.Effect<void, never, LanguageModel>;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
   readonly refreshCommits: Effect.Effect<void>;
   /** The sign-in state changed. */
-  readonly refreshAuth: Effect.Effect<void>;
+  readonly refreshAuth: Effect.Effect<void, never, LanguageModel>;
   /** The host's own banners changed (a key stored, a tool installed). */
-  readonly refreshHostBanners: Effect.Effect<void>;
+  readonly refreshHostBanners: Effect.Effect<void, never, LanguageModel>;
   /** The workspace folders changed. */
   refreshWorkspaceRoots(): void;
   /** The one recorder per process started or stopped. */
@@ -260,7 +269,7 @@ export function createHostSnapshotSource(
   const catalogLoads = [loadAgents, loadTeams, loadModels];
 
   return {
-    refresh: guarded(
+    refresh: guarded<LanguageModel | FileSystem.FileSystem>(
       ...catalogLoads,
       loadFiles,
       loadCommits,

@@ -47,6 +47,7 @@ import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { AppState, type StateStore } from '@platform/interfaces';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import {
   tryProcessRuntime,
   type ProcessRuntime,
@@ -139,6 +140,9 @@ export function installCliProcessRuntime(
       updateCheckStorage: () => storage.getGlobalStoragePath(),
       secrets: getCliSecrets(storageRoot),
       ...(globalState === undefined ? {} : { appState: globalState }),
+      // A terminal has no editor language models; the CLI's platform installs
+      // the same port.
+      languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
       // The one resume port, shared with the platform `initCliPlatform`
       // wires: it forwards to the chat TUI's handler whenever one is
       // mounted, whichever entry installed this runtime.

@@ -18,6 +18,10 @@ import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { agentRunLayer } from '@agent/runtime/run/AgentRun';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -118,6 +122,9 @@ describe('run-scoped tool resolution', () => {
                 }),
               ),
               Layer.provideMerge(Layer.succeed(RunLedger, session.ledger)),
+              Layer.provideMerge(
+                LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+              ),
               Layer.provideMerge(testHttpClientLayer),
             ),
           ),
@@ -168,7 +175,9 @@ describe('run-scoped tool resolution', () => {
           toolInjections: new ToolInjectionRegistry(),
           config: new FakeConfigProvider(),
           stores: hostStores(),
-        });
+        }).pipe(
+          Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+        );
 
         expect(resolved.map(({ name }) => name)).toEqual(['grep']);
       }),

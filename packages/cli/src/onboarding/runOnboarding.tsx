@@ -36,6 +36,7 @@ import {
 } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
@@ -140,7 +141,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
   function* (
     services: CliOnboardingServices,
     context: OnboardingGateContext,
-  ): Effect.fn.Return<CliOnboardingResult, Error> {
+  ): Effect.fn.Return<CliOnboardingResult, Error, LanguageModel> {
     // context.* carries the parsed intent (headless / non-TTY / dumb); the final
     // `process.stdout.isTTY` is the authoritative "Ink can actually mount here"
     // check at the call site (same guard runCliOnboarding uses for the

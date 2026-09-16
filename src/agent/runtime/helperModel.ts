@@ -14,9 +14,9 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import type { LanguageModel } from '@platform/languageModel';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AgentCategory } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { getHelperModelName } from './helperModelName';
 import { bindModel, type BoundModel } from './run/modelBinding';
@@ -50,16 +50,13 @@ export const helperModel = Effect.fn('helperModel')(function* (
 ): Effect.fn.Return<
   BoundModel,
   HelperModelUnavailable | Error,
-  Scope.Scope | HttpClient.HttpClient
+  Scope.Scope | LanguageModel | HttpClient.HttpClient
 > {
   const modelName = getHelperModelName(stores.globalState);
   const inputs = yield* readModelAvailabilityInputs(stores, [modelName]);
   const reason = modelUnavailableReasonFrom(inputs, modelName);
   if (reason) return yield* new HelperModelUnavailable({ message: reason });
-  const config = yield* Effect.tryPromise({
-    try: () => resolveRuntimeModelConfig(modelName),
-    catch: ensureError,
-  });
+  const config = yield* resolveRuntimeModelConfig(modelName);
   if (!config) {
     return yield* new HelperModelUnavailable({
       message: `Model "${modelName}" is not recognized.`,

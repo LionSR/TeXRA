@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
@@ -5,6 +6,7 @@ import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
+import type { LanguageModel } from '@platform/languageModel';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   ChatgptCodexContextWindowSchema,
@@ -12,6 +14,7 @@ import {
 } from '@shared/schemas';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
 
@@ -149,20 +152,26 @@ export function resolveCodexSubscriptionCapabilities(
  * probe and add key-set facts), so they answer from their catalog descriptor
  * in `@model/codingPlanSubscriptions`.
  */
-async function signedInSubscriptionUsageRoute(
+const signedInSubscriptionUsageRoute = Effect.fn(
+  'providerCapabilities.signedInSubscriptionUsageRoute',
+)(function* (
   modelId: string,
   resolveCapabilities: (
     config: ModelConfig,
     useOpenRouter: boolean,
   ) => ProviderCapabilityProfile | null,
   isSignedIn: () => boolean | Promise<boolean>,
-): Promise<UsageRoute | undefined> {
-  const config = await resolveRuntimeModelConfig(modelId);
+): Effect.fn.Return<UsageRoute | undefined, Error, LanguageModel> {
+  const config = yield* resolveRuntimeModelConfig(modelId);
   if (!config) return undefined;
   const capabilities = resolveCapabilities(config, getUseOpenRouter());
   if (!capabilities) return undefined;
-  return (await isSignedIn()) ? capabilities.usageRoute : undefined;
-}
+  const signedIn = yield* Effect.tryPromise({
+    try: async () => isSignedIn(),
+    catch: ensureError,
+  });
+  return signedIn ? capabilities.usageRoute : undefined;
+});
 
 /**
  * The OAuth-subscription route serving this model's next request, if any.
@@ -171,35 +180,35 @@ async function signedInSubscriptionUsageRoute(
  * this module — the one that owns those profiles. `activeSubscriptionUsageRoute`
  * (`@model/codingPlanSubscriptions`) unions this with the API-key coding plans.
  */
-export async function oauthSubscriptionUsageRoute(
-  modelId: string,
-): Promise<UsageRoute | undefined> {
+export const oauthSubscriptionUsageRoute = Effect.fn(
+  'providerCapabilities.oauthSubscriptionUsageRoute',
+)(function* (modelId: string) {
   return (
-    (await signedInSubscriptionUsageRoute(
+    (yield* signedInSubscriptionUsageRoute(
       modelId,
       resolveCodexSubscriptionCapabilities,
       isCodexSignedIn,
     )) ??
-    (await signedInSubscriptionUsageRoute(
+    (yield* signedInSubscriptionUsageRoute(
       modelId,
       resolveXaiSubscriptionCapabilities,
       isXaiSignedIn,
     ))
   );
-}
+});
 
 /** Whether the model currently routes through a signed-in ChatGPT subscription. */
-export async function isCodexSubscriptionActive(
-  modelId: string,
-): Promise<boolean> {
+export const isCodexSubscriptionActive = Effect.fn(
+  'providerCapabilities.isCodexSubscriptionActive',
+)(function* (modelId: string) {
   return (
-    (await signedInSubscriptionUsageRoute(
+    (yield* signedInSubscriptionUsageRoute(
       modelId,
       resolveCodexSubscriptionCapabilities,
       isCodexSignedIn,
     )) !== undefined
   );
-}
+});
 
 /**
  * Resolve the active Grok-subscription provider profile, or null when the
@@ -222,14 +231,14 @@ export function resolveXaiSubscriptionCapabilities(
 }
 
 /** Whether the model currently routes through a signed-in Grok subscription. */
-export async function isXaiSubscriptionActive(
-  modelId: string,
-): Promise<boolean> {
+export const isXaiSubscriptionActive = Effect.fn(
+  'providerCapabilities.isXaiSubscriptionActive',
+)(function* (modelId: string) {
   return (
-    (await signedInSubscriptionUsageRoute(
+    (yield* signedInSubscriptionUsageRoute(
       modelId,
       resolveXaiSubscriptionCapabilities,
       isXaiSignedIn,
     )) !== undefined
   );
-}
+});

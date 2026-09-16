@@ -192,6 +192,7 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   const processServices = {
     secrets: platform.secrets,
     appState: platform.roots.globalState,
+    languageModel: platform.languageModel,
     agentResume: platform.agentResume,
     setup: PACKAGE_SETUP,
   };
