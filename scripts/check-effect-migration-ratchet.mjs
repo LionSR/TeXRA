@@ -1056,7 +1056,7 @@ function selfTestBoundary() {
     'packages/extension/src/progressView/frontend/ProgressApp.ts',
   );
   const processRuntimeProbe = surveySource(
-    "import { Cause, Effect, Exit, type ManagedRuntime } from 'effect';\nexport function withForkFailureReporting(runtime: ManagedRuntime.ManagedRuntime<never, never>) {\n  const reportExit = (exit) => runtime.runFork(Effect.logError(exit));\n  return { ...runtime, runFork: (effect, options) => runtime.runFork(effect, options) };\n}\n",
+    "import { Effect, type ManagedRuntime } from 'effect';\nexport function withForkFailureReporting(runtime: ManagedRuntime.ManagedRuntime<never, never>) {\n  const reportExit = (exit) => runtime.runFork(Effect.logError(exit));\n  return { ...runtime, runFork: (effect, options) => runtime.runFork(effect, options) };\n}\n",
     'src/platform/processRuntime.ts',
   );
   const siblingParameterProbe = surveySource(
@@ -1118,7 +1118,7 @@ function selfTestBoundary() {
       'a file outside the map has no approved runtime',
     ],
     [
-      processRuntimeProbe.counts.get(ROW_RUN_BOUNDARY) === 2 &&
+      (processRuntimeProbe.counts.get(ROW_RUN_BOUNDARY) ?? 0) === 2 &&
         processRuntimeProbe.localRuntimeRuns === 2,
       "processRuntime's wrapper admits both runs on its caller-passed parameter",
     ],
