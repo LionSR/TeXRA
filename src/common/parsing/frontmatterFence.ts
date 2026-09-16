@@ -1,6 +1,9 @@
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
-const FENCE = '---';
+// Matches a line that is exactly `---`, tolerant of a trailing `\r` so a
+// CRLF-edited file still fences correctly. `$` in multiline mode also
+// matches end-of-string, so a fence line need not be newline-terminated.
+const FENCE_LINE_RE = () => /^---\r?(?:\n|$)/gm;
 
 export type FrontmatterFenceSplit =
   | { kind: 'ok'; frontmatterText: string; body: string }
@@ -9,24 +12,29 @@ export type FrontmatterFenceSplit =
 
 /**
  * Split a `---`-delimited frontmatter block off the front of file content.
- * Both delimiters must be `---` on their own line; line endings are
- * normalized first so a CRLF-edited file still matches. Callers decide how
- * to react to each failure kind and whether to trim the returned body.
+ * Both delimiters must be `---` on their own line. Only fence-line matching
+ * and the returned `frontmatterText` are line-ending-normalized; `body` is a
+ * raw substring of the original content, so its bytes (including any CRLF)
+ * round-trip unchanged for callers that write it back to disk.
  */
 export function splitFrontmatterFence(content: string): FrontmatterFenceSplit {
-  const lines = normalizeLineEndings(content).split('\n');
-  if (lines[0] !== FENCE) {
+  const fenceLineRe = FENCE_LINE_RE();
+  const opening = fenceLineRe.exec(content);
+  if (!opening || opening.index !== 0) {
     return { kind: 'no-opening-fence' };
   }
 
-  const closeIndex = lines.indexOf(FENCE, 1);
-  if (closeIndex < 0) {
+  fenceLineRe.lastIndex = opening[0].length;
+  const closing = fenceLineRe.exec(content);
+  if (!closing) {
     return { kind: 'no-closing-fence' };
   }
 
   return {
     kind: 'ok',
-    frontmatterText: lines.slice(1, closeIndex).join('\n'),
-    body: lines.slice(closeIndex + 1).join('\n'),
+    frontmatterText: normalizeLineEndings(
+      content.slice(opening[0].length, closing.index),
+    ),
+    body: content.slice(closing.index + closing[0].length),
   };
 }
