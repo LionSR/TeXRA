@@ -9,7 +9,7 @@
  * banners only it can answer (a VS Code host knows its API-key status and
  * its missing tools; the desktop keeps both in Settings).
  */
-import { Cause, Data, Effect, Exit } from 'effect';
+import { Cause, Data, Effect, Exit, type FileSystem } from 'effect';
 import { computeAgentOptionsData } from '@agent/index';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
@@ -71,8 +71,14 @@ interface HostSnapshotSourceOptions {
    * preferences.
    */
   inScope: ModelAvailabilityScope;
-  /** The launcher's single-slot catalogs: base and edited candidates. */
-  fileOptions(): Effect.Effect<FileOptions, HostSnapshotReadFailed>;
+  /** The launcher's single-slot catalogs: base and edited candidates. The
+   *  read takes the process `FileSystem` from context; the refresh effects
+   *  that reach it carry the requirement. */
+  fileOptions(): Effect.Effect<
+    FileOptions,
+    HostSnapshotReadFailed,
+    FileSystem.FileSystem
+  >;
   readRecentCommits(): Effect.Effect<
     { commits: string[]; isGitRepo: boolean },
     HostSnapshotReadFailed
@@ -96,12 +102,12 @@ interface HostSnapshotSourceOptions {
 
 export interface HostSnapshotSource {
   /** Reassemble every catalog and publish the result. */
-  readonly refresh: Effect.Effect<void>;
+  readonly refresh: Effect.Effect<void, never, FileSystem.FileSystem>;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<void>;
   /** The project's files changed on disk, or the surface asked for a relist. */
-  readonly refreshFiles: Effect.Effect<void>;
+  readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
   readonly refreshCommits: Effect.Effect<void>;
   /** The sign-in state changed. */
   readonly refreshAuth: Effect.Effect<void>;
@@ -236,9 +242,9 @@ export function createHostSnapshotSource(
   /** Each producer settles on its own: one that fails is reported and keeps
    *  its last value, and the snapshot still publishes what the others read,
    *  so a single unavailable source never leaves the shell blank. */
-  const guarded = (
-    ...loads: Effect.Effect<void, unknown>[]
-  ): Effect.Effect<void> =>
+  const guarded = <R>(
+    ...loads: Effect.Effect<void, unknown, R>[]
+  ): Effect.Effect<void, never, R> =>
     Effect.gen(function* () {
       const settled = yield* Effect.forEach(
         loads,

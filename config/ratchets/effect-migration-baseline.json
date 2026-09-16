@@ -3,7 +3,6 @@
   "rows": {
     "platform()": {
       "src/agent/index/agentRegistry.ts": 1,
-      "src/controllers/session/workspaceFileOptions.ts": 1,
       "src/model/runtimeModelRegistry.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/files/baseFS.ts": 11,

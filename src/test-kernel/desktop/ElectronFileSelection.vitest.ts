@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -137,6 +137,14 @@ describe('desktop file selection', () => {
     await expect(
       files.attachDroppedFiles([join(workspacePath, 'sections')], 'input'),
     ).rejects.toMatchObject({ _tag: 'Rejected' });
+  });
+
+  it('skips a circular symlink instead of failing the catalog', async () => {
+    const loop = join(workspacePath, 'loop');
+    await symlink(loop, loop);
+    const files = await createFileSelection();
+
+    expect((await files.fileOptions()).baseFile).toEqual(BASE_FILE_OPTIONS);
   });
 
   it('rejects a listing of a missing workspace loudly', async () => {
