@@ -37,6 +37,10 @@ import {
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
+import {
   RUN_OUTCOME,
   RUN_PHASE,
   AgentCategory,
@@ -248,6 +252,10 @@ describe('AgentLaunchContext', () => {
               }),
               session,
             }),
+          ).pipe(
+            Effect.provide(
+              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+            ),
           );
           expect(error.message).toContain('is not registered');
         } finally {

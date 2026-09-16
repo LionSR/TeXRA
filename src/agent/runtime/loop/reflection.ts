@@ -81,6 +81,7 @@ import { isNotADirectoryError } from '@common/errors';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import type { WorkspaceFs } from '@platform/rootedFs';
+import type { LanguageModel } from '@platform/languageModel';
 import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
@@ -197,7 +198,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 ): Effect.fn.Return<
   ReflectionResult,
   Error,
-  AgentRun | RunLedger | ModelInvoker | FileSystem.FileSystem | WorkspaceFs
+  | AgentRun
+  | RunLedger
+  | ModelInvoker
+  | FileSystem.FileSystem
+  | WorkspaceFs
+  | LanguageModel
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -1043,7 +1049,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** One round inside its trace stage: prompt, response cycles, output. */
   const runRound = Effect.fn('reflection.round')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RoundExit, Error, FileSystem.FileSystem | WorkspaceFs> {
+  ): Effect.fn.Return<
+    RoundExit,
+    Error,
+    FileSystem.FileSystem | WorkspaceFs | LanguageModel
+  > {
     const round = flow.currentRound;
     // The stage closes with the round's own verdict; an exit that never set
     // one is a stop (interrupt) or a defect.

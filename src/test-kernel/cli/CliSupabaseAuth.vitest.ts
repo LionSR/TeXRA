@@ -142,6 +142,7 @@ async function loadSupabaseAuth() {
       import('@tools/setup/platform'),
       import('@agent/runtime/toolInjection'),
     ]);
+  const { LanguageModel } = await import('@platform/languageModel');
   const { createFakeWorkspaceRoots } =
     await import('@test/support/FakePlatform');
   const { globalStorage } = createFakeWorkspaceRoots();
@@ -159,6 +160,11 @@ async function loadSupabaseAuth() {
       // rather than an answer from a store nothing here opened.
       Layer.mock(Secrets, { getEnv: unreadProcessService }),
       Layer.mock(AppState, { update: unreadProcessService }),
+      Layer.mock(LanguageModel, {
+        isAvailable: unreadProcessService,
+        selectModels: unreadProcessService,
+        onDidChange: unreadProcessService,
+      }),
       SetupPlatform.layer({ host: 'cli', signIn: async () => false }),
       ToolInjections.layer([]),
     ),

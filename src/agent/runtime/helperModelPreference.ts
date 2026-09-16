@@ -21,7 +21,6 @@ import {
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
 import { AgentCategory } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 import { getHelperModelName } from './helperModelName';
 
 const log = createLog('helperModelPreference');
@@ -48,10 +47,7 @@ export const applyHelperModelPreference = Effect.fn(
   const helperModel = getHelperModelName(stores.globalState);
   if (helperModel === config.model) return config;
 
-  const helperModelConfig = yield* Effect.tryPromise({
-    try: () => inScope(() => resolveRuntimeModelConfig(helperModel)),
-    catch: ensureError,
-  });
+  const helperModelConfig = yield* resolveRuntimeModelConfig(helperModel);
 
   // A tool-use agent (e.g. latexFixer) needs its tools, so do not assign a
   // helper model that does not declare function calling — not only one that

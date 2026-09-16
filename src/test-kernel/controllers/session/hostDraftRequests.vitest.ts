@@ -9,6 +9,10 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { apiKeySecretName } from '@model/apiProviders';
 import { AppState } from '@platform/interfaces';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { Secrets } from '@platform/secrets';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 
@@ -34,6 +38,9 @@ const processStores = Layer.mergeAll(
   Secrets.layer(new FakeSecrets({ [apiKeySecretName('openai')]: 'sk-test' })),
   AppState.layer(new FakeStateStore()),
   FileSystem.layerNoop({}),
+  // `polishTextWithAI` is mocked, but the request handler's type keeps the
+  // real signature's `LanguageModel` requirement.
+  LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
 );
 
 /** The same pair with no saved OpenAI key, so the take's credential read
@@ -42,6 +49,7 @@ const storesWithoutCredential = Layer.mergeAll(
   Secrets.layer(new FakeSecrets()),
   AppState.layer(new FakeStateStore()),
   FileSystem.layerNoop({}),
+  LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
 );
 
 it.effect(

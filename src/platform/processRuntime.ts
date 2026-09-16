@@ -15,11 +15,12 @@ import type { FileSystem, ManagedRuntime, Path } from 'effect';
 import type { HttpClient } from 'effect/unstable/http';
 
 import type { AppState } from './interfaces';
+import type { LanguageModel } from './languageModel';
 import type { Secrets } from './secrets';
 
 /**
  * The runtime over the process-lifetime services every entry provides: the
- * four cohort-A tags beside the records, the Lean port and the HTTP client,
+ * five cohort-A tags beside the records, the Lean port and the HTTP client,
  * merged once in `installProcessRuntime`'s `services` layer, plus the
  * standard library's `FileSystem` and `Path`, which the same install provides
  * from `@effect/platform-node` so a program that reads or resolves a file
@@ -33,6 +34,7 @@ export type ProcessServices =
   | UpdateCheckRecords
   | Secrets
   | AppState
+  | LanguageModel
   | SetupPlatform
   | ToolInjections
   | LeanLanguageServices;

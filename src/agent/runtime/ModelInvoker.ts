@@ -50,6 +50,7 @@ import {
   type TurnResult,
 } from '@llm/turn';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import type { LanguageModel } from '@platform/languageModel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   AgentCategory,
@@ -202,7 +203,11 @@ export class ModelInvoker extends Context.Service<
     readonly invoke: (
       state: RunState,
       request: InvokeRequest,
-    ) => Effect.Effect<InvocationOutcome, InvokeError, FileSystem.FileSystem>;
+    ) => Effect.Effect<
+      InvocationOutcome,
+      InvokeError,
+      FileSystem.FileSystem | LanguageModel
+    >;
   }
 >()('@texra/agent/ModelInvoker') {}
 
@@ -972,10 +977,8 @@ export const modelInvokerLayer = (): Layer.Layer<
             // endpoint) and binds the catalog model.
             const config =
               selection === 'personal'
-                ? ((yield* Effect.tryPromise({
-                    try: () => resolveRuntimeModelConfig(failed.modelId),
-                    catch: ensureError,
-                  })) ?? failed.config)
+                ? ((yield* resolveRuntimeModelConfig(failed.modelId)) ??
+                  failed.config)
                 : failed.config;
             const next = yield* bindModel({
               config,
@@ -1012,7 +1015,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         failedAttempt: InvocationRef,
         operationId: string,
         outstanding: string | null,
-      ): Effect.fn.Return<Decision, InvokeError> {
+      ): Effect.fn.Return<Decision, InvokeError, LanguageModel> {
         let state = initial;
         const requestId = outstanding ?? `retry-${generateShortId()}`;
         const info = toRetryErrorInfo(recorded);
@@ -1160,7 +1163,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       ): Effect.fn.Return<
         InvocationOutcome,
         InvokeError,
-        FileSystem.FileSystem
+        FileSystem.FileSystem | LanguageModel
       > {
         let state = initial;
         const operationId = `model-operation-${generateShortId()}`;

@@ -20,6 +20,7 @@ import {
   type ModelAvailabilityScope,
 } from '@model/computeModelOptions';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { FileOptions, SessionType } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -84,7 +85,11 @@ interface HostSnapshotSourceOptions {
   debugMode?: () => boolean;
   /** Hosts that surface these outside Settings answer them; absent means
    *  never shown. */
-  apiKeyBanner?: () => Effect.Effect<Banners['apiKey'], HostSnapshotReadFailed>;
+  apiKeyBanner?: () => Effect.Effect<
+    Banners['apiKey'],
+    HostSnapshotReadFailed,
+    LanguageModel
+  >;
   dependencyBanner?: () => Effect.Effect<
     Banners['dependency'],
     HostSnapshotReadFailed
@@ -96,17 +101,17 @@ interface HostSnapshotSourceOptions {
 
 export interface HostSnapshotSource {
   /** Reassemble every catalog and publish the result. */
-  readonly refresh: Effect.Effect<void>;
+  readonly refresh: Effect.Effect<void, never, LanguageModel>;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
-  readonly refreshCatalogs: Effect.Effect<void>;
+  readonly refreshCatalogs: Effect.Effect<void, never, LanguageModel>;
   /** The project's files changed on disk, or the surface asked for a relist. */
-  readonly refreshFiles: Effect.Effect<void>;
-  readonly refreshCommits: Effect.Effect<void>;
+  readonly refreshFiles: Effect.Effect<void, never, LanguageModel>;
+  readonly refreshCommits: Effect.Effect<void, never, LanguageModel>;
   /** The sign-in state changed. */
-  readonly refreshAuth: Effect.Effect<void>;
+  readonly refreshAuth: Effect.Effect<void, never, LanguageModel>;
   /** The host's own banners changed (a key stored, a tool installed). */
-  readonly refreshHostBanners: Effect.Effect<void>;
+  readonly refreshHostBanners: Effect.Effect<void, never, LanguageModel>;
   /** The workspace folders changed. */
   refreshWorkspaceRoots(): void;
   /** The one recorder per process started or stopped. */
@@ -236,9 +241,9 @@ export function createHostSnapshotSource(
   /** Each producer settles on its own: one that fails is reported and keeps
    *  its last value, and the snapshot still publishes what the others read,
    *  so a single unavailable source never leaves the shell blank. */
-  const guarded = (
-    ...loads: Effect.Effect<void, unknown>[]
-  ): Effect.Effect<void> =>
+  const guarded = <R>(
+    ...loads: Effect.Effect<void, unknown, R>[]
+  ): Effect.Effect<void, never, R> =>
     Effect.gen(function* () {
       const settled = yield* Effect.forEach(
         loads,

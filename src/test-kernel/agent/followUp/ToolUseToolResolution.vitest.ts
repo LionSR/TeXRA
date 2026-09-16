@@ -5,6 +5,10 @@ import { Effect } from 'effect';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
@@ -40,7 +44,12 @@ describe('tool-use tool resolution', () => {
       config: new FakeConfigProvider(),
       stores: hostStores(),
       ...options,
-    }).pipe(Effect.map((tools) => tools.map((tool) => tool.name)));
+    }).pipe(
+      Effect.map((tools) => tools.map((tool) => tool.name)),
+      // The delegation-annotation availability read yields `LanguageModel`;
+      // this host has no editor models.
+      Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+    );
   }
 
   function resolveDiagnostics(runtimeUnavailableTools: readonly string[]) {
@@ -55,7 +64,9 @@ describe('tool-use tool resolution', () => {
       stores: hostStores(),
       runtimeUnavailableTools,
       approvalPromptsUnavailable: false,
-    });
+    }).pipe(
+      Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+    );
   }
 
   it.effect(

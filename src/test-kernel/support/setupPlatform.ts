@@ -24,6 +24,7 @@ import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { AppState, StateStore } from '@platform/interfaces';
+import type { LanguageModelPort } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -188,6 +189,19 @@ export const fakeHostAppState: StateStore = {
   update: (key, value) => installedHost().roots.globalState.update(key, value),
 };
 
+/**
+ * The `LanguageModel` service of every test runtime, delegating per call for
+ * the same reason `fakeHostSecrets` does: the runtime is built once per
+ * module instance while the host's port is swapped per test.
+ */
+export const fakeHostLanguageModel: LanguageModelPort = {
+  isAvailable: () => installedHost().platform.languageModel.isAvailable(),
+  selectModels: (selector) =>
+    installedHost().platform.languageModel.selectModels(selector),
+  onDidChange: (listener) =>
+    installedHost().platform.languageModel.onDidChange(listener),
+};
+
 /** The process services a fake host provides to a program. */
 export type FakeProcessServices = ProcessServices;
 
@@ -231,6 +245,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { testHttpClientLayer },
     { Secrets },
     { AppState },
+    { LanguageModel },
     { SetupPlatform },
     { ToolInjections },
   ] = await Promise.all([
@@ -242,6 +257,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@test/support/fetchTestUtils'),
     import('@platform/secrets'),
     import('@platform/interfaces'),
+    import('@platform/languageModel'),
     import('@tools/setup/platform'),
     import('@agent/runtime/toolInjection'),
   ]);
@@ -265,6 +281,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
     Secrets.layer(fakeHostSecrets),
     AppState.layer(fakeHostAppState),
+    LanguageModel.layer(fakeHostLanguageModel),
     SetupPlatform.layer(fakeSetupPlatform),
     // No conditional injections on the bare fake host: a suite that
     // exercises them passes its own list to `resolveAgentTools`.

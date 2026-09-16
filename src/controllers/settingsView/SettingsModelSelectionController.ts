@@ -14,10 +14,7 @@ import {
 } from '@model/reasoningLevel';
 import { preferredCopilotRouteModels } from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
-import {
-  discoveredCopilotRoutes,
-  type CopilotModelRoute,
-} from '@model/runtimeModelRegistry';
+import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
 import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import {
   getEnabledModels,
@@ -45,7 +42,12 @@ interface SettingsModelSelectionControllerDeps {
   globalState: StateStore;
   /** Provider credentials behind the availability decoration on each option. */
   secrets: PlatformSecrets;
-  getCopilotRoutes?: () => Promise<ReadonlyMap<string, CopilotModelRoute>>;
+  /**
+   * The discovered Copilot routes. A port because the read behind it is an
+   * Effect and this controller is in a zone that may not run one: each host
+   * wires it on the runtime it already holds.
+   */
+  getCopilotRoutes: () => Promise<ReadonlyMap<string, CopilotModelRoute>>;
   getPreferredCopilotRouteModels?: () => readonly string[];
   /**
    * Resolve availability-decorated options for the given models. A port
@@ -75,9 +77,7 @@ export class SettingsModelSelectionController {
 
   async buildSelectionData(): Promise<SettingsModelSelectionData> {
     const visibleModels = getEnabledModels(this.deps.globalState);
-    const routes = await (
-      this.deps.getCopilotRoutes ?? discoveredCopilotRoutes
-    )();
+    const routes = await this.deps.getCopilotRoutes();
     const preferredModels = new Set(
       this.deps.getPreferredCopilotRouteModels?.() ??
         preferredCopilotRouteModels(this.deps.globalState),

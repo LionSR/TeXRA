@@ -17,6 +17,10 @@ import {
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { fakeStores } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
@@ -71,6 +75,7 @@ const agentPath = (): string => join(agentDir, 'editor.yaml');
 const createAgent = (ui: AgentCreatorUI): Effect.Effect<void, unknown> =>
   runAgentCreator(CONFIG, 'workflow', ui, STORES).pipe(
     Effect.provide(nodePlatformLayer),
+    Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
   );
 
 function createUi(

@@ -14,6 +14,7 @@ import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { LanguageModel } from '@platform/languageModel';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   isNonEmptyString,
@@ -103,7 +104,7 @@ export const generateSessionDescription = Effect.fn(
   agentDescription: string | undefined,
   session: SessionHandle,
   stores: ModelOptionStores,
-): Effect.fn.Return<void> {
+): Effect.fn.Return<void, never, LanguageModel> {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
   yield* Effect.gen(function* () {

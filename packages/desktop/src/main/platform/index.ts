@@ -34,6 +34,7 @@ import {
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
   WorkspaceStorageProvider,
@@ -176,6 +177,8 @@ export async function initializeElectronPlatform(
     updateCheckStorage: () => resolveGlobalStoragePath(userDataPath),
     secrets,
     appState: globalStateStore,
+    // No editor in this process: the same port nodeHost installs below.
+    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     setup: desktopSetupPlatform,
     lean: directLeanLanguageServices(),
   });

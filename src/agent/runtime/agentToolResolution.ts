@@ -36,6 +36,7 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -98,7 +99,7 @@ function availableDelegationModelNamesForTools(
   tools: readonly ToolDefinition[],
   stores: ModelOptionStores,
   inScope: ModelAvailabilityScope | undefined,
-): Effect.Effect<readonly string[] | null | undefined> {
+): Effect.Effect<readonly string[] | null | undefined, never, LanguageModel> {
   if (!hasDelegationTool(tools.map((tool) => tool.name))) {
     return Effect.succeed(undefined);
   }

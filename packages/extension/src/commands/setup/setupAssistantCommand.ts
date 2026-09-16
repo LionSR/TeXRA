@@ -14,6 +14,7 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { StateStore } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
@@ -43,7 +44,7 @@ interface LaunchModelResolution {
  */
 function selectLaunchModel(
   secrets: PlatformSecrets,
-): Effect.Effect<LaunchModelResolution | null> {
+): Effect.Effect<LaunchModelResolution | null, never, LanguageModel> {
   return resolveSetupLaunchModel(secrets, true).pipe(
     Effect.map((resolution) =>
       resolution
@@ -112,7 +113,7 @@ function withOpenRouterFlagOn<A, E, R>(
  */
 export function hasAnyUsableSetupCredential(
   secrets: PlatformSecrets,
-): Effect.Effect<boolean> {
+): Effect.Effect<boolean, never, LanguageModel> {
   return hasUsableSetupCredential(secrets, credentialLog.warn);
 }
 
@@ -181,7 +182,9 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
 // Routing is fine when the current configuration resolves any setup model.
 // A managed direct route can remain runnable even when global OpenRouter is
 // enabled without an OpenRouter key.
-function isRoutingConfigured(secrets: PlatformSecrets): Effect.Effect<boolean> {
+function isRoutingConfigured(
+  secrets: PlatformSecrets,
+): Effect.Effect<boolean, never, LanguageModel> {
   if (!getUseOpenRouter()) return Effect.succeed(true);
   return resolveSetupLaunchModel(secrets, false).pipe(
     Effect.map((resolution) => resolution !== null),

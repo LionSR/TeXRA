@@ -14,6 +14,7 @@ import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { LanguageModel } from '@platform/languageModel';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
@@ -395,7 +396,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
   blueprint: AgentBlueprint,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Effect.fn.Return<string, unknown> {
+): Effect.fn.Return<string, unknown, LanguageModel> {
   let lastValidationError: string | undefined;
 
   const attempt = Effect.gen(function* () {
@@ -479,7 +480,7 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   category: AgentCategory,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Effect.fn.Return<void, unknown, FileSystem.FileSystem> {
+): Effect.fn.Return<void, unknown, FileSystem.FileSystem | LanguageModel> {
   const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
   const agentName = yield* ui.promptAgentName(categoryLabel);
   if (!agentName) return;
