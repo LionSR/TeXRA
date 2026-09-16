@@ -1,6 +1,3 @@
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,7 +29,6 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
 
 // Local imports
 import {
-  defaultSession,
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
@@ -41,6 +37,7 @@ import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: undefined });
@@ -77,7 +74,7 @@ function createHarness(): AgentSkillsHarness {
   Reflect.set(handler, 'postStateSettingSnapshot', vi.fn());
   // The guard reads the window's session for its workspace root; the suite's
   // beforeEach reopens the process default against the folderless roots.
-  Reflect.set(handler, 'session', defaultSession());
+  Reflect.set(handler, 'session', testDefaultSession());
   // The shared write path is an Effect program now, settled on the same
   // process runtime the real constructor is handed.
   Reflect.set(handler, 'runtime', effectRuntime());

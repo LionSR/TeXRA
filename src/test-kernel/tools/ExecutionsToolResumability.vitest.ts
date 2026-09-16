@@ -1,14 +1,12 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { it } from '@effect/vitest';
 // Test composition imports
 
 import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -48,7 +46,7 @@ describe('ExecutionsTool resumability fallback', () => {
     () =>
       Effect.gen(function* () {
         const runId = 'abc123abc123' as RunId;
-        const session = defaultSession();
+        const session = testDefaultSession();
         publishTestRunStart(session, runId);
         yield* session.ledger.appendBatch(runId, null, [
           openingSnapshot(runId),
@@ -65,7 +63,7 @@ describe('ExecutionsTool resumability fallback', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'tool-test' as RunId,
               toolPolicy: {},
             },

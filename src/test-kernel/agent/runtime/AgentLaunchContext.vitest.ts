@@ -24,14 +24,10 @@ vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 
 import { noopTrace } from '@agent/trace';
 import { registerRun } from '@agent/storage/runLifecycle';
-import { createRunScope } from '@agent/runtime/RunScope';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   buildAgentLaunchContext as buildAgentLaunchContextEffect,
-  withLaunchRunContext,
-  type AgentLaunchContext,
   prepareAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
@@ -319,51 +315,6 @@ describe('AgentLaunchContext', () => {
         }
       }),
   );
-
-  it('projects model changes into the active run context', async () => {
-    const session = {} as SessionHandle;
-    const runId = 'launch-context-run' as RunId;
-    const runScope = createRunScope({
-      runId,
-      session,
-    });
-    const onApprovalPolicyDenial = vi.fn();
-    const ctx = {
-      runScope,
-      logger: noopTrace,
-      toolPolicy: {
-        approvalPromptsUnavailable: true,
-        runtimeUnavailableTools: ['inquiry'],
-        stopAfterCycle: true,
-      },
-      config: {
-        agent: 'chat',
-        model: 'deepseekT',
-      },
-    } as unknown as AgentLaunchContext;
-
-    await withLaunchRunContext(ctx, { onApprovalPolicyDenial }, async () => {
-      const context = tryUseRunContext()!;
-      expect(context.model).toBe('deepseekT');
-      expect(context.kind).toBe('launch');
-      if (context.kind !== 'launch') {
-        throw new Error('expected launch context');
-      }
-      expect(context.runScope).toBe(runScope);
-      // `withLaunchRunContext` projects `ctx.toolPolicy` into the ambient
-      // RunContext; the only explicit option left is `onApprovalPolicyDenial`.
-      expect(context.approvalPromptsUnavailable).toBe(true);
-      expect(context.runtimeUnavailableTools).toEqual(['inquiry']);
-      expect(context.stopAfterCycle).toBe(true);
-      expect(context.onApprovalPolicyDenial).toBe(onApprovalPolicyDenial);
-
-      // The run mirrors a switch into its config once the new binding is
-      // live (`onModelChanged`); the context reads it at read time.
-      ctx.config.model = 'sonnet46T';
-
-      expect(tryUseRunContext()?.model).toBe('sonnet46T');
-    });
-  });
 
   it.effect(
     'commits the activation with creation instead of publishing a reservation',

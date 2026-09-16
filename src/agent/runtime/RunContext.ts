@@ -141,9 +141,9 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
  *
  * The context is populated by `withLaunchRunContext` (in
  * `AgentLaunchContext.ts`), which projects an {@link AgentLaunchContext} into
- * the ALS scope. Tools and utilities call `tryUseRunContext()` to read it.
- * A context with a session also enters that session's workspace roots, so
- * session-rooted services (`StorageFS`, `WorkspaceFS`) follow the run.
+ * the ALS scope. A context with a session also enters that session's
+ * workspace roots, so session-rooted services (`StorageFS`, `WorkspaceFS`)
+ * follow the run.
  */
 export function withRunContext<T>(context: RunContext, fn: () => T): T {
   const session = getRunContextSession(context);
@@ -154,25 +154,20 @@ export function withRunContext<T>(context: RunContext, fn: () => T): T {
 
 /**
  * Run host code in the scope of one session, so session-rooted services
- * (`StorageFS`, `WorkspaceFS`, `currentSession()`) resolve to that session
- * outside any agent run. A host holding several sessions in one process (the
- * desktop, one per open paper) wraps every touch of a session's storage.
+ * (`StorageFS`, `WorkspaceFS`) resolve to that session outside any agent run.
+ * A host holding several sessions in one process (the desktop, one per open
+ * paper) wraps every touch of a session's storage.
  */
 export function runInSession<T>(session: SessionHandle, fn: () => T): T {
   return withRunContext(createRunContext({ session }), fn);
-}
-
-/** Return the active run context when called from a run, otherwise undefined. */
-export function tryUseRunContext(): RunContext | undefined {
-  return runContextScope.getStore();
 }
 
 /**
  * Return the owner session for a context, reading launch contexts through
  * `RunScope` and bare contexts directly.
  */
-export function getRunContextSession(
-  context: RunContext | undefined = tryUseRunContext(),
+function getRunContextSession(
+  context: RunContext | undefined,
 ): SessionHandle | undefined {
   return context?.kind === 'launch'
     ? context.runScope.session

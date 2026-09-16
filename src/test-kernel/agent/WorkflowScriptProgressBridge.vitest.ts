@@ -4,7 +4,6 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
-  currentSession,
   initializeDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
@@ -24,6 +23,7 @@ import {
 } from '@shared/schemas';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { projectWorkflowScriptProgress } from '@tools/delegation/workflowScriptRun';
 
 const meta = `export const meta = {
@@ -123,7 +123,7 @@ function runProjected(
   options: Omit<ScriptRunOptions, 'session' | 'parentRunId'>,
 ): Effect.Effect<WorkflowScriptRunResult, Error> {
   const projection = projectWorkflowScriptProgress(trace, {
-    session: currentSession(),
+    session: testDefaultSession(),
     parentRunId,
     ...options,
   });

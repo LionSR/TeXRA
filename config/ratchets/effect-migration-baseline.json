@@ -20,7 +20,6 @@
       "src/agent/index/agentRegistry.ts": 1,
       "src/agent/runtime/AgentLaunchContext.ts": 4,
       "src/agent/runtime/RunContext.ts": 1,
-      "src/agent/runtime/SessionHandle.ts": 2,
       "src/agent/runtime/childRunLoop.ts": 1,
       "src/agent/runtime/runAgent.ts": 1,
       "src/agent/runtime/sessionGraph.ts": 2,

@@ -89,7 +89,7 @@ export function registerAgentReviewCommands(
   runtime: ProcessRuntime,
   session: SessionHandle,
 ): void {
-  AgentReviewService.initialize(context, runtime);
+  AgentReviewService.initialize(context, runtime, session);
 
   // The Agent Review tree lives in VS Code's Source Control (git) panel,
   // GitKraken/Cursor-style.

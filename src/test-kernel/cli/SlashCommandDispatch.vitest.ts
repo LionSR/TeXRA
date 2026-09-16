@@ -1,5 +1,4 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 import { Effect } from 'effect';
 
@@ -16,7 +15,6 @@ import {
   type MockInstance,
 } from 'vitest';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
 import {
   applyCliModelAccessSelection,
@@ -73,6 +71,7 @@ import {
 import type { TranscriptRow } from '@shared/transcript';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import type { RunView } from '@shared/session/sessionView';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
@@ -101,7 +100,7 @@ beforeAll(bindTestSessionView);
 // `/plan` reads the focused run off the session's own fold, `/status` off the
 // TUI's projection of it; one seeded map answers both.
 beforeEach(() => {
-  vi.spyOn(defaultSession(), 'runView').mockImplementation((id) =>
+  vi.spyOn(testDefaultSession(), 'runView').mockImplementation((id) =>
     seeded.get(id),
   );
 });
@@ -154,7 +153,7 @@ const stores = {
   secrets: new FakeSecrets(),
   state: new FakeStateStore(),
   runtime: effectRuntime(),
-  runtimeSession: defaultSession(),
+  runtimeSession: testDefaultSession(),
 };
 
 function createSession(): TuiSession {

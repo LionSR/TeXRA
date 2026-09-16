@@ -19,7 +19,6 @@ import * as vscode from 'vscode';
 // Local imports
 import {
   AgentConfigSchema,
-  defaultSession,
   runAgent,
   type SessionHandle,
 } from '@agent/runtime';
@@ -125,15 +124,19 @@ class AgentReviewServiceImpl {
   // Captured by `initialize` from the host entry, which holds the process
   // runtime in a local; the service is a process-lifetime singleton.
   private runtime: ProcessRuntime | undefined;
-  // Captured by `initialize` on the same occasion: extension activation runs
+  // Handed to `initialize` on the same occasion: extension activation runs
   // after `initializeDefaultSession`, and every review entry (the commands,
   // the commit watcher) is UI-triggered outside any run context, so the
   // default session is the session a review would resolve anyway.
   private session: SessionHandle | undefined;
 
-  initialize(context: vscode.ExtensionContext, runtime: ProcessRuntime): void {
+  initialize(
+    context: vscode.ExtensionContext,
+    runtime: ProcessRuntime,
+    session: SessionHandle,
+  ): void {
     this.runtime = runtime;
-    this.session = defaultSession();
+    this.session = session;
     this.collection =
       vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
     context.subscriptions.push(this.collection, this.emitter);

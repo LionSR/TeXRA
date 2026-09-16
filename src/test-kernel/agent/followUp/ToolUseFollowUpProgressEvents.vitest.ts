@@ -1,9 +1,8 @@
 import { Effect } from 'effect';
-import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunInput } from '@agent/followUp/RunInput';
 import {
   notifyFollowUpSent,
@@ -14,6 +13,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {
@@ -77,7 +77,7 @@ describe('tool-use follow-up progress events', () => {
     readonly session?: SessionHandle;
   } = {}): void {
     const handle = testRunHandle({ runId, agent: 'search' });
-    const owner = session ?? defaultSession();
+    const owner = session ?? testDefaultSession();
     handle.attachToolUseFlow({
       ownerSession: owner,
       requestImmediateCompaction: () => {},
@@ -135,22 +135,24 @@ describe('tool-use follow-up progress events', () => {
   });
 
   it('does not append through stale active contexts after final status', async () => {
-    await seedTerminalRun(defaultSession(), runId, RUN_OUTCOME.COMPLETED);
+    await seedTerminalRun(testDefaultSession(), runId, RUN_OUTCOME.COMPLETED);
     // A finished run's driver gave its claim back with its last drain; these
     // rows stand in for that driver, so the claim goes back here too.
     await Effect.runPromise(
-      defaultSession().releaseClaims(qualifyAggregateId('run', runId)),
+      testDefaultSession().releaseClaims(qualifyAggregateId('run', runId)),
     );
     trackToolUseFlow();
 
     const result = await Effect.runPromise(
-      submitFollowUp(runId, 'late follow-up', { session: defaultSession() }),
+      submitFollowUp(runId, 'late follow-up', {
+        session: testDefaultSession(),
+      }),
     );
 
     // The run's own terminal row is the refusal: it finished.
     expect(result).toEqual({ status: 'failed', reason: 'finished' });
     expect(
-      await Effect.runPromise(queuedFollowUps(defaultSession(), runId)),
+      await Effect.runPromise(queuedFollowUps(testDefaultSession(), runId)),
     ).toEqual([]);
   });
 
@@ -158,12 +160,14 @@ describe('tool-use follow-up progress events', () => {
     const resumingRunId = 'fa0002' as RunId;
 
     // A second activation is the resume the registry admits a follow-up for.
-    await seedActiveRun(defaultSession(), resumingRunId, { resuming: true });
+    await seedActiveRun(testDefaultSession(), resumingRunId, {
+      resuming: true,
+    });
 
     try {
       const result = await Effect.runPromise(
         submitFollowUp(resumingRunId, 'queued while resuming', {
-          session: defaultSession(),
+          session: testDefaultSession(),
         }),
       );
 
@@ -172,11 +176,11 @@ describe('tool-use follow-up progress events', () => {
       expect(result).toEqual({ status: 'queued', wake: 'failed' });
       expect(
         await Effect.runPromise(
-          queuedFollowUps(defaultSession(), resumingRunId),
+          queuedFollowUps(testDefaultSession(), resumingRunId),
         ),
       ).toMatchObject([{ text: 'queued while resuming' }]);
     } finally {
-      defaultSession().followUps.terminalize(resumingRunId);
+      testDefaultSession().followUps.terminalize(resumingRunId);
     }
   });
 });
