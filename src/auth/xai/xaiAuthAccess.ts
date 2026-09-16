@@ -13,6 +13,7 @@ import {
   XaiSessionCoordinator,
   type XaiSessionStatus,
 } from './XaiSessionCoordinator';
+import type { Effect } from 'effect';
 
 const CHANNEL = 'xaiAuth';
 
@@ -29,9 +30,9 @@ export function xaiCoordinator(
 }
 
 /** Signed-in status, read from the caller's secret store. */
-export async function getXaiStatus(
+export function getXaiStatus(
   secrets: SessionSecretStore,
-): Promise<XaiSessionStatus> {
+): Effect.Effect<XaiSessionStatus> {
   return getSubscriptionSessionStatus(
     () => xaiCoordinator(secrets),
     CHANNEL,

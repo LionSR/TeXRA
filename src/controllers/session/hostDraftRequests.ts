@@ -25,6 +25,7 @@ import {
 import { THREE_DAYS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
+import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('HostDraftRequests');
 
@@ -159,7 +160,7 @@ export class HostDraftRequests {
   ): Effect.fn.Return<
     HostOutcome,
     unknown,
-    AppState | Secrets | FileSystem.FileSystem
+    AppState | Secrets | FileSystem.FileSystem | HttpClient.HttpClient
   > {
     switch (request.kind) {
       case 'polish': {

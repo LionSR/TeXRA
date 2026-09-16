@@ -271,6 +271,7 @@ function appProps(onInterruptRun: (runId: RunId) => void): AppProps {
     // suites; the App only requires the store to be present.
     secrets: new FakeSecrets(),
     runtime: effectRuntime(),
+    session: defaultSession(),
     onSubmit: vi.fn(),
     onKillRun: vi.fn(),
     onWorkflowControl: vi.fn(),

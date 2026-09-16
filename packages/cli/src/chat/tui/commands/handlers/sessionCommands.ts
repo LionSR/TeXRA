@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { defaultSession } from '@agent/runtime';
+import { type SessionHandle } from '@agent/runtime';
 import { notifyFollowUpSent } from '@agent/followUp';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
@@ -49,7 +49,7 @@ export function showCliGoalModeHelp(): void {
 }
 
 /** Open the focused run's work plan from the view it is rendered from. */
-export function showCliWorkPlan(): void {
+export function showCliWorkPlan(session: SessionHandle): void {
   const runId = activeRunIdSignal.get();
   if (!runId) {
     cancelPendingWorkPlanReaderRequest();
@@ -58,7 +58,7 @@ export function showCliWorkPlan(): void {
   }
   clearTransientNotice();
   const request = beginWorkPlanReaderRequest(runId);
-  const run = defaultSession().runView(runId);
+  const run = session.runView(runId);
   if (
     run?.category === AgentCategory.ToolUse &&
     (run.plan !== null || run.todos.length > 0)
@@ -69,9 +69,12 @@ export function showCliWorkPlan(): void {
   }
 }
 
-function activeSkillNamesFor(runId: RunId | undefined): readonly string[] {
+function activeSkillNamesFor(
+  session: SessionHandle,
+  runId: RunId | undefined,
+): readonly string[] {
   if (runId === undefined) return [];
-  const entries = defaultSession().transcripts.get(runId)?.toJSON() ?? [];
+  const entries = session.transcripts.get(runId)?.toJSON() ?? [];
   const latest = entries.findLast(
     (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
   );
@@ -115,7 +118,7 @@ export async function showCliSessionStatus(
         run?.category === AgentCategory.ToolUse && run.goal.active
           ? run.goal
           : undefined,
-      activeSkills: activeSkillNamesFor(activeRunId),
+      activeSkills: activeSkillNamesFor(context.runtimeSession, activeRunId),
       sessionId: run ? context.session.runId : undefined,
       commandName: context.cliContext.commandName,
       cwd: context.cliContext.cwd,
@@ -131,7 +134,10 @@ export async function showCliSessionStatus(
 
 /** `/compact`: one runtime request on the runtime the command registry holds;
  *  the outcome or refusal becomes a notice. */
-export function requestCliSessionCompaction(runtime: ProcessRuntime): void {
+export function requestCliSessionCompaction(
+  session: SessionHandle,
+  runtime: ProcessRuntime,
+): void {
   const runId = activeRunIdSignal.get();
   if (runId === undefined) {
     appendLocalAssistantTranscript(
@@ -139,7 +145,6 @@ export function requestCliSessionCompaction(runtime: ProcessRuntime): void {
     );
     return;
   }
-  const session = defaultSession();
   void runtime.runPromise(
     session.requests.request({ kind: 'run.compact', runId }).pipe(
       Effect.match({

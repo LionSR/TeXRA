@@ -24,7 +24,6 @@ export {
   defaultSession,
   initializeDefaultSession,
   teardownDefaultSession,
-  tryDefaultSession,
 } from './SessionHandle';
 
 // sessionGraph: the process's session owner, as the hosts and the SDK open
@@ -34,6 +33,7 @@ export {
   listSessions,
   openSessionEffect,
   sessionOwnerInstalled,
+  tryDefaultSession,
 } from './sessionGraph';
 
 // RunContext: the session scope a host enters around every touch of a

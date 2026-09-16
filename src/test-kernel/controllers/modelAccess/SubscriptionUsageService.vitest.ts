@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@auth/codex';
@@ -396,10 +397,12 @@ describe('SubscriptionUsageService', () => {
   });
 
   it('reports an absent stored ChatGPT session as missing credentials', async () => {
-    const loadSession = vi.fn(async () => null);
-    const getFreshSession = vi.fn(async () => {
-      throw new CodexAuthError('Sign in with ChatGPT to continue.', 'expired');
-    });
+    const loadSession = vi.fn(() => Effect.succeed(null));
+    const getFreshSession = vi.fn(() =>
+      Effect.fail(
+        new CodexAuthError('Sign in with ChatGPT to continue.', 'expired'),
+      ),
+    );
     vi.spyOn(codexAuth, 'codexCoordinator').mockReturnValue({
       loadSession,
       getFreshSession,

@@ -11,6 +11,7 @@ import { apiKeySecretName } from '@model/apiProviders';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 const audio = vi.hoisted(() => ({
   startRecording: vi.fn(),
@@ -34,6 +35,7 @@ const processStores = Layer.mergeAll(
   Secrets.layer(new FakeSecrets({ [apiKeySecretName('openai')]: 'sk-test' })),
   AppState.layer(new FakeStateStore()),
   FileSystem.layerNoop({}),
+  testHttpClientLayer,
 );
 
 /** The same pair with no saved OpenAI key, so the take's credential read
@@ -42,6 +44,7 @@ const storesWithoutCredential = Layer.mergeAll(
   Secrets.layer(new FakeSecrets()),
   AppState.layer(new FakeStateStore()),
   FileSystem.layerNoop({}),
+  testHttpClientLayer,
 );
 
 it.effect(

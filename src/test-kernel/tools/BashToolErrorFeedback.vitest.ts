@@ -10,7 +10,10 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 
 // Local imports
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
-import { formatToolResultTextWithAttachments } from '@agent/runtime/run/toolResultText';
+import {
+  formatAttachmentSummary,
+  formatToolResultAsText,
+} from '@agent/runtime/run/toolResultText';
 import type { RunId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY, type ToolResult } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -46,10 +49,9 @@ function stubBashApprovalDisabled(): void {
  * the model-visible text. */
 function toolUseOutput(result: ToolResult): string {
   const { attachments, sanitizedResult } = extractToolAttachments(result);
-  return formatToolResultTextWithAttachments(
+  return formatToolResultAsText(
     sanitizedResult,
-    attachments,
-    true,
+    attachments.length > 0 ? formatAttachmentSummary(attachments) : undefined,
   );
 }
 

@@ -20,7 +20,7 @@ import {
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
+import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -504,8 +504,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await this.runReported(
       'Failed to view remote agent prompt',
       Effect.gen({ self: this }, function* () {
-        const result = yield* Effect.tryPromise({
-          try: () => getRemoteAgentPromptConfig(data.agentName),
+        const config = yield* Effect.tryPromise({
+          try: () => fetchRemoteAgentPromptYaml(data.agentName),
           catch: (cause) =>
             new AgentSettingsActionFailed({
               member: 'getRemoteAgentPrompt',
@@ -513,8 +513,10 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
               cause,
             }),
         });
-        if (!result.ok) {
-          yield* this.notifications.showErrorMessage(result.message);
+        if (config == null) {
+          yield* this.notifications.showErrorMessage(
+            'Authentication required. Sign in using "TeXRA: Sign In".',
+          );
           return;
         }
 
@@ -531,7 +533,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           `${data.agentName}.yaml`,
         );
         const fs = yield* FileSystem.FileSystem;
-        yield* fs.writeFileString(target, result.config);
+        yield* fs.writeFileString(target, config);
         yield* Effect.tryPromise({
           try: () => this.directory.openPath(target),
           catch: (cause) =>

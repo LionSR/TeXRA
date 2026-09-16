@@ -53,7 +53,7 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
-import { defaultSession, type SessionHandle } from './SessionHandle';
+import type { SessionHandle } from './SessionHandle';
 import type { AgentRunServices } from './toolInjection';
 
 /**
@@ -78,11 +78,12 @@ export type ResumeRunResult =
 
 export interface ResumeRunOptions extends Pick<
   SubagentRunOptions,
-  | 'session'
   | 'approvalPromptsUnavailable'
   | 'onApprovalPolicyDenial'
   | 'runtimeUnavailableTools'
 > {
+  /** Session owning the resumed run's coordination state. */
+  readonly session: SessionHandle;
   /** Recovery ownership synchronously claimed by the submission boundary. */
   readonly recovery?: RecoveryContinuation;
   /** Monotone per-attempt cancellation signal: once true it stays true. */
@@ -139,7 +140,7 @@ export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
   runId: RunId,
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeRunResult, Error, ProcessServices> {
-  const session = options.session ?? defaultSession();
+  const session = options.session;
   const { runs } = session;
   if (
     options.isCancellationRequested?.() === true ||
@@ -155,7 +156,7 @@ export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
   }
   return yield* resumeRunWithRecoveryProvenance(
     runId,
-    { ...options, session, recovery },
+    { ...options, recovery },
     options.recovery == null,
   ).pipe(Effect.provideService(Runs, runs));
 }, Effect.uninterruptible);
@@ -195,12 +196,9 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
   runId: RunId,
   options: ResumeRunOptions,
 ) {
-  const session = options.session ?? defaultSession();
-  return yield* resumeRunWithRecoveryProvenance(
-    runId,
-    { ...options, session },
-    false,
-  ).pipe(Effect.provideService(Runs, session.runs));
+  return yield* resumeRunWithRecoveryProvenance(runId, options, false).pipe(
+    Effect.provideService(Runs, options.session.runs),
+  );
 }, Effect.uninterruptible);
 
 /** Resume preparation is one ordered program; checkpoint interpretation is unchanged. */
@@ -211,7 +209,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   options: ResumeRunOptions,
   recoveryIsProvisional: boolean,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
-  const session = options.session ?? defaultSession();
+  const session = options.session;
   const runs = yield* Runs;
   const cancelled = () => options.isCancellationRequested?.() === true;
   const suppliedRecovery = options.recovery
