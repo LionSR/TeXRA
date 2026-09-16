@@ -28,7 +28,7 @@ export class FileLister {
   private workspacePath: string | undefined;
 
   constructor(private readonly session: SessionHandle) {
-    this.workspacePath = session.roots.workspace;
+    this.refresh();
   }
 
   public refresh(): void {

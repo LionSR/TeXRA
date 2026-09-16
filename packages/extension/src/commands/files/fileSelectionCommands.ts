@@ -7,6 +7,7 @@ import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
+import type { MultipleDocumentFileType } from '@shared/schemas';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'fileSelectionCommands';
@@ -61,12 +62,12 @@ function createMultiPicker(
  * The native picker of each multi-file launcher list, bound to the host's
  * session so the dialog's starting folder is that session's workspace.
  */
-export function createFileSelectionPickers(session: SessionHandle): {
-  input: (currentFile?: string) => Promise<string[] | null>;
-  context: (currentFile?: string) => Promise<string[] | null>;
-  media: (currentFile?: string) => Promise<string[] | null>;
-  output: (currentFile?: string) => Promise<string[] | null>;
-} {
+export function createFileSelectionPickers(
+  session: SessionHandle,
+): Record<
+  MultipleDocumentFileType,
+  (currentFile?: string) => Promise<string[] | null>
+> {
   return {
     input: createMultiPicker(session, {
       openLabel: 'Select Files',

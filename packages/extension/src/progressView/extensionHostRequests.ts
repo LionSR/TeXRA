@@ -66,7 +66,6 @@ import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
   isMultipleDocumentFileType,
-  type MultipleDocumentFileType,
   type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -189,10 +188,7 @@ export function createExtensionHostRequests(
   );
 
   /** The native picker of each multi-file launcher list. */
-  const multipleFilePickers: Record<
-    MultipleDocumentFileType,
-    () => Promise<string[] | null>
-  > = createFileSelectionPickers(session);
+  const multipleFilePickers = createFileSelectionPickers(session);
 
   /** Validate an agent request and run it through the one launch command. */
   async function runAgentRequest(
