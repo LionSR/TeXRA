@@ -6,6 +6,7 @@ import { Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
 import { byString, normalizeFilePath } from '@utils/core';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 import {
   passesFileFilters,
@@ -24,8 +25,8 @@ export interface WorkspaceFileListingOptions {
  * `FileSystem.readDirectory` returns names alone, so each entry's type is a
  * `stat` — which follows a symlink, matching the platform listing this
  * replaces: a link to a directory is visited, a link to a file is listed,
- * and a dangling link, like an entry that vanished between the listing and
- * the probe, is skipped.
+ * and a dangling, circular, or unreadable link, like an entry that vanished
+ * between the listing and the probe, is skipped.
  */
 export const listWorkspaceFiles = Effect.fn(
   'workspaceFileListing.listWorkspaceFiles',
@@ -47,8 +48,16 @@ export const listWorkspaceFiles = Effect.fn(
         );
         const absolutePath = join(directory, name);
         const info = yield* fs.stat(absolutePath).pipe(
+          // Absent (`absentReason`: NotFound / ENOTDIR), the rest of
+          // BadResource (`ELOOP`), and PermissionDenied skip this entry;
+          // any other failure is real. glob.ts drops NotFound and
+          // BadResource the same way; the platform listing swallowed every
+          // symlink-target stat error.
           Effect.catchIf(
-            (error) => error.reason._tag === 'NotFound',
+            (error) =>
+              absentReason(error) ||
+              error.reason._tag === 'BadResource' ||
+              error.reason._tag === 'PermissionDenied',
             () => Effect.succeed(undefined),
           ),
         );
