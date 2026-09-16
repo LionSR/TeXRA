@@ -33,6 +33,7 @@ import { emitRunFact } from '@agent/runtime/runFactEvents';
 import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentResume } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   RunId,
@@ -357,7 +358,7 @@ function startCodexLoop(params: {
   resumeThreadId: string | undefined;
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
-}): Effect.Effect<void, Error, Runs> {
+}): Effect.Effect<void, Error, Runs | AgentResume> {
   const {
     thread,
     childRun,
@@ -489,7 +490,11 @@ export class CodexTool extends defineTool({
     session: SessionHandle,
     toolCall: ToolCallShape,
     requestApproval: typeof requestBashApproval,
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, ToolCall | Runs> {
+  ): Effect.fn.Return<
+    ToolResult,
+    AgentCliToolFailure,
+    ToolCall | Runs | AgentResume
+  > {
     // Resolve the effective sandbox mode once (per-call override, else the
     // user-configured default) rather than mutating the parsed input object.
     const sandboxMode =
@@ -533,7 +538,11 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure, ToolCall | Runs> {
+): Effect.fn.Return<
+  ToolResult,
+  AgentCliToolFailure,
+  ToolCall | Runs | AgentResume
+> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const { roots } = yield* ToolCall;
   const thread = yield* agentCliCall(() =>

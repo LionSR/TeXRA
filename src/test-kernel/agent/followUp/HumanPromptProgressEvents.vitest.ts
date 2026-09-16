@@ -1,5 +1,3 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { Effect } from 'effect';
 import { it } from '@effect/vitest';
 // Test composition imports
@@ -10,8 +8,9 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 // Local imports
-import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
+
 import type { RunId } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -30,12 +29,12 @@ function inToolContext<A, E, R>(
   run: () => Effect.Effect<A, E, R>,
 ) {
   return Effect.acquireUseRelease(
-    Effect.sync(() => defaultSession().interactions.use(interactions)),
+    Effect.sync(() => testDefaultSession().interactions.use(interactions)),
     () =>
       run().pipe(
         Effect.provide(
           nativeToolTestLayer({
-            run: { runId, session: defaultSession(), toolPolicy: {} },
+            run: { runId, session: testDefaultSession(), toolPolicy: {} },
           }),
         ),
       ),
@@ -46,7 +45,7 @@ function inToolContext<A, E, R>(
 /** A run whose existence fact the request rows below hang off. */
 function startedRun(): RunId {
   const runId = generateRunId();
-  publishTestRunStart(defaultSession(), runId);
+  publishTestRunStart(testDefaultSession(), runId);
   return runId;
 }
 
@@ -56,14 +55,14 @@ describe('human prompt progress events', () => {
   });
 
   afterEach(() => {
-    defaultSession().approvals.clearAll();
+    testDefaultSession().approvals.clearAll();
   });
 
   it.live('opens a bash request on the run and settles on its decision', () =>
     Effect.gen(function* () {
       const explicit = createRecordingHost();
       const runId = startedRun();
-      const decided = autoDecideRequests(defaultSession(), () => ({
+      const decided = autoDecideRequests(testDefaultSession(), () => ({
         action: 'approve',
       }));
 
@@ -105,7 +104,7 @@ describe('human prompt progress events', () => {
         const runId = startedRun();
         const tool = new AskUserQuestionTool();
         const question = 'Which path should the agent take?';
-        const decided = autoDecideRequests(defaultSession(), () => ({
+        const decided = autoDecideRequests(testDefaultSession(), () => ({
           action: 'submit',
           answers: { [question]: 'Run the build' },
         }));
@@ -165,26 +164,31 @@ describe('human prompt progress events', () => {
       label: 'tool-edit',
       kind: 'toolEdit',
       setBypass: (runId: RunId, enabled: boolean) =>
-        currentSession().approvals.toolEdit.bypass.setBypass(runId, enabled),
+        testDefaultSession().approvals.toolEdit.bypass.setBypass(
+          runId,
+          enabled,
+        ),
     },
     {
       label: 'bash',
       kind: 'bash',
       setBypass: (runId: RunId, enabled: boolean) =>
-        currentSession().approvals.bash.bypass.setBypass(runId, enabled),
+        testDefaultSession().approvals.bash.bypass.setBypass(runId, enabled),
     },
     {
       label: 'proposal',
       kind: 'superYolo',
       setBypass: (runId: RunId, enabled: boolean) =>
-        proposalApprovals().setBypass(runId, enabled),
+        proposalApprovals(testDefaultSession()).setBypass(runId, enabled),
     },
   ])(
     'publishes $label bypass changes through the explicit runtime host',
     ({ kind, setBypass }) => {
       const explicit = createRecordingHost();
       const runId = generateRunId();
-      const detach = defaultSession().interactions.use(explicit.interactions);
+      const detach = testDefaultSession().interactions.use(
+        explicit.interactions,
+      );
 
       try {
         setBypass(runId, true);
@@ -205,12 +209,12 @@ describe('human prompt progress events', () => {
     Effect.gen(function* () {
       const explicit = createRecordingHost();
       const runId = startedRun();
-      const decided = autoDecideRequests(defaultSession(), () => ({
+      const decided = autoDecideRequests(testDefaultSession(), () => ({
         action: 'approve',
       }));
 
       try {
-        currentSession().approvals.toolEdit.bypass.setBypass(runId, true, {
+        testDefaultSession().approvals.toolEdit.bypass.setBypass(runId, true, {
           silent: true,
         });
 
@@ -228,7 +232,7 @@ describe('human prompt progress events', () => {
 
         // A bash bypass answers without asking; the edit bypass above is not
         // what silenced it.
-        currentSession().approvals.bash.bypass.setBypass(runId, true, {
+        testDefaultSession().approvals.bash.bypass.setBypass(runId, true, {
           silent: true,
         });
 
@@ -241,7 +245,7 @@ describe('human prompt progress events', () => {
         expect(bypassed).toEqual({ action: 'approve' });
         expect(decided.opened).toHaveLength(1);
 
-        currentSession().approvals.toolEdit.bypass.setBypass(runId, false, {
+        testDefaultSession().approvals.toolEdit.bypass.setBypass(runId, false, {
           silent: true,
         });
 

@@ -15,11 +15,11 @@
  * process's session owner (the `Sessions` map behind `openSessionEffect`): the
  * extension and the CLI open one over the process roots, the desktop one
  * per project, the SDK one per platform. The default instance is installed
- * explicitly through {@link initializeDefaultSession}; {@link defaultSession}
- * only retrieves that process-wide owner. There is no other way to reach
- * these owners: the invariant is "no session-scoped mutable module export"
- * (#7694) — a run-scoped caller resolves through {@link currentSession} /
- * {@link defaultSession}, never a standalone singleton import.
+ * explicitly through {@link initializeDefaultSession} and inspected through
+ * {@link tryDefaultSession}. There is no other way to reach these owners:
+ * the invariant is "no session-scoped mutable module export" (#7694) — a
+ * run-scoped caller receives its session as data, never through a standalone
+ * singleton import.
  *
  * Fresh construction is in FORCED dependency order with every cross-reference
  * explicit: no member is ever allowed to default to a neighboring module
@@ -97,7 +97,6 @@ import type {
 } from '@transcript/StreamLogStore';
 import { aggregateError } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { getRunContextSession, tryUseRunContext } from './RunContext';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -105,9 +104,9 @@ import {
 import { redactedForFact } from './loop/rows';
 import { runEventDraft } from './SessionEvents';
 import {
-  defaultRootSession,
   heldSessions,
   openSessionEffect,
+  tryDefaultSession,
   type SessionGraph,
 } from './sessionGraph';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
@@ -1427,12 +1426,10 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
   },
 );
 
-let defaultSessionFallbackWarned = false;
-
 /**
  * Open the process-default session, the session of the process roots, after
  * its transcript store is valid. Its owner holds it, as it holds every
- * session: {@link defaultSession} reads it from there on each call, so no
+ * session: {@link tryDefaultSession} reads it from there on each call, so no
  * second reference to it exists to go stale when the root is closed. A
  * second initialization while one is open is a lifecycle error and dies.
  */
@@ -1440,63 +1437,15 @@ export function initializeDefaultSession(
   init: SessionHandleInit,
 ): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.suspend(() => {
-    if (defaultRootSession()) {
+    if (tryDefaultSession()) {
       throw new Error('The default session has already been initialized.');
     }
     return openSessionEffect(init);
   });
 }
 
-/** Inspect whether the host has installed its process-default session. */
-export function tryDefaultSession(): SessionHandle | undefined {
-  return defaultRootSession();
-}
-
 /** Dispose the process-default session during host teardown; nothing to
  *  do when none is open. */
 export function teardownDefaultSession(): Effect.Effect<void> {
-  return Effect.suspend(() => defaultRootSession()?.dispose() ?? Effect.void);
-}
-
-/**
- * The process-default session — the sole owner of the process-wide runtime
- * singletons (#7694). Every member the constructor doesn't receive is
- * fresh-built in the same FORCED dependency order any other `SessionHandle`
- * uses, and this construction is the only place those singletons live: no
- * module-level `Shared*`/`*Service` export aliases them.
- *
- * Hosts must initialize it explicitly after opening transcript persistence.
- * Access before that composition step is a lifecycle error rather than an
- * implicit memory-only session. If another session is live, retrieval emits at
- * most one best-effort warning for the process lifetime, including across
- * teardown and reinitialization of the default session.
- */
-export function defaultSession(): SessionHandle {
-  const processDefault = defaultRootSession();
-  if (!processDefault) {
-    throw new Error(
-      'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.',
-    );
-  }
-  if (
-    !defaultSessionFallbackWarned &&
-    heldSessions().some((session) => session !== processDefault)
-  ) {
-    defaultSessionFallbackWarned = true;
-    logger.warn(
-      'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
-    );
-  }
-  return processDefault;
-}
-
-/**
- * Resolve the session for the calling context: the active run's session when
- * called inside a run, otherwise the process {@link defaultSession}. This is
- * the single resolution point run-scoped code (flows, tools, formatters) uses
- * to reach session-owned state — there is no other way to reach it (#7694) —
- * and the seam that lets a host inject an isolated session per run.
- */
-export function currentSession(): SessionHandle {
-  return getRunContextSession(tryUseRunContext()) ?? defaultSession();
+  return Effect.suspend(() => tryDefaultSession()?.dispose() ?? Effect.void);
 }

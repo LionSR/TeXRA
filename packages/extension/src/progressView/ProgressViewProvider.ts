@@ -17,11 +17,9 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
   attachTerminalResultToast,
-  defaultSession,
   PdfOpenFailed,
   type SessionHandle,
 } from '@agent/runtime';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import {
   BundledViewContentProvider,
@@ -143,9 +141,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     /** This view's handle on the process runtime, handed down by the host
      *  entry for the session edges below. */
     private readonly runtime: ProcessRuntime,
+    /** The extension host's one session, created in `activate` and handed
+     *  down to every surface that needs it. */
+    session: SessionHandle,
   ) {
     this.logger = createChannelTrace('ProgressViewProvider');
-    const session = defaultSession();
     this.session = session;
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -191,15 +191,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // One session per extension host: the calling frame is this session's.
       inScope: (read) => read(),
       fileOptions: () =>
-        Effect.tryPromise({
-          try: () => workspaceFileOptions(roots.workspace),
-          catch: (cause) =>
-            new HostSnapshotReadFailed({
-              member: 'fileOptions',
-              message: 'The workspace file lists could not be read.',
-              cause,
-            }),
-        }),
+        workspaceFileOptions(roots.workspace).pipe(
+          Effect.mapError(
+            (cause) =>
+              new HostSnapshotReadFailed({
+                member: 'fileOptions',
+                message: 'The workspace file lists could not be read.',
+                cause,
+              }),
+          ),
+        ),
       readRecentCommits: () =>
         Effect.tryPromise({
           try: async () => {
@@ -219,19 +220,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             new HostSnapshotReadFailed({
               member: 'readRecentCommits',
               message: 'The recent commits could not be read.',
-              cause,
-            }),
-        }),
-      // Only the authenticated flag feeds the login banner, so this
-      // deliberately skips the profile and tier round-trips the settings view's
-      // profile message makes.
-      isAuthenticated: () =>
-        Effect.tryPromise({
-          try: () => SupabaseClient.isAuthenticated(),
-          catch: (cause) =>
-            new HostSnapshotReadFailed({
-              member: 'isAuthenticated',
-              message: 'The TeXRA sign-in state could not be read.',
               cause,
             }),
         }),
@@ -301,6 +289,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
         decideRequest,
         this.runtime,
+        session,
       ),
     });
     // A workflow run's `run.end` is the completion chime, one per process
@@ -347,7 +336,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // proposal, retry, question) stay pending in the fold until the view's
     // request row decides them.
     const detachHostInteractions = session.interactions.use({
-      ...createAgentPresentationHost(this, globalState, this.runtime),
+      ...createAgentPresentationHost(this, globalState, this.runtime, session),
       readDiagnostics: getLinterMessages,
       addCriticism: (payload) => ({
         accepted: pushManualCriticism(payload),

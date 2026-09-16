@@ -21,9 +21,7 @@ import {
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
 import {
-  AgentResumeFailed,
   type LifecycleHost,
-  type RecoveryContinuation,
   type StateStore,
   type StateWriteFailed,
 } from '@platform/interfaces';
@@ -44,7 +42,6 @@ import {
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
-import type { RunId } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -55,6 +52,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { installCliProcessRuntime } from './cliProcessRuntime';
+import { cliAgentResume } from './cliAgentResume';
 import { getCliSecrets } from './cliSecrets';
 import {
   flushNdjsonStdout,
@@ -262,31 +260,6 @@ export function handOffCliShutdownSignalHandlers(): void {
 }
 
 /**
- * The chat TUI's stream resume, installed while a chat session is mounted.
- * The platform port above forwards to it; outside a chat there is no host
- * that can resume, so the port answers `false`.
- *
- * Promise-typed on purpose: the TUI's controller claims its root-run slot in
- * a synchronous promise handshake, so the port adopts the attempt where it
- * stands rather than the controller answering in a shape it cannot.
- */
-type CliResumeHandler = (
-  runId: RunId,
-  recovery?: RecoveryContinuation,
-) => Promise<boolean>;
-
-let cliResumeHandler: CliResumeHandler | undefined;
-
-export function setCliAgentResumeHandler(
-  handler: CliResumeHandler,
-): () => void {
-  cliResumeHandler = handler;
-  return () => {
-    if (cliResumeHandler === handler) cliResumeHandler = undefined;
-  };
-}
-
-/**
  * Record the model the chat is running as the default helper model. Returns
  * the write as the Effect it is: the callers that want a promise face own a
  * runtime and run it, and the ones that are already inside a program compose
@@ -429,19 +402,7 @@ export async function initCliPlatform(
       const cliSecrets = getCliSecrets(context.storageRoot);
       const platform = createNodePlatform({
         lifecycle,
-        agentResume: {
-          tryResumeRun: (runId, recovery) =>
-            Effect.tryPromise({
-              try: async () =>
-                (await cliResumeHandler?.(runId, recovery)) ?? false,
-              catch: (cause) =>
-                new AgentResumeFailed({
-                  runId,
-                  message: toErrorMessage(cause),
-                  cause,
-                }),
-            }),
-        },
+        agentResume: cliAgentResume,
         agentDirectories,
       });
       // One process, one project: the process roots are the `--cwd` workspace.
@@ -463,10 +424,13 @@ export async function initCliPlatform(
         Effect.cached(
           initializeDefaultSession({
             responseTextProcessing: createTexraResponseTextProcessing(
-              createAgentResponseTextConnector({
-                secrets: cliSecrets,
-                globalState,
-              }),
+              createAgentResponseTextConnector(
+                {
+                  secrets: cliSecrets,
+                  globalState,
+                },
+                roots,
+              ),
             ),
           }).pipe(
             Effect.tap((session) =>

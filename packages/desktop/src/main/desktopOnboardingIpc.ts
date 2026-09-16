@@ -2,6 +2,7 @@ import { Data, Effect } from 'effect';
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   setFirstRunDone,
@@ -47,7 +48,7 @@ interface DesktopOnboardingIpcOptions {
    * provider API key), as a program: the secrets read behind it is one, and
    * the funnel refresh below yields it on the runtime it already holds.
    */
-  hasCredential: () => Effect.Effect<boolean>;
+  hasCredential: () => Effect.Effect<boolean, never, LanguageModel>;
   /** Launch the setup conversation when the user clicks "Run Setup". */
   kickoffSetup: () => Promise<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */

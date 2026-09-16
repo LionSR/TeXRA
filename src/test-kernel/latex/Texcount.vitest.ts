@@ -1,12 +1,12 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, FileSystem, Layer, PlatformError } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { LATEX_COMMANDS_CHANNEL } from '@latex/latexLogging';
 import { getTeXCount } from '@latex/texcount';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { platform } from '@platform/platform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
@@ -41,6 +41,28 @@ const withPlatform = (
 const withDiagnostics = <A, E, R>(
   self: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E, R> => Effect.provide(self, effectDiagnosticsLayer);
+
+/**
+ * A `FileSystem` that reports every path as present and fails every read with
+ * `message`: the injected read failure the Chinese-package probe must treat as
+ * best-effort. The suite used to spy on `platform().fs.readFile`, which the
+ * probe no longer reads through.
+ */
+function failingReadLayer(message: string): Layer.Layer<FileSystem.FileSystem> {
+  return FileSystem.layerNoop({
+    exists: () => Effect.succeed(true),
+    readFile: (path) =>
+      Effect.fail(
+        PlatformError.systemError({
+          _tag: 'BadResource',
+          module: 'FileSystem',
+          method: 'readFile',
+          pathOrDescriptor: path,
+          description: message,
+        }),
+      ),
+  });
+}
 
 // #10635: getTeXCount names its channel once for the whole count, so every
 // entry a helper writes carries the caller's channel rather than the module
@@ -82,7 +104,7 @@ describe('texcount diagnostics', () => {
           'No LaTeX files provided for texcount.',
         ),
       ).toBe(true);
-    }).pipe(withDiagnostics),
+    }).pipe(withDiagnostics, Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('warns on the resolved channel when a file does not exist', () =>
@@ -97,7 +119,7 @@ describe('texcount diagnostics', () => {
       expect(result.output).toBeNull();
       expect(result.errors).toHaveLength(1);
       expect(logs.has('WARN', 'pinnedTexcount', 'does not exist')).toBe(true);
-    }).pipe(withDiagnostics),
+    }).pipe(withDiagnostics, Effect.provide(nodePlatformLayer)),
   );
 
   // The Chinese-package probe is best-effort, and its failure is reported on
@@ -106,13 +128,7 @@ describe('texcount diagnostics', () => {
     'reports a failed Chinese-package check on the resolved channel',
     () =>
       Effect.gen(function* () {
-        yield* withPlatform({
-          '/workspace/main.tex': '\\documentclass{article}\n',
-        });
-        // The first (and only) AbsoluteFS.read here is hasChinesePackages'.
-        vi.spyOn(platform().fs, 'readFile').mockRejectedValueOnce(
-          new Error('disk flutter'),
-        );
+        yield* withPlatform();
         mocks.runToolWithCheck.mockResolvedValue({
           success: true,
           stdout: 'Words in text: 5',
@@ -127,14 +143,20 @@ describe('texcount diagnostics', () => {
 
         // The failed probe is best-effort: the count still runs.
         expect(result.output).toContain('Words in text: 5');
+        // The failure is logged with its prefix and its cause on the count's
+        // own channel.
         expect(
           logs.has(
             'ERROR',
             'pinnedTexcount',
-            'Error checking Chinese packages: disk flutter',
+            'Error checking Chinese packages',
           ),
         ).toBe(true);
-      }).pipe(withDiagnostics),
+        expect(logs.has('ERROR', 'pinnedTexcount', 'disk flutter')).toBe(true);
+      }).pipe(
+        withDiagnostics,
+        Effect.provide(failingReadLayer('disk flutter')),
+      ),
   );
 
   it.effect(
@@ -164,7 +186,7 @@ describe('texcount diagnostics', () => {
         expect(
           logs.has('ERROR', 'pinnedTexcount', 'Stderr: texcount exploded'),
         ).toBe(true);
-      }).pipe(withDiagnostics),
+      }).pipe(withDiagnostics, Effect.provide(nodePlatformLayer)),
   );
 
   // #10649: pins the sum-mode path's own emission — getSummedCount's

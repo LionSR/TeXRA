@@ -1,5 +1,3 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { Effect } from 'effect';
@@ -7,7 +5,6 @@ import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   buildConfigListItems,
   coerceSettingInput,
@@ -45,6 +42,7 @@ import {
 } from '@shared/schemas';
 import type { SurfacedSettingEntry } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
   createDeferred,
   waitForCondition as waitFor,
@@ -207,7 +205,7 @@ async function openConfigFormProps(
     secrets: new FakeSecrets(),
     state: stores.globalState,
     runtime: effectRuntime(),
-    runtimeSession: defaultSession(),
+    runtimeSession: testDefaultSession(),
     getConfigStores: () => stores,
   });
   openCliSlashCommandForm('config', '');
@@ -476,7 +474,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
       secrets: new FakeSecrets(),
       state: stores.globalState,
       runtime: effectRuntime(),
-      runtimeSession: defaultSession(),
+      runtimeSession: testDefaultSession(),
       getConfigStores: () => stores,
     });
     openCliSlashCommandForm('config', '');
@@ -509,7 +507,7 @@ describe('/config slash command wiring', () => {
       secrets: new FakeSecrets(),
       state: stores.globalState,
       runtime: effectRuntime(),
-      runtimeSession: defaultSession(),
+      runtimeSession: testDefaultSession(),
       getConfigStores: () => stores,
     });
     expect(openCliSlashCommandForm('config', '')).toBe(true);
@@ -534,7 +532,7 @@ describe('/config slash command wiring', () => {
       secrets: new FakeSecrets(),
       state: stores.globalState,
       runtime: effectRuntime(),
-      runtimeSession: defaultSession(),
+      runtimeSession: testDefaultSession(),
       getConfigStores: () => stores,
       onApprovalPolicySelect: (policy) => {
         applied.push(policy);
@@ -569,7 +567,7 @@ describe('/config slash command wiring', () => {
       secrets: new FakeSecrets(),
       state: stores.globalState,
       runtime: effectRuntime(),
-      runtimeSession: defaultSession(),
+      runtimeSession: testDefaultSession(),
       getConfigStores: () => stores,
       onError: () => {
         events.push('error');

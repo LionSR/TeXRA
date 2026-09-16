@@ -21,7 +21,7 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { loadAgents } from '@agent/index';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { platform } from '@platform/platform';
@@ -397,7 +397,11 @@ const HARNESS_DISPOSERS: Array<() => void> = [];
 
 /** The session every fixture publishes into and the TUI renders. */
 function session() {
-  return defaultSession();
+  const installed = tryDefaultSession();
+  if (!installed) {
+    throw new Error('tui-harness: the default session is not initialized.');
+  }
+  return installed;
 }
 
 function publish(...drafts: SessionEventDraft[]): void {
@@ -435,6 +439,7 @@ const harnessRuntimeHost: CliRuntimeHost = createCliRuntimeHost(
 HARNESS_DISPOSERS.push(
   session().interactions.use(
     createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
+      session: session(),
       secrets: HARNESS_PLATFORM_SERVICES.secrets,
       runtime: effectRuntime(),
     }),
@@ -1048,13 +1053,13 @@ async function appendHarnessPlanDecision(
 ): Promise<void> {
   if (result.action === 'approve_and_goal') {
     await effectRuntime().runPromise(
-      startGoal(defaultSession(), HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE),
+      startGoal(session(), HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE),
     );
     // The same grant `PlanTool.startGoalForPlan` applies next: approving a
     // plan as a goal auto-approves commands, and nothing broader unless the
     // user explicitly widened the scope.
     setGoalSessionAutoApproval(
-      defaultSession(),
+      session(),
       HARNESS_RUN_ID,
       result.autoApproveAll ? 'allAgentWork' : 'commands',
     );
@@ -1585,7 +1590,7 @@ function appendHarnessStatus(): void {
 function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   cancelHarnessRequests('Session interrupted.');
-  void effectRuntime().runPromise(clearGoal(defaultSession(), HARNESS_RUN_ID));
+  void effectRuntime().runPromise(clearGoal(session(), HARNESS_RUN_ID));
   for (const runId of [...currentView().runs.keys()]) {
     removeRun(runId);
   }
@@ -1622,7 +1627,7 @@ function handleHarnessSlashCommand(line: string): boolean {
       appendHarnessStatus();
       return true;
     case 'plan':
-      void showCliWorkPlan();
+      void showCliWorkPlan(session());
       return true;
     case 'goal':
     case 'goals':
@@ -1737,6 +1742,7 @@ function renderHarnessApp(): React.JSX.Element {
     <App
       secrets={HARNESS_PLATFORM_SERVICES.secrets}
       runtime={effectRuntime()}
+      session={session()}
       onSubmit={handleHarnessSubmit}
       onKillRun={markHarnessRunStopped}
       onWorkflowControl={() => undefined}

@@ -56,9 +56,6 @@ vi.mock('@agent/index', () => ({
 vi.mock('@agent/remote/remoteAgentConfigClient', () => ({
   fetchRemoteAgentConfigYaml: vi.fn(),
 }));
-vi.mock('@auth/SupabaseClient', () => ({
-  SupabaseClient: { getAccessToken: vi.fn(), getUserTier: vi.fn() },
-}));
 vi.mock('@common/teams/TeamRosterApplication', () => ({
   applyTeamRosterWithPreflight: vi.fn(),
 }));
@@ -72,12 +69,6 @@ vi.mock('@controllers/settingsView/SettingsAgentControllerFactory', () => ({
 vi.mock('@controllers/settingsView/SettingsTeamRosterController', () => ({
   applySettingsTeamRoster: mocks.applySettingsTeamRoster,
 }));
-vi.mock(
-  '@controllers/settingsView/SettingsRemoteAgentPromptController',
-  () => ({
-    getRemoteAgentPromptConfig: vi.fn(),
-  }),
-);
 vi.mock('@frontend/auth/agentCatalogRefreshScope', () => ({
   withAgentCatalogAuthRefreshDeferred: async (action: () => Promise<void>) =>
     action(),

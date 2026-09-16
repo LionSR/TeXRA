@@ -59,6 +59,7 @@ import {
   type SessionGraph,
   type SessionOpen,
 } from '@agent/runtime/sessionGraph';
+import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { createLog } from '@logger/logUtils';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import {
@@ -67,7 +68,13 @@ import {
   tryProcessRuntime,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import { AppState, type StateStore } from '@platform/interfaces';
+import {
+  AgentResume,
+  AppState,
+  type AgentResumePort,
+  type StateStore,
+} from '@platform/interfaces';
+import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
@@ -283,6 +290,7 @@ const sessionHandleLayer = (
       const identity = yield* ProcessIdentity;
       const ledger = yield* RunLedger;
       const inquiryRecords = yield* InquiryRecords;
+      const agentResume = yield* AgentResume;
       const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
       const inputs = yield* SessionInputs;
@@ -497,6 +505,7 @@ const sessionHandleLayer = (
             eventLog,
             local.ref,
             inquiryRecords,
+            agentResume,
           ),
           now,
           // The teardown runs at once, before the release: an entry another
@@ -1016,15 +1025,24 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * this — the desktop and CLI roots open theirs on a bootstrap run rather
  * than on the runtime they are about to install, so both arrive as values
  * (the CLI's secrets-only `clone` entry is the one `AppState` omission);
+ * `SupabaseAuth` over the root's account plane; `LanguageModel` over the
+ * root's editor language-model bridge (`UNAVAILABLE_LANGUAGE_MODEL_PORT`
+ * where the host has none); `AgentResume` over the root's own resume port;
  * `SetupPlatform` over the root's host-varying setup capabilities; and
- * `ToolInjections` over `AGENT_TOOL_INJECTIONS`, the same list for every
- * host.
+ * `ToolInjections` over `AGENT_TOOL_INJECTIONS`, the same list for every host.
  */
 export interface ProcessRuntimeOptions {
   readonly processStart: string | undefined | Promise<string | undefined>;
   readonly globalStorage: () => string;
   readonly updateCheckStorage: () => string;
   readonly secrets: PlatformSecrets;
+  /**
+   * The root's agent-resume port, served as `AgentResume`. The same value
+   * the root wires into its platform; required of every entry, even one
+   * whose port always answers `false` (the agent package's embedder
+   * default).
+   */
+  readonly agentResume: AgentResumePort;
   /**
    * The root's global state store, opened before this install and served as
    * `AppState`. Omitted only by an entry that serves no application state at
@@ -1033,6 +1051,20 @@ export interface ProcessRuntimeOptions {
    * yields `AppState` on such a runtime fails as a missing service.
    */
   readonly appState?: StateStore;
+  /**
+   * The root's account plane, served as `SupabaseAuth`. Every shipped host
+   * builds one from its secrets; a composition with no TeXRA account plane
+   * (the agent package serving an embedder) serves
+   * `unavailableSupabaseAuth()`, whose probes answer signed-out.
+   */
+  readonly auth: SupabaseAuthShape;
+  /**
+   * The host's editor language-model bridge, served as `LanguageModel`. Every
+   * host has a value for it: the VS Code extension's bridge to the editor's
+   * language-model API, or `UNAVAILABLE_LANGUAGE_MODEL_PORT` on hosts without
+   * one, where discovery discovers nothing.
+   */
+  readonly languageModel: LanguageModelPort;
   readonly setup: SetupPlatformShape;
   /**
    * The editor's language models, for the one host that has an editor: the
@@ -1054,17 +1086,30 @@ export interface ProcessRuntimeOptions {
 }
 
 /**
- * The four cohort-A process services over a root's own stores and setup
- * platform: what {@link installProcessRuntime} merges into the process
- * runtime, and what the agent package provides around the launches it runs
- * on an embedder's runtime (its `Sessions` API keeps them off its types).
+ * The cohort-A process services over a root's own stores, account plane,
+ * language-model bridge, resume port, and setup platform: what
+ * {@link installProcessRuntime} merges into the process runtime, and what the
+ * agent package provides around the launches it runs on an embedder's runtime
+ * (its `Sessions` API keeps them off its types).
  */
 function processServicesLayer({
   secrets,
   appState,
+  auth,
+  languageModel,
+  agentResume,
   setup,
-}: Pick<ProcessRuntimeOptions, 'secrets' | 'appState' | 'setup'>): Layer.Layer<
-  Secrets | AppState | SetupPlatform | ToolInjections
+}: Pick<
+  ProcessRuntimeOptions,
+  'secrets' | 'appState' | 'auth' | 'languageModel' | 'agentResume' | 'setup'
+>): Layer.Layer<
+  | Secrets
+  | AppState
+  | SupabaseAuth
+  | LanguageModel
+  | AgentResume
+  | SetupPlatform
+  | ToolInjections
 > {
   return Layer.mergeAll(
     Secrets.layer(secrets),
@@ -1074,6 +1119,9 @@ function processServicesLayer({
     appState === undefined
       ? (Layer.empty as Layer.Layer<AppState>)
       : AppState.layer(appState),
+    SupabaseAuth.layer(auth),
+    LanguageModel.layer(languageModel),
+    AgentResume.layer(agentResume),
     SetupPlatform.layer(setup),
     ToolInjections.layer(AGENT_TOOL_INJECTIONS),
   );
@@ -1085,6 +1133,9 @@ export function installProcessRuntime({
   updateCheckStorage,
   secrets,
   appState,
+  auth,
+  languageModel,
+  agentResume,
   setup,
   editorModel,
   lean,
@@ -1105,7 +1156,14 @@ export function installProcessRuntime({
   const services = Layer.mergeAll(
     inquiryRecordsLayer(globalStorage),
     updateCheckRecordsLayer(updateCheckStorage),
-    processServicesLayer({ secrets, appState, setup }),
+    processServicesLayer({
+      secrets,
+      appState,
+      auth,
+      languageModel,
+      agentResume,
+      setup,
+    }),
     editorModel === undefined
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),

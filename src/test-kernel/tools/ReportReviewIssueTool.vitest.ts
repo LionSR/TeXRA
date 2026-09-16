@@ -1,5 +1,3 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { Effect } from 'effect';
 import { it } from '@effect/vitest';
 // Test composition imports
@@ -9,8 +7,9 @@ import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+
 import type { RunId } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { getDefaultToolRegistry } from '@tools/registry';
 
@@ -30,7 +29,7 @@ let detachHostInteractions = (): void => {};
 /** Attach a review sink the way a host does: as a session capability. */
 function useReviewSink(sink: ReportReviewIssueSink): void {
   detachHostInteractions();
-  detachHostInteractions = defaultSession().interactions.use({
+  detachHostInteractions = testDefaultSession().interactions.use({
     reportReviewIssue: sink,
   });
 }
@@ -78,7 +77,7 @@ describe('ReportReviewIssueTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },
@@ -103,7 +102,7 @@ describe('ReportReviewIssueTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'tool-test' as RunId,
               toolPolicy: {},
             },
@@ -132,7 +131,7 @@ describe('ReportReviewIssueTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'tool-test' as RunId,
               toolPolicy: {},
             },
@@ -153,7 +152,7 @@ describe('ReportReviewIssueTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },

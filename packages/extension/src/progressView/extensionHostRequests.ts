@@ -13,18 +13,15 @@ import * as vscode from 'vscode';
 import { Data, Effect, FileSystem } from 'effect';
 
 import {
+  runAgent,
   validateRunRequest,
-  type RunRequest,
   type SessionHandle,
 } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
+  createFileSelectionPickers,
   getCurrentFile,
-  selectContextFiles,
-  selectInputFiles,
-  selectMediaFiles,
-  selectOutputFiles,
 } from '@commands/files/fileSelectionCommands';
 import { setActiveSidebarView } from '@common/webview';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
@@ -51,6 +48,8 @@ import {
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
+import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
@@ -65,11 +64,11 @@ import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
   isMultipleDocumentFileType,
-  type MultipleDocumentFileType,
   type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -116,17 +115,6 @@ class DropFileUnreadable extends Data.TaggedError('DropFileUnreadable')<{
 class FilePickerFailed extends Data.TaggedError('FilePickerFailed')<{
   readonly message: string;
 }> {}
-
-/** The native picker of each multi-file launcher list. */
-const MULTIPLE_FILE_PICKERS: Record<
-  MultipleDocumentFileType,
-  () => Promise<string[] | null>
-> = {
-  input: selectInputFiles,
-  context: selectContextFiles,
-  media: selectMediaFiles,
-  output: selectOutputFiles,
-};
 
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
@@ -202,21 +190,44 @@ export function createExtensionHostRequests(
     options.snapshot.setRecording(recording),
   );
 
-  /** Validate an agent request and run it through the one launch command. */
-  async function runAgentRequest(
-    request: RunRequest,
-    runOptions: Parameters<HostRunActionPorts['runAgentRequest']>[1] = {},
-  ): Promise<void> {
+  /** The native picker of each multi-file launcher list. */
+  const multipleFilePickers = createFileSelectionPickers(session);
+
+  /**
+   * Validate an agent request and launch it directly: the port settled with
+   * the run even through the old `texra.execute` command hop, and the hop's
+   * only addition was a second Zod parse of the config `validateRunRequest`
+   * already checked. The launch program takes its process services from this
+   * runtime's context on the fiber that runs it, as the resume port's program
+   * does.
+   */
+  const runAgentRequest: HostRunActionPorts['runAgentRequest'] = (
+    request,
+    runOptions = {},
+  ) => {
     const validation = validateRunRequest(request);
     if (!validation.valid) {
       log.error(validation.message);
-      throw new Rejected({ reason: validation.message });
+      return Effect.fail(new Rejected({ reason: validation.message }));
     }
-    await runCommand('texra.execute', {
-      ...validation.request,
-      ...runOptions,
-    });
-  }
+    const { config, runId } = validation.request;
+    const launch = runAgent(
+      runId === undefined
+        ? { kind: 'fresh', config }
+        : { kind: 'resume', config, runId },
+      {
+        session,
+        openWorkflowOutput: openFinalOutputIfAvailable,
+        preferHelperModel: runOptions.preferHelperModel ?? false,
+        ownApiKeyFallback: runOptions.ownApiKeyFallback,
+        onRun: runOptions.onRun,
+        onRunResolved: presentLaunchedProgressRun,
+      },
+    ).pipe(Effect.asVoid);
+    return Effect.flatMap(runtime.contextEffect, (context) =>
+      Effect.provideContext(launch, context),
+    );
+  };
 
   const runActions = runtime.runSync(
     createHostRunActions({
@@ -441,12 +452,7 @@ export function createExtensionHostRequests(
               })) ?? 'cancel'
             );
           },
-          signInForRemoteAgentCatalog: async () =>
-            Boolean(
-              await vscode.commands.executeCommand<boolean>(
-                AUTH_COMMANDS.SIGN_IN,
-              ),
-            ),
+          signInForRemoteAgentCatalog: runSignInCommand,
         },
         session.roots.workspaceState,
       ),
@@ -554,7 +560,7 @@ export function createExtensionHostRequests(
   async function useCurrentFile(
     request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
   ): Promise<HostOutcome> {
-    const currentOpenFile = await getCurrentFile();
+    const currentOpenFile = await getCurrentFile(session);
     if (!currentOpenFile) {
       throw new Rejected({
         reason:
@@ -612,7 +618,7 @@ export function createExtensionHostRequests(
   ): Effect.Effect<HostOutcome, Rejected | Cancelled> {
     const { fileType } = request;
     const pick = isMultipleDocumentFileType(fileType)
-      ? MULTIPLE_FILE_PICKERS[fileType]
+      ? multipleFilePickers[fileType]
       : undefined;
     if (!pick) {
       return Effect.fail(

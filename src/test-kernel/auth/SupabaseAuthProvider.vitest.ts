@@ -103,24 +103,8 @@ vi.mock('vscode', () => ({
   },
 }));
 
-vi.mock('@auth/SupabaseAuthCoordinator', () => ({
-  createHostAuthCoordinator: () => testDoubles.coordinator,
-}));
-
 vi.mock('@auth/pkcePermit', () => ({
   withPkcePermit: providerMocks.withPkcePermit,
-}));
-
-vi.mock('@auth/SupabaseClient', () => ({
-  SupabaseClient: {
-    getClient: () => ({
-      auth: {
-        getUser: providerMocks.getUser,
-        signInWithOAuth: providerMocks.signInWithOAuth,
-        signOut: providerMocks.signOut,
-      },
-    }),
-  },
 }));
 
 vi.mock('@agent/index', () => ({
@@ -135,6 +119,7 @@ import type { StoredSessionState } from '@auth/TokenProvider';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import type { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { effectRuntime } from '@platform/processRuntime';
+import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 
 const PENDING_STATE_PREFIX = 'texra.extension.pendingOAuthState.';
 const TEST_NONCE = '0123456789abcdef0123456789abcdef';
@@ -207,6 +192,16 @@ function createProvider(options: {
     },
     testDoubles.secretsPort,
     effectRuntime(),
+    fakeSupabaseAuth({
+      client: {
+        auth: {
+          getUser: providerMocks.getUser,
+          signInWithOAuth: providerMocks.signInWithOAuth,
+          signOut: providerMocks.signOut,
+        },
+      } as never,
+      coordinator: testDoubles.coordinator as never,
+    }),
   );
   const emitter = testDoubles.emitters[0];
   if (!emitter) throw new Error('provider did not create a session emitter');
@@ -889,7 +884,9 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
             Effect.fail(failure) as never,
           );
         } else {
-          providerMocks.secretDelete.mockRejectedValueOnce(failure);
+          providerMocks.secretDelete.mockReturnValueOnce(
+            Effect.fail(failure) as never,
+          );
         }
 
         yield* Effect.promise(() =>

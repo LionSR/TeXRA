@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FileSystem } from 'effect';
 
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -119,11 +119,13 @@ export const invokeLatexWorkshopBuild = (
  * viewer-open outcome that follows the build attempt.
  */
 export async function openBuildDisplayIfTex(
+  session: SessionHandle,
   fileLocation: FileLocation,
   runtime: ProcessRuntime,
   options: { preserveFocus?: boolean } = {},
 ): Promise<boolean> {
   const prepared = await prepareFileForDisplay(
+    session,
     fileLocation,
     options.preserveFocus ?? false,
     runtime,
@@ -144,11 +146,13 @@ export async function openBuildDisplayIfTex(
  * current document/root is the intended viewer target (#10553).
  */
 export async function prepareBuildDisplay(
+  session: SessionHandle,
   fileLocation: FileLocation,
   runtime: ProcessRuntime,
   options: { preserveFocus?: boolean; scheduleViewer?: boolean } = {},
 ): Promise<boolean> {
   const prepared = await prepareFileForDisplay(
+    session,
     fileLocation,
     options.preserveFocus ?? false,
     runtime,
@@ -167,6 +171,7 @@ type PrepareFileForDisplayResult =
   { kind: 'done'; delivered: boolean } | { kind: 'latex-ready' };
 
 async function prepareFileForDisplay(
+  session: SessionHandle,
   fileLocation: FileLocation,
   preserveFocus: boolean,
   runtime: ProcessRuntime,
@@ -190,6 +195,7 @@ async function prepareFileForDisplay(
   }
 
   const prepared = await prepareLatexBuild(
+    session,
     uri,
     fileLocation,
     preserveFocus,
@@ -212,6 +218,7 @@ async function prepareFileForDisplay(
  * workspace root, ensuring project-local .sty / .cls / .bib files are found.
  */
 async function prepareLatexBuild(
+  session: SessionHandle,
   uri: vscode.Uri,
   fileLocation: FileLocation,
   preserveFocus: boolean,
@@ -231,7 +238,7 @@ async function prepareLatexBuild(
   // packages, so compile internally with TEXINPUTS set.
   // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
   const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
-  const { roots } = defaultSession();
+  const { roots } = session;
   const compiled = await runtime.runPromise(
     withSessionFs(
       roots,

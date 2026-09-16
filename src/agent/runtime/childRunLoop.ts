@@ -37,6 +37,7 @@ import {
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { AgentResume } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
   aggregateId,
@@ -783,7 +784,7 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   session: SessionHandle,
   runId: RunId,
   logger: AgentTrace,
-): Effect.fn.Return<void, Error> {
+): Effect.fn.Return<void, Error, AgentResume> {
   if (!pending) return;
   const targetRunId = pending.resolveTargetRunId();
   if (!targetRunId) {
@@ -888,7 +889,7 @@ export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
  */
 export function startChildRunLoop<TTurn, R = never>(
   params: ChildRunLoopParams<TTurn, R>,
-): Effect.Effect<Fiber.Fiber<void, Error>, Error, R | Runs> {
+): Effect.Effect<Fiber.Fiber<void, Error>, Error, R | Runs | AgentResume> {
   return Effect.gen(function* () {
     const runSession = params.session;
     const runs = yield* Runs;

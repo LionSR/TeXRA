@@ -26,6 +26,7 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import type { ModelAvailabilityScope } from '@model/computeModelOptions';
+import { discoveredCopilotRoutes } from '@model/runtimeModelRegistry';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -220,6 +221,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
             readModelAvailabilityInputs(stores, models, options.inScope),
           ),
         ),
+      // The route catalogue read is an Effect for the same reason.
+      getCopilotRoutes: () =>
+        options.runtime.runPromise(discoveredCopilotRoutes()),
     });
     this.profileController = new SettingsProfileController({
       host: 'desktop',
@@ -539,7 +543,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           toErrorMessage(error),
         ),
       async (provider) => {
-        await provider.signOut(this.options.secrets);
+        await this.options.runtime.runPromise(
+          provider.signOut(this.options.secrets),
+        );
         await this.options.runtime.runPromise(
           this.options.notifications.showInfoMessage(
             ACCOUNT_OUTCOME.signedOut(provider.displayName),
@@ -574,7 +580,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   async postProfileData(): Promise<void> {
     this.options.renderer.postToRenderer(
-      await this.profileController.buildProfileMessage(),
+      await this.options.runtime.runPromise(
+        this.profileController.buildProfileMessage(),
+      ),
     );
   }
 

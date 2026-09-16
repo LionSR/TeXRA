@@ -17,7 +17,7 @@ import {
   HttpClientRequest,
 } from 'effect/unstable/http';
 
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { createLog } from '@logger/logUtils';
 import type { ConfigProvider } from '@platform/interfaces';
@@ -259,12 +259,14 @@ class UsageLogServiceImpl {
       // dispose also removes its parent finalizer, so reinitialization neither
       // retains old shutdown callbacks nor changes the drain-before-stop order.
       // A scope finalizer runs with no context of its own, so the drain it
-      // performs carries the client this initialization was given.
+      // performs carries the services this initialization was given.
       const client = yield* HttpClient.HttpClient;
+      const auth = yield* SupabaseAuth;
       yield* Scope.addFinalizer(
         lifetime,
         this.shutdown().pipe(
           Effect.provideService(HttpClient.HttpClient, client),
+          Effect.provideService(SupabaseAuth, auth),
         ),
       );
     }
@@ -371,14 +373,10 @@ class UsageLogServiceImpl {
   /** True means this batch is settled; false pauses draining until a later trigger. */
   private readonly sendNextBatch = Effect.fn('UsageLogService.sendNextBatch')(
     function* (this: UsageLogServiceImpl) {
-      const token = yield* Effect.tryPromise({
-        try: () => SupabaseClient.getAccessToken(),
-        catch: (error) =>
-          new UsageBatchUndelivered({
-            reason: toErrorMessage(error),
-            requeue: null,
-          }),
-      });
+      const token = yield* Effect.flatMap(
+        SupabaseAuth,
+        (auth) => auth.accessToken,
+      );
       if (!token) {
         log.debug('Skipping flush - user not authenticated');
         return false;
@@ -534,7 +532,7 @@ class UsageLogServiceImpl {
   );
 
   /** Close the active process child, draining its sender before interruption. */
-  dispose(): Effect.Effect<void, never, HttpClient.HttpClient> {
+  dispose(): Effect.Effect<void, never, HttpClient.HttpClient | SupabaseAuth> {
     return Effect.suspend(() =>
       this.lifetime ? Scope.close(this.lifetime, Exit.void) : this.shutdown(),
     );

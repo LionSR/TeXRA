@@ -6,6 +6,10 @@ import {
   SETUP_MODEL_BY_PROVIDER,
   XAI_SETUP_MODEL,
 } from '@model/setupModelDefaults';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { FakeSecrets } from '@test/support/FakePlatform';
 
 /**
@@ -19,8 +23,8 @@ import { FakeSecrets } from '@test/support/FakePlatform';
  */
 
 const mocks = vi.hoisted(() => ({
-  isCodexSubscriptionActive: vi.fn<() => Promise<boolean>>(),
-  isXaiSubscriptionActive: vi.fn<() => Promise<boolean>>(),
+  isCodexSubscriptionActive: vi.fn<() => Effect.Effect<boolean, Error>>(),
+  isXaiSubscriptionActive: vi.fn<() => Effect.Effect<boolean, Error>>(),
   hasUsableApiKey:
     vi.fn<
       (secrets: unknown, provider: string) => Effect.Effect<boolean, Error>
@@ -60,8 +64,12 @@ const {
 } = await import('@controllers/onboarding/setupLaunch');
 
 beforeEach(() => {
-  mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
-  mocks.isXaiSubscriptionActive.mockReset().mockResolvedValue(false);
+  mocks.isCodexSubscriptionActive
+    .mockReset()
+    .mockReturnValue(Effect.succeed(false));
+  mocks.isXaiSubscriptionActive
+    .mockReset()
+    .mockReturnValue(Effect.succeed(false));
   mocks.hasUsableApiKey.mockReset().mockReturnValue(Effect.succeed(false));
   mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
   mocks.getProviderEndpoint.mockReset().mockReturnValue('');
@@ -75,10 +83,19 @@ beforeEach(() => {
  */
 const secrets = new FakeSecrets();
 
+/** Run a setup-launch program with the one process service its subscription
+ *  probes yield: the unavailable port, since this host has no editor. */
+const runSetup = <A>(program: Effect.Effect<A, Error, LanguageModel>) =>
+  Effect.runPromise(
+    program.pipe(
+      Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+    ),
+  );
+
 function selectCredentialModel(
   includeOpenRouter?: boolean,
 ): Promise<string | null> {
-  return Effect.runPromise(
+  return runSetup(
     selectSetupCredentialModelExcludingOpenRouter(secrets, includeOpenRouter),
   );
 }
@@ -91,16 +108,14 @@ function selectCredentialModel(
  * launch - rather than by re-deriving the projection here.
  */
 async function desktopSetupModel(): Promise<string | null> {
-  const request = await Effect.runPromise(buildDesktopSetupRunRequest(secrets));
+  const request = await runSetup(buildDesktopSetupRunRequest(secrets));
   return request?.config.model ?? null;
 }
 
 function launchModel(
   includeAccessListFallback: boolean,
 ): Promise<{ model: string; reason: string } | null> {
-  return Effect.runPromise(
-    resolveSetupLaunchModel(secrets, includeAccessListFallback),
-  );
+  return runSetup(resolveSetupLaunchModel(secrets, includeAccessListFallback));
 }
 
 function mockDirectApiKey(provider: string): void {
@@ -111,14 +126,14 @@ function mockDirectApiKey(provider: string): void {
 
 describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   it('prefers an active ChatGPT subscription over every other credential', async () => {
-    mocks.isCodexSubscriptionActive.mockResolvedValue(true);
+    mocks.isCodexSubscriptionActive.mockReturnValue(Effect.succeed(true));
     mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
 
     await expect(selectCredentialModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 
   it('uses an active Grok subscription before provider keys', async () => {
-    mocks.isXaiSubscriptionActive.mockResolvedValue(true);
+    mocks.isXaiSubscriptionActive.mockReturnValue(Effect.succeed(true));
     mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
 
     await expect(selectCredentialModel()).resolves.toBe(XAI_SETUP_MODEL);
@@ -153,15 +168,15 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
     {
       subscription: 'ChatGPT',
       fail: () =>
-        mocks.isCodexSubscriptionActive.mockRejectedValueOnce(
-          new Error('chatgpt offline'),
+        mocks.isCodexSubscriptionActive.mockReturnValueOnce(
+          Effect.fail(new Error('chatgpt offline')),
         ),
     },
     {
       subscription: 'Grok',
       fail: () =>
-        mocks.isXaiSubscriptionActive.mockRejectedValueOnce(
-          new Error('grok offline'),
+        mocks.isXaiSubscriptionActive.mockReturnValueOnce(
+          Effect.fail(new Error('grok offline')),
         ),
     },
   ])(
@@ -208,7 +223,7 @@ describe('buildDesktopSetupRunRequest', () => {
 
   it('refuses launch when the OpenRouter flag is on without a key, without falling back', async () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
-    mocks.isCodexSubscriptionActive.mockResolvedValue(true);
+    mocks.isCodexSubscriptionActive.mockReturnValue(Effect.succeed(true));
 
     await expect(desktopSetupModel()).resolves.toBeNull();
     expect(mocks.isCodexSubscriptionActive).not.toHaveBeenCalled();
@@ -225,13 +240,13 @@ describe('buildDesktopSetupRunRequest', () => {
   });
 
   it('delegates to the shared credential scan when the flag is off', async () => {
-    mocks.isCodexSubscriptionActive.mockResolvedValue(true);
+    mocks.isCodexSubscriptionActive.mockReturnValue(Effect.succeed(true));
 
     await expect(desktopSetupModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 
   it('launches with Grok for a Grok-only user when the flag is off', async () => {
-    mocks.isXaiSubscriptionActive.mockResolvedValue(true);
+    mocks.isXaiSubscriptionActive.mockReturnValue(Effect.succeed(true));
 
     await expect(desktopSetupModel()).resolves.toBe(XAI_SETUP_MODEL);
   });
@@ -250,12 +265,14 @@ describe('resolveSetupLaunchModel', () => {
     {
       subscription: 'ChatGPT',
       model: CHATGPT_SETUP_MODEL,
-      activate: () => mocks.isCodexSubscriptionActive.mockResolvedValue(true),
+      activate: () =>
+        mocks.isCodexSubscriptionActive.mockReturnValue(Effect.succeed(true)),
     },
     {
       subscription: 'Grok',
       model: XAI_SETUP_MODEL,
-      activate: () => mocks.isXaiSubscriptionActive.mockResolvedValue(true),
+      activate: () =>
+        mocks.isXaiSubscriptionActive.mockReturnValue(Effect.succeed(true)),
     },
   ])(
     'continues to an active $subscription subscription when the OpenRouter key read fails',

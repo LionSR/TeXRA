@@ -38,8 +38,8 @@ interface ControllerFixtureOptions {
   readonly chooseTeamAvailability?: () => Promise<
     'cancel' | 'continue' | 'sign-in'
   >;
-  readonly canAccessRemoteCatalog?: () => Promise<boolean>;
-  readonly signInForRemoteCatalog?: () => Promise<boolean>;
+  readonly canAccessRemoteCatalog?: Effect.Effect<boolean>;
+  readonly signInForRemoteCatalog?: () => Effect.Effect<boolean>;
   readonly getCustomAgentDirectory?: () => Promise<string>;
   readonly selectCustomAgentDirectory?: () => Promise<string | undefined>;
 }
@@ -119,8 +119,8 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
         options.chooseTeamAvailability ?? (async () => 'cancel'),
     },
     remoteCatalog: {
-      canAccess: options.canAccessRemoteCatalog ?? (async () => false),
-      signIn: options.signInForRemoteCatalog ?? (async () => false),
+      canAccess: () => options.canAccessRemoteCatalog ?? Effect.succeed(false),
+      signIn: options.signInForRemoteCatalog ?? (() => Effect.succeed(false)),
     },
     notifications: {
       showInfoMessage: (message) =>
@@ -280,12 +280,13 @@ describe('DefaultDesktopAgentSettingsController', () => {
     const { controller } = createControllerFixture({
       workspaceState,
       catalog,
-      canAccessRemoteCatalog: async () => false,
+      canAccessRemoteCatalog: Effect.succeed(false),
       chooseTeamAvailability: async () => 'sign-in',
-      signInForRemoteCatalog: async () => {
-        order.push('sign-in');
-        return true;
-      },
+      signInForRemoteCatalog: () =>
+        Effect.sync(() => {
+          order.push('sign-in');
+          return true;
+        }),
       refreshAgents,
     });
     update.mockClear();

@@ -79,7 +79,9 @@ export async function showAgent(
   // never worth a fetch here.
   let shown = entry;
   if (entry.source === 'remote' && entry.category === AgentCategory.Workflow) {
-    const [setting] = await loadAgentSettingAndPrompts(entry);
+    const [setting] = await runtime.runPromise(
+      loadAgentSettingAndPrompts(entry),
+    );
     // A scanned entry omits the field rather than carrying an empty list;
     // a loaded definition with nothing declared reads the same way.
     if (setting.defaultOutputFiles.length > 0)

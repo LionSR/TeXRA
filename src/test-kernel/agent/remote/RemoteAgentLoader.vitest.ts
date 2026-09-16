@@ -4,8 +4,17 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { listRemoteAgents } from '@agent/remote/remoteAgentList';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { SUPABASE_CONFIG } from '@auth/config';
+import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
+
+/** Every program here runs against a signed-in fake account plane. */
+const signedIn = <A, E>(program: Effect.Effect<A, E>): Effect.Effect<A, E> =>
+  Effect.provideService(
+    program,
+    SupabaseAuth,
+    fakeSupabaseAuth({ accessToken: Effect.succeed('access-token') }),
+  );
 
 function installRemoteAgentListClient(result: {
   data: unknown[] | null;
@@ -34,7 +43,6 @@ function installRemoteAgentListClient(result: {
       });
     }),
   );
-  vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue('access-token');
 
   return selectedColumns;
 }
@@ -71,7 +79,7 @@ describe('remote agent listing', () => {
         error: null,
       });
 
-      const agents = yield* listRemoteAgents();
+      const agents = yield* signedIn(listRemoteAgents());
 
       expect(agents.map((agent) => agent.name)).toEqual(['review']);
     }),
@@ -87,7 +95,7 @@ describe('remote agent listing', () => {
         error: null,
       });
 
-      const agents = yield* listRemoteAgents();
+      const agents = yield* signedIn(listRemoteAgents());
 
       expect(agents.map((agent) => agent.name)).toEqual(['review']);
     }),
@@ -103,7 +111,7 @@ describe('remote agent listing', () => {
         },
       });
 
-      const agents = yield* listRemoteAgents();
+      const agents = yield* signedIn(listRemoteAgents());
 
       expect(agents).toEqual([]);
       expect(selectedColumns).toEqual([
@@ -114,27 +122,34 @@ describe('remote agent listing', () => {
 });
 
 describe('remote agent config parsing', () => {
-  it('rejects with a wrapped error for malformed remote config YAML', async () => {
-    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
-    vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue(
-      'access-token',
-    );
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        const urlString = input instanceof Request ? input.url : String(input);
-        if (urlString !== SUPABASE_CONFIG.edgeFunctionUrl) {
-          return new Response('not found', { status: 404 });
-        }
-        return new Response(JSON.stringify({ config: 'name: "unterminated' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }),
-    );
+  it.effect(
+    'rejects with a wrapped error for malformed remote config YAML',
+    () =>
+      Effect.gen(function* () {
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(async (input: RequestInfo | URL) => {
+            const urlString =
+              input instanceof Request ? input.url : String(input);
+            if (urlString !== SUPABASE_CONFIG.edgeFunctionUrl) {
+              return new Response('not found', { status: 404 });
+            }
+            return new Response(
+              JSON.stringify({ config: 'name: "unterminated' }),
+              {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+              },
+            );
+          }),
+        );
 
-    await expect(loadRemoteAgent('broken-agent')).rejects.toThrow(
-      'Failed to parse YAML for remote agent "broken-agent"',
-    );
-  });
+        const error = yield* Effect.flip(
+          signedIn(loadRemoteAgent('broken-agent')),
+        );
+        expect(error.message).toContain(
+          'Failed to parse YAML for remote agent "broken-agent"',
+        );
+      }),
+  );
 });

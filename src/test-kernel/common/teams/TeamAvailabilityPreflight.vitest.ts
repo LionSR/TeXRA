@@ -21,7 +21,7 @@ function options(overrides: {
   remoteCatalogRefreshAttempted?: boolean;
 }) {
   const refresh = vi.fn(() => undefined);
-  const signIn = vi.fn(async () => overrides.signedIn ?? true);
+  const signIn = vi.fn(() => Effect.succeed(overrides.signedIn ?? true));
   const choose = vi.fn(async () =>
     overrides.choiceRequired ? undefined : (overrides.choice ?? 'cancel'),
   );
@@ -33,7 +33,8 @@ function options(overrides: {
       initial: overrides.initial ?? { unresolvedNames: ['orchestrator'] },
       unresolvedNames: (value: Resolution) => value.unresolvedNames,
       texraHostedNames: hosted,
-      canAccessRemoteCatalog: async () => overrides.authenticated ?? false,
+      canAccessRemoteCatalog: () =>
+        Effect.succeed(overrides.authenticated ?? false),
       providedChoice: overrides.providedChoice,
       choose,
       signIn,

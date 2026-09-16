@@ -26,6 +26,8 @@ import {
   listSessions as listOwnedSessions,
   sessionOwnerInstalled,
 } from '@agent/runtime';
+import { unavailableSupabaseAuth } from '@auth/SupabaseAuth';
+import { SignInFailed } from '@common/errors/signInFailed';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -74,7 +76,7 @@ export interface AgentRuntime {
  * `false` would report a sign-in that can never happen as one that merely
  * did not complete. Each member says so instead, the way the test kernel's
  * fake does — on read for the members a caller only ever calls, and as the
- * port's own typed failure for the command surface a caller reads first.
+ * port's own typed failure for the sign-in and command surfaces.
  * The same loud answer this package gave before it provided `SetupPlatform`
  * at all.
  */
@@ -85,7 +87,7 @@ const PACKAGE_SETUP: SetupPlatformShape = {
   get host(): never {
     throw new Error(NO_SETUP_PLATFORM);
   },
-  signIn: () => Promise.reject(new Error(NO_SETUP_PLATFORM)),
+  signIn: () => Effect.fail(new SignInFailed({ message: NO_SETUP_PLATFORM })),
   // The one member read before it is called: `unset_api_key` asks for the
   // command surface to refresh the host's status views after a credential
   // it already removed. A throwing getter would make that read a defect
@@ -191,6 +193,11 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   const processServices = {
     secrets: platform.secrets,
     appState: platform.roots.globalState,
+    // The package has no TeXRA account plane of its own: every probe answers
+    // signed-out, as the uninitialized facade did for an embedder.
+    auth: unavailableSupabaseAuth(),
+    languageModel: platform.languageModel,
+    agentResume: platform.agentResume,
     setup: PACKAGE_SETUP,
   };
   let processRuntime = tryProcessRuntime();

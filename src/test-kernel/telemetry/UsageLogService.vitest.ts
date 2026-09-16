@@ -9,7 +9,6 @@ import {
   type Mock,
 } from 'vitest';
 
-import { SupabaseClient } from '@auth/SupabaseClient';
 import * as logger from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
@@ -21,7 +20,8 @@ import {
   FakeScopedConfigProvider,
 } from '@test/support/FakePlatform';
 import { jsonResponse } from '@test/support/fetchTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
+import { installHostAuth, setupPlatform } from '@test/support/setupPlatform';
 
 function usageEntry(model: string) {
   return {
@@ -45,7 +45,7 @@ function batchId(batch: unknown): string {
 }
 
 function stubAccessToken(): void {
-  vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue('token');
+  installHostAuth(fakeSupabaseAuth({ accessToken: Effect.succeed('token') }));
 }
 
 // The Effect fetch client passes (url, init); read each batch body from the
@@ -266,10 +266,18 @@ describe('UsageLogService', () => {
     expect(batches.map(batchModels)).toEqual([['slow']]);
   });
 
-  it('keeps queued entries when setup fails before dequeue', async () => {
-    vi.spyOn(SupabaseClient, 'getAccessToken')
-      .mockRejectedValueOnce(new Error('auth unavailable'))
-      .mockResolvedValue('token');
+  it('keeps queued entries when the token read answers signed-out', async () => {
+    // The token probe never rejects — an auth outage answers null — so the
+    // outage case is a signed-out read: the flush skips without dequeuing,
+    // and the next timer tick sends once a token exists.
+    let tokenReads = 0;
+    installHostAuth(
+      fakeSupabaseAuth({
+        accessToken: Effect.suspend(() =>
+          Effect.succeed(tokenReads++ === 0 ? null : 'token'),
+        ),
+      }),
+    );
 
     const { batches, fetchMock } = stubBatchFetch();
 
@@ -540,16 +548,17 @@ describe('UsageLogService', () => {
       expect(batches.map(batchModels)).toEqual([['hosted']]);
     });
 
-    // getAccessToken() is awaited before the batch is sent, so an opt-out
+    // The token probe is awaited before the batch is sent, so an opt-out
     // that lands during that await must still take effect.
     it('honours an opt-out that lands while the token lookup is in flight', async () => {
       const { promise: tokenReleased, resolve: releaseToken } =
         createDeferred();
-      vi.spyOn(SupabaseClient, 'getAccessToken').mockImplementation(
-        async () => {
-          await tokenReleased;
-          return 'token';
-        },
+      installHostAuth(
+        fakeSupabaseAuth({
+          accessToken: Effect.promise(() => tokenReleased).pipe(
+            Effect.map(() => 'token'),
+          ),
+        }),
       );
 
       const { batches, fetchMock } = stubBatchFetch();

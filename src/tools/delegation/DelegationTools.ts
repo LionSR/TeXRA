@@ -24,6 +24,7 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { createLog } from '@logger/logUtils';
+import { AgentResume } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import {
   AgentCategory,
@@ -77,7 +78,7 @@ const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
     session: SessionHandle,
     runId: string,
     err: unknown,
-  ): Effect.fn.Return<void, Error> {
+  ): Effect.fn.Return<void, Error, AgentResume> {
     log.warn(
       `Failed to wake resumed subagent '${runId}': ${toErrorMessage(err)}`,
     );
@@ -314,7 +315,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       instruction: string,
       session: SessionHandle,
       callerRunId: RunId | undefined,
-    ): Effect.fn.Return<ToolResult, Error, Runs> {
+    ): Effect.fn.Return<ToolResult, Error, Runs | AgentResume> {
       const handle = (yield* Runs).getHandle(runId);
       if (!handle) {
         return yield* Effect.fail(

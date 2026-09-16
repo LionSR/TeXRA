@@ -6,11 +6,11 @@
  * {@link SubscriptionOAuthPolicy}; this class owns single-flight refresh,
  * generation supersede, and serialized storage writes.
  *
- * The Promise methods are the boundary; each runs one of the Effect programs
- * below through {@link runAuthProgram}. Inside, the shared-machine
- * {@link SubscriptionOAuthError} is the typed failure and a port rejection
- * travels as {@link AuthPortError}; the edge re-mints both as the provider's
- * own error type.
+ * Every method is an Effect program the caller yields or settles at its own
+ * edge. Inside, the shared-machine {@link SubscriptionOAuthError} is the typed
+ * failure and a port rejection travels as {@link AuthPortError}; the mutating
+ * and refreshing programs re-mint both as the provider's own error type, so a
+ * caller sees the same error vocabulary the retired Promise methods threw.
  */
 // Third-party imports
 import { Deferred, Effect, Result } from 'effect';
@@ -20,12 +20,7 @@ import { safeParseJson } from '@common/parsing/safeParseJson';
 import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  AuthPortError,
-  callPort,
-  runAuthProgram,
-  SerializedWrites,
-} from '../authProgram';
+import { AuthPortError, SerializedWrites } from '../authProgram';
 import { generateOAuthState, generatePkcePair } from './pkce';
 import {
   toProviderAuthError,
@@ -40,9 +35,9 @@ const log = createLog('SubscriptionOAuth');
 
 /** Secret-backed persistence for one session bundle. */
 export interface SubscriptionSessionStorage {
-  get(): Promise<string | undefined>;
-  store(value: string): Promise<void>;
-  delete(): Promise<void>;
+  get(): Effect.Effect<string | undefined, AuthPortError>;
+  store(value: string): Effect.Effect<void, AuthPortError>;
+  delete(): Effect.Effect<void, AuthPortError>;
 }
 
 /** Raw token-endpoint shape shared by authorization-code and refresh grants. */
@@ -134,8 +129,8 @@ export interface SubscriptionOAuthCoordinatorInit<
    */
   now?: () => number;
   /**
-   * Provider error type. The public mutating/refreshing methods (signOut,
-   * completeLoginWithCode, storeTokens, getFreshSession) rethrow
+   * Provider error type. The mutating/refreshing programs (loginWithCode,
+   * storeTokens, getFreshAccessToken, getFreshSession) re-mint
    * {@link SubscriptionOAuthError} as this type so callers see the provider's
    * own error vocabulary.
    */
@@ -180,90 +175,10 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
       this.errorType,
     );
 
-  private readonly rethrowAsProviderError = (error: MachineFailure): never => {
-    throw this.toProviderError(error);
-  };
-
-  async loadSession(): Promise<S | null> {
-    return runAuthProgram(this.load());
-  }
-
-  async signOut(): Promise<void> {
-    await runAuthProgram(this.clearSession(), this.rethrowAsProviderError);
-  }
-
-  async getStatus(): Promise<SubscriptionSessionStatus> {
-    return runAuthProgram(
-      Effect.map(this.load(), (session) =>
-        session
-          ? {
-              signedIn: true,
-              email: session.email,
-              accountId: session.accountId,
-            }
-          : { signedIn: false },
-      ),
-    );
-  }
-
-  buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest {
-    const pkce = generatePkcePair();
-    const state = generateOAuthState();
-    return this.policy.buildAuthorizeRequest(port, pkce, state);
-  }
-
-  async completeLoginWithCode(params: {
-    code: string;
-    verifier: string;
-    redirectUri: string;
-  }): Promise<S> {
-    return runAuthProgram(
-      this.exchangeCode(params),
-      this.rethrowAsProviderError,
-    );
-  }
-
-  /**
-   * {@link completeLoginWithCode} as a program, for a caller already on the
-   * runtime (the loopback login yields it, so interrupting that login reaches
-   * the exchange and the store). It fails as the Promise edge would throw:
-   * the provider's own error type for a machine failure, otherwise the port's
-   * own rejection.
-   */
-  loginWithCode(params: {
-    code: string;
-    verifier: string;
-    redirectUri: string;
-  }): Effect.Effect<S, unknown, HttpClient.HttpClient> {
-    return Effect.mapError(this.exchangeCode(params), this.toProviderError);
-  }
-
-  /** Persist tokens from a successful device-code (or other) grant. */
-  async storeTokens(tokens: SubscriptionTokenResponse): Promise<S> {
-    return runAuthProgram(
-      this.adoptTokens(tokens),
-      this.rethrowAsProviderError,
-    );
-  }
-
-  isExpiringSoon(session: S): boolean {
-    return this.now() + this.policy.refreshBufferMs >= session.expiresAtMs;
-  }
-
-  async getFreshAccessToken(): Promise<string> {
-    return runAuthProgram(
-      Effect.map(this.freshSession(), (session) => session.accessToken),
-      this.rethrowAsProviderError,
-    );
-  }
-
-  async getFreshSession(): Promise<S> {
-    return runAuthProgram(this.freshSession(), this.rethrowAsProviderError);
-  }
-
-  private readonly load = Effect.fn('SubscriptionOAuthCoordinator.loadSession')(
+  /** The stored session, or null when signed out or unreadable. */
+  readonly loadSession = Effect.fn('SubscriptionOAuthCoordinator.loadSession')(
     function* (this: SubscriptionOAuthCoordinator<S>) {
-      const raw = yield* callPort(() => this.storage.get());
+      const raw = yield* this.storage.get();
       if (!raw) return null;
       const parsedJson = safeParseJson(raw);
       if (Result.isFailure(parsedJson)) {
@@ -284,8 +199,63 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     },
   );
 
+  /** Signed-in status of the stored session. */
+  getStatus(): Effect.Effect<SubscriptionSessionStatus, AuthPortError> {
+    return Effect.map(this.loadSession(), (session) =>
+      session
+        ? {
+            signedIn: true,
+            email: session.email,
+            accountId: session.accountId,
+          }
+        : { signedIn: false },
+    );
+  }
+
+  buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest {
+    const pkce = generatePkcePair();
+    const state = generateOAuthState();
+    return this.policy.buildAuthorizeRequest(port, pkce, state);
+  }
+
+  /**
+   * The code exchange as a program: the loopback login yields it, so
+   * interrupting that login reaches the exchange and the store. A machine
+   * failure is re-minted as the provider's own error type; a port rejection
+   * travels as its own cause.
+   */
+  loginWithCode(params: {
+    code: string;
+    verifier: string;
+    redirectUri: string;
+  }): Effect.Effect<S, unknown, HttpClient.HttpClient> {
+    return Effect.mapError(this.exchangeCode(params), this.toProviderError);
+  }
+
+  /** Persist tokens from a successful device-code (or other) grant. */
+  storeTokens(tokens: SubscriptionTokenResponse): Effect.Effect<S, unknown> {
+    return Effect.mapError(this.adoptTokens(tokens), this.toProviderError);
+  }
+
+  isExpiringSoon(session: S): boolean {
+    return this.now() + this.policy.refreshBufferMs >= session.expiresAtMs;
+  }
+
+  /** The access token of the stored session, refreshed when expiring soon. */
+  getFreshAccessToken(): Effect.Effect<string, unknown, HttpClient.HttpClient> {
+    return Effect.mapError(
+      Effect.map(this.freshSession(), (session) => session.accessToken),
+      this.toProviderError,
+    );
+  }
+
+  /** The stored session, refreshed when expiring soon. */
+  getFreshSession(): Effect.Effect<S, unknown, HttpClient.HttpClient> {
+    return Effect.mapError(this.freshSession(), this.toProviderError);
+  }
+
   private store(session: S): Effect.Effect<void, AuthPortError> {
-    return callPort(() => this.storage.store(JSON.stringify(session)));
+    return this.storage.store(JSON.stringify(session));
   }
 
   private buildSession(
@@ -306,7 +276,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
       // A mutation that starts after the barrier bumps the generation and
       // re-loops.
       yield* this.sessionMutations.awaitIdle();
-      const session = yield* this.load();
+      const session = yield* this.loadSession();
       if (generation === this.sessionGeneration) {
         return { generation, session };
       }
@@ -357,14 +327,15 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     );
   });
 
-  private readonly clearSession = Effect.fn(
-    'SubscriptionOAuthCoordinator.signOut',
-  )(function* (this: SubscriptionOAuthCoordinator<S>) {
-    yield* this.sessionMutations.run(
-      callPort(() => this.storage.delete()),
-      this.supersedeInFlightRefresh,
-    );
-  });
+  /** Delete the stored session, superseding any refresh in flight. */
+  readonly signOut = Effect.fn('SubscriptionOAuthCoordinator.signOut')(
+    function* (this: SubscriptionOAuthCoordinator<S>) {
+      yield* this.sessionMutations.run(
+        this.storage.delete(),
+        this.supersedeInFlightRefresh,
+      );
+    },
+  );
 
   /** Make the session for a fresh grant the stored one, superseding any refresh in flight. */
   private readonly adoptTokens = Effect.fn(
@@ -382,7 +353,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   });
 
   private readonly exchangeCode = Effect.fn(
-    'SubscriptionOAuthCoordinator.completeLoginWithCode',
+    'SubscriptionOAuthCoordinator.loginWithCode',
   )(function* (
     this: SubscriptionOAuthCoordinator<S>,
     params: { code: string; verifier: string; redirectUri: string },
@@ -446,7 +417,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
           ? this.sessionMutations.run(
               Effect.suspend(() =>
                 generation === this.sessionGeneration
-                  ? callPort(() => this.storage.delete())
+                  ? this.storage.delete()
                   : Effect.void,
               ),
             )

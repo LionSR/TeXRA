@@ -1,5 +1,3 @@
-import '@test/support/defaultSessionTestSetup';
-
 // Test composition imports
 
 // Node imports
@@ -15,7 +13,7 @@ import { beforeEach, afterEach, describe, vi } from 'vitest';
 import { getRunRecords } from '@agent/storage';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import {
   RUN_OUTCOME,
@@ -25,6 +23,7 @@ import {
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createProcessSession,
@@ -96,7 +95,7 @@ function detachBackgroundRun(
   recorded: ReturnType<typeof recordSessionEvents>,
   parentRunId: RunId,
 ): void {
-  defaultSession().followUps.terminalize(parentRunId);
+  testDefaultSession().followUps.terminalize(parentRunId);
 }
 
 /**
@@ -106,7 +105,7 @@ function detachBackgroundRun(
  * rule, and that refusal is a lost publication the next settle reports.
  */
 function startedParentRun(): RunId {
-  return publishTestRunStart(defaultSession());
+  return publishTestRunStart(testDefaultSession());
 }
 
 /**
@@ -115,7 +114,7 @@ function startedParentRun(): RunId {
  * parked parent a real run would.
  */
 async function parkRunWaiting(runId: RunId): Promise<void> {
-  const session = defaultSession();
+  const session = testDefaultSession();
   session.publish([
     {
       type: 'flow.step',
@@ -124,7 +123,10 @@ async function parkRunWaiting(runId: RunId): Promise<void> {
     },
   ]);
   await vi.waitFor(() => {
-    assert.equal(defaultSession().runView(runId)?.status, RUN_PHASE.WAITING);
+    assert.equal(
+      testDefaultSession().runView(runId)?.status,
+      RUN_PHASE.WAITING,
+    );
   });
 }
 
@@ -166,7 +168,7 @@ function backgroundBashCall(parentRunId: RunId) {
         nativeToolTestLayer({
           tracker: new FileInteractionState(),
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: parentRunId,
             toolPolicy: {},
           },
@@ -210,7 +212,7 @@ describe('BashTool', () => {
           nativeToolTestLayer({
             tracker: new FileInteractionState(),
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -236,7 +238,7 @@ describe('BashTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },
@@ -261,7 +263,7 @@ describe('BashTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -300,7 +302,7 @@ describe('BashTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },
@@ -330,7 +332,7 @@ describe('BashTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },
@@ -362,7 +364,7 @@ describe('BashTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },
@@ -400,7 +402,7 @@ describe('BashTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -439,7 +441,7 @@ describe('BashTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -484,7 +486,7 @@ describe('BashTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -526,11 +528,11 @@ describe('BashTool', () => {
           .mockReturnValue(Effect.succeed({ status: 'sent' }));
 
         const parentRunId = startedParentRun();
-        const parentLease = defaultSession().followUps.claimLive(
+        const parentLease = testDefaultSession().followUps.claimLive(
           parentRunId,
           'flow',
         )!;
-        const recorded = recordSessionEvents(defaultSession());
+        const recorded = recordSessionEvents(testDefaultSession());
 
         try {
           const launchResult = yield* launchBackgroundBash(parentRunId);
@@ -547,7 +549,7 @@ describe('BashTool', () => {
             }),
           );
         } finally {
-          defaultSession().followUps.release(parentLease, 'terminal');
+          testDefaultSession().followUps.release(parentLease, 'terminal');
         }
 
         const followUpArg = submitFollowUpSpy.mock.calls[0]?.[1];
@@ -572,7 +574,7 @@ describe('BashTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -603,7 +605,7 @@ describe('BashTool', () => {
         );
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
 
-        const recorded = recordSessionEvents(defaultSession());
+        const recorded = recordSessionEvents(testDefaultSession());
 
         try {
           const launchResult = yield* launchBackgroundBash(parentRunId);
@@ -628,7 +630,7 @@ describe('BashTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -659,7 +661,7 @@ describe('BashTool', () => {
         let handleAtResumeTime: unknown;
         let runId = '' as RunId;
         const tryResumeRun = vi.fn().mockImplementation(async () => {
-          handleAtResumeTime = defaultSession().runs.getHandle(runId);
+          handleAtResumeTime = testDefaultSession().runs.getHandle(runId);
           await new Promise<void>((resolve) => {
             releaseResume = resolve;
           });
@@ -672,7 +674,7 @@ describe('BashTool', () => {
         );
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
 
-        const recorded = recordSessionEvents(defaultSession());
+        const recorded = recordSessionEvents(testDefaultSession());
 
         try {
           const launchResult = yield* launchBackgroundBash(parentRunId);
@@ -693,7 +695,7 @@ describe('BashTool', () => {
           // (finalized), never still RUNNING, so a resumed parent that waits on
           // it right now resolves immediately instead of racing its own wake.
           assert.equal(handleAtResumeTime, undefined);
-          assert.equal(defaultSession().runs.getHandle(runId), undefined);
+          assert.equal(testDefaultSession().runs.getHandle(runId), undefined);
         } finally {
           releaseResume?.();
           detachBackgroundRun(recorded, parentRunId);
@@ -702,7 +704,7 @@ describe('BashTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -718,12 +720,12 @@ describe('BashTool', () => {
         const resolveCommand = holdCommand();
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
         const parentRunId = startedParentRun();
-        const recorded = recordSessionEvents(defaultSession());
+        const recorded = recordSessionEvents(testDefaultSession());
 
         const launchResult = yield* launchBackgroundBash(parentRunId);
         const { runId } = launchedIds(launchResult);
         assert.ok(runId, JSON.stringify(launchResult));
-        const session = defaultSession();
+        const session = testDefaultSession();
         const commit = session.commit.bind(session);
         vi.spyOn(session, 'commit').mockImplementation((events) =>
           events.some((event) => event.type === 'run.result')
@@ -748,7 +750,7 @@ describe('BashTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -770,7 +772,7 @@ describe('BashTool', () => {
         });
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
         const parentRunId = startedParentRun();
-        const recorded = recordSessionEvents(defaultSession());
+        const recorded = recordSessionEvents(testDefaultSession());
 
         const launchResult = yield* launchBackgroundBash(parentRunId);
         const { output, runId } = launchedIds(launchResult);
@@ -791,14 +793,14 @@ describe('BashTool', () => {
             );
           }),
         );
-        assert.equal(defaultSession().runs.getHandle(runId), undefined);
+        assert.equal(testDefaultSession().runs.getHandle(runId), undefined);
 
         detachBackgroundRun(recorded, parentRunId);
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -814,7 +816,7 @@ describe('BashTool', () => {
         const resolveCommand = holdCommand();
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
         const parentRunId = startedParentRun();
-        const recorded = recordSessionEvents(defaultSession());
+        const recorded = recordSessionEvents(testDefaultSession());
 
         const launchResult = yield* launchBackgroundBash(parentRunId);
         const { output, runId } = launchedIds(launchResult);
@@ -822,7 +824,7 @@ describe('BashTool', () => {
 
         // The user stop lands CANCELLED on the run phase; only afterwards does
         // the killed process report its non-zero exit.
-        const stopped = defaultSession().runs.kill(runId);
+        const stopped = testDefaultSession().runs.kill(runId);
         assert.equal(stopped.accepted(), true);
         const stopSettlement = yield* Effect.forkChild(stopped.settlement);
         resolveCommand({
@@ -834,7 +836,7 @@ describe('BashTool', () => {
         });
 
         yield* Fiber.join(stopSettlement);
-        const records = getRunRecords(defaultSession(), runId);
+        const records = getRunRecords(testDefaultSession(), runId);
         yield* records.readRunEnd().pipe(
           Effect.repeat({
             while: (end) => end?.outcome !== RUN_OUTCOME.CANCELLED,
@@ -847,7 +849,7 @@ describe('BashTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'bash-tool' as RunId,
               toolPolicy: {},
             },
@@ -886,7 +888,7 @@ describe('BashTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'bash-tool' as RunId,
             toolPolicy: {},
           },
@@ -932,7 +934,7 @@ describe('BashTool', () => {
                   onToolOutput: (chunk) => hookCalls.push(`output:${chunk}`),
                 },
                 run: {
-                  session: defaultSession(),
+                  session: testDefaultSession(),
                   runId: 'bash-tool' as RunId,
                   toolPolicy: {},
                 },

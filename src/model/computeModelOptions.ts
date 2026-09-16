@@ -891,7 +891,9 @@ export const readModelAvailabilityInputs = Effect.fn(
 ) {
   // Presentation-only refresh: the catalogue keeps its last-known entries on
   // a discovery failure, so this step cannot fail (see `discoveredCopilotRoutes`).
-  yield* Effect.promise(() => inScope(discoveredCopilotRoutes));
+  // No `inScope`: the discovery reads its port from the fiber's own context
+  // (the `LanguageModel` process service), not from the workspace-roots frame.
+  yield* discoveredCopilotRoutes();
   const routeCtx = yield* buildAvailabilityContext(stores, inScope);
   const visible =
     models ??

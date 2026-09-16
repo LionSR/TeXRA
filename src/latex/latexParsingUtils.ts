@@ -9,8 +9,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel, withLogData } from '@logger/effectLog';
-import { fsCall } from '@utils/errors/fsCall';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { ensureError } from '@utils/errors/errorMessage';
+import { pathExists } from '@utils/files/fsDurability';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 const CHANNEL = 'LatexParsing';
@@ -91,12 +91,17 @@ export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
 
 /**
  * Return `absolutePath` if it exists on disk, otherwise null. Centralizes
- * the `AbsoluteFS.exists(...)` boilerplate used by the various LaTeX
- * dependency resolvers.
+ * the existence probe used by the various LaTeX dependency resolvers:
+ * `pathExists`'s reading, which is `BaseFS.exists`'s ENOTDIR correction plus
+ * a link that resolves to nothing read as absent -- right for a dependency,
+ * which a dangling symlink does not supply.
  */
 export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
   function* (absolutePath: string) {
-    const exists = yield* fsCall(() => AbsoluteFS.exists(absolutePath));
+    const fs = yield* FileSystem.FileSystem;
+    const exists = yield* pathExists(fs, absolutePath).pipe(
+      Effect.mapError(ensureError),
+    );
     return exists ? absolutePath : null;
   },
 );

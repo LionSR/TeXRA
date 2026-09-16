@@ -45,19 +45,6 @@ vi.mock('@agent/index', async () => ({
   getVisibleAgents: (category: AgentCategory) => registry.catalog[category],
 }));
 
-const isAuthenticated = vi.hoisted(() => vi.fn(async () => false));
-
-vi.mock('@auth/SupabaseClient', async () => ({
-  ...(await vi.importActual<typeof import('@auth/SupabaseClient')>(
-    '@auth/SupabaseClient',
-  )),
-  SupabaseClient: {
-    isAuthenticated,
-    getUserTier: () => undefined,
-    getAccessToken: async () => undefined,
-  },
-}));
-
 const { AgentHandlers } = await import('@settingsView/handlers/agentHandlers');
 
 type Handlers = InstanceType<typeof AgentHandlers>;
@@ -142,7 +129,6 @@ describe('extension settings AgentHandlers', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     registry.refreshAgents.mockImplementation(() => Effect.void);
-    isAuthenticated.mockResolvedValue(false);
     resetAgentCatalogAuthRefreshScopeForTests();
   });
 

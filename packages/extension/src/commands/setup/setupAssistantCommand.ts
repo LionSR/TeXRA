@@ -4,7 +4,11 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { loadAgents } from '@agent/index';
-import { AgentConfigSchema, defaultSession, runAgent } from '@agent/runtime';
+import {
+  AgentConfigSchema,
+  runAgent,
+  type SessionHandle,
+} from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   resolveSetupLaunchModel,
@@ -14,6 +18,7 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { StateStore } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
@@ -43,7 +48,7 @@ interface LaunchModelResolution {
  */
 function selectLaunchModel(
   secrets: PlatformSecrets,
-): Effect.Effect<LaunchModelResolution | null> {
+): Effect.Effect<LaunchModelResolution | null, never, LanguageModel> {
   return resolveSetupLaunchModel(secrets, true).pipe(
     Effect.map((resolution) =>
       resolution
@@ -112,7 +117,7 @@ function withOpenRouterFlagOn<A, E, R>(
  */
 export function hasAnyUsableSetupCredential(
   secrets: PlatformSecrets,
-): Effect.Effect<boolean> {
+): Effect.Effect<boolean, never, LanguageModel> {
   return hasUsableSetupCredential(secrets, credentialLog.warn);
 }
 
@@ -181,7 +186,9 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
 // Routing is fine when the current configuration resolves any setup model.
 // A managed direct route can remain runnable even when global OpenRouter is
 // enabled without an OpenRouter key.
-function isRoutingConfigured(secrets: PlatformSecrets): Effect.Effect<boolean> {
+function isRoutingConfigured(
+  secrets: PlatformSecrets,
+): Effect.Effect<boolean, never, LanguageModel> {
   if (!getUseOpenRouter()) return Effect.succeed(true);
   return resolveSetupLaunchModel(secrets, false).pipe(
     Effect.map((resolution) => resolution !== null),
@@ -236,6 +243,7 @@ export function launchSetupAssistant(
   secrets: PlatformSecrets,
   globalState: StateStore,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): Promise<'launched' | 'already-running' | 'not-started'> {
   return runtime.runPromise(
     Effect.gen(function* () {
@@ -245,8 +253,8 @@ export function launchSetupAssistant(
       // installs and config writes. The launcher's manual Execute path is
       // deliberately not gated — an explicit user action wins.
       if (
-        defaultSession()
-          .runs.getAgentHandles()
+        session.runs
+          .getAgentHandles()
           .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
       ) {
         void vscode.window.showInformationMessage(
@@ -320,7 +328,7 @@ export function launchSetupAssistant(
       const launch = runAgent(
         { kind: 'fresh', config },
         {
-          session: defaultSession(),
+          session,
           onRunResolved: presentLaunchedProgressRun,
         },
       );

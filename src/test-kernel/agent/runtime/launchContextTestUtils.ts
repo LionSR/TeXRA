@@ -12,15 +12,13 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 /**
  * The zero-priced OpenAI model every runtime fixture bills against, shaped
@@ -60,7 +58,7 @@ interface TestLaunchContextInit {
  */
 export function createTestLaunchContext({
   runId,
-  session = defaultSession(),
+  session = testDefaultSession(),
   agent = 'assistant',
   category = AgentCategory.ToolUse,
   logger = noopTrace,

@@ -177,7 +177,6 @@ describe('desktop preview host', () => {
           fileOptions: () => Effect.promise(() => files.fileOptions()),
           readRecentCommits: () =>
             Effect.succeed({ commits: [], isGitRepo: false }),
-          isAuthenticated: () => Effect.succeed(false),
           publish: () => {},
           onError: () => {},
         }),

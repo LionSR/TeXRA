@@ -17,6 +17,7 @@ import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { AppState } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { Secrets } from '@platform/secrets';
 import {
   aggregateId as qualifyAggregateId,
@@ -56,7 +57,7 @@ function workflowRunnerError(error: unknown): Error {
 function workflowScriptModelSelection(
   invocation: Pick<WorkflowAgentInvocation, 'options'>,
   parent: DelegationParent,
-): Effect.Effect<string, Error, Secrets | AppState> {
+): Effect.Effect<string, Error, Secrets | AppState | LanguageModel> {
   const requestedModel = invocation.options.model;
   return selectAvailableDelegationModel({
     ...(requestedModel !== undefined && { requestedModel }),
@@ -103,7 +104,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
   ): Effect.fn.Return<
     { configPayload: AgentConfigPayload; agentName: string },
     Error,
-    Secrets | AppState | FileSystem.FileSystem
+    Secrets | AppState | FileSystem.FileSystem | LanguageModel
   > {
     const { session } = parent.run;
     const sharedConfigFields = {

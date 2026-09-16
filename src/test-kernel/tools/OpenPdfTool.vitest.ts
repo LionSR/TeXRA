@@ -12,15 +12,13 @@ import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import {
-  defaultSession,
-  initializeDefaultSession,
-} from '@agent/runtime/SessionHandle';
+import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { OpenPdfTool } from '@tools/OpenPdfTool';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
@@ -72,7 +70,7 @@ describe('OpenPdfTool', () => {
     const openPdf = vi.fn<(request: OpenPdfRequest) => Effect.Effect<void>>();
     openPdf.mockReturnValue(Effect.void);
     detachHostInteractions();
-    detachHostInteractions = defaultSession().interactions.use({
+    detachHostInteractions = testDefaultSession().interactions.use({
       openPdf,
     });
     return openPdf;
@@ -105,7 +103,7 @@ describe('OpenPdfTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'tool-test' as RunId,
               toolPolicy: {},
             },
@@ -137,7 +135,7 @@ describe('OpenPdfTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },
@@ -160,7 +158,7 @@ describe('OpenPdfTool', () => {
           Effect.provide(
             nativeToolTestLayer({
               run: {
-                session: defaultSession(),
+                session: testDefaultSession(),
                 runId: 'run-1' as RunId,
                 toolPolicy: {},
               },
@@ -182,7 +180,7 @@ describe('OpenPdfTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },
@@ -205,7 +203,7 @@ describe('OpenPdfTool', () => {
               nativeToolTestLayer({
                 workingDirectory: 'relative-path',
                 run: {
-                  session: defaultSession(),
+                  session: testDefaultSession(),
                   runId: 'run-1' as RunId,
                   toolPolicy: {},
                 },
@@ -219,7 +217,7 @@ describe('OpenPdfTool', () => {
         Effect.provide(
           nativeToolTestLayer({
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'tool-test' as RunId,
               toolPolicy: {},
             },
@@ -238,7 +236,7 @@ describe('OpenPdfTool', () => {
           nativeToolTestLayer({
             workingDirectory: fakePath('workspace'),
             run: {
-              session: defaultSession(),
+              session: testDefaultSession(),
               runId: 'tool-test' as RunId,
               toolPolicy: {},
             },
@@ -252,7 +250,7 @@ describe('OpenPdfTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },
@@ -274,7 +272,7 @@ describe('OpenPdfTool', () => {
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            session: defaultSession(),
+            session: testDefaultSession(),
             runId: 'tool-test' as RunId,
             toolPolicy: {},
           },

@@ -3,8 +3,6 @@
 // on, and the credential work behind a retry on the user's own key. A run asks
 // with `session.openRequest`; the surface answers with `request.decide`.
 
-import '@test/support/defaultSessionTestSetup';
-
 import { it } from '@effect/vitest';
 import { Effect, Fiber, SubscriptionRef } from 'effect';
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
@@ -71,7 +69,6 @@ vi.mock('@platform/platform', async () => {
   };
 });
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
@@ -98,6 +95,7 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
@@ -128,13 +126,14 @@ function tui(
   contextOverrides: Partial<CliContext> = {},
 ): { readonly presentationHost: CliRuntimeHost; readonly dispose: () => void } {
   const cliContext = createTuiCliContext(contextOverrides);
-  defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
+  testDefaultSession().setApprovalPolicy(cliContext.approvalPolicy);
   // The installed fake host's secret store: the credential work takes it
   // directly, and the key-check expectations name exactly this object.
   const { secrets } = installedHost();
   detachHost();
-  detachHost = defaultSession().interactions.use(
+  detachHost = testDefaultSession().interactions.use(
     createTuiHostInteractions(presentationHost, cliContext, {
+      session: testDefaultSession(),
       secrets,
       runtime: effectRuntime(),
     }),
@@ -167,7 +166,7 @@ function ensureRun(runId: RunId): Effect.Effect<void> {
     if (root === undefined) rootRunId.set(runId);
     if (started.has(runId)) return;
     started.add(runId);
-    const session = defaultSession();
+    const session = testDefaultSession();
     publishTestRunStart(session, runId, { parent: root ?? null });
     yield* session.settlePublications().pipe(Effect.orDie);
   });
@@ -184,7 +183,7 @@ function requestEdit(runId: RunId) {
     Effect.provide(
       nativeToolTestLayer({
         workingDirectory: '/work',
-        run: { runId, session: defaultSession(), toolPolicy: {} },
+        run: { runId, session: testDefaultSession(), toolPolicy: {} },
       }),
     ),
   );
@@ -198,7 +197,7 @@ function openRequest(
 ): Effect.Effect<RequestDecision, Error> {
   return Effect.gen(function* () {
     yield* ensureRun(runId);
-    return yield* defaultSession().openRequest(runId, payload);
+    return yield* testDefaultSession().openRequest(runId, payload);
   }).pipe(Effect.mapError((cause) => new Error(String(cause))));
 }
 
@@ -303,7 +302,7 @@ function glmCodingPlanRetry(label: string): RetryPermission {
 function decideCurrent(decision: SurfaceDecision): void {
   const pending = currentApproval.get();
   expect(pending).toBeDefined();
-  pending?.decide(effectRuntime(), decision);
+  pending?.decide(testDefaultSession(), effectRuntime(), decision);
 }
 
 function decideRetry(decision: SurfaceDecision): void {
@@ -369,7 +368,7 @@ function waitForNoApproval(): Effect.Effect<void> {
 }
 
 beforeAll(() => {
-  bindSessionView(effectRuntime(), defaultSession().view);
+  bindSessionView(effectRuntime(), testDefaultSession().view);
 });
 
 beforeEach(() => {
@@ -402,7 +401,7 @@ afterEach(async () => {
   detachHost = () => {};
   // A request left open outlives its test on the file's session, so close
   // whatever this test did not answer before the next one reads the head.
-  const session = defaultSession();
+  const session = testDefaultSession();
   for (const request of SubscriptionRef.getUnsafe(session.view).requests) {
     await effectRuntime().runPromise(
       session.requests
@@ -437,7 +436,7 @@ describe('TUI request decisions', () => {
         yield* ensureRun(runIdFor('waiting-proposal-parent'));
         const runId = runIdFor('waiting-proposal-policy-change');
         yield* ensureRun(runId);
-        const session = defaultSession();
+        const session = testDefaultSession();
         session.runs.track(testRunHandle({ runId, agent: 'orchestrator' }));
         const pending = yield* Effect.forkChild(
           openRequest(runId, {
@@ -516,14 +515,14 @@ describe('TUI request decisions', () => {
         const runId = runIdFor('goal-bypass');
         yield* ensureRun(runId);
 
-        setGoalSessionAutoApproval(defaultSession(), runId, 'commands');
+        setGoalSessionAutoApproval(testDefaultSession(), runId, 'commands');
         expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
           runId,
           kind: 'bash',
           bypassActive: true,
         });
 
-        setGoalSessionAutoApproval(defaultSession(), runId, false);
+        setGoalSessionAutoApproval(testDefaultSession(), runId, false);
         expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
           runId,
           kind: 'bash',
@@ -576,13 +575,15 @@ describe('TUI request decisions', () => {
           action: 'approve',
         });
         yield* waitFor(() => {
-          expect(proposalApprovals().isBypassed(runId)).toBe(true);
           expect(
-            defaultSession().approvals.toolEdit.bypass.isBypassed(runId),
+            proposalApprovals(testDefaultSession()).isBypassed(runId),
           ).toBe(true);
-          expect(defaultSession().approvals.bash.bypass.isBypassed(runId)).toBe(
-            true,
-          );
+          expect(
+            testDefaultSession().approvals.toolEdit.bypass.isBypassed(runId),
+          ).toBe(true);
+          expect(
+            testDefaultSession().approvals.bash.bypass.isBypassed(runId),
+          ).toBe(true);
         });
         for (const kind of ['superYolo', 'toolEdit', 'bash'] as const) {
           expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith(
@@ -659,13 +660,15 @@ describe('TUI request decisions', () => {
         decideCurrent({ action: 'approve' });
 
         expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
-        expect(proposalApprovals().isBypassed(runId)).toBe(false);
-        expect(
-          defaultSession().approvals.toolEdit.bypass.isBypassed(runId),
-        ).toBe(false);
-        expect(defaultSession().approvals.bash.bypass.isBypassed(runId)).toBe(
+        expect(proposalApprovals(testDefaultSession()).isBypassed(runId)).toBe(
           false,
         );
+        expect(
+          testDefaultSession().approvals.toolEdit.bypass.isBypassed(runId),
+        ).toBe(false);
+        expect(
+          testDefaultSession().approvals.bash.bypass.isBypassed(runId),
+        ).toBe(false);
       }),
   );
 
@@ -850,9 +853,9 @@ describe('TUI request decisions', () => {
         }
         finishLookup?.();
         yield* settle();
-        yield* defaultSession().settlePublications();
+        yield* testDefaultSession().settlePublications();
         expect(
-          SubscriptionRef.getUnsafe(defaultSession().view).requests.some(
+          SubscriptionRef.getUnsafe(testDefaultSession().view).requests.some(
             (request) => request.requestId === permission.requestId,
           ),
         ).toBe(true);

@@ -14,7 +14,7 @@ import { ZodError } from 'zod';
 import { ModelError } from '@texra-ai/llm/turn';
 
 // Shared schemas and dispatchers
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
@@ -55,6 +55,7 @@ import {
 import {
   invalidateRuntimeModelRegistry,
   copilotRouteForModel,
+  discoveredCopilotRoutes,
   refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
@@ -152,6 +153,7 @@ export class SettingsViewMessageHandler {
     private readonly globalState: StateStore,
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
+    private readonly session: SessionHandle,
   ) {
     const ctx: SettingsHandlerContext = this.handlerContext();
 
@@ -169,6 +171,9 @@ export class SettingsViewMessageHandler {
             readModelAvailabilityInputs(stores, models),
           ),
         ),
+      // The route catalogue read is an Effect for the same reason.
+      getCopilotRoutes: () =>
+        this.runtime.runPromise(discoveredCopilotRoutes()),
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',
@@ -213,6 +218,7 @@ export class SettingsViewMessageHandler {
       this.memoryController,
       this.viewName,
       this.runtime,
+      session,
     );
     this.githubHandlers = new GitHubSubscriptionHandlers(
       ctx,
@@ -278,7 +284,7 @@ export class SettingsViewMessageHandler {
       },
     );
     const unsubscribeGoals = subscribeGoalStateChanges(
-      defaultSession(),
+      session,
       () => {
         void this.withActiveWebview((w) => this.sendGoalList(w));
       },
@@ -435,7 +441,7 @@ export class SettingsViewMessageHandler {
         try: () =>
           webview.postMessage({
             command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-            items: goalList(defaultSession()),
+            items: goalList(this.session),
           }),
         catch: (error) => error,
       }).pipe(
@@ -648,7 +654,9 @@ export class SettingsViewMessageHandler {
 
   private async sendProfileData(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      await this.profileController.buildProfileMessage(),
+      await this.runtime.runPromise(
+        this.profileController.buildProfileMessage(),
+      ),
     );
   }
 
@@ -716,9 +724,9 @@ export class SettingsViewMessageHandler {
         stores: platformSettingsStores(),
         // The shared function already gates this hook on
         // `configTarget !== 'global'`; this checks only the workspace half.
-        requiresOpenWorkspace: () => !defaultSession().roots.workspace,
+        requiresOpenWorkspace: () => !this.session.roots.workspace,
         onApprovalPolicyChanged: (policy) => {
-          defaultSession().setApprovalPolicy(policy);
+          this.session.setApprovalPolicy(policy);
           appSignals.emit('approvalPolicyChanged', undefined);
         },
       }),
@@ -852,11 +860,12 @@ export class SettingsViewMessageHandler {
       const discovery = await this.runtime.runPromiseExit(
         Effect.gen(function* () {
           // Retry one superseded discovery, then fail closed rather than
-          // authorize from the retained presentation catalogue.
+          // authorize from the retained presentation catalogue. A failed
+          // probe fails the program: authorization never falls back to the
+          // retained catalogue.
           for (let attempt = 0; attempt < 2; attempt += 1) {
-            const result = yield* Effect.tryPromise({
-              try: () => refreshRuntimeModelRegistry({ forceDiscovery: true }),
-              catch: (error) => error,
+            const result = yield* refreshRuntimeModelRegistry({
+              forceDiscovery: true,
             });
             if (result === 'current') return copilotRouteForModel(modelName);
           }

@@ -66,13 +66,15 @@ vi.mock('@utils/config/configUtils', () => ({
 }));
 
 // Local imports
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { signIn, signOut } from '@commands/auth/authCommands';
+import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 
-function mockUnavailableStoredSession(failure: 'invalid' | 'transient'): void {
-  vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
-  vi.spyOn(SupabaseClient, 'getStoredSessionState').mockResolvedValue(failure);
-}
+/** Run the command against the fake account plane. */
+const withAuth = <A>(
+  auth: SupabaseAuthShape,
+  program: Effect.Effect<A, never, SupabaseAuth>,
+): Effect.Effect<A> => Effect.provideService(program, SupabaseAuth, auth);
 
 describe('auth commands for unavailable stored sessions', () => {
   afterEach(() => {
@@ -85,18 +87,16 @@ describe('auth commands for unavailable stored sessions', () => {
     'clears an invalid session before opening the sign-in chooser',
     () =>
       Effect.gen(function* () {
-        mockUnavailableStoredSession('invalid');
-        const authenticatedProbe = vi
-          .spyOn(SupabaseClient, 'isAuthenticated')
-          .mockResolvedValue(true);
+        const auth = fakeSupabaseAuth({
+          storedSessionState: Effect.succeed('invalid' as const),
+        });
         authMocks.showQuickPick.mockResolvedValue(undefined);
 
-        expect(yield* signIn).toBe(false);
+        expect(yield* withAuth(auth, signIn)).toBe(false);
 
         expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
         expect(authMocks.getSession).not.toHaveBeenCalled();
         expect(authMocks.showQuickPick).toHaveBeenCalledOnce();
-        expect(authenticatedProbe).not.toHaveBeenCalled();
       }),
   );
 
@@ -104,9 +104,11 @@ describe('auth commands for unavailable stored sessions', () => {
     'preserves the session and defers sign-in during a transient outage',
     () =>
       Effect.gen(function* () {
-        mockUnavailableStoredSession('transient');
+        const auth = fakeSupabaseAuth({
+          storedSessionState: Effect.succeed('transient' as const),
+        });
 
-        expect(yield* signIn).toBe(false);
+        expect(yield* withAuth(auth, signIn)).toBe(false);
 
         expect(authMocks.clearStoredSession).not.toHaveBeenCalled();
         expect(authMocks.getSession).not.toHaveBeenCalled();
@@ -120,20 +122,26 @@ describe('auth commands for unavailable stored sessions', () => {
 
   it.effect('uses a replacement session installed during invalid cleanup', () =>
     Effect.gen(function* () {
-      vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
-      vi.spyOn(SupabaseClient, 'getStoredSessionState')
-        .mockResolvedValueOnce('invalid')
-        .mockResolvedValueOnce('authenticated');
+      // The first classification answers invalid, the one after the failed
+      // clear answers authenticated — the replacement session's.
+      let classifications = 0;
+      const auth = fakeSupabaseAuth({
+        storedSessionState: Effect.suspend(() =>
+          Effect.succeed(
+            classifications++ === 0
+              ? ('invalid' as const)
+              : ('authenticated' as const),
+          ),
+        ),
+        user: Effect.succeed({ email: 'user@example.com' } as never),
+      });
       authMocks.clearStoredSession.mockResolvedValueOnce(false);
       authMocks.getSession.mockResolvedValue({
         id: 'replacement',
         account: { id: 'user-id', label: 'user@example.com' },
       });
-      vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
-        email: 'user@example.com',
-      } as never);
 
-      expect(yield* signIn).toBe(true);
+      expect(yield* withAuth(auth, signIn)).toBe(true);
 
       expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
       expect(authMocks.getSession).toHaveBeenCalledOnce();
@@ -148,13 +156,12 @@ describe('auth commands for unavailable stored sessions', () => {
     'defers sign-in when secondary validation cannot resolve a healthy session',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
-        vi.spyOn(SupabaseClient, 'getStoredSessionState').mockResolvedValue(
-          'authenticated',
-        );
+        const auth = fakeSupabaseAuth({
+          storedSessionState: Effect.succeed('authenticated' as const),
+        });
         authMocks.getSession.mockResolvedValue(undefined);
 
-        expect(yield* signIn).toBe(false);
+        expect(yield* withAuth(auth, signIn)).toBe(false);
 
         expect(authMocks.clearStoredSession).not.toHaveBeenCalled();
         expect(authMocks.showQuickPick).not.toHaveBeenCalled();
@@ -169,10 +176,12 @@ describe('auth commands for unavailable stored sessions', () => {
     'removes an unavailable stored session without resolving it first',
     () =>
       Effect.gen(function* () {
-        mockUnavailableStoredSession('invalid');
+        const auth = fakeSupabaseAuth({
+          storedSessionState: Effect.succeed('invalid' as const),
+        });
         authMocks.showWarningMessage.mockResolvedValue('Sign out');
 
-        yield* signOut;
+        yield* withAuth(auth, signOut);
 
         expect(authMocks.getSession).not.toHaveBeenCalled();
         expect(authMocks.removeStoredSession).toHaveBeenCalledOnce();

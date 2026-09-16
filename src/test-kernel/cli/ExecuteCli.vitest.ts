@@ -23,6 +23,7 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
 
 const mocks = vi.hoisted(() => ({
@@ -168,15 +169,15 @@ function toolUseConfig() {
 /** Tools the CLI runtime hides by default during agent run. */
 const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = getDefaultUnavailableToolNames('cli');
 
-/** A run program's options with the session and runtime the wrapper below
- *  supplies. */
-type WithoutSession<O> = Omit<O, 'session' | 'runtime'>;
+/** A run program's options with the session, runtime and lifecycle the
+ *  wrapper below supplies. */
+type WithoutSession<O> = Omit<O, 'session' | 'runtime' | 'lifecycle'>;
 
 async function loadExecuteCli() {
   const runtime = await import('@cli/runtime/executeCli');
-  const { defaultSession } = await import('@agent/runtime/SessionHandle');
-  // The commands thread `initCliPlatform`'s session and runtime in; here the
-  // process default this file installs stands in for both.
+  // The commands thread `initCliPlatform`'s session, runtime and lifecycle
+  // in; here the process default this file installs stands in for the first
+  // two and the installed host's lifecycle for the third.
   return {
     ...runtime,
     executeCliRequest: (
@@ -188,8 +189,9 @@ async function loadExecuteCli() {
     ) =>
       Effect.provide(
         runtime.executeCliRequest(request, context, {
-          session: Effect.succeed(defaultSession()),
+          session: Effect.succeed(testDefaultSession()),
           runtime: effectRuntime(),
+          lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
         fakeProcessServices(),
@@ -203,8 +205,9 @@ async function loadExecuteCli() {
     ) =>
       Effect.provide(
         runtime.executeCliConfig(config, context, {
-          session: Effect.succeed(defaultSession()),
+          session: Effect.succeed(testDefaultSession()),
           runtime: effectRuntime(),
+          lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
         fakeProcessServices(),
@@ -218,8 +221,9 @@ async function loadExecuteCli() {
     ) =>
       Effect.provide(
         runtime.executeCliToolUseConfig(config, context, {
-          session: Effect.succeed(defaultSession()),
+          session: Effect.succeed(testDefaultSession()),
           runtime: effectRuntime(),
+          lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
         fakeProcessServices(),
@@ -272,10 +276,9 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
 
 /** Observe the session's terminal artifact drain. */
 async function spyOnArtifactFlush() {
-  const { defaultSession } = await import('@agent/runtime/SessionHandle');
-  const store = defaultSession().transcripts;
+  const store = testDefaultSession().transcripts;
   const flushSpy = vi
-    .spyOn(defaultSession(), 'settlePublications')
+    .spyOn(testDefaultSession(), 'settlePublications')
     .mockReturnValue(Effect.void);
   return { store, flushSpy };
 }
@@ -516,14 +519,11 @@ describe('executeCliRequest', () => {
   it.effect('keeps yolo runs approval-available for agent run', () =>
     Effect.gen(function* () {
       const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-      const { defaultSession } = yield* Effect.promise(
-        () => import('@agent/runtime/SessionHandle'),
-      );
       const request = baseRequest();
 
       yield* executeCliRequest(request, cliContext({ approvalPolicy: 'yolo' }));
 
-      expect(defaultSession().approvalPolicy).toBe('yolo');
+      expect(testDefaultSession().approvalPolicy).toBe('yolo');
       expect(mocks.runAgent).toHaveBeenCalledWith(
         request,
         expect.objectContaining({
@@ -735,7 +735,7 @@ describe('executeCliRequest', () => {
         const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
         mocks.runAgent.mockImplementationOnce(async () => {
           const hooks =
-            mocks.createHeadlessCliHostInteractions.mock.calls[0]?.[2];
+            mocks.createHeadlessCliHostInteractions.mock.calls[0]?.[3];
           hooks.emit('requestShowError', { message: 'Agent not found.' });
           throw new AgentError('Agent not found.');
         });
@@ -765,10 +765,7 @@ describe('executeCliRequest', () => {
           loadExecuteCliOnInstalledHost,
         );
         const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
-        const { defaultSession } = yield* Effect.promise(
-          () => import('@agent/runtime/SessionHandle'),
-        );
-        const killSpy = vi.spyOn(defaultSession().runs, 'kill');
+        const killSpy = vi.spyOn(testDefaultSession().runs, 'kill');
         mocks.releaseRunLeaseAfterArtifacts.mockImplementationOnce(
           async (session, runId) =>
             Effect.runPromise(session.settlePublications(runId)),
@@ -987,10 +984,7 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        const { defaultSession } = yield* Effect.promise(
-          () => import('@agent/runtime/SessionHandle'),
-        );
-        vi.spyOn(defaultSession().runs, 'kill').mockReturnValue({
+        vi.spyOn(testDefaultSession().runs, 'kill').mockReturnValue({
           accepted: () => false,
           settlement: Effect.void,
         });
@@ -1073,10 +1067,7 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        const { defaultSession } = yield* Effect.promise(
-          () => import('@agent/runtime/SessionHandle'),
-        );
-        const killSpy = vi.spyOn(defaultSession().runs, 'kill');
+        const killSpy = vi.spyOn(testDefaultSession().runs, 'kill');
         const published = yield* Deferred.make<LeaseOptions>();
         const hangingRun = stubHangingRun(published);
         let publicationCommitted: boolean | undefined;
@@ -1123,16 +1114,13 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        const { defaultSession } = yield* Effect.promise(
-          () => import('@agent/runtime/SessionHandle'),
-        );
         // Imported dynamically (like the lease test below) so the `instanceof`
         // check in executeCli.ts sees the same module instance even after an
         // earlier test's `vi.resetModules()` in this file.
         const { AgentError: RuntimeAgentError } = yield* Effect.promise(
           () => import('@common/errors'),
         );
-        const killSpy = vi.spyOn(defaultSession().runs, 'kill');
+        const killSpy = vi.spyOn(testDefaultSession().runs, 'kill');
         const outputFailure = new Error(
           'Workflow completed without generated outputs; nothing was copied to out.',
         );

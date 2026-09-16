@@ -16,7 +16,7 @@ import { z } from 'zod';
 
 import { Effect, Result } from 'effect';
 import { SUPABASE_CONFIG } from '@auth/config';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { createLog } from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
@@ -78,16 +78,17 @@ function parseListItemRow(row: RemoteAgentListRow): RemoteAgentListItem | null {
 /**
  * List all available remote agents for the current user. The listing is a
  * best-effort projection behind registry/settings refreshes: a signed-out
- * user, an unreachable relay, or a rejected query all yield an empty list
- * (logged at debug) rather than a failure of the catalog load that awaits it.
+ * user — including a composition with no account plane to sign in to — an
+ * unreachable relay, or a rejected query all yield an empty list (logged at
+ * debug) rather than a failure of the catalog load that awaits it.
  */
 export function listRemoteAgents(): Effect.Effect<RemoteAgentListItem[]> {
   return Effect.gen(function* () {
-    const token = yield* Effect.tryPromise({
-      try: () => SupabaseClient.getAccessToken(),
-      catch: (cause) =>
-        new RemoteAgentListError({ message: toErrorMessage(cause), cause }),
-    });
+    // `serviceOption`, not a required service: the embeddable agent package
+    // composes no account plane, and its catalog load answers signed-out.
+    const auth = yield* Effect.serviceOption(SupabaseAuth);
+    if (auth._tag === 'None') return [];
+    const token = yield* auth.value.accessToken;
     if (!token) return [];
 
     const { data, error } = yield* fetchRemoteAgentListRows(token);

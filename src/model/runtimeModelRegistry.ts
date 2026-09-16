@@ -1,13 +1,14 @@
+import { Deferred, Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
-import { platform } from '@platform/platform';
-import type {
-  LanguageModelAccessState,
-  LanguageModelInfo,
-  LanguageModelReference,
+import {
+  LanguageModel,
+  type LanguageModelAccessState,
+  type LanguageModelInfo,
+  type LanguageModelReference,
 } from '@platform/languageModel';
 
 /**
@@ -48,8 +49,11 @@ interface RuntimeModelCatalogue {
   readonly entries: ReadonlyMap<string, CopilotModelRoute>;
   /** Whether {@link entries} reflect a discovery that is still current. */
   readonly discovered: boolean;
-  /** The in-flight discovery, if one is running. */
-  readonly pending?: Promise<RefreshRuntimeModelRegistryResult>;
+  /** The in-flight discovery's shared answer, if one is running. */
+  readonly pending?: Deferred.Deferred<
+    RefreshRuntimeModelRegistryResult,
+    unknown
+  >;
   /** Whether the in-flight discovery explicitly bypasses a fresh cache. */
   readonly pendingForceDiscovery?: boolean;
 }
@@ -88,13 +92,18 @@ function matchingBaseModel(info: LanguageModelInfo): string | undefined {
     .at(0)?.[0];
 }
 
-async function discoverCopilotRoutes(): Promise<
-  Map<string, CopilotModelRoute>
-> {
-  const languageModel = platform().languageModel;
-  if (!languageModel.isAvailable()) return new Map();
+const discoverCopilotRoutes = Effect.fn(
+  'runtimeModelRegistry.discoverCopilotRoutes',
+)(function* () {
+  const languageModel = yield* LanguageModel;
+  if (!languageModel.isAvailable()) return new Map<string, CopilotModelRoute>();
 
-  const discovered = await languageModel.selectModels({ vendor: 'copilot' });
+  const discovered = yield* Effect.tryPromise({
+    // The port's own rejection travels as the failure, so a caller waiting on
+    // this discovery sees the error the host raised, not a wrapped one.
+    try: () => languageModel.selectModels({ vendor: 'copilot' }),
+    catch: (cause) => cause,
+  });
   const entries = new Map<string, CopilotModelRoute>();
   for (const info of discovered.toSorted((left, right) =>
     right.version.localeCompare(left.version),
@@ -123,7 +132,7 @@ async function discoverCopilotRoutes(): Promise<
     });
   }
   return entries;
-}
+});
 
 interface RefreshRuntimeModelRegistryOptions {
   /** Re-query the adapter even when the current catalogue is marked fresh. */
@@ -132,53 +141,82 @@ interface RefreshRuntimeModelRegistryOptions {
 
 type RefreshRuntimeModelRegistryResult = 'current' | 'superseded';
 
-/** Refresh editor-supplied routes after the native model/access cache changes. */
-export async function refreshRuntimeModelRegistry(
+/**
+ * Refresh editor-supplied routes after the native model/access cache changes.
+ *
+ * The discovery runs on a detached fiber and every concurrent caller waits on
+ * the same `Deferred`, so one caller's interruption cancels only its own wait
+ * — what the shared promise this replaced did by construction. The claim and
+ * the fork run under one uninterruptible mask: an interrupt landing between
+ * registering the deferred and starting the fiber that settles it would
+ * otherwise leave every later caller waiting on an answer nothing completes
+ * (the `resolveApiKey` shape in `@model/apiProviders`).
+ */
+export const refreshRuntimeModelRegistry = Effect.fn(
+  'runtimeModelRegistry.refreshRuntimeModelRegistry',
+)(function* (
   options: RefreshRuntimeModelRegistryOptions = {},
-): Promise<RefreshRuntimeModelRegistryResult> {
+): Effect.fn.Return<RefreshRuntimeModelRegistryResult, unknown, LanguageModel> {
   if (options.forceDiscovery) {
     // Overlapping user actions share one forced probe. A normal probe that
     // started earlier is superseded because its access snapshot may predate
     // the action that must authorize persistence.
     if (catalogue.pendingForceDiscovery && catalogue.pending) {
-      return catalogue.pending;
+      return yield* Deferred.await(catalogue.pending);
     }
     invalidateRuntimeModelRegistry();
   }
   if (catalogue.discovered) return 'current';
-  if (catalogue.pending) return catalogue.pending;
+  if (catalogue.pending) return yield* Deferred.await(catalogue.pending);
 
-  // Both outcomes below replace the catalogue wholesale, which is also what
-  // clears `pending`; a result whose generation has moved on was superseded by
-  // an invalidation and is dropped instead of committed.
-  const { generation, entries: previousEntries } = catalogue;
-  const request = (async (): Promise<RefreshRuntimeModelRegistryResult> => {
-    const entries = await discoverCopilotRoutes();
-    if (catalogue.generation !== generation) return 'superseded';
-    catalogue = { generation, entries, discovered: true };
-    return 'current';
-  })();
-  catalogue = {
-    ...catalogue,
-    pending: request,
-    pendingForceDiscovery: options.forceDiscovery === true,
-  };
-  try {
-    return await request;
-  } catch (error) {
-    if (catalogue.generation === generation) {
-      catalogue = {
-        generation,
-        // Discovery failure marks last-known presentation stale but does not
-        // blank it. Authorization callers still receive the thrown error and
-        // therefore cannot act on these retained entries.
-        entries: previousEntries,
-        discovered: false,
-      };
-    }
-    throw error;
-  }
-}
+  return yield* Effect.uninterruptibleMask((restore) => {
+    // Both outcomes below replace the catalogue wholesale, which is also what
+    // clears `pending`; a result whose generation has moved on was superseded
+    // by an invalidation and is dropped instead of committed.
+    const { generation, entries: previousEntries } = catalogue;
+    const pending = Deferred.makeUnsafe<
+      RefreshRuntimeModelRegistryResult,
+      unknown
+    >();
+    catalogue = {
+      ...catalogue,
+      pending,
+      pendingForceDiscovery: options.forceDiscovery === true,
+    };
+    return Effect.flatMap(
+      Effect.forkDetach(
+        discoverCopilotRoutes().pipe(
+          Effect.flatMap((entries) =>
+            Effect.sync((): RefreshRuntimeModelRegistryResult => {
+              if (catalogue.generation !== generation) return 'superseded';
+              catalogue = { generation, entries, discovered: true };
+              return 'current';
+            }),
+          ),
+          Effect.tapError(() =>
+            Effect.sync(() => {
+              if (catalogue.generation === generation) {
+                catalogue = {
+                  generation,
+                  // Discovery failure marks last-known presentation stale but
+                  // does not blank it. Authorization callers still receive the
+                  // failure and therefore cannot act on these retained
+                  // entries.
+                  entries: previousEntries,
+                  discovered: false,
+                };
+              }
+            }),
+          ),
+          Effect.onExit((exit) =>
+            Effect.sync(() => Deferred.doneUnsafe(pending, exit)),
+          ),
+        ),
+      ),
+      () => restore(Deferred.await(pending)),
+    );
+  });
+});
 
 /** Mark discovery stale while retaining last-known routes for sync readers. */
 export function invalidateRuntimeModelRegistry(): void {
@@ -199,12 +237,12 @@ export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
  * discovery has run in this host, so a Copilot route preference decided from
  * the result routes on a fresh catalogue.
  */
-export async function resolveRuntimeModelConfig(
-  model: string,
-): Promise<ModelConfig | undefined> {
-  await discoveredCopilotRoutes();
+export const resolveRuntimeModelConfig = Effect.fn(
+  'runtimeModelRegistry.resolveRuntimeModelConfig',
+)(function* (model: string) {
+  yield* discoveredCopilotRoutes();
   return getRuntimeModelConfig(model);
-}
+});
 
 /** The Copilot route discovered for a canonical base model id, if any. */
 export function copilotRouteForModel(
@@ -221,16 +259,15 @@ export function copilotRouteForModel(
  * stale. Authorization never uses this fallback: access requests force a new
  * probe and propagate its failure.
  */
-export async function discoveredCopilotRoutes(): Promise<
-  ReadonlyMap<string, CopilotModelRoute>
-> {
-  try {
-    await refreshRuntimeModelRegistry();
-  } catch {
+export const discoveredCopilotRoutes = Effect.fn(
+  'runtimeModelRegistry.discoveredCopilotRoutes',
+)(function* () {
+  yield* refreshRuntimeModelRegistry().pipe(
     // Tolerated: presentation keeps the retained last-known catalogue.
-  }
+    Effect.catch(() => Effect.void),
+  );
   return catalogue.entries;
-}
+});
 
 /** Direct-key route for a model the editor was serving through Copilot. */
 export function getRuntimeModelDirectFallback(

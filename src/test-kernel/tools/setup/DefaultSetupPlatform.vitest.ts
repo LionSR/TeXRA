@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { SupabaseClient } from '@auth/SupabaseClient';
 import * as codexAuth from '@auth/codex';
 import * as providerCapabilities from '@model/providerCapabilities';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
@@ -25,12 +24,11 @@ setupPlatform(
     secrets: { 'apiKey.openai': 'sk-stored-key' },
     secretsEnv: { GITHUB_TOKEN: 'github-env-token' },
   },
-  { setup: { host: 'extension', signIn: async () => false } },
+  { setup: { host: 'extension', signIn: () => Effect.succeed(false) } },
 );
 
 afterEach(() => {
   vi.restoreAllMocks();
-  SupabaseClient.resetForTests();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -51,11 +49,13 @@ describe('shared setup capabilities', () => {
     'does not expose ChatGPT account identifiers through setup tools',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(codexAuth, 'getCodexStatus').mockResolvedValue({
-          signedIn: true,
-          email: 'researcher@example.com',
-          accountId: 'account-private-id',
-        });
+        vi.spyOn(codexAuth, 'getCodexStatus').mockReturnValue(
+          Effect.succeed({
+            signedIn: true,
+            email: 'researcher@example.com',
+            accountId: 'account-private-id',
+          }),
+        );
 
         const status = yield* getChatGptSubscriptionStatus();
 
@@ -70,14 +70,16 @@ describe('shared setup capabilities', () => {
     'reports ChatGPT as disabled when runtime routing cannot use it',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(codexAuth, 'getCodexStatus').mockResolvedValue({
-          signedIn: true,
-          email: 'researcher@example.com',
-        });
+        vi.spyOn(codexAuth, 'getCodexStatus').mockReturnValue(
+          Effect.succeed({
+            signedIn: true,
+            email: 'researcher@example.com',
+          }),
+        );
         vi.spyOn(
           providerCapabilities,
           'isCodexSubscriptionActive',
-        ).mockResolvedValue(false);
+        ).mockReturnValue(Effect.succeed(false));
 
         expect(yield* getChatGptSubscriptionStatus()).toEqual({
           signedIn: true,

@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { getFileLister } from '@frontend/files/fileLister';
 import { openFirstLabelMatch } from '@latex/labelSearch';
@@ -21,9 +21,13 @@ function revealPosition(editor: vscode.TextEditor, pos: vscode.Position): void {
   editor.selection = new vscode.Selection(pos, pos);
 }
 
-async function openFile(file: string, line?: number): Promise<void> {
+async function openFile(
+  session: SessionHandle,
+  file: string,
+  line?: number,
+): Promise<void> {
   const uri = vscode.Uri.file(
-    workspaceAbsolutePath(defaultSession().roots.workspace, file),
+    workspaceAbsolutePath(session.roots.workspace, file),
   );
 
   if (line !== undefined && line > 0) {
@@ -42,6 +46,7 @@ async function openFile(file: string, line?: number): Promise<void> {
  * for every host.
  */
 async function openLabel(
+  session: SessionHandle,
   label: string,
   runtime: ProcessRuntime,
 ): Promise<boolean> {
@@ -49,7 +54,7 @@ async function openLabel(
     ...(await getFileLister().list('input')),
     ...(await getFileLister().list('context')),
   ]);
-  const { roots } = defaultSession();
+  const { roots } = session;
   // The candidates are workspace-relative listings, read through the
   // session's workspace view.
   const workspaceFs = await runtime.runPromise(
@@ -85,12 +90,16 @@ async function openLabel(
 export function registerOpenFileCommands(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): void {
   registerCommandEntries(context, [
-    { id: 'texra.openFile', handler: openFile },
+    {
+      id: 'texra.openFile',
+      handler: (file: string, line?: number) => openFile(session, file, line),
+    },
     {
       id: 'texra.openLabel',
-      handler: (label: string) => openLabel(label, runtime),
+      handler: (label: string) => openLabel(session, label, runtime),
     },
   ]);
 }
