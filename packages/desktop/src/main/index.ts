@@ -707,7 +707,7 @@ function createWindow(options: {
   };
   const signInForRemoteAgentCatalog = () =>
     Effect.tryPromise({
-      try: async (): Promise<boolean> => {
+      try: async () => {
         const provider = await chooseOAuthProvider();
         if (provider === undefined) return false;
         teamSignInPending = true;
