@@ -214,8 +214,8 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // desktop roots.
     processRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
-      globalStorage: () => platform.roots.globalStorage,
-      updateCheckStorage: () => platform.roots.globalStorage,
+      globalStorage: platform.roots.globalStorage,
+      updateCheckStorage: platform.roots.globalStorage,
       ...processServices,
       lean: directLeanLanguageServices(),
     });

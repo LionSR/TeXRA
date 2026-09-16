@@ -52,7 +52,7 @@ beforeEach(() => {
         testHttpClientLayer,
         Layer.mock(UpdateCheckRecords, {}),
         fakeProcessServices(),
-        inquiryRecordsLayer(() => globalStorage).pipe(
+        inquiryRecordsLayer(globalStorage).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         ),
       ),

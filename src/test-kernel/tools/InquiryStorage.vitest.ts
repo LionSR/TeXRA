@@ -26,7 +26,7 @@ describe('InquiryStorage', () => {
   afterEach(() => rmSync(storage, { recursive: true, force: true }));
   const layer = Layer.unwrap(
     Effect.sync(() =>
-      inquiryRecordsLayer(() => storage).pipe(
+      inquiryRecordsLayer(storage).pipe(
         Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
       ),
     ),

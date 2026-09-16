@@ -244,8 +244,8 @@ async function initVscodePlatform(
   };
   const runtime = installProcessRuntime({
     processStart: await nodeProcesses.selfIdentity(),
-    globalStorage: () => storage.getGlobalStoragePath(),
-    updateCheckStorage: () => storage.getGlobalStoragePath(),
+    globalStorage: storage.getGlobalStoragePath(),
+    updateCheckStorage: storage.getGlobalStoragePath(),
     secrets,
     appState: globalState,
     auth,

@@ -706,9 +706,9 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          inquiryRecordsLayer(
-            () => createFakeWorkspaceRoots().globalStorage,
-          ).pipe(Layer.provide(ProcessIdentity.layer(SELF))),
+          inquiryRecordsLayer(createFakeWorkspaceRoots().globalStorage).pipe(
+            Layer.provide(ProcessIdentity.layer(SELF)),
+          ),
         ),
       ),
   );

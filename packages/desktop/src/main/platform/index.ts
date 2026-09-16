@@ -194,8 +194,8 @@ export async function initializeElectronPlatform(
   const setupAuth = createDesktopSetupAuth();
   const runtime = installProcessRuntime({
     processStart,
-    globalStorage: () => storage.getGlobalStoragePath(),
-    updateCheckStorage: () => resolveGlobalStoragePath(userDataPath),
+    globalStorage: storage.getGlobalStoragePath(),
+    updateCheckStorage: resolveGlobalStoragePath(userDataPath),
     secrets,
     appState: globalStateStore,
     auth: supabaseAuth,
