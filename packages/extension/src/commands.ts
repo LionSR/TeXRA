@@ -38,6 +38,7 @@ export function registerCommands(
     globalState,
     secrets,
     runtime,
+    session,
   );
   registerOpenFileCommands(context, runtime, session);
   registerMainViewCommands(context, progressViewProvider);

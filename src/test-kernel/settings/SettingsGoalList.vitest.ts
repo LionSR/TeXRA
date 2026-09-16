@@ -46,6 +46,7 @@ function createHandler(): SettingsViewMessageHandler {
     globalState,
     secrets,
     effectRuntime(),
+    defaultSession(),
   );
 }
 
