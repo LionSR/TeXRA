@@ -186,8 +186,8 @@ function expectedAccessStatus(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
-  mocks.getXaiStatus.mockResolvedValue({ signedIn: false });
+  mocks.getCodexStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
+  mocks.getXaiStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
   mocks.isPreferCodexSubscription.mockReturnValue(false);
   mocks.isPreferXaiSubscription.mockReturnValue(false);
   mocks.setPreferCodexSubscription.mockReturnValue(
@@ -248,10 +248,12 @@ describe('CLI model access routes', () => {
   });
 
   it('reports the ChatGPT preference independently of sign-in', async () => {
-    mocks.getCodexStatus.mockResolvedValue({
-      signedIn: true,
-      email: 'user@example.com',
-    });
+    mocks.getCodexStatus.mockReturnValue(
+      Effect.succeed({
+        signedIn: true,
+        email: 'user@example.com',
+      }),
+    );
     mocks.isPreferCodexSubscription.mockReturnValue(true);
 
     expect(await Effect.runPromise(readCliModelAccessStatus(secrets))).toEqual(
@@ -265,7 +267,7 @@ describe('CLI model access routes', () => {
       }),
     );
 
-    mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
+    mocks.getCodexStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
     expect(await Effect.runPromise(readCliModelAccessStatus(secrets))).toEqual(
       expectedAccessStatus({
         preferences: {
@@ -438,10 +440,12 @@ describe('CLI model access routes', () => {
 
   it.effect('turns off ChatGPT without changing the Kimi preference', () =>
     Effect.gen(function* () {
-      mocks.getCodexStatus.mockResolvedValue({
-        signedIn: true,
-        email: 'user@example.com',
-      });
+      mocks.getCodexStatus.mockReturnValue(
+        Effect.succeed({
+          signedIn: true,
+          email: 'user@example.com',
+        }),
+      );
       mocks.isPreferCodexSubscription.mockReturnValue(true);
       mocks.setPreferCodexSubscription.mockReturnValue(
         Effect.succeed({ effective: false, target: 'global' }),
@@ -466,10 +470,12 @@ describe('CLI model access routes', () => {
     'represents preferences independently and toggles each without side effects',
     () =>
       Effect.gen(function* () {
-        mocks.getCodexStatus.mockResolvedValue({
-          signedIn: true,
-          email: 'user@example.com',
-        });
+        mocks.getCodexStatus.mockReturnValue(
+          Effect.succeed({
+            signedIn: true,
+            email: 'user@example.com',
+          }),
+        );
         mocks.isPreferCodexSubscription.mockReturnValue(true);
         mocks.getPreferKimiCode.mockReturnValue(true);
         mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
@@ -509,10 +515,12 @@ describe('CLI model access routes', () => {
         expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
 
         vi.clearAllMocks();
-        mocks.getCodexStatus.mockResolvedValue({
-          signedIn: true,
-          email: 'user@example.com',
-        });
+        mocks.getCodexStatus.mockReturnValue(
+          Effect.succeed({
+            signedIn: true,
+            email: 'user@example.com',
+          }),
+        );
         mocks.isPreferCodexSubscription.mockReturnValue(true);
         mocks.setPreferCodexSubscription.mockReturnValue(
           Effect.succeed({ effective: false, target: 'global' }),

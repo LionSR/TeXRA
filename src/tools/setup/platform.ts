@@ -161,15 +161,15 @@ export const getSetupAuthStatus = Effect.fn('getSetupAuthStatus')(
 );
 
 /**
- * The ChatGPT subscription probe could not answer. Both members read the
- * stored OAuth session and the routing built from it; neither reports "no
- * subscription" this way, which is a value. They stay `Promise`-shaped with
+ * The ChatGPT subscription routing probe could not answer. It reads the
+ * routing built from the stored OAuth session; it never reports "no
+ * subscription" this way, which is a value. It stays `Promise`-shaped with
  * the rest of the account group.
  */
 class SubscriptionProbeFailed extends Data.TaggedError(
   'SubscriptionProbeFailed',
 )<{
-  readonly member: 'getCodexStatus' | 'isCodexSubscriptionActive';
+  readonly member: 'isCodexSubscriptionActive';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -183,15 +183,7 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   Secrets
 > {
   const secrets = yield* Secrets;
-  const status = yield* Effect.tryPromise({
-    try: () => getCodexStatus(secrets),
-    catch: (cause) =>
-      new SubscriptionProbeFailed({
-        member: 'getCodexStatus',
-        message: 'The ChatGPT subscription session could not be read.',
-        cause,
-      }),
-  });
+  const status = yield* getCodexStatus(secrets);
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
   const enabled = yield* Effect.tryPromise({

@@ -186,6 +186,7 @@ export async function initializeElectronPlatform(
     updateCheckStorage: () => resolveGlobalStoragePath(userDataPath),
     secrets,
     appState: globalStateStore,
+    agentResume,
     setup: setupAuth.platform,
     lean: directLeanLanguageServices(),
   });

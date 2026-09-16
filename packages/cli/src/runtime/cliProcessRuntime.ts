@@ -58,6 +58,7 @@ import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter'
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getCliSecrets } from './cliSecrets';
+import { cliAgentResume } from './cliAgentResume';
 import { signInCliSupabase } from './supabaseAuth';
 
 /** The process runtime and the global state store installed under it. */
@@ -138,6 +139,10 @@ export function installCliProcessRuntime(
       updateCheckStorage: () => storage.getGlobalStoragePath(),
       secrets: getCliSecrets(storageRoot),
       ...(globalState === undefined ? {} : { appState: globalState }),
+      // The one resume port, shared with the platform `initCliPlatform`
+      // wires: it forwards to the chat TUI's handler whenever one is
+      // mounted, whichever entry installed this runtime.
+      agentResume: cliAgentResume,
       setup: {
         host: 'cli',
         // The one closure left over the runtime being installed, and a real

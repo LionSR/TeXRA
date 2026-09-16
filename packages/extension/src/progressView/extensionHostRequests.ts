@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 import { Data, Effect, FileSystem } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
+import { runAgent } from '@agent/runtime';
 import {
   validateRunRequest,
   type RunRequest,
@@ -51,6 +52,7 @@ import {
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
@@ -66,6 +68,7 @@ import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
@@ -203,21 +206,41 @@ export function createExtensionHostRequests(
     options.snapshot.setRecording(recording),
   );
 
-  /** Validate an agent request and run it through the one launch command. */
-  async function runAgentRequest(
-    request: RunRequest,
-    runOptions: Parameters<HostRunActionPorts['runAgentRequest']>[1] = {},
-  ): Promise<void> {
+  /**
+   * Validate an agent request and launch it directly: the port settled with
+   * the run even through the old `texra.execute` command hop, and the hop's
+   * only addition was a second Zod parse of the config `validateRunRequest`
+   * already checked. The launch program takes its process services from this
+   * runtime's context on the fiber that runs it, as the resume port's program
+   * does.
+   */
+  const runAgentRequest: HostRunActionPorts['runAgentRequest'] = (
+    request,
+    runOptions = {},
+  ) => {
     const validation = validateRunRequest(request);
     if (!validation.valid) {
       log.error(validation.message);
-      throw new Rejected({ reason: validation.message });
+      return Effect.fail(new Rejected({ reason: validation.message }));
     }
-    await runCommand('texra.execute', {
-      ...validation.request,
-      ...runOptions,
-    });
-  }
+    const { config, runId } = validation.request;
+    const launch = runAgent(
+      runId === undefined
+        ? { kind: 'fresh', config }
+        : { kind: 'resume', config, runId },
+      {
+        session,
+        openWorkflowOutput: openFinalOutputIfAvailable,
+        preferHelperModel: runOptions.preferHelperModel ?? false,
+        ownApiKeyFallback: runOptions.ownApiKeyFallback,
+        onRun: runOptions.onRun,
+        onRunResolved: presentLaunchedProgressRun,
+      },
+    ).pipe(Effect.asVoid);
+    return Effect.flatMap(runtime.contextEffect, (context) =>
+      Effect.provideContext(launch, context),
+    );
+  };
 
   const runActions = runtime.runSync(
     createHostRunActions({

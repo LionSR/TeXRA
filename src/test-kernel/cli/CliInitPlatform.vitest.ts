@@ -4,10 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { SupabaseClient } from '@auth/SupabaseClient';
-import {
-  initCliPlatform,
-  setCliAgentResumeHandler,
-} from '@cli/runtime/initPlatform';
+import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { StateWriteFailed } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';

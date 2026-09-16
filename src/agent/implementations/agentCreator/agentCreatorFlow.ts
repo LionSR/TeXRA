@@ -21,6 +21,7 @@ import type { RegisteredToolName } from '@tools/registry';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
+import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('AgentCreator');
 
@@ -395,7 +396,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
   blueprint: AgentBlueprint,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Effect.fn.Return<string, unknown> {
+): Effect.fn.Return<string, unknown, HttpClient.HttpClient> {
   let lastValidationError: string | undefined;
 
   const attempt = Effect.gen(function* () {
@@ -479,7 +480,11 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   category: AgentCategory,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Effect.fn.Return<void, unknown, FileSystem.FileSystem> {
+): Effect.fn.Return<
+  void,
+  unknown,
+  FileSystem.FileSystem | HttpClient.HttpClient
+> {
   const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
   const agentName = yield* ui.promptAgentName(categoryLabel);
   if (!agentName) return;

@@ -1,4 +1,3 @@
-import { defaultSession } from '@agent/runtime';
 import {
   assertCliAgentLaunch,
   resolveCliAgentInCategory,
@@ -99,7 +98,7 @@ export async function applyCliModelSelection(
   }
 
   const activeFlow = context.session.runId
-    ? defaultSession().runs.getToolUseFlowContext(context.session.runId)
+    ? context.runtimeSession.runs.getToolUseFlowContext(context.session.runId)
     : undefined;
   if (!activeFlow) {
     appendLocalAssistantTranscript(

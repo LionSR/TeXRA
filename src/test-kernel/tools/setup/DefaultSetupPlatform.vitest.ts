@@ -51,11 +51,13 @@ describe('shared setup capabilities', () => {
     'does not expose ChatGPT account identifiers through setup tools',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(codexAuth, 'getCodexStatus').mockResolvedValue({
-          signedIn: true,
-          email: 'researcher@example.com',
-          accountId: 'account-private-id',
-        });
+        vi.spyOn(codexAuth, 'getCodexStatus').mockReturnValue(
+          Effect.succeed({
+            signedIn: true,
+            email: 'researcher@example.com',
+            accountId: 'account-private-id',
+          }),
+        );
 
         const status = yield* getChatGptSubscriptionStatus();
 
@@ -70,10 +72,12 @@ describe('shared setup capabilities', () => {
     'reports ChatGPT as disabled when runtime routing cannot use it',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(codexAuth, 'getCodexStatus').mockResolvedValue({
-          signedIn: true,
-          email: 'researcher@example.com',
-        });
+        vi.spyOn(codexAuth, 'getCodexStatus').mockReturnValue(
+          Effect.succeed({
+            signedIn: true,
+            email: 'researcher@example.com',
+          }),
+        );
         vi.spyOn(
           providerCapabilities,
           'isCodexSubscriptionActive',

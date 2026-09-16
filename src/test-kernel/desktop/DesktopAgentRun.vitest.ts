@@ -2,6 +2,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
@@ -51,7 +52,7 @@ describe('desktop agent run completion hook', () => {
     });
     const launch = vi
       .spyOn(DesktopAgentLaunch, 'launchDesktopAgent')
-      .mockReturnValue(launchSettled);
+      .mockReturnValue(Effect.promise(() => launchSettled));
     onTestFinished(() => {
       launch.mockRestore();
     });
