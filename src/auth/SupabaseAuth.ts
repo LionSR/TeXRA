@@ -206,6 +206,11 @@ export function createSupabaseAuth(init: SupabaseAuthInit): SupabaseAuthShape {
       // `persistSession` is what gates GoTrue's use of `storage` at all; the
       // adapter above is what keeps this honest, writing PKCE flow state
       // only and never the session, which the host's secret storage owns.
+      // The plane is built before the host installs the auth run edge
+      // (`installAuthProgramEdge`): safe because GoTrue's construction-time
+      // session read asks for the bare session-slot key, which the adapter
+      // short-circuits without reaching `runAuthProgram`. A storage read of a
+      // derived key during construction would hit the uninstalled edge.
       persistSession: true,
       storage: gotrueStorage(init.secrets),
       storageKey: SUPABASE_GOTRUE_STORAGE_KEY,

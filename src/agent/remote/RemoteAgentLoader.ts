@@ -64,12 +64,18 @@ export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
       const toolNames = extractToolNames(settings.tools);
       const defaultOutputFiles = settings.defaultOutputFiles;
 
-      const config: RemoteAgentConfig = {
-        settings: AgentSettingSchema.parse(
-          normalizeAgentSettingTools(settings, CHANNEL),
-        ),
-        prompts: AgentPromptSchema.parse(validated.prompts),
-      };
+      // The stricter setting/prompt schemas throw: keep that on the typed
+      // channel, where the catch below logs and re-fails it, as the old
+      // try/catch did — a defect would skip both.
+      const config = yield* Effect.try({
+        try: (): RemoteAgentConfig => ({
+          settings: AgentSettingSchema.parse(
+            normalizeAgentSettingTools(settings, CHANNEL),
+          ),
+          prompts: AgentPromptSchema.parse(validated.prompts),
+        }),
+        catch: ensureError,
+      });
 
       updateAgentMeta(`remote:${agentName}`, {
         description: validated.description,
