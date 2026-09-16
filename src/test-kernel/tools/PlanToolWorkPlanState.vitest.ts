@@ -1,5 +1,4 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -8,15 +7,13 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 // Local imports
 import { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
-import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { platform, type Platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { Goal, Plan, RequestDecision, RunId } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -429,8 +426,8 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   beforeEach(async () => {
     await installPlatform(true);
     RUN_ID = generateRunId();
-    publishTestRunStart(defaultSession(), RUN_ID);
-    await Effect.runPromise(defaultSession().settlePublications());
+    publishTestRunStart(testDefaultSession(), RUN_ID);
+    await Effect.runPromise(testDefaultSession().settlePublications());
   });
 
   function callTool(input: unknown) {
@@ -438,7 +435,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     return tool.call(input).pipe(
       Effect.provide(
         nativeToolTestLayer({
-          run: { runId: RUN_ID, session: defaultSession(), toolPolicy: {} },
+          run: { runId: RUN_ID, session: testDefaultSession(), toolPolicy: {} },
         }),
       ),
     );
@@ -446,7 +443,11 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
 
   /** Put a goal on the run: its committed row folds before the tool reads it. */
   const seedGoal = Effect.fn('test.seedGoal')(function* () {
-    yield* startGoal(defaultSession(), RUN_ID, 'Drive the plan to completion.');
+    yield* startGoal(
+      testDefaultSession(),
+      RUN_ID,
+      'Drive the plan to completion.',
+    );
   });
 
   it.effect('pauses an active goal with a reason', () =>
@@ -457,8 +458,8 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
         reason: 'Need API credentials from the user.',
       });
       expect(result.status).toBe('executed');
-      yield* defaultSession().settlePublications();
-      expect(goalOf(defaultSession(), RUN_ID)?.status).toBe('paused');
+      yield* testDefaultSession().settlePublications();
+      expect(goalOf(testDefaultSession(), RUN_ID)?.status).toBe('paused');
     }),
   );
 
@@ -473,8 +474,8 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
       expect(result.output).toContain('all 142 tests pass');
       // A finished goal is not archived: the run's next row states that none
       // is in flight, so the wait-node loop has nothing to continue.
-      yield* defaultSession().settlePublications();
-      expect(goalOf(defaultSession(), RUN_ID)).toBeNull();
+      yield* testDefaultSession().settlePublications();
+      expect(goalOf(testDefaultSession(), RUN_ID)).toBeNull();
     }),
   );
 });

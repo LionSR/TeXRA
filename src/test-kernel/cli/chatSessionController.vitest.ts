@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   setCliHelperModel: vi.fn(),
   createCliRuntimeHost: vi.fn(),
   presentationHostClose: vi.fn(),
-  defaultSession: vi.fn(),
+  sessionStub: vi.fn(),
   getActiveRunIds: vi.fn(),
   getRunHandle: vi.fn(),
   detachHostInteractions: vi.fn(),
@@ -78,12 +78,6 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 
 vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
-}));
-
-vi.mock('@agent/runtime/SessionHandle', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/runtime/SessionHandle')>()),
-  currentSession: mocks.defaultSession,
-  defaultSession: mocks.defaultSession,
 }));
 
 vi.mock('@agent/runtime/terminalResultToast', () => ({
@@ -261,7 +255,7 @@ function makeInit(
   onTestFinished(() => Effect.runPromise(Scope.close(scope, Exit.void)));
   return {
     session: makeSession(),
-    runtimeSession: mocks.defaultSession(),
+    runtimeSession: mocks.sessionStub(),
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
     followUpQueue: Effect.runSync(makeFollowUpDeliveryQueue(scope)),
@@ -300,17 +294,17 @@ function installResumeRunStore(
 }
 
 /**
- * Installs what `defaultSession()` answers with. Every surface is a stub the
- * controller can call; a test that asserts through a real runtime object swaps
- * just that surface in. `defaultSession` is a bare mock, so the override map is
- * untyped here exactly as the returned session is.
+ * Installs the session stub the controller surfaces receive. Every surface is
+ * a stub the controller can call; a test that asserts through a real runtime
+ * object swaps just that surface in. `sessionStub` is a bare mock, so the
+ * override map is untyped here exactly as the returned session is.
  */
 function installSession(overrides: Record<string, unknown> = {}): void {
   const runs = {
     getActiveIds: mocks.getActiveRunIds,
     getHandle: mocks.getRunHandle,
   };
-  mocks.defaultSession.mockReturnValue({
+  mocks.sessionStub.mockReturnValue({
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
     interactions: {
       use: vi.fn(() => mocks.detachHostInteractions),
@@ -369,7 +363,7 @@ function installOwnerSession(): {
         }),
     },
   });
-  mocks.defaultSession.mockReturnValue(owner);
+  mocks.sessionStub.mockReturnValue(owner);
   return {
     session,
     runs: session.runs,
@@ -470,7 +464,7 @@ describe('CLI terminal outcome resolution', () => {
 
     await expect(
       Effect.runPromise(
-        readCliRunOutcomeState(mocks.defaultSession(), {
+        readCliRunOutcomeState(mocks.sessionStub(), {
           outcome: RUN_OUTCOME.COMPLETED,
           output: { category: 'toolUse', response: '', files: [] },
           runId: '5d0001' as RunId,
@@ -491,7 +485,7 @@ describe('CLI terminal outcome resolution', () => {
     await expect(
       Effect.runPromise(
         readCliRunOutcomeState(
-          mocks.defaultSession(),
+          mocks.sessionStub(),
           {
             outcome: RUN_OUTCOME.COMPLETED,
             output: { category: 'toolUse', response: '', files: [] },
@@ -1095,7 +1089,7 @@ describe('createChatSessionController', () => {
     holdRun('aaaaaa' as RunId);
     const resumed = ctrl.resume('aaaaaa' as RunId);
     // resume() has claimed the slot synchronously; once the durable record
-    // resolves it suspends inside defaultSession().transcripts.ensureLoaded()
+    // resolves it suspends inside session.transcripts.ensureLoaded()
     // with session.runId already set to the resumed run.
     expect(session.runPromise).toBeDefined();
     await vi.waitFor(() => expect(session.runId).toBe('aaaaaa'));

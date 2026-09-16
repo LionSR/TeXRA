@@ -1,5 +1,4 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -16,13 +15,14 @@ import {
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
-import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_PHASE,
   AgentCategory,
   agentMatchesIdentifier,
 } from '@shared/schemas';
 import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
@@ -148,7 +148,7 @@ function parentRunContext(
     hooks: NonNullable<ToolCallShape['hooks']>;
   }> = {},
 ): Partial<ToolCallShape> {
-  const session = overrides.session ?? defaultSession();
+  const session = overrides.session ?? testDefaultSession();
   const stopAfterCycle = overrides.stopAfterCycle ?? false;
   return {
     model: 'deepseekT',
@@ -358,7 +358,7 @@ function mockWaitingChildOnce(
         parent: PARENT_RUN_ID,
         agent: 'review',
       });
-      defaultSession().runs.track(handle);
+      testDefaultSession().runs.track(handle);
       runOptions.onRunResolved?.(runId);
       runOptions.onRun?.(handle);
       await options.afterRun?.(handle);
@@ -612,7 +612,7 @@ describe('headless delegation', () => {
   );
 
   afterEach(async () => {
-    const session = defaultSession();
+    const session = testDefaultSession();
     for (const runId of session.runs.getActiveIds()) {
       // Test handles have no provider interrupt handler. Remove the fake
       // handle, then stop the real child activation that owns the loop.
@@ -1041,7 +1041,7 @@ describe('headless delegation', () => {
       // than hand the caller's instruction through verbatim. Deliberately
       // wording-free — the injected copy churns (#9568) without behavior changing.
       yield* callDelegateReview();
-      yield* waitForChildrenEffect(defaultSession());
+      yield* waitForChildrenEffect(testDefaultSession());
 
       const instruction =
         mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
@@ -1059,7 +1059,7 @@ describe('headless delegation', () => {
         yield* callDelegateReview(
           parentRunContext({ userInstruction: parentInstruction }),
         );
-        yield* waitForChildrenEffect(defaultSession());
+        yield* waitForChildrenEffect(testDefaultSession());
 
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -1137,7 +1137,7 @@ describe('headless delegation', () => {
         expect(result.output).toContain(
           "Subagent 'review' launched. Result will be delivered automatically",
         );
-        yield* waitForChildrenEffect(defaultSession());
+        yield* waitForChildrenEffect(testDefaultSession());
         const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
         expect(executeOptions).toEqual(
           expect.objectContaining({
@@ -1293,7 +1293,7 @@ describe('headless delegation', () => {
           afterRun: (handle) => {
             capturedHandle = handle;
             return Effect.runPromise(
-              defaultSession().runs.detachActiveChildren(PARENT_RUN_ID),
+              testDefaultSession().runs.detachActiveChildren(PARENT_RUN_ID),
             );
           },
         });
@@ -1308,12 +1308,12 @@ describe('headless delegation', () => {
           }),
         );
         expect(capturedHandle?.deliveryTarget).toBeUndefined();
-        expect(yield* queuedFollowUps(defaultSession(), PARENT_RUN_ID)).toEqual(
-          [],
-        );
-        expect(yield* queuedFollowUps(defaultSession(), CHILD_RUN_ID)).toEqual(
-          [],
-        );
+        expect(
+          yield* queuedFollowUps(testDefaultSession(), PARENT_RUN_ID),
+        ).toEqual([]);
+        expect(
+          yield* queuedFollowUps(testDefaultSession(), CHILD_RUN_ID),
+        ).toEqual([]);
       }),
   );
 });

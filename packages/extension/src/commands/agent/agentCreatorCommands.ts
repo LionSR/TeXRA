@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
+import type { SessionHandle } from '@agent/runtime';
 import { renderAgentTemplateString } from '@agent/templates';
 import {
   AgentCreatorUiFailed,
@@ -17,7 +18,6 @@ import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { StateStore } from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
@@ -179,7 +179,10 @@ function pickToolGroups(
   );
 }
 
-function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
+function buildVSCodeUI(
+  runtime: ProcessRuntime,
+  session: SessionHandle,
+): AgentCreatorUI {
   return {
     promptAgentName(categoryLabel) {
       return askForInput({
@@ -244,7 +247,13 @@ function buildVSCodeUI(runtime: ProcessRuntime): AgentCreatorUI {
     promptAddToConfig(agentName, category) {
       return Effect.tryPromise({
         try: () =>
-          promptToAddAgentToConfig(agentName, 'custom', category, runtime),
+          promptToAddAgentToConfig(
+            agentName,
+            'custom',
+            category,
+            runtime,
+            session,
+          ),
         catch: (cause) =>
           new AgentCreatorUiFailed({
             reason: 'config-update-failed',
@@ -289,19 +298,19 @@ export function handleCreateAgentWithAI(
   category: AgentCategory,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
-  roots: WorkspaceRoots,
+  session: SessionHandle,
 ) {
   return Effect.gen(function* () {
     const config = yield* loadCreatorConfig(context);
     yield* runAgentCreator(
       config,
       category,
-      buildVSCodeUI(runtime),
+      buildVSCodeUI(runtime, session),
       {
         secrets,
         globalState,
       },
-      roots,
+      session.roots,
     );
   }).pipe(
     Effect.catchCause((cause) =>

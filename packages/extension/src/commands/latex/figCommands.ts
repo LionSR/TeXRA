@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
@@ -19,9 +19,11 @@ const CHANNEL = 'FigCommands';
 const log = createLog(CHANNEL);
 
 export async function handleExtractTikzFigures(
+  session: SessionHandle,
   runtime: ProcessRuntime,
 ): Promise<void> {
   await runGuardedLatexCommand(
+    session,
     {
       channel: CHANNEL,
       action: 'extract TikZ figures',
@@ -63,9 +65,11 @@ export async function handleExtractTikzFigures(
 }
 
 export async function handleCompileTikzFigures(
+  session: SessionHandle,
   runtime: ProcessRuntime,
 ): Promise<void> {
   await runGuardedLatexCommand(
+    session,
     {
       channel: CHANNEL,
       action: 'compile TikZ figures',
@@ -85,7 +89,7 @@ export async function handleCompileTikzFigures(
             message: 'Extracting and compiling TikZ pictures...',
           });
 
-          const { roots } = defaultSession();
+          const { roots } = session;
           const compiledFiles = await runtime.runPromise(
             withSessionFs(
               roots,

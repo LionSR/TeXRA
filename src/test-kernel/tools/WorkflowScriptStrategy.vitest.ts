@@ -8,7 +8,6 @@ import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoi
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import {
-  currentSession,
   initializeDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
@@ -25,6 +24,7 @@ import { DatabaseWriteFailed } from '@shared/session/database';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { fingerprintWorkflowAgentDependencies } from '@tools/delegation/inputFields';
 import {
   createWorkflowScriptStrategy,
@@ -98,9 +98,13 @@ function strategyParams(
   return {
     runId,
     parentRunId: runId,
-    session: currentSession(),
+    session: testDefaultSession(),
     fingerprintAgentDependencies: (options) =>
-      fingerprintWorkflowAgentDependencies(currentSession(), runId, options),
+      fingerprintWorkflowAgentDependencies(
+        testDefaultSession(),
+        runId,
+        options,
+      ),
     logger: new TraceEmitter(),
     checkpointId: checkpointIdFor(overrides.name),
     script,
@@ -233,7 +237,7 @@ return await agent('Solve.', {
   it.effect('settles zero for a pure checkpoint replay', () =>
     Effect.gen(function* () {
       yield* runPersistedWorkflowScript({
-        session: currentSession(),
+        session: testDefaultSession(),
         parentRunId: runId,
         checkpointId: checkpointIdFor('strategy-test'),
         script,
@@ -300,7 +304,7 @@ return args`,
 }
 return args`;
       yield* runPersistedWorkflowScript({
-        session: currentSession(),
+        session: testDefaultSession(),
         parentRunId: runId,
         checkpointId: checkpointIdFor('retained-arguments'),
         script: argsScript,
@@ -366,7 +370,7 @@ await agent('saved call')
 throw new Error('script failed after replay')`;
         const seedError = yield* Effect.flip(
           runPersistedWorkflowScript({
-            session: currentSession(),
+            session: testDefaultSession(),
             parentRunId: runId,
             checkpointId: checkpointIdFor('retained-settlement'),
             script: failingScript,
@@ -431,7 +435,7 @@ return await agent('malformed stale')`;
           },
         };
         yield* runPersistedWorkflowScript({
-          session: currentSession(),
+          session: testDefaultSession(),
           parentRunId: runId,
           checkpointId: checkpointIdFor(name),
           script: baselineScript,
@@ -485,7 +489,7 @@ throw new Error('current revision failed')`,
     'keeps the delivery summary at the last durable journal state when journaling fails',
     () =>
       Effect.gen(function* () {
-        const session = currentSession();
+        const session = testDefaultSession();
         const commit = session.commit.bind(session);
         const commitSpy = vi
           .spyOn(session, 'commit')

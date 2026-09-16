@@ -14,18 +14,12 @@ import { Data, Effect, FileSystem } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import { runAgent } from '@agent/runtime';
-import {
-  validateRunRequest,
-  type RunRequest,
-} from '@agent/core/state/runRequests';
+import { validateRunRequest } from '@agent/core/state/runRequests';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
+  createFileSelectionPickers,
   getCurrentFile,
-  selectContextFiles,
-  selectInputFiles,
-  selectMediaFiles,
-  selectOutputFiles,
 } from '@commands/files/fileSelectionCommands';
 import { setActiveSidebarView } from '@common/webview';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
@@ -73,7 +67,6 @@ import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
   isMultipleDocumentFileType,
-  type MultipleDocumentFileType,
   type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -120,17 +113,6 @@ class DropFileUnreadable extends Data.TaggedError('DropFileUnreadable')<{
 class FilePickerFailed extends Data.TaggedError('FilePickerFailed')<{
   readonly message: string;
 }> {}
-
-/** The native picker of each multi-file launcher list. */
-const MULTIPLE_FILE_PICKERS: Record<
-  MultipleDocumentFileType,
-  () => Promise<string[] | null>
-> = {
-  input: selectInputFiles,
-  context: selectContextFiles,
-  media: selectMediaFiles,
-  output: selectOutputFiles,
-};
 
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
@@ -205,6 +187,9 @@ export function createExtensionHostRequests(
   const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
+
+  /** The native picker of each multi-file launcher list. */
+  const multipleFilePickers = createFileSelectionPickers(session);
 
   /**
    * Validate an agent request and launch it directly: the port settled with
@@ -573,7 +558,7 @@ export function createExtensionHostRequests(
   async function useCurrentFile(
     request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
   ): Promise<HostOutcome> {
-    const currentOpenFile = await getCurrentFile();
+    const currentOpenFile = await getCurrentFile(session);
     if (!currentOpenFile) {
       throw new Rejected({
         reason:
@@ -631,7 +616,7 @@ export function createExtensionHostRequests(
   ): Effect.Effect<HostOutcome, Rejected | Cancelled> {
     const { fileType } = request;
     const pick = isMultipleDocumentFileType(fileType)
-      ? MULTIPLE_FILE_PICKERS[fileType]
+      ? multipleFilePickers[fileType]
       : undefined;
     if (!pick) {
       return Effect.fail(

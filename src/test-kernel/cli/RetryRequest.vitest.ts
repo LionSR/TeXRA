@@ -1,9 +1,7 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { ApprovalModal } from '@cli/chat/tui/modals/ApprovalModal';
 import { RetryRequest } from '@cli/chat/tui/modals/RetryRequest';
 import type {
@@ -14,6 +12,7 @@ import type {
 import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
   loadInk,
@@ -71,7 +70,7 @@ describe('CLI retry request', () => {
       React.createElement(ApprovalModal, {
         pending,
         runtime: effectRuntime(),
-        session: defaultSession(),
+        session: testDefaultSession(),
       }),
       { columns: 100 },
     );
@@ -124,7 +123,7 @@ describe('CLI retry request', () => {
       React.createElement(ApprovalModal, {
         pending,
         runtime: effectRuntime(),
-        session: defaultSession(),
+        session: testDefaultSession(),
       }),
       { columns: 100 },
     );

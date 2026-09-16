@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - utils
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -55,6 +55,7 @@ type ActiveFileGuardResult =
  * saving it first when dirty.
  */
 async function getActiveLatexEditor(
+  session: SessionHandle,
   saveDocument: boolean,
 ): Promise<ActiveFileGuardResult> {
   const editor = vscode.window.activeTextEditor;
@@ -81,7 +82,7 @@ async function getActiveLatexEditor(
   }
 
   const relativePath = workspaceRelativePath(
-    defaultSession().roots.workspace,
+    session.roots.workspace,
     editor.document.fileName,
   );
 
@@ -110,6 +111,7 @@ interface GuardedLatexCommandOptions {
  * through that same channel.
  */
 export async function runGuardedLatexCommand(
+  session: SessionHandle,
   options: GuardedLatexCommandOptions,
   operation: (guardResult: ActiveFileGuardSuccess) => Promise<void>,
 ): Promise<void> {
@@ -118,7 +120,7 @@ export async function runGuardedLatexCommand(
   const log = createLog(channel);
 
   try {
-    const guardResult = await getActiveLatexEditor(saveDocument);
+    const guardResult = await getActiveLatexEditor(session, saveDocument);
 
     if (guardResult.status !== 'ok') {
       const failure = GUARD_FAILURE_MESSAGES[guardResult.status];

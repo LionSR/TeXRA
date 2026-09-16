@@ -4,7 +4,11 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { loadAgents } from '@agent/index';
-import { AgentConfigSchema, defaultSession, runAgent } from '@agent/runtime';
+import {
+  AgentConfigSchema,
+  runAgent,
+  type SessionHandle,
+} from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   resolveSetupLaunchModel,
@@ -239,6 +243,7 @@ export function launchSetupAssistant(
   secrets: PlatformSecrets,
   globalState: StateStore,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): Promise<'launched' | 'already-running' | 'not-started'> {
   return runtime.runPromise(
     Effect.gen(function* () {
@@ -248,8 +253,8 @@ export function launchSetupAssistant(
       // installs and config writes. The launcher's manual Execute path is
       // deliberately not gated — an explicit user action wins.
       if (
-        defaultSession()
-          .runs.getAgentHandles()
+        session.runs
+          .getAgentHandles()
           .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
       ) {
         void vscode.window.showInformationMessage(
@@ -323,7 +328,7 @@ export function launchSetupAssistant(
       const launch = runAgent(
         { kind: 'fresh', config },
         {
-          session: defaultSession(),
+          session,
           onRunResolved: presentLaunchedProgressRun,
         },
       );
