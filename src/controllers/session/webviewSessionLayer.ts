@@ -85,11 +85,21 @@ type WebviewRuntime = ManagedRuntime.ManagedRuntime<WebviewSessions, never>;
  * diagnostics layer pulls Node-only `logUtils`, so this writes the same
  * structured entry through `logSink` (redacted unless a host marked the sink
  * trusted) instead of Effect's default console logger.
+ *
+ * ERROR/FATAL are emitted as WARN: this bundle has no host log channel, and
+ * Electron's smoke harness treats `console.error` (the sink's ERROR path) as
+ * a failed view. Fork-failure reports and fold defects still show in
+ * DevTools after redaction.
  */
 const webviewDiagnosticsLayer = Logger.layer([
   Logger.make((options) => {
     if (options.logLevel === 'None') return;
-    writeLogEntry(Logger.formatStructured.log(options));
+    const entry = Logger.formatStructured.log(options);
+    writeLogEntry(
+      entry.level === 'ERROR' || entry.level === 'FATAL'
+        ? { ...entry, level: 'WARN' }
+        : entry,
+    );
   }),
 ]);
 
