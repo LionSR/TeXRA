@@ -21,9 +21,9 @@
 //       `let program; program = this.executeGoal(...)`), and a syntax scan
 //       cannot tell a stored Effect that is run later from one that is not.
 //   4. an Effect returned directly from the thunk of `Effect.tryPromise` /
-//      `Effect.promise`. Only the direct form: an async thunk's
-//      Promise<Effect> is accepted because the produced Effect may be
-//      executed by a later statement (`const projected = yield*
+//      `Effect.promise`. Only the direct form: a thunk returning
+//      Promise<Effect> (async or not) is accepted because the produced Effect
+//      may be executed by a later statement (`const projected = yield*
 //      Effect.promise(...); yield* projected;` is a real pattern), which this
 //      scan cannot distinguish from a dropped one.
 //
@@ -45,7 +45,7 @@
 // config must exist and parse — a missing one fails the gate, so a renamed
 // config cannot quietly shrink the scanned surface.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -190,9 +190,35 @@ const KIND_TEXT = {
  * reported them, and `await` of a non-thenable keeps the operand's type, so
  * the statement would otherwise re-report the same site), assignments (they
  * store the Effect — a value the tree passes around deliberately, run later
- * by its consumer), and `yield`/`yield*` statements (the generator driver
- * executes them).
+ * by its consumer; compound assignments included), and `yield`/`yield*`
+ * statements (the generator driver executes them). Logical/comma discards
+ * (`enabled && someEffect;`) are still this shape.
  */
+function isAssignmentExpression(node) {
+  if (!ts.isBinaryExpression(node)) return false;
+  switch (node.operatorToken.kind) {
+    case ts.SyntaxKind.EqualsToken:
+    case ts.SyntaxKind.PlusEqualsToken:
+    case ts.SyntaxKind.MinusEqualsToken:
+    case ts.SyntaxKind.AsteriskEqualsToken:
+    case ts.SyntaxKind.AsteriskAsteriskEqualsToken:
+    case ts.SyntaxKind.SlashEqualsToken:
+    case ts.SyntaxKind.PercentEqualsToken:
+    case ts.SyntaxKind.AmpersandEqualsToken:
+    case ts.SyntaxKind.BarEqualsToken:
+    case ts.SyntaxKind.CaretEqualsToken:
+    case ts.SyntaxKind.LessThanLessThanEqualsToken:
+    case ts.SyntaxKind.GreaterThanGreaterThanEqualsToken:
+    case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken:
+    case ts.SyntaxKind.AmpersandAmpersandEqualsToken:
+    case ts.SyntaxKind.BarBarEqualsToken:
+    case ts.SyntaxKind.QuestionQuestionEqualsToken:
+      return true;
+    default:
+      return false;
+  }
+}
+
 function scanSourceFile(checker, sourceFile) {
   const isEffectType = makeIsEffectType(checker);
   const findings = [];
@@ -216,7 +242,7 @@ function scanSourceFile(checker, sourceFile) {
       !ts.isAwaitExpression(node.expression) &&
       node.expression.kind !== ts.SyntaxKind.VoidExpression &&
       !ts.isYieldExpression(node.expression) &&
-      !ts.isBinaryExpression(node.expression)
+      !isAssignmentExpression(node.expression)
     ) {
       const type = checker.getTypeAtLocation(node.expression);
       if (isEffectType(type)) {
