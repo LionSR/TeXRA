@@ -43,9 +43,9 @@
 import { Effect } from 'effect';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { SignInFailed } from '@common/errors/signInFailed';
 import { AppState, type StateStore } from '@platform/interfaces';
 import {
   tryProcessRuntime,
