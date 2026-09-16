@@ -3,7 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit } from 'effect';
+import { Deferred, Effect, Exit, Fiber } from 'effect';
 import pDefer from 'p-defer';
 import { describe, expect, vi } from 'vitest';
 
@@ -20,6 +20,8 @@ import type {
 } from '@auth/codex/codexSessionTypes';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { effectRuntime } from '@platform/processRuntime';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import type { HttpClient } from 'effect/unstable/http';
 
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;
@@ -121,28 +123,37 @@ function newLoginTokenResponse(): CodexTokenResponse {
   });
 }
 
-function completeLogin(
+// The coordinator's refresh can require the HTTP client; these suites stub
+// the OAuth client instead, so the shared stub layer satisfies the type.
+const withHttp = <A>(
+  program: Effect.Effect<A, unknown, HttpClient.HttpClient>,
+): Effect.Effect<A, unknown> => Effect.provide(program, testHttpClientLayer);
+
+function loginWithCode(
   coordinator: CodexSessionCoordinator,
-): Promise<CodexSession> {
-  return coordinator.completeLoginWithCode({
-    code: 'new-code',
-    verifier: 'new-verifier',
-    redirectUri: 'http://localhost:1455/auth/callback',
-  });
+): Effect.Effect<CodexSession, unknown> {
+  return withHttp(
+    coordinator.loginWithCode({
+      code: 'new-code',
+      verifier: 'new-verifier',
+      redirectUri: 'http://localhost:1455/auth/callback',
+    }),
+  );
 }
 
 /**
- * Capture the rejection of a coordinator call the test already started.
- * (`Effect.promise` would turn the rejection into a defect, which
- * `Effect.flip` does not see.)
+ * Start a coordinator program on its own fiber, synchronously — the old
+ * Promise surface began its work at the call site, and these interleavings
+ * depend on that: the fiber must be parked (or queued) before the test's next
+ * statement runs.
  */
-const rejection = (completion: Promise<unknown>) =>
-  Effect.flip(
-    Effect.tryPromise({
-      try: () => completion,
-      catch: (error) => error,
-    }),
-  );
+const forkNow = <A>(
+  program: Effect.Effect<A, unknown, HttpClient.HttpClient>,
+) => Effect.forkChild(withHttp(program), { startImmediately: true });
+
+/** The typed failure of a fiber the test started with {@link forkNow}. */
+const joinFailure = <A>(fiber: Fiber.Fiber<A, unknown>) =>
+  Effect.flip(Fiber.join(fiber));
 
 function makeCoordinator(
   storage: CodexSessionStorage,
@@ -167,9 +178,9 @@ describe('CodexSessionCoordinator', () => {
       );
       const refreshTokens = vi.fn();
       const coordinator = makeCoordinator(storage, { refreshTokens });
-      expect(
-        yield* Effect.promise(() => coordinator.getFreshAccessToken()),
-      ).toBe('access-0');
+      expect(yield* withHttp(coordinator.getFreshAccessToken())).toBe(
+        'access-0',
+      );
       expect(refreshTokens).not.toHaveBeenCalled();
     }),
   );
@@ -179,9 +190,9 @@ describe('CodexSessionCoordinator', () => {
       const storage = memoryStorage(session({ expiresAtMs: NOW + 60_000 }));
       const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
       const coordinator = makeCoordinator(storage, { refreshTokens });
-      expect(
-        yield* Effect.promise(() => coordinator.getFreshAccessToken()),
-      ).toBe('access-1');
+      expect(yield* withHttp(coordinator.getFreshAccessToken())).toBe(
+        'access-1',
+      );
       expect(refreshTokens).toHaveBeenCalledOnce();
       expect(storage.peek()?.accessToken).toBe('access-1');
     }),
@@ -194,14 +205,14 @@ describe('CodexSessionCoordinator', () => {
       const refreshTokens = vi.fn(() => Deferred.await(pending));
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
-      const a = coordinator.getFreshAccessToken();
-      const b = coordinator.getFreshAccessToken();
+      const a = yield* forkNow(coordinator.getFreshAccessToken());
+      const b = yield* forkNow(coordinator.getFreshAccessToken());
       // Let both callers reach the shared refresh before it resolves.
       yield* Effect.promise(() => delay(0));
       expect(refreshTokens).toHaveBeenCalledOnce();
 
       Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
-      const [ra, rb] = yield* Effect.promise(() => Promise.all([a, b]));
+      const [ra, rb] = yield* Effect.all([Fiber.join(a), Fiber.join(b)]);
 
       expect(ra).toBe('access-1');
       expect(rb).toBe('access-1');
@@ -216,14 +227,14 @@ describe('CodexSessionCoordinator', () => {
       const refreshTokens = vi.fn(() => Deferred.await(pending));
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
-      const token = coordinator.getFreshAccessToken();
+      const token = yield* forkNow(coordinator.getFreshAccessToken());
       yield* Effect.promise(() => delay(0));
       expect(refreshTokens).toHaveBeenCalledOnce();
 
-      yield* Effect.promise(() => coordinator.signOut());
+      yield* coordinator.signOut();
       Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
 
-      const error = yield* rejection(token);
+      const error = yield* joinFailure(token);
       expect(error).toMatchObject({
         kind: 'expired',
         needsReauth: true,
@@ -240,17 +251,17 @@ describe('CodexSessionCoordinator', () => {
         const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
         const coordinator = makeCoordinator(storage, { refreshTokens });
 
-        const token = coordinator.getFreshAccessToken();
+        const token = yield* forkNow(coordinator.getFreshAccessToken());
         yield* Effect.promise(() => storage.gateReached);
-        const signOut = coordinator.signOut();
+        const signOut = yield* forkNow(coordinator.signOut());
         storage.release();
 
-        const error = yield* rejection(token);
+        const error = yield* joinFailure(token);
         expect(error).toMatchObject({
           kind: 'expired',
           needsReauth: true,
         });
-        yield* Effect.promise(() => signOut);
+        yield* Fiber.join(signOut);
         expect(storage.peek()).toBeUndefined();
       }),
   );
@@ -271,18 +282,18 @@ describe('CodexSessionCoordinator', () => {
           refreshTokens,
         });
 
-        const token = coordinator.getFreshAccessToken();
+        const token = yield* forkNow(coordinator.getFreshAccessToken());
         // The fatal refresh has started its delete (blocked); a login lands now.
         yield* Effect.promise(() => storage.gateReached);
-        const login = completeLogin(coordinator);
+        const login = yield* forkNow(loginWithCode(coordinator));
         // Let the login run as far as it can before the delete unblocks, so an
         // unserialized store would land first and be erased by the stale delete.
         yield* Effect.promise(() => delay(0));
         storage.release();
 
-        const error = yield* rejection(token);
+        const error = yield* joinFailure(token);
         expect(error).toMatchObject({ kind: 'fatal' });
-        yield* Effect.promise(() => login);
+        yield* Fiber.join(login);
         expect(storage.peek()?.accessToken).toBe('access-new');
         expect(storage.peek()?.refreshToken).toBe('refresh-new');
       }),
@@ -296,18 +307,18 @@ describe('CodexSessionCoordinator', () => {
         const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
         const coordinator = makeCoordinator(storage, { refreshTokens });
 
-        const signOut = coordinator.signOut();
+        const signOut = yield* forkNow(coordinator.signOut());
         // The sign-out delete is blocked mid-write; a caller enters now.
         yield* Effect.promise(() => storage.gateReached);
-        const token = coordinator.getFreshAccessToken();
+        const token = yield* forkNow(coordinator.getFreshAccessToken());
         storage.release();
 
-        const error = yield* rejection(token);
+        const error = yield* joinFailure(token);
         expect(error).toMatchObject({
           kind: 'expired',
           needsReauth: true,
         });
-        yield* Effect.promise(() => signOut);
+        yield* Fiber.join(signOut);
         expect(refreshTokens).not.toHaveBeenCalled();
         expect(storage.peek()).toBeUndefined();
       }),
@@ -327,14 +338,14 @@ describe('CodexSessionCoordinator', () => {
           refreshTokens,
         });
 
-        const login = completeLogin(coordinator);
+        const login = yield* forkNow(loginWithCode(coordinator));
         // The login store is blocked mid-write; a caller enters now.
         yield* Effect.promise(() => storage.gateReached);
-        const token = coordinator.getFreshAccessToken();
+        const token = yield* forkNow(coordinator.getFreshAccessToken());
         storage.release();
 
-        yield* Effect.promise(() => login);
-        expect(yield* Effect.promise(() => token)).toBe('access-new');
+        yield* Fiber.join(login);
+        expect(yield* Fiber.join(token)).toBe('access-new');
         expect(refreshTokens).not.toHaveBeenCalled();
         expect(storage.peek()?.accessToken).toBe('access-new');
       }),
@@ -379,7 +390,7 @@ describe('CodexSessionCoordinator', () => {
         );
         yield* Effect.promise(() => gated.gateReached);
         controller.abort();
-        const signOut = coordinator.signOut();
+        const signOut = yield* forkNow(coordinator.signOut());
         yield* Effect.promise(() => delay(0));
 
         // The store cannot be cancelled, so it keeps the permit: the sign-out
@@ -389,7 +400,7 @@ describe('CodexSessionCoordinator', () => {
 
         const loginExit = yield* Effect.promise(() => login);
         expect(Exit.isSuccess(loginExit)).toBe(false);
-        yield* Effect.promise(() => signOut);
+        yield* Fiber.join(signOut);
         expect(ops).toEqual(['store', 'delete']);
         expect(gated.peek()).toBeUndefined();
       }),
@@ -405,12 +416,12 @@ describe('CodexSessionCoordinator', () => {
         exchangeAuthorizationCode,
       });
 
-      const token = coordinator.getFreshAccessToken();
+      const token = yield* forkNow(coordinator.getFreshAccessToken());
       yield* Effect.promise(() => storage.gateReached);
-      yield* Effect.promise(() => completeLogin(coordinator));
+      yield* loginWithCode(coordinator);
       storage.release();
 
-      expect(yield* Effect.promise(() => token)).toBe('access-new');
+      expect(yield* Fiber.join(token)).toBe('access-new');
       expect(storage.peek()?.accessToken).toBe('access-new');
     }),
   );
@@ -433,17 +444,17 @@ describe('CodexSessionCoordinator', () => {
           refreshTokens,
         });
 
-        const token = coordinator.getFreshAccessToken();
+        const token = yield* forkNow(coordinator.getFreshAccessToken());
         yield* Effect.promise(() => delay(0));
         expect(refreshTokens).toHaveBeenCalledOnce();
 
-        yield* Effect.promise(() => completeLogin(coordinator));
+        yield* loginWithCode(coordinator);
         Deferred.doneUnsafe(
           pending,
           Effect.fail(new CodexAuthError('revoked', 'fatal', 401)),
         );
 
-        const error = yield* rejection(token);
+        const error = yield* joinFailure(token);
         expect(error).toMatchObject({
           kind: 'fatal',
           needsReauth: true,
@@ -471,15 +482,15 @@ describe('CodexSessionCoordinator', () => {
           refreshTokens,
         });
 
-        const token = coordinator.getFreshAccessToken();
+        const token = yield* forkNow(coordinator.getFreshAccessToken());
         yield* Effect.promise(() => delay(0));
         expect(refreshTokens).toHaveBeenCalledOnce();
 
-        yield* Effect.promise(() => completeLogin(coordinator));
+        yield* loginWithCode(coordinator);
         Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
 
         // Concurrent sign-in is not a re-auth failure — hand back the new session.
-        expect(yield* Effect.promise(() => token)).toBe('access-new');
+        expect(yield* Fiber.join(token)).toBe('access-new');
         expect(storage.peek()?.accessToken).toBe('access-new');
         expect(storage.peek()?.refreshToken).toBe('refresh-new');
       }),
@@ -513,11 +524,11 @@ describe('CodexSessionCoordinator', () => {
           refreshTokens,
         });
 
-        const token = coordinator.getFreshAccessToken();
+        const token = yield* forkNow(coordinator.getFreshAccessToken());
         yield* Effect.promise(() => delay(0));
         expect(refreshTokens).toHaveBeenCalledOnce();
 
-        yield* Effect.promise(() => completeLogin(coordinator));
+        yield* loginWithCode(coordinator);
         Deferred.doneUnsafe(
           pending,
           Effect.succeed(
@@ -525,7 +536,7 @@ describe('CodexSessionCoordinator', () => {
           ),
         );
 
-        const error = yield* rejection(token);
+        const error = yield* joinFailure(token);
         expect(error).toMatchObject({
           kind: 'transient',
           needsReauth: false,
@@ -543,7 +554,7 @@ describe('CodexSessionCoordinator', () => {
           Effect.succeed(tokenResponse({ refresh_token: undefined })),
         );
         const coordinator = makeCoordinator(storage, { refreshTokens });
-        yield* Effect.promise(() => coordinator.getFreshAccessToken());
+        yield* withHttp(coordinator.getFreshAccessToken());
         expect(storage.peek()?.refreshToken).toBe('refresh-0');
       }),
   );
@@ -556,7 +567,9 @@ describe('CodexSessionCoordinator', () => {
       );
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
-      const error = yield* rejection(coordinator.getFreshAccessToken());
+      const error = yield* Effect.flip(
+        withHttp(coordinator.getFreshAccessToken()),
+      );
       expect(error).toMatchObject({
         kind: 'fatal',
         needsReauth: true,
@@ -573,7 +586,9 @@ describe('CodexSessionCoordinator', () => {
       );
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
-      const error = yield* rejection(coordinator.getFreshAccessToken());
+      const error = yield* Effect.flip(
+        withHttp(coordinator.getFreshAccessToken()),
+      );
       expect(error).toMatchObject({
         kind: 'transient',
       });
@@ -584,7 +599,9 @@ describe('CodexSessionCoordinator', () => {
   it.effect('throws expired when not signed in', () =>
     Effect.gen(function* () {
       const coordinator = makeCoordinator(memoryStorage());
-      const error = yield* rejection(coordinator.getFreshAccessToken());
+      const error = yield* Effect.flip(
+        withHttp(coordinator.getFreshAccessToken()),
+      );
       expect(error).toMatchObject({
         kind: 'expired',
         needsReauth: true,

@@ -21,6 +21,7 @@ import { getHelperModelName } from './helperModelName';
 import { bindModel, type BoundModel } from './run/modelBinding';
 import { classifyModelFailure } from './run/modelFailure';
 import { turnText } from './run/turnText';
+import type { HttpClient } from 'effect/unstable/http';
 
 /**
  * The configured helper model cannot serve right now (no key, disabled,
@@ -41,7 +42,11 @@ export class HelperModelUnavailable extends Data.TaggedError(
  */
 export const helperModel = Effect.fn('helperModel')(function* (
   stores: ModelOptionStores,
-): Effect.fn.Return<BoundModel, HelperModelUnavailable | Error, Scope.Scope> {
+): Effect.fn.Return<
+  BoundModel,
+  HelperModelUnavailable | Error,
+  Scope.Scope | HttpClient.HttpClient
+> {
   const modelName = getHelperModelName(stores.globalState);
   const inputs = yield* readModelAvailabilityInputs(stores, [modelName]);
   const reason = modelUnavailableReasonFrom(inputs, modelName);

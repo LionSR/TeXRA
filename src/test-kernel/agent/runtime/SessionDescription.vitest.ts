@@ -11,6 +11,7 @@ import * as logger from '@logger/logUtils';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { fakeStores } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
   createTestSession,
   publishTestRunStart,
@@ -57,7 +58,7 @@ function runDescription(
       agentDescription,
       session,
       STORES,
-    ),
+    ).pipe(Effect.provide(testHttpClientLayer)),
   );
 }
 

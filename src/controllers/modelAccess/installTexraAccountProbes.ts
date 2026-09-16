@@ -8,6 +8,7 @@
  * silent picker diagnostics.
  */
 
+import { runAuthProgram } from '@auth/authProgram';
 import { getCodexStatus } from '@auth/codex';
 import { getXaiStatus } from '@auth/xai';
 import { createLog } from '@logger/logUtils';
@@ -25,8 +26,12 @@ const log = createLog('computeModelOptions');
  * secrets-free.
  */
 export function installTexraAccountProbes(secrets: PlatformSecrets): void {
-  setCodexSignedInProbe(async () => (await getCodexStatus(secrets)).signedIn);
-  setXaiSignedInProbe(async () => (await getXaiStatus(secrets)).signedIn);
+  setCodexSignedInProbe(
+    async () => (await runAuthProgram(getCodexStatus(secrets))).signedIn,
+  );
+  setXaiSignedInProbe(
+    async () => (await runAuthProgram(getXaiStatus(secrets))).signedIn,
+  );
   setModelAvailabilityWarningSink((message, error) => {
     log.warn(message, { data: error });
   });

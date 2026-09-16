@@ -105,8 +105,10 @@ function defaultCredentials(
   return Object.freeze({
     async loadChatGpt(): Promise<ChatGptUsageCredential | null> {
       const coordinator = codexCoordinator(secrets);
-      if (!(await coordinator.loadSession())) return null;
-      const session = await coordinator.getFreshSession();
+      if ((await runAuthProgram(coordinator.loadSession())) === null) {
+        return null;
+      }
+      const session = await runAuthProgram(coordinator.getFreshSession());
       return {
         accessToken: session.accessToken,
         ...(session.accountId ? { accountId: session.accountId } : {}),
@@ -117,9 +119,9 @@ function defaultCredentials(
     ): Promise<string | undefined> {
       // The key read is a program; this bag is the Promise-shaped credential
       // surface the adapters above consume, so it settles on the auth
-      // subsystem's installed run edge — the same edge `loadChatGpt`'s
-      // coordinator already storages through — which re-throws the port's own
-      // `SecretsFailed` unchanged, as the rejected store read did.
+      // subsystem's installed run edge — the same edge `loadChatGpt` settles
+      // on — which re-throws the port's own `SecretsFailed` unchanged, as the
+      // rejected store read did.
       const key = await runAuthProgram(lookupApiKey(secrets, provider));
       return key === undefined ? undefined : exposeApiKey(key);
     },
