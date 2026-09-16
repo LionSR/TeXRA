@@ -234,12 +234,10 @@ export function createDesktopAgentRun(
     runAgentRequest(request, runOptions) {
       const validated = validateRunRequest(request);
       if (!validated.valid) {
-        return Effect.suspend(() => {
-          logger.error('Invalid desktop run request', {
-            data: validated.issue,
-          });
-          return Effect.fail(new Rejected({ reason: validated.message }));
+        logger.error('Invalid desktop run request', {
+          data: validated.issue,
         });
+        return Effect.fail(new Rejected({ reason: validated.message }));
       }
       return runValidatedEffect(validated.request, runOptions);
     },

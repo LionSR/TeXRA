@@ -219,10 +219,8 @@ export function createExtensionHostRequests(
   ) => {
     const validation = validateRunRequest(request);
     if (!validation.valid) {
-      return Effect.suspend(() => {
-        log.error(validation.message);
-        return Effect.fail(new Rejected({ reason: validation.message }));
-      });
+      log.error(validation.message);
+      return Effect.fail(new Rejected({ reason: validation.message }));
     }
     const { config, runId } = validation.request;
     const launch = runAgent(
