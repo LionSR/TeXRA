@@ -576,7 +576,9 @@ describe('TUI request decisions', () => {
           action: 'approve',
         });
         yield* waitFor(() => {
-          expect(proposalApprovals().isBypassed(runId)).toBe(true);
+          expect(proposalApprovals(defaultSession()).isBypassed(runId)).toBe(
+            true,
+          );
           expect(
             defaultSession().approvals.toolEdit.bypass.isBypassed(runId),
           ).toBe(true);
@@ -659,7 +661,9 @@ describe('TUI request decisions', () => {
         decideCurrent({ action: 'approve' });
 
         expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
-        expect(proposalApprovals().isBypassed(runId)).toBe(false);
+        expect(proposalApprovals(defaultSession()).isBypassed(runId)).toBe(
+          false,
+        );
         expect(
           defaultSession().approvals.toolEdit.bypass.isBypassed(runId),
         ).toBe(false);

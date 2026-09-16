@@ -5,10 +5,7 @@ import {
   classifyRun,
   type RunClassification,
 } from '@agent/runtime/runClassification';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import { AgentResume } from '@platform/interfaces';
 import { ownerPid, type RunId } from '@shared/schemas';
@@ -107,11 +104,8 @@ export function presentFollowUpResult(
 
 const logger = createLog('ToolUseFollowUp');
 
-export function notifyFollowUpSent(
-  runId: RunId,
-  session?: SessionHandle,
-): void {
-  (session ?? currentSession()).followUps.notifySent(runId);
+export function notifyFollowUpSent(runId: RunId, session: SessionHandle): void {
+  session.followUps.notifySent(runId);
 }
 
 /**

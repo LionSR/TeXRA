@@ -3,7 +3,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunInput } from '@agent/followUp/RunInput';
 import {
@@ -118,38 +117,6 @@ describe('tool-use follow-up progress events', () => {
     expect(await Effect.runPromise(input.poll)).toMatchObject({
       followUps: [{ content: { text: 'please continue', origin: 'user' } }],
     });
-    expect(sent.sent).toEqual([runId]);
-    expect(run.events).toEqual([]);
-  });
-
-  it('prefers an explicit session over the active run context when notifying follow-up sent', () => {
-    const run = createRecordingHost();
-    const explicitSession = trackSession();
-    const activeSession = trackSession();
-    const explicit = recordFollowUpsSent(explicitSession);
-    const active = recordFollowUpsSent(activeSession);
-
-    withRunContext(
-      createRunContext({
-        session: activeSession,
-      }),
-      () => notifyFollowUpSent(runId, explicitSession),
-    );
-
-    expect(explicit.sent).toEqual([runId]);
-    expect(active.sent).toEqual([]);
-    expect(run.events).toEqual([]);
-  });
-
-  it("routes follow-up sent notifications through the active run's current session", () => {
-    const run = createRecordingHost();
-    const session = trackSession();
-    const sent = recordFollowUpsSent(session);
-
-    withRunContext(createRunContext({ session }), () =>
-      notifyFollowUpSent(runId),
-    );
-
     expect(sent.sent).toEqual([runId]);
     expect(run.events).toEqual([]);
   });
