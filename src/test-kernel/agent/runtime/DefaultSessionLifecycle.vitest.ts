@@ -16,7 +16,9 @@ async function importSessionRuntime() {
   const { installPlatform } = await import('@test/support/setupPlatform');
   await installPlatform();
   await import('@test/support/sessionGraphTestSetup');
-  return import('@agent/runtime/SessionHandle');
+  const sessionHandle = await import('@agent/runtime/SessionHandle');
+  const { tryDefaultSession } = await import('@agent/runtime/sessionGraph');
+  return { ...sessionHandle, tryDefaultSession };
 }
 
 describe('default session lifecycle', () => {

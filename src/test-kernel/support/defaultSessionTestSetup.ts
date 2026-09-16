@@ -4,9 +4,9 @@ import { Effect } from 'effect';
 
 import {
   initializeDefaultSession,
-  tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { tryDefaultSession } from '@agent/runtime/sessionGraph';
 
 // An ephemeral session's graph builds synchronously, so the process default
 // is open before the importing suite's first test.

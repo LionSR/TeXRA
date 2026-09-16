@@ -21,7 +21,7 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { loadAgents } from '@agent/index';
-import { tryDefaultSession } from '@agent/runtime/SessionHandle';
+import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { platform } from '@platform/platform';
