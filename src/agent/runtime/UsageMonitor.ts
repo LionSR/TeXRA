@@ -108,10 +108,10 @@ export class UsageMonitor {
    * it. The loop passes the model it actually ran, so a mid-run switch is
    * priced and reported against it without anyone mirroring it back in.
    */
-  async recordUsage(
+  recordUsage(
     stateGlobal: AgentRunStateSnapshot,
     bound: { readonly config: UsageMonitorModelInfo },
-  ): Promise<void> {
+  ): void {
     const model = bound.config;
     const { logger, runId, runStageId } = this.context;
     const { agentCategory } = this.metadata;

@@ -18,7 +18,7 @@ import {
   type ModelAvailabilityScope,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
 import { AgentCategory } from '@shared/schemas';
 import { getHelperModelName } from './helperModelName';
@@ -47,7 +47,7 @@ export const applyHelperModelPreference = Effect.fn(
   const helperModel = getHelperModelName(stores.globalState);
   if (helperModel === config.model) return config;
 
-  const helperModelConfig = yield* resolveRuntimeModelConfig(helperModel);
+  const helperModelConfig = getRuntimeModelConfig(helperModel);
 
   // A tool-use agent (e.g. latexFixer) needs its tools, so do not assign a
   // helper model that does not declare function calling — not only one that

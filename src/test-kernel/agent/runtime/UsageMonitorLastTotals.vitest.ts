@@ -81,7 +81,7 @@ describe('UsageMonitor', () => {
       expect(monitor.lastTotals()).toBeUndefined();
 
       const state = AgentRunStateSnapshotSchema.parse({});
-      await monitor.recordUsage(state, testModelInfo);
+      monitor.recordUsage(state, testModelInfo);
 
       // The cache holds the exact totals object the accumulator exposed, so a
       // failed run's terminal `result` event can report usage from the catch arm.
@@ -101,7 +101,7 @@ describe('UsageMonitor', () => {
         usageRoute: 'chatgpt-subscription',
       });
 
-      await monitor.recordUsage(state, testModelInfo);
+      monitor.recordUsage(state, testModelInfo);
 
       const usageEvent = traceEventsOfType(events, 'usage').at(0);
       expect(usageEvent).toMatchObject({
@@ -125,9 +125,9 @@ describe('UsageMonitor', () => {
         provider: 'openai-chat' as const,
       };
       recordRound(state, 50, round);
-      await monitor.recordUsage(state, testModelInfo);
+      monitor.recordUsage(state, testModelInfo);
       recordRound(state, 50, round);
-      await monitor.recordUsage(state, testModelInfo);
+      monitor.recordUsage(state, testModelInfo);
 
       // The session row is a snapshot of the run's spend (the fold replaces
       // the run's total with the newest row), so the second round's row
@@ -157,11 +157,11 @@ describe('UsageMonitor', () => {
         provider: 'openai-chat' as const,
       };
       recordRound(state, 50, usage);
-      await monitor.recordUsage(state, testModelInfo);
+      monitor.recordUsage(state, testModelInfo);
 
       recordRound(state, 25, null);
       expect(state.usageAccumulator.latestUsage).toBeNull();
-      await monitor.recordUsage(state, testModelInfo);
+      monitor.recordUsage(state, testModelInfo);
 
       expect(traceEventsOfType(events, 'usage')).toHaveLength(1);
       expect(log).toHaveBeenCalledTimes(1);
@@ -188,7 +188,7 @@ describe('UsageMonitor', () => {
         responseTimeMs: 50,
         provider: 'openai-chat' as const,
       });
-      await monitor.recordUsage(state, switched);
+      monitor.recordUsage(state, switched);
 
       // The loop passes the binding that served the round, so the round is
       // billed against it and not against the launch model.
@@ -215,7 +215,7 @@ describe('UsageMonitor', () => {
         provider: 'openrouter-chat' as const,
       });
 
-      await monitor.recordUsage(state, other);
+      monitor.recordUsage(state, other);
 
       expect(log).toHaveBeenCalledWith(
         expect.objectContaining({ provider: 'openrouter-chat' }),

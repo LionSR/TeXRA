@@ -13,7 +13,7 @@ import {
   readModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AgentCategory } from '@shared/schemas';
@@ -56,7 +56,7 @@ export const helperModel = Effect.fn('helperModel')(function* (
   const inputs = yield* readModelAvailabilityInputs(stores, [modelName]);
   const reason = modelUnavailableReasonFrom(inputs, modelName);
   if (reason) return yield* new HelperModelUnavailable({ message: reason });
-  const config = yield* resolveRuntimeModelConfig(modelName);
+  const config = getRuntimeModelConfig(modelName);
   if (!config) {
     return yield* new HelperModelUnavailable({
       message: `Model "${modelName}" is not recognized.`,

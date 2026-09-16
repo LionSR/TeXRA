@@ -107,7 +107,7 @@ export async function applyCliModelSelection(
     return;
   }
 
-  await activeFlow.switchModel(nextModel);
+  activeFlow.switchModel(nextModel);
   setCliSessionModelOverride(nextModel);
   try {
     await context.runtime.runPromise(
