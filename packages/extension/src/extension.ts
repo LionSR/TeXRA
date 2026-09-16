@@ -140,6 +140,17 @@ class SupabaseAuthRegistrationFailed extends Data.TaggedError(
   'SupabaseAuthRegistrationFailed',
 )<{ readonly cause: unknown }> {}
 
+/**
+ * The OAuth readiness gate the account plane's `isReady` probe awaits. Built
+ * with the plane in `initVscodePlatform` and flipped by `registerSupabaseAuth`
+ * once the URI handler is installed, so a sign-in attempted before that
+ * reports the handler as not initialized — the check the auth provider's own
+ * constructor closure used to make.
+ */
+interface AuthReadinessGate {
+  uriHandlerInstalled: boolean;
+}
+
 /** The workspace `.env` file could not be read into the process env. */
 class WorkspaceEnvFileUnreadable extends Data.TaggedError(
   'WorkspaceEnvFileUnreadable',
@@ -175,7 +186,7 @@ async function initVscodePlatform(
   secrets: PlatformSecrets;
   runtime: ProcessRuntime;
   auth: SupabaseAuthShape;
-  authReadiness: { current: () => Promise<void> };
+  authReadiness: AuthReadinessGate;
 }> {
   // The process runtime comes first: the config stores below are opened as
   // Effect programs, so it must exist before the platform this host wires.
@@ -187,13 +198,7 @@ async function initVscodePlatform(
   // extension its SecretStorage and Memento at activation.
   const secrets = new VscodeSecrets(context);
   const globalState = mementoStateStore(context.globalState);
-  // The OAuth readiness gate the account plane's `isReady` probe awaits:
-  // `registerSupabaseAuth` flips it once the URI handler is installed, so a
-  // sign-in attempted before that reports the handler as not initialized.
-  const authReadiness = {
-    current: (): Promise<void> =>
-      Promise.reject(new Error(AUTH_URI_HANDLER_NOT_INITIALIZED)),
-  };
+  const authReadiness: AuthReadinessGate = { uriHandlerInstalled: false };
   // A construction failure degrades to the unavailable plane instead of
   // failing activation: registration below records and reports the error, and
   // every probe answers signed-out — what the facade's statics answered when
@@ -203,7 +208,11 @@ async function initVscodePlatform(
       try: () =>
         createSupabaseAuth({
           secrets,
-          whenReady: () => authReadiness.current(),
+          whenReady: async () => {
+            if (!authReadiness.uriHandlerInstalled) {
+              throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
+            }
+          },
           log: logger,
         }),
       catch: (cause) => ensureError(cause),
@@ -384,7 +393,7 @@ function registerSupabaseAuth(
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
   auth: SupabaseAuthShape,
-  authReadiness: { current: () => Promise<void> },
+  authReadiness: AuthReadinessGate,
 ): void {
   runtime.runSync(
     Effect.try({
@@ -435,7 +444,7 @@ function registerSupabaseAuth(
         // The account plane's readiness probe gates on this: the URI handler
         // is what an OAuth callback arrives at, so sign-in is not "ready"
         // before it is installed.
-        authReadiness.current = () => Promise.resolve();
+        authReadiness.uriHandlerInstalled = true;
 
         log.info('Supabase authentication provider registered');
       },
@@ -501,7 +510,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     secrets: PlatformSecrets,
     runtime: ProcessRuntime,
     auth: SupabaseAuthShape,
-    authReadiness: { current: () => Promise<void> },
+    authReadiness: AuthReadinessGate,
   ): void => {
     // After the platform above, which built the runtime the manager settles
     // its watcher rebuilds on.

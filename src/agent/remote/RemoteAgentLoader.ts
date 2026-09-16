@@ -65,8 +65,8 @@ export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
       const defaultOutputFiles = settings.defaultOutputFiles;
 
       // The stricter setting/prompt schemas throw: keep that on the typed
-      // channel, where the catch below logs and re-fails it, as the old
-      // try/catch did — a defect would skip both.
+      // channel, where the tapError below logs it, as the old try/catch did —
+      // a defect would skip the log.
       const config = yield* Effect.try({
         try: (): RemoteAgentConfig => ({
           settings: AgentSettingSchema.parse(
@@ -90,13 +90,16 @@ export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
       return config;
     });
 
+    // Only the load past the auth gate logs: a signed-out caller's failure is
+    // its own message, not an error-level log line.
     return yield* attempt.pipe(
-      Effect.catch((error: Error) => {
-        log.error(
-          `Failed to load remote agent "${agentName}": ${error.message}`,
-        );
-        return Effect.fail(error);
-      }),
+      Effect.tapError((error: Error) =>
+        Effect.sync(() => {
+          log.error(
+            `Failed to load remote agent "${agentName}": ${error.message}`,
+          );
+        }),
+      ),
     );
   },
 );
