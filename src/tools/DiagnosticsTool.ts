@@ -150,9 +150,9 @@ export class DiagnosticsTool extends defineTool({
       );
     }
 
-    // The host's own failure, matched by tag: `reason` says whether the file
-    // had no workspace, the refresh build faulted, or the collection itself
-    // threw, and the agent is told which.
+    // The host's own failure, matched by tag: `reason` says whether the
+    // refresh build faulted or the collection itself threw, and the agent is
+    // told which.
     const messages = yield* linter(diagnosticsPath).pipe(
       Effect.catchTag('DiagnosticsReadFailed', (error) => {
         log.error(
