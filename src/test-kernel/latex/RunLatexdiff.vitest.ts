@@ -8,6 +8,7 @@ import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdi
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 
@@ -86,7 +87,7 @@ describe('runLatexdiffForRun', () => {
       );
       expect(mocks.scanRunDirForOutputs).not.toHaveBeenCalled();
       expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -110,7 +111,7 @@ describe('runLatexdiffForRun', () => {
         );
         expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
         expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -127,7 +128,7 @@ describe('runLatexdiffForRun', () => {
         expect(result.outcome.results).toEqual([]);
         expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
         expect(mocks.runLatexdiffFromMetadata).not.toHaveBeenCalled();
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -142,7 +143,7 @@ describe('runLatexdiffForRun', () => {
         expect(result.outcome.results).toEqual([]);
         expect(mocks.scanRunDirForOutputs).not.toHaveBeenCalled();
         expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('auto-discovers by agent/model/input when no runId is given', () =>
@@ -168,7 +169,7 @@ describe('runLatexdiffForRun', () => {
         baseRequest.filesystem,
       );
       expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   // Save-as-copy files beside the source are user files, not workflow outputs.
@@ -182,7 +183,7 @@ describe('runLatexdiffForRun', () => {
 
         expect(result.outcome.results).toEqual([]);
         expect(mocks.runLatexdiffFromMetadata).not.toHaveBeenCalled();
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
 
@@ -217,7 +218,10 @@ describe('runLatexdiffForRun diagnostics', () => {
       expect(
         logs.has('DEBUG', 'test', 'Using run-dir scan outputs from run abc123'),
       ).toBe(true);
-    }).pipe(Effect.provide(effectDiagnosticsLayer)),
+    }).pipe(
+      Effect.provide(effectDiagnosticsLayer),
+      Effect.provide(nodePlatformLayer),
+    ),
   );
 });
 

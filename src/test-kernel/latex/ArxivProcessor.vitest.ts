@@ -3,8 +3,18 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
+import * as NodePath from '@effect/platform-node/NodePath';
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  Path,
+} from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -15,16 +25,64 @@ import {
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const tempDirs = useTempDirs();
 const SOURCE_URL = 'https://arxiv.org/src/2404.12175';
 
+/**
+ * The download's body writer is opened with node's `createWriteStream` — the
+ * bare factory the facade static it replaced also called — so this suite hooks
+ * that one export to observe the writer the interruption path must close.
+ * Every other `node:fs` member passes through untouched.
+ */
+const fsHooks = vi.hoisted(() => ({
+  onWriteStream: undefined as
+    ((stream: NodeJS.WritableStream) => void) | undefined,
+}));
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    createWriteStream: (
+      ...args: Parameters<typeof actual.createWriteStream>
+    ) => {
+      const stream = actual.createWriteStream(...args);
+      fsHooks.onWriteStream?.(stream);
+      return stream;
+    },
+  };
+});
+
+/**
+ * The context filesystem, with every `remove` recorded before it runs: the
+ * partial-download delete is one of the three events the interruption order
+ * assertion pins, and it now runs through the injected `FileSystem` service
+ * rather than a facade static.
+ */
+function recordingFsLayer(
+  events: string[],
+): Layer.Layer<FileSystem.FileSystem | Path.Path> {
+  const hooked = Layer.effect(
+    FileSystem.FileSystem,
+    Effect.map(FileSystem.FileSystem, (fs): FileSystem.FileSystem => ({
+      ...fs,
+      remove: (target, options) => {
+        events.push('partial-deleted');
+        return fs.remove(target, options);
+      },
+    })),
+  ).pipe(Layer.provide(nodePlatformLayer));
+  return Layer.merge(hooked, NodePath.layer);
+}
+
 afterEach(async () => {
   setLogSink(null);
+  fsHooks.onWriteStream = undefined;
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -105,7 +163,7 @@ describe('arXiv processor logger channel', () => {
       expect(
         logs.has('DEBUG', 'arxivProcessor', 'Download attempt failed'),
       ).toBe(true);
-    }).pipe(withDiagnostics),
+    }).pipe(withDiagnostics, Effect.provide(nodePlatformLayer)),
   );
 });
 
@@ -136,7 +194,7 @@ describe('arXiv source download filenames', () => {
           autoIndent: false,
         });
         expect(result).toEqual({ path: sourceDirectory, alreadyExisted: true });
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -146,20 +204,10 @@ describe('arXiv source download filenames', () => {
         const destBasePath = yield* tempSourceBase;
         const started = yield* Deferred.make<void>();
         const events: string[] = [];
-        const createWriteStream = AbsoluteFS.createWriteStream.bind(AbsoluteFS);
-        vi.spyOn(AbsoluteFS, 'createWriteStream').mockImplementation(
-          (...args) => {
-            const writer = createWriteStream(...args);
-            writer.once('close', () => events.push('writer-closed'));
-            writer.once('open', () => Deferred.doneUnsafe(started, Exit.void));
-            return writer;
-          },
-        );
-        const deleteFile = AbsoluteFS.delete.bind(AbsoluteFS);
-        vi.spyOn(AbsoluteFS, 'delete').mockImplementation(async (...args) => {
-          events.push('partial-deleted');
-          return deleteFile(...args);
-        });
+        fsHooks.onWriteStream = (writer) => {
+          writer.once('close', () => events.push('writer-closed'));
+          writer.once('open', () => Deferred.doneUnsafe(started, Exit.void));
+        };
         let body: ReadableStreamDefaultController<Uint8Array> | undefined;
         vi.stubGlobal(
           'fetch',
@@ -189,7 +237,7 @@ describe('arXiv source download filenames', () => {
         const fiber = yield* ArxivProcessor.downloadFile(
           SOURCE_URL,
           destBasePath,
-        ).pipe(Effect.forkChild);
+        ).pipe(Effect.provide(recordingFsLayer(events)), Effect.forkChild);
         yield* Deferred.await(started);
         yield* Fiber.interrupt(fiber);
         const exit = yield* Fiber.await(fiber);
@@ -241,7 +289,7 @@ describe('arXiv source download filenames', () => {
           }),
         );
         expect(accessError).toBeInstanceOf(Error);
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
 
@@ -268,7 +316,7 @@ describe('arXiv source download retry classification', () => {
 
       expect(attempt).toBe(2);
       expect(downloadedPath).toBe(destBasePath);
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('does not retry a permanent 400 response', () =>
@@ -282,6 +330,6 @@ describe('arXiv source download retry classification', () => {
       );
       expect(error.message).toContain('HTTP 400');
       expect(fetchMock).toHaveBeenCalledTimes(1);
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
