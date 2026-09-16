@@ -79,8 +79,7 @@ interface CliExecuteOptions {
    *  callbacks the agent runtime calls, so each runs its program on this. */
   readonly runtime: ProcessRuntime;
   /** The host's shutdown registry, from the same services: the run's
-   *  shutdown-status handler registers here instead of re-reading the ambient
-   *  platform singleton the composition root already holds. */
+   *  shutdown-status handler registers here. */
   readonly lifecycle: LifecycleHost;
   /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
    *  `expectedCategory`, never set by a command handler. */
