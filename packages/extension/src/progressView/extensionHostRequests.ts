@@ -12,9 +12,11 @@ import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
 import { Data, Effect, FileSystem } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime';
-import { runAgent } from '@agent/runtime';
-import { validateRunRequest } from '@agent/core/state/runRequests';
+import {
+  runAgent,
+  validateRunRequest,
+  type SessionHandle,
+} from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
