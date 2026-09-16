@@ -39,7 +39,7 @@ type TeamRosterApplicationResult =
 export interface TeamRosterApplicationDeps {
   readonly catalog: TeamRosterCatalog;
   readonly loadLocalCatalog: () => Effect.Effect<void, unknown>;
-  readonly canAccessRemoteCatalog: () => Promise<boolean>;
+  readonly canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   /** A decision already supplied by a non-interactive caller. */
   readonly providedChoice?: TeamAvailabilityChoice;
   readonly choose: (

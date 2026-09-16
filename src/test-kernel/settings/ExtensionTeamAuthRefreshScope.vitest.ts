@@ -53,7 +53,7 @@ describe('extension team auth catalog refresh scope', () => {
             commitPreset,
           },
           loadLocalCatalog: () => Effect.void,
-          canAccessRemoteCatalog: async () => false,
+          canAccessRemoteCatalog: () => Effect.succeed(false),
           choose: async () => 'sign-in',
           signIn: () =>
             Effect.sync(() => {

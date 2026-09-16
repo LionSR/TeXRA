@@ -20,7 +20,6 @@ import {
   type PendingOAuthState,
 } from '@auth/pendingOAuthState';
 import { withPkcePermit } from '@auth/pkcePermit';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   AUTH_BRIDGE_URL,
   DEFAULT_OAUTH_PROVIDER,
@@ -30,7 +29,7 @@ import {
   isOAuthProvider,
   type OAuthProvider,
 } from '@auth/config';
-import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
+import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import {
   SupabaseSessionCoordinator,
   type SupabaseSession,
@@ -47,7 +46,7 @@ import type { SupabaseUriHandler } from './UriHandler';
 const CHANNEL = 'SupabaseAuthProvider';
 const log = logger.createLog(CHANNEL);
 
-const AUTH_URI_HANDLER_NOT_INITIALIZED =
+export const AUTH_URI_HANDLER_NOT_INITIALIZED =
   'OAuth handler not initialized. Restart the extension.';
 const PENDING_OAUTH_STATE_PREFIX = 'texra.extension.pendingOAuthState.';
 
@@ -90,16 +89,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     private readonly notifier: AuthNotifier,
     private readonly secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
+    /**
+     * The account plane the composition root built and served as
+     * `SupabaseAuth`; the readiness gate it was built with is the extension
+     * root's URI-handler check, flipped once `setUriHandler` runs.
+     */
+    private readonly auth: SupabaseAuthShape,
   ) {
-    this.sessionCoordinator = createHostAuthCoordinator({
-      secrets,
-      whenReady: async () => {
-        if (!this.uriHandler) {
-          throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
-        }
-      },
-      log: logger,
-    });
+    this.sessionCoordinator = auth.coordinator;
     SupabaseAuthProvider.instance = this;
   }
 
@@ -413,7 +410,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
 
       const { data, error } = yield* callPort(() =>
-        SupabaseClient.getClient().auth.getUser(session.accessToken),
+        this.auth.client.auth.getUser(session.accessToken),
       );
       if (error) {
         if (classifyAuthFailureStatus(error.status) === 'invalid') {
@@ -588,7 +585,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       );
       const { data, error } = yield* withPkcePermit(
         callPort(() =>
-          SupabaseClient.getClient().auth.signInWithOAuth({
+          this.auth.client.auth.signInWithOAuth({
             provider,
             options,
           }),

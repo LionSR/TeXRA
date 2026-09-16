@@ -487,10 +487,9 @@ describe('completedRunArchive facade', () => {
         launchMocks.resolveAgent.mockReturnValue({
           path: '/agents/orchestrator.yaml',
         });
-        launchMocks.loadAgent.mockResolvedValue([
-          { agentCategory: AgentCategory.ToolUse },
-          {},
-        ]);
+        launchMocks.loadAgent.mockReturnValue(
+          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+        );
         launchMocks.buildVars.mockRejectedValueOnce(launchFailure);
 
         // The one fact a resume reads: the run aggregate's latest

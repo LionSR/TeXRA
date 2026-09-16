@@ -654,7 +654,9 @@ export class SettingsViewMessageHandler {
 
   private async sendProfileData(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      await this.profileController.buildProfileMessage(),
+      await this.runtime.runPromise(
+        this.profileController.buildProfileMessage(),
+      ),
     );
   }
 

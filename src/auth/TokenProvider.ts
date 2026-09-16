@@ -24,8 +24,9 @@ export function classifyAuthFailureStatus(
 
 /**
  * Host-neutral source for authenticated Supabase session tokens. Effect-typed
- * (PRD R1): the one Promise rendering is `SupabaseClient`'s facade, settled
- * through `runAuthProgram` for the consumers its own comment names.
+ * (PRD R1): the `SupabaseAuth` account plane exposes it to consumers, and the
+ * hosts' own Promise-facing sign-in surfaces settle it through
+ * `runAuthProgram`.
  */
 export interface AuthTokenProvider {
   whenReady(): Effect.Effect<void, AuthPortError>;

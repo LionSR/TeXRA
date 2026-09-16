@@ -50,7 +50,7 @@ function makeDeps(
       ...catalog,
     },
     loadLocalCatalog: () => Effect.void,
-    canAccessRemoteCatalog: async () => false,
+    canAccessRemoteCatalog: () => Effect.succeed(false),
     choose: async () => 'cancel',
     signIn: () => Effect.succeed(false),
     forceRefreshRemoteCatalog: () => Effect.void,
@@ -160,7 +160,7 @@ describe('team roster application', () => {
             getPresetToolUseRoot,
           },
           loadLocalCatalog: () => Effect.void,
-          canAccessRemoteCatalog: async () => false,
+          canAccessRemoteCatalog: () => Effect.succeed(false),
           signIn: () => Effect.succeed(false),
           forceRefreshRemoteCatalog: () => Effect.void,
           presentation: {
@@ -200,7 +200,7 @@ describe('team roster application', () => {
           getPresetToolUseRoot: vi.fn(),
         },
         loadLocalCatalog: () => Effect.void,
-        canAccessRemoteCatalog: async () => false,
+        canAccessRemoteCatalog: () => Effect.succeed(false),
         signIn: () => Effect.succeed(true),
         forceRefreshRemoteCatalog: () => Effect.void,
         presentation: {

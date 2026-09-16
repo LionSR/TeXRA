@@ -147,7 +147,7 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
    */
   readonly resourcesPath: string;
   readonly remoteCatalog: {
-    readonly canAccess: () => Promise<boolean>;
+    readonly canAccess: () => Effect.Effect<boolean>;
     readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
   };
   readonly notifications: Pick<
@@ -505,15 +505,16 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await this.runReported(
       'Failed to view remote agent prompt',
       Effect.gen({ self: this }, function* () {
-        const config = yield* Effect.tryPromise({
-          try: () => fetchRemoteAgentPromptYaml(data.agentName),
-          catch: (cause) =>
-            new AgentSettingsActionFailed({
-              member: 'getRemoteAgentPrompt',
-              message: `The hosted agent prompt could not be fetched: ${toErrorMessage(cause)}`,
-              cause,
-            }),
-        });
+        const config = yield* fetchRemoteAgentPromptYaml(data.agentName).pipe(
+          Effect.mapError(
+            (cause) =>
+              new AgentSettingsActionFailed({
+                member: 'getRemoteAgentPrompt',
+                message: `The hosted agent prompt could not be fetched: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          ),
+        );
         if (config == null) {
           yield* this.notifications.showErrorMessage(
             'Authentication required. Sign in using "TeXRA: Sign In".',

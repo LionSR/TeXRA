@@ -4,86 +4,60 @@ import { Effect } from 'effect';
 import { describe, it, afterEach, expect, vi } from 'vitest';
 
 // Local imports - auth
-import { AuthPortError } from '@auth/authProgram';
 import { SUPABASE_GOTRUE_STORAGE_KEY } from '@auth/config';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import type { AuthTokenProvider } from '@auth/TokenProvider';
+import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import type { SessionSecretStore } from '@auth/oauth/sessionAccess';
 import * as logger from '@logger/logUtils';
 import { SecretsFailed } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
-import { createDeferred } from '@test/support/asyncTestUtils';
 
-const SUPABASE_URL = 'https://example.supabase.co';
-const PUBLIC_KEY = 'public-key';
-
-function initializeSupabase(secrets: SessionSecretStore): void {
-  SupabaseClient.initialize(SUPABASE_URL, PUBLIC_KEY, secrets);
+function createAuth(
+  secrets: SessionSecretStore,
+  whenReady?: () => Promise<void>,
+): SupabaseAuthShape {
+  return createSupabaseAuth({ secrets, ...(whenReady ? { whenReady } : {}) });
 }
 
-function createTokenProvider(
-  overrides: Partial<AuthTokenProvider> = {},
-): AuthTokenProvider {
-  return {
-    whenReady: () => Effect.void,
-    ensureFreshToken: () => Effect.succeed('access-token'),
-    getStoredSessionState: () => Effect.succeed('none'),
-    getStoredAccountLabel: () => Effect.succeed(null),
-    getLastRefreshFailure: () => null,
-    ...overrides,
-  };
-}
-
-describe('SupabaseClient', () => {
-  afterEach(() => {
-    SupabaseClient.resetForTests();
-    vi.restoreAllMocks();
-  });
-
-  it('reports not ready when token provider readiness fails', async () => {
-    const provider = createTokenProvider({
-      whenReady: () =>
-        Effect.fail(
-          new AuthPortError({ cause: new Error('host auth unavailable') }),
-        ),
-    });
-
-    initializeSupabase(new FakeSecrets());
-    SupabaseClient.setAuthProvider(provider);
-
-    assert.equal(await SupabaseClient.isReady(), false);
-    assert.equal(
-      SupabaseClient.getInitError()?.message,
-      'host auth unavailable',
+describe('SupabaseAuth probes', () => {
+  it('reports not ready when the readiness gate fails', async () => {
+    const auth = createAuth(new FakeSecrets(), () =>
+      Promise.reject(new Error('host auth unavailable')),
     );
+
+    assert.equal(await Effect.runPromise(auth.isReady), false);
+    assert.equal(auth.getInitError()?.message, 'host auth unavailable');
   });
 
   it('warns and reports no label when the stored label read throws', async () => {
-    SupabaseClient.setAuthProvider(
-      createTokenProvider({
-        getStoredAccountLabel: () =>
-          Effect.fail(
-            new AuthPortError({
-              cause: new Error('secret storage unavailable'),
-            }),
-          ),
-      }),
-    );
+    const secrets: SessionSecretStore = {
+      get: () =>
+        Effect.fail(
+          new SecretsFailed({
+            reason: 'io',
+            operation: 'get',
+            message: 'secret storage unavailable',
+          }),
+        ),
+      set: () => Effect.void,
+      delete: () => Effect.void,
+    };
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const auth = createAuth(secrets);
 
-    await expect(SupabaseClient.getStoredAccountLabel()).resolves.toBe(null);
+    await expect(Effect.runPromise(auth.storedAccountLabel)).resolves.toBe(
+      null,
+    );
     expect(warn).toHaveBeenCalledWith(
-      'SupabaseClient',
+      'SupabaseAuth',
       expect.stringContaining('secret storage unavailable'),
     );
   });
 });
 
-describe('SupabaseClient PKCE flow state', () => {
+describe('SupabaseAuth PKCE flow state', () => {
   const VERIFIER_KEY = `${SUPABASE_GOTRUE_STORAGE_KEY}-code-verifier`;
 
   afterEach(() => {
-    SupabaseClient.resetForTests();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -119,8 +93,8 @@ describe('SupabaseClient PKCE flow state', () => {
   }
 
   /** Start browser OAuth without navigating, as a host window would. */
-  async function startSignIn(): Promise<void> {
-    const { error } = await SupabaseClient.getClient().auth.signInWithOAuth({
+  async function startSignIn(auth: SupabaseAuthShape): Promise<void> {
+    const { error } = await auth.client.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: 'https://remote.texra.ai/functions/v1/auth-bridge/cursor/x',
@@ -132,9 +106,9 @@ describe('SupabaseClient PKCE flow state', () => {
 
   it('persists only the flow state, never the session slot', async () => {
     const secrets = new FakeSecrets();
-    initializeSupabase(secrets);
+    const auth = createAuth(secrets);
 
-    await startSignIn();
+    await startSignIn(auth);
 
     // A flow start writes its numbered slot, the slot index, and the fixed
     // legacy key the callback reads. All three are keys GoTrue derives from
@@ -151,8 +125,7 @@ describe('SupabaseClient PKCE flow state', () => {
 
   it('completes a callback delivered to a different client instance', async () => {
     const secrets = new FakeSecrets();
-    initializeSupabase(secrets);
-    await startSignIn();
+    await startSignIn(createAuth(secrets));
     // GoTrue JSON-encodes every stored value; the slot holds the verifier
     // alone, or `verifier/redirectType` for a recovery link.
     const stored: unknown = JSON.parse(
@@ -164,11 +137,10 @@ describe('SupabaseClient PKCE flow state', () => {
     // A second window (or the same one after a host reload): a fresh client
     // that never generated a verifier of its own.
     const exchangeBody = stubCodeExchange();
-    SupabaseClient.resetForTests();
-    initializeSupabase(secrets);
+    const secondWindow = createAuth(secrets);
 
     const { data, error } =
-      await SupabaseClient.getClient().auth.exchangeCodeForSession('auth-code');
+      await secondWindow.client.auth.exchangeCodeForSession('auth-code');
 
     assert.equal(error, null);
     assert.equal(data.session?.access_token, 'pkce-access');
@@ -201,12 +173,12 @@ describe('SupabaseClient PKCE flow state', () => {
         ),
       delete: () => Effect.void,
     };
-    initializeSupabase(secrets);
+    const auth = createAuth(secrets);
 
-    await startSignIn();
+    await startSignIn(auth);
 
     expect(warn).toHaveBeenCalledWith(
-      'SupabaseClient',
+      'SupabaseAuth',
       expect.stringContaining('keychain locked'),
     );
 
@@ -215,7 +187,7 @@ describe('SupabaseClient PKCE flow state', () => {
     const exchangeBody = stubCodeExchange();
 
     const { data, error } =
-      await SupabaseClient.getClient().auth.exchangeCodeForSession('auth-code');
+      await auth.client.auth.exchangeCodeForSession('auth-code');
 
     assert.equal(error, null);
     assert.equal(data.session?.access_token, 'pkce-access');

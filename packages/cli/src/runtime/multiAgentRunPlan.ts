@@ -1,5 +1,5 @@
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import {
   findTeamPreset,
   planTeamRun,
@@ -115,7 +115,7 @@ function reloadRemoteAgentsForGaps<T>(
 }> {
   return runtime.runPromise(
     refreshRemoteCatalogForGaps(value, hasGaps, replan, {
-      canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
+      canAccessRemoteCatalog: () => supabaseAuthenticated,
       refreshRemote: () => refresh({ includeRemote: true }),
     }),
   );

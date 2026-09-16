@@ -372,7 +372,7 @@ describe('loadTeamOptions', () => {
               ? [agent('writer', { source: 'builtInWorkflow' })]
               : [agent('lead', { tools: delegateTools }), agent('member')];
           },
-          canAccessRemoteCatalog: async () => true,
+          canAccessRemoteCatalog: () => Effect.succeed(true),
           refreshRemote: () =>
             Effect.sync(() => {
               refreshed = true;
@@ -398,7 +398,7 @@ describe('loadTeamOptions', () => {
         customPresetsRaw: [preset()],
         ensureCatalogLoaded: () => Effect.void,
         getAgents: () => [],
-        canAccessRemoteCatalog: async () => false,
+        canAccessRemoteCatalog: () => Effect.succeed(false),
         refreshRemote: () =>
           Effect.sync(() => {
             refreshed = true;
@@ -424,7 +424,7 @@ describe('loadTeamOptions', () => {
             loaded = true;
           }),
         getAgents,
-        canAccessRemoteCatalog: async () => false,
+        canAccessRemoteCatalog: () => Effect.succeed(false),
         refreshRemote: () => Effect.void,
       });
 
@@ -448,7 +448,7 @@ describe('resolveTeamLaunch', () => {
       ensureCatalogLoaded: () => Effect.void,
       getAgents: (category: string) =>
         category === 'workflow' ? workflowAgents : toolUseAgents,
-      canAccessRemoteCatalog: async () => false,
+      canAccessRemoteCatalog: () => Effect.succeed(false),
       refreshRemote: () => Effect.void,
       choose: async () => 'cancel' as const,
       signIn: () => Effect.succeed(false),
@@ -554,7 +554,7 @@ describe('resolveTeamLaunch', () => {
           yield* resolveTeamLaunch(
             launchArgs({
               customPresetsRaw: [hostedWriterPreset()],
-              canAccessRemoteCatalog: async () => true,
+              canAccessRemoteCatalog: () => Effect.succeed(true),
               refreshRemote: () =>
                 Effect.sync(() => {
                   refreshed = true;

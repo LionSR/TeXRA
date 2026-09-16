@@ -23,7 +23,7 @@ import {
   refreshRemoteAgentCatalogAfterSignOut,
   requireOAuthRedirectUrl,
 } from '@auth/authFlowEffects';
-import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
+import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import {
   type SupabaseCallbackResult,
   type SupabaseSession,
@@ -33,7 +33,6 @@ import type { AuthCallbackUriParts } from '@auth/authCallback';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { TEXRA_PROTOCOL } from '../shared/desktopProtocol.js';
@@ -73,7 +72,7 @@ export interface DesktopAuthCallbackState {
   clearAwaitingCallback(nonce?: string): Effect.Effect<void, StateWriteFailed>;
 }
 
-type DesktopAuthLog = Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
+export type DesktopAuthLog = Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
 
 export interface DesktopSupabaseAuthHost extends Pick<
   MessageHost,
@@ -109,9 +108,8 @@ interface DesktopOAuthClient {
 
 /**
  * The session-storage surface this module drives. Token freshness and readiness
- * are not part of it: the coordinator registers itself with `SupabaseClient` as
- * the process-wide token provider, and every desktop token read goes through
- * there.
+ * are not part of it: the account plane (`SupabaseAuth`) the composition root
+ * served owns those, and every desktop token read goes through there.
  */
 export interface DesktopAuthCoordinator {
   storeSession(session: SupabaseSession): Effect.Effect<void, AuthPortError>;
@@ -509,8 +507,9 @@ export function createDesktopSupabaseAuth(
 }
 
 export function createDesktopAuthCoordinator(options: {
-  secrets: PlatformSecrets;
-  log: DesktopAuthLog;
+  /** The account plane the composition root built and served as
+   *  `SupabaseAuth`. */
+  auth: SupabaseAuthShape;
   /** The process runtime the composition root built; the auth subsystem's run
    *  edge is installed over it. */
   runtime: ProcessRuntime;
@@ -520,10 +519,7 @@ export function createDesktopAuthCoordinator(options: {
   // compose it directly; only the CLI's own composition root settles auth
   // programs through `runAuthProgram`.
   installAuthProgramEdge((program) => options.runtime.runPromiseExit(program));
-  return createHostAuthCoordinator({
-    secrets: options.secrets,
-    log: createSessionLog(options.log),
-  });
+  return options.auth.coordinator;
 }
 
 function processProtocolCallback(
@@ -596,7 +592,7 @@ function processProtocolCallback(
   });
 }
 
-function createSessionLog(log: DesktopAuthLog): SupabaseSessionLog {
+export function createSessionLog(log: DesktopAuthLog): SupabaseSessionLog {
   return {
     debug: (source, message, options) =>
       log.debug(`[${source}] ${message}`, options?.data),

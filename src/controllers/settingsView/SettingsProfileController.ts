@@ -1,4 +1,5 @@
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { Effect } from 'effect';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { API_PROVIDERS } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -18,6 +19,7 @@ import {
   getProviderKeyUrl,
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
+import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * Host-supplied storage wiring: `globalState`, `loadProviderKeyStatuses`, and
@@ -40,16 +42,28 @@ export class SettingsProfileController {
   constructor(private readonly deps: SettingsProfileControllerDeps) {}
 
   /**
-   * Assemble the canonical `UPDATE_PROFILE` message for either host.
+   * Assemble the canonical `UPDATE_PROFILE` message for either host. The host
+   * settles it on its process runtime, which provides `SupabaseAuth`.
    *
    * Profile-metadata reads degrade gracefully: a transient failure keeps the
    * user signed in with fallback values rather than failing the whole refresh.
    */
-  async buildProfileMessage(): Promise<UpdateProfileMessage> {
-    const [storedSessionState, providerKeyStatuses] = await Promise.all([
-      SupabaseClient.getStoredSessionState(),
-      this.getProviderKeyStatuses(),
-    ]);
+  readonly buildProfileMessage = Effect.fn(
+    'SettingsProfileController.buildProfileMessage',
+  )(function* (
+    this: SettingsProfileController,
+  ): Effect.fn.Return<UpdateProfileMessage, Error, SupabaseAuth> {
+    const auth = yield* SupabaseAuth;
+    const [storedSessionState, providerKeyStatuses] = yield* Effect.all(
+      [
+        auth.storedSessionState,
+        Effect.tryPromise({
+          try: () => this.getProviderKeyStatuses(),
+          catch: ensureError,
+        }),
+      ],
+      { concurrency: 'unbounded' },
+    );
     const base = {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       providerKeyStatuses,
@@ -66,7 +80,7 @@ export class SettingsProfileController {
       sessionProblem = 'unavailable';
     }
     const storedEmail = hasStoredSession
-      ? await SupabaseClient.getStoredAccountLabel()
+      ? yield* auth.storedAccountLabel
       : null;
 
     if (storedSessionState !== 'authenticated') {
@@ -78,7 +92,7 @@ export class SettingsProfileController {
       };
     }
 
-    const user = await SupabaseClient.getUser();
+    const user = yield* auth.user;
 
     return {
       ...base,
@@ -86,7 +100,7 @@ export class SettingsProfileController {
       user: { email: user?.email ?? storedEmail ?? '' },
       sessionProblem,
     };
-  }
+  });
 
   getProviderDisplayName(provider: string): string {
     return getProviderDisplayName(

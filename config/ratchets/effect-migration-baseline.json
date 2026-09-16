@@ -13,7 +13,7 @@
       "packages/extension/src/commands/latex/latexdiffCommands.ts": 2,
       "packages/extension/src/settingsView/handlers/agentHandlers.ts": 1,
       "src/agent/index/agentRegistry.ts": 1,
-      "src/agent/runtime/AgentLaunchContext.ts": 4,
+      "src/agent/runtime/AgentLaunchContext.ts": 3,
       "src/agent/runtime/RunContext.ts": 1,
       "src/agent/runtime/childRunLoop.ts": 1,
       "src/agent/runtime/runAgent.ts": 1,
@@ -38,7 +38,6 @@
     },
     "catch:effect-importer": {
       "packages/desktop/src/main/index.ts": 1,
-      "src/agent/remote/RemoteAgentLoader.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/files/relativeFS.ts": 2
     }

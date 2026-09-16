@@ -7,6 +7,7 @@
  * Installed like the process roots: exactly once, by the entry.
  */
 import type { ToolInjections } from '@agent/runtime/toolInjection';
+import type { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -20,8 +21,8 @@ import type { Secrets } from './secrets';
 
 /**
  * The runtime over the process-lifetime services every entry provides: the
- * cohort-A tags beside the records, the resume port, the language-model
- * bridge, the Lean port and the HTTP client, merged once in
+ * cohort-A tags beside the records, the account plane, the resume port, the
+ * language-model bridge, the Lean port and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer, plus the standard library's
  * `FileSystem` and `Path`, which the same install provides from
  * `@effect/platform-node` so a program that reads or resolves a file takes
@@ -39,7 +40,8 @@ export type ProcessServices =
   | AgentResume
   | SetupPlatform
   | ToolInjections
-  | LeanLanguageServices;
+  | LeanLanguageServices
+  | SupabaseAuth;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices,

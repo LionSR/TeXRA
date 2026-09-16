@@ -16,7 +16,11 @@ import {
 import { installAuthProgramEdge } from '@auth/authProgram';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import { setRuntimeExtensionId } from '@auth/config';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import {
+  createSupabaseAuth,
+  unavailableSupabaseAuth,
+  type SupabaseAuthShape,
+} from '@auth/SupabaseAuth';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { signIn as authSignIn } from '@commands/auth/authCommands';
@@ -45,7 +49,10 @@ import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
-import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
+import {
+  SupabaseAuthProvider,
+  AUTH_URI_HANDLER_NOT_INITIALIZED,
+} from '@frontend/auth/SupabaseAuthProvider';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
@@ -64,7 +71,7 @@ import {
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { createLog } from '@logger/logUtils';
+import * as logger from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
@@ -132,14 +139,25 @@ import { mementoStateStore } from './frontend/vscodeStateStore';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 
-const log = createLog('extension');
+const log = logger.createLog('extension');
 
-const authLog = createLog('SupabaseAuthProvider');
+const authLog = logger.createLog('SupabaseAuthProvider');
 
 /** The TeXRA account provider and its URI handler could not be registered. */
 class SupabaseAuthRegistrationFailed extends Data.TaggedError(
   'SupabaseAuthRegistrationFailed',
 )<{ readonly cause: unknown }> {}
+
+/**
+ * The OAuth readiness gate the account plane's `isReady` probe awaits. Built
+ * with the plane in `initVscodePlatform` and flipped by `registerSupabaseAuth`
+ * once the URI handler is installed, so a sign-in attempted before that
+ * reports the handler as not initialized — the check the auth provider's own
+ * constructor closure used to make.
+ */
+interface AuthReadinessGate {
+  uriHandlerInstalled: boolean;
+}
 
 /** The workspace `.env` file could not be read into the process env. */
 class WorkspaceEnvFileUnreadable extends Data.TaggedError(
@@ -180,6 +198,8 @@ async function initVscodePlatform(
 ): Promise<{
   secrets: PlatformSecrets;
   runtime: ProcessRuntime;
+  auth: SupabaseAuthShape;
+  authReadiness: AuthReadinessGate;
   roots: WorkspaceRoots;
 }> {
   // The process runtime comes first: the config stores below are opened as
@@ -192,6 +212,28 @@ async function initVscodePlatform(
   // extension its SecretStorage and Memento at activation.
   const secrets = new VscodeSecrets(context);
   const globalState = mementoStateStore(context.globalState);
+  const authReadiness: AuthReadinessGate = { uriHandlerInstalled: false };
+  // A construction failure degrades to the unavailable plane instead of
+  // failing activation: registration below records and reports the error, and
+  // every probe answers signed-out — what the facade's statics answered when
+  // initialization threw.
+  const auth = Effect.runSync(
+    Effect.try({
+      try: () =>
+        createSupabaseAuth({
+          secrets,
+          whenReady: async () => {
+            if (!authReadiness.uriHandlerInstalled) {
+              throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
+            }
+          },
+          log: logger,
+        }),
+      catch: (cause) => ensureError(cause),
+    }).pipe(
+      Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
+    ),
+  );
   // The resume port closes over the runtime installed just below: a resume
   // attempt runs on it, and the port is only invoked after activation has
   // returned. One value serves both the runtime's `AgentResume` service and
@@ -206,6 +248,7 @@ async function initVscodePlatform(
     updateCheckStorage: () => storage.getGlobalStoragePath(),
     secrets,
     appState: globalState,
+    auth,
     // The same bridge the platform wires below (nodeHost applies the same
     // fallback): the editor's LM API on the workspace path, unavailable on
     // the credential-only one.
@@ -253,7 +296,7 @@ async function initVscodePlatform(
     globalState,
   });
   initProcessWorkspaceRoots(roots);
-  return { secrets, runtime, roots };
+  return { secrets, runtime, auth, authReadiness, roots };
 }
 
 function shutdownExtension(): Promise<void> {
@@ -372,6 +415,8 @@ function registerSupabaseAuth(
   context: vscode.ExtensionContext,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
+  auth: SupabaseAuthShape,
+  authReadiness: AuthReadinessGate,
 ): void {
   runtime.runSync(
     Effect.try({
@@ -403,6 +448,7 @@ function registerSupabaseAuth(
           },
           secrets,
           runtime,
+          auth,
         );
         context.subscriptions.push(
           vscode.authentication.registerAuthenticationProvider(
@@ -418,6 +464,10 @@ function registerSupabaseAuth(
           vscode.window.registerUriHandler(uriHandler),
         );
         authProvider.setUriHandler(uriHandler);
+        // The account plane's readiness probe gates on this: the URI handler
+        // is what an OAuth callback arrives at, so sign-in is not "ready"
+        // before it is installed.
+        authReadiness.uriHandlerInstalled = true;
 
         log.info('Supabase authentication provider registered');
       },
@@ -425,7 +475,7 @@ function registerSupabaseAuth(
     }).pipe(
       Effect.catchTag('SupabaseAuthRegistrationFailed', (failure) =>
         Effect.sync(() => {
-          SupabaseClient.setInitError(ensureError(failure.cause));
+          auth.setInitError(ensureError(failure.cause));
           log.error(
             `Failed to initialize Supabase authentication: ${toErrorMessage(failure.cause)}`,
           );
@@ -482,6 +532,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const wirePostPlatform = (
     secrets: PlatformSecrets,
     runtime: ProcessRuntime,
+    auth: SupabaseAuthShape,
+    authReadiness: AuthReadinessGate,
   ): void => {
     // After the platform above, which built the runtime the manager settles
     // its watcher rebuilds on.
@@ -490,7 +542,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       path.join(context.extensionPath, 'resources'),
       runtime,
     );
-    registerSupabaseAuth(context, secrets, runtime);
+    registerSupabaseAuth(context, secrets, runtime, auth, authReadiness);
   };
 
   if (!hasSingleWorkspace) {
@@ -500,7 +552,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
-    const { secrets, runtime } = await initVscodePlatform(
+    const { secrets, runtime, auth, authReadiness } = await initVscodePlatform(
       context,
       lifecycle,
       undefined,
@@ -513,7 +565,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         );
       },
     );
-    wirePostPlatform(secrets, runtime);
+    wirePostPlatform(secrets, runtime, auth, authReadiness);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
     // path below, so the welcome view registers its own standalone variant:
@@ -580,33 +632,34 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
-  const { secrets, runtime, roots } = await initVscodePlatform(
-    context,
-    lifecycle,
-    workspaceRoot,
-    workspaceState,
-    // `runtimeSession` is created below; resume requests only arrive after
-    // activation has composed it.
-    () => runtimeSession,
-    {
-      languageModel,
-      toolMissingHandler: async (message, openDocsCommand) => {
-        const actions = openDocsCommand ? ['View Installation Guide'] : [];
-        log.error(message);
-        const choice = await vscode.window.showErrorMessage(
-          message,
-          ...actions,
-        );
-        if (choice === 'View Installation Guide' && openDocsCommand) {
-          const [command, ...args] = openDocsCommand.split(',');
-          void vscode.commands.executeCommand(command, ...args);
-        }
+  const { secrets, runtime, auth, authReadiness, roots } =
+    await initVscodePlatform(
+      context,
+      lifecycle,
+      workspaceRoot,
+      workspaceState,
+      // `runtimeSession` is created below; resume requests only arrive after
+      // activation has composed it.
+      () => runtimeSession,
+      {
+        languageModel,
+        toolMissingHandler: async (message, openDocsCommand) => {
+          const actions = openDocsCommand ? ['View Installation Guide'] : [];
+          log.error(message);
+          const choice = await vscode.window.showErrorMessage(
+            message,
+            ...actions,
+          );
+          if (choice === 'View Installation Guide' && openDocsCommand) {
+            const [command, ...args] = openDocsCommand.split(',');
+            void vscode.commands.executeCommand(command, ...args);
+          }
+        },
       },
-    },
-  );
-  wirePostPlatform(secrets, runtime);
+    );
+  wirePostPlatform(secrets, runtime, auth, authReadiness);
   // That registration precedes the fire-and-forget remote agent refresh below,
-  // which reads `SupabaseClient.getAccessToken()`: with the provider in place
+  // which reads the account plane's access token: with the provider in place
   // the refresh fetches the real catalog instead of short-circuiting on a null
   // token, so activation now performs that one background fetch.
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this

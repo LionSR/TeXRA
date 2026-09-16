@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import {
   getAgent,
   getAgentsByCategory,
@@ -6,7 +8,7 @@ import {
   resolveAgentForLaunch,
   type AgentEntry,
 } from '@agent/index';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AGENT_CATEGORIES,
@@ -168,7 +170,10 @@ export async function resolveCliAgent(
   // local miss) falls through to the full load below.
   if (
     agent &&
-    (name.includes(':') || !(await SupabaseClient.isAuthenticated()))
+    (name.includes(':') ||
+      !(await runtime.runPromise(
+        Effect.flatMap(SupabaseAuth, (auth) => auth.authenticated),
+      )))
   ) {
     return agent;
   }

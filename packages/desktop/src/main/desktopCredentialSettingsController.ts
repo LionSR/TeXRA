@@ -580,7 +580,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   async postProfileData(): Promise<void> {
     this.options.renderer.postToRenderer(
-      await this.profileController.buildProfileMessage(),
+      await this.options.runtime.runPromise(
+        this.profileController.buildProfileMessage(),
+      ),
     );
   }
 
