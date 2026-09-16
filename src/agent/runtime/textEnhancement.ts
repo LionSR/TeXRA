@@ -8,6 +8,7 @@ import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
 import { POLISH_PROMPT_PREFIX } from './bundledPrompts';
 import { helperCompletion, helperModel } from './helperModel';
+import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('TextEnhancement');
 
@@ -22,7 +23,7 @@ const log = createLog('TextEnhancement');
 export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
   text: string,
   stores: ModelOptionStores,
-): Effect.fn.Return<string, Error> {
+): Effect.fn.Return<string, Error, HttpClient.HttpClient> {
   return yield* Effect.gen(function* () {
     const bound = yield* helperModel(stores);
     const responseText = yield* helperCompletion(bound, {

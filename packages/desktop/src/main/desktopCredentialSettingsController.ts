@@ -539,7 +539,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           toErrorMessage(error),
         ),
       async (provider) => {
-        await provider.signOut(this.options.secrets);
+        await this.options.runtime.runPromise(
+          provider.signOut(this.options.secrets),
+        );
         await this.options.runtime.runPromise(
           this.options.notifications.showInfoMessage(
             ACCOUNT_OUTCOME.signedOut(provider.displayName),
