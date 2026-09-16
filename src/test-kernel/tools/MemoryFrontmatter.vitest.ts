@@ -42,6 +42,23 @@ describe('memory frontmatter (yaml-backed)', () => {
     expect(parsed.meta?.pinned).toBeUndefined();
   });
 
+  it('parses a block using CRLF line endings', () => {
+    const crlf = [
+      '---',
+      'modifiedBy: agent-name',
+      'modifiedAt: 2026-06-20T14:30:45.123Z',
+      '---',
+      'crlf body',
+    ].join('\r\n');
+
+    const parsed = parseFrontmatter(crlf);
+    expect(parsed.meta).toEqual({
+      modifiedBy: 'agent-name',
+      modifiedAt: '2026-06-20T14:30:45.123Z',
+    });
+    expect(parsed.content).toBe('crlf body');
+  });
+
   it('parses a legacy hand-written block (unquoted values)', () => {
     const legacy = [
       '---',
