@@ -1,6 +1,5 @@
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
-import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
@@ -8,7 +7,7 @@ import { noopTrace, TraceEmitter } from '@agent/trace';
 import type { FinalizeRunResult } from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
-import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
   runFlowWithLifecycle,
@@ -30,6 +29,7 @@ import type { RunId, RunOutcome } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -164,7 +164,7 @@ function waitingResult(runId: RunId): WaitingToolUseFlowResult {
  * stop tear the run down.
  */
 function takeWaitingHandle(runId: RunId): RunHandle {
-  const handle = defaultSession().runs.getHandle(runId);
+  const handle = testDefaultSession().runs.getHandle(runId);
   expect(handle).toBeInstanceOf(RunHandle);
   if (!(handle instanceof RunHandle)) {
     throw new Error('Expected a suspended agent run handle.');
@@ -292,7 +292,7 @@ describe('runFlowWithLifecycle', () => {
   it('keeps subagent errors registered until terminal delivery runs', async () => {
     const { runId, ctx } = lifecycleFixture();
     const onError = vi.fn(() => {
-      expect(defaultSession().runs.getHandle(runId)).toBeDefined();
+      expect(testDefaultSession().runs.getHandle(runId)).toBeDefined();
     });
 
     try {
@@ -305,9 +305,9 @@ describe('runFlowWithLifecycle', () => {
 
       expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
       expect(onError).toHaveBeenCalledOnce();
-      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+      expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
-      defaultSession().runs.untrack(runId);
+      testDefaultSession().runs.untrack(runId);
     }
   });
 
@@ -326,9 +326,9 @@ describe('runFlowWithLifecycle', () => {
       expect(result.outcome).toBe(RUN_PHASE.WAITING);
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(onError).not.toHaveBeenCalled();
-      expect(defaultSession().runs.getHandle(runId)).toBeDefined();
+      expect(testDefaultSession().runs.getHandle(runId)).toBeDefined();
     } finally {
-      defaultSession().runs.untrack(runId);
+      testDefaultSession().runs.untrack(runId);
     }
   });
 
@@ -357,7 +357,7 @@ describe('runFlowWithLifecycle', () => {
           yield* Deferred.await(parked.started);
           expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
 
-          const stop = defaultSession().runs.kill(runId);
+          const stop = testDefaultSession().runs.kill(runId);
 
           expect(stop.accepted()).toBe(false);
 
@@ -366,9 +366,9 @@ describe('runFlowWithLifecycle', () => {
           yield* Deferred.succeed(parked.release, undefined);
           const result = yield* Fiber.join(running);
           expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-          expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+          expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
         } finally {
-          defaultSession().runs.untrack(runId);
+          testDefaultSession().runs.untrack(runId);
         }
       }),
   );
@@ -405,7 +405,7 @@ describe('runFlowWithLifecycle', () => {
       ]);
       expect(rosterEmissionsBeforeOnRun).toBeGreaterThan(0);
     } finally {
-      defaultSession().runs.untrack(runId);
+      testDefaultSession().runs.untrack(runId);
     }
   });
 
@@ -426,7 +426,7 @@ describe('runFlowWithLifecycle', () => {
           }),
         {
           onRun: async () => {
-            stop = defaultSession().runs.kill(runId);
+            stop = testDefaultSession().runs.kill(runId);
             expect(stop.accepted()).toBe(true);
           },
         },
@@ -458,7 +458,7 @@ describe('runFlowWithLifecycle', () => {
           () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
           {
             onRun: async () => {
-              stop = defaultSession().runs.kill(runId);
+              stop = testDefaultSession().runs.kill(runId);
               expect(stop.accepted()).toBe(true);
             },
           },
@@ -477,7 +477,7 @@ describe('runFlowWithLifecycle', () => {
           ),
         ).toEqual([]);
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          defaultSession(),
+          testDefaultSession(),
           {
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
@@ -501,7 +501,7 @@ describe('runFlowWithLifecycle', () => {
     const result = await Effect.runPromise(
       runFlow(ctx, (handle) =>
         Effect.gen(function* () {
-          const stop = defaultSession().runs.kill(runId);
+          const stop = testDefaultSession().runs.kill(runId);
           expect(stop.accepted()).toBe(true);
           yield* stop.settlement;
           expect(handle.stopRequested).toBe(true);
@@ -514,7 +514,7 @@ describe('runFlowWithLifecycle', () => {
     // won on the run, so the flow's COMPLETED report is relabeled.
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
-      defaultSession(),
+      testDefaultSession(),
       expect.objectContaining({
         outcome: RUN_OUTCOME.CANCELLED,
       }),
@@ -532,7 +532,7 @@ describe('runFlowWithLifecycle', () => {
         ctx,
         () =>
           Effect.gen(function* () {
-            const stop = defaultSession().runs.kill(runId);
+            const stop = testDefaultSession().runs.kill(runId);
             expect(stop.accepted()).toBe(true);
             yield* stop.settlement;
             return yield* Effect.fail(new Error('child exited with code 143'));
@@ -543,7 +543,7 @@ describe('runFlowWithLifecycle', () => {
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-      defaultSession(),
+      testDefaultSession(),
       expect.objectContaining({
         outcome: RUN_OUTCOME.CANCELLED,
       }),
@@ -574,7 +574,7 @@ describe('runFlowWithLifecycle', () => {
           );
 
           expect(result.outcome).toBe(RUN_PHASE.WAITING);
-          expect(defaultSession().runs.getHandle(runId)).toBeDefined();
+          expect(testDefaultSession().runs.getHandle(runId)).toBeDefined();
           expect(followUpsTerminalize).not.toHaveBeenCalled();
           expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
 
@@ -587,18 +587,18 @@ describe('runFlowWithLifecycle', () => {
           // loop/toolUse.ts). With no interrupt target left, `runs.kill()`
           // falls back to the teardown the WAITING branch parked and tears the
           // run down.
-          const stop = defaultSession().runs.kill(runId);
+          const stop = testDefaultSession().runs.kill(runId);
           expect(stop.accepted()).toBe(true);
           yield* stop.settlement;
 
-          expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+          expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
           expect(followUpsTerminalize).toHaveBeenCalledWith(runId);
           // The bypassed runFlowWithLifecycle can't write the terminal row, so
           // terminateWaitingHandle must — session subscribers would otherwise
           // miss the stop entirely. The settlement runs that write in this fiber,
           // so the call is a fact as soon as it returns.
           expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            defaultSession(),
+            testDefaultSession(),
             {
               runId,
               outcome: RUN_OUTCOME.CANCELLED,
@@ -620,7 +620,7 @@ describe('runFlowWithLifecycle', () => {
             }),
           );
         } finally {
-          defaultSession().runs.untrack(runId);
+          testDefaultSession().runs.untrack(runId);
         }
       }),
   );
@@ -649,7 +649,7 @@ describe('runFlowWithLifecycle', () => {
         expect(result.outcome).toBe(RUN_PHASE.WAITING);
         takeWaitingHandle(runId);
 
-        const stop = defaultSession().runs.kill(runId);
+        const stop = testDefaultSession().runs.kill(runId);
 
         expect(stop.accepted()).toBe(true);
 
@@ -657,7 +657,7 @@ describe('runFlowWithLifecycle', () => {
 
         expect(stopSessionsForRun).toHaveBeenCalledWith(runId);
       } finally {
-        defaultSession().runs.untrack(runId);
+        testDefaultSession().runs.untrack(runId);
       }
     }),
   );
@@ -678,11 +678,14 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(outcome);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
-        runId,
-        outcome,
-        output: EMPTY_TOOL_USE_OUTPUT,
-      });
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        testDefaultSession(),
+        {
+          runId,
+          outcome,
+          output: EMPTY_TOOL_USE_OUTPUT,
+        },
+      );
       expect(stageEnd).toHaveBeenCalledWith(outcome);
     }
   });
@@ -704,17 +707,20 @@ describe('runFlowWithLifecycle', () => {
       expect(result).toEqual(carriedResult);
       // `run.end` is not a trace arm: the storage finalizer is its one
       // writer, so the absent error facts are read off that input.
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
-        runId,
-        outcome: RUN_OUTCOME.FAILED,
-        error: undefined,
-        usage: undefined,
-        output: carriedResult.output,
-      });
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        testDefaultSession(),
+        {
+          runId,
+          outcome: RUN_OUTCOME.FAILED,
+          error: undefined,
+          usage: undefined,
+          output: carriedResult.output,
+        },
+      );
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
       expect(onError).not.toHaveBeenCalled();
     } finally {
-      defaultSession().runs.untrack(runId);
+      testDefaultSession().runs.untrack(runId);
     }
   });
 
@@ -729,17 +735,20 @@ describe('runFlowWithLifecycle', () => {
     );
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
-      runId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      error: {
-        kind: 'abort',
-        message: 'Request aborted',
-        userRetryable: false,
+    expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+      testDefaultSession(),
+      {
+        runId,
+        outcome: RUN_OUTCOME.CANCELLED,
+        error: {
+          kind: 'abort',
+          message: 'Request aborted',
+          userRetryable: false,
+        },
+        usage: undefined,
+        output: EMPTY_TOOL_USE_OUTPUT,
       },
-      usage: undefined,
-      output: EMPTY_TOOL_USE_OUTPUT,
-    });
+    );
     expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
   });
 
@@ -753,17 +762,20 @@ describe('runFlowWithLifecycle', () => {
       );
       expect(error.message).toContain('model exploded');
 
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
-        runId,
-        outcome: RUN_OUTCOME.FAILED,
-        error: {
-          kind: 'unexpected',
-          message: 'Error executing agent test-agent: model exploded',
-          userRetryable: true,
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        testDefaultSession(),
+        {
+          runId,
+          outcome: RUN_OUTCOME.FAILED,
+          error: {
+            kind: 'unexpected',
+            message: 'Error executing agent test-agent: model exploded',
+            userRetryable: true,
+          },
+          usage: undefined,
+          output: EMPTY_TOOL_USE_OUTPUT,
         },
-        usage: undefined,
-        output: EMPTY_TOOL_USE_OUTPUT,
-      });
+      );
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
     }),
   );
@@ -792,7 +804,7 @@ describe('runFlowWithLifecycle', () => {
         carriedResult,
       );
     } finally {
-      defaultSession().runs.untrack(runId);
+      testDefaultSession().runs.untrack(runId);
     }
   });
 
@@ -828,7 +840,7 @@ describe('runFlowWithLifecycle', () => {
           // status, same stage outcome, same classified error on the `run.end`
           // row the storage finalizer writes.
           expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            defaultSession(),
+            testDefaultSession(),
             expect.objectContaining({
               runId,
               outcome: RUN_OUTCOME.FAILED,
@@ -841,7 +853,7 @@ describe('runFlowWithLifecycle', () => {
           );
           expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
         } finally {
-          defaultSession().runs.untrack(runId);
+          testDefaultSession().runs.untrack(runId);
         }
       }),
   );
@@ -876,14 +888,14 @@ describe('runFlowWithLifecycle', () => {
           expect(error.message).toContain('Missing OpenRouter API key.');
 
           expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            defaultSession(),
+            testDefaultSession(),
             expect.objectContaining({
               outcome: RUN_OUTCOME.FAILED,
               error: expect.objectContaining({ kind: 'missing-api-key' }),
             }),
           );
         } finally {
-          defaultSession().runs.untrack(runId);
+          testDefaultSession().runs.untrack(runId);
         }
       }),
   );

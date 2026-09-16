@@ -22,6 +22,7 @@
 import { Effect, Semaphore } from 'effect';
 
 import type { StateStore } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   readOnboardingFlags,
@@ -94,7 +95,7 @@ interface OnboardingFunnelHost {
    * still paint, but never silently, since that answer blanks a user who has
    * keys back down to the first-run welcome card.
    */
-  readonly hasCredential: () => Effect.Effect<boolean>;
+  readonly hasCredential: () => Effect.Effect<boolean, never, LanguageModel>;
   /** The user-scoped flag store; onboarding is a fact about the user. */
   readonly flags: StateStore;
   /**
@@ -165,7 +166,7 @@ export class OnboardingFunnelRefresher {
   );
 
   /** Ask for a refresh. A refresh that fails keeps the host's own error. */
-  run(): Effect.Effect<void, unknown> {
+  run(): Effect.Effect<void, unknown, LanguageModel> {
     return Effect.suspend(() => {
       this.rerunRequested = true;
       return this.lane.withPermit(this.drain());

@@ -5,7 +5,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import * as vscode from 'vscode';
 
 // Local imports
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import {
   showLoggedErrorMessage,
@@ -27,11 +27,9 @@ import { AgentCategory } from '@shared/schemas';
 
 const log = createLog(CHANNEL);
 
-export async function handleIndentTeX(): Promise<void> {
+export async function handleIndentTeX(session: SessionHandle): Promise<void> {
   try {
-    const result = await indentLatexFilesInDirectory(
-      defaultSession().roots.workspace,
-    );
+    const result = await indentLatexFilesInDirectory(session.roots.workspace);
     switch (result.status) {
       case 'missing-config':
         await showLoggedMessage(
@@ -55,8 +53,11 @@ export async function handleIndentTeX(): Promise<void> {
   }
 }
 
-export async function handleFixCompilation(): Promise<void> {
+export async function handleFixCompilation(
+  session: SessionHandle,
+): Promise<void> {
   await runGuardedLatexCommand(
+    session,
     {
       channel: CHANNEL,
       action: 'fix compilation',
@@ -77,7 +78,7 @@ export async function handleFixCompilation(): Promise<void> {
           instruction: await buildLatexdiffAwareFixInstruction(
             `Fix the LaTeX compilation errors in ${relativePath}.`,
             editor.document.fileName,
-            defaultSession().roots.workspace,
+            session.roots.workspace,
           ),
         },
         // This is a "run latexFixer" command, so prefer the helper model.
@@ -87,8 +88,11 @@ export async function handleFixCompilation(): Promise<void> {
   );
 }
 
-export async function handleIndentCurrentTeX(): Promise<void> {
+export async function handleIndentCurrentTeX(
+  session: SessionHandle,
+): Promise<void> {
   await runGuardedLatexCommand(
+    session,
     {
       channel: CHANNEL,
       action: 'indent LaTeX document',
@@ -112,7 +116,7 @@ export async function handleIndentCurrentTeX(): Promise<void> {
 
       const success = await formatter.run(
         relativePath,
-        defaultSession().roots.workspace,
+        session.roots.workspace,
         formatter.configPath,
       );
 
@@ -130,9 +134,11 @@ export async function handleIndentCurrentTeX(): Promise<void> {
 }
 
 export async function handleGetTeXCount(
+  session: SessionHandle,
   runtime: ProcessRuntime,
 ): Promise<void> {
   await runGuardedLatexCommand(
+    session,
     {
       channel: CHANNEL,
       action: 'get TeX count',

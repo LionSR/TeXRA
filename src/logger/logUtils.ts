@@ -20,11 +20,7 @@ import { serializeError } from 'serialize-error';
 // Local imports
 import * as loggerSelf from '@logger/logUtils';
 import { LOG_CHANNEL, writeLogEntry, type LogEntry } from '@logger/logSink';
-// Deliberate deep import: the '@shared/schemas' barrel transitively imports
-// this module (stateSettings → '@shared/approvalPolicy' → here), so importing
-// the barrel would create an import cycle. Recorded in the shared-schemas
-// deep-import baseline as its documented cycle floor.
-import { LOG_LEVELS, type LogLevel } from '@shared/schemas/log';
+import { LOG_LEVELS, type LogLevel } from '@shared/schemas';
 import { getConfigBeforePlatformInit } from '@utils/config/configUtils';
 
 export interface LogUtilsOptions {

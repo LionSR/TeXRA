@@ -21,6 +21,10 @@ vi.mock('@platform/processRuntime', () => ({
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { effectRuntime, type ProcessRuntime } from '@platform/processRuntime';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -31,6 +35,13 @@ import {
 } from '@test/support/FakePlatform';
 
 const { maybeRunCliOnboarding } = await import('@cli/onboarding/runOnboarding');
+
+/** The gate over the unavailable port: the credential probe is mocked, but
+ *  the program's type keeps the real signature's `LanguageModel` requirement. */
+const maybeOnboarding = (...args: Parameters<typeof maybeRunCliOnboarding>) =>
+  maybeRunCliOnboarding(...args).pipe(
+    Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+  );
 
 const INTERACTIVE = {
   mode: 'interactive' as const,
@@ -76,9 +87,7 @@ describe('maybeRunCliOnboarding gate', () => {
     () =>
       Effect.gen(function* () {
         mocks.hasUsableSetupCredential.mockReturnValue(Effect.succeed(true));
-        expect(yield* maybeRunCliOnboarding(services, INTERACTIVE)).toEqual(
-          SKIPPED,
-        );
+        expect(yield* maybeOnboarding(services, INTERACTIVE)).toEqual(SKIPPED);
         expect(mocks.hasUsableSetupCredential).toHaveBeenCalled();
       }),
   );
@@ -89,9 +98,7 @@ describe('maybeRunCliOnboarding gate', () => {
         GlobalStateKey.ONBOARDING_DECLINED,
         true,
       );
-      expect(yield* maybeRunCliOnboarding(services, INTERACTIVE)).toEqual(
-        SKIPPED,
-      );
+      expect(yield* maybeOnboarding(services, INTERACTIVE)).toEqual(SKIPPED);
       expect(mocks.hasUsableSetupCredential).toHaveBeenCalled();
     }),
   );
@@ -109,9 +116,7 @@ describe('maybeRunCliOnboarding gate', () => {
         // `configured` stays false: only the picker actually configuring a
         // credential in this process is a post-picker continuation. A pre-existing
         // credential must not route every launch into the setup agent.
-        expect(yield* maybeRunCliOnboarding(services, INTERACTIVE)).toEqual(
-          SKIPPED,
-        );
+        expect(yield* maybeOnboarding(services, INTERACTIVE)).toEqual(SKIPPED);
         expect(
           services.globalState.get(GlobalStateKey.ONBOARDING_DECLINED),
         ).toBe(false);
@@ -129,7 +134,7 @@ describe('maybeRunCliOnboarding gate', () => {
     },
   ])('skips $scenario before checking credentials', ({ options }) =>
     Effect.gen(function* () {
-      expect(yield* maybeRunCliOnboarding(services, options)).toEqual(SKIPPED);
+      expect(yield* maybeOnboarding(services, options)).toEqual(SKIPPED);
       expect(mocks.hasUsableSetupCredential).not.toHaveBeenCalled();
     }),
   );

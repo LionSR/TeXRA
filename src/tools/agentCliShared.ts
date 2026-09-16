@@ -24,6 +24,7 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { runInSession } from '@agent/runtime/RunContext';
+import { AgentResume } from '@platform/interfaces';
 import {
   emptyUsageStats,
   RUN_OUTCOME,
@@ -134,7 +135,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       callerRunId: RunId | undefined;
       labels: AgentCliResumeLabels;
     },
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, AgentResume> {
     const { id, prompt, callerRunId, labels } = params;
     // Ownership is a live-handle fact: a detached or re-parented child must not
     // accept follow-ups from its former orchestrator. A missing handle falls
@@ -194,7 +195,11 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
       releaseClaim?: () => void,
     ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
   },
-): Effect.fn.Return<ToolResult, AgentCliToolFailure, R | ToolCall> {
+): Effect.fn.Return<
+  ToolResult,
+  AgentCliToolFailure,
+  R | ToolCall | AgentResume
+> {
   const { id } = params;
   if (!id) return yield* params.launch();
 
@@ -231,7 +236,7 @@ interface AgentCliLaunchParams {
   startLoop: (ctx: {
     childRun: ChildRun;
     runId: RunId;
-  }) => Effect.Effect<void, Error, Runs>;
+  }) => Effect.Effect<void, Error, Runs | AgentResume>;
   summary: string;
   launchedLine: string;
   followUpLine: string;
@@ -245,7 +250,7 @@ export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
 )(function* (
   params: AgentCliLaunchParams,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure, Runs> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure, Runs | AgentResume> {
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const runId = generateRunId();
@@ -425,7 +430,11 @@ export function dispatchAgentCliTool<R = never>(params: {
   launch: (
     context: AgentCliLaunchContext,
   ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
-}): Effect.Effect<ToolResult, AgentCliToolFailure, R | ToolCall | Runs> {
+}): Effect.Effect<
+  ToolResult,
+  AgentCliToolFailure,
+  R | ToolCall | Runs | AgentResume
+> {
   const {
     agentName,
     approvalLabel,
@@ -546,7 +555,7 @@ interface AgentCliLoopParams<TTurn> {
  */
 export function startAgentCliLoop<TTurn>(
   params: AgentCliLoopParams<TTurn>,
-): Effect.Effect<void, Error, Runs> {
+): Effect.Effect<void, Error, Runs | AgentResume> {
   return Effect.gen(function* () {
     const {
       childRun,

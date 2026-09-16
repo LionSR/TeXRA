@@ -8,16 +8,21 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
+import {
+  hostStores,
+  installHostAuth,
+  installPlatform,
+} from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
@@ -45,18 +50,17 @@ function expectNoTeamState(): void {
  * The installed fake host's setup sign-in: a suite-level double the host is
  * built with once, so a test steers sign-in without swapping hosts.
  */
-const signIn = vi.fn<() => Promise<boolean>>();
+const signIn = vi.fn<SetupPlatformShape['signIn']>();
 
 function mockCatalogAccess(canAccessCatalog: boolean): void {
-  vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(
-    canAccessCatalog,
+  installHostAuth(
+    fakeSupabaseAuth({ authenticated: Effect.succeed(canAccessCatalog) }),
   );
-  vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
 }
 
 async function clearOnboardingState(): Promise<void> {
   signIn.mockReset();
-  signIn.mockResolvedValue(false);
+  signIn.mockReturnValue(Effect.succeed(false));
   await Effect.runPromise(
     workspaceRoots().workspaceState.update(
       WorkspaceStateKey.AGENT_ROSTER_SELECTION,
@@ -205,7 +209,7 @@ describe('apply_team', () => {
     'uses the host setup sign-in capability before its forced retry',
     () =>
       Effect.gen(function* () {
-        signIn.mockResolvedValue(true);
+        signIn.mockReturnValue(Effect.succeed(true));
         mockCatalogAccess(false);
 
         const result = yield* applyTeam({

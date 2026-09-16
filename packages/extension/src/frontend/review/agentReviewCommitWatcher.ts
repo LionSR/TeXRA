@@ -12,7 +12,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -31,9 +31,10 @@ function watchRepository(
   context: vscode.ExtensionContext,
   watchedRoots: Set<string>,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): void {
   // Only watch the repository containing the workspace root.
-  const workspacePath = defaultSession().roots.workspace;
+  const workspacePath = session.roots.workspace;
   if (
     !workspacePath ||
     !isPathWithin(repository.rootUri.fsPath, workspacePath)
@@ -130,6 +131,7 @@ function watchRepository(
 export function registerAgentReviewCommitWatcher(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): void {
   void (async () => {
     const git = await getGitAPI();
@@ -137,11 +139,11 @@ export function registerAgentReviewCommitWatcher(
 
     const watchedRoots = new Set<string>();
     for (const repository of git.repositories) {
-      watchRepository(repository, context, watchedRoots, runtime);
+      watchRepository(repository, context, watchedRoots, runtime, session);
     }
     context.subscriptions.push(
       git.onDidOpenRepository((repository) =>
-        watchRepository(repository, context, watchedRoots, runtime),
+        watchRepository(repository, context, watchedRoots, runtime, session),
       ),
     );
   })().catch((err: unknown) => {

@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import type { SessionHandle } from '@agent/runtime';
 import {
   BundledViewContentProvider,
   getSharedLocalResourceRoots,
@@ -34,6 +35,7 @@ export class SettingsViewProvider {
     globalState: StateStore,
     secrets: PlatformSecrets,
     runtime: ProcessRuntime,
+    session: SessionHandle,
   ) {
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -46,6 +48,7 @@ export class SettingsViewProvider {
       globalState,
       secrets,
       runtime,
+      session,
     );
 
     // Listen for auth state changes to refresh all data

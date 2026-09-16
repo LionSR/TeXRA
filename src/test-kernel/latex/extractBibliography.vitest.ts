@@ -2,15 +2,14 @@ import * as assert from 'node:assert';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { afterEach, describe, vi } from 'vitest';
+import { Effect, FileSystem, Layer, PlatformError } from 'effect';
+import { describe } from 'vitest';
 
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const BIB_CONTENT = `@article{alpha,
   title = {Alpha Paper},
@@ -20,32 +19,43 @@ const BIB_CONTENT = `@article{alpha,
   title = {Beta Book},
 }`;
 
-describe('extractBibliography helpers', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+/**
+ * The files "on disk" for one case. The suite used to stub `AbsoluteFS.read`
+ * and `AbsoluteFS.exists`; the module now reads through the *context*
+ * filesystem, so the same two answers are served from one map — a listed path
+ * exists and reads back its content, anything else is absent.
+ */
+function filesLayer(
+  files: Record<string, string>,
+): Layer.Layer<FileSystem.FileSystem> {
+  return FileSystem.layerNoop({
+    exists: (target) => Effect.succeed(Object.hasOwn(files, target)),
+    readFile: (target) => {
+      const content = files[target];
+      return content === undefined
+        ? Effect.fail(
+            PlatformError.systemError({
+              _tag: 'NotFound',
+              module: 'FileSystem',
+              method: 'readFile',
+              pathOrDescriptor: target,
+            }),
+          )
+        : Effect.succeed(new TextEncoder().encode(content));
+    },
   });
+}
 
-  it.effect('collects bibliography paths and citation keys', () =>
-    Effect.gen(function* () {
-      const texPath = path.join('/workspace', 'chapters', 'main.tex');
-      const expectedBibPath = path.join(
-        '/workspace',
-        'chapters',
-        'references.bib',
-      );
+describe('extractBibliography helpers', () => {
+  it.effect('collects bibliography paths and citation keys', () => {
+    const texPath = path.join('/workspace', 'chapters', 'main.tex');
+    const expectedBibPath = path.join(
+      '/workspace',
+      'chapters',
+      'references.bib',
+    );
 
-      vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(`
-      % comment
-      \\documentclass{article}
-      \\addbibresource[location=local]{references}
-      Some text \\cite{alpha , beta}
-      More citations \\nocite{gamma}
-      % \\cite{ignored}
-    `);
-      vi.spyOn(AbsoluteFS, 'exists').mockImplementation(
-        async (file) => file === expectedBibPath,
-      );
-
+    return Effect.gen(function* () {
       const result = yield* extractBibliographyContext(texPath);
 
       assert.deepStrictEqual(result.bibliographyFiles, [expectedBibPath]);
@@ -54,28 +64,33 @@ describe('extractBibliography helpers', () => {
         new Set(result.citationKeys),
         new Set(['alpha', 'beta', 'gamma']),
       );
-    }),
-  );
+    }).pipe(
+      Effect.provide(
+        filesLayer({
+          [texPath]: `
+      % comment
+      \\documentclass{article}
+      \\addbibresource[location=local]{references}
+      Some text \\cite{alpha , beta}
+      More citations \\nocite{gamma}
+      % \\cite{ignored}
+    `,
+          [expectedBibPath]: '',
+        }),
+      ),
+    );
+  });
 
   it.effect(
     'marks missing bibliography files and ignores empty citations',
-    () =>
-      Effect.gen(function* () {
-        const texPath = 'paper.tex';
+    () => {
+      const texPath = 'paper.tex';
+      const presentBibPath = path.join('bib', 'two.bib');
 
-        vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(`
-      \\bibliography{bib/one, bib/two.bib, } % trailing comma
-      \\cite{first} \\cite{second, third}
-    `);
-        vi.spyOn(AbsoluteFS, 'exists').mockImplementation(
-          async (file) => file === path.join('bib', 'two.bib'),
-        );
-
+      return Effect.gen(function* () {
         const result = yield* extractBibliographyContext(texPath);
 
-        assert.deepStrictEqual(result.bibliographyFiles, [
-          path.join('bib', 'two.bib'),
-        ]);
+        assert.deepStrictEqual(result.bibliographyFiles, [presentBibPath]);
         assert.deepStrictEqual(result.missingBibliographyFiles, [
           path.join('bib', 'one.bib'),
         ]);
@@ -83,15 +98,24 @@ describe('extractBibliography helpers', () => {
           new Set(result.citationKeys),
           new Set(['first', 'second', 'third']),
         );
-      }),
+      }).pipe(
+        Effect.provide(
+          filesLayer({
+            [texPath]: `
+      \\bibliography{bib/one, bib/two.bib, } % trailing comma
+      \\cite{first} \\cite{second, third}
+    `,
+            [presentBibPath]: '',
+          }),
+        ),
+      );
+    },
   );
 
   it.effect(
     'loads requested bibliography entries and reports missing keys',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(BIB_CONTENT);
-
         const { entries, missingKeys } = yield* loadBibliographyEntries(
           ['references.bib'],
           ['alpha', 'gamma'],
@@ -109,13 +133,11 @@ describe('extractBibliography helpers', () => {
         assert.deepStrictEqual(formatted, [
           '@article{alpha,\n  title = {Alpha Paper}\n}',
         ]);
-      }),
+      }).pipe(Effect.provide(filesLayer({ 'references.bib': BIB_CONTENT }))),
   );
 
   it.effect('loads all entries when nocite wildcard is present', () =>
     Effect.gen(function* () {
-      vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(BIB_CONTENT);
-
       const { entries, missingKeys } = yield* loadBibliographyEntries(
         ['references.bib'],
         ['*'],
@@ -125,6 +147,6 @@ describe('extractBibliography helpers', () => {
       assert.deepStrictEqual(missingKeys, []);
       assert.ok(entries.has('alpha'));
       assert.ok(entries.has('beta'));
-    }),
+    }).pipe(Effect.provide(filesLayer({ 'references.bib': BIB_CONTENT }))),
   );
 });

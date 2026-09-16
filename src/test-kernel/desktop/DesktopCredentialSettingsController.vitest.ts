@@ -43,7 +43,7 @@ const codexMocks = vi.hoisted(() => ({
   setPreferSubscription: vi.fn((enabled: boolean) =>
     Effect.succeed({ effective: enabled }),
   ),
-  signOut: vi.fn(async () => undefined),
+  signOut: vi.fn(() => Effect.void),
 }));
 
 const modelMocks = vi.hoisted(() => ({
@@ -229,7 +229,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     codexMocks.setPreferSubscription.mockImplementation((enabled: boolean) =>
       Effect.succeed({ effective: enabled }),
     );
-    codexMocks.signOut.mockResolvedValue(undefined);
+    codexMocks.signOut.mockReturnValue(Effect.void);
   });
 
   afterEach(() => {

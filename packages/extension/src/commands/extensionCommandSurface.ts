@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import {
   signIn as authSignIn,
   signOut as authSignOut,
@@ -63,20 +63,17 @@ export function createExtensionCommandActions(
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): ExtensionCommandActions {
   const refreshAfterProviderKeyChange = (provider: string) =>
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
 
   /**
-   * Settle a housekeeping program over the default session's rooted
-   * filesystems. The session is looked up per command, not captured here:
-   * this factory runs during activation, and a default session closed and
-   * reopened later is a new session with its own snapshot of roots.
+   * Settle a housekeeping program over the session's rooted filesystems.
    */
   const onSessionFiles = <A, E>(
     program: Effect.Effect<A, E, WorkspaceFs | StorageFs | ProcessServices>,
-  ): Promise<A> =>
-    runtime.runPromise(withSessionFs(defaultSession().roots, program));
+  ): Promise<A> => runtime.runPromise(withSessionFs(session.roots, program));
 
   return {
     showSettings(tab, agentSubTab) {
@@ -99,18 +96,18 @@ export function createExtensionCommandActions(
           copyMeta,
         ),
       ),
-    indentTeX: handleIndentTeX,
+    indentTeX: () => handleIndentTeX(session),
     signIn: () => runtime.runPromise(authSignIn),
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
     signOut: () => runtime.runPromise(authSignOut),
     runSetupAssistant: async () => {
-      await launchSetupAssistant(secrets, globalState, runtime);
+      await launchSetupAssistant(secrets, globalState, runtime, session);
     },
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () =>
-      sysCreateSampleProject(context.extensionPath, runtime),
-    downloadArXivSource: () => latexDownloadArXivSource(runtime),
+      sysCreateSampleProject(context.extensionPath, runtime, session),
+    downloadArXivSource: () => latexDownloadArXivSource(session, runtime),
     openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     async openDoc(page) {
       if (!page) return;
@@ -118,12 +115,13 @@ export function createExtensionCommandActions(
         vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
       );
     },
-    indentCurrentTeX: latexIndentCurrentTeX,
-    fixCompilation: latexFixCompilation,
-    getTeXCount: () => latexGetTeXCount(runtime),
-    extractTikzFigures: () => latexExtractTikzFigures(runtime),
-    compileTikzFigures: () => latexCompileTikzFigures(runtime),
-    cloneOverleafProject: () => gitCloneOverleafProject(secrets, runtime),
+    indentCurrentTeX: () => latexIndentCurrentTeX(session),
+    fixCompilation: () => latexFixCompilation(session),
+    getTeXCount: () => latexGetTeXCount(session, runtime),
+    extractTikzFigures: () => latexExtractTikzFigures(session, runtime),
+    compileTikzFigures: () => latexCompileTikzFigures(session, runtime),
+    cloneOverleafProject: () =>
+      gitCloneOverleafProject(session, secrets, runtime),
     removeApiKey: () =>
       apiRemoveApiKey(secrets, refreshAfterProviderKeyChange, runtime),
     showImportOptions: sysShowImportOptions,
@@ -142,6 +140,7 @@ export function createExtensionCommandActions(
           category,
           secrets,
           runtime,
+          session,
         ),
       ),
     // Without a configuration the command is the composer's accelerator
@@ -149,7 +148,7 @@ export function createExtensionCommandActions(
     execute: (input) =>
       input === undefined
         ? progressViewProvider.submit()
-        : agentRunExecuteCommand(input, runtime),
+        : agentRunExecuteCommand(input, runtime, session),
   };
 }
 

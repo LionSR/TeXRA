@@ -1,13 +1,13 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { defaultSession } from '@agent/runtime/SessionHandle';
+
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   claudeAgentSessionsFor,
@@ -23,7 +23,7 @@ describe('agent shutdown', () => {
   it('drains every live session once and interrupts its agent-CLI sessions', async () => {
     const firstSession = createTestSession();
     const secondSession = createTestSession();
-    const compatibilitySession = defaultSession();
+    const compatibilitySession = testDefaultSession();
     const firstDrain = vi.spyOn(firstSession.runs, 'killBackgroundProcesses');
     const secondDrain = vi.spyOn(secondSession.runs, 'killBackgroundProcesses');
     const compatibilityDrain = vi.spyOn(

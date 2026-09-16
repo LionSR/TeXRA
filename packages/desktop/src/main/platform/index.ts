@@ -3,6 +3,7 @@ import { app } from 'electron';
 import { Effect } from 'effect';
 
 import { createPlatformAgentDirectories } from '@agent/index';
+import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
@@ -34,6 +35,7 @@ import {
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
   WorkspaceStorageProvider,
@@ -48,7 +50,11 @@ import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { desktopSetupPlatform } from '../desktopSetupAuth.js';
+import {
+  createDesktopSetupAuth,
+  type DesktopSetupAuth,
+} from '../desktopSetupAuth.js';
+import { createSessionLog } from '../desktopSupabaseAuth.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveDesktopDataRoot, resolveResourcesPath } from './paths.js';
@@ -75,6 +81,8 @@ export interface ElectronPlatformInitResult {
   globalState: StateStore;
   ownerId: OwnerId;
   secrets: PlatformSecrets;
+  /** The account plane served as `SupabaseAuth`, built beside `secrets`. */
+  supabaseAuth: SupabaseAuthShape;
   agentDirectories: AgentDirectoriesPort;
   /**
    * Desktop's memory/history/executions data root (`~/.texra` in
@@ -96,6 +104,12 @@ export interface ElectronPlatformInitResult {
    * process-global locator.
    */
   runtime: ProcessRuntime;
+  /**
+   * The setup sign-in registration installed with the runtime. Each window
+   * registers its own sign-in flow here, since the flow needs the window to
+   * anchor its dialogs to and no window exists at install time.
+   */
+  setupAuth: DesktopSetupAuth;
 }
 
 export async function initializeElectronPlatform(
@@ -166,17 +180,29 @@ export async function initializeElectronPlatform(
           }),
       }),
   });
+  // The account plane is built before the runtime that serves it, beside the
+  // secrets store it reads; the window's sign-in surfaces take it from the
+  // init result below.
+  const supabaseAuth = createSupabaseAuth({
+    secrets,
+    log: createSessionLog(console),
+  });
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeProcessRuntime`), after run
   // settlement and the projects' release of their graphs.
+  const setupAuth = createDesktopSetupAuth();
   const runtime = installProcessRuntime({
     processStart,
     globalStorage: () => storage.getGlobalStoragePath(),
     updateCheckStorage: () => resolveGlobalStoragePath(userDataPath),
     secrets,
     appState: globalStateStore,
-    setup: desktopSetupPlatform,
+    auth: supabaseAuth,
+    // No editor in this process: the same port nodeHost installs below.
+    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
+    agentResume,
+    setup: setupAuth.platform,
     lean: directLeanLanguageServices(),
   });
 
@@ -239,9 +265,11 @@ export async function initializeElectronPlatform(
     globalState: globalStateStore,
     ownerId: processOwnerId(processStart),
     secrets,
+    supabaseAuth,
     agentDirectories,
     dataRoot,
     resourcesPath,
     runtime,
+    setupAuth,
   };
 }

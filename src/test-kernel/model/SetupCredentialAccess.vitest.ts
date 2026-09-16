@@ -4,11 +4,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
 import type { PlatformSecrets } from '@platform/secrets';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 
 const events: string[] = [];
 const mocks = vi.hoisted(() => ({
-  isCodexSubscriptionActive: vi.fn<(model: string) => Promise<boolean>>(),
-  isXaiSubscriptionActive: vi.fn<(model: string) => Promise<boolean>>(),
+  isCodexSubscriptionActive:
+    vi.fn<(model: string) => Effect.Effect<boolean, Error>>(),
+  isXaiSubscriptionActive:
+    vi.fn<(model: string) => Effect.Effect<boolean, Error>>(),
   reportProbeFailure: vi.fn(),
   hasUsableApiKey:
     vi.fn<
@@ -47,7 +53,11 @@ const { hasUsableSetupCredential } =
 
 function hasCredential(): Promise<boolean> {
   return Effect.runPromise(
-    hasUsableSetupCredential(secrets, mocks.reportProbeFailure),
+    hasUsableSetupCredential(secrets, mocks.reportProbeFailure).pipe(
+      // The subscription probes yield the `LanguageModel` service by type;
+      // both are mocked, so the port is never read.
+      Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+    ),
   );
 }
 
@@ -66,14 +76,18 @@ describe('setup credential access', () => {
     access.grokSubscription = false;
     access.keys = {};
     mocks.reportProbeFailure.mockReset();
-    mocks.isCodexSubscriptionActive.mockReset().mockImplementation(async () => {
-      events.push('subscription:chatgpt');
-      return access.chatGptSubscription;
-    });
-    mocks.isXaiSubscriptionActive.mockReset().mockImplementation(async () => {
-      events.push('subscription:grok');
-      return access.grokSubscription;
-    });
+    mocks.isCodexSubscriptionActive.mockReset().mockImplementation(() =>
+      Effect.sync(() => {
+        events.push('subscription:chatgpt');
+        return access.chatGptSubscription;
+      }),
+    );
+    mocks.isXaiSubscriptionActive.mockReset().mockImplementation(() =>
+      Effect.sync(() => {
+        events.push('subscription:grok');
+        return access.grokSubscription;
+      }),
+    );
     mocks.hasUsableApiKey.mockReset().mockImplementation((_, provider) =>
       Effect.sync(() => {
         events.push(`key:${provider}`);
@@ -117,8 +131,8 @@ describe('setup credential access', () => {
     {
       kind: 'ChatGPT subscription',
       fail: () =>
-        mocks.isCodexSubscriptionActive.mockRejectedValueOnce(
-          new Error('chatgpt offline'),
+        mocks.isCodexSubscriptionActive.mockReturnValueOnce(
+          Effect.fail(new Error('chatgpt offline')),
         ),
       message: 'chatgpt offline',
       expectedResult: false,
@@ -127,8 +141,8 @@ describe('setup credential access', () => {
     {
       kind: 'Grok subscription',
       fail: () =>
-        mocks.isXaiSubscriptionActive.mockRejectedValueOnce(
-          new Error('grok offline'),
+        mocks.isXaiSubscriptionActive.mockReturnValueOnce(
+          Effect.fail(new Error('grok offline')),
         ),
       message: 'grok offline',
       expectedResult: false,

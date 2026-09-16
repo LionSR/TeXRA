@@ -1,14 +1,13 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { effectRuntime } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { RunId } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { installedHost, setupPlatform } from '@test/support/setupPlatform';
 import { startGoal } from '@tools/goal';
@@ -46,6 +45,7 @@ function createHandler(): SettingsViewMessageHandler {
     globalState,
     secrets,
     effectRuntime(),
+    testDefaultSession(),
   );
 }
 
@@ -76,7 +76,7 @@ describe('settings goal list', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("posts the goal the run's row states", async () => {
-    const session = defaultSession();
+    const session = testDefaultSession();
     publishTestRunStart(session, RUN_ID);
     const goal = await effectRuntime().runPromise(
       startGoal(session, RUN_ID, 'Finish the settings fix.'),

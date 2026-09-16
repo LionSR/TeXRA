@@ -58,6 +58,10 @@ import {
   type TurnEvent,
   type TurnResult,
 } from '@llm/turn';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
@@ -73,6 +77,7 @@ import {
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -381,9 +386,13 @@ const invokeOn = ({ layer, state }: InvokerKit) =>
   }).pipe(
     // `invoke`'s debug-object sink writes through the process `FileSystem`;
     // this suite runs on `it.effect`'s own runtime, so the service comes from
-    // the Node layer rather than the installed platform.
+    // the Node layer rather than the installed platform. `LanguageModel` is
+    // the unavailable port: a manual-retry rebind's catalogue discovery finds
+    // no editor models here.
     Effect.provide(layer),
     Effect.provide(nodePlatformLayer),
+    Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+    Effect.provide(testHttpClientLayer),
   );
 
 /** An Error carrying the HTTP status/body shape the classifiers read. */

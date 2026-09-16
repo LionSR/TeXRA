@@ -50,9 +50,9 @@ function makeDeps(
       ...catalog,
     },
     loadLocalCatalog: () => Effect.void,
-    canAccessRemoteCatalog: async () => false,
+    canAccessRemoteCatalog: () => Effect.succeed(false),
     choose: async () => 'cancel',
-    signIn: async () => false,
+    signIn: () => Effect.succeed(false),
     forceRefreshRemoteCatalog: () => Effect.void,
     ...rest,
   };
@@ -88,10 +88,11 @@ describe('team roster application', () => {
             calls.push('choose');
             return 'sign-in';
           },
-          signIn: async () => {
-            calls.push('sign-in');
-            return true;
-          },
+          signIn: () =>
+            Effect.sync(() => {
+              calls.push('sign-in');
+              return true;
+            }),
           forceRefreshRemoteCatalog: () =>
             Effect.sync(() => {
               calls.push('forced-refresh');
@@ -159,8 +160,8 @@ describe('team roster application', () => {
             getPresetToolUseRoot,
           },
           loadLocalCatalog: () => Effect.void,
-          canAccessRemoteCatalog: async () => false,
-          signIn: async () => false,
+          canAccessRemoteCatalog: () => Effect.succeed(false),
+          signIn: () => Effect.succeed(false),
           forceRefreshRemoteCatalog: () => Effect.void,
           presentation: {
             chooseTeamAvailability: async () => 'cancel',
@@ -199,8 +200,8 @@ describe('team roster application', () => {
           getPresetToolUseRoot: vi.fn(),
         },
         loadLocalCatalog: () => Effect.void,
-        canAccessRemoteCatalog: async () => false,
-        signIn: async () => true,
+        canAccessRemoteCatalog: () => Effect.succeed(false),
+        signIn: () => Effect.succeed(true),
         forceRefreshRemoteCatalog: () => Effect.void,
         presentation: {
           chooseTeamAvailability: async (prompt) => {

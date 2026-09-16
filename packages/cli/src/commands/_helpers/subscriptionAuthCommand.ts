@@ -158,7 +158,7 @@ export function defineSubscriptionAuthCommand(
     async run(context) {
       const services = await initCliPlatform({ ...context, quietLogs: true });
       const statusResult = await withCliAuthError(() =>
-        provider.getStatus(services.secrets),
+        services.runtime.runPromise(provider.getStatus(services.secrets)),
       );
       if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
       const { label, ...status } = statusResult.value;

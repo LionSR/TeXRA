@@ -1,4 +1,3 @@
-import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
@@ -15,10 +14,7 @@ import type {
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import { RunBusy } from '@agent/runtime/runLanes';
-import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import {
   aggregateId as qualifyAggregateId,
@@ -32,6 +28,7 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -171,7 +168,7 @@ function createRegistry(
       }),
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
     releaseRootRunLease: () => Effect.void,
-    finalizeRun: (input) => finalizeRun(defaultSession(), input),
+    finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
     acquireRunClaim: () => Effect.succeed(Effect.void),
     ...options,
   });
@@ -472,7 +469,7 @@ describe('runRegistry', () => {
           yield* stop.settlement;
 
           expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
-            defaultSession(),
+            testDefaultSession(),
             {
               runId,
               outcome: RUN_OUTCOME.CANCELLED,
@@ -669,7 +666,7 @@ describe('runRegistry', () => {
         yield* stop.settlement;
 
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          defaultSession(),
+          testDefaultSession(),
           {
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
@@ -713,7 +710,7 @@ describe('runRegistry', () => {
           yield* stop.settlement;
 
           expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            defaultSession(),
+            testDefaultSession(),
             {
               runId,
               outcome: RUN_OUTCOME.CANCELLED,
@@ -857,11 +854,11 @@ describe('runRegistry', () => {
         const runId = 'eec-abcdef' as RunId;
         const parentRunId = generateRunId();
         const cleanup = vi.fn();
-        const store = getRunRecords(defaultSession(), runId);
+        const store = getRunRecords(testDefaultSession(), runId);
 
         try {
-          publishTestRunStart(defaultSession(), runId);
-          yield* defaultSession().settlePublications();
+          publishTestRunStart(testDefaultSession(), runId);
+          yield* testDefaultSession().settlePublications();
           yield* store.writeResultMeta({
             producer: 'subagent',
             agentName: 'test-subagent',
@@ -1243,14 +1240,14 @@ describe('runRegistry', () => {
         // The start row is what lets the stop's typed failure be yielded here:
         // `finalizeOwnerlessStop` fails for a run that has none, and today the
         // registry's own runFork drops that failure.
-        publishTestRunStart(defaultSession(), runId);
-        yield* defaultSession().settlePublications();
+        publishTestRunStart(testDefaultSession(), runId);
+        yield* testDefaultSession().settlePublications();
         yield* registry.stopAgentRun(runId);
 
         // `run.end` is the run's whole terminal fact (one run model, 3.3), so
         // a stop that reached no live handle still writes it.
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          defaultSession(),
+          testDefaultSession(),
           expect.objectContaining({
             runId,
             outcome: RUN_OUTCOME.CANCELLED,

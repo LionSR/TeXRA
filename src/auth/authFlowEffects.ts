@@ -20,6 +20,8 @@
  * effects would either omit host refresh work or repeat it.
  */
 
+import { Cause, Effect } from 'effect';
+
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -44,18 +46,22 @@ export function requireOAuthRedirectUrl(
 /**
  * Best-effort remote-agent-catalog refresh after sign-out. Failures are
  * logged through the caller's `warn`, never thrown — a stale local catalog
- * must not block sign-out from completing. Takes the invalidation call as a
- * parameter (rather than importing `invalidateRemoteAgentsAfterSignOut`
+ * must not block sign-out from completing. Takes the invalidation program as
+ * a parameter (rather than importing `invalidateRemoteAgentsAfterSignOut`
  * directly from `@agent/index`) so `src/auth/` doesn't take on a dependency
  * on the `agent` subsystem — the reverse edge is the only one baselined.
  */
-export async function refreshRemoteAgentCatalogAfterSignOut(
-  invalidateCatalog: () => Promise<void>,
+export function refreshRemoteAgentCatalogAfterSignOut(
+  invalidateCatalog: Effect.Effect<void>,
   warn: (message: string) => void,
-): Promise<void> {
-  await invalidateCatalog().catch((error: unknown) => {
-    warn(
-      `Local agent catalog refresh failed after sign-out: ${toErrorMessage(error)}`,
-    );
-  });
+): Effect.Effect<void> {
+  return invalidateCatalog.pipe(
+    Effect.catchCause((cause) =>
+      Effect.sync(() => {
+        warn(
+          `Local agent catalog refresh failed after sign-out: ${toErrorMessage(Cause.squash(cause))}`,
+        );
+      }),
+    ),
+  );
 }

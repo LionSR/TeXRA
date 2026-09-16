@@ -267,7 +267,7 @@ describe('completedRunArchive facade', () => {
     // The run's one `run.description` row is redacted on the way into the
     // event table, so every reader of it — the view's fold included, asserted
     // below — sees the redacted text; the private sidecars above stay exact.
-    const runAgentRequest = vi.fn(async () => undefined);
+    const runAgentRequest = vi.fn(() => Effect.void);
     const actions = await Effect.runPromise(
       createHostRunActions({
         session: taskSession,
@@ -487,10 +487,9 @@ describe('completedRunArchive facade', () => {
         launchMocks.resolveAgent.mockReturnValue({
           path: '/agents/orchestrator.yaml',
         });
-        launchMocks.loadAgent.mockResolvedValue([
-          { agentCategory: AgentCategory.ToolUse },
-          {},
-        ]);
+        launchMocks.loadAgent.mockReturnValue(
+          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+        );
         launchMocks.buildVars.mockRejectedValueOnce(launchFailure);
 
         // The one fact a resume reads: the run aggregate's latest

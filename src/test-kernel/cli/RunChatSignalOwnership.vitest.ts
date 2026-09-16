@@ -9,7 +9,6 @@ import '@test/support/sessionGraphTestSetup';
 
 // Local imports
 import {
-  defaultSession,
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime';
@@ -33,6 +32,7 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -100,7 +100,6 @@ vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
   initInteractiveCliPlatform: mocks.initInteractiveCliPlatform,
   runCliPlatformShutdownSequence: mocks.runCliPlatformShutdownSequence,
-  setCliAgentResumeHandler: vi.fn(() => () => {}),
   setCliHelperModel: mocks.setCliHelperModel,
 }));
 
@@ -496,7 +495,7 @@ describe('runChat signal ownership wiring', () => {
       await vi.waitFor(() =>
         expect(mocks.createChatSessionController).toHaveBeenCalled(),
       );
-      const session = defaultSession();
+      const session = testDefaultSession();
       const ownRoot = 'c1ea40007007' as RunId;
       const history = 'c1ea4041570f' as RunId;
       // Both land the way the transcript summary's runs hydrate: top-level

@@ -14,13 +14,15 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import type { LanguageModel } from '@platform/languageModel';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AgentCategory } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { getHelperModelName } from './helperModelName';
 import { bindModel, type BoundModel } from './run/modelBinding';
 import { classifyModelFailure } from './run/modelFailure';
 import { turnText } from './run/turnText';
+import type { HttpClient } from 'effect/unstable/http';
 
 /**
  * The configured helper model cannot serve right now (no key, disabled,
@@ -36,20 +38,25 @@ export class HelperModelUnavailable extends Data.TaggedError(
  * `stores` are the process secret store and global state the caller already
  * holds (the `Secrets` / `AppState` services, or the stores a host root
  * threaded down), so helper resolution reads the same stores as the run that
- * asked for it. A helper has no persisted conversation format and no launch
+ * asked for it; `roots` are the setting slots beside them (a session's
+ * `session.roots`, or the process roots a host composition root opened),
+ * which the bind reads the model toggles and the OpenRouter preference from.
+ * A helper has no persisted conversation format and no launch
  * async-local frame; it never takes the tool-use output haircut.
  */
 export const helperModel = Effect.fn('helperModel')(function* (
   stores: ModelOptionStores,
-): Effect.fn.Return<BoundModel, HelperModelUnavailable | Error, Scope.Scope> {
+  roots: SettingsStores,
+): Effect.fn.Return<
+  BoundModel,
+  HelperModelUnavailable | Error,
+  Scope.Scope | LanguageModel | HttpClient.HttpClient
+> {
   const modelName = getHelperModelName(stores.globalState);
   const inputs = yield* readModelAvailabilityInputs(stores, [modelName]);
   const reason = modelUnavailableReasonFrom(inputs, modelName);
   if (reason) return yield* new HelperModelUnavailable({ message: reason });
-  const config = yield* Effect.tryPromise({
-    try: () => resolveRuntimeModelConfig(modelName),
-    catch: ensureError,
-  });
+  const config = yield* resolveRuntimeModelConfig(modelName);
   if (!config) {
     return yield* new HelperModelUnavailable({
       message: `Model "${modelName}" is not recognized.`,
@@ -58,6 +65,7 @@ export const helperModel = Effect.fn('helperModel')(function* (
   return yield* bindModel({
     config,
     stores,
+    roots,
     compatibilityKey: null,
     agentCategory: AgentCategory.Workflow,
     // Helper calls are deterministic one-shots, never sampled.

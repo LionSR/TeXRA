@@ -1,9 +1,9 @@
 // Local imports
+import { Effect } from 'effect';
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { Effect } from 'effect';
 
 /**
  * Live team-catalog ports shared by every host's main view. Launch resolution
@@ -16,7 +16,7 @@ export function createTeamCatalogPorts(workspaceState: StateStore): {
   readonly customPresetsRaw: unknown;
   readonly ensureCatalogLoaded: () => Effect.Effect<void, unknown>;
   readonly getAgents: typeof getAgentsByCategory;
-  readonly canAccessRemoteCatalog: () => Promise<boolean>;
+  readonly canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   readonly refreshRemote: () => Effect.Effect<void, unknown>;
 } {
   return {
@@ -25,7 +25,7 @@ export function createTeamCatalogPorts(workspaceState: StateStore): {
     ),
     ensureCatalogLoaded: () => loadAgents(),
     getAgents: getAgentsByCategory,
-    canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
+    canAccessRemoteCatalog: () => supabaseAuthenticated,
     refreshRemote: () => refresh({ includeRemote: true }),
   };
 }

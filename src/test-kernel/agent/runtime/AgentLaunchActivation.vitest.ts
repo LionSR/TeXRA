@@ -116,10 +116,9 @@ const captureStartedLaunch = Effect.fn(function* (
         const trace = new TraceEmitter();
 
         mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
-        mocks.load.mockResolvedValueOnce([
-          { agentCategory: AgentCategory.ToolUse },
-          {},
-        ]);
+        mocks.load.mockReturnValueOnce(
+          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+        );
         mocks.createTrace.mockReturnValueOnce({
           trace,
           dispose: vi.fn(),

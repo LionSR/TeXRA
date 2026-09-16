@@ -10,6 +10,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
+import { discoveredCopilotRoutes } from '@model/runtimeModelRegistry';
 import { effectRuntime } from '@platform/processRuntime';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
@@ -96,6 +97,8 @@ export function createStubDesktopCredentialSettingsController(
             readModelAvailabilityInputs(stores, models),
           ),
         ),
+      getCopilotRoutes: () =>
+        effectRuntime().runPromise(discoveredCopilotRoutes()),
     }),
     refreshModelOptions: noOp,
     postProfileData: noOp,

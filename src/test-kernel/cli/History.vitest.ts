@@ -33,10 +33,7 @@ import {
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
-import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -132,6 +129,7 @@ import {
   readCliHistoryExportInput,
   readCliHistoryStandaloneTemplate,
 } from '@cli/runtime/history';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const config = AgentConfigSchema.parse({
   agent: 'correct',
@@ -152,7 +150,7 @@ function historyDetails(
 ) {
   return readCliHistoryDetails(
     effectRuntime(),
-    Effect.succeed(defaultSession()),
+    Effect.succeed(testDefaultSession()),
     id,
     options,
   );
@@ -220,8 +218,7 @@ async function publishRunFacts(
     outcome?: RunOutcome;
   } = {},
 ): Promise<SessionHandle> {
-  const { defaultSession } = await import('@agent/runtime/SessionHandle');
-  const session = defaultSession();
+  const session = testDefaultSession();
   if (facts.parent) publishTestRunStart(session, facts.parent);
   publishTestRunStart(session, runId, { parent: facts.parent ?? null });
   if (facts.description !== undefined) {
@@ -296,7 +293,7 @@ describe('CLI history runtime', () => {
       globalStorage: host.roots.globalStorage,
       globalState: host.roots.globalState,
       secrets: host.secrets,
-      session: Effect.succeed(defaultSession()),
+      session: Effect.succeed(testDefaultSession()),
       roots: host.roots,
       runtime: effectRuntime(),
     });
@@ -315,7 +312,7 @@ describe('CLI history runtime', () => {
 
     const entries = await listCliHistoryEntries(
       effectRuntime(),
-      Effect.succeed(defaultSession()),
+      Effect.succeed(testDefaultSession()),
     );
 
     expect(formatCliHistoryText(entries)).toBe(
@@ -361,7 +358,7 @@ describe('CLI history runtime', () => {
 
     const entries = await listCliHistoryEntries(
       effectRuntime(),
-      Effect.succeed(defaultSession()),
+      Effect.succeed(testDefaultSession()),
     );
     expect(entries.map((entry) => entry.status)).toEqual([
       'cancelled',
@@ -413,7 +410,7 @@ describe('CLI history runtime', () => {
 
     const entries = await listCliHistoryEntries(
       effectRuntime(),
-      Effect.succeed(defaultSession()),
+      Effect.succeed(testDefaultSession()),
     );
 
     expect(entries.map((entry) => entry.id)).toEqual(['visible']);
@@ -432,7 +429,7 @@ describe('CLI history runtime', () => {
 
     const entries = await listCliHistoryEntries(
       effectRuntime(),
-      Effect.succeed(defaultSession()),
+      Effect.succeed(testDefaultSession()),
     );
 
     expect(entries.map((entry) => entry.id)).toEqual(['root']);
@@ -457,7 +454,7 @@ describe('CLI history runtime', () => {
 
     const entries = await listCliHistoryEntries(
       effectRuntime(),
-      Effect.succeed(defaultSession()),
+      Effect.succeed(testDefaultSession()),
     );
 
     expect(entries[0]?.agent).toBe('engineer');
@@ -484,7 +481,7 @@ describe('CLI history runtime', () => {
 
     const entries = await listCliHistoryEntries(
       effectRuntime(),
-      Effect.succeed(defaultSession()),
+      Effect.succeed(testDefaultSession()),
     );
 
     expect(formatCliHistoryText(entries)).toBe(
@@ -511,8 +508,7 @@ describe('CLI history runtime', () => {
 
   it('finds a stamped diagnostic-only root in CLI history details', async () => {
     const runId = 'a11ce7a11ce7' as RunId;
-    const { defaultSession } = await import('@agent/runtime/SessionHandle');
-    const session = defaultSession();
+    const session = testDefaultSession();
     publishTestRunStart(session, runId);
     session.publishRunEvent(runId, {
       type: 'log',
@@ -986,7 +982,7 @@ describe('CLI history runtime', () => {
 
       const result = await readCliHistoryExportInput(
         effectRuntime(),
-        Effect.succeed(defaultSession()),
+        Effect.succeed(testDefaultSession()),
         runId,
       );
 
@@ -1021,7 +1017,7 @@ describe('CLI history runtime', () => {
       await expect(
         readCliHistoryExportInput(
           effectRuntime(),
-          Effect.succeed(defaultSession()),
+          Effect.succeed(testDefaultSession()),
           'facade' as RunId,
         ),
       ).resolves.toEqual({ status: 'not_found' });
@@ -1035,7 +1031,7 @@ describe('CLI history runtime', () => {
       await expect(
         readCliHistoryExportInput(
           effectRuntime(),
-          Effect.succeed(defaultSession()),
+          Effect.succeed(testDefaultSession()),
           'a1a1a1' as RunId,
         ),
       ).resolves.toEqual({ status: 'incomplete' });
@@ -1050,7 +1046,7 @@ describe('CLI history runtime', () => {
       await expect(
         readCliHistoryExportInput(
           effectRuntime(),
-          Effect.succeed(defaultSession()),
+          Effect.succeed(testDefaultSession()),
           'a1a1a1' as RunId,
         ),
       ).resolves.toEqual({ status: 'incomplete' });
@@ -1068,7 +1064,7 @@ describe('CLI history runtime', () => {
       await expect(
         readCliHistoryExportInput(
           effectRuntime(),
-          Effect.succeed(defaultSession()),
+          Effect.succeed(testDefaultSession()),
           'facade' as RunId,
         ),
       ).resolves.toEqual({ status: 'not_found' });

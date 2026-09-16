@@ -10,6 +10,7 @@ import {
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { oauthSubscriptionUsageRoute } from '@model/providerCapabilities';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigWriteFailed } from '@platform/interfaces';
 import {
@@ -26,7 +27,6 @@ import {
   setGLMCodingPlan,
 } from '@utils/config/providerConfig';
 import { writePlatformSetting } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 
 export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
@@ -44,12 +44,9 @@ export interface CodingPlanSubscriptionRuntime {
 function isGlmCodingPlanActive(
   modelId: string,
   secrets: PlatformSecrets,
-): Effect.Effect<boolean, Error> {
+): Effect.Effect<boolean, Error, LanguageModel> {
   return Effect.gen(function* () {
-    const config = yield* Effect.tryPromise({
-      try: () => resolveRuntimeModelConfig(modelId),
-      catch: ensureError,
-    });
+    const config = yield* resolveRuntimeModelConfig(modelId);
     if (config?.provider !== ModelProvider.GLM) return false;
 
     const route = resolveGlmRoute({
@@ -73,12 +70,9 @@ function isGlmCodingPlanActive(
 function isKimiCodeSubscriptionActive(
   modelId: string,
   secrets: PlatformSecrets,
-): Effect.Effect<boolean, Error> {
+): Effect.Effect<boolean, Error, LanguageModel> {
   return Effect.gen(function* () {
-    const config = yield* Effect.tryPromise({
-      try: () => resolveRuntimeModelConfig(modelId),
-      catch: ensureError,
-    });
+    const config = yield* resolveRuntimeModelConfig(modelId);
     if (!config || !isKimiSubscriptionEligible(config)) return false;
     return isKimiCodeRoute(
       config,
@@ -113,7 +107,7 @@ const RUNTIME_BY_ID = {
     readonly isActiveForModel: (
       modelId: string,
       secrets: PlatformSecrets,
-    ) => Effect.Effect<boolean, Error>;
+    ) => Effect.Effect<boolean, Error, LanguageModel>;
   }
 >;
 
@@ -135,7 +129,11 @@ export const codingPlanSubscriptionRuntimes: readonly CodingPlanSubscriptionRunt
 function activeCodingPlanForModel(
   modelId: string,
   secrets: PlatformSecrets,
-): Effect.Effect<CodingPlanSubscriptionRuntime | undefined, Error> {
+): Effect.Effect<
+  CodingPlanSubscriptionRuntime | undefined,
+  Error,
+  LanguageModel
+> {
   return Effect.forEach(
     RUNTIMES,
     (runtime) =>
@@ -168,12 +166,9 @@ function activeCodingPlanForModel(
 export function activeSubscriptionUsageRoute(
   modelId: string,
   secrets: PlatformSecrets,
-): Effect.Effect<UsageRoute | undefined, Error> {
+): Effect.Effect<UsageRoute | undefined, Error, LanguageModel> {
   return Effect.gen(function* () {
-    const oauthRoute = yield* Effect.tryPromise({
-      try: () => oauthSubscriptionUsageRoute(modelId),
-      catch: ensureError,
-    });
+    const oauthRoute = yield* oauthSubscriptionUsageRoute(modelId);
     if (oauthRoute !== undefined) return oauthRoute;
     const plan = yield* activeCodingPlanForModel(modelId, secrets);
     return plan?.descriptor.usageRoute;

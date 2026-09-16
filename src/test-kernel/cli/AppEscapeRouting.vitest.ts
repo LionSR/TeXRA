@@ -1,5 +1,3 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { Effect } from 'effect';
@@ -15,7 +13,6 @@ import {
   vi,
 } from 'vitest';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { App, type AppProps } from '@cli/chat/tui/App';
 import { ESC_META_CHORD_INTERRUPT_DELAY_MS } from '@cli/chat/tui/appInteractionPolicy';
 import {
@@ -54,6 +51,7 @@ import type { TranscriptRow } from '@shared/transcript';
 import { runUnreadableMessage } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { workflowRunModel } from '@shared/runs/workflowRunModel';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
@@ -271,6 +269,7 @@ function appProps(onInterruptRun: (runId: RunId) => void): AppProps {
     // suites; the App only requires the store to be present.
     secrets: new FakeSecrets(),
     runtime: effectRuntime(),
+    session: testDefaultSession(),
     onSubmit: vi.fn(),
     onKillRun: vi.fn(),
     onWorkflowControl: vi.fn(),
@@ -415,7 +414,7 @@ describe('App foreground Escape ownership', () => {
     markToolUseAgent(CHILD);
     const { instance, stdin, stdout, onInterruptRun } =
       await renderWithInterrupt();
-    const emit = vi.spyOn(defaultSession(), 'publish');
+    const emit = vi.spyOn(testDefaultSession(), 'publish');
 
     try {
       expandedRuns.set(new Map([[ROOT, true]]));

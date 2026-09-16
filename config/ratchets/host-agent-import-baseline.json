@@ -15,7 +15,6 @@
       "@agent/trace"
     ],
     "extension": [
-      "@agent/core/state/runRequests",
       "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
       "@agent/review",

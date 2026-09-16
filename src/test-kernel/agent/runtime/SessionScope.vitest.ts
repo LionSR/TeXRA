@@ -1,11 +1,10 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { AgentResume } from '@platform/interfaces';
 import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
@@ -41,7 +40,7 @@ describe('session-owned transcripts and follow-up queues', () => {
             .map((entry) => entry.text),
         ).toEqual(['owned by launching session']);
         expect(sibling.transcripts.get(runId)).toBeUndefined();
-        expect(defaultSession().transcripts.get(runId)).toBeUndefined();
+        expect(testDefaultSession().transcripts.get(runId)).toBeUndefined();
       } finally {
         detach();
         handle.dispose();
@@ -134,8 +133,11 @@ describe('sendFollowUp host-path session routing', () => {
         Effect.runPromise(
           submitFollowUp(parentRun, 'continue', {
             session: processSession,
-            resumePort: { tryResumeRun: () => Effect.succeed(false) },
-          }),
+          }).pipe(
+            Effect.provideService(AgentResume, {
+              tryResumeRun: () => Effect.succeed(false),
+            }),
+          ),
         ),
       ).resolves.toEqual({ status: 'queued', wake: 'failed' });
 
@@ -146,8 +148,12 @@ describe('sendFollowUp host-path session routing', () => {
       await expect(
         Effect.runPromise(
           submitFollowUp(parentRun, 'continue', {
-            session: defaultSession(),
-          }),
+            session: testDefaultSession(),
+          }).pipe(
+            Effect.provideService(AgentResume, {
+              tryResumeRun: () => Effect.succeed(false),
+            }),
+          ),
         ),
       ).resolves.toEqual({
         status: 'failed',

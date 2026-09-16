@@ -4,7 +4,7 @@ import { execa } from 'execa';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
@@ -34,7 +34,10 @@ import { isGitRepository } from '@utils/git/isGitRepository';
 const CHANNEL = 'gitCommands';
 const log = createLog(CHANNEL);
 
-export function registerGitCommands(context: vscode.ExtensionContext): void {
+export function registerGitCommands(
+  context: vscode.ExtensionContext,
+  session: SessionHandle,
+): void {
   // `isGitRepository`, `getRecentCommits`, and `findCommitInHistory`
   // return values to `executeCommand` callers (`boolean`,
   // `string[] | null`, `string | null` respectively) and accept
@@ -44,13 +47,23 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
   // `extensionCommandSurface.ts`).
   registerCommandEntries(context, [
     { id: 'texra.isGitRepository', handler: isGitRepository },
-    { id: 'texra.getRecentCommits', handler: getRecentCommits },
-    { id: 'texra.findCommitInHistory', handler: findCommitInHistory },
+    {
+      id: 'texra.getRecentCommits',
+      handler: (rootPath?: string) => getRecentCommits(session, rootPath),
+    },
+    {
+      id: 'texra.findCommitInHistory',
+      handler: (commitHash: string, rootPath?: string) =>
+        findCommitInHistory(session, commitHash, rootPath),
+    },
   ]);
 }
 
-async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
-  const workspacePath = rootPath ?? defaultSession().roots.workspace;
+async function getRecentCommits(
+  session: SessionHandle,
+  rootPath?: string,
+): Promise<string[] | null> {
+  const workspacePath = rootPath ?? session.roots.workspace;
   if (!workspacePath || !(await isGitRepository(workspacePath))) {
     return null;
   }
@@ -72,6 +85,7 @@ async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
 }
 
 function findCommitInHistory(
+  session: SessionHandle,
   commitHash: string,
   rootPath?: string,
 ): string | null {
@@ -84,7 +98,7 @@ function findCommitInHistory(
     return null;
   }
 
-  const workspacePath = rootPath ?? defaultSession().roots.workspace;
+  const workspacePath = rootPath ?? session.roots.workspace;
   if (!workspacePath) {
     return null;
   }
@@ -301,6 +315,7 @@ function buildOverleafClonePorts(
 }
 
 export async function cloneOverleafProject(
+  session: SessionHandle,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
 ): Promise<void> {
@@ -320,7 +335,7 @@ export async function cloneOverleafProject(
   // so the emptiness check and the clone agree on one folder.
   await runtime.runPromise(
     withSessionFs(
-      defaultSession().roots,
+      session.roots,
       Effect.gen(function* () {
         const workspaceFs = yield* WorkspaceFs;
         const workspacePath = workspaceFs.root;
