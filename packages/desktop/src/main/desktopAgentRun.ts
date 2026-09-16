@@ -69,11 +69,15 @@ export interface DesktopAgentRunOptions {
 }
 
 export interface DesktopAgentRun {
-  /** Launch a request another host action built (a merge, a compile fix). */
+  /**
+   * Launch a request another host action built (a merge, a compile fix). The
+   * Effect settles with the launched run itself, as the port contract in
+   * `HostRunActionPorts.runAgentRequest` states.
+   */
   runAgentRequest(
     request: RunRequest,
     options?: DesktopRunOptions,
-  ): Promise<void>;
+  ): Effect.Effect<void, Error>;
   runValidated(
     request: ValidatedRunRequest,
     options?: DesktopRunOptions,
@@ -199,37 +203,45 @@ export function createDesktopAgentRun(
     releaseToolEdit: (requestId) => toolEditApprovals.release(requestId),
   });
 
+  /**
+   * The launch as an Effect, settling with the run. `onRunCompleted` fires on
+   * every settlement, as the old `finally` did — after the awaited launch,
+   * including `setFirstRunDone`. Do not hook session.onResult: that fires
+   * from run.end inside finalizeTerminal, before the flag write.
+   */
+  function runValidatedEffect(
+    request: ValidatedRunRequest,
+    runOptions: DesktopRunOptions = {},
+  ): Effect.Effect<void, Error> {
+    return launchDesktopAgent(
+      { kind: 'fresh', ...request },
+      { session, runtime },
+      {
+        onRunResolved: options.onLaunched,
+        ...runOptions,
+      },
+    ).pipe(Effect.ensuring(Effect.sync(() => options.onRunCompleted?.())));
+  }
+
   async function runValidated(
     request: ValidatedRunRequest,
     runOptions: DesktopRunOptions = {},
   ): Promise<void> {
-    try {
-      await launchDesktopAgent(
-        { kind: 'fresh', ...request },
-        { session, runtime },
-        {
-          onRunResolved: options.onLaunched,
-          ...runOptions,
-        },
-      );
-    } finally {
-      // After the awaited runPromise, including setFirstRunDone. Do not
-      // hook session.onResult: that fires from run.end inside
-      // finalizeTerminal, before the flag write.
-      options.onRunCompleted?.();
-    }
+    await runtime.runPromise(runValidatedEffect(request, runOptions));
   }
 
   return {
-    async runAgentRequest(request, runOptions) {
+    runAgentRequest(request, runOptions) {
       const validated = validateRunRequest(request);
       if (!validated.valid) {
-        logger.error('Invalid desktop run request', {
-          data: validated.issue,
+        return Effect.suspend(() => {
+          logger.error('Invalid desktop run request', {
+            data: validated.issue,
+          });
+          return Effect.fail(new Rejected({ reason: validated.message }));
         });
-        throw new Rejected({ reason: validated.message });
       }
-      await runValidated(validated.request, runOptions);
+      return runValidatedEffect(validated.request, runOptions);
     },
     runValidated,
     toolEditApprovals,

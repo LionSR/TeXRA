@@ -68,7 +68,11 @@ import { createLog } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import {
+  SHUTDOWN_PHASE,
+  type AgentResumePort,
+  type LifecycleHost,
+} from '@platform/interfaces';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -175,12 +179,21 @@ async function initVscodePlatform(
   // extension its SecretStorage and Memento at activation.
   const secrets = new VscodeSecrets(context);
   const globalState = mementoStateStore(context.globalState);
+  // The resume port closes over the runtime installed just below: a resume
+  // attempt runs on it, and the port is only invoked after activation has
+  // returned. One value serves both the runtime's `AgentResume` service and
+  // the platform port.
+  const agentResume: AgentResumePort = {
+    tryResumeRun: (runId, recovery) =>
+      tryResumeFromResumeData(runId, runtime, recovery),
+  };
   const runtime = installProcessRuntime({
     processStart: await nodeProcesses.selfIdentity(),
     globalStorage: () => storage.getGlobalStoragePath(),
     updateCheckStorage: () => storage.getGlobalStoragePath(),
     secrets,
     appState: globalState,
+    agentResume,
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`
     // models on this host (R2); consent was granted from the settings view.
@@ -210,10 +223,7 @@ async function initVscodePlatform(
     createNodePlatform({
       lifecycle,
       agentDirectories,
-      agentResume: {
-        tryResumeRun: (runId, recovery) =>
-          tryResumeFromResumeData(runId, runtime, recovery),
-      },
+      agentResume,
       ...extras,
     }),
   );

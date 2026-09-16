@@ -16,10 +16,10 @@ import {
   SETUP_AGENT_HANDOFF_NOTICE,
 } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
+import { setCliAgentResumeHandler } from '@cli/runtime/cliAgentResume';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   initInteractiveCliPlatform,
-  setCliAgentResumeHandler,
   setCliHelperModel,
 } from '@cli/runtime/initPlatform';
 import {
