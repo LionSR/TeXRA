@@ -147,7 +147,7 @@ type RefreshRuntimeModelRegistryResult = 'current' | 'superseded';
  * The discovery runs on a detached fiber and every concurrent caller waits on
  * the same `Deferred`, so one caller's interruption cancels only its own wait
  * — what the shared promise this replaced did by construction. The claim and
- * the fork run under one uninterruptible mask, an interrupt landing between
+ * the fork run under one uninterruptible mask: an interrupt landing between
  * registering the deferred and starting the fiber that settles it would
  * otherwise leave every later caller waiting on an answer nothing completes
  * (the `resolveApiKey` shape in `@model/apiProviders`).
