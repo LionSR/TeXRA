@@ -100,7 +100,6 @@ vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
   initInteractiveCliPlatform: mocks.initInteractiveCliPlatform,
   runCliPlatformShutdownSequence: mocks.runCliPlatformShutdownSequence,
-  setCliAgentResumeHandler: vi.fn(() => () => {}),
   setCliHelperModel: mocks.setCliHelperModel,
 }));
 

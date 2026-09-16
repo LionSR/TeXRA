@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { getRunRecords, registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { Runs } from '@agent/runtime/runRegistry';
-
+import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -20,6 +20,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import { fakeHostAgentResume } from '@test/support/setupPlatform';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -487,7 +488,7 @@ describe('child run progress events', () => {
         } finally {
           publication.mockRestore();
         }
-      }),
+      }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
   );
 
   it.effect(
@@ -536,7 +537,7 @@ describe('child run progress events', () => {
         expect(
           yield* getRunRecords(session, childRunId).readRunEnd(),
         ).toMatchObject({ outcome: 'failed' });
-      }),
+      }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
   );
 
   // The child reports its own exit and nothing else: a stop that already

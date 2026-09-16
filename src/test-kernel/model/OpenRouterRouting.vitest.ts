@@ -10,7 +10,12 @@ import {
 } from '@model/openRouterRouting';
 import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import {
+  hostStores,
+  installedHost,
+  setupPlatform,
+} from '@test/support/setupPlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 describe('shouldRouteModelThroughOpenRouter', () => {
   it.each([
@@ -88,14 +93,17 @@ describe('bindModel', () => {
     Effect.runPromise(
       Effect.exit(
         Effect.scoped(
-          bindModel({
-            config,
-            stores: hostStores(),
-            compatibilityKey: null,
-            agentCategory: AgentCategory.Workflow,
-            temperature: 0,
-            inScope: (operation) => operation(),
-          }),
+          Effect.provide(testHttpClientLayer)(
+            bindModel({
+              config,
+              stores: hostStores(),
+              roots: installedHost().roots,
+              compatibilityKey: null,
+              agentCategory: AgentCategory.Workflow,
+              temperature: 0,
+              inScope: (operation) => operation(),
+            }),
+          ),
         ),
       ),
     );

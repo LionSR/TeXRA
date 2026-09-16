@@ -7,8 +7,7 @@ import {
 } from '@agent/runtime/runClassification';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
-import type { AgentResumePort } from '@platform/interfaces';
+import { AgentResume } from '@platform/interfaces';
 import { ownerPid, type RunId } from '@shared/schemas';
 import {
   runHeldMessage,
@@ -56,7 +55,6 @@ type FollowUpPresentation =
 
 interface SubmitFollowUpOptions {
   readonly session: SessionHandle;
-  readonly resumePort?: Pick<AgentResumePort, 'tryResumeRun'>;
   /**
    * Notifications never revive a persisted cursor. A child delivery is an
    * ordinary continuation: its parent counts the child as active until the
@@ -121,10 +119,9 @@ export function startFollowUpWake(
   runId: RunId,
   recovery: FollowUpRecoveryLease,
   session: SessionHandle,
-  resumePort?: Pick<AgentResumePort, 'tryResumeRun'>,
-): Effect.Effect<boolean> {
-  return Effect.suspend(() =>
-    (resumePort ?? platform().agentResume).tryResumeRun(runId, recovery),
+): Effect.Effect<boolean, never, AgentResume> {
+  return Effect.flatMap(AgentResume, (resume) =>
+    resume.tryResumeRun(runId, recovery),
   ).pipe(
     Effect.tap((resumed) =>
       Effect.sync(() => {
@@ -161,7 +158,7 @@ export function enqueueLiveFollowUp(
 
 type Admission =
   | SubmitFollowUpResult
-  | { readonly resume: Effect.Effect<boolean> }
+  | { readonly resume: Effect.Effect<boolean, never, AgentResume> }
   | { status: 'no_session' };
 
 /**
@@ -177,7 +174,7 @@ function admitFollowUp(
   item: FollowUpQueueInput,
   options: SubmitFollowUpOptions,
   ownerSession: SessionHandle,
-): Effect.Effect<Admission, Error> {
+): Effect.Effect<Admission, Error, AgentResume> {
   return Effect.suspend(() => {
     const target = ownerSession.runs.getToolUseFollowUpTarget(runId);
 
@@ -232,12 +229,7 @@ function admitFollowUp(
           return { status: 'queued' };
         }
         return {
-          resume: startFollowUpWake(
-            runId,
-            submission.lease,
-            ownerSession,
-            options.resumePort,
-          ),
+          resume: startFollowUpWake(runId, submission.lease, ownerSession),
         };
       },
     );
@@ -317,7 +309,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
   followUp: FollowUpQueueInput | string,
   options: SubmitFollowUpOptions,
-): Effect.fn.Return<SubmitFollowUpResult, Error> {
+): Effect.fn.Return<SubmitFollowUpResult, Error, AgentResume> {
   const ownerSession = options.session;
   const item = typeof followUp === 'string' ? { text: followUp } : followUp;
   // A host callback must not be able to strand the recovery lease below:

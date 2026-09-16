@@ -302,10 +302,16 @@ export function handleCreateAgentWithAI(
 ) {
   return Effect.gen(function* () {
     const config = yield* loadCreatorConfig(context);
-    yield* runAgentCreator(config, category, buildVSCodeUI(runtime, session), {
-      secrets,
-      globalState,
-    });
+    yield* runAgentCreator(
+      config,
+      category,
+      buildVSCodeUI(runtime, session),
+      {
+        secrets,
+        globalState,
+      },
+      session.roots,
+    );
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.promise(async () => {

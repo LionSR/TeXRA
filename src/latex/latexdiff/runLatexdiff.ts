@@ -10,7 +10,7 @@
  * rendering) and calls this with a {@link DiffProgressReporter}.
  */
 
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -92,7 +92,7 @@ interface LatexdiffExecutionResult {
 export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
   function* (
     params: RunLatexdiffForRunParams,
-  ): Effect.fn.Return<LatexdiffExecutionResult, Error> {
+  ): Effect.fn.Return<LatexdiffExecutionResult, Error, FileSystem.FileSystem> {
     const {
       agent,
       model,

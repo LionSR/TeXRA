@@ -451,7 +451,7 @@ describe('resolveTeamLaunch', () => {
       canAccessRemoteCatalog: async () => false,
       refreshRemote: () => Effect.void,
       choose: async () => 'cancel' as const,
-      signIn: async () => false,
+      signIn: () => Effect.succeed(false),
       ...overrides,
     };
   }

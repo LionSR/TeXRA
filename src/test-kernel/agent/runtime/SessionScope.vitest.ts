@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { AgentResume } from '@platform/interfaces';
 import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -132,8 +133,11 @@ describe('sendFollowUp host-path session routing', () => {
         Effect.runPromise(
           submitFollowUp(parentRun, 'continue', {
             session: processSession,
-            resumePort: { tryResumeRun: () => Effect.succeed(false) },
-          }),
+          }).pipe(
+            Effect.provideService(AgentResume, {
+              tryResumeRun: () => Effect.succeed(false),
+            }),
+          ),
         ),
       ).resolves.toEqual({ status: 'queued', wake: 'failed' });
 
@@ -145,7 +149,11 @@ describe('sendFollowUp host-path session routing', () => {
         Effect.runPromise(
           submitFollowUp(parentRun, 'continue', {
             session: testDefaultSession(),
-          }),
+          }).pipe(
+            Effect.provideService(AgentResume, {
+              tryResumeRun: () => Effect.succeed(false),
+            }),
+          ),
         ),
       ).resolves.toEqual({
         status: 'failed',

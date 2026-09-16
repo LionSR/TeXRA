@@ -17,6 +17,7 @@ import {
 } from '@common/teams/TeamPlan';
 
 // Local imports - main-view run
+import type { SignInFailed } from '@common/errors/signInFailed';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 
 // Local imports - shared types and errors
@@ -49,7 +50,7 @@ export interface MainViewRunLaunchHost {
   chooseTeamAvailability(
     unavailableNames: readonly string[],
   ): Promise<TeamAvailabilityChoice | undefined>;
-  signInForRemoteAgentCatalog(): Promise<boolean>;
+  signInForRemoteAgentCatalog(): Effect.Effect<boolean, SignInFailed>;
   showInfoMessage: MessageHost['showInfoMessage'];
 }
 
@@ -146,7 +147,7 @@ export function prepareSurfaceLaunch(
         ...createTeamCatalogPorts(workspaceState),
         choose: (unavailableNames) =>
           host.chooseTeamAvailability(unavailableNames),
-        signIn: () => host.signInForRemoteAgentCatalog(),
+        signIn: host.signInForRemoteAgentCatalog,
       }).pipe(
         Effect.catch((error: unknown) =>
           Effect.fail(

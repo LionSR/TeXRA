@@ -6,12 +6,7 @@
  * dance.
  */
 import { Effect } from 'effect';
-import {
-  AuthPortError,
-  callPort,
-  runAuthProgram,
-  settleFailure,
-} from '@auth/authProgram';
+import { AuthPortError, settleFailure } from '@auth/authProgram';
 import { createLog } from '@logger/logUtils';
 import type { SecretsFailed } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -77,30 +72,27 @@ export function createSecretBackedCoordinator<C>(init: {
 
 /** Minimal coordinator surface used for the status probe. */
 export interface SessionAccessCoordinator {
-  getStatus(): Promise<SubscriptionSessionStatus>;
+  getStatus(): Effect.Effect<SubscriptionSessionStatus, unknown>;
 }
 
 /**
- * Read signed-in status without throwing: a store the caller could not open
+ * Read signed-in status without failing: a store the caller could not open
  * reports signed-out, with the cause logged. The probe's recovery is part of
- * the program; only its settled answer crosses the Promise surface, on the
- * auth subsystem's installed run edge.
+ * the program; the caller yields it or settles it at its own edge.
  */
 export function getSubscriptionSessionStatus(
   getCoordinator: () => SessionAccessCoordinator,
   channel: string,
   displayName: string,
-): Promise<SubscriptionSessionStatus> {
-  return runAuthProgram(
-    callPort(() => getCoordinator().getStatus()).pipe(
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          createLog(channel).warn(
-            `Failed to read ${displayName} session status: ${toErrorMessage(settleFailure(cause))}`,
-          );
-          return { signedIn: false };
-        }),
-      ),
+): Effect.Effect<SubscriptionSessionStatus> {
+  return Effect.suspend(() => getCoordinator().getStatus()).pipe(
+    Effect.catchCause((cause) =>
+      Effect.sync(() => {
+        createLog(channel).warn(
+          `Failed to read ${displayName} session status: ${toErrorMessage(settleFailure(cause))}`,
+        );
+        return { signedIn: false };
+      }),
     ),
   );
 }

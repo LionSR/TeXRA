@@ -10,6 +10,7 @@ import {
   callPort,
   runAuthProgram,
   SerializedWrites,
+  settleFailure,
 } from '@auth/authProgram';
 import {
   isPendingOAuthStateFresh,
@@ -38,7 +39,7 @@ import { classifyAuthFailureStatus } from '@auth/TokenProvider';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import * as logger from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/unstable/http';
 import type { SupabaseUriHandler } from './UriHandler';
@@ -108,9 +109,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
-   * Settle an auth effect at this host edge as an `Exit`, unwrapping the port
-   * envelope from a typed failure so the fold sees the port's own error — the
-   * same error the Promise edge surfaced to the converted catch clauses.
+   * Settle an auth effect at one of this class's Promise boundaries as an
+   * `Exit`, unwrapping the port envelope from a typed failure so the fold
+   * sees the port's own error — the same error the Promise edge surfaced to
+   * the converted catch clauses.
    */
   private async settleAuthEffect<A>(
     program: Effect.Effect<A, unknown, HttpClient.HttpClient>,
@@ -128,50 +130,53 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return `${PENDING_OAUTH_STATE_PREFIX}${nonce}`;
   }
 
-  private async readPendingOAuthState(
+  private readPendingOAuthState(
     nonce: string,
-  ): Promise<PendingOAuthState | null> {
-    const stored = await runAuthProgram(
-      this.secrets.getStored(this.pendingStateKey(nonce)),
+  ): Effect.Effect<PendingOAuthState | null, SecretsFailed> {
+    return this.secrets.getStored(this.pendingStateKey(nonce)).pipe(
+      Effect.map((stored) => {
+        if (!stored) return null;
+        const parsed = parseJsonWith(stored, PendingOAuthStateSchema);
+        if (Result.isSuccess(parsed)) return parsed.success;
+        // The fixed diagnostic deliberately excludes stored secret content.
+        log.warn(
+          'Stored OAuth callback state is malformed and will be ignored',
+        );
+        return null;
+      }),
     );
-    if (!stored) return null;
-    const parsed = parseJsonWith(stored, PendingOAuthStateSchema);
-    if (Result.isSuccess(parsed)) return parsed.success;
-    // The fixed diagnostic deliberately excludes stored secret content.
-    log.warn('Stored OAuth callback state is malformed and will be ignored');
-    return null;
   }
 
-  private async sweepPendingOAuthStates(): Promise<void> {
-    const listed = await this.settleAuthEffect(this.secrets.listStoredKeys());
-    if (Exit.isFailure(listed)) {
-      log.warn('Unable to inspect stored OAuth callback state for cleanup');
-      return;
-    }
-
-    for (const key of listed.value) {
-      if (!key.startsWith(PENDING_OAUTH_STATE_PREFIX)) continue;
-      const nonce = key.slice(PENDING_OAUTH_STATE_PREFIX.length);
-      const cleaned = await this.settleAuthEffect(
-        Effect.gen({ self: this }, function* () {
-          const state = yield* callPort(() =>
-            this.readPendingOAuthState(nonce),
-          );
-          if (!state?.flowId || !isPendingOAuthStateFresh(state)) {
-            yield* this.secrets.delete(key);
-          }
-        }),
-      );
-      if (Exit.isFailure(cleaned)) {
-        log.warn('Unable to clean up stored OAuth callback state');
+  private sweepPendingOAuthStates(): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const listed = yield* Effect.exit(this.secrets.listStoredKeys());
+      if (Exit.isFailure(listed)) {
+        log.warn('Unable to inspect stored OAuth callback state for cleanup');
+        return;
       }
-    }
+
+      for (const key of listed.value) {
+        if (!key.startsWith(PENDING_OAUTH_STATE_PREFIX)) continue;
+        const nonce = key.slice(PENDING_OAUTH_STATE_PREFIX.length);
+        const cleaned = yield* Effect.exit(
+          Effect.gen({ self: this }, function* () {
+            const state = yield* this.readPendingOAuthState(nonce);
+            if (!state?.flowId || !isPendingOAuthStateFresh(state)) {
+              yield* this.secrets.delete(key);
+            }
+          }),
+        );
+        if (Exit.isFailure(cleaned)) {
+          log.warn('Unable to clean up stored OAuth callback state');
+        }
+      }
+    });
   }
 
-  private async bindPkceFlow(
+  private bindPkceFlow(
     attempt: ExtensionAuthAttempt,
     flowId: string | null | undefined,
-  ): Promise<void> {
+  ): Effect.Effect<void, SecretsFailed> {
     if (!flowId || !PKCE_FLOW_ID_PATTERN.test(flowId)) {
       throw new Error('OAuth initialization did not return a valid PKCE flow.');
     }
@@ -180,22 +185,20 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         'Authentication attempt is no longer pending. Try again.',
       );
     }
-    await this.runtime.runPromise(
-      this.secrets.set(
-        this.pendingStateKey(attempt.nonce),
-        JSON.stringify({
-          nonce: attempt.nonce,
-          createdAt: attempt.createdAt,
-          flowId,
-        }),
-      ),
+    return this.secrets.set(
+      this.pendingStateKey(attempt.nonce),
+      JSON.stringify({
+        nonce: attempt.nonce,
+        createdAt: attempt.createdAt,
+        flowId,
+      }),
     );
   }
 
-  private async clearPendingAttempt(nonce: string): Promise<void> {
-    await this.runtime.runPromise(
-      this.secrets.delete(this.pendingStateKey(nonce)),
-    );
+  private clearPendingAttempt(
+    nonce: string,
+  ): Effect.Effect<void, SecretsFailed> {
+    return this.secrets.delete(this.pendingStateKey(nonce));
   }
 
   private callbackNonce(query: string): string | null {
@@ -207,67 +210,54 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /** Claim a persisted callback and hand back its PKCE flow id. */
-  private async claimCallback(
+  private claimCallback(
     query: string,
     expectedAttempt?: ExtensionAuthAttempt,
-  ): Promise<string | null> {
-    return runAuthProgram(
-      this.callbackClaims.run(
-        Effect.gen({ self: this }, function* (): Generator<
-          Effect.Effect<unknown, AuthPortError>,
-          string | null,
-          never
-        > {
-          const nonce = this.callbackNonce(query);
-          if (!nonce || (expectedAttempt && expectedAttempt.nonce !== nonce)) {
-            log.warn(
-              'OAuth callback rejected: invalid or stale attempt binding',
-            );
-            return null;
-          }
+  ): Effect.Effect<string | null> {
+    return this.callbackClaims.run(
+      Effect.gen({ self: this }, function* () {
+        const nonce = this.callbackNonce(query);
+        if (!nonce || (expectedAttempt && expectedAttempt.nonce !== nonce)) {
+          log.warn('OAuth callback rejected: invalid or stale attempt binding');
+          return null;
+        }
 
-          const pending = yield* callPort(() =>
-            this.readPendingOAuthState(nonce),
+        const pending = yield* this.readPendingOAuthState(nonce);
+        if (
+          !pending?.flowId ||
+          pending.nonce !== nonce ||
+          !isPendingOAuthStateFresh(pending)
+        ) {
+          if (pending && !isPendingOAuthStateFresh(pending)) {
+            yield* this.clearPendingAttempt(nonce);
+          }
+          log.warn('OAuth callback rejected: invalid or stale attempt binding');
+          return null;
+        }
+
+        if (expectedAttempt && this.activeAttempt !== expectedAttempt) {
+          log.debug(
+            'OAuth callback ignored after its sign-in attempt was superseded',
           );
-          if (
-            !pending?.flowId ||
-            pending.nonce !== nonce ||
-            !isPendingOAuthStateFresh(pending)
-          ) {
-            if (pending && !isPendingOAuthStateFresh(pending)) {
-              yield* callPort(() => this.clearPendingAttempt(nonce));
-            }
-            log.warn(
-              'OAuth callback rejected: invalid or stale attempt binding',
-            );
-            return null;
-          }
+          return null;
+        }
 
-          if (expectedAttempt && this.activeAttempt !== expectedAttempt) {
-            log.debug(
-              'OAuth callback ignored after its sign-in attempt was superseded',
-            );
-            return null;
-          }
-
-          yield* callPort(() => this.clearPendingAttempt(nonce));
-          // Re-check after the await: `activeAttempt` is mutated outside the
-          // claim lane by `invalidateActiveAttempt`, so this is not a repeat
-          // of the check above.
-          if (expectedAttempt && this.activeAttempt !== expectedAttempt) {
-            return null;
-          }
-          return pending.flowId;
-        }).pipe(
-          // Any port failure means the callback's ownership could not be
-          // verified; the fixed message deliberately excludes secret-store
-          // detail, and the fold below re-throws exactly it.
-          Effect.catch(() =>
-            Effect.die(
-              new Error(
-                'OAuth callback state could not be verified. Try again.',
-              ),
-            ),
+        yield* this.clearPendingAttempt(nonce);
+        // Re-check after the yield: `activeAttempt` is mutated outside the
+        // claim lane by `invalidateActiveAttempt`, so this is not a repeat
+        // of the check above.
+        if (expectedAttempt && this.activeAttempt !== expectedAttempt) {
+          return null;
+        }
+        return pending.flowId;
+      }).pipe(
+        // Any port failure means the callback's ownership could not be
+        // verified; the fixed message deliberately excludes secret-store
+        // detail, and both callback surfaces fold the defect back to exactly
+        // it.
+        Effect.catch(() =>
+          Effect.die(
+            new Error('OAuth callback state could not be verified. Try again.'),
           ),
         ),
       ),
@@ -280,23 +270,28 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     attempt?.cancel();
   }
 
-  private async cancelPendingAttempt(): Promise<void> {
+  /**
+   * Invalidate the active attempt synchronously and hand back the program
+   * that clears its pending record, so a boundary can run the clear without
+   * deferring the invalidation behind the runtime's scheduling.
+   */
+  private cancelPendingAttempt(): Effect.Effect<void, SecretsFailed> {
     const pendingNonce = this.activeAttempt?.nonce;
     this.invalidateActiveAttempt();
-    if (pendingNonce) await this.clearPendingAttempt(pendingNonce);
-  }
-
-  private async runAuthCommit<T>(commit: () => Promise<T>): Promise<T> {
-    return runAuthProgram(this.authCommits.run(callPort(commit)));
+    return pendingNonce ? this.clearPendingAttempt(pendingNonce) : Effect.void;
   }
 
   /** Store a newly created session and fire the session-change event. */
-  private async storeSession(session: SupabaseSession): Promise<void> {
-    await runAuthProgram(this.sessionCoordinator.storeSession(session));
-    this._onDidChangeSessions.fire({
-      added: [this.toVSCodeSession(session)],
-      removed: [],
-      changed: [],
+  private storeSession(
+    session: SupabaseSession,
+  ): Effect.Effect<void, AuthPortError> {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.sessionCoordinator.storeSession(session);
+      this._onDidChangeSessions.fire({
+        added: [this.toVSCodeSession(session)],
+        removed: [],
+        changed: [],
+      });
     });
   }
 
@@ -331,9 +326,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     const nonce = this.callbackNonce(uri.query);
     if (nonce && this.activeAttempt?.nonce === nonce) return;
 
-    const exit = await this.settleAuthEffect(
-      callPort(() => this.processLateAuthCallback(uri)),
-    );
+    const exit = await this.settleAuthEffect(this.processLateAuthCallback(uri));
     if (Exit.isFailure(exit)) {
       const message = toErrorMessage(Cause.squash(exit.cause));
       log.error(`Error processing auth callback: ${message}`);
@@ -341,38 +334,44 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
   }
 
-  private async processLateAuthCallback(uri: vscode.Uri): Promise<void> {
-    const flowId = await this.claimCallback(uri.query);
-    if (!flowId) return;
+  private processLateAuthCallback(
+    uri: vscode.Uri,
+  ): Effect.Effect<void, AuthPortError> {
+    return Effect.gen({ self: this }, function* () {
+      const flowId = yield* this.claimCallback(uri.query);
+      if (!flowId) return;
 
-    const existingSession = await runAuthProgram(
-      this.sessionCoordinator.loadSession(),
-    );
-    if (existingSession) return;
+      const existingSession = yield* this.sessionCoordinator.loadSession();
+      if (existingSession) return;
 
-    const result = await runAuthProgram(
-      withPkcePermit(
+      const result = yield* withPkcePermit(
         this.sessionCoordinator.createSessionFromCallback(
           { path: uri.path, query: uri.query },
           flowId,
         ),
-      ),
-    );
+      );
 
-    if (!result.success) {
-      if (result.isAuthError) {
-        log.error(`Sign-in failed: ${result.error}`);
-        this.notifier.showError(`Sign-in failed: ${result.error}`);
-      } else {
-        log.debug(`Auth callback ignored: ${result.error}`);
+      if (!result.success) {
+        if (result.isAuthError) {
+          log.error(`Sign-in failed: ${result.error}`);
+          this.notifier.showError(`Sign-in failed: ${result.error}`);
+        } else {
+          log.debug(`Auth callback ignored: ${result.error}`);
+        }
+        return;
       }
-      return;
-    }
 
-    await this.runAuthCommit(async () => {
-      await this.storeSession(result.session);
-      this.notifier.showInfo(`Signed in as ${result.session.account.label}`);
-      log.info(`Late sign-in successful for ${result.session.account.label}`);
+      yield* this.authCommits.run(
+        Effect.gen({ self: this }, function* () {
+          yield* this.storeSession(result.session);
+          this.notifier.showInfo(
+            `Signed in as ${result.session.account.label}`,
+          );
+          log.info(
+            `Late sign-in successful for ${result.session.account.label}`,
+          );
+        }),
+      );
     });
   }
 
@@ -387,7 +386,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
 
     const exit = await this.settleAuthEffect(
-      callPort(() => this.resolveUsableSession(session)),
+      this.resolveUsableSession(session),
     );
     if (Exit.isSuccess(exit)) return exit.value;
     log.error(
@@ -397,53 +396,56 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /** Resolve a stored session to the session VS Code may use, if any. */
-  private async resolveUsableSession(
+  private resolveUsableSession(
     session: SupabaseSession,
-  ): Promise<vscode.AuthenticationSession[]> {
-    if (Date.now() >= session.expiresAt) {
-      const refreshed = await runAuthProgram(
-        this.sessionCoordinator.refreshSession(session),
+  ): Effect.Effect<vscode.AuthenticationSession[], AuthPortError> {
+    return Effect.gen({ self: this }, function* () {
+      if (Date.now() >= session.expiresAt) {
+        const refreshed =
+          yield* this.sessionCoordinator.refreshSession(session);
+        if (!refreshed) {
+          if (this.sessionCoordinator.getLastRefreshFailure() === 'invalid') {
+            yield* this.handleInvalidSession(session, 'expired');
+          }
+          return [];
+        }
+        return [this.toVSCodeSession(refreshed)];
+      }
+
+      const { data, error } = yield* callPort(() =>
+        SupabaseClient.getClient().auth.getUser(session.accessToken),
       );
-      if (!refreshed) {
-        if (this.sessionCoordinator.getLastRefreshFailure() === 'invalid') {
-          await this.handleInvalidSession(session, 'expired');
+      if (error) {
+        if (classifyAuthFailureStatus(error.status) === 'invalid') {
+          yield* this.handleInvalidSession(session, 'invalid');
         }
         return [];
       }
-      return [this.toVSCodeSession(refreshed)];
-    }
-
-    const { data, error } = await SupabaseClient.getClient().auth.getUser(
-      session.accessToken,
-    );
-    if (error) {
-      if (classifyAuthFailureStatus(error.status) === 'invalid') {
-        await this.handleInvalidSession(session, 'invalid');
+      if (!data.user) {
+        return [];
       }
-      return [];
-    }
-    if (!data.user) {
-      return [];
-    }
 
-    return [this.toVSCodeSession(session)];
+      return [this.toVSCodeSession(session)];
+    });
   }
 
   /**
    * Handle invalid session by removing it and prompting user to sign in again.
    */
-  private async handleInvalidSession(
+  private handleInvalidSession(
     session: SupabaseSession,
     reason: 'expired' | 'invalid',
-  ): Promise<void> {
-    // The rejected credential is already unusable. Do not call the client's
-    // global signOut here: an OAuth callback may have installed a replacement
-    // while validation was in flight, and signOut would target that newer
-    // client state. The conditional local clear below is generation-safe.
-    const cleared = await this.clearLocalSessionIfCurrent(session);
-    if (cleared) {
-      await this.notifier.showSignInPrompt(reason);
-    }
+  ): Effect.Effect<void, AuthPortError> {
+    return Effect.gen({ self: this }, function* () {
+      // The rejected credential is already unusable. Do not call the client's
+      // global signOut here: an OAuth callback may have installed a replacement
+      // while validation was in flight, and signOut would target that newer
+      // client state. The conditional local clear below is generation-safe.
+      const cleared = yield* this.clearLocalSessionIfCurrent(session);
+      if (cleared) {
+        yield* callPort(() => this.notifier.showSignInPrompt(reason));
+      }
+    });
   }
 
   private async buildOAuthOptions(
@@ -541,14 +543,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           );
 
         const exit = await this.settleAuthEffect(
-          callPort(() =>
-            this.runOAuthAttempt(
-              provider,
-              attempt,
-              progress,
-              callback,
-              interruptedError,
-            ),
+          this.runOAuthAttempt(
+            provider,
+            attempt,
+            progress,
+            callback,
+            interruptedError,
           ).pipe(Effect.ensuring(this.finalizeOAuthAttempt(attempt))),
         );
         if (Exit.isSuccess(exit)) return exit.value;
@@ -563,7 +563,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /** One OAuth attempt's body: initialize the flow, wait, and commit. */
-  private async runOAuthAttempt(
+  private runOAuthAttempt(
     provider: OAuthProvider,
     attempt: ExtensionAuthAttempt,
     progress: vscode.Progress<{
@@ -572,60 +572,67 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }>,
     callback: Promise<SupabaseSession | null>,
     interruptedError: () => Error,
-  ): Promise<vscode.AuthenticationSession> {
-    progress.report({ message: 'Waiting for authentication...' });
-    // Finish any callback commit owned by the superseded attempt before
-    // initializing this attempt's PKCE flow.
-    await runAuthProgram(this.authCommits.awaitIdle());
-    if (this.activeAttempt !== attempt) throw interruptedError();
+  ): Effect.Effect<vscode.AuthenticationSession, unknown> {
+    return Effect.gen({ self: this }, function* () {
+      progress.report({ message: 'Waiting for authentication...' });
+      // Finish any callback commit owned by the superseded attempt before
+      // initializing this attempt's PKCE flow.
+      yield* this.authCommits.awaitIdle();
+      if (this.activeAttempt !== attempt) throw interruptedError();
 
-    await this.sweepPendingOAuthStates();
-    if (this.activeAttempt !== attempt) throw interruptedError();
+      yield* this.sweepPendingOAuthStates();
+      if (this.activeAttempt !== attempt) throw interruptedError();
 
-    const options = await this.buildOAuthOptions(attempt.nonce);
-    const { data, error } = await runAuthProgram(
-      withPkcePermit(
+      const options = yield* callPort(() =>
+        this.buildOAuthOptions(attempt.nonce),
+      );
+      const { data, error } = yield* withPkcePermit(
         callPort(() =>
           SupabaseClient.getClient().auth.signInWithOAuth({
             provider,
             options,
           }),
         ),
-      ),
-    );
-
-    if (error || !data.url) {
-      throw new Error(
-        `OAuth initialization failed: ${error?.message || 'Unknown error'}. Try again.`,
       );
-    }
-    if (this.activeAttempt !== attempt) throw interruptedError();
-    await this.bindPkceFlow(attempt, data.flowId);
 
-    // The callback listener is already armed before the browser can send a
-    // fast redirect back to the extension host.
-    await vscode.env.openExternal(vscode.Uri.parse(data.url));
-    const session = await callback;
-    if (!session) {
-      throw new Error('Authentication cancelled or timed out. Try again.');
-    }
-
-    await this.runAuthCommit(async () => {
-      if (this.activeAttempt !== attempt) return;
-      await this.storeSession(session);
-      if (this.activeAttempt !== attempt) {
-        await runAuthProgram(
-          this.sessionCoordinator.clearSessionIfCurrent(session),
+      if (error || !data.url) {
+        throw new Error(
+          `OAuth initialization failed: ${error?.message || 'Unknown error'}. Try again.`,
         );
       }
-    });
-    if (this.activeAttempt !== attempt) throw interruptedError();
+      if (this.activeAttempt !== attempt) throw interruptedError();
+      yield* this.bindPkceFlow(attempt, data.flowId);
 
-    const sessions = await this.getSessions();
-    if (sessions.length === 0) {
-      throw new Error('Session creation failed. Try signing in again.');
-    }
-    return sessions[0];
+      // The callback listener is already armed before the browser can send a
+      // fast redirect back to the extension host.
+      yield* callPort(async () => {
+        await vscode.env.openExternal(vscode.Uri.parse(data.url));
+      });
+      const session = yield* callPort(() => callback);
+      if (!session) {
+        throw new Error('Authentication cancelled or timed out. Try again.');
+      }
+
+      yield* this.authCommits.run(
+        Effect.gen({ self: this }, function* () {
+          if (this.activeAttempt !== attempt) return;
+          yield* this.storeSession(session);
+          if (this.activeAttempt !== attempt) {
+            yield* this.sessionCoordinator.clearSessionIfCurrent(session);
+          }
+        }),
+      );
+      if (this.activeAttempt !== attempt) throw interruptedError();
+
+      // Resolve through the foreign-facing method so its failure policy — a
+      // rejected load rejects the attempt, a resolution failure answers an
+      // empty list — applies unchanged to the post-commit read.
+      const sessions = yield* callPort(() => this.getSessions());
+      if (sessions.length === 0) {
+        throw new Error('Session creation failed. Try signing in again.');
+      }
+      return sessions[0];
+    });
   }
 
   /**
@@ -642,7 +649,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         attempt.cancel();
         if (this.activeAttempt === attempt) this.activeAttempt = undefined;
       });
-      yield* callPort(() => this.clearPendingAttempt(attempt.nonce)).pipe(
+      yield* this.clearPendingAttempt(attempt.nonce).pipe(
         Effect.catch(() =>
           Effect.sync(() => {
             log.warn('Unable to clean up stored OAuth callback state');
@@ -661,8 +668,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * device's refresh tokens with its default global scope.
    */
   async removeSession(sessionId: string): Promise<void> {
-    await this.cancelPendingAttempt();
-    await this.clearLocalSession(sessionId);
+    const cancelPending = this.cancelPendingAttempt();
+    await runAuthProgram(
+      cancelPending.pipe(Effect.andThen(this.clearLocalSession(sessionId))),
+    );
   }
 
   /**
@@ -671,46 +680,61 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * its own sign-in prompt and duplicate the caller's authentication action.
    */
   async clearStoredSession(): Promise<boolean> {
-    const session = await runAuthProgram(this.sessionCoordinator.loadSession());
-    if (!session) return false;
-    const storedState = await runAuthProgram(
-      this.sessionCoordinator.getStoredSessionState(),
+    return runAuthProgram(
+      Effect.gen({ self: this }, function* () {
+        const session = yield* this.sessionCoordinator.loadSession();
+        if (!session) return false;
+        const storedState =
+          yield* this.sessionCoordinator.getStoredSessionState();
+        if (storedState !== 'invalid') {
+          return false;
+        }
+        return yield* this.clearLocalSessionIfCurrent(session);
+      }),
     );
-    if (storedState !== 'invalid') {
-      return false;
-    }
-    return this.clearLocalSessionIfCurrent(session);
   }
 
   /** Remove the currently stored session without resolving it. */
   async removeStoredSession(): Promise<boolean> {
-    await this.cancelPendingAttempt();
-    const session = await runAuthProgram(this.sessionCoordinator.loadSession());
-    if (!session) return false;
-    await this.clearLocalSession(session.id);
-    return true;
-  }
-
-  private async clearLocalSession(sessionId: string): Promise<void> {
-    await runAuthProgram(this.sessionCoordinator.clearSession());
-    await this.afterLocalSessionCleared(sessionId);
-  }
-
-  private async clearLocalSessionIfCurrent(
-    session: SupabaseSession,
-  ): Promise<boolean> {
-    const cleared = await runAuthProgram(
-      this.sessionCoordinator.clearSessionIfCurrent(session),
+    const cancelPending = this.cancelPendingAttempt();
+    return runAuthProgram(
+      Effect.gen({ self: this }, function* () {
+        yield* cancelPending;
+        const session = yield* this.sessionCoordinator.loadSession();
+        if (!session) return false;
+        yield* this.clearLocalSession(session.id);
+        return true;
+      }),
     );
-    if (!cleared) return false;
-    await this.afterLocalSessionCleared(session.id);
-    return true;
+  }
+
+  private clearLocalSession(
+    sessionId: string,
+  ): Effect.Effect<void, AuthPortError> {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.sessionCoordinator.clearSession();
+      yield* callPort(() => this.afterLocalSessionCleared(sessionId));
+    });
+  }
+
+  private clearLocalSessionIfCurrent(
+    session: SupabaseSession,
+  ): Effect.Effect<boolean, AuthPortError> {
+    return Effect.gen({ self: this }, function* () {
+      const cleared =
+        yield* this.sessionCoordinator.clearSessionIfCurrent(session);
+      if (!cleared) return false;
+      yield* callPort(() => this.afterLocalSessionCleared(session.id));
+      return true;
+    });
   }
 
   private async afterLocalSessionCleared(sessionId: string): Promise<void> {
-    await refreshRemoteAgentCatalogAfterSignOut(
-      () => this.runtime.runPromise(invalidateRemoteAgentsAfterSignOut()),
-      log.warn,
+    await this.runtime.runPromise(
+      refreshRemoteAgentCatalogAfterSignOut(
+        invalidateRemoteAgentsAfterSignOut(),
+        log.warn,
+      ),
     );
     this._onDidChangeSessions.fire({
       added: [],
@@ -814,25 +838,16 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     stopListening: () => void,
   ): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      const flowId = yield* Effect.tryPromise({
-        try: () => this.claimCallback(uri.query, attempt),
-        catch: (error) => error,
-      });
+      const flowId = yield* this.claimCallback(uri.query, attempt);
       if (!flowId) return;
       stopListening();
 
-      const result = yield* Effect.tryPromise({
-        try: () =>
-          runAuthProgram(
-            withPkcePermit(
-              this.sessionCoordinator.createSessionFromCallback(
-                { path: uri.path, query: uri.query },
-                flowId,
-              ),
-            ),
-          ),
-        catch: (error) => error,
-      });
+      const result = yield* withPkcePermit(
+        this.sessionCoordinator.createSessionFromCallback(
+          { path: uri.path, query: uri.query },
+          flowId,
+        ),
+      );
 
       if (!result.success) {
         if (result.error === 'Missing authorization code in callback') {
@@ -853,8 +868,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
       yield* Deferred.succeed(outcome, result.session);
     }).pipe(
-      Effect.catch((error) =>
+      // catchCause so the claim lane's defect ("callback state could not be
+      // verified") and a port failure both settle `outcome`; settleFailure
+      // keeps the port's own error as the value, as the Promise edge did.
+      Effect.catchCause((cause) =>
         Effect.sync(() => {
+          const error = settleFailure(cause);
           log.error(
             `Error processing OAuth callback: ${toErrorMessage(error)}`,
           );

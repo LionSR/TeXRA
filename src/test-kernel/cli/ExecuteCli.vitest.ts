@@ -169,14 +169,15 @@ function toolUseConfig() {
 /** Tools the CLI runtime hides by default during agent run. */
 const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = getDefaultUnavailableToolNames('cli');
 
-/** A run program's options with the session and runtime the wrapper below
- *  supplies. */
-type WithoutSession<O> = Omit<O, 'session' | 'runtime'>;
+/** A run program's options with the session, runtime and lifecycle the
+ *  wrapper below supplies. */
+type WithoutSession<O> = Omit<O, 'session' | 'runtime' | 'lifecycle'>;
 
 async function loadExecuteCli() {
   const runtime = await import('@cli/runtime/executeCli');
-  // The commands thread `initCliPlatform`'s session and runtime in; here the
-  // process default this file installs stands in for both.
+  // The commands thread `initCliPlatform`'s session, runtime and lifecycle
+  // in; here the process default this file installs stands in for the first
+  // two and the installed host's lifecycle for the third.
   return {
     ...runtime,
     executeCliRequest: (
@@ -190,6 +191,7 @@ async function loadExecuteCli() {
         runtime.executeCliRequest(request, context, {
           session: Effect.succeed(testDefaultSession()),
           runtime: effectRuntime(),
+          lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
         fakeProcessServices(),
@@ -205,6 +207,7 @@ async function loadExecuteCli() {
         runtime.executeCliConfig(config, context, {
           session: Effect.succeed(testDefaultSession()),
           runtime: effectRuntime(),
+          lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
         fakeProcessServices(),
@@ -220,6 +223,7 @@ async function loadExecuteCli() {
         runtime.executeCliToolUseConfig(config, context, {
           session: Effect.succeed(testDefaultSession()),
           runtime: effectRuntime(),
+          lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
         fakeProcessServices(),

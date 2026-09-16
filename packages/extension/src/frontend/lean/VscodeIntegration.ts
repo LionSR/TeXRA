@@ -477,11 +477,9 @@ function navigateToFirstError(
   if (!firstError) return Effect.void;
   // `openFileInEditor` reports a refusal by returning nothing, having
   // already logged it, so this navigation has no failure of its own.
-  return Effect.promise(async () => {
-    await openFileInEditor(filePath, {
-      line: firstError.range.start.line + 1,
-    });
-  });
+  return Effect.promise(() =>
+    openFileInEditor(filePath, { line: firstError.range.start.line + 1 }),
+  );
 }
 
 function executeProjectCommand(

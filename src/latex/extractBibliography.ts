@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Named import only: bibtex's UMD exports carry `__esModule: true`, so a
 // default import bundles to `undefined` under esbuild's ESM interop and the
@@ -10,8 +10,9 @@ import { Effect } from 'effect';
 import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
-import { fsCall } from '@utils/errors/fsCall';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { ensureError } from '@utils/errors/errorMessage';
+import { pathExists } from '@utils/files/fsDurability';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -49,20 +50,32 @@ interface BibliographyEntriesResult {
 /** Bibliography probes hit the filesystem, so bound the fan-out. */
 const PROBE_CONCURRENCY = 8;
 
+/** Read a bibliography file, surfacing the read failure as a typed error.
+ *  Decoded from bytes rather than `readFileString`, whose `TextDecoder`
+ *  strips a leading UTF-8 BOM that the old `AbsoluteFS.read` preserved. */
+const readBibliographyFile = Effect.fn('latex.readBibliographyFile')(function* (
+  filePath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const bytes = yield* fs.readFile(filePath).pipe(Effect.mapError(ensureError));
+  return normalizeLineEndings(Buffer.from(bytes).toString('utf-8'));
+});
+
 export const extractBibliographyContext = Effect.fn(
   'latex.extractBibliographyContext',
 )(function* (
   texPath: string,
-): Effect.fn.Return<BibliographyReferenceResult, Error> {
+): Effect.fn.Return<BibliographyReferenceResult, Error, FileSystem.FileSystem> {
   const texDir = path.dirname(texPath);
-  const content = yield* fsCall(() => AbsoluteFS.read(texPath));
+  const content = yield* readBibliographyFile(texPath);
   const uncommented = stripLatexComments(content);
 
   const referencedPaths = collectBibliographyPaths(texDir, uncommented);
+  const fs = yield* FileSystem.FileSystem;
   const probed = yield* Effect.forEach(
     referencedPaths,
     (candidate) =>
-      fsCall(() => AbsoluteFS.exists(candidate)).pipe(
+      pathExists(fs, candidate).pipe(
         Effect.map((exists) => ({ candidate, exists })),
       ),
     { concurrency: PROBE_CONCURRENCY },
@@ -155,13 +168,13 @@ export const loadBibliographyEntries = Effect.fn(
 )(function* (
   bibliographyFiles: readonly string[],
   citationKeys: readonly string[],
-): Effect.fn.Return<BibliographyEntriesResult, Error> {
+): Effect.fn.Return<BibliographyEntriesResult, Error, FileSystem.FileSystem> {
   // Citation keys are matched case-insensitively; the first definition of a
   // key across the bibliography files wins, so the files are read as one
   // bounded fan-out and folded back in their declared order.
   const contents = yield* Effect.forEach(
     bibliographyFiles,
-    (filePath) => fsCall(() => AbsoluteFS.read(filePath)),
+    readBibliographyFile,
     {
       concurrency: PROBE_CONCURRENCY,
     },

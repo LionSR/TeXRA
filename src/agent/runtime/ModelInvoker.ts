@@ -73,7 +73,7 @@ import {
   type RunState,
 } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
-import { getValidatedConfig } from '@utils/config/configUtils';
+import { readValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
@@ -94,6 +94,7 @@ import {
   runtimeSnapshotRow,
   stepRow,
 } from './loop/rows';
+import type { HttpClient } from 'effect/unstable/http';
 import type { RoutePolicy } from './ModelRetryGate';
 
 /**
@@ -141,22 +142,6 @@ const EMPTY_RESPONSE_ERROR_MESSAGE =
  */
 const PARTIAL_TEXT_TAIL_MAX = 4096;
 
-/**
- * One initial attempt plus the configured number of automatic retries. The
- * schema bounds the setting to [0, 5] and falls back to the default on
- * anything else, so the result is always >= 1.
- */
-function automaticAttemptLimit(): number {
-  return (
-    1 +
-    getValidatedConfig(
-      MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-      ModelRetryMaxAttemptsSchema,
-      MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
-    )
-  );
-}
-
 export interface InvokeRequest {
   readonly system: string | undefined;
   /** The tools this turn advertises; a reflection turn advertises none. */
@@ -202,7 +187,11 @@ export class ModelInvoker extends Context.Service<
     readonly invoke: (
       state: RunState,
       request: InvokeRequest,
-    ) => Effect.Effect<InvocationOutcome, InvokeError, FileSystem.FileSystem>;
+    ) => Effect.Effect<
+      InvocationOutcome,
+      InvokeError,
+      FileSystem.FileSystem | HttpClient.HttpClient
+    >;
   }
 >()('@texra/agent/ModelInvoker') {}
 
@@ -277,33 +266,18 @@ export const modelInvokerLayer = (): Layer.Layer<
         round: number,
         baseName: string,
       ) =>
-        // `Effect.try` for the same reason the old `Effect.tryPromise` was
-        // there: the guard inside `maybeSaveDebugObject` reads configuration
-        // synchronously, and a thrown error from it must be caught here, not
-        // become a defect.
-        Effect.try({
-          try: () =>
-            maybeSaveDebugObject({
-              object,
-              objectType,
-              context: {
-                logger,
-                runId,
-                modelName: run.config.model,
-                isRemote: isRemoteAgent(run.config.agent),
-                roots: session.roots,
-              },
-              fileOptions: { continuationCount: round, baseName },
-            }),
-          catch: ensureError,
-        }).pipe(
-          Effect.flatten,
-          Effect.catch((error) =>
-            Effect.sync(() =>
-              logger.debug('Debug object save failed', { data: error }),
-            ),
-          ),
-        );
+        maybeSaveDebugObject({
+          object,
+          objectType,
+          context: {
+            logger,
+            runId,
+            modelName: run.config.model,
+            isRemote: isRemoteAgent(run.config.agent),
+            roots: session.roots,
+          },
+          fileOptions: { continuationCount: round, baseName },
+        });
 
       /** The snapshot the retry protocol commits: runtime fields on the last
        *  written family state, references from the folded rows. */
@@ -318,15 +292,19 @@ export const modelInvokerLayer = (): Layer.Layer<
        * Whether a turn runs as background work: a workflow turn on a binding
        * that supports it, under the provider's toggle. The binding owns the
        * rule (it decides the Responses transport by the same answer); this
-       * asks it per turn with the run's category.
+       * asks it per turn with the run's category, reading the toggle live
+       * from the session's own config provider.
        */
       const backgroundRequested = (bound: BoundModel): boolean =>
-        backgroundDelivery({
-          backgroundCapable: bound.backgroundCapable,
-          protocol: bound.origin.protocol,
-          modelName: bound.config.name,
-          agentCategory: run.config.agentCategory,
-        });
+        backgroundDelivery(
+          {
+            backgroundCapable: bound.backgroundCapable,
+            protocol: bound.origin.protocol,
+            modelName: bound.config.name,
+            agentCategory: run.config.agentCategory,
+          },
+          session.roots.config,
+        );
 
       /**
        * The semantic request an attempt admits: this run's history as the
@@ -980,6 +958,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             const next = yield* bindModel({
               config,
               stores: run.stores,
+              roots: session.roots,
               compatibilityKey: failed.compatibilityKey,
               declinedRoutes,
               agentCategory: run.config.agentCategory,
@@ -1012,7 +991,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         failedAttempt: InvocationRef,
         operationId: string,
         outstanding: string | null,
-      ): Effect.fn.Return<Decision, InvokeError> {
+      ): Effect.fn.Return<Decision, InvokeError, HttpClient.HttpClient> {
         let state = initial;
         const requestId = outstanding ?? `retry-${generateShortId()}`;
         const info = toRetryErrorInfo(recorded);
@@ -1160,11 +1139,21 @@ export const modelInvokerLayer = (): Layer.Layer<
       ): Effect.fn.Return<
         InvocationOutcome,
         InvokeError,
-        FileSystem.FileSystem
+        FileSystem.FileSystem | HttpClient.HttpClient
       > {
         let state = initial;
         const operationId = `model-operation-${generateShortId()}`;
-        const limit = automaticAttemptLimit();
+        // One initial attempt plus the configured number of automatic
+        // retries; the schema bounds the setting to [0, 5] and falls back to
+        // the default on anything else, so the limit is always >= 1.
+        const limit =
+          1 +
+          readValidatedConfig(
+            session.roots.config,
+            MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+            ModelRetryMaxAttemptsSchema,
+            MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+          );
         let automaticAttempts = 0;
         // An open attempt with no response is an invocation whose outcome the
         // process never saw: the next attempt continues its numbering, and its

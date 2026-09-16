@@ -43,6 +43,7 @@
 import { Effect } from 'effect';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { AppState, type StateStore } from '@platform/interfaces';
@@ -54,8 +55,10 @@ import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getCliSecrets } from './cliSecrets';
+import { cliAgentResume } from './cliAgentResume';
 import { signInCliSupabase } from './supabaseAuth';
 
 /** The process runtime and the global state store installed under it. */
@@ -136,14 +139,26 @@ export function installCliProcessRuntime(
       updateCheckStorage: () => storage.getGlobalStoragePath(),
       secrets: getCliSecrets(storageRoot),
       ...(globalState === undefined ? {} : { appState: globalState }),
+      // The one resume port, shared with the platform `initCliPlatform`
+      // wires: it forwards to the chat TUI's handler whenever one is
+      // mounted, whichever entry installed this runtime.
+      agentResume: cliAgentResume,
       setup: {
         host: 'cli',
         // The one closure left over the runtime being installed, and a real
         // one: signing in runs a program on it, long after this returns.
-        signIn: async () => {
-          await signInCliSupabase(runtime, { openBrowser: true });
-          return SupabaseClient.isAuthenticated();
-        },
+        signIn: () =>
+          Effect.tryPromise({
+            try: async () => {
+              await signInCliSupabase(runtime, { openBrowser: true });
+              return SupabaseClient.isAuthenticated();
+            },
+            catch: (cause) =>
+              new SignInFailed({
+                message: `The CLI sign-in could not run: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          }),
       },
       lean: directLeanLanguageServices(),
     });

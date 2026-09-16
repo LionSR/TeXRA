@@ -1,7 +1,7 @@
 // Local imports - utilities
 import { Result } from 'effect';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 
 interface ExtractedFrontmatter {
   frontmatter: unknown;
@@ -28,30 +28,24 @@ export class SkillFrontmatterError extends Error {
  * Throws {@link SkillFrontmatterError} for every malformed-frontmatter case.
  */
 export function extractFrontmatter(content: string): ExtractedFrontmatter {
-  const lines = normalizeLineEndings(content).split('\n');
-  if (lines[0] !== '---') {
+  const split = splitFrontmatterFence(content);
+  if (split.kind === 'no-opening-fence') {
     throw new SkillFrontmatterError(
       'SKILL.md must start with YAML frontmatter',
     );
   }
-
-  const closeIndex = lines.indexOf('---', 1);
-  if (closeIndex < 0) {
+  if (split.kind === 'no-closing-fence') {
     throw new SkillFrontmatterError(
       'SKILL.md frontmatter is missing a closing delimiter',
     );
   }
 
-  const frontmatterText = lines.slice(1, closeIndex).join('\n');
-  const body = lines
-    .slice(closeIndex + 1)
-    .join('\n')
-    .trim();
+  const body = split.body.trim();
   if (!body) {
     throw new SkillFrontmatterError('SKILL.md body must be non-empty');
   }
 
-  const parsed = safeParseYaml(frontmatterText);
+  const parsed = safeParseYaml(split.frontmatterText);
   if (Result.isFailure(parsed)) {
     throw new SkillFrontmatterError(
       `Invalid SKILL.md frontmatter: ${parsed.failure.message}`,
