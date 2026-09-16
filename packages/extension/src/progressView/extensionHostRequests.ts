@@ -162,17 +162,8 @@ function runCommand<T = void>(
   );
 }
 
-const showInfo = async (message: string): Promise<void> => {
-  await vscode.window.showInformationMessage(message);
-};
-const showWarning = async (message: string): Promise<void> => {
-  await vscode.window.showWarningMessage(message);
-};
-const showError = async (message: string): Promise<void> => {
-  await vscode.window.showErrorMessage(message);
-};
-
-/** The typed notification surface the run-action ports and launch host take. */
+/** The typed notification surface the run-action ports, the launch host, and
+ *  the transcript export ports take. */
 const messages = new VscodeMessageHost();
 
 export function createExtensionHostRequests(
@@ -294,8 +285,12 @@ export function createExtensionHostRequests(
             Effect.map(fs.readFileString(file), normalizeLineEndings),
           ),
         ),
-      showInfo,
-      showError,
+      // The file-actions host port is still Promise-shaped, so the message
+      // host is demoted here only.
+      showInfo: (message) =>
+        runtime.runPromise(messages.showInfoMessage(message)),
+      showError: (message) =>
+        runtime.runPromise(messages.showErrorMessage(message)),
       logError: (message, error) => {
         log.error(message, {
           data: error instanceof Error ? error : undefined,
@@ -342,9 +337,9 @@ export function createExtensionHostRequests(
               )
             )?.format,
           openPath: openExportPath,
-          showInfo,
-          showWarning,
-          showError,
+          showInfo: (message) => messages.showInfoMessage(message),
+          showWarning: (message) => messages.showWarningMessage(message),
+          showError: (message) => messages.showErrorMessage(message),
           reportDetail: (message, data) => log.error(message, { data }),
           getController: () =>
             Promise.resolve(
@@ -547,8 +542,10 @@ export function createExtensionHostRequests(
           getIncludedExtensions(request.category),
         );
         if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
-          void showInfo(
-            `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+          void runtime.runFork(
+            messages.showInfoMessage(
+              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+            ),
           );
         }
         return { kind: 'files', paths: attached.paths };
@@ -583,8 +580,10 @@ export function createExtensionHostRequests(
             patch: { commit: parsed.commitHash },
           });
         } else {
-          void showInfo(
-            `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
+          void runtime.runFork(
+            messages.showInfoMessage(
+              `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
+            ),
           );
         }
         const sourceLocation = locateInWorkspace(
@@ -605,8 +604,10 @@ export function createExtensionHostRequests(
           await runtime.runPromise(snapshot.refreshFiles);
           return { kind: 'files', paths: [parsed.sourcePath] };
         }
-        void showInfo(
-          `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
+        void runtime.runFork(
+          messages.showInfoMessage(
+            `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
+          ),
         );
       }
     }

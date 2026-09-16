@@ -13,8 +13,10 @@ import { Effect, type FileSystem } from 'effect';
 
 // Local imports
 import type { ChatExportInput } from '@agent/export/schemas';
+import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
+import type { Rejected } from '@shared/session/requestErrors';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   ChatExportController,
@@ -51,9 +53,14 @@ export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
 interface TranscriptExportPorts {
   pickFormat(): Promise<TranscriptExportFormat | undefined>;
   openPath(filePath: string, kind: TranscriptExportOpenKind): Promise<void>;
-  showInfo(message: string): Promise<void> | void;
-  showWarning(message: string): Promise<void> | void;
-  showError(message: string): Promise<void> | void;
+  showInfo: MessageHost['showInfoMessage'];
+  showWarning: MessageHost['showWarningMessage'];
+  /** The error notice. A host may answer it by refusing the request instead:
+   *  the desktop's failure is the `Rejected` the surface presents with this
+   *  message, so the channel admits it beside `NotificationFailed`. */
+  showError(
+    message: string,
+  ): Effect.Effect<void, NotificationFailed | Rejected>;
   reportDetail?(message: string, data?: unknown): void;
   getController(): Promise<ChatExportController>;
   getTraceViewerTemplate(): string;
@@ -120,10 +127,7 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
   }
   const result = yield* controller.buildExportInput(runId);
   if (result.status !== 'ok') {
-    yield* Effect.tryPromise({
-      try: async () => ports.showError(exportInputErrorMessage(result.status)),
-      catch: ensureError,
-    });
+    yield* ports.showError(exportInputErrorMessage(result.status));
     return;
   }
   if (format === 'md') {
@@ -141,12 +145,10 @@ const exportMarkdown = Effect.fn('exportMarkdown')(function* (
 ): Effect.fn.Return<void, Error, StorageFs> {
   const result = yield* controller.exportAsMarkdown(runId, input);
   yield* Effect.tryPromise({
-    try: async () => {
-      await ports.openPath(result.absolutePath, 'text');
-      await ports.showInfo(exportedFileMessage(result.storagePath));
-    },
+    try: () => ports.openPath(result.absolutePath, 'text'),
     catch: ensureError,
   });
+  yield* ports.showInfo(exportedFileMessage(result.storagePath));
 });
 
 const exportLatex = Effect.fn('exportLatex')(function* (
@@ -160,31 +162,31 @@ const exportLatex = Effect.fn('exportLatex')(function* (
   FileSystem.FileSystem | StorageFs | WorkspaceFs
 > {
   const result = yield* controller.exportAsLatex(runId, input);
+  if (result.pdfPath) {
+    const pdfPath = result.pdfPath;
+    const pdfFilename = path
+      .basename(result.storagePath)
+      .replace(/\.tex$/, '.pdf');
+    yield* Effect.tryPromise({
+      try: () => ports.openPath(pdfPath, 'pdf'),
+      catch: ensureError,
+    });
+    yield* ports.showInfo(`Transcript exported and compiled: ${pdfFilename}`);
+    return;
+  }
+  if (result.logTail) {
+    ports.reportDetail?.(
+      `LaTeX export compilation failed for ${result.storagePath}:\n${result.logTail}`,
+      { storagePath: result.storagePath, logTail: result.logTail },
+    );
+  }
   yield* Effect.tryPromise({
-    try: async () => {
-      if (result.pdfPath) {
-        const pdfFilename = path
-          .basename(result.storagePath)
-          .replace(/\.tex$/, '.pdf');
-        await ports.openPath(result.pdfPath, 'pdf');
-        await ports.showInfo(
-          `Transcript exported and compiled: ${pdfFilename}`,
-        );
-        return;
-      }
-      if (result.logTail) {
-        ports.reportDetail?.(
-          `LaTeX export compilation failed for ${result.storagePath}:\n${result.logTail}`,
-          { storagePath: result.storagePath, logTail: result.logTail },
-        );
-      }
-      await ports.openPath(result.absolutePath, 'text');
-      await ports.showWarning(
-        'LaTeX compilation failed. The .tex source file has been opened instead.',
-      );
-    },
+    try: () => ports.openPath(result.absolutePath, 'text'),
     catch: ensureError,
   });
+  yield* ports.showWarning(
+    'LaTeX compilation failed. The .tex source file has been opened instead.',
+  );
 });
 
 const exportHtml = Effect.fn('exportHtml')(function* (
@@ -197,19 +199,12 @@ const exportHtml = Effect.fn('exportHtml')(function* (
     ports.getTraceViewerTemplate(),
   );
   if (outcome.status !== 'ok') {
-    yield* Effect.tryPromise({
-      try: async () => ports.showError(htmlExportErrorMessage(outcome.status)),
-      catch: ensureError,
-    });
+    yield* ports.showError(htmlExportErrorMessage(outcome.status));
     return;
   }
   yield* Effect.tryPromise({
     try: async () => ports.openPath(outcome.result.absolutePath, 'external'),
     catch: ensureError,
   });
-  yield* Effect.tryPromise({
-    try: async () =>
-      ports.showInfo(exportedFileMessage(outcome.result.storagePath)),
-    catch: ensureError,
-  });
+  yield* ports.showInfo(exportedFileMessage(outcome.result.storagePath));
 });
