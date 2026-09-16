@@ -51,6 +51,7 @@ import {
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
@@ -441,12 +442,7 @@ export function createExtensionHostRequests(
               })) ?? 'cancel'
             );
           },
-          signInForRemoteAgentCatalog: async () =>
-            Boolean(
-              await vscode.commands.executeCommand<boolean>(
-                AUTH_COMMANDS.SIGN_IN,
-              ),
-            ),
+          signInForRemoteAgentCatalog: runSignInCommand,
         },
         session.roots.workspaceState,
       ),

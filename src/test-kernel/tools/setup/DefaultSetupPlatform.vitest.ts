@@ -25,7 +25,7 @@ setupPlatform(
     secrets: { 'apiKey.openai': 'sk-stored-key' },
     secretsEnv: { GITHUB_TOKEN: 'github-env-token' },
   },
-  { setup: { host: 'extension', signIn: async () => false } },
+  { setup: { host: 'extension', signIn: () => Effect.succeed(false) } },
 );
 
 afterEach(() => {

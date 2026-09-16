@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import type { SignInFailed } from '@common/errors/signInFailed';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS,
@@ -304,7 +305,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
   choose: (
     unavailableNames: readonly string[],
   ) => Promise<TeamAvailabilityChoice | undefined>;
-  signIn: () => Promise<boolean>;
+  signIn: () => Effect.Effect<boolean, SignInFailed>;
   providedChoice?: TeamAvailabilityChoice;
 }): Effect.Effect<TeamLaunchResolution, unknown> {
   return Effect.gen(function* () {

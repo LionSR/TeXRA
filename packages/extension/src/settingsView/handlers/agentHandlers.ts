@@ -16,7 +16,6 @@ import {
   loadAgents,
   refresh as refreshAgents,
 } from '@agent/index';
-import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
@@ -30,6 +29,7 @@ import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRe
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
+import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
 import {
@@ -330,10 +330,7 @@ export class AgentHandlers {
               catalog: this.catalogController,
               loadLocalCatalog: () => loadAgents({ includeRemote: false }),
               canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
-              signIn: async () =>
-                (await vscode.commands.executeCommand<boolean>(
-                  AUTH_COMMANDS.SIGN_IN,
-                )) === true,
+              signIn: runSignInCommand,
               forceRefreshRemoteCatalog: () =>
                 refreshAgents({ includeRemote: true }),
               presentation: {

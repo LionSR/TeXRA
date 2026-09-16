@@ -13,6 +13,7 @@ import {
 } from '@agent/index';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { type TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
+import type { SignInFailed } from '@common/errors/signInFailed';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentCategoryLabel,
@@ -147,7 +148,7 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
   readonly resourcesPath: string;
   readonly remoteCatalog: {
     readonly canAccess: () => Promise<boolean>;
-    readonly signIn: () => Promise<boolean>;
+    readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
   };
   readonly notifications: Pick<
     MessageHost,
