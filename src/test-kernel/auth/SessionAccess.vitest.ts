@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import {
   createSecretBackedCoordinator,
@@ -63,22 +64,24 @@ describe('createSecretBackedCoordinator', () => {
     return { values, secrets };
   }
 
-  it('reuses one coordinator per store, so distinct stores share no state', async () => {
-    const access = createSecretBackedCoordinator({
-      secretKey: 'session',
-      makeCoordinator: (storage) => ({ storage }),
-    });
-    const first = store();
-    const second = store();
+  it.effect(
+    'reuses one coordinator per store, so distinct stores share no state',
+    () =>
+      Effect.gen(function* () {
+        const access = createSecretBackedCoordinator({
+          secretKey: 'session',
+          makeCoordinator: (storage) => ({ storage }),
+        });
+        const first = store();
+        const second = store();
 
-    const coordinator = access(first.secrets);
-    expect(access(first.secrets)).toBe(coordinator);
-    expect(access(second.secrets)).not.toBe(coordinator);
+        const coordinator = access(first.secrets);
+        expect(access(first.secrets)).toBe(coordinator);
+        expect(access(second.secrets)).not.toBe(coordinator);
 
-    await Effect.runPromise(
-      coordinator.storage.store('{"accessToken":"first"}'),
-    );
-    expect(first.values.session).toBe('{"accessToken":"first"}');
-    expect(second.values.session).toBeUndefined();
-  });
+        yield* coordinator.storage.store('{"accessToken":"first"}');
+        expect(first.values.session).toBe('{"accessToken":"first"}');
+        expect(second.values.session).toBeUndefined();
+      }),
+  );
 });
