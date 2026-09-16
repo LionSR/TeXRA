@@ -53,8 +53,8 @@ let processRuntime: ProcessRuntime | null = null;
 
 /** Install the process runtime. Called by a composition root exactly once at
  *  startup, right beside `initPlatform()`. */
-export function initProcessRuntime(runtime: ProcessRuntime): void {
-  processRuntime = runtime;
+export function initProcessRuntime(instance: ProcessRuntime): void {
+  processRuntime = instance;
 }
 
 /**
@@ -70,14 +70,14 @@ export function tryProcessRuntime(): ProcessRuntime | null {
 }
 
 /**
- * Forget `runtime`, but only while it is still the installed one. Called by
+ * Forget `instance`, but only while it is still the installed one. Called by
  * `disposeProcessRuntime` AFTER its disposal, never before: the layer
  * finalizers unwinding inside `dispose()` still publish through
  * `effectRuntime()`, and a runtime installed to replace this one while it was
  * unwinding must survive the clear that ends its predecessor.
  */
-export function clearProcessRuntime(runtime: ProcessRuntime): void {
-  if (processRuntime === runtime) processRuntime = null;
+export function clearProcessRuntime(instance: ProcessRuntime): void {
+  if (processRuntime === instance) processRuntime = null;
 }
 
 /** The process runtime, for the Promise-facing boundaries that run fibers. */
