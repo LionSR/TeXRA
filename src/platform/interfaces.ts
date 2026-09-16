@@ -167,7 +167,6 @@ export interface FileSystemProvider {
    * entries; some `vscode.workspace.fs` implementations do not set that bit.
    */
   isSymlink(path: string): Promise<boolean>;
-  realPath(path: string): Promise<string>;
   readFile(path: string): Promise<Uint8Array>;
   writeFile(path: string, content: Uint8Array): Promise<void>;
   /**
@@ -177,9 +176,6 @@ export interface FileSystemProvider {
    * files (where atomic rename would replace a user's symlink).
    */
   writeFileAtomic(path: string, content: Uint8Array): Promise<void>;
-  /** Remove a directory only if it is empty; rejects with `ENOTEMPTY`. */
-  removeEmptyDirectory(path: string): Promise<void>;
-  appendFile(path: string, content: Uint8Array): Promise<void>;
   delete(path: string, options?: { recursive?: boolean }): Promise<void>;
   createDirectory(path: string): Promise<void>;
   readDirectory(path: string): Promise<[string, number][]>;

@@ -43,10 +43,6 @@ export const nodeFilesystem: FileSystemProvider = {
     return lstats.isSymbolicLink();
   },
 
-  async realPath(target: string): Promise<string> {
-    return fs.promises.realpath(target);
-  },
-
   async readFile(target: string): Promise<Uint8Array> {
     return fs.promises.readFile(target);
   },
@@ -59,14 +55,6 @@ export const nodeFilesystem: FileSystemProvider = {
     // write-file-atomic stages to a sibling temp, fsyncs, and renames over the
     // target — resolving the realpath first, so a symlinked path is preserved.
     await writeFileAtomicLib(target, Buffer.from(content));
-  },
-
-  async removeEmptyDirectory(target: string): Promise<void> {
-    await fs.promises.rmdir(target);
-  },
-
-  async appendFile(target: string, content: Uint8Array): Promise<void> {
-    await fs.promises.appendFile(target, content);
   },
 
   async delete(

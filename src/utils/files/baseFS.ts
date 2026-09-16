@@ -13,7 +13,6 @@ import {
 import { type FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import { isFile, isSymlink } from './fsEntryType';
 
 /** Convert content to Buffer for writing. */
 function toBuffer(content: string | Uint8Array): Uint8Array {
@@ -113,14 +112,6 @@ export abstract class BaseFS {
     );
   }
 
-  public static async appendFile(
-    this: typeof BaseFS,
-    target: string,
-    content: string | Uint8Array,
-  ): Promise<void> {
-    await platform().fs.appendFile(this.preparePath(target), toBuffer(content));
-  }
-
   public static async delete(
     this: typeof BaseFS,
     target: string,
@@ -187,32 +178,6 @@ export abstract class BaseFS {
       this.preparePath(destination),
       options,
     );
-  }
-
-  public static async isFile(
-    this: typeof BaseFS,
-    target: string,
-  ): Promise<boolean> {
-    const stats = await this.statIfExists(target);
-    return stats !== undefined && isFile(stats.type);
-  }
-
-  public static async isSymbolicLink(
-    this: typeof BaseFS,
-    target: string,
-  ): Promise<boolean> {
-    const stats = await this.statIfExists(target);
-    return stats !== undefined && isSymlink(stats.type);
-  }
-
-  // ===== Sync Methods =====
-
-  public static existsSync(this: typeof BaseFS, target: string): boolean {
-    return fs.existsSync(this.preparePath(target));
-  }
-
-  public static statSync(this: typeof BaseFS, target: string): fs.Stats {
-    return fs.statSync(this.preparePath(target));
   }
 
   // ===== Stream Methods =====

@@ -1,12 +1,7 @@
 // Standard library imports
 import * as path from 'node:path';
 
-// Third-party imports
-import { type ZodType } from 'zod';
-
 // Local imports
-import { Result } from 'effect';
-import { parseJsonWith, safeParseJson } from '@common/parsing/safeParseJson';
 import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -27,29 +22,6 @@ export abstract class RelativeFS extends BaseFS {
     return path.isAbsolute(target)
       ? target
       : path.join(this.getBasePath(), target);
-  }
-
-  /**
-   * Read and parse a JSON file.
-   *
-   * Pass a Zod `schema` to validate the parsed value — the returned `T` is
-   * then guaranteed to match it. Without a schema the result is parsed but
-   * cast unchecked, so prefer the schema overload for untrusted files.
-   * Either way a malformed file throws a descriptive error naming the target.
-   */
-  public static async readJson<T>(
-    target: string,
-    schema?: ZodType<T>,
-  ): Promise<T> {
-    const raw = await this.read(target);
-    const result = schema ? parseJsonWith(raw, schema) : safeParseJson(raw);
-    if (Result.isFailure(result)) {
-      throw new Error(
-        `Failed to parse JSON from ${target}: ${result.failure.message}`,
-        { cause: result.failure },
-      );
-    }
-    return result.success as T;
   }
 
   /**

@@ -23,11 +23,7 @@ import { Effect, FileSystem, Path, PlatformError, Stream } from 'effect';
 import { Glob } from 'glob';
 
 // Local imports
-import {
-  readDirectoryTyped,
-  removeEmptyDirectory,
-  writeFileAtomic,
-} from './fsDurability';
+import { readDirectoryTyped, writeFileAtomic } from './fsDurability';
 
 const MODULE = 'RootedFileSystem';
 
@@ -62,10 +58,6 @@ export interface RootedFileSystem extends FileSystem.FileSystem {
   readonly writeFileAtomic: (
     target: string,
     data: Uint8Array,
-  ) => Effect.Effect<void, PlatformError.PlatformError>;
-  /** Remove `target` only if it is an empty directory. */
-  readonly removeEmptyDirectory: (
-    target: string,
   ) => Effect.Effect<void, PlatformError.PlatformError>;
   /** Directory entries with the type of each, one `stat` per entry. */
   readonly readDirectoryTyped: (
@@ -369,9 +361,6 @@ export function rootedFileSystem(
       on('writeFileAtomic', (resolved) =>
         bound(writeFileAtomic(resolved, data)),
       )(target),
-    removeEmptyDirectory: on('removeEmptyDirectory', (resolved) =>
-      bound(removeEmptyDirectory(resolved)),
-    ),
     readDirectoryTyped: on('readDirectoryTyped', (resolved) =>
       bound(readDirectoryTyped(resolved)),
     ),

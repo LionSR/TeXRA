@@ -314,14 +314,13 @@ export class HostDraftRequests {
       // OpenRouter route, so the global OpenRouter preference is not
       // applied to it. The take holds no session frame to enter — its
       // roots travel with each call — so the endpoint read runs in the
-      // calling frame, and the resolved credential reaches the
-      // transcription as data.
-      const inCallingScope = <A>(read: () => A): A => read();
+      // calling frame (the identity scope), and the resolved credential
+      // reaches the transcription as data.
       const credential = yield* resolveRouteCredential(
         MODEL_CONFIGS['gpt4o'],
         false,
         secrets,
-        inCallingScope,
+        (read) => read(),
       ).pipe(
         Effect.mapError((error) => new Rejected({ reason: error.message })),
       );

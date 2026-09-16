@@ -1,13 +1,13 @@
 /**
  * The filesystem primitives the repo must keep that the standard library's
- * `FileSystem` does not provide: crash-safe replace, empty-directory removal,
- * a directory listing carrying each entry's own (unfollowed) type, and
- * exclusive or symlink-dereferencing copies.
+ * `FileSystem` does not provide: crash-safe replace, a directory listing
+ * carrying each entry's own (unfollowed) type, and exclusive or
+ * symlink-dereferencing copies.
  *
  * These are the Effect form of what `baseFS.ts` reached `platform().fs` for.
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
- * no wrapper. The Node calls `FileSystem` cannot express (`rmdir`, `lstat`,
+ * no wrapper. The Node calls `FileSystem` cannot express (`lstat`,
  * `copyFile` with `COPYFILE_EXCL`, `cp` with `dereference`, and the
  * `write-file-atomic` package) classify their errno exactly as
  * `@effect/platform-node` does, so a consumer matches `SystemError` by
@@ -46,7 +46,6 @@ const SYSTEM_ERROR_TAGS: Readonly<
   ENOTDIR: 'BadResource',
   ELOOP: 'BadResource',
   EBUSY: 'Busy',
-  ENOTEMPTY: 'Busy',
 };
 
 function systemErrorFrom(
@@ -81,21 +80,6 @@ export const writeFileAtomic = Effect.fn('fsDurability.writeFileAtomic')(
     });
   },
 );
-
-/**
- * Remove `target` only if it is an empty directory — `rmdir`, which
- * `FileSystem.remove` cannot express: its non-recursive form rejects a
- * directory outright, and its recursive form would delete the contents a
- * concurrent writer added since the last listing.
- */
-export const removeEmptyDirectory = Effect.fn(
-  'fsDurability.removeEmptyDirectory',
-)(function* (target: string) {
-  yield* Effect.tryPromise({
-    try: () => nodeFs.rmdir(target),
-    catch: (cause) => systemErrorFrom('removeEmptyDirectory', target, cause),
-  });
-});
 
 /** An `lstat` result or a `readdir` dirent as `FileSystem`'s entry type: a
  *  link is itself. Both carry the same predicate set, so one mapping serves
