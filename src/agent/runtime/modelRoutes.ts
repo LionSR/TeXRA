@@ -44,6 +44,7 @@ import type {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
+import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('modelRoutes');
 
@@ -191,7 +192,7 @@ export const resolveSubscriptionCredential = Effect.fn(
   secrets: PlatformSecrets,
   inScope: ModelAvailabilityScope,
   declinedRoutes: readonly DeclinableUsageRoute[] = [],
-): Effect.fn.Return<SubscriptionRoute | null, Error> {
+): Effect.fn.Return<SubscriptionRoute | null, Error, HttpClient.HttpClient> {
   const provider = resolveDirectModelApiKeyProvider(config);
   if (provider === undefined) return null;
   if (config.provider === ModelProvider.OPENAI) {
@@ -208,7 +209,7 @@ export const resolveSubscriptionCredential = Effect.fn(
       catch: ensureError,
     });
     if (profile === null) return null;
-    const routable = yield* isCodexSessionRoutable(secrets, inScope).pipe(
+    const routable = yield* isCodexSessionRoutable(secrets).pipe(
       Effect.mapError(codexAuthFailure),
     );
     if (!routable) {
@@ -221,14 +222,11 @@ export const resolveSubscriptionCredential = Effect.fn(
     // Same conversion as the routability check above: a refresh that fails
     // must reach the user with the "sign in again, or turn off the
     // preference" instruction, not as a raw auth error.
-    const session = yield* Effect.tryPromise({
-      try: () =>
-        inScope(async () => ({
-          accessToken: await coordinator.getFreshAccessToken(),
-          accountId: (await coordinator.getAccountId()) ?? null,
-        })),
-      catch: codexAuthFailure,
-    });
+    const session = yield* Effect.gen(function* () {
+      const accessToken = yield* coordinator.getFreshAccessToken();
+      const accountId = (yield* coordinator.getAccountId()) ?? null;
+      return { accessToken, accountId };
+    }).pipe(Effect.mapError(codexAuthFailure));
     return {
       credential: {
         route: 'chatgpt-subscription',
@@ -277,15 +275,17 @@ export const resolveSubscriptionCredential = Effect.fn(
       );
       return null;
     }
-    const accessToken = yield* Effect.tryPromise({
-      try: () => inScope(() => xaiCoordinator(secrets).getFreshAccessToken()),
-      catch: (error) =>
-        error instanceof XaiAuthError
-          ? new AgentError(formatXaiAuthUnavailableMessage(error), {
-              cause: error,
-            })
-          : ensureError(error),
-    });
+    const accessToken = yield* xaiCoordinator(secrets)
+      .getFreshAccessToken()
+      .pipe(
+        Effect.mapError((error) =>
+          error instanceof XaiAuthError
+            ? new AgentError(formatXaiAuthUnavailableMessage(error), {
+                cause: error,
+              })
+            : ensureError(error),
+        ),
+      );
     return {
       credential: {
         route: 'xai-subscription',

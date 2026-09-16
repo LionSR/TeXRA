@@ -9,6 +9,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import { createLog } from '@logger/logUtils';
 import { AppState } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -25,6 +26,7 @@ import {
 import { THREE_DAYS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
+import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('HostDraftRequests');
 
@@ -159,7 +161,11 @@ export class HostDraftRequests {
   ): Effect.fn.Return<
     HostOutcome,
     unknown,
-    AppState | Secrets | FileSystem.FileSystem
+    | AppState
+    | Secrets
+    | FileSystem.FileSystem
+    | LanguageModel
+    | HttpClient.HttpClient
   > {
     switch (request.kind) {
       case 'polish': {
@@ -169,7 +175,11 @@ export class HostDraftRequests {
           secrets: yield* Secrets,
           globalState: yield* AppState,
         };
-        const text = yield* polishTextWithAI(request.text, stores).pipe(
+        const text = yield* polishTextWithAI(
+          request.text,
+          stores,
+          session.roots,
+        ).pipe(
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         return { kind: 'text', text };

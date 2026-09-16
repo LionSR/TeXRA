@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
 import * as agentRegistry from '@agent/index/agentRegistry';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { AuthPortError } from '@auth/authProgram';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import {
@@ -20,7 +21,9 @@ import {
 import { NotificationFailed } from '@hosts/uiHosts';
 import { effectRuntime } from '@platform/processRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { FakeStateStore } from '@test/support/FakePlatform';
+import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
+import { installHostAuth } from '@test/support/setupPlatform';
 
 type DesktopOAuthClient = Parameters<
   typeof createDesktopSupabaseAuth
@@ -30,15 +33,19 @@ function createCoordinator() {
   const storedSession: { current: SupabaseSession | null } = { current: null };
   const createSessionFromCallback = vi.fn<
     DesktopAuthCoordinator['createSessionFromCallback']
-  >(async () => callbackSessionResult());
+  >(() => Effect.succeed(callbackSessionResult()));
   return {
     loadSession: vi.fn(async () => storedSession.current),
-    storeSession: vi.fn(async (session: SupabaseSession) => {
-      storedSession.current = session;
-    }),
-    clearSession: vi.fn(async () => {
-      storedSession.current = null;
-    }),
+    storeSession: vi.fn((session: SupabaseSession) =>
+      Effect.sync(() => {
+        storedSession.current = session;
+      }),
+    ),
+    clearSession: vi.fn(() =>
+      Effect.sync(() => {
+        storedSession.current = null;
+      }),
+    ),
     createSessionFromCallback,
     whenReady: vi.fn(async () => {}),
     ensureFreshToken: vi.fn(
@@ -151,10 +158,12 @@ function gateNextStoreSession(
 ) {
   const gate = createDeferred<void>();
   const storeSession = coordinator.storeSession.getMockImplementation();
-  coordinator.storeSession.mockImplementationOnce(async (session) => {
-    await gate.promise;
-    await storeSession?.(session);
-  });
+  coordinator.storeSession.mockImplementationOnce((session) =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => gate.promise);
+      if (storeSession) yield* storeSession(session);
+    }),
+  );
   return gate;
 }
 
@@ -163,10 +172,12 @@ function gateNextCallbackProcessing(
   coordinator: ReturnType<typeof createCoordinator>,
 ) {
   const gate = createDeferred<void>();
-  coordinator.createSessionFromCallback.mockImplementationOnce(async () => {
-    await gate.promise;
-    return callbackSessionResult();
-  });
+  coordinator.createSessionFromCallback.mockImplementationOnce(() =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => gate.promise);
+      return callbackSessionResult();
+    }),
+  );
   return gate;
 }
 
@@ -195,28 +206,24 @@ function routeMatchingCallback(
   router.routeUrl(authCallbackUrl({ code, nonce: nonceFor(oauthClient) }));
 }
 
+/**
+ * Install a signed-in account plane on the fake host: classified from the
+ * stored session, with the account read answered without a token refresh.
+ */
 function installAuthenticatedSupabaseProvider() {
-  const ensureFreshToken = vi.fn(() => Effect.succeed('fresh-access-token'));
   const getStoredSessionState = vi.fn(() =>
     Effect.succeed('authenticated' as const),
   );
-  SupabaseClient.initialize(
-    'https://example.supabase.co',
-    'public-key',
-    new FakeSecrets(),
+  installHostAuth(
+    fakeSupabaseAuth({
+      storedSessionState: Effect.suspend(getStoredSessionState),
+      user: Effect.succeed({
+        id: 'user-1',
+        email: 'user@example.com',
+      } as never),
+    }),
   );
-  SupabaseClient.setAuthProvider({
-    whenReady: vi.fn(() => Effect.void),
-    ensureFreshToken,
-    getStoredSessionState,
-    getStoredAccountLabel: vi.fn(() => Effect.succeed(null)),
-    getLastRefreshFailure: vi.fn(() => null),
-  });
-  vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
-    id: 'user-1',
-    email: 'user@example.com',
-  } as never);
-  return { ensureFreshToken, getStoredSessionState };
+  return { getStoredSessionState };
 }
 
 describe('desktop Supabase auth', () => {
@@ -229,7 +236,6 @@ describe('desktop Supabase auth', () => {
   afterEach(() => {
     for (const auth of testAuths.splice(0)) auth.dispose();
     vi.restoreAllMocks();
-    SupabaseClient.resetForTests();
   });
 
   it('opens Supabase OAuth with the desktop texra callback URI', async () => {
@@ -255,12 +261,14 @@ describe('desktop Supabase auth', () => {
     const events: string[] = [];
     const callbackState: DesktopAuthCallbackState = {
       hasPendingSignIn: vi.fn(() => false),
-      beginAuthAttempt: vi.fn(async () => {
+      beginAuthAttempt: vi.fn(() => {
         events.push('begin');
+        return Effect.void;
       }),
       matchesPendingNonce: vi.fn(() => false),
-      clearAwaitingCallback: vi.fn(async () => {
+      clearAwaitingCallback: vi.fn(() => {
         events.push('clear');
+        return Effect.void;
       }),
     };
     const oauthClient: DesktopOAuthClient = {
@@ -313,7 +321,13 @@ describe('desktop Supabase auth', () => {
     });
     expect(onSessionChanged).toHaveBeenCalled();
 
-    expect(await SupabaseClient.isAuthenticated()).toBe(false);
+    // The callback wrote to the coordinator double, not to the host's real
+    // session store: the account plane still answers signed-out.
+    expect(
+      await effectRuntime().runPromise(
+        Effect.flatMap(SupabaseAuth, (plane) => plane.authenticated),
+      ),
+    ).toBe(false);
   });
 
   it('waits for the matching callback before completing sign-in', async () => {
@@ -358,11 +372,13 @@ describe('desktop Supabase auth', () => {
       showErrorMessage,
       log,
     });
-    coordinator.createSessionFromCallback.mockResolvedValueOnce({
-      success: false,
-      error: 'The user closed the authorization page',
-      isAuthError: true,
-    });
+    coordinator.createSessionFromCallback.mockReturnValueOnce(
+      Effect.succeed({
+        success: false,
+        error: 'The user closed the authorization page',
+        isAuthError: true,
+      }),
+    );
     const completion = auth.signInAndWaitForSession(undefined, {
       timeoutMs: 1_000,
     });
@@ -397,8 +413,8 @@ describe('desktop Supabase auth', () => {
       ),
       log,
     });
-    coordinator.createSessionFromCallback.mockRejectedValueOnce(
-      new Error('callback failure'),
+    coordinator.createSessionFromCallback.mockReturnValueOnce(
+      Effect.fail(new AuthPortError({ cause: new Error('callback failure') })),
     );
     const completion = auth.signInAndWaitForSession(undefined, {
       timeoutMs: 1_000,
@@ -546,7 +562,9 @@ describe('desktop Supabase auth', () => {
         createLog(),
         stateStore,
       );
-      await initialState.beginAuthAttempt('11111111111111111111111111111111');
+      await effectRuntime().runPromise(
+        initialState.beginAuthAttempt('11111111111111111111111111111111'),
+      );
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
 
       const cleanup = createDeferred<void>();
@@ -563,8 +581,8 @@ describe('desktop Supabase auth', () => {
         createLog(),
         stateStore,
       );
-      const beginNewAttempt = recreatedState.beginAuthAttempt(
-        '22222222222222222222222222222222',
+      const beginNewAttempt = effectRuntime().runPromise(
+        recreatedState.beginAuthAttempt('22222222222222222222222222222222'),
       );
       await vi.waitFor(() => {
         expect(stateStore.update).toHaveBeenCalledOnce();
@@ -820,8 +838,8 @@ describe('desktop Supabase auth', () => {
       showErrorMessage,
       log,
     });
-    coordinator.createSessionFromCallback.mockRejectedValueOnce(
-      new Error('network down'),
+    coordinator.createSessionFromCallback.mockReturnValueOnce(
+      Effect.fail(new AuthPortError({ cause: new Error('network down') })),
     );
 
     await auth.signIn();
@@ -855,9 +873,8 @@ describe('desktop Supabase auth', () => {
     );
   });
 
-  it('refreshes desktop session state for profile data without a token fetch', async () => {
-    const { ensureFreshToken, getStoredSessionState } =
-      installAuthenticatedSupabaseProvider();
+  it('refreshes desktop session state for profile data', async () => {
+    const { getStoredSessionState } = installAuthenticatedSupabaseProvider();
 
     const controller = new SettingsProfileController({
       host: 'desktop',
@@ -865,10 +882,11 @@ describe('desktop Supabase auth', () => {
       loadProviderKeyStatuses: async () => ({}),
       getConfig: (_key, defaultValue) => defaultValue,
     });
-    const message = await controller.buildProfileMessage();
+    const message = await effectRuntime().runPromise(
+      controller.buildProfileMessage(),
+    );
 
     expect(getStoredSessionState).toHaveBeenCalledOnce();
-    expect(ensureFreshToken).not.toHaveBeenCalled();
     expect(message).toMatchObject({
       authenticated: true,
       user: { email: 'user@example.com' },

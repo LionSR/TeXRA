@@ -6,6 +6,10 @@ import { maskDisplayValue } from '@cli/chat/tui/input/textInputEditing';
 import { formatPersonalApiKeysLine } from '@cli/runtime/apiStatus';
 import { maybeRunCliOnboarding } from '@cli/onboarding/runOnboarding';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   readOnboardingFlags,
@@ -17,6 +21,13 @@ import {
   createFakePlatform,
   createFakeWorkspaceRoots,
 } from '@test/support/FakePlatform';
+
+/** The gate over the unavailable port: this host has no editor models, and
+ *  the gate's type carries the `LanguageModel` requirement regardless. */
+const maybeOnboarding = (...args: Parameters<typeof maybeRunCliOnboarding>) =>
+  maybeRunCliOnboarding(...args).pipe(
+    Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+  );
 
 const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
 
@@ -55,7 +66,7 @@ describe('maybeRunCliOnboarding headless parity', () => {
         });
         try {
           expect(
-            yield* maybeRunCliOnboarding(
+            yield* maybeOnboarding(
               {
                 ...createFakePlatform(),
                 globalState: createFakeWorkspaceRoots().globalState,

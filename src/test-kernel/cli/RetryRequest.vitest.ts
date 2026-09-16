@@ -1,3 +1,5 @@
+// Test composition imports
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApprovalModal } from '@cli/chat/tui/modals/ApprovalModal';
@@ -10,6 +12,7 @@ import type {
 import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
   loadInk,
@@ -24,7 +27,7 @@ function pendingFor(payload: ApprovalPayload): {
 } {
   let decide!: PendingApproval['decide'];
   const decision = new Promise<SurfaceDecision>((resolve) => {
-    decide = (_runtime, next) => resolve(next);
+    decide = (_session, _runtime, next) => resolve(next);
   });
   return { pending: { payload, decide }, decision };
 }
@@ -64,7 +67,11 @@ describe('CLI retry request', () => {
     });
     const { instance, stdin } = renderInteractive(
       ink,
-      React.createElement(ApprovalModal, { pending, runtime: effectRuntime() }),
+      React.createElement(ApprovalModal, {
+        pending,
+        runtime: effectRuntime(),
+        session: testDefaultSession(),
+      }),
       { columns: 100 },
     );
 
@@ -113,7 +120,11 @@ describe('CLI retry request', () => {
     const { pending, decision } = pendingFor(subscriptionLimitPayload(true));
     const { instance, stdin } = renderInteractive(
       ink,
-      React.createElement(ApprovalModal, { pending, runtime: effectRuntime() }),
+      React.createElement(ApprovalModal, {
+        pending,
+        runtime: effectRuntime(),
+        session: testDefaultSession(),
+      }),
       { columns: 100 },
     );
 

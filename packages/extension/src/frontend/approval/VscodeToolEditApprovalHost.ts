@@ -11,6 +11,7 @@ import { mkdir } from 'node:fs/promises';
 
 import * as vscode from 'vscode';
 
+import type { SessionHandle } from '@agent/runtime';
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
@@ -40,7 +41,7 @@ const CHANNEL = 'ToolEditApproval';
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost: DiffViewHost = new VscodeDiffViewHost();
   readonly openBuildDisplay: BuildDisplayFn = async (location, options) => {
-    await openBuildDisplayIfTex(location, this.runtime, options);
+    await openBuildDisplayIfTex(this.session, location, this.runtime, options);
   };
 
   constructor(
@@ -48,6 +49,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     /** The window's `request.decide`: where a staged request's decision goes. */
     readonly decide: ToolEditApprovalHost['decide'],
     private readonly runtime: ProcessRuntime,
+    private readonly session: SessionHandle,
   ) {}
 
   async stagePreview(

@@ -14,11 +14,13 @@ import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { LanguageModel } from '@platform/languageModel';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   isNonEmptyString,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('SessionDescription');
 const MAX_DESCRIPTION_LENGTH = 80;
@@ -103,11 +105,11 @@ export const generateSessionDescription = Effect.fn(
   agentDescription: string | undefined,
   session: SessionHandle,
   stores: ModelOptionStores,
-): Effect.fn.Return<void> {
+): Effect.fn.Return<void, never, LanguageModel | HttpClient.HttpClient> {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
   yield* Effect.gen(function* () {
-    const bound = yield* helperModel(stores);
+    const bound = yield* helperModel(stores, session.roots);
     const text = yield* helperCompletion(bound, {
       userPrompt: buildUserPrompt(config.agent, agentDescription, instruction),
       systemPrompt: SYSTEM_PROMPT,

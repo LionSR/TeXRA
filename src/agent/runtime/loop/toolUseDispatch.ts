@@ -57,7 +57,10 @@ import { pathToLocation } from '@utils/files/fileLocation';
 import { AgentRun } from '../run/AgentRun';
 import { inlineMediaPart, type InputPart } from '../run/mediaInput';
 import { localCallsOf, parseCallArguments, type LocalCall } from '../run/tools';
-import { formatToolResultTextWithAttachments } from '../run/toolResultText';
+import {
+  formatAttachmentSummary,
+  formatToolResultAsText,
+} from '../run/toolResultText';
 import {
   appendRow,
   displayRow,
@@ -209,10 +212,9 @@ function settlementContent(
         : {}),
     }),
   );
-  const text = formatToolResultTextWithAttachments(
+  const text = formatToolResultAsText(
     settlement.result,
-    attachments,
-    true,
+    attachments.length > 0 ? formatAttachmentSummary(attachments) : undefined,
   );
   const media = settlement.attachments.flatMap((attachment) => {
     if (attachment.content.kind !== 'base64') {

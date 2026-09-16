@@ -1,6 +1,7 @@
 import { Effect, FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SessionHandle } from '@agent/runtime';
 import {
   openBuildDisplayIfTex,
   prepareBuildDisplay,
@@ -48,13 +49,12 @@ vi.mock('@latex/texTools', () => ({
   compileLatex2Pdf: mocks.compileLatex2Pdf,
 }));
 
-vi.mock('@agent/runtime', () => ({
-  defaultSession: () => ({ roots: { config: {} } }),
-}));
-
 vi.mock('@platform/rootedFs', () => ({
   withSessionFs: (_roots: unknown, program: unknown) => program,
 }));
+
+/** The session the host would thread in; only its roots reach the compile. */
+const session = { roots: { config: {} } } as unknown as SessionHandle;
 
 /**
  * The host entry's runtime over the real filesystem service, with the
@@ -144,7 +144,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       return undefined;
     });
 
-    const delivery = openBuildDisplayIfTex(workspaceTex, runtime);
+    const delivery = openBuildDisplayIfTex(session, workspaceTex, runtime);
     // Flush the setup chain (exists -> openTextDocument -> showTextDocument ->
     // latex-workshop.build) before advancing the clock so the viewer-open timer
     // is actually registered when the 5s advance runs (#10555).
@@ -160,7 +160,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
 
   it('reports delivery only once the viewer-open command has settled', async () => {
     let settled = false;
-    const delivery = openBuildDisplayIfTex(workspaceTex, runtime).then(
+    const delivery = openBuildDisplayIfTex(session, workspaceTex, runtime).then(
       (delivered) => {
         settled = true;
         return delivered;
@@ -186,7 +186,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       return undefined;
     });
 
-    const delivery = openBuildDisplayIfTex(workspaceTex, runtime);
+    const delivery = openBuildDisplayIfTex(session, workspaceTex, runtime);
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
 
@@ -208,7 +208,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       return Promise.resolve(undefined);
     });
 
-    const delivery = openBuildDisplayIfTex(workspaceTex, runtime);
+    const delivery = openBuildDisplayIfTex(session, workspaceTex, runtime);
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
 
@@ -230,7 +230,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       return Promise.resolve(undefined);
     });
 
-    const delivery = openBuildDisplayIfTex(workspaceTex, runtime);
+    const delivery = openBuildDisplayIfTex(session, workspaceTex, runtime);
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS);
     await vi.advanceTimersByTimeAsync(LATEX_VIEWER_REFRESH_DELAY_MS);
@@ -247,9 +247,9 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     // so the latexdiff command's existing error handler stays authoritative.
     mocks.openTextDocument.mockRejectedValueOnce(new Error('open failed'));
 
-    await expect(prepareBuildDisplay(workspaceTex, runtime)).rejects.toThrow(
-      'open failed',
-    );
+    await expect(
+      prepareBuildDisplay(session, workspaceTex, runtime),
+    ).rejects.toThrow('open failed');
     expect(mocks.executeCommand).not.toHaveBeenCalledWith(
       'latex-workshop.view',
     );
@@ -264,7 +264,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       absolutePath: '/tmp/paper.tex',
     };
 
-    const ready = await prepareBuildDisplay(externalTex, runtime, {
+    const ready = await prepareBuildDisplay(session, externalTex, runtime, {
       scheduleViewer: false,
     });
     expect(ready).toBe(false);
@@ -295,9 +295,11 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     const first = { ...workspaceTex, absolutePath: '/workspace/diff-1.tex' };
     const second = { ...workspaceTex, absolutePath: '/workspace/diff-2.tex' };
 
-    await prepareBuildDisplay(first, runtime, { scheduleViewer: false });
+    await prepareBuildDisplay(session, first, runtime, {
+      scheduleViewer: false,
+    });
     await expect(
-      prepareBuildDisplay(second, runtime, { scheduleViewer: false }),
+      prepareBuildDisplay(session, second, runtime, { scheduleViewer: false }),
     ).rejects.toThrow('second setup failed');
 
     // The command's try/finally schedules the final viewer for the last
@@ -334,7 +336,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     // Prepare every diff without scheduling a viewer handoff, as the
     // multi-result latexdiff loop does (#10553).
     for (const diff of diffs) {
-      await prepareBuildDisplay(diff, runtime, {
+      await prepareBuildDisplay(session, diff, runtime, {
         preserveFocus: true,
         scheduleViewer: false,
       });

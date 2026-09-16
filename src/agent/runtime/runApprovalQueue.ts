@@ -195,8 +195,8 @@ function createRunApprovalController(
  * Session-owned approval state: the tool-edit and bash controllers plus the
  * delegation-proposal (super-YOLO) bypass. One instance per session, built by
  * the session layer as the `approvals` of its {@link Requests}; run-scoped
- * code resolves it through `currentSession().approvals`, host code passes its
- * own session explicitly, and Effect code below a launch takes
+ * code receives its session's instance as data, host code passes its own
+ * session explicitly, and Effect code below a launch takes
  * {@link Requests} from context.
  */
 export interface SessionApprovals {

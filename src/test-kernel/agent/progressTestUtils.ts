@@ -25,6 +25,7 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
   prepareToolEditApprovalPrompt,
   type ToolEditApprovalRequest,
@@ -310,10 +311,10 @@ export async function seedTerminalRun(
 
 /**
  * An isolated session for node tests, with the given host interactions
- * attached: run-scoped code that resolves `currentSession().interactions`
- * (presentation) or `currentSession().approvals` (bypass state, queues)
- * reaches this session's owners. A session's facts are read back with
- * {@link recordSessionEvents}. Passing another session's
+ * attached: a test hands this session to run-scoped code, whose
+ * `session.interactions` (presentation) and `session.approvals` (bypass
+ * state, queues) reads reach the owners attached here. A session's facts are
+ * read back with {@link recordSessionEvents}. Passing another session's
  * `SessionHostInteractions` makes it this session's owner too, so a
  * recording host can be shared across the sessions of one test.
  */

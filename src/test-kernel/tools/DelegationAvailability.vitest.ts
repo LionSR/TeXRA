@@ -3,6 +3,10 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { platform } from '@platform/platform';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
@@ -148,7 +152,11 @@ function resolveToolList(
       stores: { secrets, globalState },
       inScope,
     });
-  });
+  }).pipe(
+    // The delegation-annotation availability read yields `LanguageModel`;
+    // this host has no editor models.
+    Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+  );
 }
 
 function resolveDelegateAgent(extraTools: ToolInput[] = []) {

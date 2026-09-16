@@ -12,7 +12,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { Data, Effect, Result } from 'effect';
-import { currentSession } from '@agent/runtime';
 
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -37,7 +36,6 @@ import {
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
 import type { LeanLanguageServicesShape } from '@tools/lean/leanLanguageServices';
-import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -221,10 +219,8 @@ function toLeanDiagnostic(d: vscode.Diagnostic): LeanDiagnostic {
  * Get diagnostics for a Lean file using VS Code's diagnostics API.
  * This returns diagnostics from the Lean 4 extension's LSP.
  */
-function getDiagnostics(filePath: string): LeanDiagnostic[] {
-  const uri = vscode.Uri.file(
-    workspaceAbsolutePath(currentSession().roots.workspace, filePath),
-  );
+function getDiagnostics(absolutePath: string): LeanDiagnostic[] {
+  const uri = vscode.Uri.file(absolutePath);
   const directLookup = vscode.languages.getDiagnostics(uri);
   if (directLookup.length > 0) {
     return directLookup.map(toLeanDiagnostic);
@@ -295,11 +291,7 @@ function executeFileCommand(
   filePath: string,
 ): Effect.Effect<boolean> {
   return Effect.gen(function* () {
-    yield* openInEditor(
-      vscode.Uri.file(
-        workspaceAbsolutePath(currentSession().roots.workspace, filePath),
-      ),
-    );
+    yield* openInEditor(vscode.Uri.file(filePath));
     yield* getClientProvider(globalState);
     yield* executeLeanCommand(FILE_COMMAND_VSCODE_IDS[command]);
     return true;
@@ -375,16 +367,12 @@ function getClientProvider(
  */
 function sendPositionRequest<T>(
   globalState: StateStore,
-  filePath: string,
+  absolutePath: string,
   line: number,
   column: number,
   method: string,
 ): Effect.Effect<LspResult<T>> {
   return Effect.gen(function* () {
-    const absolutePath = workspaceAbsolutePath(
-      currentSession().roots.workspace,
-      filePath,
-    );
     const uri = vscode.Uri.file(absolutePath);
     const leanUri = createLeanFileUri(absolutePath);
 
@@ -446,13 +434,9 @@ function sendPositionRequest<T>(
  * host call fails the effect.
  */
 function fetchDiagnosticsForFile(
-  file: string,
+  absolutePath: string,
 ): Effect.Effect<FetchDiagnosticsResult> {
   return Effect.gen(function* () {
-    const absolutePath = workspaceAbsolutePath(
-      currentSession().roots.workspace,
-      file,
-    );
     // Subscribed before the file is opened, so an update the open itself
     // triggers is not missed. `Effect.sync` starts that wait here; the
     // program awaits the same promise below.
@@ -493,12 +477,9 @@ function navigateToFirstError(
   if (!firstError) return Effect.void;
   // `openFileInEditor` reports a refusal by returning nothing, having
   // already logged it, so this navigation has no failure of its own.
-  return Effect.promise(async () => {
-    await openFileInEditor(
-      workspaceAbsolutePath(currentSession().roots.workspace, filePath),
-      { line: firstError.range.start.line + 1 },
-    );
-  });
+  return Effect.promise(() =>
+    openFileInEditor(filePath, { line: firstError.range.start.line + 1 }),
+  );
 }
 
 function executeProjectCommand(

@@ -135,14 +135,17 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // before `installProcessRuntime`, because two of them are the values that
   // install is given.
   'packages/desktop/src/main/platform/index.ts': 1,
-  // The VS Code entry's two pre-runtime folds, and only those: `activate`
-  // reports a failed activation and runs the cleanup that disposes the
-  // process runtime, so it cannot borrow the runtime it is tearing down (the
-  // reason `initPlatform.ts` above is pinned), and the workspace `.env` load
-  // happens before `initVscodePlatform` installs a runtime at all. Both
+  // The VS Code entry's two pre-runtime folds, plus the account-plane
+  // construction in `initVscodePlatform`: `activate` reports a failed
+  // activation and runs the cleanup that disposes the process runtime, so it
+  // cannot borrow the runtime it is tearing down (the reason
+  // `initPlatform.ts` above is pinned), the workspace `.env` load happens
+  // before `initVscodePlatform` installs a runtime at all, and the
+  // account-plane build degrades a missing-credentials throw to the
+  // unavailable shape BEFORE the runtime that will serve it exists. All three
   // programs are service-free. Every other Effect in this file settles on the
   // local `ProcessRuntime` the entry holds.
-  'packages/extension/src/extension.ts': 2,
+  'packages/extension/src/extension.ts': 3,
 };
 
 function sourceFilesUnder(

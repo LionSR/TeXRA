@@ -11,6 +11,10 @@ import {
   activeSubscriptionUsageRoute,
   codingPlanSubscriptionRuntimes,
 } from '@model/codingPlanSubscriptions';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 
@@ -185,7 +189,11 @@ describe('coding-plan subscription runtime', () => {
       expect(endpoint.usageRoute).toBe(usageRoute);
       expect(
         await Effect.runPromise(
-          activeSubscriptionUsageRoute('glm52', hostStores().secrets),
+          activeSubscriptionUsageRoute('glm52', hostStores().secrets).pipe(
+            Effect.provide(
+              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+            ),
+          ),
         ),
       ).toBe(usageRoute);
     },

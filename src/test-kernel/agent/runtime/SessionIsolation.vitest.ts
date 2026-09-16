@@ -1,19 +1,10 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, vi } from 'vitest';
 
-import {
-  createRunContext,
-  runInSession,
-  withRunContext,
-} from '@agent/runtime/RunContext';
-import {
-  currentSession,
-  defaultSession,
-  settleLiveSessionRuns,
-} from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime/RunContext';
+import { settleLiveSessionRuns } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { platform } from '@platform/platform';
@@ -26,6 +17,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import {
   fakeProcessServices,
@@ -70,23 +62,6 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
 });
 
 describe('session isolation', () => {
-  it('currentSession() resolves the active run context session, default otherwise', async () => {
-    const sessionB = createTestSession();
-    try {
-      expect(currentSession()).toBe(defaultSession());
-      const ctx = createRunContext({
-        session: sessionB,
-      });
-      withRunContext(ctx, () => {
-        expect(currentSession()).toBe(sessionB);
-      });
-      // Resolution falls back to the default session outside any run.
-      expect(currentSession()).toBe(defaultSession());
-    } finally {
-      await Effect.runPromise(sessionB.dispose());
-    }
-  });
-
   it('two sessions in one process write under their own roots', async () => {
     const paperA = createFakeWorkspaceRoots({
       workspacePath: fakePath('papers/a'),
@@ -265,7 +240,7 @@ describe('session isolation', () => {
       expect(stop.accepted()).toBe(true);
       await Effect.runPromise(stop.settlement);
       expect(interrupt).toHaveBeenCalledOnce();
-      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+      expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
       await Effect.runPromise(sessionB.dispose());
     }
@@ -289,7 +264,9 @@ describe('session isolation', () => {
             Effect.sync(() => {
               // Mid-run: the handle is registered in session B's registry only.
               expect(sessionB.runs.getHandle(runId)).toBeDefined();
-              expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+              expect(
+                testDefaultSession().runs.getHandle(runId),
+              ).toBeUndefined();
               return {
                 outcome: RUN_OUTCOME.COMPLETED,
                 runId,
@@ -303,7 +280,7 @@ describe('session isolation', () => {
 
       // After completion the run session untracked it; default never saw it.
       expect(sessionB.runs.getHandle(runId)).toBeUndefined();
-      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+      expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
       await Effect.runPromise(sessionB.dispose());
     }

@@ -17,7 +17,11 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { AgentConfigSchema, currentSession, runAgent } from '@agent/runtime';
+import {
+  AgentConfigSchema,
+  runAgent,
+  type SessionHandle,
+} from '@agent/runtime';
 import {
   buildFixInstruction,
   buildReviewInstruction,
@@ -120,9 +124,19 @@ class AgentReviewServiceImpl {
   // Captured by `initialize` from the host entry, which holds the process
   // runtime in a local; the service is a process-lifetime singleton.
   private runtime: ProcessRuntime | undefined;
+  // Handed to `initialize` on the same occasion: extension activation runs
+  // after `initializeDefaultSession`, and every review entry (the commands,
+  // the commit watcher) is UI-triggered outside any run context, so the
+  // process default is the session a review belongs to.
+  private session: SessionHandle | undefined;
 
-  initialize(context: vscode.ExtensionContext, runtime: ProcessRuntime): void {
+  initialize(
+    context: vscode.ExtensionContext,
+    runtime: ProcessRuntime,
+    session: SessionHandle,
+  ): void {
     this.runtime = runtime;
+    this.session = session;
     this.collection =
       vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
     context.subscriptions.push(this.collection, this.emitter);
@@ -170,7 +184,12 @@ class AgentReviewServiceImpl {
       }
       return;
     }
-    const session = currentSession();
+    const session = this.session;
+    if (!session) {
+      throw new Error(
+        'Agent review is not initialized. Call AgentReviewService.initialize() first.',
+      );
+    }
     const cwd = session.roots.workspace;
     if (!cwd) {
       if (trigger === 'manual') {

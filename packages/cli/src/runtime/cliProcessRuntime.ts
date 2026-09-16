@@ -42,10 +42,12 @@
  */
 import { Effect } from 'effect';
 
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { SupabaseAuth } from '@auth/SupabaseAuth';
+import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { AppState, type StateStore } from '@platform/interfaces';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import {
   tryProcessRuntime,
   type ProcessRuntime,
@@ -54,9 +56,11 @@ import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getCliSecrets } from './cliSecrets';
-import { signInCliSupabase } from './supabaseAuth';
+import { cliAgentResume } from './cliAgentResume';
+import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 
 /** The process runtime and the global state store installed under it. */
 export interface CliProcessRuntimeInstall {
@@ -130,20 +134,43 @@ export function installCliProcessRuntime(
             Effect.provide(nodeFileServices),
           ),
         );
+    const secrets = getCliSecrets(storageRoot);
+    // The account plane is built beside the runtime that serves it; the CLI's
+    // sign-in surfaces settle it through the auth run edge, which
+    // `initializeCliSupabaseAuth` installs over this runtime.
+    const auth = ensureCliSupabaseAuth(secrets);
     const runtime: ProcessRuntime = installProcessRuntime({
       processStart,
       globalStorage: () => storage.getGlobalStoragePath(),
       updateCheckStorage: () => storage.getGlobalStoragePath(),
-      secrets: getCliSecrets(storageRoot),
+      secrets,
       ...(globalState === undefined ? {} : { appState: globalState }),
+      auth,
+      // A terminal has no editor language models; the CLI's platform installs
+      // the same port.
+      languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
+      // The one resume port, shared with the platform `initCliPlatform`
+      // wires: it forwards to the chat TUI's handler whenever one is
+      // mounted, whichever entry installed this runtime.
+      agentResume: cliAgentResume,
       setup: {
         host: 'cli',
         // The one closure left over the runtime being installed, and a real
         // one: signing in runs a program on it, long after this returns.
-        signIn: async () => {
-          await signInCliSupabase(runtime, { openBrowser: true });
-          return SupabaseClient.isAuthenticated();
-        },
+        signIn: () =>
+          Effect.tryPromise({
+            try: async () => {
+              await signInCliSupabase(runtime, { openBrowser: true });
+              return runtime.runPromise(
+                Effect.flatMap(SupabaseAuth, (plane) => plane.authenticated),
+              );
+            },
+            catch: (cause) =>
+              new SignInFailed({
+                message: `The CLI sign-in could not run: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          }),
       },
       lean: directLeanLanguageServices(),
     });

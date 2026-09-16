@@ -33,6 +33,7 @@ import {
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
 import type { ProcessServices } from '@platform/processRuntime';
+import type { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
@@ -74,6 +75,7 @@ import {
   type ToolUseFlowState,
 } from './rows';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
+import type { HttpClient } from 'effect/unstable/http';
 import type { SessionHandle } from '../SessionHandle';
 
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
@@ -260,16 +262,19 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   /** Record a host-admitted model switch: the compaction that drops the
    *  continuation, the snapshot naming the new model, then the live swap. */
   const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
-    function* (state: RunState): Effect.fn.Return<RunState, Error> {
+    function* (
+      state: RunState,
+    ): Effect.fn.Return<
+      RunState,
+      Error,
+      LanguageModel | HttpClient.HttpClient
+    > {
       const model = run.pendingModelSwitch.value;
       run.pendingModelSwitch.value = null;
       if (model === null) return state;
       const current = yield* SynchronizedRef.get(run.model);
       if (current.modelId === model) return state;
-      const nextConfig = yield* Effect.tryPromise({
-        try: () => resolveRuntimeModelConfig(model),
-        catch: ensureError,
-      });
+      const nextConfig = yield* resolveRuntimeModelConfig(model);
       if (!nextConfig) {
         return yield* Effect.fail(
           new Error(`Model ${model} is not registered`),
@@ -278,6 +283,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const next = yield* bindModel({
         config: nextConfig,
         stores: run.stores,
+        roots: run.session.roots,
         compatibilityKey: current.compatibilityKey,
         declinedRoutes: state.declinedRoutes,
         agentCategory: run.config.agentCategory,
@@ -631,6 +637,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               ledger,
               logger,
               bound,
+              config: session.roots.config,
               system: systemPrompt,
               tools,
               force,

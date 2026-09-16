@@ -7,6 +7,7 @@ import { Effect, Result } from 'effect';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { unwrapAuthPortCause } from '../authProgram';
 import {
   createSecretBackedCoordinator,
   getSubscriptionSessionStatus,
@@ -35,9 +36,9 @@ export function codexCoordinator(
 }
 
 /** Signed-in status, read from the caller's secret store. */
-export async function getCodexStatus(
+export function getCodexStatus(
   secrets: SessionSecretStore,
-): Promise<CodexSessionStatus> {
+): Effect.Effect<CodexSessionStatus> {
   return getSubscriptionSessionStatus(
     () => codexCoordinator(secrets),
     CHANNEL,
@@ -46,49 +47,46 @@ export async function getCodexStatus(
 }
 
 /**
- * Runs one host read inside the caller's frame. The routability check reads
- * the secret store and the network through the caller's workspace-roots
- * frame, so the frame is applied around each host call rather than around
- * the construction of the program.
- */
-type HostReadScope = <T>(read: () => T) => T;
-
-/**
  * Whether subscription routing should use the stored session. A refresh that
  * fails with a re-auth error is only routable-false when the stored session is
  * gone; if a session is still there, another writer replaced it mid-refresh,
  * which is transient.
  */
 export const isCodexSessionRoutable = Effect.fn('codexAuth.isSessionRoutable')(
-  function* (secrets: SessionSecretStore, inScope: HostReadScope) {
+  function* (secrets: SessionSecretStore) {
     const coordinator = codexCoordinator(secrets);
     const refreshed = yield* Effect.result(
-      Effect.tryPromise({
-        try: () => inScope(() => coordinator.getFreshAccessToken()),
-        catch: (error) =>
-          error instanceof SubscriptionOAuthError
-            ? error
-            : new CodexAuthError(
-                `Could not access ChatGPT session: ${toErrorMessage(error)}`,
-                'transient',
-                undefined,
-                { cause: error },
-              ),
-      }),
+      coordinator
+        .getFreshAccessToken()
+        .pipe(
+          Effect.mapError((error) =>
+            error instanceof SubscriptionOAuthError
+              ? error
+              : new CodexAuthError(
+                  `Could not access ChatGPT session: ${toErrorMessage(error)}`,
+                  'transient',
+                  undefined,
+                  { cause: error },
+                ),
+          ),
+        ),
     );
     if (Result.isSuccess(refreshed)) return true;
     const error = refreshed.failure;
     if (!error.needsReauth) return yield* Effect.fail(error);
-    const storedSession = yield* Effect.tryPromise({
-      try: () => inScope(() => coordinator.loadSession()),
-      catch: (readError) =>
-        new CodexAuthError(
-          `Could not verify ChatGPT session: ${toErrorMessage(readError)}`,
-          'transient',
-          undefined,
-          { cause: readError },
+    const storedSession = yield* coordinator
+      .loadSession()
+      .pipe(
+        Effect.mapError(
+          (readError) =>
+            new CodexAuthError(
+              `Could not verify ChatGPT session: ${toErrorMessage(unwrapAuthPortCause(readError))}`,
+              'transient',
+              undefined,
+              { cause: readError },
+            ),
         ),
-    });
+      );
     if (storedSession) {
       return yield* Effect.fail(
         new CodexAuthError(

@@ -13,6 +13,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
+import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   type AgentDirectoriesPort,
@@ -465,6 +466,9 @@ export type FakeHostOverrides = Partial<Platform> &
     /** The store the host's `Secrets` service reads, as a root's own local. */
     readonly secrets?: PlatformSecrets;
     readonly setup?: SetupPlatformShape;
+    /** The account plane the host's `SupabaseAuth` service reads. Absent hosts
+     *  answer signed-out. */
+    readonly auth?: SupabaseAuthShape;
   };
 
 /** The workspace roots a fake host installs beside its platform. */

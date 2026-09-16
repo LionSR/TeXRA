@@ -1,3 +1,5 @@
+import { Context, Layer } from 'effect';
+
 // Local imports - platform
 import type { Disposable } from './interfaces';
 
@@ -78,3 +80,25 @@ export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
     onDidChange: () => ({ dispose() {} }),
   },
 );
+
+/**
+ * The process's editor language-model bridge as an Effect service
+ * (`@texra/platform/LanguageModel`), provided once by the composition root
+ * through `installProcessRuntime`. The shape is the port itself — hosts
+ * without an editor language-model API provide
+ * {@link UNAVAILABLE_LANGUAGE_MODEL_PORT} — so a program that discovers
+ * editor-supplied models yields the service instead of reading the platform
+ * ambiently.
+ *
+ * `layer` takes the port itself, for the same reason `AppState.layer` takes
+ * the store: every root builds its port before installing the runtime that
+ * serves it.
+ */
+export class LanguageModel extends Context.Service<
+  LanguageModel,
+  LanguageModelPort
+>()('@texra/platform/LanguageModel') {
+  static layer(port: LanguageModelPort): Layer.Layer<LanguageModel> {
+    return Layer.succeed(LanguageModel)(port);
+  }
+}

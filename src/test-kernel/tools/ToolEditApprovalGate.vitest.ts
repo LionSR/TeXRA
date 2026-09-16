@@ -1,5 +1,4 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
 
 // Node imports
 import * as assert from 'node:assert';
@@ -14,11 +13,12 @@ import { describe, beforeEach, afterEach, vi } from 'vitest';
 // Local imports
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+
 import { WorkspaceFs } from '@platform/rootedFs';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { fakePath } from '@test/support/FakePlatform';
@@ -73,7 +73,7 @@ async function installPlatform(
     files,
   });
   detachHostInteractions();
-  detachHostInteractions = defaultSession().interactions.use({
+  detachHostInteractions = testDefaultSession().interactions.use({
     presentToolEdit: (request) => {
       approvalRequests.push(request);
     },
@@ -148,7 +148,7 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
       nativeToolTestLayer({
         workingDirectory: WORKSPACE_PATH,
         tracker,
-        run: { runId, session: defaultSession(), toolPolicy: {} },
+        run: { runId, session: testDefaultSession(), toolPolicy: {} },
         onApprovalPolicyDenial: () => {
           policyDenials += 1;
         },
@@ -160,15 +160,15 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
 describe('Tool edit approval gating', () => {
   beforeEach(async () => {
     await installPlatform();
-    defaultSession().setApprovalPolicy('ask');
+    testDefaultSession().setApprovalPolicy('ask');
     policyDenials = 0;
     workspaceWrites.mockReset();
     relativeFiles.clear();
     tracker = new FileInteractionState();
-    defaultSession().approvals.clearAll();
-    runId = publishTestRunStart(defaultSession(), generateRunId());
-    await Effect.runPromise(defaultSession().settlePublications());
-    decisions = autoDecideRequests(defaultSession(), () => nextDecision());
+    testDefaultSession().approvals.clearAll();
+    runId = publishTestRunStart(testDefaultSession(), generateRunId());
+    await Effect.runPromise(testDefaultSession().settlePublications());
+    decisions = autoDecideRequests(testDefaultSession(), () => nextDecision());
   });
 
   afterEach(() => {
@@ -177,7 +177,7 @@ describe('Tool edit approval gating', () => {
     vi.restoreAllMocks();
     detachHostInteractions();
     detachHostInteractions = () => {};
-    defaultSession().approvals.clearAll();
+    testDefaultSession().approvals.clearAll();
   });
 
   it.effect('gates an edit to a dangling symlink as an existing file', () =>
@@ -249,7 +249,7 @@ describe('Tool edit approval gating', () => {
         Effect.provide(
           nativeToolTestLayer({
             tracker,
-            run: { runId, session: defaultSession(), toolPolicy: {} },
+            run: { runId, session: testDefaultSession(), toolPolicy: {} },
             inScope: (operation) =>
               runWithWorkspaceRoots(project.roots, operation),
           }),
@@ -373,7 +373,7 @@ describe('Tool edit approval gating', () => {
       yield* Effect.tryPromise(() =>
         installPlatform({ 'texra.toolUse.requireEditApproval': false }),
       );
-      defaultSession().setApprovalPolicy('never');
+      testDefaultSession().setApprovalPolicy('never');
 
       const tool = new WriteFileTool();
       const write = stubWorkspaceFile('denied.txt', {
@@ -402,7 +402,7 @@ describe('Tool edit approval gating', () => {
         content: '',
       });
 
-      defaultSession().approvals.toolEdit.bypass.setBypass(runId, true, {
+      testDefaultSession().approvals.toolEdit.bypass.setBypass(runId, true, {
         silent: true,
       });
 
@@ -424,7 +424,7 @@ describe('Tool edit approval gating', () => {
       // `request.decided` will ever release the preview staged before it:
       // `openRequest`, the one call that knows the row never landed, runs
       // the release the staging handed it.
-      const session = defaultSession();
+      const session = testDefaultSession();
       const commit = session.commit.bind(session);
       vi.spyOn(session, 'commit').mockImplementation((events) =>
         events.some((event) => event.type === 'request.opened')
@@ -460,7 +460,7 @@ describe('Tool edit approval gating', () => {
         // The `request.opened` commit never settles, so the interrupt lands
         // with no row written: the cancellation finds nothing open, writes
         // no decision, and releases what the open never listed.
-        const session = defaultSession();
+        const session = testDefaultSession();
         const commit = session.commit.bind(session);
         vi.spyOn(session, 'commit').mockImplementation((events) =>
           events.some((event) => event.type === 'request.opened')
@@ -509,7 +509,7 @@ describe('Tool edit approval gating', () => {
         // cancellation is itself refused: nothing left to render, nothing
         // left to answer.
         nextDecision = () => null;
-        const session = defaultSession();
+        const session = testDefaultSession();
 
         const request = yield* Effect.forkChild(
           inRun(
@@ -557,11 +557,11 @@ describe('Tool edit approval gating', () => {
         }),
       );
 
-      defaultSession().approvals.toolEdit.bypass.setBypass(runId, true, {
+      testDefaultSession().approvals.toolEdit.bypass.setBypass(runId, true, {
         silent: true,
       });
       decideRequest(
-        defaultSession(),
+        testDefaultSession(),
         { runId, requestId: approvalRequests[0]!.permission.requestId },
         { action: 'approve', content: 'first.txt' },
       );

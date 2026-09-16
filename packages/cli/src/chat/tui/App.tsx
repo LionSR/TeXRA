@@ -12,6 +12,7 @@ import {
 } from 'react';
 
 // Local imports - shared runtime
+import { type SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
   isEscapeInput,
@@ -129,6 +130,10 @@ export interface AppProps {
    * on, threaded from the same chat surface — this component runs no Effect.
    */
   readonly runtime: ProcessRuntime;
+  /** The chat's session: the approval modal's decisions land on it and the
+   *  work-plan reader renders from it, threaded from the chat surface that
+   *  opened it. */
+  readonly session: SessionHandle;
   readonly onSubmit: (
     line: string,
     mediaFiles?: readonly string[],
@@ -349,6 +354,7 @@ export function App(props: AppProps): React.JSX.Element {
         return activeApprovalVisible && pending ? (
           <ApprovalModal
             runtime={props.runtime}
+            session={props.session}
             availableRows={availableRows}
             goalAutoApproveAll={goalAutoApproveAll}
             pending={pending}
@@ -411,6 +417,7 @@ export function App(props: AppProps): React.JSX.Element {
             loading={foregroundReader.loading === true}
             onClose={closeForegroundReader}
             runId={foregroundReader.runId}
+            session={props.session}
             title={`Work plan: ${label}`}
           />
         );

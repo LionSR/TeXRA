@@ -1024,7 +1024,7 @@ describe('an active goal at the wait', () => {
           }
         } finally {
           yield* clearGoal(session, runId);
-          releaseRunResources(runId);
+          releaseRunResources(runId, session);
         }
       }),
   );
@@ -1075,7 +1075,7 @@ describe('an active goal at the wait', () => {
           expect(setApprovalBypassState).not.toHaveBeenCalled();
         } finally {
           yield* clearGoal(session, runId);
-          releaseRunResources(runId);
+          releaseRunResources(runId, session);
         }
       }),
   );

@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Result } from 'effect';
+import { Effect, Result } from 'effect';
 import { getAgent } from '@agent/index';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import {
@@ -17,6 +17,7 @@ import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
 import { agentKey, AgentCategory } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { normalizeAgentSettingTools } from './agentSettingTools';
 
@@ -45,29 +46,38 @@ export function validateAgentYamlContent(content: string): void {
 }
 
 /** Loads and parses a YAML file from an absolute path. */
-async function loadYaml(absolutePath: string): Promise<object> {
+const loadYaml = Effect.fn('agentLoad.loadYaml')(function* (
+  absolutePath: string,
+): Effect.fn.Return<object, Error> {
   if (!path.isAbsolute(absolutePath)) {
-    throw new Error('loadYaml requires an absolute path');
+    return yield* Effect.fail(new Error('loadYaml requires an absolute path'));
   }
 
-  const yamlContent = await AbsoluteFS.read(absolutePath);
+  const yamlContent = yield* Effect.tryPromise({
+    try: () => AbsoluteFS.read(absolutePath),
+    catch: ensureError,
+  });
   const parsed = safeParseYaml(yamlContent);
   if (Result.isFailure(parsed)) {
-    throw new Error(
-      `Failed to parse YAML at ${absolutePath}: ${parsed.failure.message}`,
-      { cause: parsed.failure },
+    return yield* Effect.fail(
+      new Error(
+        `Failed to parse YAML at ${absolutePath}: ${parsed.failure.message}`,
+        { cause: parsed.failure },
+      ),
     );
   }
   return parsed.success as object;
-}
+});
 
-export async function loadAgentSettingAndPrompts(
+export const loadAgentSettingAndPrompts = Effect.fn(
+  'agentLoad.loadAgentSettingAndPrompts',
+)(function* (
   entry: AgentEntry,
   seen: ReadonlySet<string> = new Set(),
-): Promise<[AgentSetting, AgentPrompt]> {
+): Effect.fn.Return<[AgentSetting, AgentPrompt], Error> {
   // Handle remote agents
   if (entry.source === 'remote') {
-    const remoteConfig = await loadRemoteAgent(entry.name);
+    const remoteConfig = yield* loadRemoteAgent(entry.name);
 
     // Remote agents are already fully processed (tools resolved, validated)
     return [remoteConfig.settings, remoteConfig.prompts];
@@ -78,14 +88,19 @@ export async function loadAgentSettingAndPrompts(
   // (this is the runtime load path) rather than recurse without bound.
   const entryKey = agentKey(entry.source, entry.name);
   if (seen.has(entryKey)) {
-    throw new Error(
-      `Circular "inherits" chain detected: ${[...seen, entryKey].join(' -> ')}.`,
+    return yield* Effect.fail(
+      new Error(
+        `Circular "inherits" chain detected: ${[...seen, entryKey].join(' -> ')}.`,
+      ),
     );
   }
   const nextSeen = new Set([...seen, entryKey]);
 
-  const rawConfig = await loadYaml(entry.path);
-  const config = AgentDefinitionSchema.parse(rawConfig);
+  const rawConfig = yield* loadYaml(entry.path);
+  const config = yield* Effect.try({
+    try: () => AgentDefinitionSchema.parse(rawConfig),
+    catch: ensureError,
+  });
 
   // Initialize with own settings/prompts (spread creates a mutable copy).
   // Tools may still be raw name strings at this point — they are resolved below.
@@ -96,26 +111,25 @@ export async function loadAgentSettingAndPrompts(
   if (config.inherits) {
     const parentEntry = getAgent(agentKey(entry.source, config.inherits));
     if (!parentEntry) {
-      throw new Error(
-        `Unable to locate parent agent "${config.inherits}" in source "${entry.source}".`,
+      return yield* Effect.fail(
+        new Error(
+          `Unable to locate parent agent "${config.inherits}" in source "${entry.source}".`,
+        ),
       );
     }
-    const [parentSettings, parentPrompts] = await loadAgentSettingAndPrompts(
+    const [parentSettings, parentPrompts] = yield* loadAgentSettingAndPrompts(
       parentEntry,
       nextSeen,
     );
 
-    // Parent provides defaults, child overrides.
-    // parentSettings has resolved ToolDefinition objects while
-    // config.settings may still have raw strings; AgentSetting's fields are a
-    // structural subset of AgentSettingInput's (required vs. optional), so the
-    // merge can be typed as AgentSettingInput directly without an
-    // unknown-escaping cast.
+    // Parent provides defaults, child overrides. `AgentSetting`'s fields are a
+    // structural subset of `AgentSettingInput`'s (required vs. optional), so
+    // the merge can be typed as `AgentSettingInput` directly.
     settings = mergeInheritedAgentObject<AgentSettingInput>(
       parentSettings,
-      config.settings,
+      settings,
     );
-    prompts = mergeInheritedAgentObject(parentPrompts, config.prompts);
+    prompts = mergeInheritedAgentObject(parentPrompts, prompts);
   }
 
   if (entry.source === 'builtInToolUse' && !settings.agentCategory) {
@@ -125,8 +139,12 @@ export async function loadAgentSettingAndPrompts(
   const normalizedSettings = normalizeAgentSettingTools(settings, CHANNEL);
 
   // Apply defaults and validate the final settings and prompts
-  return [
-    AgentSettingSchema.parse(normalizedSettings),
-    AgentPromptSchema.parse(prompts),
-  ];
-}
+  return yield* Effect.try({
+    try: () =>
+      [
+        AgentSettingSchema.parse(normalizedSettings),
+        AgentPromptSchema.parse(prompts),
+      ] as [AgentSetting, AgentPrompt],
+    catch: ensureError,
+  });
+});

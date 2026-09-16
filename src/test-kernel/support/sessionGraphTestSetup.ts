@@ -1,11 +1,15 @@
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import {
+  fakeHostAgentResume,
   fakeHostAppState,
+  fakeHostAuth,
+  fakeHostLanguageModel,
   fakeHostSecrets,
   fakeSetupPlatform,
   installedHost,
 } from './setupPlatform';
+
 /**
  * The test kernel's process runtime and session graph family (PRD
  * one-fold-three-renderers, 7.7): what a composition root installs beside
@@ -38,6 +42,11 @@ export function installTestSessionGraphs(): void {
     updateCheckStorage: () => installedHost().roots.globalStorage,
     secrets: fakeHostSecrets,
     appState: fakeHostAppState,
+    // Suites swap the account plane with their host; the default host's
+    // answers signed-out.
+    auth: fakeHostAuth,
+    languageModel: fakeHostLanguageModel,
+    agentResume: fakeHostAgentResume,
     setup: fakeSetupPlatform,
     // The Node hosts' layer: inert until a Lean tool is invoked.
     lean: directLeanLanguageServices(),

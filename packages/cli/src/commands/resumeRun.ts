@@ -191,6 +191,7 @@ export async function runResumeCommand(
                 {
                   session: stores.session,
                   runtime: stores.runtime,
+                  lifecycle: stores.lifecycle,
                   runId,
                   modelCompatibilityKey,
                   recoveryInputIsDurable:

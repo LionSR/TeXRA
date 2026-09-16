@@ -18,6 +18,7 @@ import {
 import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { LanguageModel } from '@platform/languageModel';
 import { SecretsFailed } from '@platform/secrets';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
@@ -28,12 +29,25 @@ import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import {
+  fakeHostLanguageModel,
   hostStores,
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
 
 const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
+
+/**
+ * The availability read over the installed fake host's language-model port:
+ * the read's Copilot discovery yields the `LanguageModel` service, which the
+ * bare `it.effect` runtime does not carry.
+ */
+const availabilityInputs = (
+  ...args: Parameters<typeof readModelAvailabilityInputs>
+) =>
+  readModelAvailabilityInputs(...args).pipe(
+    Effect.provide(LanguageModel.layer(fakeHostLanguageModel)),
+  );
 
 /**
  * Global state that counts the Copilot-preference reads, the one live state
@@ -161,7 +175,7 @@ describe('model availability', () => {
         );
 
         const [option] = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), [model]),
+          yield* availabilityInputs(hostStores(), [model]),
         );
 
         expect(option.reasoning).toBe(expected);
@@ -177,7 +191,7 @@ describe('model availability', () => {
       );
 
       const [model] = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['kimiCoding']),
+        yield* availabilityInputs(hostStores(), ['kimiCoding']),
       );
 
       expect(model).toMatchObject({
@@ -196,10 +210,10 @@ describe('model availability', () => {
       );
 
       const [model] = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['kimiCoding']),
+        yield* availabilityInputs(hostStores(), ['kimiCoding']),
       );
       const reason = modelUnavailableReasonFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['kimiCoding']),
+        yield* availabilityInputs(hostStores(), ['kimiCoding']),
         'kimiCoding',
       );
 
@@ -218,7 +232,7 @@ describe('model availability', () => {
       yield* Effect.promise(() => installAccessPlatform({ secrets: {} }));
 
       const [model] = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['gpt55']),
+        yield* availabilityInputs(hostStores(), ['gpt55']),
       );
 
       expect(model.availability).toBe('missing-key');
@@ -248,7 +262,7 @@ describe('model availability', () => {
         const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
         const [gpt55, gpt56] = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['gpt55', 'gpt56']),
+          yield* availabilityInputs(hostStores(), ['gpt55', 'gpt56']),
         );
 
         expect(gpt55.availability).toBe('missing-key');
@@ -297,10 +311,7 @@ describe('model availability', () => {
         const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
         const rows = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), [
-            'haiku3',
-            'haiku35',
-          ]),
+          yield* availabilityInputs(hostStores(), ['haiku3', 'haiku35']),
         );
 
         expect(rows.map((row) => row.availability)).toEqual([
@@ -312,7 +323,7 @@ describe('model availability', () => {
 
         // Two models that do reach the Copilot branch: one preference read each.
         const keyed = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['gpt55', 'gpt56']),
+          yield* availabilityInputs(hostStores(), ['gpt55', 'gpt56']),
         );
 
         expect(keyed).toHaveLength(2);
@@ -346,7 +357,7 @@ describe('model availability', () => {
         );
         invalidateApiKeyCache();
 
-        const inputs = yield* readModelAvailabilityInputs(hostStores(), [
+        const inputs = yield* availabilityInputs(hostStores(), [
           'gpt55',
           'gpt56',
         ]);
@@ -379,7 +390,7 @@ describe('model availability', () => {
         yield* Effect.promise(() => installAccessPlatform());
 
         const [model] = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['no-such-model']),
+          yield* availabilityInputs(hostStores(), ['no-such-model']),
         );
 
         expect(model).toMatchObject({
@@ -394,9 +405,7 @@ describe('model availability', () => {
     Effect.gen(function* () {
       yield* Effect.promise(() => installAccessPlatform());
 
-      const [model] = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores()),
-      );
+      const [model] = modelOptionsFrom(yield* availabilityInputs(hostStores()));
 
       expect(model.availability).toBe('provider-key');
       expect(isModelOptionAvailable(model)).toBe(true);
@@ -408,10 +417,10 @@ describe('model availability', () => {
       yield* Effect.promise(() => installAccessPlatform());
 
       const [model] = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['haiku3']),
+        yield* availabilityInputs(hostStores(), ['haiku3']),
       );
       const reason = modelUnavailableReasonFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['haiku3']),
+        yield* availabilityInputs(hostStores(), ['haiku3']),
         'haiku3',
       );
 
@@ -432,7 +441,7 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['gpt55']),
+          yield* availabilityInputs(hostStores(), ['gpt55']),
         );
 
         expect(model.availability).toBe('provider-key');
@@ -450,7 +459,7 @@ describe('model availability', () => {
       );
 
       const [model] = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['gpt56pro']),
+        yield* availabilityInputs(hostStores(), ['gpt56pro']),
       );
 
       expect(MODEL_CONFIGS.gpt56pro.codexSubscription).not.toBe(true);
@@ -467,10 +476,10 @@ describe('model availability', () => {
       );
 
       const [model] = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['gpt56pro']),
+        yield* availabilityInputs(hostStores(), ['gpt56pro']),
       );
       const reason = modelUnavailableReasonFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['gpt56pro']),
+        yield* availabilityInputs(hostStores(), ['gpt56pro']),
         'gpt56pro',
       );
 
@@ -492,10 +501,10 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['gpt55']),
+          yield* availabilityInputs(hostStores(), ['gpt55']),
         );
         const reason = modelUnavailableReasonFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['gpt55']),
+          yield* availabilityInputs(hostStores(), ['gpt55']),
           'gpt55',
         );
 
@@ -520,7 +529,7 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['gemini31p']),
+          yield* availabilityInputs(hostStores(), ['gemini31p']),
         );
 
         expect(model.availability).toBe('missing-key');
@@ -539,7 +548,7 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['gpt55']),
+          yield* availabilityInputs(hostStores(), ['gpt55']),
         );
 
         expect(model.availability).toBe('subscription-access');
@@ -566,9 +575,7 @@ describe('model availability', () => {
         }),
       );
 
-      const models = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores()),
-      );
+      const models = modelOptionsFrom(yield* availabilityInputs(hostStores()));
       const expected = Object.entries(MODEL_CONFIGS)
         .filter(
           ([, config]) =>
@@ -603,7 +610,7 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* readModelAvailabilityInputs(hostStores(), ['gpt55']),
+          yield* availabilityInputs(hostStores(), ['gpt55']),
         );
 
         expect(model.availability).toBe('subscription-access');
@@ -631,7 +638,7 @@ describe('model availability Kimi Code routing (dual-backend kimi3)', () => {
         }),
       );
       const [model] = modelOptionsFrom(
-        yield* readModelAvailabilityInputs(hostStores(), ['kimi3']),
+        yield* availabilityInputs(hostStores(), ['kimi3']),
       );
       return model;
     });

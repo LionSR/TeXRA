@@ -9,6 +9,7 @@ import {
   CHATGPT_SETUP_MODEL,
   XAI_SETUP_MODEL,
 } from '@model/setupModelDefaults';
+import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -66,13 +67,12 @@ export const setupCredentialProbeFailed =
  *
  * `check` is the credential program itself, typed with the one failure a
  * probe reports: a check whose own failure is already typed (a provider key
- * read) maps it, and one that is still a host promise mints it at its own
- * call.
+ * read, a subscription probe) maps it to the tag at its own call.
  */
-export function probeSetupCredential(
-  check: Effect.Effect<boolean, SetupCredentialProbeFailed>,
+export function probeSetupCredential<R>(
+  check: Effect.Effect<boolean, SetupCredentialProbeFailed, R>,
   onProbeFailure: (message: string) => void,
-): Effect.Effect<boolean> {
+): Effect.Effect<boolean, never, R> {
   return check.pipe(
     Effect.catchTag('SetupCredentialProbeFailed', (failure) =>
       Effect.sync(() => {
@@ -93,21 +93,19 @@ export function probeSetupCredential(
  */
 export function setupSubscriptionModel(
   onProbeFailure: (message: string) => void,
-): Effect.Effect<string | null> {
+): Effect.Effect<string | null, never, LanguageModel> {
   return Effect.gen(function* () {
     const hasChatGptSubscription = yield* probeSetupCredential(
-      Effect.tryPromise({
-        try: () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
-        catch: setupCredentialProbeFailed('ChatGPT subscription'),
-      }),
+      isCodexSubscriptionActive(CHATGPT_SETUP_MODEL).pipe(
+        Effect.mapError(setupCredentialProbeFailed('ChatGPT subscription')),
+      ),
       onProbeFailure,
     );
     if (hasChatGptSubscription) return CHATGPT_SETUP_MODEL;
     const hasGrokSubscription = yield* probeSetupCredential(
-      Effect.tryPromise({
-        try: () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
-        catch: setupCredentialProbeFailed('Grok subscription'),
-      }),
+      isXaiSubscriptionActive(XAI_SETUP_MODEL).pipe(
+        Effect.mapError(setupCredentialProbeFailed('Grok subscription')),
+      ),
       onProbeFailure,
     );
     return hasGrokSubscription ? XAI_SETUP_MODEL : null;
@@ -122,7 +120,7 @@ export function setupSubscriptionModel(
 export function hasUsableSetupCredential(
   secrets: PlatformSecrets,
   onProbeFailure: (message: string) => void,
-): Effect.Effect<boolean> {
+): Effect.Effect<boolean, never, LanguageModel> {
   return Effect.gen(function* () {
     const subscriptionModel = yield* setupSubscriptionModel(onProbeFailure);
     if (subscriptionModel !== null) return true;

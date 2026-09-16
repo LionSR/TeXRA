@@ -1288,7 +1288,11 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      { session: Effect.succeed(session), runtime: effectRuntime() },
+      {
+        session: Effect.succeed(session),
+        runtime: effectRuntime(),
+        lifecycle: installedHost().platform.lifecycle,
+      },
     ).finally(() => Effect.runPromise(session.dispose()));
 
     expect(exitCode).toBe(CliExitCode.Interrupted);
@@ -1330,7 +1334,11 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      { session: Effect.succeed(session), runtime: effectRuntime() },
+      {
+        session: Effect.succeed(session),
+        runtime: effectRuntime(),
+        lifecycle: installedHost().platform.lifecycle,
+      },
     ).finally(() => Effect.runPromise(session.dispose()));
     await expect(result).resolves.toBe(CliExitCode.Interrupted);
     expect(cwdSpy).toHaveBeenCalledOnce();

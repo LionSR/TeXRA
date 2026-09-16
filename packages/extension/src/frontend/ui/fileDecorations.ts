@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { defaultSession, type SessionHandle } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { appSignals } from '@eventBus/AppSignals';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -51,7 +51,7 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
 export function registerFileDecorations(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
-  session: Pick<SessionHandle, 'events' | 'now'> = defaultSession(),
+  session: Pick<SessionHandle, 'events' | 'now'>,
 ): void {
   const provider = new TeXRAFileDecorationProvider();
 

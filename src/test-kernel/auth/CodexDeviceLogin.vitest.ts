@@ -110,7 +110,7 @@ describe('Codex device login', () => {
         const storeEntered = yield* Deferred.make<void>();
         vi.mocked(coordinator.completeDeviceLogin).mockImplementation(() => {
           Deferred.doneUnsafe(storeEntered, Effect.void);
-          return store.promise as never;
+          return Effect.promise(() => store.promise) as never;
         });
         const shown = yield* Deferred.make<void>();
         const onPrompt = vi.fn(() => {

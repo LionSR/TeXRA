@@ -7,6 +7,7 @@ import type {
   TeamRosterCatalog,
   TeamRosterResolution,
 } from '@common/teams/TeamRoster';
+import type { SignInFailed } from '@common/errors/signInFailed';
 import type { AgentModePreset } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -38,14 +39,14 @@ type TeamRosterApplicationResult =
 export interface TeamRosterApplicationDeps {
   readonly catalog: TeamRosterCatalog;
   readonly loadLocalCatalog: () => Effect.Effect<void, unknown>;
-  readonly canAccessRemoteCatalog: () => Promise<boolean>;
+  readonly canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   /** A decision already supplied by a non-interactive caller. */
   readonly providedChoice?: TeamAvailabilityChoice;
   readonly choose: (
     preset: AgentModePreset,
     unavailableNames: readonly string[],
   ) => Promise<TeamAvailabilityChoice | undefined>;
-  readonly signIn: () => Promise<boolean>;
+  readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
   readonly forceRefreshRemoteCatalog: () => Effect.Effect<void, unknown>;
 }
 

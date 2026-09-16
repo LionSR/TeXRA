@@ -6,9 +6,6 @@ import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
-// Local imports - errors
-import { isNotADirectoryError } from '@common/errors/errorPredicates';
-
 // Local imports - tools
 import {
   extractBibliographyContext,
@@ -21,6 +18,7 @@ import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
+import { pathExists } from '@utils/files/fsDurability';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { readConfig } from '@utils/config/configUtils';
 import {
@@ -84,20 +82,11 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
         ? yield* FileSystem.FileSystem
         : yield* WorkspaceFs;
       // A path whose parent is not a directory is a missing bibliography, not
-      // a tool failure: `BaseFS.exists` counted ENOTDIR as absent alongside
-      // ENOENT, and `FileSystem.exists` reports it as `BadResource`. The
-      // predicate names ENOTDIR specifically so an operational failure
-      // (`ELOOP`) still propagates. One difference is deliberate: `exists`
-      // follows the link, so a dangling symlink now reads as missing where the
-      // old `lstat`-based check saw the entry itself.
-      const exists = yield* fs.exists(resolved.fsPath).pipe(
-        Effect.catchIf(
-          (error) =>
-            error.reason._tag === 'BadResource' &&
-            isNotADirectoryError(error.reason.cause),
-          () => Effect.succeed(false),
-        ),
-      );
+      // a tool failure: that is `pathExists`'s reading. One difference from
+      // the old `lstat`-backed check is deliberate -- `exists` follows the
+      // link, so a dangling symlink reads as missing where the facade saw the
+      // entry itself.
+      const exists = yield* pathExists(fs, resolved.fsPath);
       const target = exists ? bibliographyFiles : missingBibliographyFiles;
       if (!target.includes(resolved.absolute)) {
         target.push(resolved.absolute);

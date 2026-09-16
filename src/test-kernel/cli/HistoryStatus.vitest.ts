@@ -10,8 +10,6 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
-  currentSession,
-  defaultSession,
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
@@ -35,6 +33,7 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
   agent: 'orchestrator',
@@ -103,12 +102,12 @@ async function seedSnapshot(
   family: 'toolUse' | 'reflection',
 ): Promise<void> {
   await Effect.runPromise(
-    registerRun(currentSession(), id, config, agent, {
+    registerRun(testDefaultSession(), id, config, agent, {
       identity: { kind: 'agent', agent },
     }),
   );
   await Effect.runPromise(
-    currentSession().commit([
+    testDefaultSession().commit([
       {
         type: 'flow.snapshot',
         aggregateId: aggregateId('run', id),
@@ -116,7 +115,7 @@ async function seedSnapshot(
       },
     ]),
   );
-  await Effect.runPromise(currentSession().releaseRunLease(id));
+  await Effect.runPromise(testDefaultSession().releaseRunLease(id));
 }
 
 describe('CLI history status formatting', () => {
@@ -204,7 +203,7 @@ describe('CLI history status formatting', () => {
 
     const details = await readCliHistoryDetails(
       effectRuntime(),
-      Effect.succeed(defaultSession()),
+      Effect.succeed(testDefaultSession()),
       id,
     );
 
@@ -222,7 +221,7 @@ describe('CLI history status formatting', () => {
 
     const details = await readCliHistoryDetails(
       effectRuntime(),
-      Effect.succeed(defaultSession()),
+      Effect.succeed(testDefaultSession()),
       id,
     );
 
@@ -238,7 +237,7 @@ describe('CLI history status formatting', () => {
   it('does not offer a run whose config is missing as resumable', async () => {
     const id = 'baad-c0f' as RunId;
     await Effect.runPromise(
-      currentSession().commit([
+      testDefaultSession().commit([
         {
           type: 'run.start',
           aggregateId: aggregateId('run', id),
@@ -251,7 +250,7 @@ describe('CLI history status formatting', () => {
       ]),
     );
     await Effect.runPromise(
-      currentSession().commit([
+      testDefaultSession().commit([
         {
           type: 'flow.snapshot',
           aggregateId: aggregateId('run', id),
@@ -262,7 +261,7 @@ describe('CLI history status formatting', () => {
 
     const details = await readCliHistoryDetails(
       effectRuntime(),
-      Effect.succeed(defaultSession()),
+      Effect.succeed(testDefaultSession()),
       id,
     );
 

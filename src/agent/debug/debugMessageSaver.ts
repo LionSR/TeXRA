@@ -9,7 +9,7 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
@@ -24,9 +24,11 @@ interface DebugContext {
    * The run's session roots, passed as data. A save with a run id lands under
    * the storage root, a save without one under the workspace root — the two
    * roots the `StorageFS` / `WorkspaceFS` facades read from the ambient
-   * `workspaceRoots()` at call time.
+   * `workspaceRoots()` at call time — and the config provider is the
+   * session's own, so the `texra.debug.saveModelIO` guard below cannot throw
+   * before platform init.
    */
-  roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>;
+  roots: Pick<WorkspaceRoots, 'workspace' | 'storage' | 'config'>;
 }
 
 interface DebugSaveOptions {
@@ -63,7 +65,10 @@ export function maybeSaveDebugObject({
 }: SaveDebugParams): Effect.Effect<void, never, FileSystem.FileSystem> {
   // `texra.debug.saveModelIO` is the one setting covering request messages,
   // responses, and the final input prompt.
-  if (!getConfig<boolean>('texra.debug.saveModelIO') || context.isRemote)
+  if (
+    !readConfig<boolean>(context.roots.config, 'texra.debug.saveModelIO') ||
+    context.isRemote
+  )
     return Effect.void;
 
   const { logger, modelName, runId, roots } = context;
