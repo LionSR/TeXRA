@@ -1139,7 +1139,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const limit =
           1 +
           readValidatedConfig(
-            run.session.roots.config,
+            session.roots.config,
             MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
             ModelRetryMaxAttemptsSchema,
             MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
