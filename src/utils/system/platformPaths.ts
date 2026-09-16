@@ -15,12 +15,11 @@ import { normalizeFilePath, unique } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
 
 /**
- * `AbsoluteFS.existsSync`'s contract without the facade: the probe asserts an
- * absolute path and then asks `node:fs`. The facade refused a relative one
- * with a thrown `Path must be absolute`, and three of the roots searched below
- * come straight from the environment (`SCOOP`, `MSYS2_HOME`, `LOCALAPPDATA`),
- * so a probe that quietly answered "absent" would drop those directories from
- * PATH with nothing to show for it.
+ * An existence probe that asserts an absolute path and then asks `node:fs`.
+ * A relative one is refused with a thrown `Path must be absolute`, and three
+ * of the roots searched below come straight from the environment (`SCOOP`,
+ * `MSYS2_HOME`, `LOCALAPPDATA`), so a probe that quietly answered "absent"
+ * would drop those directories from PATH with nothing to show for it.
  */
 function existsAtAbsolute(target: string): boolean {
   if (!path.isAbsolute(target)) {

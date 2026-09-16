@@ -14,7 +14,6 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 type ProviderCase = {
   provider: FileSystemProvider;
   resolve(testPath: string): string;
-  expectedRealPath(testPath: string): Promise<string>;
 };
 
 /**
@@ -31,7 +30,6 @@ async function withProvider(
     await run({
       provider: nodeFilesystem,
       resolve,
-      expectedRealPath: (testPath) => fs.realpath(resolve(testPath)),
     });
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -58,15 +56,11 @@ async function rejectsWithCode(
 
 describe('nodeFilesystem', () => {
   it('reads, writes, stats, and lists directories', async () => {
-    await withProvider(async ({ provider, resolve, expectedRealPath }) => {
+    await withProvider(async ({ provider, resolve }) => {
       await provider.createDirectory(resolve('/workspace/docs'));
       await provider.writeFile(
         resolve('/workspace/docs/a.txt'),
         Buffer.from('A'),
-      );
-      await provider.appendFile(
-        resolve('/workspace/docs/a.txt'),
-        Buffer.from('B'),
       );
       await provider.writeFileAtomic(
         resolve('/workspace/docs/atomic.txt'),
@@ -75,7 +69,7 @@ describe('nodeFilesystem', () => {
 
       assert.equal(
         text(await provider.readFile(resolve('/workspace/docs/a.txt'))),
-        'AB',
+        'A',
       );
       assert.deepEqual(
         sortedEntries(await provider.readDirectory(resolve('/workspace/docs'))),
@@ -90,15 +84,11 @@ describe('nodeFilesystem', () => {
       );
       assert.equal(
         (await provider.stat(resolve('/workspace/docs/a.txt'))).size,
-        2,
+        1,
       );
       assert.equal(
         await provider.isSymlink(resolve('/workspace/docs/a.txt')),
         false,
-      );
-      assert.equal(
-        await provider.realPath(resolve('/workspace/docs/a.txt')),
-        await expectedRealPath('/workspace/docs/a.txt'),
       );
     });
   });

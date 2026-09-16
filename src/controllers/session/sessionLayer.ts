@@ -861,9 +861,6 @@ const untilSettled = (runs: RunRegistry): Effect.Effect<void> =>
     }
   });
 
-/** A root with nothing open: nothing to settle, nothing abandoned. */
-const NOTHING_TO_CLOSE: SessionCloseReport = { settled: true, abandoned: [] };
-
 /** Resolves once `signal` aborts; interrupting it detaches the listener. */
 const aborted = (signal: AbortSignal) =>
   Effect.callback<void>((resume, interrupt) => {
@@ -903,7 +900,8 @@ const closeSession = (root: string, signal?: AbortSignal) =>
   Effect.gen(function* () {
     const sessions = yield* Sessions;
     const held = yield* heldSession(root);
-    if (held === undefined) return NOTHING_TO_CLOSE;
+    // A root with nothing open: nothing to settle, nothing abandoned.
+    if (held === undefined) return { settled: true, abandoned: [] };
     const { key, session, runs } = held;
     // A failed settle travels the defect channel: see the race below.
     const flushArtifacts = session.settlePublications().pipe(Effect.orDie);

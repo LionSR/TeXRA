@@ -56,9 +56,9 @@ function resolveSoxCommand(
     'texra.audio.soxPath',
   );
   if (configuredPath) {
-    // `AbsoluteFS.existsSync` validated the path before probing it, so a
-    // non-absolute `soxPath` threw "Path must be absolute: ..." and the
-    // recording failed loudly instead of quietly auto-detecting whatever
+    // The path is validated before being probed, so a non-absolute
+    // `soxPath` throws "Path must be absolute: ..." and the recording
+    // fails loudly instead of quietly auto-detecting whatever
     // `sox` is on PATH. A relative path still resolves against the process
     // cwd, never the workspace, so it cannot be the configured binary.
     if (!path.isAbsolute(configuredPath)) {

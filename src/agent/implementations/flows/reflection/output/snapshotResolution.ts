@@ -17,7 +17,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { originalSnapshotPathUnder } from '@utils/files/runStorageFs';
 
-/** ENOENT, or ENOTDIR on a parent, as `AbsoluteFS.isFile` via `statIfExists` treated them. */
+/** ENOENT, or ENOTDIR on a parent, both read as the path being absent. */
 function isAbsentFsPath(error: PlatformError.PlatformError): boolean {
   return (
     error.reason._tag === 'NotFound' ||

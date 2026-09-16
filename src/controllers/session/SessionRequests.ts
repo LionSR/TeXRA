@@ -12,8 +12,9 @@
  * a foreign claim
  * without a death proof is `NotOwner`. Display residency and historical
  * event writers never establish present ownership. A collaborator that
- * rejects is neither: the arms below reach one through `Effect.promise`, so
- * its rejection is a handler defect, and `SessionBridge` logs the cause
+ * rejects is neither: the arms below reach one as an Effect of this same
+ * program and die on its untyped failures (`Effect.orDie`), so such a
+ * rejection is a handler defect, and `SessionBridge` logs the cause
  * under the request id and answers `Internal`; the sender's latch clears
  * either way. A refusal this handler decides is a `RequestError`; a
  * collaborator breaking is not one to word. In process (the TUI,
@@ -60,7 +61,7 @@ import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const done: Outcome = { kind: 'done' };
+const done: Outcome = Object.freeze({ kind: 'done' } as const);
 
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,

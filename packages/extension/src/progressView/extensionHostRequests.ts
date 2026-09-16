@@ -145,7 +145,7 @@ interface ExtensionHostRequests {
   dispose(): void;
 }
 
-const done: HostOutcome = { kind: 'done' };
+const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
 function runCommand<T = void>(
   command: string,

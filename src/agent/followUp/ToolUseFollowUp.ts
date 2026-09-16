@@ -141,21 +141,6 @@ export function startFollowUpWake(
   );
 }
 
-/**
- * Queue transient progress using the current run and live queue owners. The
- * target and the admission are decided when this is called; the returned
- * effect writes the row (nothing when no session holds the run).
- */
-export function enqueueLiveFollowUp(
-  runId: RunId,
-  followUp: FollowUpQueueInput,
-  session: SessionHandle,
-): Effect.Effect<void, Error> {
-  const target = session.runs.getToolUseFollowUpTarget(runId);
-  if (target.kind === 'no_session') return Effect.void;
-  return Effect.asVoid(session.followUps.submit(runId, followUp, 'live_owner'));
-}
-
 type Admission =
   | SubmitFollowUpResult
   | { readonly resume: Effect.Effect<boolean, never, AgentResume> }

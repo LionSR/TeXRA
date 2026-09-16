@@ -1,32 +1,18 @@
 // Suites for src/utils/files (baseFS predicates, workspaceFS, mime,
-// absoluteFS, relativeFS JSON, pasted images, rooted filesystem confinement).
+// absoluteFS, pasted images, rooted filesystem confinement).
 
 import * as assert from 'node:assert';
-import * as path from 'node:path';
-import * as os from 'node:os';
-import { promises as fs } from 'node:fs';
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { it as effectIt } from '@effect/vitest';
 import { Cause, Effect, Exit, FileSystem, Path } from 'effect';
-import { z } from 'zod';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import { platform } from '@platform/platform';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { getMimeType } from '@utils/files/mimeUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { RelativeFS } from '@utils/files/relativeFS';
 import { pastedImageFileName } from '@utils/files/pastedImageUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { rootedFileSystem } from '@utils/files/rootedFileSystem';
@@ -44,8 +30,6 @@ describe('BaseFS stat predicates', () => {
 
   const statPredicates = [
     ['exists', (path: string) => AbsoluteFS.exists(path)],
-    ['isFile', (path: string) => AbsoluteFS.isFile(path)],
-    ['isSymbolicLink', (path: string) => AbsoluteFS.isSymbolicLink(path)],
   ] as const;
 
   it.each(statPredicates)(
@@ -128,48 +112,6 @@ describe('AbsoluteFS.write', () => {
 
     expect(writeFile).toHaveBeenCalledOnce();
     expect(deletePath).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// RelativeFSJson
-// ---------------------------------------------------------------------------
-
-const BASE_DIR = path.join(os.tmpdir(), 'texra-relativefs-json-tests');
-
-class TestRelativeFS extends RelativeFS {
-  protected static override getBasePath(): string {
-    return BASE_DIR;
-  }
-}
-
-describe('RelativeFS JSON helpers', () => {
-  // RelativeFS goes through the platform filesystem; back it with the real
-  // node filesystem since this suite writes to a real temp directory.
-  setupPlatform({}, { fs: nodeFilesystem });
-
-  beforeEach(async () => {
-    await fs.rm(BASE_DIR, { recursive: true, force: true });
-    await fs.mkdir(BASE_DIR, { recursive: true });
-  });
-
-  afterAll(async () => {
-    await fs.rm(BASE_DIR, { recursive: true, force: true });
-  });
-
-  it('preserves malformed JSON errors as the readJson cause', async () => {
-    await TestRelativeFS.write('broken.json', '{not json');
-
-    await assert.rejects(
-      () =>
-        TestRelativeFS.readJson('broken.json', z.object({ name: z.string() })),
-      (error: unknown) => {
-        assert.ok(error instanceof Error);
-        assert.match(error.message, /Failed to parse JSON from broken\.json:/);
-        assert.ok(error.cause instanceof SyntaxError);
-        return true;
-      },
-    );
   });
 });
 

@@ -30,7 +30,6 @@ import type {
   FollowUpRecoveryLease,
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
-  enqueueLiveFollowUp,
   startFollowUpWake,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
@@ -1055,17 +1054,27 @@ export function startChildRunLoop<TTurn, R = never>(
           childRun ? childRunHandle?.deliveryTarget : parentRunId,
         );
         if (!targetRunId) return;
-        Queue.offerUnsafe(
-          notices,
-          enqueueLiveFollowUp(
-            targetRunId,
-            {
-              text: formatSubagentProgress(runId, agentName, update),
-              origin: 'subagent_result',
-            },
-            runSession,
-          ),
-        );
+        // The target and the admission are decided where the progress is
+        // reported; the queued effect writes the row, and nothing is queued
+        // when no session holds the run.
+        if (
+          runSession.runs.getToolUseFollowUpTarget(targetRunId).kind !==
+          'no_session'
+        ) {
+          Queue.offerUnsafe(
+            notices,
+            Effect.asVoid(
+              runSession.followUps.submit(
+                targetRunId,
+                {
+                  text: formatSubagentProgress(runId, agentName, update),
+                  origin: 'subagent_result',
+                },
+                'live_owner',
+              ),
+            ),
+          );
+        }
       },
       recordCost: (totalCost) => {
         if (totalCost !== undefined) {
