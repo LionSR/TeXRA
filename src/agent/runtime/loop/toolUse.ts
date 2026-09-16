@@ -94,7 +94,7 @@ export interface ToolUseFlowContext {
   interrupt(): void;
   requestImmediateCompaction(): void;
   modelSwitchDisabledReason(model: string): string | undefined;
-  switchModel(model: string): Promise<void>;
+  switchModel(model: string): void;
 }
 
 export interface ToolUseStart {
@@ -231,21 +231,18 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         ? undefined
         : MODEL_SWITCH_DIFFERENT_FORMAT_REASON;
     },
-    switchModel(model: string): Promise<void> {
+    switchModel(model: string): void {
       const disabledReason = flowContext.modelSwitchDisabledReason(model);
       if (disabledReason !== undefined) {
-        return Promise.reject(
-          new Error(
-            disabledReason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
-              ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
-              : disabledReason,
-          ),
+        throw new Error(
+          disabledReason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
+            ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
+            : disabledReason,
         );
       }
       // Bound and recorded by the loop at its next model boundary: the rows
       // that record the switch belong to the fiber holding the run's state.
       run.pendingModelSwitch.value = model;
-      return Promise.resolve();
     },
   };
   const attach = (): void => {
@@ -675,14 +672,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // Priced against the binding that served the round: a manual retry
         // may have rebound the model inside the invoker.
         const served = yield* SynchronizedRef.get(run.model);
-        yield* Effect.tryPromise({
-          try: () =>
-            run.usageMonitor.recordUsage(
-              usageSnapshot(state, outcome.usage),
-              served,
-            ),
-          catch: ensureError,
-        });
+        yield* Effect.sync(() =>
+          run.usageMonitor.recordUsage(
+            usageSnapshot(state, outcome.usage),
+            served,
+          ),
+        );
         if (outcome.text) response = outcome.text;
         if (state.pendingResponse !== null) continue;
         // A text-only response: the same policy the resume path replays.

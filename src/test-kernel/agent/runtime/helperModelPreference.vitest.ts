@@ -16,14 +16,14 @@ const readModelAvailabilityInputs = vi.hoisted(() =>
   vi.fn(() => Effect.succeed({})),
 );
 const modelUnavailableReasonFrom = vi.hoisted(() => vi.fn());
-const resolveRuntimeModelConfig = vi.hoisted(() => vi.fn());
+const getRuntimeModelConfig = vi.hoisted(() => vi.fn());
 
 vi.mock('@agent/runtime/helperModelName', () => ({ getHelperModelName }));
 vi.mock('@model/computeModelOptions', () => ({
   readModelAvailabilityInputs,
   modelUnavailableReasonFrom,
 }));
-vi.mock('@model/runtimeModelRegistry', () => ({ resolveRuntimeModelConfig }));
+vi.mock('@model/runtimeModelRegistry', () => ({ getRuntimeModelConfig }));
 
 /**
  * The launching run's stores. Both readers that would touch them
@@ -54,12 +54,10 @@ describe('applyHelperModelPreference', () => {
     getHelperModelName.mockReset();
     readModelAvailabilityInputs.mockClear();
     modelUnavailableReasonFrom.mockReset();
-    resolveRuntimeModelConfig.mockImplementation((model: string) =>
-      Effect.succeed(
-        Object.hasOwn(MODEL_CONFIGS, model)
-          ? MODEL_CONFIGS[model as keyof typeof MODEL_CONFIGS]
-          : undefined,
-      ),
+    getRuntimeModelConfig.mockImplementation((model: string) =>
+      Object.hasOwn(MODEL_CONFIGS, model)
+        ? MODEL_CONFIGS[model as keyof typeof MODEL_CONFIGS]
+        : undefined,
     );
   });
 
@@ -72,7 +70,7 @@ describe('applyHelperModelPreference', () => {
       Effect.flatMap(({ applyHelperModelPreference }) =>
         applyHelperModelPreference(config, STORES),
       ),
-      // The real `resolveRuntimeModelConfig` requires the service; the mock
+      // The real `readModelAvailabilityInputs` requires the service; the mock
       // replaces it, but the requirement stays on the program's type.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     );

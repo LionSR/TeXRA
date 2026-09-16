@@ -215,7 +215,7 @@ describe('terminal result event', () => {
       Effect.gen(function* () {
         const { ctx, results } = setupResultCase();
         // Record one round of usage so the failed result still carries totals.
-        yield* Effect.promise(() =>
+        yield* Effect.sync(() =>
           ctx.usageMonitor.recordUsage(
             AgentRunStateSnapshotSchema.parse({}),
             testModelInfo,
