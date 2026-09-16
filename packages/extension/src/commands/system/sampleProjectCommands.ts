@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports - fs
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -62,7 +62,7 @@ export async function createSampleProjectWithoutWorkspace(
 }
 
 /**
- * Copy the bundled sample into the default session's workspace and open its
+ * Copy the bundled sample into the session's workspace and open its
  * README. Every workspace path is named and checked by the session's
  * workspace view; the bundled source lives in the extension, outside every
  * session root, so the tree copy runs at the two absolute paths, with the
@@ -71,10 +71,11 @@ export async function createSampleProjectWithoutWorkspace(
 export async function createSampleProject(
   extensionPath: string,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): Promise<void> {
   try {
     const workspaceFs = await runtime.runPromise(
-      withSessionFs(defaultSession().roots, WorkspaceFs),
+      withSessionFs(session.roots, WorkspaceFs),
     );
     if (!workspaceFs.root) {
       void showLoggedMessage(

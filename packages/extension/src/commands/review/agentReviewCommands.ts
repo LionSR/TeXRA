@@ -11,7 +11,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import {
   AGENT_REVIEW_VIEW_ID,
@@ -70,8 +70,8 @@ async function handleOpenIssue(node: AgentReviewNode): Promise<void> {
 }
 
 /** "Find Issues" split-button options: gather per-run choices, then run. */
-async function handleRunWithOptions(): Promise<void> {
-  const cwd = defaultSession().roots.workspace;
+async function handleRunWithOptions(session: SessionHandle): Promise<void> {
+  const cwd = session.roots.workspace;
   if (!cwd) {
     void showLoggedMessage(
       CHANNEL,
@@ -87,6 +87,7 @@ async function handleRunWithOptions(): Promise<void> {
 export function registerAgentReviewCommands(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): void {
   AgentReviewService.initialize(context, runtime);
 
@@ -120,7 +121,7 @@ export function registerAgentReviewCommands(
     ),
   );
 
-  registerAgentReviewCommitWatcher(context, runtime);
+  registerAgentReviewCommitWatcher(context, runtime, session);
 
   registerCommandEntries(context, [
     {
@@ -129,7 +130,7 @@ export function registerAgentReviewCommands(
     },
     {
       id: 'texra.agentReview.runWithOptions',
-      handler: () => void handleRunWithOptions(),
+      handler: () => void handleRunWithOptions(session),
     },
     {
       id: 'texra.agentReview.stop',

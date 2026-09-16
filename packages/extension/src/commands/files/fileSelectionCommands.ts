@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
@@ -42,13 +42,14 @@ async function announceSelection(
 }
 
 function createMultiPicker(
+  session: SessionHandle,
   options: PickerOptions,
 ): (currentFile?: string) => Promise<string[] | null> {
   return (currentFile) =>
     announceSelection(() =>
       selectFiles({
         currentFile,
-        workspacePath: defaultSession().roots.workspace,
+        workspacePath: session.roots.workspace,
         openLabel: options.openLabel,
         filters: options.filters(),
         allowMany: true,
@@ -56,34 +57,46 @@ function createMultiPicker(
     );
 }
 
-export const selectInputFiles = createMultiPicker({
-  openLabel: 'Select Files',
-  filters: () => ({
-    'Text files': getFilterExtensions('input'),
-  }),
-});
+/**
+ * The native picker of each multi-file launcher list, bound to the host's
+ * session so the dialog's starting folder is that session's workspace.
+ */
+export function createFileSelectionPickers(session: SessionHandle): {
+  input: (currentFile?: string) => Promise<string[] | null>;
+  context: (currentFile?: string) => Promise<string[] | null>;
+  media: (currentFile?: string) => Promise<string[] | null>;
+  output: (currentFile?: string) => Promise<string[] | null>;
+} {
+  return {
+    input: createMultiPicker(session, {
+      openLabel: 'Select Files',
+      filters: () => ({
+        'Text files': getFilterExtensions('input'),
+      }),
+    }),
+    context: createMultiPicker(session, {
+      openLabel: 'Select Context Files',
+      filters: () => ({
+        'Text files': getFilterExtensions('context'),
+      }),
+    }),
+    media: createMultiPicker(session, {
+      openLabel: 'Select Media',
+      filters: () => ({
+        'Image files': getFilterExtensions('media'),
+      }),
+    }),
+    output: createMultiPicker(session, {
+      openLabel: 'Select Output Files',
+      filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
+    }),
+  };
+}
 
-export const selectContextFiles = createMultiPicker({
-  openLabel: 'Select Context Files',
-  filters: () => ({
-    'Text files': getFilterExtensions('context'),
-  }),
-});
-
-export const selectMediaFiles = createMultiPicker({
-  openLabel: 'Select Media',
-  filters: () => ({
-    'Image files': getFilterExtensions('media'),
-  }),
-});
-
-export const selectOutputFiles = createMultiPicker({
-  openLabel: 'Select Output Files',
-  filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
-});
-
-export async function getCurrentFile(): Promise<string | null> {
-  const workspaceRoot = defaultSession().roots.workspace;
+export async function getCurrentFile(
+  session: SessionHandle,
+): Promise<string | null> {
+  const workspaceRoot = session.roots.workspace;
   // Try activeTextEditor first (for text files)
   const doc = vscode.window.activeTextEditor?.document;
   if (doc?.uri.scheme === 'file') {

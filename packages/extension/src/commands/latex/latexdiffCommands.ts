@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { defaultSession } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { createLatexRunDiscovery } from '@agent/storage';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import {
@@ -135,6 +135,7 @@ interface OpenedLatexdiffResult {
  * file whose PDF is not viewer-ready.
  */
 async function openLatexdiffResult(
+  session: SessionHandle,
   diffFilePath: string,
   runtime: ProcessRuntime,
   options: { scheduleViewer?: boolean } = {},
@@ -154,10 +155,15 @@ async function openLatexdiffResult(
   // command's error handler. The caller decides whether to schedule a viewer
   // from `viewerReady`; a generated path alone is not enough when external
   // compilation failed (#10553).
-  const viewerReady = await prepareBuildDisplay(diffLocation, runtime, {
-    preserveFocus: true,
-    scheduleViewer: options.scheduleViewer,
-  });
+  const viewerReady = await prepareBuildDisplay(
+    session,
+    diffLocation,
+    runtime,
+    {
+      preserveFocus: true,
+      scheduleViewer: options.scheduleViewer,
+    },
+  );
   return { diffLocation, viewerReady };
 }
 
@@ -200,6 +206,7 @@ async function restorePreparedViewerTarget(
  * including on normal completion (#10553).
  */
 async function prepareLatexdiffResultsAndScheduleViewer(
+  session: SessionHandle,
   results: readonly DiffRunResult[],
   runtime: ProcessRuntime,
 ): Promise<void> {
@@ -212,9 +219,14 @@ async function prepareLatexdiffResultsAndScheduleViewer(
       const suffix = result.description ? ` (${result.description})` : '';
 
       if (result.success) {
-        const opened = await openLatexdiffResult(result.diffPath, runtime, {
-          scheduleViewer: false,
-        });
+        const opened = await openLatexdiffResult(
+          session,
+          result.diffPath,
+          runtime,
+          {
+            scheduleViewer: false,
+          },
+        );
         if (opened) {
           lastProcessedLocation = opened.diffLocation;
           log.debug(`Successfully generated diff: ${result.diffPath}${suffix}`);
@@ -250,6 +262,7 @@ async function prepareLatexdiffResultsAndScheduleViewer(
  * underlying diff call and the tool name used for logging.
  */
 async function runDiffAndOpen(
+  session: SessionHandle,
   toolLabel: string,
   runDiff: (mathMarkup: MathMarkupOption) => Effect.Effect<LaTeXdiffResult>,
   runtime: ProcessRuntime,
@@ -262,17 +275,17 @@ async function runDiffAndOpen(
   if (!result.success) {
     throw new Error(result.message);
   }
-  await openLatexdiffResult(result.diffPath, runtime);
+  await openLatexdiffResult(session, result.diffPath, runtime);
 }
 
 /** Settle a housekeeping program on the host entry's runtime over the
- *  default session's rooted filesystems, read per command rather than
- *  captured at registration. */
+ *  session's rooted filesystems. */
 function onSessionFiles<A, E>(
+  session: SessionHandle,
   runtime: ProcessRuntime,
   program: Effect.Effect<A, E, WorkspaceFs | StorageFs | ProcessServices>,
 ): Promise<A> {
-  return runtime.runPromise(withSessionFs(defaultSession().roots, program));
+  return runtime.runPromise(withSessionFs(session.roots, program));
 }
 
 // Turn pack/clean run results into user notifications. Folds the notification
@@ -285,17 +298,18 @@ function reportLatexdiff(result: LatexdiffPackResult): void {
 export function registerLatexdiffCommands(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): void {
   registerCommandEntries(context, [
     {
       id: 'texra.latexdiff',
       handler: (inputFile: string, baseFile: string, editedFile: string) =>
-        handleLatexdiff(inputFile, baseFile, editedFile, runtime),
+        handleLatexdiff(session, inputFile, baseFile, editedFile, runtime),
     },
     {
       id: 'texra.latexdiffvc',
       handler: (inputFile: string, baseFile: string, commitHash: string) =>
-        handleLatexdiffvc(inputFile, baseFile, commitHash, runtime),
+        handleLatexdiffvc(session, inputFile, baseFile, commitHash, runtime),
     },
     {
       id: 'texra.packLatexdiffvc',
@@ -305,18 +319,32 @@ export function registerLatexdiffCommands(
         commitHash: string,
         clean: boolean,
       ) =>
-        handlePackLatexdiffvc(inputFile, baseFile, commitHash, clean, runtime),
+        handlePackLatexdiffvc(
+          session,
+          inputFile,
+          baseFile,
+          commitHash,
+          clean,
+          runtime,
+        ),
     },
     {
       id: 'texra.cleanLatexdiffvc',
       // Clean is a pack run with `clean` set, and the failure label follows it.
       handler: (inputFile: string, baseFile: string, commitHash: string) =>
-        handlePackLatexdiffvc(inputFile, baseFile, commitHash, true, runtime),
+        handlePackLatexdiffvc(
+          session,
+          inputFile,
+          baseFile,
+          commitHash,
+          true,
+          runtime,
+        ),
     },
     {
       id: 'texra.runLatexdiff',
       handler: (config: RunLatexdiffCommandConfig) =>
-        handleRunLatexdiff(config, runtime),
+        handleRunLatexdiff(session, config, runtime),
     },
   ]);
 }
@@ -344,6 +372,7 @@ async function resolveDiffBase(
 }
 
 async function handleLatexdiff(
+  session: SessionHandle,
   inputFile: string,
   baseFile: string,
   editedFile: string,
@@ -364,6 +393,7 @@ async function handleLatexdiff(
   await withLatexdiffTool('latexdiff', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
     return runDiffAndOpen(
+      session,
       'latexdiff',
       (mathMarkup) =>
         latexdiffService.runDiff(
@@ -378,6 +408,7 @@ async function handleLatexdiff(
 }
 
 async function handleLatexdiffvc(
+  session: SessionHandle,
   inputFile: string,
   baseFile: string,
   commitHash: string,
@@ -388,6 +419,7 @@ async function handleLatexdiffvc(
   await withLatexdiffTool('latexdiff-vc', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
     return runDiffAndOpen(
+      session,
       'latexdiff-vc',
       (mathMarkup) =>
         latexdiffService.runDiffVc(fileToUseLocation, commitHash, mathMarkup),
@@ -397,6 +429,7 @@ async function handleLatexdiffvc(
 }
 
 async function handlePackLatexdiffvc(
+  session: SessionHandle,
   inputFile: string,
   baseFile: string,
   commitHash: string,
@@ -414,6 +447,7 @@ async function handlePackLatexdiffvc(
       if (!fileToUse) return;
       reportLatexdiff(
         await onSessionFiles(
+          session,
           runtime,
           runPackLatexdiffvc(fileToUse, commitHash, clean),
         ),
@@ -423,6 +457,7 @@ async function handlePackLatexdiffvc(
 }
 
 async function handleRunLatexdiff(
+  session: SessionHandle,
   config: RunLatexdiffCommandConfig,
   runtime: ProcessRuntime,
 ): Promise<void> {
@@ -469,7 +504,6 @@ async function handleRunLatexdiff(
             increment: 0,
             message: 'Preparing LaTeX diffs...',
           });
-          const session = defaultSession();
           return runtime.runPromise(
             runLatexdiffForRun({
               filesystem: nodeFilesystem,
@@ -506,7 +540,7 @@ async function handleRunLatexdiff(
         );
       }
 
-      await prepareLatexdiffResultsAndScheduleViewer(results, runtime);
+      await prepareLatexdiffResultsAndScheduleViewer(session, results, runtime);
     },
   );
 }

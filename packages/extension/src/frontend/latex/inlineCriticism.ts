@@ -20,11 +20,7 @@ import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  defaultSession,
-  type ManualCriticismEntry,
-  type SessionHandle,
-} from '@agent/runtime';
+import { type ManualCriticismEntry, type SessionHandle } from '@agent/runtime';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
@@ -227,7 +223,7 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
 export function registerInlineCriticism(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
-  session: Pick<SessionHandle, 'events' | 'now'> = defaultSession(),
+  session: Pick<SessionHandle, 'events' | 'now'>,
 ): void {
   registration = { context, session, runtime };
   if (isInlineCriticismEnabled()) enable(registration);
