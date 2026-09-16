@@ -168,15 +168,16 @@ function toolUseConfig() {
 /** Tools the CLI runtime hides by default during agent run. */
 const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = getDefaultUnavailableToolNames('cli');
 
-/** A run program's options with the session and runtime the wrapper below
- *  supplies. */
-type WithoutSession<O> = Omit<O, 'session' | 'runtime'>;
+/** A run program's options with the session, runtime and lifecycle the
+ *  wrapper below supplies. */
+type WithoutSession<O> = Omit<O, 'session' | 'runtime' | 'lifecycle'>;
 
 async function loadExecuteCli() {
   const runtime = await import('@cli/runtime/executeCli');
   const { defaultSession } = await import('@agent/runtime/SessionHandle');
-  // The commands thread `initCliPlatform`'s session and runtime in; here the
-  // process default this file installs stands in for both.
+  // The commands thread `initCliPlatform`'s session, runtime and lifecycle
+  // in; here the process default this file installs stands in for the first
+  // two and the installed host's lifecycle for the third.
   return {
     ...runtime,
     executeCliRequest: (
@@ -190,6 +191,7 @@ async function loadExecuteCli() {
         runtime.executeCliRequest(request, context, {
           session: Effect.succeed(defaultSession()),
           runtime: effectRuntime(),
+          lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
         fakeProcessServices(),
@@ -205,6 +207,7 @@ async function loadExecuteCli() {
         runtime.executeCliConfig(config, context, {
           session: Effect.succeed(defaultSession()),
           runtime: effectRuntime(),
+          lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
         fakeProcessServices(),
@@ -220,6 +223,7 @@ async function loadExecuteCli() {
         runtime.executeCliToolUseConfig(config, context, {
           session: Effect.succeed(defaultSession()),
           runtime: effectRuntime(),
+          lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
         fakeProcessServices(),
@@ -735,7 +739,7 @@ describe('executeCliRequest', () => {
         const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
         mocks.runAgent.mockImplementationOnce(async () => {
           const hooks =
-            mocks.createHeadlessCliHostInteractions.mock.calls[0]?.[2];
+            mocks.createHeadlessCliHostInteractions.mock.calls[0]?.[3];
           hooks.emit('requestShowError', { message: 'Agent not found.' });
           throw new AgentError('Agent not found.');
         });

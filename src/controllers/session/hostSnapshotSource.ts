@@ -10,7 +10,7 @@
  * its missing tools; the desktop keeps both in Settings). The sign-in probe
  * is the account plane's own read, yielded from `SupabaseAuth`.
  */
-import { Cause, Data, Effect, Exit } from 'effect';
+import { Cause, Data, Effect, Exit, type FileSystem } from 'effect';
 import { computeAgentOptionsData } from '@agent/index';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
@@ -72,8 +72,14 @@ interface HostSnapshotSourceOptions {
    * preferences.
    */
   inScope: ModelAvailabilityScope;
-  /** The launcher's single-slot catalogs: base and edited candidates. */
-  fileOptions(): Effect.Effect<FileOptions, HostSnapshotReadFailed>;
+  /** The launcher's single-slot catalogs: base and edited candidates. The
+   *  read takes the process `FileSystem` from context; the refresh effects
+   *  that reach it carry the requirement. */
+  fileOptions(): Effect.Effect<
+    FileOptions,
+    HostSnapshotReadFailed,
+    FileSystem.FileSystem
+  >;
   readRecentCommits(): Effect.Effect<
     { commits: string[]; isGitRepo: boolean },
     HostSnapshotReadFailed
@@ -95,12 +101,16 @@ interface HostSnapshotSourceOptions {
 
 export interface HostSnapshotSource {
   /** Reassemble every catalog and publish the result. */
-  readonly refresh: Effect.Effect<void, never, SupabaseAuth>;
+  readonly refresh: Effect.Effect<
+    void,
+    never,
+    SupabaseAuth | FileSystem.FileSystem
+  >;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<void>;
   /** The project's files changed on disk, or the surface asked for a relist. */
-  readonly refreshFiles: Effect.Effect<void>;
+  readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
   readonly refreshCommits: Effect.Effect<void>;
   /** The sign-in state changed. */
   readonly refreshAuth: Effect.Effect<void, never, SupabaseAuth>;
@@ -256,7 +266,7 @@ export function createHostSnapshotSource(
   const catalogLoads = [loadAgents, loadTeams, loadModels];
 
   return {
-    refresh: guarded(
+    refresh: guarded<SupabaseAuth | FileSystem.FileSystem>(
       ...catalogLoads,
       loadFiles,
       loadCommits,

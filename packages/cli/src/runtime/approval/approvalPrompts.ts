@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { defaultSession } from '@agent/runtime';
+import { type SessionHandle } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import { getExhaustionReason } from '@shared/schemas';
 import type { RequestDecision, RetryPermission, RunId } from '@shared/schemas';
@@ -47,10 +47,12 @@ function onCliPromptLane(context: CliContext) {
  * is diagnostics only — a denied gate never changes the process exit code.
  *
  * Match settleApprovals: TUI `/approval` updates SessionHandle only, so the
- * frozen CliContext.approvalPolicy can be stale. Operator-facing warnings go
+ * frozen CliContext.approvalPolicy can be stale — the warning names the live
+ * policy read off the threaded `session`. Operator-facing warnings go
  * to stderr (not `@logger/logUtils`).
  */
 export function warnApprovalDenied(
+  session: SessionHandle,
   context: CliContext,
   gate?: string,
   runId?: RunId | '',
@@ -60,7 +62,7 @@ export function warnApprovalDenied(
   const key = runId || undefined;
   if (warned.has(key)) return;
   warned.add(key);
-  const policy = defaultSession().approvalPolicy;
+  const policy = session.approvalPolicy;
   writeTextStderr(
     `[warn] [cli-approval] ${gate?.trim() || 'Approval gate'} denied under policy "${policy}".`,
   );

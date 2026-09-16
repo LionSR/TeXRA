@@ -100,22 +100,24 @@ export const pollDeviceAuthorization = Effect.fn(
 });
 
 /**
- * Persist the approved token as a session through the coordinator's settled
- * store: the Supabase coordinator's store program settled by `runAuthProgram`,
- * or a subscription coordinator's Promise method while that surface settles
- * its own callers. An interruption already pending is honored before the
- * store starts; once it has started, an interruption waits for it, so the
- * persisted session and the caller's view of it never diverge.
+ * Persist the approved token as a session through the coordinator's store
+ * program. An interruption already pending is honored before the store
+ * starts; once it has started, an interruption waits for it, so the persisted
+ * session and the caller's view of it never diverge.
  */
 export const completeDeviceSession = Effect.fn(
   'deviceAuthorization.completeDeviceSession',
-)(function* <Session>(complete: () => Promise<Session>) {
+)(function* <Session, E, R>(complete: () => Effect.Effect<Session, E, R>) {
   yield* Effect.yieldNow;
   return yield* Effect.uninterruptible(
-    Effect.tryPromise({
-      try: complete,
-      catch: (cause) =>
-        new SessionCompletionFailed({ message: toErrorMessage(cause), cause }),
-    }),
+    complete().pipe(
+      Effect.mapError(
+        (cause) =>
+          new SessionCompletionFailed({
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      ),
+    ),
   );
 });

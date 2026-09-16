@@ -56,15 +56,14 @@ export type PresentationEventHandlers<
  * Why the host could not read a file's diagnostics for the diagnostics tool.
  *
  * Read off the one implementation
- * (`packages/extension/src/frontend/latex/linter.ts`): the file's workspace
- * root is not resolvable (`workspace-unavailable`), the LaTeX build the read
- * triggers to refresh them faults (`build-failed`), or the host's own
+ * (`packages/extension/src/frontend/latex/linter.ts`): the LaTeX build the
+ * read triggers to refresh them faults (`build-failed`), or the host's own
  * diagnostics collection throws (`read-failed`).
  */
 export class DiagnosticsReadFailed extends Data.TaggedError(
   'DiagnosticsReadFailed',
 )<{
-  readonly reason: 'workspace-unavailable' | 'build-failed' | 'read-failed';
+  readonly reason: 'build-failed' | 'read-failed';
   readonly path: string;
   readonly message: string;
   readonly cause?: unknown;

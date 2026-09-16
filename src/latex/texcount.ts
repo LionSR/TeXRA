@@ -1,11 +1,11 @@
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
-import { fsCall } from '@utils/errors/fsCall';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
+import { pathExists } from '@utils/files/fsDurability';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { hasExtension } from '@utils/core/pathCore';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
@@ -25,7 +25,14 @@ const COUNT_CONCURRENCY = 4;
 const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
   absolutePath: string,
 ) {
-  return yield* fsCall(() => AbsoluteFS.read(absolutePath)).pipe(
+  const fs = yield* FileSystem.FileSystem;
+  return yield* fs.readFile(absolutePath).pipe(
+    Effect.mapError(ensureError),
+    // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
+    // strips a leading UTF-8 BOM that the old `AbsoluteFS.read` preserved.
+    Effect.map((bytes) =>
+      normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
+    ),
     Effect.map((content) =>
       CHINESE_PACKAGES.some(
         (pkg) =>
@@ -57,7 +64,10 @@ interface TexcountResult {
 const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
   filePath: string,
 ) {
-  const exists = yield* fsCall(() => AbsoluteFS.exists(filePath));
+  const fs = yield* FileSystem.FileSystem;
+  const exists = yield* pathExists(fs, filePath).pipe(
+    Effect.mapError(ensureError),
+  );
   if (!exists) {
     const reason = `File ${filePath} does not exist.`;
     yield* Effect.logWarning(reason);
@@ -246,7 +256,7 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
 export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
   filePaths: string | string[],
   { mode = 'separate', channel }: TexcountOptions = {},
-): Effect.fn.Return<TexcountResult, never> {
+): Effect.fn.Return<TexcountResult, never, FileSystem.FileSystem> {
   const resolvedChannel = channel ?? CHANNEL;
 
   const counted = Effect.gen(function* () {

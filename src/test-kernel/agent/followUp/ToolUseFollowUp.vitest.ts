@@ -14,7 +14,11 @@ import {
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentResumeFailed } from '@platform/interfaces';
+import {
+  AgentResume,
+  AgentResumeFailed,
+  type AgentResumePort,
+} from '@platform/interfaces';
 import { aggregateId, type RunId, type SessionEvent } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
@@ -34,6 +38,15 @@ function mockTryResume(): Mock<
 > {
   return vi.fn(() => Effect.succeed(true));
 }
+
+/** Provide a case's resume port as the `AgentResume` service the wake reads:
+ *  production takes the process service; a suite substitutes it. */
+const withResumePort =
+  (tryResumeRun: AgentResumePort['tryResumeRun']) =>
+  <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, Exclude<R, AgentResume>> =>
+    Effect.provideService(effect, AgentResume, { tryResumeRun });
 
 /**
  * The admission boundary over a recorded session plane: one serializer (a
@@ -188,10 +201,9 @@ describe('submitFollowUp', () => {
 
         for (const text of ['while waiting', 'between turns', 'during turn']) {
           expect(
-            yield* submitFollowUp(runId, text, {
-              session,
-              resumePort: { tryResumeRun },
-            }),
+            yield* submitFollowUp(runId, text, { session }).pipe(
+              withResumePort(tryResumeRun),
+            ),
           ).toMatchObject({ status: 'queued' });
         }
 
@@ -214,10 +226,9 @@ describe('submitFollowUp', () => {
       const tryResumeRun = mockTryResume();
 
       expect(
-        yield* submitFollowUp(runId, 'during active turn', {
-          session,
-          resumePort: { tryResumeRun },
-        }),
+        yield* submitFollowUp(runId, 'during active turn', { session }).pipe(
+          withResumePort(tryResumeRun),
+        ),
       ).toEqual({ status: 'sent' });
 
       expect(tryResumeRun).not.toHaveBeenCalled();
@@ -242,7 +253,7 @@ describe('submitFollowUp', () => {
           yield* submitFollowUp(runId, 'child progress', {
             session,
             mode: 'live_notification',
-          }),
+          }).pipe(withResumePort(mockTryResume())),
         ).toEqual({ status: 'queued' });
 
         expect(yield* taken(session.followUps, flow)).toEqual([
@@ -271,9 +282,8 @@ describe('submitFollowUp', () => {
         // without claiming recovery or triggering a stream resume.
         const result = yield* submitFollowUp(runId, 'child progress', {
           session,
-          resumePort: { tryResumeRun },
           mode: 'live_notification',
-        });
+        }).pipe(withResumePort(tryResumeRun));
 
         expect(result).toMatchObject({ status: 'queued' });
         expect(tryResumeRun).not.toHaveBeenCalled();
@@ -293,22 +303,19 @@ describe('submitFollowUp', () => {
       });
 
       const first = yield* Effect.forkChild(
-        submitFollowUp(runId, 'one', {
-          session,
-          resumePort: { tryResumeRun },
-        }),
+        submitFollowUp(runId, 'one', { session }).pipe(
+          withResumePort(tryResumeRun),
+        ),
       );
       const second = yield* Effect.forkChild(
-        submitFollowUp(runId, 'two', {
-          session,
-          resumePort: { tryResumeRun },
-        }),
+        submitFollowUp(runId, 'two', { session }).pipe(
+          withResumePort(tryResumeRun),
+        ),
       );
       const third = yield* Effect.forkChild(
-        submitFollowUp(runId, 'three', {
-          session,
-          resumePort: { tryResumeRun },
-        }),
+        submitFollowUp(runId, 'three', { session }).pipe(
+          withResumePort(tryResumeRun),
+        ),
       );
 
       yield* settle;
@@ -335,16 +342,15 @@ describe('submitFollowUp', () => {
         const fiber = yield* Effect.forkChild(
           submitFollowUp(runId, 'keep this input', {
             session,
-            resumePort: {
-              tryResumeRun: () => {
-                Deferred.doneUnsafe(started, Effect.void);
-                return Effect.promise(() => resumed.promise);
-              },
-            },
             onAdmitted: () => {
               Deferred.doneUnsafe(admitted, Effect.void);
             },
-          }),
+          }).pipe(
+            withResumePort(() => {
+              Deferred.doneUnsafe(started, Effect.void);
+              return Effect.promise(() => resumed.promise);
+            }),
+          ),
         );
         // The host is asked before the submitter is told it was admitted, so
         // the interrupt below lands on a wake already in flight.
@@ -369,19 +375,17 @@ describe('submitFollowUp', () => {
       const runId = generateRunId();
       const session = fakeSession({ kind: 'queue' });
       expect(
-        yield* submitFollowUp(runId, 'keep this input', {
-          session,
-          resumePort: {
-            tryResumeRun: () =>
-              Effect.fail(
-                new AgentResumeFailed({
-                  runId,
-                  message: 'resume prep failed',
-                  cause: new Error('resume prep failed'),
-                }),
-              ),
-          },
-        }),
+        yield* submitFollowUp(runId, 'keep this input', { session }).pipe(
+          withResumePort(() =>
+            Effect.fail(
+              new AgentResumeFailed({
+                runId,
+                message: 'resume prep failed',
+                cause: new Error('resume prep failed'),
+              }),
+            ),
+          ),
+        ),
       ).toEqual({ status: 'queued', wake: 'failed' });
       expect(session.followUps.claimLive(runId, 'child')).toBeDefined();
       expect(recorded.queued(runId)).toEqual(['keep this input']);
@@ -397,10 +401,9 @@ describe('submitFollowUp', () => {
       const tryResumeRun = mockTryResume();
 
       expect(
-        yield* submitFollowUp(runId, 'continue', {
-          session,
-          resumePort: { tryResumeRun },
-        }),
+        yield* submitFollowUp(runId, 'continue', { session }).pipe(
+          withResumePort(tryResumeRun),
+        ),
       ).toEqual({ status: 'queued' });
       expect(tryResumeRun).toHaveBeenCalledTimes(1);
     }),
@@ -421,11 +424,8 @@ describe('submitFollowUp', () => {
           yield* submitFollowUp(
             runId,
             { text: 'retained child result', origin: 'subagent_result' },
-            {
-              session,
-              resumePort: { tryResumeRun },
-            },
-          ),
+            { session },
+          ).pipe(withResumePort(tryResumeRun)),
         ).toEqual({ status: 'queued' });
 
         expect(deriveSpy).not.toHaveBeenCalled();
@@ -446,11 +446,8 @@ describe('submitFollowUp', () => {
         yield* submitFollowUp(
           runId,
           { text: 'late child result', origin: 'subagent_result' },
-          {
-            session,
-            resumePort: { tryResumeRun },
-          },
-        ),
+          { session },
+        ).pipe(withResumePort(tryResumeRun)),
       ).toEqual({ status: 'failed', reason: 'not_resumable' });
       expect(tryResumeRun).not.toHaveBeenCalled();
     }),
@@ -470,10 +467,9 @@ describe('submitFollowUp', () => {
         };
 
         expect(
-          yield* submitFollowUp(runId, delivery, {
-            session,
-            resumePort: { tryResumeRun },
-          }),
+          yield* submitFollowUp(runId, delivery, { session }).pipe(
+            withResumePort(tryResumeRun),
+          ),
         ).toEqual({ status: 'queued' });
         expect(tryResumeRun).toHaveBeenCalledTimes(1);
 
@@ -481,10 +477,9 @@ describe('submitFollowUp', () => {
         // another parent message nor trigger another parent wake.
         for (let replay = 0; replay < 100; replay++) {
           expect(
-            yield* submitFollowUp(runId, delivery, {
-              session,
-              resumePort: { tryResumeRun },
-            }),
+            yield* submitFollowUp(runId, delivery, { session }).pipe(
+              withResumePort(tryResumeRun),
+            ),
           ).toEqual({ status: 'sent' });
         }
         expect(tryResumeRun).toHaveBeenCalledTimes(1);

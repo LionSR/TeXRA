@@ -43,6 +43,7 @@
 import { Effect } from 'effect';
 
 import { SupabaseAuth } from '@auth/SupabaseAuth';
+import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { AppState, type StateStore } from '@platform/interfaces';
@@ -54,8 +55,10 @@ import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getCliSecrets } from './cliSecrets';
+import { cliAgentResume } from './cliAgentResume';
 import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 
 /** The process runtime and the global state store installed under it. */
@@ -142,16 +145,28 @@ export function installCliProcessRuntime(
       secrets,
       ...(globalState === undefined ? {} : { appState: globalState }),
       auth,
+      // The one resume port, shared with the platform `initCliPlatform`
+      // wires: it forwards to the chat TUI's handler whenever one is
+      // mounted, whichever entry installed this runtime.
+      agentResume: cliAgentResume,
       setup: {
         host: 'cli',
         // The one closure left over the runtime being installed, and a real
         // one: signing in runs a program on it, long after this returns.
-        signIn: async () => {
-          await signInCliSupabase(runtime, { openBrowser: true });
-          return runtime.runPromise(
-            Effect.flatMap(SupabaseAuth, (plane) => plane.authenticated),
-          );
-        },
+        signIn: () =>
+          Effect.tryPromise({
+            try: async () => {
+              await signInCliSupabase(runtime, { openBrowser: true });
+              return runtime.runPromise(
+                Effect.flatMap(SupabaseAuth, (plane) => plane.authenticated),
+              );
+            },
+            catch: (cause) =>
+              new SignInFailed({
+                message: `The CLI sign-in could not run: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          }),
       },
       lean: directLeanLanguageServices(),
     });

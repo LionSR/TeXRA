@@ -25,6 +25,7 @@ import {
   type ChildRunLoopParams,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
+import type { AgentResume } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -122,7 +123,7 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
     completion: Fiber.Fiber<void, Error>;
   },
   Error,
-  R | Runs
+  R | Runs | AgentResume
 > {
   return runWithOwnedRunLeaseLaunchGuard(
     input.session,

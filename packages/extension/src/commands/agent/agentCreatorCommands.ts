@@ -17,6 +17,7 @@ import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { StateStore } from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
@@ -288,13 +289,20 @@ export function handleCreateAgentWithAI(
   category: AgentCategory,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
+  roots: WorkspaceRoots,
 ) {
   return Effect.gen(function* () {
     const config = yield* loadCreatorConfig(context);
-    yield* runAgentCreator(config, category, buildVSCodeUI(runtime), {
-      secrets,
-      globalState,
-    });
+    yield* runAgentCreator(
+      config,
+      category,
+      buildVSCodeUI(runtime),
+      {
+        secrets,
+        globalState,
+      },
+      roots,
+    );
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.promise(async () => {

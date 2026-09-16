@@ -75,13 +75,20 @@ import * as logger from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import {
+  SHUTDOWN_PHASE,
+  type AgentResumePort,
+  type LifecycleHost,
+} from '@platform/interfaces';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { tryProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
+import {
+  initProcessWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
 import {
   createNodePlatform,
   createNodeWorkspaceRoots,
@@ -169,9 +176,10 @@ let extensionShutdownPromise: Promise<void> | undefined;
  * both activation paths: the credential-only path without a folder and the
  * workspace path, which adds the ports only a folder can answer.
  *
- * Returns the secrets port and the process runtime it built, so the surfaces
- * registered below take both as arguments instead of reading either back off
- * an ambient locator (PRD R1: each composition root holds its runtime).
+ * Returns the secrets port, the process runtime and the process roots it
+ * built, so the surfaces registered below take them as arguments instead of
+ * reading either back off an ambient locator (PRD R1: each composition root
+ * holds its runtime).
  */
 async function initVscodePlatform(
   context: vscode.ExtensionContext,
@@ -187,6 +195,7 @@ async function initVscodePlatform(
   runtime: ProcessRuntime;
   auth: SupabaseAuthShape;
   authReadiness: AuthReadinessGate;
+  roots: WorkspaceRoots;
 }> {
   // The process runtime comes first: the config stores below are opened as
   // Effect programs, so it must exist before the platform this host wires.
@@ -220,6 +229,14 @@ async function initVscodePlatform(
       Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
     ),
   );
+  // The resume port closes over the runtime installed just below: a resume
+  // attempt runs on it, and the port is only invoked after activation has
+  // returned. One value serves both the runtime's `AgentResume` service and
+  // the platform port.
+  const agentResume: AgentResumePort = {
+    tryResumeRun: (runId, recovery) =>
+      tryResumeFromResumeData(runId, runtime, recovery),
+  };
   const runtime = installProcessRuntime({
     processStart: await nodeProcesses.selfIdentity(),
     globalStorage: () => storage.getGlobalStoragePath(),
@@ -227,6 +244,7 @@ async function initVscodePlatform(
     secrets,
     appState: globalState,
     auth,
+    agentResume,
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`
     // models on this host (R2); consent was granted from the settings view.
@@ -256,24 +274,20 @@ async function initVscodePlatform(
     createNodePlatform({
       lifecycle,
       agentDirectories,
-      agentResume: {
-        tryResumeRun: (runId, recovery) =>
-          tryResumeFromResumeData(runId, runtime, recovery),
-      },
+      agentResume,
       ...extras,
     }),
   );
-  initProcessWorkspaceRoots(
-    createNodeWorkspaceRoots({
-      workspacePath: workspaceRoot,
-      storage: storage.getStoragePath(),
-      globalStorage: storage.getGlobalStoragePath(),
-      config,
-      workspaceState,
-      globalState,
-    }),
-  );
-  return { secrets, runtime, auth, authReadiness };
+  const roots = createNodeWorkspaceRoots({
+    workspacePath: workspaceRoot,
+    storage: storage.getStoragePath(),
+    globalStorage: storage.getGlobalStoragePath(),
+    config,
+    workspaceState,
+    globalState,
+  });
+  initProcessWorkspaceRoots(roots);
+  return { secrets, runtime, auth, authReadiness, roots };
 }
 
 function shutdownExtension(): Promise<void> {
@@ -602,27 +616,28 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
-  const { secrets, runtime, auth, authReadiness } = await initVscodePlatform(
-    context,
-    lifecycle,
-    workspaceRoot,
-    workspaceState,
-    {
-      languageModel,
-      toolMissingHandler: async (message, openDocsCommand) => {
-        const actions = openDocsCommand ? ['View Installation Guide'] : [];
-        log.error(message);
-        const choice = await vscode.window.showErrorMessage(
-          message,
-          ...actions,
-        );
-        if (choice === 'View Installation Guide' && openDocsCommand) {
-          const [command, ...args] = openDocsCommand.split(',');
-          void vscode.commands.executeCommand(command, ...args);
-        }
+  const { secrets, runtime, auth, authReadiness, roots } =
+    await initVscodePlatform(
+      context,
+      lifecycle,
+      workspaceRoot,
+      workspaceState,
+      {
+        languageModel,
+        toolMissingHandler: async (message, openDocsCommand) => {
+          const actions = openDocsCommand ? ['View Installation Guide'] : [];
+          log.error(message);
+          const choice = await vscode.window.showErrorMessage(
+            message,
+            ...actions,
+          );
+          if (choice === 'View Installation Guide' && openDocsCommand) {
+            const [command, ...args] = openDocsCommand.split(',');
+            void vscode.commands.executeCommand(command, ...args);
+          }
+        },
       },
-    },
-  );
+    );
   wirePostPlatform(secrets, runtime, auth, authReadiness);
   // That registration precedes the fire-and-forget remote agent refresh below,
   // which reads the account plane's access token: with the provider in place
@@ -644,7 +659,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const runtimeSession = await runtime.runPromise(
     initializeDefaultSession({
       responseTextProcessing: createTexraResponseTextProcessing(
-        createAgentResponseTextConnector({ secrets, globalState }),
+        createAgentResponseTextConnector({ secrets, globalState }, roots),
       ),
     }),
   );
@@ -762,6 +777,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     progressViewProvider,
     secrets,
     runtime,
+    roots,
   );
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context, runtime);

@@ -15,7 +15,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 // Local imports
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { appSignals } from '@eventBus/AppSignals';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
@@ -178,11 +177,12 @@ describe('GitHub subscription app signals and follow-ups', () => {
   it('publishes githubSubscriptionsChanged through app signals', async () => {
     const signal = recordAppSignal('githubSubscriptionsChanged');
     const source = new RegistryTestSource();
+    const session = createTestSession();
     const registry = createTestRegistry(source);
 
     try {
       await effectRuntime().runPromise(
-        registry.bind('stream-a' as RunId, 'owner/repo'),
+        registry.bind('stream-a' as RunId, 'owner/repo', session),
       );
       expect(signal.events).toEqual([
         { event: 'githubSubscriptionsChanged', payload: undefined },
@@ -196,6 +196,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       ]);
     } finally {
       signal.dispose();
+      await Effect.runPromise(session.dispose());
     }
   });
 
@@ -233,8 +234,8 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const registry = createTestRegistry(source);
 
     try {
-      await withRunContext(createRunContext({ runId, session }), () =>
-        effectRuntime().runPromise(registry.bind(runId, 'owner/repo')),
+      await effectRuntime().runPromise(
+        registry.bind(runId, 'owner/repo', session),
       );
 
       await source.emit('owner/repo', 'new github event');
@@ -259,13 +260,11 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const registry = createTestRegistry(source);
 
     try {
-      await withRunContext(
-        createRunContext({ runId, session: firstSession }),
-        () => effectRuntime().runPromise(registry.bind(runId, 'owner/repo')),
+      await effectRuntime().runPromise(
+        registry.bind(runId, 'owner/repo', firstSession),
       );
-      await withRunContext(
-        createRunContext({ runId, session: secondSession }),
-        () => effectRuntime().runPromise(registry.bind(runId, 'owner/repo')),
+      await effectRuntime().runPromise(
+        registry.bind(runId, 'owner/repo', secondSession),
       );
 
       await source.emit('owner/repo', 'new github event');
@@ -284,6 +283,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
   it('warns instead of leaking an unhandled rejection when delivery fails', async () => {
     const runId = 'stream-a' as RunId;
     const source = new RegistryTestSource();
+    const session = createTestSession();
     const logger = {
       info: vi.fn(),
       warn: vi.fn(),
@@ -296,7 +296,9 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
     try {
       process.once('unhandledRejection', unhandledRejection);
-      await effectRuntime().runPromise(registry.bind(runId, 'owner/repo'));
+      await effectRuntime().runPromise(
+        registry.bind(runId, 'owner/repo', session),
+      );
 
       // emit() awaits the delivery program, so the recovery has run by the
       // time it resolves — no settle-and-hope.
@@ -314,6 +316,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       );
     } finally {
       process.off('unhandledRejection', unhandledRejection);
+      await Effect.runPromise(session.dispose());
     }
   });
 });

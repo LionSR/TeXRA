@@ -28,6 +28,7 @@ import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
+import { SignInFailed } from '@common/errors/signInFailed';
 import {
   teamAvailabilityPrompt,
   type TeamAvailabilityPrompt,
@@ -145,7 +146,6 @@ import {
   getDesktopWindowTitle,
   installDesktopWindowTitle,
 } from './desktopWindowTitle.js';
-import { registerDesktopSetupSignIn } from './desktopSetupAuth.js';
 import {
   checkForDesktopUpdate,
   DESKTOP_RELEASES_PAGE_URL,
@@ -166,6 +166,7 @@ import {
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
+import type { DesktopSetupAuth } from './desktopSetupAuth.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
@@ -317,6 +318,8 @@ function createWindow(options: {
    * runs settles on it, and every handler and service below is handed it.
    */
   runtime: ProcessRuntime;
+  /** See ElectronPlatformInitResult.setupAuth. */
+  setupAuth: DesktopSetupAuth;
 }): void {
   const activeProject = () => options.projects.active();
   // This window's handle on the process runtime, as its opener handed it over.
@@ -705,20 +708,30 @@ function createWindow(options: {
     if (provider === undefined) return;
     await desktopAuth.signIn(provider);
   };
-  const signInForRemoteAgentCatalog = async (): Promise<boolean> => {
-    const provider = await chooseOAuthProvider();
-    if (provider === undefined) return false;
-    teamSignInPending = true;
-    try {
-      return (
-        (await desktopAuth.signInAndWaitForSession(provider)) &&
-        (await runtime.runPromise(options.supabaseAuth.authenticated))
-      );
-    } finally {
-      teamSignInPending = false;
-    }
-  };
-  windowResources.add(registerDesktopSetupSignIn(signInForRemoteAgentCatalog));
+  const signInForRemoteAgentCatalog = () =>
+    Effect.tryPromise({
+      try: async () => {
+        const provider = await chooseOAuthProvider();
+        if (provider === undefined) return false;
+        teamSignInPending = true;
+        try {
+          return (
+            (await desktopAuth.signInAndWaitForSession(provider)) &&
+            (await runtime.runPromise(options.supabaseAuth.authenticated))
+          );
+        } finally {
+          teamSignInPending = false;
+        }
+      },
+      catch: (cause) =>
+        new SignInFailed({
+          message: `The desktop sign-in could not run: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    });
+  windowResources.add(
+    options.setupAuth.registerSignIn(signInForRemoteAgentCatalog),
+  );
   const folderPickerDefaultPath = () =>
     activeProject().root ?? app.getPath('home');
 
@@ -1980,6 +1993,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               agentDirectories: platformInit.agentDirectories,
               resourcesPath: platformInit.resourcesPath,
               runtime,
+              setupAuth: platformInit.setupAuth,
             });
           reopenMainWindow();
           if (unopenedProjects.length > 0) {

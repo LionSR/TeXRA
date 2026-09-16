@@ -69,14 +69,6 @@ vi.mock('@controllers/settingsView/SettingsAgentControllerFactory', () => ({
 vi.mock('@controllers/settingsView/SettingsTeamRosterController', () => ({
   applySettingsTeamRoster: mocks.applySettingsTeamRoster,
 }));
-vi.mock(
-  '@controllers/settingsView/SettingsRemoteAgentPromptController',
-  () => ({
-    getRemoteAgentPromptConfig: vi.fn(() =>
-      Effect.succeed({ ok: false as const, message: 'unused' }),
-    ),
-  }),
-);
 vi.mock('@frontend/auth/agentCatalogRefreshScope', () => ({
   withAgentCatalogAuthRefreshDeferred: async (action: () => Promise<void>) =>
     action(),

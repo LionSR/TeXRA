@@ -19,7 +19,7 @@ export function createStubDesktopAgentRunHost(
     openDiff: async () => undefined,
     confirmAcceptFile: async () => true,
     chooseTeamAvailability: async () => 'cancel',
-    signInForRemoteAgentCatalog: async () => false,
+    signInForRemoteAgentCatalog: () => Effect.succeed(false),
     showErrorMessage: () => Effect.void,
     showWarningMessage: () => Effect.void,
     showInfoMessage: () => Effect.void,

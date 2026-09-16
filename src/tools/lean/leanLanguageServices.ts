@@ -35,6 +35,10 @@ import type {
  * and extension tags, the direct pool with its own) and every consumer folds
  * a failure into a `ToolError`, so the port declares `unknown` rather than a
  * union no caller switches on.
+ *
+ * Every file parameter is an absolute path: the calling tool resolves the
+ * model's input against the run's working directory (`leanFilePath` in
+ * `LspTools.ts`) before invoking the port, so an adapter never re-resolves.
  */
 export interface LeanLanguageServicesShape {
   executeFileCommand(

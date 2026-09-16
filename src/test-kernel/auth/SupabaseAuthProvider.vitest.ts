@@ -884,7 +884,9 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
             Effect.fail(failure) as never,
           );
         } else {
-          providerMocks.secretDelete.mockRejectedValueOnce(failure);
+          providerMocks.secretDelete.mockReturnValueOnce(
+            Effect.fail(failure) as never,
+          );
         }
 
         yield* Effect.promise(() =>

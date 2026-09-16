@@ -55,14 +55,15 @@ describe('extension team auth catalog refresh scope', () => {
           loadLocalCatalog: () => Effect.void,
           canAccessRemoteCatalog: () => Effect.succeed(false),
           choose: async () => 'sign-in',
-          signIn: async () => {
-            // Models/settings listeners run after the preflight-owned fetch and
-            // then reuse the populated cache instead of forcing another fetch.
-            runAfterAgentCatalogAuthRefresh(async () => {
-              if (!refreshed) remoteFetches += 1;
-            });
-            return true;
-          },
+          signIn: () =>
+            Effect.sync(() => {
+              // Models/settings listeners run after the preflight-owned fetch and
+              // then reuse the populated cache instead of forcing another fetch.
+              runAfterAgentCatalogAuthRefresh(async () => {
+                if (!refreshed) remoteFetches += 1;
+              });
+              return true;
+            }),
           forceRefreshRemoteCatalog: () =>
             Effect.sync(() => {
               remoteFetches += 1;

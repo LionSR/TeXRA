@@ -8,13 +8,13 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import type { FileLocation } from '@shared/schemas';
 import { filterNotNull, unique } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 // Local file imports
@@ -71,10 +71,13 @@ export const extractLatexFileDependencies = Effect.fn(
   // Follow symlinks so run-storage paths resolve against the workspace
   const latexDir = yield* resolveLatexDir(latexFileLocation.absolutePath);
 
-  const content = yield* Effect.tryPromise({
-    try: () => AbsoluteFS.read(latexFileLocation.absolutePath),
-    catch: ensureError,
-  });
+  // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
+  // strips a leading UTF-8 BOM that the old `AbsoluteFS.read` preserved.
+  const fs = yield* FileSystem.FileSystem;
+  const bytes = yield* fs
+    .readFile(latexFileLocation.absolutePath)
+    .pipe(Effect.mapError(ensureError));
+  const content = normalizeLineEndings(Buffer.from(bytes).toString('utf-8'));
   const uncommented = stripLatexComments(content);
 
   const texInputPaths = [INPUT_PATTERN, INCLUDE_PATTERN].flatMap((pattern) =>

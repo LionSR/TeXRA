@@ -28,8 +28,8 @@ interface DesktopFileSelectionOptions {
   showOpenFileDialog(
     options: DesktopFileSelectionDialogOptions,
   ): Promise<string[] | undefined>;
-  /** The process runtime the window was handed; the dropped-path probe
-   *  below settles on it. */
+  /** The process runtime the window was handed; the catalog listing and the
+   *  dropped-path probe below settle on it. */
   runtime: ProcessRuntime;
 }
 
@@ -115,7 +115,8 @@ export function createDesktopFileSelection(
 ): DesktopFileSelection {
   const { workspacePath } = options;
   return {
-    fileOptions: () => workspaceFileOptions(workspacePath),
+    fileOptions: () =>
+      options.runtime.runPromise(workspaceFileOptions(workspacePath)),
     async pickFiles(fileType, currentFile) {
       if (!workspacePath) return null;
       const listConfig = getFileListConfig(fileType);

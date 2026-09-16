@@ -13,6 +13,7 @@ import {
 } from '@agent/index';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { type TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
+import type { SignInFailed } from '@common/errors/signInFailed';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentCategoryLabel,
@@ -20,7 +21,7 @@ import {
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
+import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -147,7 +148,7 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
   readonly resourcesPath: string;
   readonly remoteCatalog: {
     readonly canAccess: () => Effect.Effect<boolean>;
-    readonly signIn: () => Promise<boolean>;
+    readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
   };
   readonly notifications: Pick<
     MessageHost,
@@ -504,7 +505,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await this.runReported(
       'Failed to view remote agent prompt',
       Effect.gen({ self: this }, function* () {
-        const result = yield* getRemoteAgentPromptConfig(data.agentName).pipe(
+        const config = yield* fetchRemoteAgentPromptYaml(data.agentName).pipe(
           Effect.mapError(
             (cause) =>
               new AgentSettingsActionFailed({
@@ -514,8 +515,10 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
               }),
           ),
         );
-        if (!result.ok) {
-          yield* this.notifications.showErrorMessage(result.message);
+        if (config == null) {
+          yield* this.notifications.showErrorMessage(
+            'Authentication required. Sign in using "TeXRA: Sign In".',
+          );
           return;
         }
 
@@ -532,7 +535,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           `${data.agentName}.yaml`,
         );
         const fs = yield* FileSystem.FileSystem;
-        yield* fs.writeFileString(target, result.config);
+        yield* fs.writeFileString(target, config);
         yield* Effect.tryPromise({
           try: () => this.directory.openPath(target),
           catch: (cause) =>

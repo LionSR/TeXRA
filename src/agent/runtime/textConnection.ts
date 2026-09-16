@@ -11,6 +11,7 @@ import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import type { ResponseTextConnector } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 
 const CASE_CONNECTORS: Record<string, string> = {
   A: '',
@@ -42,15 +43,16 @@ const SYSTEM_PROMPT =
  * the helper-model call out of the latex layer.
  *
  * A {@link ResponseTextConnector} takes only the two strings, so the process
- * stores the helper model is resolved against are bound here, at the host root
- * that owns them, rather than looked up per call.
+ * stores and setting slots the helper model is resolved against are bound
+ * here, at the host root that owns them, rather than looked up per call.
  */
 export function createAgentResponseTextConnector(
   stores: ModelOptionStores,
+  roots: SettingsStores,
 ): ResponseTextConnector {
   return (previous, next) =>
     Effect.gen(function* () {
-      const bound = yield* helperModel(stores);
+      const bound = yield* helperModel(stores, roots);
       const text = yield* helperCompletion(bound, {
         userPrompt: buildPrompt(previous, next),
         systemPrompt: SYSTEM_PROMPT,

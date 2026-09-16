@@ -177,7 +177,7 @@ describe('human prompt progress events', () => {
       label: 'proposal',
       kind: 'superYolo',
       setBypass: (runId: RunId, enabled: boolean) =>
-        proposalApprovals().setBypass(runId, enabled),
+        proposalApprovals(defaultSession()).setBypass(runId, enabled),
     },
   ])(
     'publishes $label bypass changes through the explicit runtime host',

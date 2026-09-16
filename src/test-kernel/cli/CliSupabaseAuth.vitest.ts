@@ -135,13 +135,17 @@ async function loadSupabaseAuth() {
       import('@shared/session/sessionEvents'),
       import('@platform/defaults/nodeProcesses'),
     ]);
-  const [{ Secrets }, { AppState }, { SetupPlatform }, { ToolInjections }] =
-    await Promise.all([
-      import('@platform/secrets'),
-      import('@platform/interfaces'),
-      import('@tools/setup/platform'),
-      import('@agent/runtime/toolInjection'),
-    ]);
+  const [
+    { Secrets },
+    { AgentResume, AppState },
+    { SetupPlatform },
+    { ToolInjections },
+  ] = await Promise.all([
+    import('@platform/secrets'),
+    import('@platform/interfaces'),
+    import('@tools/setup/platform'),
+    import('@agent/runtime/toolInjection'),
+  ]);
   const { SupabaseAuth, unavailableSupabaseAuth } =
     await import('@auth/SupabaseAuth');
   const { createFakeWorkspaceRoots } =
@@ -164,7 +168,8 @@ async function loadSupabaseAuth() {
       // The account plane the module under test serves is its own module
       // state; this one only satisfies the process-runtime type.
       SupabaseAuth.layer(unavailableSupabaseAuth()),
-      SetupPlatform.layer({ host: 'cli', signIn: async () => false }),
+      Layer.mock(AgentResume, { tryResumeRun: unreadProcessService }),
+      SetupPlatform.layer({ host: 'cli', signIn: () => Effect.succeed(false) }),
       ToolInjections.layer([]),
     ),
   );

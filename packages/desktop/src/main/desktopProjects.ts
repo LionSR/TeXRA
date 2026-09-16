@@ -15,10 +15,7 @@ import {
 } from '@agent/runtime';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { openAppStateStore } from '@controllers/session/appStateStore';
-import {
-  createTexraResponseTextProcessing,
-  type ResponseTextProcessing,
-} from '@latex/texraResponseTextProcessing';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -198,15 +195,22 @@ async function stopProjectRuns(
 /**
  * Open one session over `roots`. The transcript store is opened in the
  * workspace scope (it reads `StorageFS` before the session exists); everything
- * after that runs in the session's own scope.
+ * after that runs in the session's own scope. The latex text-join helper is
+ * bound here against this project's roots, so a workspace override in
+ * `.texra/config.json` is the same value a run in this session would read.
  */
 function openProjectSession(
   root: string | undefined,
   roots: WorkspaceRoots,
-  responseTextProcessing: ResponseTextProcessing,
+  stores: ModelOptionStores,
 ): Effect.Effect<DesktopProject, Error> {
   return Effect.gen(function* () {
-    const session = yield* openSessionEffect({ roots, responseTextProcessing });
+    const session = yield* openSessionEffect({
+      roots,
+      responseTextProcessing: createTexraResponseTextProcessing(
+        createAgentResponseTextConnector(stores, roots),
+      ),
+    });
     return yield* Effect.try({
       try: () =>
         runInSession(session, () => {
@@ -236,22 +240,13 @@ export function openDesktopProjectRegistry(
   options: DesktopProjectRegistryOptions,
 ): Effect.Effect<DesktopProjectRegistry, Error> {
   return Effect.gen(function* () {
-    // One connector for every project session: the helper model it asks
-    // resolves against the process stores the root opened, not per project.
-    const responseTextProcessing = createTexraResponseTextProcessing(
-      createAgentResponseTextConnector(options.stores),
-    );
     const projects = new Map<string, DesktopProject>();
     const lanes = new Map<string | symbol, PerKeyLane>();
     const selection = Symbol();
     const listeners = new Set<() => void>();
     let activeRoot: string | undefined;
     const fallback = yield* Effect.uninterruptible(
-      openProjectSession(
-        undefined,
-        options.processRoots,
-        responseTextProcessing,
-      ),
+      openProjectSession(undefined, options.processRoots, options.stores),
     );
     const notify = () => {
       for (const listener of [...listeners]) listener();
@@ -302,7 +297,7 @@ export function openDesktopProjectRegistry(
           // Acquire the session and install its registry owner before
           // interruption can leave this operation.
           return yield* Effect.uninterruptible(
-            openProjectSession(root, roots, responseTextProcessing).pipe(
+            openProjectSession(root, roots, options.stores).pipe(
               Effect.tap((project) =>
                 Effect.sync(() => {
                   projects.set(root, project);

@@ -1,17 +1,19 @@
 import { Data, Effect } from 'effect';
 
+import type { SignInFailed } from '@common/errors/signInFailed';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * A team-catalog port the host would not answer.
  *
  * The bag below is bound seven times across the three hosts and the setup
- * tool. `choose`, `signIn`, and `commitPreset` reach host dialogs and stores,
- * so their callers raise this instead of the identity-caught `unknown` they
- * used to propagate; `member` says which port refused, which is the only
- * distinction any caller here draws. `canAccessRemoteCatalog` is an Effect
- * over the account plane's own infallible probe, so it has no failure to
- * wrap.
+ * tool. `choose` and `commitPreset` reach host dialogs and stores, so their
+ * callers raise this instead of the identity-caught `unknown` they used to
+ * propagate; `member` says which port refused, which is the only distinction
+ * any caller here draws. `canAccessRemoteCatalog` is an Effect over the
+ * account plane's own infallible probe, and `signIn` is an `Effect` port
+ * carrying its own `SignInFailed` from the host boundary, so neither has a
+ * failure to wrap here.
  *
  * A user's own answer is never this: `choose` reporting `undefined` and
  * `signIn` reporting `false` are values the preflight already reads.
@@ -19,7 +21,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 export class TeamCatalogPortFailed extends Data.TaggedError(
   'TeamCatalogPortFailed',
 )<{
-  readonly member: 'choose' | 'signIn' | 'commitPreset';
+  readonly member: 'choose' | 'commitPreset';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -50,7 +52,7 @@ export interface TeamAvailabilityPreflightOptions<T> {
   readonly choose: (
     unavailableNames: readonly string[],
   ) => Promise<TeamAvailabilityChoice | undefined>;
-  readonly signIn: () => Promise<boolean>;
+  readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
   /** Force a remote catalog refresh; the failure channel is the refresh's own. */
   readonly refreshRemote: () => Effect.Effect<void, unknown>;
   /** Recompute the planned value against the refreshed catalog. */
@@ -145,15 +147,7 @@ export function preflightTeamAvailability<T>(
       return { status: 'proceed', value: options.initial, partial: true };
     }
 
-    const signedIn = yield* Effect.tryPromise({
-      try: () => options.signIn(),
-      catch: (cause) =>
-        new TeamCatalogPortFailed({
-          member: 'signIn',
-          message: `The host could not run the TeXRA sign-in: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    });
+    const signedIn = yield* options.signIn();
     if (!signedIn) {
       return { status: 'cancelled', value: options.initial };
     }

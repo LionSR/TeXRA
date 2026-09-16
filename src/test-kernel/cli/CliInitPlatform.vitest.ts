@@ -3,13 +3,9 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  initCliPlatform,
-  setCliAgentResumeHandler,
-} from '@cli/runtime/initPlatform';
+import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { StateWriteFailed } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -413,7 +409,7 @@ describe('CLI platform init', () => {
       Effect.service(SetupPlatform),
     );
     expect(setup.host).toBe('cli');
-    await expect(setup.signIn()).resolves.toBe(true);
+    expect(await effectRuntime().runPromise(setup.signIn())).toBe(true);
     expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
     expect(mocks.signInCliSupabase).toHaveBeenCalledWith(effectRuntime(), {
       openBrowser: true,

@@ -160,7 +160,7 @@ interface AgentLaunchInput {
    * launch warnings.
    */
   onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
-  /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
+  /** Session owning this run's coordination state; every launch supplies it. */
   session?: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelCompatibilityKey?: ModelCompatibilityKey | null;

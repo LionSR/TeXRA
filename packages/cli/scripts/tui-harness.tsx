@@ -435,6 +435,7 @@ const harnessRuntimeHost: CliRuntimeHost = createCliRuntimeHost(
 HARNESS_DISPOSERS.push(
   session().interactions.use(
     createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
+      session: session(),
       secrets: HARNESS_PLATFORM_SERVICES.secrets,
       runtime: effectRuntime(),
     }),
@@ -1622,7 +1623,7 @@ function handleHarnessSlashCommand(line: string): boolean {
       appendHarnessStatus();
       return true;
     case 'plan':
-      void showCliWorkPlan();
+      void showCliWorkPlan(session());
       return true;
     case 'goal':
     case 'goals':
@@ -1737,6 +1738,7 @@ function renderHarnessApp(): React.JSX.Element {
     <App
       secrets={HARNESS_PLATFORM_SERVICES.secrets}
       runtime={effectRuntime()}
+      session={session()}
       onSubmit={handleHarnessSubmit}
       onKillRun={markHarnessRunStopped}
       onWorkflowControl={() => undefined}
