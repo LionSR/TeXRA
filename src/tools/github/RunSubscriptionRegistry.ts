@@ -15,10 +15,7 @@ import { Effect } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
@@ -58,11 +55,9 @@ interface BoundSubscription {
   disposable: Disposable;
   onEvent: PollEventListener;
   /**
-   * Owning session captured at bind() time (inside the run's AsyncLocalStorage).
-   * onEvent fires later from a detached polling timer where the ALS is empty, so
-   * it must travel with the notification — otherwise submitFollowUp falls back
-   * to defaultSession() and the follow-up is misrouted/dropped on a non-default
-   * session (for example, the desktop process session).
+   * Owning session handed to bind(). onEvent fires later from a detached
+   * polling timer, so the session travels with the binding; a rebind
+   * reassigns it to the rebinding session.
    */
   owner: SessionHandle;
 }
@@ -92,24 +87,19 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   /**
    * Returns true if a new subscription was created, false if it already existed.
    *
-   * The returned Effect is run by the tool's `execute()` (R1 boundary). Its
-   * synchronous prelude runs inside that call — inside the run's
-   * AsyncLocalStorage — so the owning session capture below happens with the
-   * run's context exactly as the old synchronous `bind()` did.
+   * `session` is the owning session: events deliver their follow-ups to it and
+   * its follow-up queue's release auto-disposes the binding.
    */
   bind(
     runId: RunId,
     input: Input,
+    session: SessionHandle,
   ): Effect.Effect<boolean, never, Secrets | AgentResume> {
-    // The resume port is captured with the same timing as the session below:
-    // onEvent fires from the detached poll loop, whose context has neither.
+    // The resume port is captured now: onEvent fires from the detached poll
+    // loop, whose context has no AgentResume.
     return Effect.flatMap(AgentResume, (agentResume) =>
       Effect.suspend(() => {
         const key = this.opts.keyOf(input);
-        // Capture the session HERE: the returned Effect runs inside the run's
-        // AsyncLocalStorage (the github tool's execute()), but onEvent fires
-        // later from the detached poll loop where the ALS is empty.
-        const session = currentSession();
         const bound = this.perRun.get(runId) ?? new Map<K, BoundSubscription>();
         const existing = bound.get(key);
         if (existing) {
