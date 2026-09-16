@@ -146,7 +146,10 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
  * follow the run.
  */
 export function withRunContext<T>(context: RunContext, fn: () => T): T {
-  const session = getRunContextSession(context);
+  // The owner session reads launch contexts through `RunScope` and bare
+  // contexts directly.
+  const session =
+    context.kind === 'launch' ? context.runScope.session : context.session;
   return runContextScope.run(context, () =>
     session ? runWithWorkspaceRoots(session.roots, fn) : fn(),
   );
@@ -160,16 +163,4 @@ export function withRunContext<T>(context: RunContext, fn: () => T): T {
  */
 export function runInSession<T>(session: SessionHandle, fn: () => T): T {
   return withRunContext(createRunContext({ session }), fn);
-}
-
-/**
- * Return the owner session for a context, reading launch contexts through
- * `RunScope` and bare contexts directly.
- */
-function getRunContextSession(
-  context: RunContext | undefined,
-): SessionHandle | undefined {
-  return context?.kind === 'launch'
-    ? context.runScope.session
-    : context?.session;
 }

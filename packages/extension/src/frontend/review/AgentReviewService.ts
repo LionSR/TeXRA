@@ -127,7 +127,7 @@ class AgentReviewServiceImpl {
   // Handed to `initialize` on the same occasion: extension activation runs
   // after `initializeDefaultSession`, and every review entry (the commands,
   // the commit watcher) is UI-triggered outside any run context, so the
-  // default session is the session a review would resolve anyway.
+  // process default is the session a review belongs to.
   private session: SessionHandle | undefined;
 
   initialize(
