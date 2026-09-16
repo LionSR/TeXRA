@@ -81,8 +81,10 @@ export interface SetupPlatformShape {
   /**
    * Start the host's existing TeXRA account sign-in flow. The member is an
    * `Effect`: a host that cannot run the flow reaches the setup tool as
-   * `SignInFailed` rather than as `unknown`, and a flow the user abandons
-   * answers `false` — a value, not a failure.
+   * `SignInFailed` rather than as `unknown`. The extension and desktop
+   * implementations answer `false` when the user cancels; the CLI loopback
+   * has no boolean cancel value and surfaces abandonment or timeout through
+   * `SignInFailed`.
    */
   signIn: () => Effect.Effect<boolean, SignInFailed>;
   /** VS Code-only command invocation. */

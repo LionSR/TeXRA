@@ -1,8 +1,9 @@
 /**
  * The host's TeXRA account sign-in flow never ran to a result: the command,
- * dialog, or loopback flow driving it faulted. A user who abandons the flow
- * is **not** a failure — the implementations answer `false` for that — so a
- * caller can read this tag as "the host never got to ask".
+ * dialog, or loopback flow driving it faulted. The extension and desktop
+ * implementations answer `false` when the user cancels; the CLI loopback has
+ * no boolean cancel value and surfaces abandonment or timeout through
+ * `SignInFailed`.
  *
  * Host-neutral (lives in `@common/errors`, like `AgentError`) so the shared
  * team-launch chain and the `SetupPlatform` contract can name it: this is
