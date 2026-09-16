@@ -3,6 +3,7 @@
  * holds: one coordinator per store instance, so distinct stores never share
  * session state.
  */
+
 import {
   createSecretBackedCoordinator,
   getSubscriptionSessionStatus,

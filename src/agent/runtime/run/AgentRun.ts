@@ -272,6 +272,7 @@ export const agentRunLayer = (
       const bound = yield* bindModel({
         config: modelConfig,
         stores: ctx.stores,
+        roots: session.roots,
         compatibilityKey,
         ownApiKeyFallback: ctx.ownApiKeyFallback,
         declinedRoutes,

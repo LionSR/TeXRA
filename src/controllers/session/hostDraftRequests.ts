@@ -170,7 +170,11 @@ export class HostDraftRequests {
           secrets: yield* Secrets,
           globalState: yield* AppState,
         };
-        const text = yield* polishTextWithAI(request.text, stores).pipe(
+        const text = yield* polishTextWithAI(
+          request.text,
+          stores,
+          session.roots,
+        ).pipe(
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         return { kind: 'text', text };

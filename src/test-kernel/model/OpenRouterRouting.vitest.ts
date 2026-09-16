@@ -10,7 +10,11 @@ import {
 } from '@model/openRouterRouting';
 import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import {
+  hostStores,
+  installedHost,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 describe('shouldRouteModelThroughOpenRouter', () => {
@@ -93,6 +97,7 @@ describe('bindModel', () => {
             bindModel({
               config,
               stores: hostStores(),
+              roots: installedHost().roots,
               compatibilityKey: null,
               agentCategory: AgentCategory.Workflow,
               temperature: 0,

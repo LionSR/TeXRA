@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
@@ -18,14 +19,16 @@ const log = createLog('TextEnhancement');
  *
  * `stores` are the process secret store and global state the calling host
  * already holds (the `Secrets` / `AppState` services), which the helper model
- * is resolved against.
+ * is resolved against; `roots` are the setting slots beside them (the
+ * requesting session's roots), which the bind reads its toggles from.
  */
 export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
   text: string,
   stores: ModelOptionStores,
+  roots: SettingsStores,
 ): Effect.fn.Return<string, Error, HttpClient.HttpClient> {
   return yield* Effect.gen(function* () {
-    const bound = yield* helperModel(stores);
+    const bound = yield* helperModel(stores, roots);
     const responseText = yield* helperCompletion(bound, {
       userPrompt: POLISH_PROMPT_PREFIX + text,
     });
