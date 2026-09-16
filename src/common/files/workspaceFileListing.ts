@@ -57,10 +57,10 @@ export const listWorkspaceFiles = Effect.fn(
           if (shouldVisitDirectory(relativePath, filters)) {
             yield* visit(absolutePath, relativePath);
           }
-          continue;
-        }
-
-        if (info?.type === 'File' && passesFileFilters(relativePath, filters)) {
+        } else if (
+          info?.type === 'File' &&
+          passesFileFilters(relativePath, filters)
+        ) {
           results.push(relativePath);
         }
       }
