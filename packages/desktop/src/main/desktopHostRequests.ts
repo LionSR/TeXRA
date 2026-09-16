@@ -453,11 +453,9 @@ export function createDesktopHostRequests(
         exportRunTranscript(runId, {
           pickFormat: () => host.pickTranscriptExportFormat(),
           openPath: (filePath) => host.openPath(filePath),
-          showInfo: (message) =>
-            runtime.runPromise(host.showInfoMessage(message)),
-          showWarning: (message) =>
-            runtime.runPromise(host.showWarningMessage(message)),
-          showError: rejectRequest,
+          showInfo: (message) => host.showInfoMessage(message),
+          showWarning: (message) => host.showWarningMessage(message),
+          showError: rejectRequestEffect,
           reportDetail: (message) => logger.error(message),
           getController: getChatExportController,
           getTraceViewerTemplate: () =>
