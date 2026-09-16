@@ -166,6 +166,9 @@ jobs:
       - name: Check Effect migration ratchet
         run: pnpm run check:effect-migration-ratchet
 
+      - name: Check unexecuted Effects
+        run: pnpm run check:unexecuted-effects
+
       - name: Check extension package invariants
         run: pnpm run check:extension-package-invariants
 
