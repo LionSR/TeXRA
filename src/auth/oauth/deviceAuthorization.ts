@@ -110,7 +110,7 @@ export const completeDeviceSession = Effect.fn(
 )(function* <Session, E, R>(complete: () => Effect.Effect<Session, E, R>) {
   yield* Effect.yieldNow;
   return yield* Effect.uninterruptible(
-    Effect.suspend(complete).pipe(
+    complete().pipe(
       Effect.mapError(
         (cause) =>
           new SessionCompletionFailed({

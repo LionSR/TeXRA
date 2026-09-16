@@ -177,7 +177,6 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   Secrets
 > {
   const secrets = yield* Secrets;
-  // Infallible: an unreadable session store reports signed-out.
   const status = yield* getCodexStatus(secrets);
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };

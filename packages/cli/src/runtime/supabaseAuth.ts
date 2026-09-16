@@ -250,9 +250,11 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
 export async function signOutCliSupabase(): Promise<void> {
   const authCoordinator = cliAuthCoordinator();
   await runAuthProgram(authCoordinator.clearSession());
-  await refreshRemoteAgentCatalogAfterSignOut(
-    () => runAuthProgram(invalidateRemoteAgentsAfterSignOut()),
-    (message) => activeAuthLog?.warn?.('cli-auth', message),
+  await runAuthProgram(
+    refreshRemoteAgentCatalogAfterSignOut(
+      invalidateRemoteAgentsAfterSignOut(),
+      (message) => activeAuthLog?.warn?.('cli-auth', message),
+    ),
   );
 }
 

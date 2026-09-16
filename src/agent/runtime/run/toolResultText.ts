@@ -36,7 +36,7 @@ function describeAttachments(
  * The summary of an attachment set the model must read back itself: the list
  * of paths and MIME types, plus the hint naming the tool that opens them.
  */
-function formatAttachmentSummary(
+export function formatAttachmentSummary(
   attachments: readonly ToolFileAttachment[],
 ): string {
   const notes = describeAttachments(attachments).join('\n');
@@ -112,21 +112,4 @@ export function formatToolResultAsText(
   const combined = textPieces.join('\n\n') || 'OK';
 
   return checkToolResultTextLimit(combined) ?? combined;
-}
-
-/**
- * The plain-text tool-result body with the attachment summary appended when
- * the model can surface attachments and any are present. Shared by every
- * caller so the single and batched paths cannot drift.
- */
-export function formatToolResultTextWithAttachments(
-  result: ToolResult,
-  attachments: readonly ToolFileAttachment[],
-  canProcessAttachments: boolean,
-): string {
-  const attachmentSummary =
-    canProcessAttachments && attachments.length > 0
-      ? formatAttachmentSummary(attachments)
-      : undefined;
-  return formatToolResultAsText(result, attachmentSummary);
 }

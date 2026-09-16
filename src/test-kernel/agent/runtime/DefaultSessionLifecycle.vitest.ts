@@ -55,10 +55,11 @@ async function importSessionRuntime() {
   await installPlatform();
   await import('@test/support/sessionGraphTestSetup');
   const sessionModule = await import('@agent/runtime/SessionHandle');
+  const { tryDefaultSession } = await import('@agent/runtime/sessionGraph');
   // A session beside the process default: its own storage root, as a
   // desktop paper's, since one root holds one session.
   const { createTestSession } = await import('@test/support/sessionTestUtils');
-  return { ...sessionModule, createTestSession };
+  return { ...sessionModule, tryDefaultSession, createTestSession };
 }
 
 describe('default session lifecycle', () => {
@@ -147,8 +148,8 @@ describe('default session lifecycle', () => {
     // so the fallback must stay loud there. Silencing it — by installing a
     // default for the desktop or by inventing an implicit memory-only session
     // — would make the remaining migration sites work by accident.
-    const { currentSession, tryDefaultSession } =
-      await import('@agent/runtime/SessionHandle');
+    const { currentSession } = await import('@agent/runtime/SessionHandle');
+    const { tryDefaultSession } = await import('@agent/runtime/sessionGraph');
 
     expect(tryDefaultSession()).toBeUndefined();
     expect(() => currentSession()).toThrow(

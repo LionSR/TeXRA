@@ -56,7 +56,6 @@ export const readCliModelAccessStatus = Effect.fn(
 )(function* (secrets: PlatformSecrets) {
   const [chatGpt, grok, codingPlanEntries] = yield* Effect.all(
     [
-      // Infallible: an unreadable session store reports signed-out.
       subscriptionProvider('chatgpt').getStatus(secrets),
       subscriptionProvider('grok').getStatus(secrets),
       Effect.forEach(
@@ -143,7 +142,6 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     } satisfies CliModelAccessSelectionResult;
   }
 
-  // Infallible like the status reads above; a read failure reports signed-out.
   const status = yield* provider.getStatus(secrets);
   let accountLabel = status.label;
   if (!status.signedIn) {
