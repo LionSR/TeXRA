@@ -56,7 +56,6 @@ import {
   AgentCategory,
   MESSAGE_TYPES,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  ModelRetryMaxAttemptsSchema,
   toRetryErrorInfo,
   type DeclinableUsageRoute,
   type InvocationRef,
@@ -74,7 +73,7 @@ import {
   type RunState,
 } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
-import { readValidatedConfig } from '@utils/config/configUtils';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
@@ -1151,11 +1150,9 @@ export const modelInvokerLayer = (): Layer.Layer<
         // the default on anything else, so the limit is always >= 1.
         const limit =
           1 +
-          readValidatedConfig(
-            session.roots.config,
+          readSettingFrom<number>(
+            session.roots,
             MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-            ModelRetryMaxAttemptsSchema,
-            MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
           );
         let automaticAttempts = 0;
         // An open attempt with no response is an invocation whose outcome the

@@ -634,7 +634,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               ledger,
               logger,
               bound,
-              config: session.roots.config,
+              stores: session.roots,
               system: systemPrompt,
               tools,
               force,

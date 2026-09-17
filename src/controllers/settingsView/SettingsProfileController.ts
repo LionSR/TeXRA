@@ -1,17 +1,18 @@
 import { Effect } from 'effect';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { API_PROVIDERS } from '@model/apiProviders';
-import type { StateStore } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   modelsTabSettings,
   type ProviderKeyStatus,
   type ProviderSetting,
   type SettingHost,
-  type StateSettingEntry,
   type UpdateProfileMessage,
 } from '@shared/schemas';
-import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
+import {
+  readSetting,
+  type SettingsStores,
+} from '@shared/config/settingsAccess';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   getProviderDisplayName,
@@ -22,20 +23,20 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 
 /**
- * Host-supplied storage wiring: `globalState`, `loadProviderKeyStatuses`, and
- * `getConfig` all depend on host-specific storage and secrets, so each host
- * must supply them. Everything else the controller needs — the provider catalog
- * and the region-aware lookups built on it — is host-agnostic and read straight
- * from its modules.
+ * Host-supplied storage wiring: `stores` and `loadProviderKeyStatuses` depend
+ * on host-specific storage and secrets, so each host must supply them.
+ * Everything else the controller needs — the provider catalog and the
+ * region-aware lookups built on it — is host-agnostic and read straight from
+ * its modules.
  */
 interface SettingsProfileControllerDeps {
   /** The host reading the catalog, so `slots` resolves to its own entry. */
   readonly host: SettingHost;
-  readonly globalState: StateStore;
+  /** The three setting slots a catalog row resolves against. */
+  readonly stores: SettingsStores;
   loadProviderKeyStatuses(): Promise<
     Record<string, ProviderKeyStatus['status']>
   >;
-  getConfig<T>(key: string, defaultValue: T): T;
 }
 
 export class SettingsProfileController {
@@ -127,35 +128,18 @@ export class SettingsProfileController {
 
   /**
    * The provider's Models-tab controls, projected from the catalog rows that
-   * declare `surfaces.models` for it. The value and its default-when-absent
-   * both come from the row, so the old per-def `defaultValue` fallback ladder
-   * has nothing left to fall back through.
+   * declare `surfaces.models` for it. Value, default-when-absent, and the slot
+   * the value lives in all come from the row, through the same `readSetting`
+   * the runtime uses — so the toggle shows the value the run will honor.
    */
   private getProviderSettings(provider: string): ProviderSetting[] {
     return modelsTabSettings(provider).map(({ entry, surface }) => {
       const { provider: _provider, ...display } = surface;
-      return { ...display, key: entry.key, value: this.readToggle(entry) };
+      return {
+        ...display,
+        key: entry.key,
+        value: readSetting(entry, this.deps.stores, this.deps.host) === true,
+      };
     });
-  }
-
-  /**
-   * A Models-tab toggle's current value, read from the slot its row declares
-   * for this host. Exhaustive over `SettingStore`: a future row backed by
-   * `workspaceState` must fail loudly here rather than read the schema default
-   * out of the config tree forever while `writeSetting` persists it elsewhere.
-   */
-  private readToggle(entry: StateSettingEntry): boolean {
-    const fallback = settingDefault(entry) === true;
-    const slot = settingSlot(entry, this.deps.host);
-    switch (slot) {
-      case 'globalState':
-        return this.deps.globalState.get<boolean>(entry.key, fallback) === true;
-      case 'config':
-        return this.deps.getConfig<boolean>(entry.key, fallback);
-      case 'workspaceState':
-        throw new Error(
-          `Models tab row "${entry.key}" is workspaceState-backed, which this controller cannot read`,
-        );
-    }
   }
 }

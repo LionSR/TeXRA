@@ -23,6 +23,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { installHostAuth } from '@test/support/setupPlatform';
 
 type DesktopOAuthClient = Parameters<
@@ -878,9 +879,8 @@ describe('desktop Supabase auth', () => {
 
     const controller = new SettingsProfileController({
       host: 'desktop',
-      globalState: new FakeStateStore(),
+      stores: makeFakeSettingsStores().stores,
       loadProviderKeyStatuses: async () => ({}),
-      getConfig: (_key, defaultValue) => defaultValue,
     });
     const message = await effectRuntime().runPromise(
       controller.buildProfileMessage(),

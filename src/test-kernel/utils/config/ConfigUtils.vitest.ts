@@ -1,15 +1,11 @@
 // Suites for src/utils/config (configUtils + platformSettings + providerConfig).
 
-import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
-import * as logger from '@logger/logUtils';
-import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
-import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
+import { getConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,
   getProviderKeyUrl,
@@ -25,61 +21,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const APPROACH_SCHEMA = z.enum(['quick', 'thorough']);
-const SETTING_PATH = 'agentReview.approach';
-
-function readApproach(): 'quick' | 'thorough' {
-  return getValidatedConfig(SETTING_PATH, APPROACH_SCHEMA, 'quick');
-}
-
 describe('getConfig', () => {
-  it('resolves catalog defaults for caller-supplied config providers', async () => {
-    const callerDefaultConfig: ConfigProvider = {
-      get<T>(_key: string, defaultValue?: T): T {
-        return defaultValue as T;
-      },
-      update: () => Effect.void,
-      inspect: () => undefined,
-      isExplicitlySet: () => false,
-    };
-    await installPlatform({}, { config: callerDefaultConfig });
+  it('reads a cataloged key through the provider and falls back only off-catalog', async () => {
+    // The catalog default is the provider's own resolution step
+    // (`ConfigProvider.get`); `defaultValue` is for keys the catalog does not
+    // own, which is the only thing this reader still contributes.
+    await installPlatform({});
 
     expect(
       getConfig<boolean>('texra.model.useGoogleInteractionsServerState'),
     ).toBe(true);
     expect(getConfig('not.a.catalog.key', 'fallback')).toBe('fallback');
-  });
-});
-
-describe('getValidatedConfig', () => {
-  it('returns the stored value when it matches the schema', async () => {
-    await installPlatform({ config: { [SETTING_PATH]: 'thorough' } });
-
-    expect(readApproach()).toBe('thorough');
-  });
-
-  it('falls back to the default without warning when the setting is unset', async () => {
-    await installPlatform({});
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-
-    expect(readApproach()).toBe('quick');
-    expect(warnSpy).not.toHaveBeenCalled();
-  });
-
-  it('warns and falls back to the default instead of silently dropping an invalid user setting', async () => {
-    // Reproduces #7470: a stale/hand-edited settings.json value that no
-    // longer fits the schema must not vanish without a trace via
-    // `schema.catch(default)` — it's surfaced as a warning before defaulting.
-    await installPlatform({
-      config: { [SETTING_PATH]: 'not-a-real-approach' },
-    });
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-
-    expect(readApproach()).toBe('quick');
-    expect(warnSpy).toHaveBeenCalledWith(
-      'configUtils',
-      expect.stringContaining(SETTING_PATH),
-    );
   });
 });
 

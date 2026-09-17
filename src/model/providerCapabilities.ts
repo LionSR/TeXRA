@@ -9,10 +9,9 @@ import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { LanguageModel } from '@platform/languageModel';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  ChatgptCodexContextWindowSchema,
   type UsageRoute,
 } from '@shared/schemas';
-import { getValidatedConfig } from '@utils/config/configUtils';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -97,11 +96,7 @@ function resolveCodexSubscriptionProfile({
   if (model.openRouterOnly) return null;
   if (!isCodexSubscriptionEligible(model)) return null;
   const inputTokenLimit = Math.min(
-    getValidatedConfig(
-      CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
-      ChatgptCodexContextWindowSchema,
-      CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
-    ),
+    readPlatformSetting<number>(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey),
     model.contextWindow,
   );
   const contextWindow = Math.min(
