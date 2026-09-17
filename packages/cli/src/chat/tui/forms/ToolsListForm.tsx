@@ -4,12 +4,14 @@
 import { Text } from 'ink';
 
 import {
+  cliToolDetected,
+  cliToolEnabled,
   readCliToolStatuses,
   setCliToolEnabled,
-  type CliToolStatusRecord,
 } from '@cli/runtime/tools';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ToolDashboardItem } from '@shared/schemas';
 import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -19,35 +21,38 @@ import { AsyncListForm } from './_shared/ListForm';
 interface ToolsListFormProps {
   readonly availableRows?: number;
   /**
-   * The global state the disabled-tool read and the toggle both write. Ink
-   * components run no Effect, so the process store arrives as a prop from the
-   * surface that opened the form.
+   * The global state the toggle writes. Ink components run no Effect, so the
+   * process store arrives as a prop from the surface that opened the form.
    */
   readonly state: StateStore;
-  /** The process runtime the tool probes run on, from the same surface. */
+  /**
+   * The process runtime the tool probes run on, and whose `AppState` is that
+   * same store, from the same surface.
+   */
   readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
 }
 
-function formatToolEnablementForTui(tool: CliToolStatusRecord): string {
-  if (!tool.toggleable) return 'always on';
-  return tool.enabled === false ? 'disabled' : 'enabled';
+function formatToolEnablementForTui(tool: ToolDashboardItem): string {
+  const enabled = cliToolEnabled(tool);
+  if (enabled === null) return 'always on';
+  return enabled === false ? 'disabled' : 'enabled';
 }
 
 // Undefined when detection has not run: the status part already says the tool
 // has not been checked, and a bare "unknown" segment names nothing.
 function formatToolDetectionForTui(
-  detected: CliToolStatusRecord['detected'],
+  detected: boolean | null,
 ): string | undefined {
   if (detected === true) return 'detected';
   if (detected === false) return 'not detected';
   return undefined;
 }
 
-function formatToolDescriptionForTui(tool: CliToolStatusRecord): string {
+function formatToolDescriptionForTui(tool: ToolDashboardItem): string {
   return [
     formatToolEnablementForTui(tool),
-    formatToolDetectionForTui(tool.detected),
+    formatToolDetectionForTui(cliToolDetected(tool)),
     toolDependencyStatusLabel(tool.status, tool.statusLabel),
   ]
     .filter((part): part is string => part !== undefined)
@@ -56,11 +61,11 @@ function formatToolDescriptionForTui(tool: CliToolStatusRecord): string {
 
 export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
   return (
-    <AsyncListForm<readonly CliToolStatusRecord[], string>
+    <AsyncListForm<readonly ToolDashboardItem[], string>
       title="/tools"
       compactTitle="/tools · Toggle available external integrations."
       loadingLabel="Checking tool integrations..."
-      load={() => readCliToolStatuses(props.runtime, props.state)}
+      load={() => readCliToolStatuses(props.runtime)}
       items={(tools) =>
         tools.map((tool) => ({
           value: tool.id,
@@ -77,8 +82,9 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       showTransientCloseHint={false}
       onSelect={(id, { data: tools, reload }) => {
         const tool = tools.find((candidate) => candidate.id === id);
-        if (!tool || tool.enabled == null) return;
-        void setCliToolEnabled(props.state, id, !tool.enabled, props.runtime)
+        const enabled = tool ? cliToolEnabled(tool) : null;
+        if (enabled === null) return;
+        void setCliToolEnabled(props.state, id, !enabled, props.runtime)
           .then(reload)
           .catch((error: unknown) => {
             setTransientNotice(toErrorMessage(error));

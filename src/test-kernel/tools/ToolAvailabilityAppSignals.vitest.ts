@@ -141,7 +141,6 @@ describe('tool availability app signals', () => {
           expect.objectContaining({
             id: 'broken-probe',
             status: 'unknown',
-            detected: null,
             statusLabel: undefined,
             statusDetail:
               'Availability check failed: invalid local configuration',
@@ -149,7 +148,6 @@ describe('tool availability app signals', () => {
           expect.objectContaining({
             id: 'broken-detail',
             status: 'available',
-            detected: true,
             statusDetail: undefined,
           }),
         ]);

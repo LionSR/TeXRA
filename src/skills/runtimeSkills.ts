@@ -63,6 +63,10 @@ function discoverRuntimeSkills() {
   return discoverSkillSources(runtimeSkillSources());
 }
 
+function sourceLabel(source: SkillSource): string {
+  return source.label ?? source.scope;
+}
+
 function isSkillDisabled(
   name: string,
   scope: ActiveSkillSourceScope,
@@ -80,18 +84,24 @@ function readDisabledSkills(): DisabledSkills {
   };
 }
 
-function skillDisplayItems(
-  skills: readonly SourcedSkill[],
-  disabled: DisabledSkills,
-): SkillDisplayItem[] {
-  return skills.map(({ skill, source }) => ({
+/**
+ * One discovered skill projected for a host display. Every host renders this
+ * shape: the settings tabs from {@link loadRuntimeSkillDisplay}, and the CLI's
+ * `skills list` per discovered entry.
+ */
+export function skillDisplayItem(
+  { skill, source }: SourcedSkill,
+  disabled: DisabledSkills = readDisabledSkills(),
+): SkillDisplayItem {
+  return {
     name: skill.name,
     description: skill.description,
     scope: source.scope,
-    label: source.label ?? source.scope,
+    label: sourceLabel(source),
     path: skill.path,
+    sourcePath: source.path,
     enabled: !isSkillDisabled(skill.name, source.scope, disabled),
-  }));
+  };
 }
 
 /** Discover the complete inventory for host settings displays. */
@@ -100,7 +110,7 @@ export async function loadRuntimeSkillDisplay(
 ) {
   const result = await discoverRuntimeSkills();
   return {
-    skills: skillDisplayItems(result.skills, disabled),
+    skills: result.skills.map((entry) => skillDisplayItem(entry, disabled)),
     issues: result.errors.map(({ message, path }) => ({ message, path })),
   };
 }
@@ -124,10 +134,6 @@ export function filterDiscoveredSkills(
 export async function loadEnabledRuntimeSkills() {
   const result = await discoverRuntimeSkills();
   return filterDiscoveredSkills(result);
-}
-
-function sourceLabel(source: SkillSource): string {
-  return source.label ?? source.scope;
 }
 
 function formatRuntimeSkillCatalog(skills: readonly SourcedSkill[]): string {

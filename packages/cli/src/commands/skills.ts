@@ -1,5 +1,7 @@
 import { defineCommand } from 'citty';
 
+import { skillDisplayItem } from '@skills/runtimeSkills';
+
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -7,7 +9,6 @@ import {
   formatCliSkillIssue,
   formatCliSkillList,
   readCliSkills,
-  skillListRecord,
 } from '../runtime/skills';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -50,13 +51,11 @@ async function listSkills(
   // `<resource> list` command produces, via the shared emitCliResult helper.
   // The text list is suppressed on a usage error with no skills (nothing
   // useful to show); the helper skips the write for the resulting empty string.
+  const items = result.skills.map((entry) => skillDisplayItem(entry));
   emitCliResult(context, {
-    json: result.skills.map(skillListRecord),
+    json: items,
     ndjson: [
-      ...result.skills.map((entry) => ({
-        kind: 'skill' as const,
-        skill: skillListRecord(entry),
-      })),
+      ...items.map((skill) => ({ kind: 'skill' as const, skill })),
       ...result.errors.map((issue) => ({
         kind: 'skill-issue' as const,
         issue,

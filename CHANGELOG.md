@@ -36,6 +36,14 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **`texra tools list` and `texra skills list` JSON changed shape** — both now
+  print the same records the Tools and Skills settings tabs show. Each tool
+  record gains `description`, `tools`, `installActions`, `configNotes` and
+  `authNote`, and drops `detected`, `note`, `installCommand` and `authCommand`
+  (`status` says whether the dependency was found; the commands are entries in
+  `installActions`). Each skill record renames `sourceLabel` to `label` and
+  `source` to `sourcePath`, and gains `enabled`. The text output of both
+  commands is unchanged.
 - Node.js 22.19.0 or later in 22.x, or Node.js 24 or later is required.
 - **`texra orchestrate` is gone, and bare `texra` now opens chat** — the
   launcher menu that sat in front of every interactive command is retired.
