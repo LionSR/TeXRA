@@ -98,8 +98,9 @@ export type ManualCompactionRequestResult =
     };
 
 /**
- * The registry reads a run's phase from the session's fold (`RunView.status`,
- * one run model, 3.3) and keeps no phase of its own; the session routes each
+ * The registry, and the stopper it hands this reader to, read a run's phase
+ * from the session's fold (`RunView.status`,
+ * one run model, 3.3) and keep no phase of their own; the session routes each
  * phase-moving row it committed through `handleStatus` once the view has
  * folded it, so the registry's waiters and child rosters follow the one rail
  * every renderer reads and never read it a row behind.
