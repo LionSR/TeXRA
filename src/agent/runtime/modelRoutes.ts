@@ -246,14 +246,13 @@ export const resolveSubscriptionCredential = Effect.fn(
         inputPrice: profile.inputPrice,
         outputPrice: profile.outputPrice,
         // Whether this backend takes input files is the route's fact, not
-        // the base model's: the binding's PDF admission reads this, so a
-        // route without input files degrades a PDF the way any route without
-        // native PDF does instead of sending a shape the backend rejects.
+        // the base model's, and the ChatGPT-subscription backend takes none.
+        // The binding's PDF admission reads this, so the route degrades a PDF
+        // the way any route without native PDF does instead of sending a
+        // shape the backend rejects.
         capabilities: {
           ...config.capabilities,
-          supportsNativePdf:
-            config.capabilities.supportsNativePdf &&
-            profile.openAIResponses?.supportsInlineInputFileUpload === true,
+          supportsNativePdf: false,
         },
       },
     };
@@ -268,10 +267,9 @@ export const resolveSubscriptionCredential = Effect.fn(
       catch: ensureError,
     });
     if (profile === null) return null;
-    const signedIn = yield* Effect.tryPromise({
-      try: () => inScope(isXaiSignedIn),
-      catch: ensureError,
-    });
+    // No `inScope`: the probe reads the stored OAuth session, not the
+    // workspace-roots frame.
+    const signedIn = yield* isXaiSignedIn();
     if (!signedIn) {
       log.warn(
         `Prefer Grok subscription is on but no Grok session is signed in: model ${config.name} bills the xAI API key.`,

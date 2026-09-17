@@ -13,21 +13,8 @@ import {
 } from '@shared/schemas';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
-
-interface OpenAIResponseProviderCapabilities {
-  readonly backgroundMode: 'base' | 'disabled';
-  readonly streaming: 'base' | 'forced';
-  readonly webSocket: 'base' | 'global-toggle';
-  readonly supportsTokenCounting: boolean;
-  readonly supportsManualCompaction: boolean;
-  readonly supportsResponseChaining: boolean;
-  readonly storesResponsesServerSide: boolean;
-  readonly supportsInlineInputFileUpload: boolean;
-  readonly supportsToolResultFileUpload: boolean;
-}
 
 export interface ProviderCapabilityProfile {
   readonly contextWindow: number;
@@ -35,7 +22,6 @@ export interface ProviderCapabilityProfile {
   readonly inputPrice: number;
   readonly outputPrice: number;
   readonly usageRoute?: UsageRoute;
-  readonly openAIResponses?: OpenAIResponseProviderCapabilities;
 }
 
 interface ProviderCapabilityKey {
@@ -108,21 +94,6 @@ function resolveCodexSubscriptionProfile({
     ...zeroCostAccessOverrides(contextWindow),
     inputTokenLimit,
     usageRoute: 'chatgpt-subscription',
-    openAIResponses: {
-      backgroundMode: 'disabled',
-      streaming: 'forced',
-      webSocket: 'global-toggle',
-      supportsTokenCounting: false,
-      // This profile uses the client-side summarize-and-resend fallback
-      // (#7213). The public API's /responses/compact endpoint is stateless;
-      // store:false alone does not establish whether the separate ChatGPT
-      // subscription backend supports that endpoint.
-      supportsManualCompaction: true,
-      supportsResponseChaining: false,
-      storesResponsesServerSide: false,
-      supportsInlineInputFileUpload: false,
-      supportsToolResultFileUpload: false,
-    },
   };
 }
 
@@ -155,16 +126,13 @@ const signedInSubscriptionUsageRoute = Effect.fn(
     config: ModelConfig,
     useOpenRouter: boolean,
   ) => ProviderCapabilityProfile | null,
-  isSignedIn: () => boolean | Promise<boolean>,
+  isSignedIn: () => Effect.Effect<boolean>,
 ): Effect.fn.Return<UsageRoute | undefined, Error, LanguageModel> {
   const config = yield* resolveRuntimeModelConfig(modelId);
   if (!config) return undefined;
   const capabilities = resolveCapabilities(config, getUseOpenRouter());
   if (!capabilities) return undefined;
-  const signedIn = yield* Effect.tryPromise({
-    try: async () => isSignedIn(),
-    catch: ensureError,
-  });
+  const signedIn = yield* isSignedIn();
   return signedIn ? capabilities.usageRoute : undefined;
 });
 

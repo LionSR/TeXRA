@@ -28,7 +28,6 @@ import {
   getPreferKimiCode,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { hasUsableApiKey, type ApiProvider } from './apiProviders';
 import {
@@ -516,18 +515,10 @@ function buildAvailabilityContext(
       [
         readProviderKeyStatuses(secrets, ['openRouter', 'kimiCode']),
         // Only worth a probe when the "prefer subscription" switch is on.
-        preferCodexSubscription
-          ? Effect.tryPromise({
-              try: () => inScope(isCodexSignedIn),
-              catch: ensureError,
-            })
-          : Effect.succeed(false),
-        preferXaiSubscription
-          ? Effect.tryPromise({
-              try: () => inScope(isXaiSignedIn),
-              catch: ensureError,
-            })
-          : Effect.succeed(false),
+        // No `inScope`: the probes read the stored OAuth session, not the
+        // workspace-roots frame.
+        preferCodexSubscription ? isCodexSignedIn() : Effect.succeed(false),
+        preferXaiSubscription ? isXaiSignedIn() : Effect.succeed(false),
       ] as const,
       { concurrency: 'unbounded' },
     );

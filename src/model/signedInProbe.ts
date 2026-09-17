@@ -9,19 +9,20 @@
  * routes model selection to API keys rather than to a subscription that cannot
  * be reached.
  */
+import { Effect } from 'effect';
 
-/** Reads the current sign-in state. Never throws; never hits the network. */
-export type SignedInProbe = () => Promise<boolean>;
+/** Reads the current sign-in state. Never fails; never hits the network. */
+export type SignedInProbe = () => Effect.Effect<boolean>;
 
 interface SignedInProbeSlot {
   /** Install the app's sign-in probe. */
   setProbe(next: SignedInProbe): void;
-  isSignedIn(): Promise<boolean>;
+  isSignedIn(): Effect.Effect<boolean>;
 }
 
 /** Build a sign-in probe slot that reports signed-out until one is installed. */
 export function createSignedInProbe(): SignedInProbeSlot {
-  const SIGNED_OUT: SignedInProbe = async () => false;
+  const SIGNED_OUT: SignedInProbe = () => Effect.succeed(false);
   let probe: SignedInProbe = SIGNED_OUT;
   return {
     setProbe(next) {

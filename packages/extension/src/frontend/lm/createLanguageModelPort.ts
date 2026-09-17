@@ -4,50 +4,12 @@ import * as vscode from 'vscode';
 // Local imports
 import { warn } from '@logger/logUtils';
 import {
-  LANGUAGE_MODEL_PORT_ERROR_CODE,
-  LanguageModelPortError,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelAccessState,
   type LanguageModelInfo,
   type LanguageModelPort,
 } from '@platform/languageModel';
-
-function translateLanguageModelError(error: unknown): LanguageModelPortError {
-  if (error instanceof LanguageModelPortError) return error;
-
-  const code =
-    typeof error === 'object' && error !== null && 'code' in error
-      ? (error as { code?: unknown }).code
-      : undefined;
-  switch (code) {
-    case 'NoPermissions':
-      return new LanguageModelPortError(
-        LANGUAGE_MODEL_PORT_ERROR_CODE.NO_PERMISSIONS,
-        'Access to language model was not granted. Allow TeXRA to use language models in VS Code and try again.',
-        { cause: error },
-      );
-    case 'Blocked':
-      return new LanguageModelPortError(
-        LANGUAGE_MODEL_PORT_ERROR_CODE.QUOTA_EXCEEDED,
-        'Language model is blocked, usually because the Copilot quota has been exceeded.',
-        { cause: error },
-      );
-    case 'NotFound':
-      return new LanguageModelPortError(
-        LANGUAGE_MODEL_PORT_ERROR_CODE.MODEL_UNAVAILABLE,
-        'Language model is unavailable. Select an available Copilot model and try again.',
-        { cause: error },
-      );
-    default:
-      return new LanguageModelPortError(
-        LANGUAGE_MODEL_PORT_ERROR_CODE.UNKNOWN,
-        error instanceof Error && error.message
-          ? error.message
-          : 'Language model request failed.',
-        { cause: error },
-      );
-  }
-}
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 function toAccessState(access: boolean | undefined): LanguageModelAccessState {
   if (access === true) return 'allowed';
@@ -95,13 +57,14 @@ export function createLanguageModelPort(
           toModelInfo(model, accessInformation),
         );
       } catch (error) {
-        const translated = translateLanguageModelError(error);
+        // The editor's own error travels on unchanged: the one production
+        // consumer (`runtimeModelRegistry`) hands it to the caller that asked
+        // for discovery, which reads its message.
         warn(
           'LanguageModelPort',
-          'Could not discover editor-supplied language models.',
-          { data: translated },
+          `Could not discover editor-supplied language models: ${toErrorMessage(error)}`,
         );
-        throw translated;
+        throw error;
       }
     },
 

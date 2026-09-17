@@ -30,31 +30,6 @@ export interface LanguageModelReference {
   readonly id: string;
 }
 
-export const LANGUAGE_MODEL_PORT_ERROR_CODE = {
-  MODEL_UNAVAILABLE: 'model_unavailable',
-  NO_PERMISSIONS: 'no_permissions',
-  QUOTA_EXCEEDED: 'quota_exceeded',
-  UNKNOWN: 'unknown',
-} as const;
-
-export type LanguageModelPortErrorCode =
-  (typeof LANGUAGE_MODEL_PORT_ERROR_CODE)[keyof typeof LANGUAGE_MODEL_PORT_ERROR_CODE];
-
-/** Host-neutral failure from an editor-supplied language model API. */
-export class LanguageModelPortError extends Error {
-  readonly code: LanguageModelPortErrorCode;
-
-  constructor(
-    code: LanguageModelPortErrorCode,
-    message: string,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = 'LanguageModelPortError';
-    this.code = code;
-  }
-}
-
 /**
  * Host bridge for subscription-backed language models exposed by the editor.
  * Hosts without such an API use {@link UNAVAILABLE_LANGUAGE_MODEL_PORT}.
