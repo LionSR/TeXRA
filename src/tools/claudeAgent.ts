@@ -90,7 +90,6 @@ import {
 import {
   aggregateClaudeModelUsage,
   buildClaudeToolUseLog,
-  buildClaudeUsageStats,
   CLAUDE_AGENT_NAME,
   modelSupportsAdaptiveThinking,
   type ClaudeTurnUsage,
@@ -477,7 +476,22 @@ function startClaudeAgentLoop(params: {
     resolveSessionIds: (turn) => [fallbackSessionId, turn.sessionId],
     getUsage: (turn) => turn.usage,
     buildUsageStats: (turn) =>
-      turn.usage ? buildClaudeUsageStats(turn.usage) : undefined,
+      turn.usage
+        ? {
+            inputTokens: turn.usage.input_tokens ?? 0,
+            outputTokens: turn.usage.output_tokens ?? 0,
+            cost: turn.usage.cost_usd ?? 0,
+            ...(turn.usage.cache_read_input_tokens != null &&
+              turn.usage.cache_read_input_tokens > 0 && {
+                cacheReadInputTokens: turn.usage.cache_read_input_tokens,
+              }),
+            ...(turn.usage.cache_creation_input_tokens != null &&
+              turn.usage.cache_creation_input_tokens > 0 && {
+                cacheCreationInputTokens:
+                  turn.usage.cache_creation_input_tokens,
+              }),
+          }
+        : undefined,
     isTurnError: (turn) => turn.isError,
     onTurnError: (turn, log) => {
       if (turn.errorMessage) log.error(turn.errorMessage);

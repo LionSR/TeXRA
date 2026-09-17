@@ -414,7 +414,7 @@ function resolveModelAvailability(
 export type ModelAvailabilityScope = <T>(read: () => T) => T;
 
 /** The frame for a caller that is already in the one it wants. */
-const CALLING_SCOPE: ModelAvailabilityScope = (read) => read();
+export const CALLING_SCOPE: ModelAvailabilityScope = (read) => read();
 
 /**
  * A host fact this module reads synchronously — a workspace preference, a

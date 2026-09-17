@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import {
-  buildTeamOptions,
   canLaunchTeam,
   findTeamPreset,
   loadTeamOptions,
@@ -303,54 +302,6 @@ describe('plan status and launchability', () => {
   });
 });
 
-describe('buildTeamOptions', () => {
-  it('keeps built-in declaration order, alphabetizes customs, and maps state', () => {
-    const builtInA = manualPlan({
-      preset: preset({
-        id: 'physicist',
-        name: 'Physicist',
-        source: 'built-in',
-      }),
-    });
-    const builtInB = manualPlan({
-      preset: preset({
-        id: 'lean-project',
-        name: 'Lean Project',
-        source: 'built-in',
-      }),
-    });
-    const customZ = manualPlan({
-      preset: preset({ id: 'cz', name: 'Zulu' }),
-      missingAgents: {
-        workflow: ['writer'],
-        toolUse: ['member'],
-      },
-    });
-    const customA = manualPlan({
-      preset: preset({ id: 'ca', name: 'Alpha' }),
-      rootAgent: undefined,
-    });
-
-    const options = buildTeamOptions([customZ, builtInA, customA, builtInB]);
-
-    expect(options.map((option) => option.value)).toEqual([
-      'lean-project',
-      'physicist',
-      'ca',
-      'cz',
-    ]);
-    expect(options[2]).toMatchObject({
-      source: 'custom',
-      icon: 'bookmark',
-      description: 'A custom team.',
-      disabled: true,
-      disabledReason: 'No runnable team lead.',
-    });
-    expect(options[3].unavailableMembers).toEqual(['writer', 'member']);
-    expect(options[3].disabled).toBeUndefined();
-  });
-});
-
 describe('loadTeamOptions', () => {
   it.effect(
     'refreshes a gapped plan when remote access exists and builds final options',
@@ -430,6 +381,29 @@ describe('loadTeamOptions', () => {
 
       expect(getAgents).toHaveBeenCalled();
     }),
+  );
+
+  it.effect(
+    'orders built-in teams by declaration, then customs alphabetically',
+    () =>
+      Effect.gen(function* () {
+        const options = yield* loadTeamOptions({
+          customPresetsRaw: [
+            preset({ id: 'cz', name: 'Zulu' }),
+            preset({ id: 'ca', name: 'Alpha' }),
+          ],
+          ensureCatalogLoaded: () => Effect.void,
+          getAgents: () => [],
+          canAccessRemoteCatalog: () => Effect.succeed(false),
+          refreshRemote: () => Effect.void,
+        });
+
+        expect(options.map((option) => option.value)).toEqual([
+          ...AGENT_MODE_PRESETS.map((builtIn) => builtIn.id),
+          'ca',
+          'cz',
+        ]);
+      }),
   );
 });
 

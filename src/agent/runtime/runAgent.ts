@@ -183,6 +183,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
     const priorEnd = shouldRegister
       ? null
       : yield* getRunRecords(runSession, runId).readRunEnd();
+    const priorEndStable = stableStringify(priorEnd);
     yield* failIfLaunchStopped(launchStopped);
     if (!shouldRegister && !(yield* getRunRecords(runSession, runId).exists()))
       return yield* Effect.fail(new Error(`Run not found: ${runId}`));
@@ -303,19 +304,24 @@ export const runAgent = Effect.fn('runAgent')(function* (
                 );
             if (Exit.isFailure(current)) {
               failures.push(Cause.squash(current.cause));
-            } else if (
-              stableStringify(current.value) === stableStringify(priorEnd)
-            ) {
-              const finalization = yield* Effect.exit(
-                finalizeRun(runSession, {
-                  runId,
-                  outcome: restoredOutcome,
-                }),
-              );
-              if (Exit.isFailure(finalization))
-                failures.push(Cause.squash(finalization.cause));
-              else if (!finalization.value.ok)
-                failures.push(finalization.value.error);
+            } else {
+              const currentStable = stableStringify(current.value);
+              if (
+                currentStable !== undefined &&
+                priorEndStable !== undefined &&
+                currentStable === priorEndStable
+              ) {
+                const finalization = yield* Effect.exit(
+                  finalizeRun(runSession, {
+                    runId,
+                    outcome: restoredOutcome,
+                  }),
+                );
+                if (Exit.isFailure(finalization))
+                  failures.push(Cause.squash(finalization.cause));
+                else if (!finalization.value.ok)
+                  failures.push(finalization.value.error);
+              }
             }
           }
         }

@@ -842,12 +842,6 @@
       "name": "DeviceCodeExpired"
     },
     {
-      "file": "src/common/teams/TeamPlan.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildTeamOptions"
-    },
-    {
       "file": "src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -894,12 +888,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "resolveWorkspaceStoragePath"
-    },
-    {
-      "file": "src/platform/defaults/workspaceStorage.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "workspaceStorageId"
     },
     {
       "file": "src/replacement/engine.ts",
@@ -1026,12 +1014,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "runStreamedTurn"
-    },
-    {
-      "file": "src/tools/delegation/subagentResults.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "computeAndWriteWorkflowDiffs"
     },
     {
       "file": "src/tools/github/PRPollingSource.ts",

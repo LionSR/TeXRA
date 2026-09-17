@@ -67,12 +67,12 @@ interface HostSnapshotSourceOptions {
    * workspace roots, and it is an Effect: a fiber resumes outside whatever
    * frame its caller entered, so the frame is threaded in and applied around
    * each host call instead of wrapped around the refresh. A host that runs one
-   * session per process (the extension, the CLI) passes the calling frame,
-   * `(read) => read()`; a host with several open projects in one process (the
+   * session per process (the extension, the CLI) is already in that frame and
+   * omits this; a host with several open projects in one process (the
    * desktop) passes that project's, or every project reads the process roots'
    * preferences.
    */
-  inScope: ModelAvailabilityScope;
+  inScope?: ModelAvailabilityScope;
   /** The launcher's single-slot catalogs: base and edited candidates. The
    *  read takes the process `FileSystem` from context; the refresh effects
    *  that reach it carry the requirement. */

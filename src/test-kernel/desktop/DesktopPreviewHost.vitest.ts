@@ -173,7 +173,6 @@ describe('desktop preview host', () => {
           secrets,
           globalState,
           workspaceState: session.roots.workspaceState,
-          inScope: (read) => read(),
           fileOptions: () => Effect.promise(() => files.fileOptions()),
           readRecentCommits: () =>
             Effect.succeed({ commits: [], isGitRepo: false }),

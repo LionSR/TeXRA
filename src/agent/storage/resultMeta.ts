@@ -1,4 +1,3 @@
-import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { ResultMeta, RunEnd, RunOutcome } from '@shared/schemas';
 
 /**
@@ -23,24 +22,4 @@ export function unwrapResultMeta(
 ): PublicRunResult {
   if (meta.producer === 'backgroundBash') return meta;
   return { ...(runEnd ?? {}), output: meta.output };
-}
-
-/** Wrap a CLI workflow result in the canonical producer record. */
-export function buildCliWorkflowResultMeta(
-  flowResult: WorkflowFlowResult,
-  options: {
-    readonly copiedOutput?: string;
-    readonly copiedOutputs?: readonly string[];
-  } = {},
-): Extract<ResultMeta, { producer: 'cliWorkflow' }> {
-  return {
-    producer: 'cliWorkflow',
-    output: flowResult.output,
-    ...(options.copiedOutput !== undefined && {
-      copiedOutput: options.copiedOutput,
-    }),
-    ...(options.copiedOutputs !== undefined && {
-      copiedOutputs: [...options.copiedOutputs],
-    }),
-  };
 }

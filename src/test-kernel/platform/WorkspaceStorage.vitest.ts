@@ -1,6 +1,6 @@
 // Node imports
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -19,7 +19,6 @@ import {
   resolveRunStoragePath,
   resolveWorkspaceStoragePath,
   RUNS_STORAGE_DIR,
-  workspaceStorageId,
 } from '@platform/defaults/workspaceStorage';
 import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -31,17 +30,28 @@ describe('workspace storage defaults', () => {
     return makeTempDir('texra-workspace-storage-', tempDirs);
   }
 
-  it('computes a stable workspace storage identity', () => {
-    expect(workspaceStorageId('/workspace/a')).toMatch(/^a-[0-9a-f]{8}$/);
-    expect(workspaceStorageId('/workspace/a')).toBe(
-      workspaceStorageId('  /workspace/a  '),
+  // The workspace storage identity, read off the provider that owns it.
+  function storageIdOf(
+    root: string,
+    workspacePath: string | undefined,
+  ): string {
+    return basename(
+      new WorkspaceStorageProvider(root, workspacePath).getStoragePath(),
     );
-    expect(workspaceStorageId('/workspace/a')).not.toBe(
-      workspaceStorageId('/workspace/b'),
+  }
+
+  it('computes a stable workspace storage identity', async () => {
+    const root = await makeStorageRoot();
+    expect(storageIdOf(root, '/workspace/a')).toMatch(/^a-[0-9a-f]{8}$/);
+    expect(storageIdOf(root, '/workspace/a')).toBe(
+      storageIdOf(root, '  /workspace/a  '),
     );
-    expect(workspaceStorageId('/workspace/b')).toMatch(/^b-[0-9a-f]{8}$/);
-    expect(workspaceStorageId(undefined)).toBe(workspaceStorageId(''));
-    expect(workspaceStorageId(undefined)).toMatch(/^no-workspace-[0-9a-f]{8}$/);
+    expect(storageIdOf(root, '/workspace/a')).not.toBe(
+      storageIdOf(root, '/workspace/b'),
+    );
+    expect(storageIdOf(root, '/workspace/b')).toMatch(/^b-[0-9a-f]{8}$/);
+    expect(storageIdOf(root, undefined)).toBe(storageIdOf(root, ''));
+    expect(storageIdOf(root, undefined)).toMatch(/^no-workspace-[0-9a-f]{8}$/);
   });
 
   it('snapshots global, workspace, memory, and run storage layout paths', async () => {
@@ -58,7 +68,7 @@ describe('workspace storage defaults', () => {
       resolveRunOriginalSnapshotPath('run-1', 'Draft/Draft.tex'),
     ]).toEqual([
       join(root, 'v1', 'global-storage'),
-      join(root, 'v1', 'workspace-storage', workspaceStorageId(workspacePath)),
+      join(root, 'v1', 'workspace-storage', storageIdOf(root, workspacePath)),
       'memories',
       'memories/project.md',
       'executions',
@@ -96,7 +106,7 @@ describe('workspace storage defaults', () => {
         const workspacePath = '/workspace/Legacy Project';
         const oldPaths = [
           join(root, 'workspace-storage', 'dda160810e1d2a9f'),
-          join(root, 'workspace-storage', workspaceStorageId(workspacePath)),
+          join(root, 'workspace-storage', storageIdOf(root, workspacePath)),
           join(root, 'global-storage'),
         ];
         const oldBytes = Buffer.from('existing state\n\u0000unchanged');
@@ -114,7 +124,7 @@ describe('workspace storage defaults', () => {
             root,
             'v1',
             'workspace-storage',
-            workspaceStorageId(workspacePath),
+            storageIdOf(root, workspacePath),
           ),
         );
         expect(globalPath).toBe(join(root, 'v1', 'global-storage'));

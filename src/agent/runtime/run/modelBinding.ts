@@ -43,7 +43,10 @@ import {
   type ModelOrigin,
   type VscodeLanguageModelConfiguration,
 } from '@llm/turn';
-import type { ModelOptionStores } from '@model/computeModelOptions';
+import {
+  CALLING_SCOPE,
+  type ModelOptionStores,
+} from '@model/computeModelOptions';
 import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
@@ -179,7 +182,7 @@ interface BindModelInput {
   /** The route default's temperature; the request may override per turn. */
   readonly temperature: number;
   /** Runs a Promise-tier read inside the launch's async-local frame. */
-  readonly inScope: <A>(operation: () => A) => A;
+  readonly inScope?: <A>(operation: () => A) => A;
 }
 
 type Protocol = ModelConfiguration['protocol'];
@@ -854,6 +857,7 @@ export function releaseBindingUploads(
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope | HttpClient.HttpClient> {
+  const inScope = input.inScope ?? CALLING_SCOPE;
   const useOpenRouter = readSettingFrom<boolean>(
     input.roots,
     GlobalStateKey.USE_OPENROUTER,
@@ -910,7 +914,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         input.stores.secrets,
         onOpenRouter,
         input.declinedRoutes,
-        input.inScope,
+        inScope,
       ),
     );
   }
@@ -953,7 +957,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
           config,
           selectedOpenRouter,
           input.stores.secrets,
-          input.inScope,
+          inScope,
           input.declinedRoutes,
         )
       : null;
@@ -966,7 +970,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       config,
       onOpenRouter,
       input.stores.secrets,
-      input.inScope,
+      inScope,
       input.declinedRoutes,
     );
   }

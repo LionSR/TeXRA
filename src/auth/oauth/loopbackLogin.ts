@@ -37,7 +37,7 @@ export class LoopbackTransportUnavailableError extends Error {
  * program, not a Promise, so it runs on this flow's own fiber: interrupting
  * the login reaches the token exchange and the session store.
  */
-export interface LoopbackOAuthCoordinator<S> {
+interface LoopbackOAuthCoordinator<S> {
   buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest;
   loginWithCode(params: {
     code: string;
@@ -177,7 +177,7 @@ function decideCallback(
  * The loopback sign-in flow end to end: bind, open the browser, wait for the
  * callback, and persist the session via the coordinator.
  */
-export function loginWithOAuthLoopback<S>(
+function loginWithOAuthLoopback<S>(
   options: OAuthLoopbackLoginOptions<S>,
 ): Effect.Effect<S, unknown, HttpClient.HttpClient> {
   const { coordinator, openBrowser, ports, callbackPath, displayName } =
@@ -293,4 +293,20 @@ export function loginWithOAuthLoopback<S>(
       });
     }),
   );
+}
+
+/**
+ * A provider's loopback login: the shared flow pre-bound to the provider's
+ * registered callback constants, so each provider module is the constants
+ * rather than a wrapper function.
+ */
+export function defineLoopbackLogin<S>(constants: {
+  readonly ports: readonly number[];
+  readonly callbackPath: string;
+  readonly displayName: string;
+}) {
+  return (
+    options: Pick<OAuthLoopbackLoginOptions<S>, 'coordinator' | 'openBrowser'>,
+  ): Effect.Effect<S, unknown, HttpClient.HttpClient> =>
+    loginWithOAuthLoopback({ ...options, ...constants });
 }

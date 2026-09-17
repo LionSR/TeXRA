@@ -25,7 +25,7 @@ function sanitizeWorkspaceBasename(workspacePath: string): string {
   });
 }
 
-export function workspaceStorageId(workspacePath: string | undefined): string {
+function workspaceStorageId(workspacePath: string | undefined): string {
   const source = workspacePath?.trim() || 'no-workspace';
   const stem =
     source === 'no-workspace'

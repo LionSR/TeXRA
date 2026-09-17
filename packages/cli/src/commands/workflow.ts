@@ -2,7 +2,6 @@ import * as path from 'node:path';
 import { Effect, Result } from 'effect';
 
 import {
-  buildCliWorkflowResultMeta,
   deriveResumability,
   getRunRecords,
   type ResumabilityDecision,
@@ -425,12 +424,16 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           } else {
             workflowResult = outputResult.success;
           }
-          yield* getRunRecords(session, result.runId).writeResultMeta(
-            buildCliWorkflowResultMeta(result, {
-              copiedOutput: workflowResult?.copiedOutput,
-              copiedOutputs: workflowResult?.copiedOutputs,
+          yield* getRunRecords(session, result.runId).writeResultMeta({
+            producer: 'cliWorkflow',
+            output: result.output,
+            ...(workflowResult?.copiedOutput !== undefined && {
+              copiedOutput: workflowResult.copiedOutput,
             }),
-          );
+            ...(workflowResult?.copiedOutputs !== undefined && {
+              copiedOutputs: [...workflowResult.copiedOutputs],
+            }),
+          });
           return outcome;
         }),
     });

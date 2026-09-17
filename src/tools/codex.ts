@@ -85,7 +85,6 @@ import {
   buildCodexThreadToolLog,
   buildCodexTodoToolLog,
   buildCodexTurnToolLog,
-  buildCodexUsageStats,
 } from './codexShared';
 
 // Third-party type imports (import/order places these after local imports)
@@ -384,7 +383,16 @@ function startCodexLoop(params: {
     resolveSessionIds: () => [fallbackThreadId, thread.id],
     getUsage: (turn) => turn.usage,
     buildUsageStats: (turn) =>
-      turn.usage ? buildCodexUsageStats(turn.usage) : undefined,
+      turn.usage
+        ? {
+            inputTokens: turn.usage.input_tokens,
+            outputTokens: turn.usage.output_tokens,
+            cost: 0,
+            ...(turn.usage.cached_input_tokens > 0 && {
+              cacheReadInputTokens: turn.usage.cached_input_tokens,
+            }),
+          }
+        : undefined,
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
       formatChildRunDelivery(
         {

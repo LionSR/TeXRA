@@ -780,9 +780,10 @@ describe('CLI run command, workflow agents', () => {
           output: { category: 'workflow' },
         });
         const afterRelease = yield* Effect.result(
-          records.writeResultMeta(
-            storage.buildCliWorkflowResultMeta(run.result),
-          ),
+          records.writeResultMeta({
+            producer: 'cliWorkflow',
+            output: run.result.output,
+          }),
         );
         expect(Result.isFailure(afterRelease)).toBe(true);
       }),
