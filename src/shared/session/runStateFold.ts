@@ -624,7 +624,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
             return pending !== response;
           }
           const settledIds = Object.keys(pending.settled).sort();
-          const claimed = [...response.settled].sort();
+          const claimed = response.settled.toSorted();
           return (
             pending.responseId !== response.responseId ||
             settledIds.length !== claimed.length ||

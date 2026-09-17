@@ -167,9 +167,7 @@ async function resolveDeepestSubCommandPath({
   rootCommand,
 }: ResolveDeepestSubCommandPathInput): Promise<ResolvedCliCommand> {
   const subCommands = await commandSubcommands(cmd);
-  for (let i = 0; i < rawArgs.length; i++) {
-    const token = rawArgs[i];
-    if (token === undefined) break;
+  for (const [i, token] of rawArgs.entries()) {
     if (token.startsWith('-')) continue;
     const next = subCommands[token];
     if (next) {
