@@ -14,7 +14,6 @@ import {
   aggregateTarget,
   AgentCategory,
   emptyRunEndOutput,
-  type ActiveChildInfo,
   type BashPermission,
   type DisplaySessionEvent,
   type RequestDecision,
@@ -95,25 +94,6 @@ export function recordSessionEvents(
         : events.filter((event) => event.aggregateId === filter.aggregateId);
     },
   };
-}
-
-/** Every child roster a registry tells its listeners from this call on. */
-export function recordChildRosters(
-  registry: Pick<SessionHandle['runs'], 'onChildActivity'>,
-): {
-  readonly rosters: Array<{
-    readonly parentRunId: RunId;
-    readonly items: readonly ActiveChildInfo[];
-  }>;
-} {
-  const rosters: Array<{
-    readonly parentRunId: RunId;
-    readonly items: readonly ActiveChildInfo[];
-  }> = [];
-  registry.onChildActivity((parentRunId, items) => {
-    rosters.push({ parentRunId, items });
-  });
-  return { rosters };
 }
 
 /** Every stream whose follow-up queue reports input sent from this call on. */

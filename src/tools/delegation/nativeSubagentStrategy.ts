@@ -132,12 +132,6 @@ export interface ChildRunLaunchOptions {
   readonly approvalPromptsUnavailable?: boolean;
   readonly onApprovalPolicyDenial?: () => void;
   readonly runtimeUnavailableTools?: readonly string[];
-  /**
-   * Workflow-script phase owning this child, when the caller is a
-   * workflow-script run. Rides to the child's roster row so a host can group
-   * grandchild rows by phase.
-   */
-  readonly workflowPhase?: string;
   /** Caller cancellation for a durable in-band launch. */
   readonly signal?: AbortSignal;
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */
@@ -278,7 +272,6 @@ export function createNativeSubagentStrategy(
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
             runtimeUnavailableTools: params.runtimeUnavailableTools,
-            workflowPhase: params.workflowPhase,
             onRunResolved: params.onRunResolved,
             onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
               ports.notify(update),

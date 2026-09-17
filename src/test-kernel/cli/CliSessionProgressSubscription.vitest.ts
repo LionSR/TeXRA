@@ -11,9 +11,7 @@ import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
-  RUN_PHASE,
   AgentCategory,
-  type ActiveChildInfo,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
@@ -174,28 +172,11 @@ function rowFields(record: CliNdjsonRecord): {
   return { event: record.event, fields };
 }
 
-type RosterListener = (
-  parentRunId: RunId,
-  items: readonly ActiveChildInfo[],
-) => void;
-
 function projectionOver(session: SessionHandle) {
   const writeRecord = recordWriter();
-  let roster: RosterListener | undefined;
   const detach = attachCliSessionProgressProjection(
     effectRuntime(),
-    {
-      events: session.events,
-      now: () => session.now(),
-      runs: {
-        onChildActivity: (listener: RosterListener) => {
-          roster = listener;
-          return () => {
-            roster = undefined;
-          };
-        },
-      },
-    },
+    session,
     writeRecord,
   );
   const publish = async (source: Source): Promise<void> => {
@@ -203,16 +184,12 @@ function projectionOver(session: SessionHandle) {
     else session.publish([source.draft]);
     await Effect.runPromise(session.settlePublications());
   };
-  const records = (): CliNdjsonRecord[] =>
+  const all = (): CliNdjsonRecord[] =>
     vi.mocked(writeRecord).mock.calls.map(([record]) => record);
-  return {
-    writeRecord,
-    records,
-    publish,
-    emitRoster: (parent: RunId, items: readonly ActiveChildInfo[]) =>
-      roster?.(parent, items),
-    detach,
-  };
+  /** The event lines alone: the roster is a derivation, asserted apart. */
+  const records = (): CliNdjsonRecord[] =>
+    all().filter((record) => record.event !== 'run.children');
+  return { writeRecord, all, records, publish, detach };
 }
 
 describe('attachCliSessionProgressProjection', () => {
@@ -342,44 +319,84 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
-  it('writes the child roster as a run.children record with the rows verbatim', async () => {
-    const items: ActiveChildInfo[] = [
-      {
-        childRunId: 'run:native' as RunId,
-        agentName: 'review',
-        identity: { kind: 'agent', agent: 'review' },
-        status: RUN_PHASE.RUNNING,
-      },
-      {
-        childRunId: 'run:workflow' as RunId,
-        agentName: 'plan',
-        identity: { kind: 'multiAgentWorkflow', workflowName: 'delegate' },
-        status: RUN_PHASE.RUNNING,
-      },
-      {
-        childRunId: 'run:process' as RunId,
-        agentName: 'bash',
-        identity: { kind: 'process', tool: 'bash' },
-        status: RUN_PHASE.RUNNING,
-      },
-    ];
+  it('derives the child roster from the fold, one run.children record per change', async () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
     await Effect.runPromise(session.settlePublications());
-    const { writeRecord, records, emitRoster, detach } =
-      projectionOver(session);
+    const { all, publish, detach } = projectionOver(session);
+    const rosters = () => all().filter((r) => r.event === 'run.children');
     try {
-      emitRoster(runId, items);
-      await Effect.runPromise(session.settlePublications());
-      expect(writeRecord).toHaveBeenCalledTimes(1);
-      expect(records()[0]).toEqual({
-        kind: 'progress',
-        event: 'run.children',
-        ts: expect.any(String),
-        payload: { runId, children: items },
+      await publish({
+        draft: {
+          type: 'run.start',
+          aggregateId: childAggregate,
+          identity: { kind: 'agent', agent: 'review' },
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+          parent: { id: runId },
+        },
       });
+      // The child's own row, under its own names, with the fold's phase:
+      // `ready` until its `run.activate` folds.
+      expect(rosters()).toEqual([
+        {
+          kind: 'progress',
+          event: 'run.children',
+          ts: expect.any(String),
+          payload: {
+            runId,
+            children: [
+              {
+                childRunId,
+                agentName: 'review',
+                identity: { kind: 'agent', agent: 'review' },
+                status: 'ready',
+              },
+            ],
+          },
+        },
+      ]);
+
+      // A row that moves the child's phase rewrites the roster once.
+      await publish({
+        draft: {
+          type: 'run.activate',
+          aggregateId: childAggregate,
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+        },
+      });
+      expect(rosters()).toHaveLength(2);
+      expect(rosters()[1]?.payload).toMatchObject({
+        runId,
+        children: [{ childRunId, status: 'running' }],
+      });
+
+      // A row that moves nothing on the roster writes no second copy.
+      await publish({
+        draft: {
+          type: 'run.description',
+          aggregateId: runAggregate,
+          description: 'Checking the compactness lemma',
+        },
+      });
+      expect(rosters()).toHaveLength(2);
+
+      // The ended child leaves the live roster; its own `run.end` line
+      // carries the outcome.
+      await publish({
+        draft: {
+          type: 'run.end',
+          aggregateId: childAggregate,
+          outcome: 'completed',
+          output: { category: 'toolUse', response: '', files: [] },
+        },
+      });
+      expect(rosters()).toHaveLength(3);
+      expect(rosters()[2]?.payload).toEqual({ runId, children: [] });
     } finally {
-      detach();
+      await detach();
     }
   });
 

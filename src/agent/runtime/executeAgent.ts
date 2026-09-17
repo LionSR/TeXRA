@@ -326,7 +326,6 @@ function buildLifecycleOptions(
 ): RunFlowLifecycleOptions {
   return {
     parentRunId,
-    workflowPhase: options.workflowPhase,
     onError: options.onRunError,
     onRun: options.onRun,
     // Stop the Lean servers the ended run started; a host whose Lean
@@ -403,13 +402,6 @@ export interface SubagentRunOptions {
   ) => void | Promise<void>;
   /** Fires once with the live per-run handle right after it is tracked (F-2). */
   onRun?: (handle: AgentRunHandle) => void | Promise<void>;
-  /**
-   * Workflow-script phase owning this run, when it is an `agent()` call inside
-   * a workflow script. Carried on the parent's child roster so a host can
-   * group grandchild rows by phase. Not settable from `onRun` — see
-   * `RunFlowLifecycleOptions.workflowPhase`.
-   */
-  workflowPhase?: string;
 }
 
 /** Options for executeAgent. */

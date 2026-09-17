@@ -127,7 +127,10 @@ Every `--output-format ndjson` line is one JSON object whose first key is
   parent edge is `payload.parent` on `run.start`; the terminal fact is
   `run.end` with its `outcome`. One record with no session event behind it,
   `event: "run.children"`, reports a parent run's live child roster as
-  `{ runId, children }`, each child carrying its `childRunId` and `identity`.
+  `{ runId, children }`, each child carrying its `childRunId`, `identity`,
+  `agentName`, and `status` — the run phase, or `ready` before the child's
+  first activation. A child that reached a terminal outcome leaves the
+  roster; its `run.end` record carries the outcome.
 - `kind: "agent-result"`, `kind: "result"`, and `kind: "multi-agent-result"`
   carry the run result described above under `result`, with `runId`.
 - History records (`history-entry`, `history-detail`) spell a terminal

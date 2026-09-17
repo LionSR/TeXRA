@@ -50,13 +50,6 @@ const logger = createChannelTrace('agentRunLifecycle');
 export interface RunFlowLifecycleOptions {
   /** The launching run: the parent edge on the handle; a child may park at WAITING. */
   parentRunId?: RunId;
-  /**
-   * Workflow-script phase owning this run, stamped on the handle before it is
-   * tracked so the parent's very first child roster already groups the row.
-   * Deliberately not an `onRun` responsibility: `onRun` fires after `track()`
-   * has already notified `RunRegistry.onChildActivity` listeners.
-   */
-  workflowPhase?: string;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
   /**
    * Fires once with the live per-run handle, right after it is tracked (F-2) —
@@ -398,11 +391,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       options?.parentRunId ?? null,
       ctx.logger,
     );
-    // Roster display fields must be on the handle BEFORE it is tracked:
-    // `track()` notifies `RunRegistry.onChildActivity` listeners
-    // synchronously, so anything assigned later (e.g. from `onRun`) misses the
-    // parent's first roster snapshot.
-    if (options?.workflowPhase) handle.workflowPhase = options.workflowPhase;
     // The host's stop: the run's one stop latch, which the runner races. The
     // requests this run left open close with the fibers waiting on them
     // (`SessionHandle.openRequest`).

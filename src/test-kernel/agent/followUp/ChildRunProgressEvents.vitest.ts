@@ -36,7 +36,6 @@ import { createChildRun, type ChildRun } from '@tools/delegation/childRun';
 import {
   createRecordingHost,
   eventsOfType,
-  recordChildRosters,
   recordSessionEvents,
 } from '../progressTestUtils';
 
@@ -120,7 +119,6 @@ describe('child run progress events', () => {
 
   it('publishes child run lifecycle events through the session hub', async () => {
     const recorded = recordSessionEvents(testDefaultSession());
-    const rosters = recordChildRosters(testDefaultSession().runs);
 
     const childRun = await startBashChild(runId);
 
@@ -172,25 +170,6 @@ describe('child run progress events', () => {
         outcome: RUN_OUTCOME.COMPLETED,
       }),
     ]);
-    expect(rosters.rosters).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          parentRunId,
-          items: [
-            expect.objectContaining({
-              childRunId: runId,
-              agentName: 'bash',
-              status: RUN_PHASE.RUNNING,
-              identity: { kind: 'process', tool: 'bash' },
-            }),
-          ],
-        }),
-        expect.objectContaining({
-          parentRunId,
-          items: [],
-        }),
-      ]),
-    );
     expect(eventsOfType(await recorded.read(), 'run.removed')).toEqual([]);
   });
 
@@ -234,13 +213,8 @@ describe('child run progress events', () => {
       expect(testDefaultSession().runView(workflowRelaunchRunId)?.status).toBe(
         RUN_PHASE.RUNNING,
       );
-      expect(
-        testDefaultSession().runs.getActiveChildren(parentRunId),
-      ).toContainEqual(
-        expect.objectContaining({
-          childRunId: workflowRelaunchRunId,
-          status: RUN_PHASE.RUNNING,
-        }),
+      expect(testDefaultSession().runs.hasActiveChildren(parentRunId)).toBe(
+        true,
       );
       // The relaunch is a second activation on the same run: that row is
       // what carries the run out of its terminal phase.

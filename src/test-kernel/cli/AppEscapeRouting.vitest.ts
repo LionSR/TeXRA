@@ -42,8 +42,9 @@ import {
   AgentCategory,
   RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
-  type ActiveChildInfo,
   type RunId,
+  type RunIdentity,
+  type RunPhase,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
@@ -200,7 +201,15 @@ function taskRow(id: string, call: WorkflowCallProgress): WorkflowTaskRow {
   };
 }
 
-function runningChild(childRunId: RunId, agentName: string): ActiveChildInfo {
+/** A child the fold holds under its parent, as these cases name one. */
+type ChildRow = {
+  readonly childRunId: RunId;
+  readonly agentName: string;
+  readonly identity: RunIdentity;
+  readonly status?: RunPhase;
+};
+
+function runningChild(childRunId: RunId, agentName: string): ChildRow {
   return {
     childRunId,
     agentName,
@@ -210,10 +219,7 @@ function runningChild(childRunId: RunId, agentName: string): ActiveChildInfo {
 }
 
 // Seed the child rosters and parent edges through the session event fold.
-function seedChildRoster(
-  parentRunId: RunId,
-  rows: readonly ActiveChildInfo[],
-): void {
+function seedChildRoster(parentRunId: RunId, rows: readonly ChildRow[]): void {
   seedRun(parentRunId);
   for (const row of rows) {
     seedRun(row.childRunId, {

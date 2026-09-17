@@ -1,59 +1,8 @@
 import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import { RunIdSchema } from './identifiers';
-import { RunIdentitySchema } from './runIdentity';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { roundIndexedRecord } from './roundIndexed';
-import { RunPhaseSchema } from './run';
-
-// Active Child Info — one flat row shape. `childRunId` is the child's run id
-// and the only id on the row; the child carries its parsed `identity`
-// verbatim, and renderers key icons and clickability on `identity.kind`
-// instead of tool-name sniffing or a roster-side kind union.
-
-const ActiveChildInfoSchema = z.object({
-  /** The child's run id. */
-  childRunId: RunIdSchema,
-  /** What owns the child run — every roster emitter declares it. */
-  identity: RunIdentitySchema,
-  agentName: z.string(),
-  /**
-   * Current run phase. Takes `RunPhase` only: no artifact carries a
-   * roster (see the note above), so there is nothing to normalize here.
-   */
-  status: RunPhaseSchema.optional(),
-  /**
-   * Epoch milliseconds when the current child handle generation was created.
-   * Kept on the wire for live and retained roster rows; live active-phase
-   * elapsed time comes from the child run's `runStartedAt` instead.
-   */
-  startedAt: z.int().positive().optional(),
-  /**
-   * Epoch milliseconds when the child left its parent's active roster.
-   * Presence — and ONLY presence — means this row is a finished child retained
-   * for display. The `status` string is display-only and can lag the roster
-   * drop, so it must never be used to decide list membership.
-   */
-  finishedAt: z.int().positive().optional(),
-  /**
-   * Workflow-script phase that owns this child, when its parent is a
-   * workflow-script run. Immutable per attempt: it is stamped on the handle
-   * before the first `RunRegistry.onChildActivity` notification, so retained
-   * (finished) rows keep it. Optional because only a workflow-script run's
-   * children have an owning phase.
-   *
-   * Wire surface, not a join key. It rides the roster verbatim onto the CLI
-   * NDJSON `run.children` record, and no production reader consumes it off a
-   * roster row; `AgentRunLifecycle.vitest.ts` pins that wire shape. The run's
-   * task cards join their phase by the card's own `groupId`
-   * (`src/shared/runs/workflowRunModel.ts`), and a card joins the child that
-   * opened it by `call.childRunId`, so none of them needs this field.
-   */
-  workflowPhase: z.string().optional(),
-});
-
-export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
 
 // Round Stage (ephemeral round label from typed stage.start metadata)
 

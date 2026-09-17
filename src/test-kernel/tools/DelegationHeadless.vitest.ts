@@ -660,19 +660,14 @@ describe('headless delegation', () => {
     'composes durable workflow calls through the native launch primitive',
     () =>
       Effect.gen(function* () {
-        const result = yield* runInBand(
-          delegationOptions({ workflowPhase: 'proof-review' }),
-        );
+        const result = yield* runInBand(delegationOptions());
 
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           expect.objectContaining({
             config: expect.objectContaining({ agent: 'review' }),
           }),
           result.runId,
-          expect.objectContaining({
-            stopAfterCycle: true,
-            workflowPhase: 'proof-review',
-          }),
+          expect.objectContaining({ stopAfterCycle: true }),
         );
         expect(result.result).toEqual({
           outcome: 'completed',
