@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -113,7 +114,7 @@ function createController({
   state?: ProgressFollowUpState;
 } = {}): ProgressFollowUpController {
   return new ProgressFollowUpController({
-    loadModelOptions: async () => modelOptions,
+    loadModelOptions: () => Effect.succeed(modelOptions),
     state,
     workspace: {
       locatePath: (candidate) =>

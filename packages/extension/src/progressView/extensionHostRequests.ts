@@ -224,10 +224,13 @@ export function createExtensionHostRequests(
     createHostRunActions({
       session,
       runAgentRequest,
-      loadModelOptions: async () =>
-        modelOptionsFrom(
-          await runtime.runPromise(
-            readModelAvailabilityInputs({ secrets, globalState }),
+      loadModelOptions: () =>
+        Effect.flatMap(runtime.contextEffect, (context) =>
+          Effect.provideContext(
+            readModelAvailabilityInputs({ secrets, globalState }).pipe(
+              Effect.map(modelOptionsFrom),
+            ),
+            context,
           ),
         ),
       // The set-key quick pick is a VS Code command: it either runs or
