@@ -17,7 +17,3 @@ export interface RunScope {
   readonly delegationAgentScope?: AgentDelegationScope | null;
   readonly session: SessionHandle;
 }
-
-export function createRunScope(scope: RunScope): RunScope {
-  return Object.freeze({ ...scope });
-}

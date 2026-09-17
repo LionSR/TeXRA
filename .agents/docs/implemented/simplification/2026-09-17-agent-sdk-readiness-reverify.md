@@ -18,6 +18,26 @@ Status: implemented
 > `file:line`, config path, or count; every citation matches what a reader sees
 > on that tree.
 
+> **Correction note (same-day).** The first draft of this record carried
+> `-09-14` §4's "Tier-1 manifest re-enumeration owed" forward as an open item
+> without re-deriving it against the live file. It was wrong: the manifest was
+> re-enumerated on 2026-09-15 by **#12634** (`0ffbe01`, "docs: re-enumerate
+> agent SDK Tier-1 manifest against main"), which landed between `-09-14` and
+> this pass. Every surviving `StreamView` / `ExecutionIdSchema` /
+> `IModelHandler` / `AgentFinalResult` mention in that document is now either
+> its own correction note (lines 16–31), struck through and marked moot
+> (`:322`, `:326`), or a historical reference to the landed cutover (`:350`).
+> The item is **closed**, and §5 below records it as such. This is the same
+> stale-carry-forward failure the `-09-14` record was itself corrected for;
+> the lesson is that a carried-forward finding needs re-derivation, not
+> transcription.
+
+> **Disposition note.** This record was first filed as "recorded, not acted on"
+> under the routine's standing default. The maintainer then asked, in session,
+> for the identified problems to be refactored as far as possible. That request
+> lifts the default, and §5 records what was acted on; the audit facts above and
+> in §§1–4 are unchanged by it.
+
 ## 0. Verdict
 
 **The standing structural verdict holds: the codebase is well-aligned with an
@@ -51,13 +71,15 @@ convergent cleanup, net-negative in the four spot-checked recent commits (e.g.
 processServicesLayer, make storage roots data"). None introduces a new exported
 class, wrapper layer, or one-implementor interface in the four audited areas.
 
-Consistent with the routine's standing default — a scheduled firing carries **no
-maintainer request** — this pass is **recorded, not acted on** for the codebase.
-Unlike `-09-14` (which fixed a real README `effect`-version defect flagged in
-review) and `-09-13`, this pass found **no defect** and no clearly-correct
-one-line fix flagged in review, so there is nothing to act on: the one README
-drift below (§5.4) was already flagged "for a maintainer" by `-09-14` and its
-disposition is unchanged. The remaining §5 items are logged; none is a defect.
+The routine's standing default would have made this a **recorded, not acted on**
+pass: a scheduled firing carries no maintainer request, and none of the
+carried-forward items is a defect. The maintainer then asked for the identified
+problems to be refactored as far as possible, which lifts that default. **Three
+of the four carried-forward items are now closed in this PR** (§5.1, §5.2, §5.4)
+and the fourth turned out to have been closed already, upstream, before this
+pass ran (§5.3 — see the correction note above). The structural verdict is
+unaffected: these are the small carried-forward survivors the passes have
+tracked for weeks, not a structural refactor, and nothing in §§1–4 changed.
 
 ## 1. Method and scope
 
@@ -81,17 +103,17 @@ there unnecessary abstraction _now_).
 
 ## 2. Tracked structural facts — re-verified against `main` (`3d5fbda`)
 
-| Item                                          | `-09-14` state                       | This pass (`3d5fbda`)                                                                                                                                             |
-| --------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Node flow engine**                          | deleted                              | **still deleted.** `ls src/agent/node` → no such directory. Runs are the run-ledger Effect program (`src/shared/session/runLedger.ts`, 140 LoC).                  |
-| **`ModelHandler.ts` god-base / `IModelHandler`** | deleted, no shim                  | **still gone.** `grep "class ModelHandler\|IModelHandler" src/ packages/` → zero production hits. Model stack is `ModelInvoker.ts` (**1,326** LoC) + `runtime/run/*`. |
-| **`redactSecrets`**                           | single-arg, clean                    | **still clean.** `redactSecrets(text: string): string` (`src/logger/redaction.ts:93`), straight-line body.                                                       |
-| **SDK version**                               | 0.41.0                               | **0.41.0** (`packages/agent/package.json`).                                                                                                                       |
-| **README `effect` peer pin**                  | fixed to `4.0.0-rc.115` in `-09-14` PR | **holds.** `package.json` peer `4.0.0-rc.115`; README install guidance matches. No re-drift.                                                                    |
-| **`createRunScope`** survivor                 | 1 production caller                  | **1 production caller** (`AgentLaunchContext.ts:555`); all other sites under `src/test-kernel/`. Unchanged survivor (§5.1).                                        |
-| **`turnText` duplication** (`-09-14` §5.2)    | dup present, cleanup prescribed      | **resolved.** Relocated to leaf `run/turnText.ts:4`; four importers, no dup, no shim (§0).                                                                        |
-| **Deep-import width** (cli/desktop/ext/agent) | 5 / 4 / 8 / 7                        | **5 / 4 / 7 / 7** — extension shrank 8→7; rest hold.                                                                                                              |
-| **Tier-1 named doors**                        | 8/8 fronted                          | **8/8 fronted** — `src/agent/{export,followUp,index,review,runtime,storage,templates,trace}/index.ts` all present.                                                |
+| Item                                             | `-09-14` state                         | This pass (`3d5fbda`)                                                                                                                                                 |
+| ------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Node flow engine**                             | deleted                                | **still deleted.** `ls src/agent/node` → no such directory. Runs are the run-ledger Effect program (`src/shared/session/runLedger.ts`, 140 LoC).                      |
+| **`ModelHandler.ts` god-base / `IModelHandler`** | deleted, no shim                       | **still gone.** `grep "class ModelHandler\|IModelHandler" src/ packages/` → zero production hits. Model stack is `ModelInvoker.ts` (**1,326** LoC) + `runtime/run/*`. |
+| **`redactSecrets`**                              | single-arg, clean                      | **still clean.** `redactSecrets(text: string): string` (`src/logger/redaction.ts:58` after §5.2; `:93` before), straight-line body.                                   |
+| **SDK version**                                  | 0.41.0                                 | **0.41.0** (`packages/agent/package.json`).                                                                                                                           |
+| **README `effect` peer pin**                     | fixed to `4.0.0-rc.115` in `-09-14` PR | **holds.** `package.json` peer `4.0.0-rc.115`; README install guidance matches. No re-drift.                                                                          |
+| **`createRunScope`** survivor                    | 1 production caller                    | **removed this PR.** Was 1 production caller (`AgentLaunchContext.ts:555`) + 5 test-kernel sites; the freeze is now inline at that call site (§5.1).                  |
+| **`turnText` duplication** (`-09-14` §5.2)       | dup present, cleanup prescribed        | **resolved.** Relocated to leaf `run/turnText.ts:4`; four importers, no dup, no shim (§0).                                                                            |
+| **Deep-import width** (cli/desktop/ext/agent)    | 5 / 4 / 8 / 7                          | **5 / 4 / 7 / 7** — extension shrank 8→7; rest hold.                                                                                                                  |
+| **Tier-1 named doors**                           | 8/8 fronted                            | **8/8 fronted** — `src/agent/{export,followUp,index,review,runtime,storage,templates,trace}/index.ts` all present.                                                    |
 
 ## 3. Loop ↔ ledger boundary — fold-based continuation (unchanged)
 
@@ -115,11 +137,11 @@ and **no silent degradation** in any of the four areas (§1).
 remain a shipped, multi-implementor SPI, not a design task. Four distinct
 production construction sites, unchanged:
 
-| Site                                                 | Constructor                                                       |
-| ---------------------------------------------------- | ----------------------------------------------------------------- |
-| `src/tools/delegation/nativeSubagentStrategy.ts:193` | `createNativeSubagentStrategy` (native subagent)                  |
-| `src/tools/delegation/workflowScriptStrategy.ts:156` | `createWorkflowScriptStrategy` (workflow-script child)            |
-| `src/tools/bash.ts:230`                              | `createBackgroundBashStrategy` (background shell; used `:558`)    |
+| Site                                                 | Constructor                                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------------- |
+| `src/tools/delegation/nativeSubagentStrategy.ts:193` | `createNativeSubagentStrategy` (native subagent)                    |
+| `src/tools/delegation/workflowScriptStrategy.ts:156` | `createWorkflowScriptStrategy` (workflow-script child)              |
+| `src/tools/bash.ts:230`                              | `createBackgroundBashStrategy` (background shell; used `:558`)      |
 | `src/tools/agentCliShared.ts:615`                    | inline `const strategy: ChildRunStrategy<TTurn>` (codex/claude CLI) |
 
 **`runAgentCreator` remains the one genuine "logical agent not yet running as
@@ -132,41 +154,60 @@ open **correctly**: closing it is interactive-UI design work (the
 `AgentCreatorUI`/`HostInteractions` approval channel the public surface
 deliberately lacks), not a mechanical move (manifest §7.3).
 
-## 5. Findings (all carried forward; none a defect; none acted on)
+## 5. Findings and dispositions
 
-1. **`createRunScope` (`src/agent/runtime/RunScope.ts`) — single-caller factory,
-   carried-forward survivor.** One production caller (`AgentLaunchContext.ts:555`);
-   `Object.freeze({ ...scope })` with an identity `RunScope → RunScope`
-   signature. Defensible retention: a documented immutability invariant (run
-   identity must not mutate mid-run) plus a shared test-kernel constructor seam.
-   Same disposition as every prior pass: inline it or re-document the invariant;
-   not a defect.
-2. **`PROVIDER_KEY_REDACTION_RULES` (`src/logger/redaction.ts:28`) — test-only
-   export, already baselined.** Zero production consumers of the _export_ (the
-   file's own use at `:75` needs the value, not the `export`; the sole external
-   reader is `DesktopLogRedaction.vitest.ts`), already recorded
-   `"production-dead"` in `config/ratchets/knip-baseline.json`. The
-   `satisfies Record<…>` table earns its place (compile-time provider
-   exhaustiveness); only the `export` keyword + the `examples` fixture are
-   test-only surface. Cleanup: drop the `export`, move the fixture into the test.
-3. **Tier-1 manifest re-enumeration still owed (doc, open work).** The
-   `2026-09-10-agent-sdk-tier-1-manifest.md` still predates the one-run-model
-   rename and completed cutover, so its export tables and §7 tail point at
-   renamed/deleted surfaces (`StreamView`/`ExecutionId`, `IModelHandler` as a
-   live candidate). This is the enumeration half of the standing open work
-   (`AGENTS.md`: "the Tier-1 public manifest and shrinking the frozen deep-import
-   lists"), unchanged since `-09-14` §4. Wants a full re-enumeration against the
-   post-cutover surface, not a spot patch.
-4. **`src/agent/runtime/README.md` stale against the landed cutover — drift,
-   recorded not fixed (unchanged from `-09-14` §5.6).** The README still says the
-   directory "stays a flat list of ~50 files" (`README.md:6`), contradicted by
-   the `runtime/run/` and `runtime/loop/` subdirectories the cutover added; and
-   its module table (`README.md:17`) still names a `RunStatusService` that a
-   repo-wide search (`grep "RunStatusService" src/ packages/`, test-excluded)
-   finds **nowhere in code** — confirmed zero references this pass. Fixing the
-   README is a production-doc change; `-09-14` flagged it for a maintainer and
-   that disposition is unchanged (the scheduled firing carries no maintainer
-   request).
+All four were carried-forward survivors; none was a defect. Three are closed
+here at the maintainer's request, the fourth was already closed upstream.
+
+1. **`createRunScope` — closed by inlining.** One production caller
+   (`AgentLaunchContext.ts:555`) and a body of `Object.freeze({ ...scope })`
+   under an identity `RunScope → RunScope` signature: a single-caller extraction,
+   which the factory bar bans. Every prior pass offered the same two dispositions
+   — "inline it or re-document the invariant" — and this PR takes the first,
+   which also discharges the second: the function is deleted and the freeze now
+   sits at the run's one real construction site, where a comment states the
+   invariant it enforces (a run's identity and owning session must not change
+   under the loop that reads them; `readonly` alone stops only callers that kept
+   their types). `RunScope.ts` is now the interface alone. The five test-kernel
+   sites build plain typed literals — a fixture does not need runtime
+   enforcement of a production launch invariant — so the removal cost no test
+   coverage. Verified: `grep createRunScope src/ packages/` → zero.
+2. **`PROVIDER_KEY_REDACTION_RULES` — closed, and wider than the prescription.**
+   The prescribed cleanup was "drop the `export`, move the fixture into the
+   test." Doing so collapsed more than expected: the `examples` field was the
+   only reason the `ProviderKeyRedactionRule` interface existed, and the only
+   thing distinguishing most entries — production reads `rule.patterns` alone
+   (pre-change `redaction.ts:75`). With the fixture gone the table is `Record<ApiKeyProviderId,
+readonly RegExp[]>`, the interface is deleted, and the nine entries that
+   differed only by their examples collapse onto one shared
+   `OPENAI_COMPATIBLE_PATTERNS`. The compile-time exhaustiveness that earned the
+   table its place is preserved verbatim (`satisfies Record<ApiKeyProviderId,
+…>`), and is now documented as the point of the table: a new provider cannot
+   ship with its keys unredacted. The examples move to
+   `DesktopLogRedaction.vitest.ts` under their own `satisfies`, so the fixture
+   stays exhaustive too, and that suite's coverage test now guards the fixture
+   rather than restating a compile-time guarantee. The knip baseline entry is
+   **removed, not rewritten** (`config/ratchets/knip-baseline.json`) — the
+   ratchet shrinks; `check:dead-code-ratchet` passes at 180 vs 180.
+3. **Tier-1 manifest re-enumeration — already closed upstream; this finding was
+   wrong.** See the correction note at the head of this record. #12634
+   (`0ffbe01`) re-enumerated the manifest on 2026-09-15. Nothing to do.
+4. **`src/agent/runtime/README.md` drift — closed, and one ghost more than was
+   flagged.** `-09-14` §5.6 flagged the `RunStatusService` entry and the "flat
+   list of ~50 files" claim. Re-deriving rather than transcribing found a second
+   ghost in the same file: the intro described `core` as "split into
+   `definition/state/usage/tools/flows/`", but `core` has had three modules
+   (`definition/`, `state/`, `tools/`) since `usage` became schemas and `flows`
+   went with the node engine. A mechanical check of every module the README
+   names (each backticked identifier resolved against the tree) found exactly
+   those two ghosts and no others. Both are removed; the layout claim now states
+   what is true — ~50 files at the top level **plus** the `run/` and `loop/`
+   subdirectories — and the "Why this stays flat" section becomes "Why most of
+   this stays flat", recording that its own standing exception ("if a future
+   refactor touches a whole group's internal call sites anyway, revisit turning
+   that group into a real subdirectory") is precisely what the Effect-4 cutover
+   triggered to produce those two directories. The section's bar for any further
+   subdirectory is unchanged.
 
 ## 6. Carried-forward design notes (unchanged, none a defect)
 
@@ -193,11 +234,22 @@ substantive content is **two convergent improvements, not news**: the `-09-14`
 deep-import width shrank 8 → 7 — both the shape of progress the standing open
 work names, landed by ordinary cleanup PRs rather than by this routine. All
 eight named doors stay fronted; the model stack is the cohesive `ModelInvoker.ts`
-+ `runtime/run/*` over the run ledger, with no `ModelHandler`/`IModelHandler`
-residue; the run loop's fold-based continuation and the logger re-verify clean
-with no silent degradation. The subagent SPI is a real four-implementor
-contract; `agentCreator` is the single, correctly-open boundary. Of the four §5
-items, none is a defect (two minor cleanups, one manifest re-enumeration owed,
-one recorded README-drift note) — none warranting a speculative edit into the
-green tree absent a maintainer request this scheduled firing does not carry, so
-this pass is **recorded, not acted on**.
+
+- `runtime/run/*` over the run ledger, with no `ModelHandler`/`IModelHandler`
+  residue; the run loop's fold-based continuation and the logger re-verify clean
+  with no silent degradation. The subagent SPI is a real four-implementor
+  contract; `agentCreator` is the single, correctly-open boundary.
+
+On the four §5 items: none was a defect, and on the maintainer's request three
+are closed here — `createRunScope` inlined to its one construction site,
+`PROVIDER_KEY_REDACTION_RULES` reduced to a non-exported pattern table with its
+fixture moved into the suite that reads it (the knip baseline shrinking by one
+entry rather than being rewritten), and the `runtime/README.md` ghosts removed.
+The fourth was already closed upstream by #12634, and the first draft of this
+record was wrong to carry it forward unverified. None of the three touches the
+run loop, the model stack, the public surface, or any baseline in the widening
+direction; each removes a carried-forward survivor the passes have tracked for
+weeks. The standing open work is unchanged: **shrinking the frozen deep-import
+lists** (extension 8 → 7 this interval) and the Tier-1 ratification — the
+manifest's enumeration half is now done, its "what Tier-1 keeps or seals"
+half is not.

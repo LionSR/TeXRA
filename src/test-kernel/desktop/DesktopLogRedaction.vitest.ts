@@ -1,7 +1,38 @@
 import { describe, expect, it } from 'vitest';
 
-import { PROVIDER_KEY_REDACTION_RULES, redactSecrets } from '@logger/redaction';
+import { redactSecrets } from '@logger/redaction';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
+
+/**
+ * Representative keys for each configurable provider's key shape. These are
+ * the test's own fixture — production names the shapes it redacts, not
+ * examples of them. The `satisfies` keeps the fixture exhaustive: a provider
+ * added to `API_KEY_PROVIDER_IDS` must gain a sample here, so no provider
+ * reaches the suite below untested.
+ */
+const PROVIDER_KEY_EXAMPLES = {
+  openai: ['sk-proj-redaction-example-1234567890abcdef'],
+  anthropic: ['sk-ant-api03-redaction-example-1234567890abcdef'],
+  openRouter: ['sk-or-v1-redaction-example-1234567890abcdef'],
+  google: [
+    'AIzaSyRedactionExample1234567890abcdef',
+    'AQ.AbRedactionExample1234567890abcdef',
+  ],
+  xai: ['xai-redaction-example-1234567890abcdef'],
+  deepseek: ['sk-provider-redaction-example-1234567890abcdef'],
+  moonshot: ['sk-kimi-redaction-example-1234567890abcdef'],
+  dashscope: [
+    'sk-redaction-example-1234567890abcdef',
+    'sk-ws-redaction-example-1234567890abcdef',
+  ],
+  minimax: ['sk-cp-redaction-example-1234567890abcdef'],
+  glm: ['sk-provider-redaction-example-1234567890abcdef'],
+  meta: ['sk-provider-redaction-example-1234567890abcdef'],
+  kimiCode: ['sk-provider-redaction-example-1234567890abcdef'],
+} as const satisfies Record<
+  (typeof API_KEY_PROVIDER_IDS)[number],
+  readonly string[]
+>;
 
 describe('desktop log redaction', () => {
   it('redacts secret patterns and leaves ordinary paths intact', () => {
@@ -36,7 +67,7 @@ describe('desktop log redaction', () => {
 
   it('redacts representative API key shapes for every configurable provider', () => {
     for (const provider of API_KEY_PROVIDER_IDS) {
-      for (const sample of PROVIDER_KEY_REDACTION_RULES[provider].examples) {
+      for (const sample of PROVIDER_KEY_EXAMPLES[provider]) {
         const redacted = redactSecrets(`${provider}: ${sample}`);
 
         expect(redacted).not.toContain(sample);
@@ -46,7 +77,10 @@ describe('desktop log redaction', () => {
   });
 
   it('keeps API-key provider coverage explicit', () => {
-    expect(Object.keys(PROVIDER_KEY_REDACTION_RULES).toSorted()).toEqual(
+    // Production's own table is exhaustive by construction (it `satisfies
+    // Record<ApiKeyProviderId, …>`); what needs pinning here is that the
+    // fixture above kept up, so every provider is actually exercised.
+    expect(Object.keys(PROVIDER_KEY_EXAMPLES).toSorted()).toEqual(
       [...API_KEY_PROVIDER_IDS].toSorted(),
     );
   });

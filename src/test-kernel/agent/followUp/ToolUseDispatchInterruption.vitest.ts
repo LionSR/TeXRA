@@ -28,7 +28,7 @@ import { turnText } from '@agent/runtime/run/turnText';
 import { rowAggregate, stepRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { createRunScope } from '@agent/runtime/RunScope';
+import type { RunScope } from '@agent/runtime/RunScope';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
@@ -222,10 +222,10 @@ function agentRunTestLayer(init: HarnessInit) {
       const model = yield* SynchronizedRef.make(testBoundModel());
       const scope = yield* Effect.scope;
       const logger = new TraceEmitter();
-      const runScope = createRunScope({
+      const runScope: RunScope = {
         runId: init.runId,
         session: init.session,
-      });
+      };
       return {
         runId: init.runId,
         parentRunId: null,
