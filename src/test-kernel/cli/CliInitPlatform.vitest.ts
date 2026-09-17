@@ -58,11 +58,6 @@ const mocks = vi.hoisted(() => ({
   consoleLogSink: { write: vi.fn() },
   signInCliSupabase: vi.fn(),
   authenticated: false,
-  createPlatformAgentDirectories: vi.fn(() => ({
-    custom: vi.fn(),
-    builtIn: vi.fn(),
-    builtInToolUse: vi.fn(),
-  })),
   createNodePlatform: vi.fn(() => ({})),
   createNodeWorkspaceRoots: vi.fn(() => ({
     workspace: '/workspace',
@@ -80,10 +75,6 @@ const mocks = vi.hoisted(() => ({
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
   shutdownHandlers: [] as Array<() => unknown>,
-}));
-
-vi.mock('@agent/index/platformAgentDirectories', () => ({
-  createPlatformAgentDirectories: mocks.createPlatformAgentDirectories,
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', async () => {

@@ -32,7 +32,6 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
-import { durableFinalizationResult } from '@test/support/agentStorageFixtures';
 import {
   fakeProcessServices,
   installedHost,
@@ -393,7 +392,7 @@ describe('CLI run command, workflow agents', () => {
     cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
     cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mocks.writeResultMeta.mockResolvedValue(undefined);
-    mocks.finalizeRun.mockResolvedValue(durableFinalizationResult());
+    mocks.finalizeRun.mockResolvedValue({ ok: true });
     mocks.resolveCliRunAgent.mockResolvedValue({
       name: 'polish',
       category: AgentCategory.Workflow,
