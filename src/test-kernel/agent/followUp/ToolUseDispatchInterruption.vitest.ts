@@ -27,7 +27,7 @@ import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import { turnText } from '@agent/runtime/run/turnText';
 import { rowAggregate, stepRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { runInSession } from '@agent/runtime/RunContext';
 import type { RunScope } from '@agent/runtime/RunScope';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
@@ -256,7 +256,7 @@ function agentRunTestLayer(init: HarnessInit) {
         declinedRoutes: [],
         pendingModelSwitch: { value: null },
         inScope: <A>(operation: () => A): A =>
-          withRunContext(createRunContext({ runScope }), operation),
+          runInSession(runScope.session, operation),
         usageMonitor: new UsageMonitor(
           {
             logger,

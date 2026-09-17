@@ -37,7 +37,7 @@ import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
   type AgentLaunchContext,
-  withLaunchRunContext,
+  runInLaunchSession,
 } from './AgentLaunchContext';
 import {
   runFlowWithLifecycle,
@@ -534,11 +534,7 @@ export function executeAgent(
       },
     });
     const runInScope = <A>(operation: () => A): A =>
-      withLaunchRunContext(
-        ctx,
-        { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
-        operation,
-      );
+      runInLaunchSession(ctx, operation);
     return yield* Effect.gen(function* () {
       const { setting, config } = ctx;
       const { runId, session: runSession } = ctx.runScope;
@@ -698,11 +694,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     const { ctx, parentRunId } = setup.value;
     const { setting } = ctx;
     const runInScope = <A>(operation: () => A): A =>
-      withLaunchRunContext(
-        ctx,
-        { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
-        operation,
-      );
+      runInLaunchSession(ctx, operation);
     const result = yield* Effect.exit(
       runFlowWithLifecycle(
         ctx,

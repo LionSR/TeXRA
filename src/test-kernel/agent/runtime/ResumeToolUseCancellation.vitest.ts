@@ -24,11 +24,7 @@ vi.mock('@agent/runtime/AgentLaunchContext', async () => {
         try: () => mocks.buildAgentLaunchContext(...args),
         catch: ensureError,
       }),
-    withLaunchRunContext: (
-      _context: unknown,
-      _options: unknown,
-      run: () => Effect.Effect<unknown, unknown>,
-    ) => run(),
+    runInLaunchSession: (_ctx: unknown, run: () => unknown) => run(),
   };
 });
 

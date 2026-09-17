@@ -92,15 +92,7 @@ const AMBIENT_CARRIERS = [
   {
     alias: '@agent/runtime/RunContext',
     path: 'src/agent/runtime/RunContext',
-    readers: [
-      'runInSession',
-      'withRunContext',
-      'tryUseRunContext',
-      'getRunContextRunId',
-      'getRunContextWorkingDirectory',
-      'getRunContextSession',
-      'getRunContextInteractions',
-    ],
+    readers: ['runInSession'],
   },
   {
     alias: '@agent/followUp/ToolFileInteractionContext',
