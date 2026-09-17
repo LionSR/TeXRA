@@ -176,11 +176,8 @@ function buildResumeContext(runId: RunId): AgentLaunchContext {
   const abortController = new AbortController();
   return {
     setting: { agentCategory: AgentCategory.ToolUse },
-    runScope: {
-      runId,
-      session: LANE_SESSION,
-      signal: abortController.signal,
-    },
+    runId,
+    session: LANE_SESSION,
     config: { agent: 'test-agent', model: 'test-model' },
     userVarChannels: { MODEL: 'test-model' },
     attachedMemoryMisses: [],
@@ -271,11 +268,9 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       );
       mocks.buildAgentLaunchContext.mockResolvedValueOnce({
         setting: { agentCategory: AgentCategory.Workflow },
-        runScope: {
-          runId: resume.runId,
-          session: {
-            releaseRunLease: vi.fn(async () => {}),
-          },
+        runId: resume.runId,
+        session: {
+          releaseRunLease: vi.fn(async () => {}),
         },
       } as unknown as AgentLaunchContext);
 

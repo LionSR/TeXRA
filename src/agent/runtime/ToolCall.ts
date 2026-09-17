@@ -7,14 +7,13 @@ import type {
 } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentTrace } from '@agent/trace';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { RunScope } from './RunScope';
 import type { AgentRunShape } from './run/AgentRun';
 
 export interface ToolCallShape {
   /** The roots of the workspace the call works on: the run's session roots. */
   readonly roots: WorkspaceRoots;
   readonly toolCallId?: string;
-  readonly delegationAgentScope?: RunScope['delegationAgentScope'];
+  readonly delegationAgentScope?: AgentRunShape['delegationAgentScope'];
   readonly model?: string;
   readonly workingDirectory?: string;
   readonly stopAfterCycle?: boolean;

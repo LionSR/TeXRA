@@ -186,7 +186,7 @@ function seedOpenRunGroup(ctx: AgentLaunchContext, runId: RunId): string {
   const parentStageId = ctx.parentStage.id;
   if (!parentStageId)
     throw new Error('The fixture parent stage must carry an id.');
-  const session = ctx.runScope.session;
+  const session = ctx.session;
   publishTestRunStart(session, runId);
   session.publishRunEvent(runId, {
     type: 'stage.start',
@@ -205,7 +205,7 @@ function seedOpenRunGroup(ctx: AgentLaunchContext, runId: RunId): string {
 function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
   return runFlowWithLifecycle(...args).pipe(
     Effect.provide(fakeProcessServices()),
-    Effect.provideService(Runs, args[0].runScope.session.runs),
+    Effect.provideService(Runs, args[0].session.runs),
   );
 }
 
@@ -405,8 +405,8 @@ describe('runFlowWithLifecycle', () => {
     () =>
       Effect.gen(function* () {
         const { runId, ctx } = lifecycleFixture();
-        publishTestRunStart(ctx.runScope.session, runId);
-        const recorded = recordSessionEvents(ctx.runScope.session, {
+        publishTestRunStart(ctx.session, runId);
+        const recorded = recordSessionEvents(ctx.session, {
           aggregateId: qualifyAggregateId('run', runId),
         });
 
@@ -427,7 +427,7 @@ describe('runFlowWithLifecycle', () => {
         yield* stop.settlement;
 
         expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        yield* ctx.runScope.session.settlePublications();
+        yield* ctx.session.settlePublications();
         // A run that never ran a turn writes no step of its own: `run.end` is
         // the whole of what it says.
         expect(
@@ -518,11 +518,11 @@ describe('runFlowWithLifecycle', () => {
       Effect.gen(function* () {
         const { runId, ctx } = lifecycleFixture();
         const parentStageId = seedOpenRunGroup(ctx, runId);
-        const recorded = recordSessionEvents(ctx.runScope.session, {
+        const recorded = recordSessionEvents(ctx.session, {
           aggregateId: qualifyAggregateId('run', runId),
         });
         const followUpsTerminalize = vi.spyOn(
-          ctx.runScope.session.followUps,
+          ctx.session.followUps,
           'terminalize',
         );
 
@@ -567,7 +567,7 @@ describe('runFlowWithLifecycle', () => {
           );
           // The detached trace cannot publish this close. The suspended owner
           // must append it to the same session event stream before releasing.
-          yield* ctx.runScope.session.settlePublications();
+          yield* ctx.session.settlePublications();
           expect(
             eventsOfType(
               yield* Effect.promise(() => recorded.read()),
@@ -590,8 +590,8 @@ describe('runFlowWithLifecycle', () => {
       const { runId, ctx } = lifecycleFixture();
       const stopSessionsForRun = vi.fn((_runId: RunId) => Effect.void);
       seedOpenRunGroup(ctx, runId);
-      yield* ctx.runScope.session.settlePublications();
-      vi.spyOn(ctx.runScope.session, 'commitRunEvent').mockReturnValueOnce(
+      yield* ctx.session.settlePublications();
+      vi.spyOn(ctx.session, 'commitRunEvent').mockReturnValueOnce(
         Effect.fail(
           new DatabaseWriteFailed({
             path: 'session.db',

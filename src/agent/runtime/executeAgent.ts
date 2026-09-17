@@ -116,7 +116,7 @@ function runLayerFor(
   onIdle: (() => void) | undefined,
   inScope: <A>(operation: () => A) => A,
 ) {
-  const runSession = ctx.runScope.session;
+  const runSession = ctx.session;
   return modelInvokerLayer().pipe(
     Layer.provideMerge(
       agentRunLayer(ctx, {
@@ -165,7 +165,7 @@ function runUntilStopped<R>(
   ctx: AgentLaunchContext,
   program: Effect.Effect<AgentRuntimeFlowResult, Error, R>,
 ): Effect.Effect<AgentRuntimeFlowResult, Error, R> {
-  const { runId } = ctx.runScope;
+  const { runId } = ctx;
   return Effect.raceFirst(
     program.pipe(Effect.map((result) => ({ kind: 'result' as const, result }))),
     Deferred.await(ctx.stopped).pipe(Effect.as({ kind: 'stopped' as const })),
@@ -205,7 +205,7 @@ function launchToolUseRun(
   variant: ToolUseLaunchVariant,
   inScope: <A>(operation: () => A) => A,
 ): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
-  const { runId } = ctx.runScope;
+  const { runId } = ctx;
   const program = runToolUse({
     resume: variant.kind === 'resume',
     attachment: {
@@ -265,7 +265,7 @@ function launchReflectionRun(
   options: ExecuteAgentOptions & { readonly setting: AgentSetting },
   inScope: <A>(operation: () => A) => A,
 ): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
-  const { runId } = ctx.runScope;
+  const { runId } = ctx;
   const program = runReflection({ resume: options.resumed === true }).pipe(
     // The reflection family injects no conditional tools (memory and plan are
     // tool-use infrastructure), so its run resolves tools from an empty list.
@@ -537,7 +537,7 @@ export function executeAgent(
       runInLaunchSession(ctx, operation);
     return yield* Effect.gen(function* () {
       const { setting, config } = ctx;
-      const { runId, session: runSession } = ctx.runScope;
+      const { runId, session: runSession } = ctx;
 
       // Start description generation concurrently with the run, but join it
       // before the owner can release its run lease. This prevents the

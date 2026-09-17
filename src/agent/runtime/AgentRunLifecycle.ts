@@ -379,7 +379,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     Error,
     R | AppState | AgentRunServices
   > {
-    const { runId, session } = ctx.runScope;
+    const { runId, session } = ctx;
     const runs = yield* Runs;
     const agentIdentifier = ctx.config.agent;
     const handle = new RunHandle(

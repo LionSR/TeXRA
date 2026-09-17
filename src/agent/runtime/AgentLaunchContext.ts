@@ -50,7 +50,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runInSession } from './RunContext';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
-import type { RunScope } from './RunScope';
+import type { AgentRunShape } from './run/AgentRun';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
@@ -75,9 +75,17 @@ export interface ToolPolicy {
   readonly stopAfterCycle?: boolean;
 }
 
-export interface AgentLaunchContext {
-  /** Run identity and owning session. */
-  readonly runScope: RunScope;
+/**
+ * The run's own facts, declared once on {@link AgentRunShape}: the launch
+ * resolves them and the run's `AgentRun` service carries them for the rest of
+ * the run's life, so neither side can drift from the other.
+ */
+type LaunchResolvedRunFacts = Pick<
+  AgentRunShape,
+  'runId' | 'session' | 'workingDirectory' | 'delegationAgentScope'
+>;
+
+export interface AgentLaunchContext extends LaunchResolvedRunFacts {
   /**
    * The registry config of the launch model. The run's `AgentRun` service
    * binds it (or the model a resumed run's snapshot names) under the route
@@ -202,7 +210,7 @@ export const failIfLaunchStopped = (
  * the `inScope` the run layer hands to everything below the launch.
  */
 export function runInLaunchSession<T>(ctx: AgentLaunchContext, fn: () => T): T {
-  return runInSession(ctx.runScope.session, fn);
+  return runInSession(ctx.session, fn);
 }
 
 /**
@@ -531,15 +539,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const stopRun = () => {
       Deferred.doneUnsafe(stopped, Effect.void);
     };
-    // Frozen here, at the run's one real construction site: a run's identity
-    // and owning session must not change under the loop that reads them, and
-    // `readonly` alone stops only the callers that kept their types.
-    const runScope: RunScope = Object.freeze({
-      runId,
-      workingDirectory,
-      delegationAgentScope: config.delegationAgentScope,
-      session,
-    });
     const buildVars = (stageId?: string) =>
       buildUserVars(
         config,
@@ -557,7 +556,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           // names, readable-file reads and CWD resolve against this project's
           // folder rather than whatever roots the calling fiber carries.
           workspacePath: session.roots.workspace,
-          delegationAgentScope: runScope.delegationAgentScope,
+          delegationAgentScope: config.delegationAgentScope,
           stageId,
         },
       );
@@ -600,7 +599,11 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         agentCategory: setting.agentCategory,
       },
     );
-    return {
+    const context: AgentLaunchContext = {
+      runId,
+      session,
+      workingDirectory,
+      delegationAgentScope: config.delegationAgentScope,
       config,
       resolvedAgentDescription: agentEntry.description,
       setting,
@@ -623,7 +626,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       userVarChannels,
       attachedMemoryMisses,
       usageMonitor,
-      runScope,
       interrupt: stopRun,
       stopped,
       initialUserMessageForTranscript: initialMediaMayBeInserted
@@ -631,6 +633,11 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         : undefined,
       disposeTrace: () => runTrace.dispose(),
     };
+    // Frozen at the run's one real construction site: a run's identity, its
+    // owning session, and the rest of what the launch resolved must not change
+    // under the loop that reads them, and `readonly` alone stops only the
+    // callers that kept their types.
+    return Object.freeze(context);
   },
 );
 

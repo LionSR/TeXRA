@@ -28,6 +28,7 @@ import type { LanguageModel } from '@platform/languageModel';
 import {
   AgentCategory,
   DeclinableUsageRouteSchema,
+  type AgentDelegationScope,
   type DeclinableUsageRoute,
   type JsonValue,
   type RunId,
@@ -46,7 +47,6 @@ import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { bindModel, type BoundModel } from './modelBinding';
 import type { HttpClient } from 'effect/unstable/http';
 import type { AgentLaunchContext, ToolPolicy } from '../AgentLaunchContext';
-import type { RunScope } from '../RunScope';
 import type { SessionHandle } from '../SessionHandle';
 
 /**
@@ -83,7 +83,7 @@ export interface AgentRunShape {
   readonly parentStage: StageHandle;
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
-  readonly delegationAgentScope?: RunScope['delegationAgentScope'];
+  readonly delegationAgentScope?: AgentDelegationScope | null;
   readonly onApprovalPolicyDenial?: () => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
@@ -175,7 +175,7 @@ export const agentRunLayer = (
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
-      const { runId, session } = ctx.runScope;
+      const { runId, session } = ctx;
       const { logger, config } = ctx;
       const ledger = yield* RunLedger;
       const layerScope = yield* Effect.scope;
@@ -194,7 +194,7 @@ export const agentRunLayer = (
         toolInjections: input.toolInjections,
         config: session.roots.config,
         stores: ctx.stores,
-        delegationScope: ctx.runScope.delegationAgentScope ?? undefined,
+        delegationScope: ctx.delegationAgentScope ?? undefined,
         inScope: input.inScope,
       });
       const overlayTools: ITool[] = [];
@@ -295,8 +295,8 @@ export const agentRunLayer = (
         logger,
         parentStage: ctx.parentStage,
         toolPolicy: ctx.toolPolicy,
-        workingDirectory: ctx.runScope.workingDirectory,
-        delegationAgentScope: ctx.runScope.delegationAgentScope,
+        workingDirectory: ctx.workingDirectory,
+        delegationAgentScope: ctx.delegationAgentScope,
         onApprovalPolicyDenial: input.onApprovalPolicyDenial,
         stores: ctx.stores,
         userVarChannels: ctx.userVarChannels,
