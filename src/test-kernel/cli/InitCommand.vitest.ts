@@ -75,11 +75,9 @@ function expectUnavailableDefaultRecovery(output: string): void {
   expect(output).toContain('Next: Add a provider API key with `texra setup`.');
   expect(output).toContain('Run `texra models list --all` to inspect access.');
   expect(output).toContain(
-    'After a model is available, run `texra` for the launcher or `texra chat` to start.',
+    'After a model is available, run `texra` to start a chat.',
   );
-  expect(output).not.toContain(
-    'Next: run `texra` for the launcher, or `texra chat` to start.',
-  );
+  expect(output).not.toContain('Next: run `texra` to start a chat.');
 }
 
 const tempDirs = useTempDirs();
@@ -276,7 +274,7 @@ describe('CLI init command', () => {
       `Wrote ${path.join(root, '.texra', 'config.json')}`,
     );
     expect(stdout).toContain('  agent: assistant');
-    expect(stdout).toContain('Next: run `texra` for the launcher');
+    expect(stdout).toContain('Next: run `texra` to start a chat.');
   });
 
   it.each([
