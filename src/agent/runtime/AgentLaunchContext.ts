@@ -197,6 +197,15 @@ export const failIfLaunchStopped = (
   );
 
 /**
+ * Run `fn` in the scope of the launch's owning session, so session-rooted
+ * services (`StorageFS`, `WorkspaceFS`) resolve to the run's session. This is
+ * the `inScope` the run layer hands to everything below the launch.
+ */
+export function runInLaunchSession<T>(ctx: AgentLaunchContext, fn: () => T): T {
+  return runInSession(ctx.runScope.session, fn);
+}
+
+/**
  * Present a launch error through its targeted host notice (replayed if no
  * host is attached yet) and throw it claimed: the notice is its one surface,
  * so the launch catch adds no generic toast. No run exists yet, so a host

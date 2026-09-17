@@ -34,7 +34,6 @@ import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -391,28 +390,24 @@ function waitForClaimRelease(runId: RunId): Promise<void> {
 }
 
 /**
+ * What a follow-up dispatch needs off the parent run: the explicit carriers
+ * the delegation tool reads (run identity, owning session, current model).
+ */
+interface ParentDelegationContext {
+  readonly runId: RunId;
+  readonly session: SessionHandle;
+  readonly model: string;
+}
+
+/**
  * Queue the second-assertion follow-up onto a WAITING child through the real
  * DelegateAgentTool path, asserting the queue accepted it.
  */
 async function queueSecondAssertionFollowUp(
-  parentContext: ReturnType<typeof createRunContext>,
+  parentContext: ParentDelegationContext,
   runId: RunId,
   instruction = 'Now prove the second assertion.',
 ) {
-  const parentRun =
-    parentContext.kind === 'launch'
-      ? parentContext.runScope
-      : {
-          runId: parentContext.runId,
-          session: parentContext.session,
-          workingDirectory: parentContext.workingDirectory,
-          delegationAgentScope: undefined,
-        };
-  if (!parentRun.runId || !parentRun.session) {
-    throw new Error('Test parent context requires a run id and session.');
-  }
-  const parentRunId = parentRun.runId;
-  const parentSession = parentRun.session;
   const resumed = await effectRuntime().runPromise(
     new DelegateAgentTool()
       .call({
@@ -428,17 +423,10 @@ async function queueSecondAssertionFollowUp(
           nativeToolTestLayer({
             model: parentContext.model,
             tracker: new FileInteractionState(),
-            workingDirectory: parentRun.workingDirectory,
-            delegationAgentScope: parentRun.delegationAgentScope,
             run: {
-              runId: parentRunId,
-              session: parentSession,
-              toolPolicy: {
-                approvalPromptsUnavailable:
-                  parentContext.approvalPromptsUnavailable,
-                runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-                stopAfterCycle: parentContext.stopAfterCycle,
-              },
+              runId: parentContext.runId,
+              session: parentContext.session,
+              toolPolicy: {},
             },
           }),
         ),
@@ -459,7 +447,7 @@ async function launchWaitingChild(options: {
   readonly childGate?: Promise<unknown>;
 }): Promise<{
   readonly runId: RunId;
-  readonly parentContext: ReturnType<typeof createRunContext>;
+  readonly parentContext: ParentDelegationContext;
   readonly observedRequests: ObservedRequest[];
 }> {
   const observedRequests: ObservedRequest[] = [];
@@ -507,11 +495,11 @@ async function launchWaitingChild(options: {
     output: { response: 'Parent ready.' },
   });
 
-  const parentContext = createRunContext({
+  const parentContext: ParentDelegationContext = {
     runId: PARENT_RUN_ID,
-    config: { model: PARENT_MODEL },
     session,
-  });
+    model: PARENT_MODEL,
+  };
   const parentCall = {
     roots: session.roots,
     model: PARENT_MODEL,

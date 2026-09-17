@@ -37,6 +37,7 @@ import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
   type AgentLaunchContext,
+  runInLaunchSession,
 } from './AgentLaunchContext';
 import {
   runFlowWithLifecycle,
@@ -57,7 +58,6 @@ import {
 import { followUpsLayer } from './FollowUps';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer } from './run/AgentRun';
-import { runInSession } from './RunContext';
 import { runReflection } from './loop/reflection';
 import { runToolUse } from './loop/toolUse';
 import {
@@ -542,7 +542,7 @@ export function executeAgent(
       },
     });
     const runInScope = <A>(operation: () => A): A =>
-      runInSession(ctx.runScope.session, operation);
+      runInLaunchSession(ctx, operation);
     return yield* Effect.gen(function* () {
       const { setting, config } = ctx;
       const { runId, session: runSession } = ctx.runScope;
@@ -702,7 +702,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     const { ctx, parentRunId } = setup.value;
     const { setting } = ctx;
     const runInScope = <A>(operation: () => A): A =>
-      runInSession(ctx.runScope.session, operation);
+      runInLaunchSession(ctx, operation);
     const result = yield* Effect.exit(
       runFlowWithLifecycle(
         ctx,
