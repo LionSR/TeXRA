@@ -103,7 +103,7 @@ interface ModelAvailabilityStatus {
   kind: ModelAvailabilityKind;
   providerCapabilities?: ProviderCapabilityProfile;
   reason?: UnavailableReason;
-  /** The discovered route's config, on `copilot-access` only. */
+  /** The discovered route's config, on `copilot-allowed` only. */
   copilotConfig?: ModelConfig;
   /** The dispatch path's own wording, on the two unavailable Copilot kinds. */
   copilotReason?: string;
@@ -296,31 +296,21 @@ function resolveModelRoute(
   // canonical model row, never a reason to fall back to another transport.
   if (prefersCopilotRoute(model, globalState)) {
     const route = copilotRouteForModel(model);
-    const access = route?.access;
-    // The dispatch path's own wording for this model, resolved here from the
-    // same preference and catalogue this decision was made on.
-    const copilotReason =
-      access === 'allowed'
-        ? undefined
-        : copilotRouteUnavailableReason(model, globalState);
-    switch (access) {
-      case 'allowed':
-        return {
-          ...availabilityStatus('copilot-access'),
-          copilotConfig: route?.effectiveConfig,
-        };
-      case 'consent-required':
-        return {
-          ...availabilityStatus('copilot-consent-required'),
-          copilotReason,
-        };
-      case 'unavailable':
-      case undefined:
-        return { ...availabilityStatus('copilot-unavailable'), copilotReason };
-      default:
-        access satisfies never;
-        return { ...availabilityStatus('copilot-unavailable'), copilotReason };
+    // No discovered route is the same verdict as a discovered unavailable one.
+    // The kind is the access word itself, so there is nothing to translate.
+    const access = route?.access ?? 'unavailable';
+    if (access === 'allowed') {
+      return {
+        ...availabilityStatus('copilot-allowed'),
+        copilotConfig: route?.effectiveConfig,
+      };
     }
+    return {
+      ...availabilityStatus(`copilot-${access}`),
+      // The dispatch path's own wording for this model, resolved here from the
+      // same preference and catalogue this decision was made on.
+      copilotReason: copilotRouteUnavailableReason(model, globalState),
+    };
   }
 
   if (isOpenRouterRoutingUnsupported(config, ctx.useOpenRouter)) {
@@ -796,7 +786,7 @@ function buildModelOptionData(
     : (availability.copilotConfig ?? config);
   let reasoning: string | undefined;
   if (optionConfig.capabilities.supportsReasoning) {
-    if (availability.kind === 'copilot-access') {
+    if (availability.kind === 'copilot-allowed') {
       reasoning = 'Default (provider managed)';
     } else {
       const defaultLevel =
@@ -815,7 +805,7 @@ function buildModelOptionData(
     }
   }
   let routeLabel: string | undefined;
-  if (availability.kind === 'copilot-access') {
+  if (availability.kind === 'copilot-allowed') {
     // The row's identity stays the base model; the badge names the route.
     routeLabel = 'Via Copilot';
   } else if (

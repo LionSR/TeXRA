@@ -313,7 +313,7 @@ describe('Copilot route in model pickers', () => {
         expect(options[0]).toEqual(
           expect.objectContaining({
             value: 'gemini31p',
-            availability: 'copilot-access',
+            availability: 'copilot-allowed',
             routeLabel: 'Via Copilot',
             reasoning: 'Default (provider managed)',
             context: '160K',
