@@ -62,6 +62,12 @@ export function platformSettingsStores(): SettingsStores {
  * declares for this process's host, so the right backing store is picked
  * without the caller naming it. Host-specific convenience readers remain
  * preferable when they also own normalization or side effects.
+ *
+ * Prefer this over `configUtils.ts`'s `getConfig`/`readConfig` for any
+ * catalog-modeled key: those read the config-tree slot only, skip schema
+ * validation unless the caller opts into `getValidatedConfig`, and cannot see
+ * a key whose catalog slot is `workspaceState`/`globalState`. `getConfig`
+ * remains the right tool for a config-tree value the catalog does not model.
  */
 export function readPlatformSetting<T>(key: string): T {
   return readSettingFrom<T>(platformSettingsStores(), key);

@@ -24,6 +24,19 @@ const log = createLog('configUtils');
  *
  * @param defaultValue Optional fallback for keys the catalog does not own
  * @returns The configured, catalog-default, or caller-fallback value
+ *
+ * This reads the config-tree slot only, and — unless the caller reaches for
+ * {@link getValidatedConfig} — does no runtime validation against the
+ * setting's schema, so a hand-edited `settings.json` value of the wrong
+ * shape passes through uninspected. It also only knows the catalog default
+ * for a `CORE_TREE_SETTINGS` entry; a `STATE_SETTINGS` key (one whose slot is
+ * `workspaceState`/`globalState` for this host) is invisible to it and
+ * silently falls back to `defaultValue` instead of the real persisted value.
+ * For a catalog-modeled setting, prefer `readPlatformSetting` in
+ * `./platformSettings`: it resolves whichever slot the entry declares for
+ * the current host and always validates against the entry's schema. Reach
+ * for `getConfig`/`readConfig` only for a config-tree value the catalog does
+ * not (yet) model.
  */
 export function getConfig<T>(path: string, defaultValue?: T): T {
   return readConfig(workspaceRoots().config, path, defaultValue);

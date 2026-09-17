@@ -88,6 +88,18 @@ Things the tree won't tell you:
   `packages/extension/src/common/webview/`. <!-- guidance-refs-ignore -->
 - **No convenience barrels.** A barrel exists only for a documented public
   surface. Import the file that defines the symbol.
+- **Two families read settings, and they are not interchangeable.**
+  `src/utils/config/configUtils.ts`'s `getConfig`/`readConfig` read the
+  config-tree slot only, skip schema validation unless the caller opts into
+  `getValidatedConfig`, and cannot see a catalog key whose slot is
+  `workspaceState`/`globalState` for this host — such a key silently falls
+  back to the caller's hand-passed default instead of the real persisted
+  value. `src/utils/config/platformSettings.ts`'s `readPlatformSetting` /
+  `writePlatformSetting` resolve whichever slot the catalog entry declares
+  for the current host and always validate against its schema. For a
+  catalog-modeled setting, prefer `readPlatformSetting`; reach for
+  `getConfig`/`readConfig` only for a config-tree value the catalog does not
+  model.
 
 Two wiring points fail silently if you forget them: a new VS Code command must
 be registered through `packages/extension/src/commands.ts`, and a new setting
