@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { Effect, Result } from 'effect';
 import { z, ZodError } from 'zod';
 
 // Local imports
@@ -10,9 +11,10 @@ import {
 } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { ModelCompatibilityKeySchema, RunIdSchema } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const log = createLog('ExecuteCommand');
 
@@ -39,49 +41,60 @@ const WrappedExecuteInputSchema = z.object({
  * - Resume workflow: Pass { config, runId } - reuses runId to resume
  *
  * Tool-use sessions resume through `tryResumeFromResumeData` instead.
+ *
+ * The launch is the Effect this returns: the extension's command surface
+ * settles it on the host entry's runtime, and `tryResumeFromResumeData`
+ * composes it into the resume program that already runs on one.
  */
-export async function runExecuteCommand(
+export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   input: unknown,
-  runtime: ProcessRuntime,
   session: SessionHandle,
-): Promise<void> {
-  try {
-    const isWrapped =
-      input !== null && typeof input === 'object' && 'config' in input;
-    const wrapped = isWrapped ? WrappedExecuteInputSchema.parse(input) : null;
-    const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
-    // Not data, so it bypasses the Zod schema above — see that schema's doc.
-    const onRun = isWrapped
-      ? (input as { onRun?: () => void }).onRun
-      : undefined;
-
-    const request = wrapped?.runId
-      ? ({ kind: 'resume', config, runId: wrapped.runId } as const)
-      : ({ kind: 'fresh', config } as const);
-    await runtime.runPromise(
-      runAgent(request, {
-        session,
-        openWorkflowOutput: openFinalOutputIfAvailable,
-        // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
-        // progress-view compile fixer); a direct main-view launch omits it and
-        // keeps the user's selected model.
-        preferHelperModel: wrapped?.preferHelperModel ?? false,
-        modelCompatibilityKey: wrapped?.modelCompatibilityKey,
-        ownApiKeyFallback: wrapped?.ownApiKeyFallback,
-        onRun,
-        onRunResolved: presentLaunchedProgressRun,
-      }),
-    );
-  } catch (error) {
+): Effect.fn.Return<void, Error, ProcessServices> {
+  const parsed = yield* Effect.result(
+    Effect.try({
+      try: () => {
+        const isWrapped =
+          input !== null && typeof input === 'object' && 'config' in input;
+        const wrapped = isWrapped
+          ? WrappedExecuteInputSchema.parse(input)
+          : null;
+        const config = AgentConfigSchema.parse(
+          wrapped ? wrapped.config : input,
+        );
+        return { wrapped, isWrapped, config };
+      },
+      catch: ensureError,
+    }),
+  );
+  if (Result.isFailure(parsed)) {
+    const error = parsed.failure;
     if (error instanceof ZodError) {
       const message = `Invalid agent configuration. ${z.prettifyError(error)}`;
       log.warn(message, { data: error });
       void vscode.window.showErrorMessage(message);
       return;
     }
-
-    // Post-start failures are already logged and surfaced by the run
-    // lifecycle; rethrow without a second (mislabeled) log entry.
-    throw error;
+    return yield* Effect.fail(error);
   }
-}
+  const { wrapped, isWrapped, config } = parsed.success;
+  // Not data, so it bypasses the Zod schema above — see that schema's doc.
+  const onRun = isWrapped ? (input as { onRun?: () => void }).onRun : undefined;
+
+  const request = wrapped?.runId
+    ? ({ kind: 'resume', config, runId: wrapped.runId } as const)
+    : ({ kind: 'fresh', config } as const);
+  // Post-start failures are already logged and surfaced by the run lifecycle,
+  // so they travel the failure channel without a second (mislabeled) log entry.
+  yield* runAgent(request, {
+    session,
+    openWorkflowOutput: openFinalOutputIfAvailable,
+    // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
+    // progress-view compile fixer); a direct main-view launch omits it and
+    // keeps the user's selected model.
+    preferHelperModel: wrapped?.preferHelperModel ?? false,
+    modelCompatibilityKey: wrapped?.modelCompatibilityKey,
+    ownApiKeyFallback: wrapped?.ownApiKeyFallback,
+    onRun,
+    onRunResolved: presentLaunchedProgressRun,
+  });
+});

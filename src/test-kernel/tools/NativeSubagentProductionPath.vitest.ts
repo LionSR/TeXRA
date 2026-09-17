@@ -283,9 +283,10 @@ function resumePersistedRun(
         resumeRun(runId, {
           session,
           recovery,
-          executeWorkflow: async () => {
-            throw new Error('Workflow resume is not part of this fixture.');
-          },
+          executeWorkflow: () =>
+            Effect.fail(
+              new Error('Workflow resume is not part of this fixture.'),
+            ),
         }),
       );
       completedResumes.push(runId);

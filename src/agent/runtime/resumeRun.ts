@@ -66,7 +66,7 @@ import type { AgentRunServices } from './toolInjection';
  * raw result (terminal or WAITING), absent on the workflow path and when the
  * run never returned one. A refusal carries the reason a host words with
  * `describeFollowUpFailure`. Unexpected failures (storage errors, the run
- * itself throwing) reject.
+ * itself failing) reach the caller's failure channel.
  */
 export type ResumeRunResult =
   | {
@@ -114,11 +114,11 @@ export interface ResumeRunOptions extends Pick<
    * history listing advertises a row from its checkpoint file alone (one
    * `stat`, never a parse) and inspects no lease per row, so both an unusable
    * checkpoint and a run another TeXRA process holds refuse above this hook
-   * with the user's window untouched. A rejection propagates to the caller; a
+   * with the user's window untouched. A failure propagates to the caller; a
    * stop requested while it runs is honored, because
    * {@link isCancellationRequested} is re-read once it returns.
    */
-  readonly onResumeResolved?: () => Promise<void> | void;
+  readonly onResumeResolved?: () => Effect.Effect<void, Error, ProcessServices>;
 
   /**
    * Workflow launch owns stream acquisition and status transitions through
@@ -128,7 +128,7 @@ export interface ResumeRunOptions extends Pick<
     config: AgentConfig,
     runId: RunId,
     modelCompatibilityKey: ModelCompatibilityKey | null | undefined,
-  ) => Promise<void>;
+  ) => Effect.Effect<void, Error, ProcessServices>;
 }
 
 /**
@@ -190,7 +190,7 @@ function namesUnusableCheckpoint(error: unknown): boolean {
   return false;
 }
 
-// The existing host cancellation predicate controls the Promise-based launch.
+// The existing host cancellation predicate controls the launch.
 // Keep its queue owner until that launch and its cleanup have settled.
 export const resumeRun = Effect.fn('resumeRun')(function* (
   runId: RunId,
@@ -290,11 +290,9 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     return { failed: 'owned_elsewhere' };
   }
   if (willLaunch && options.onResumeResolved) {
-    const onResumeResolved = options.onResumeResolved;
-    yield* Effect.tryPromise({
-      try: async () => onResumeResolved(),
-      catch: ensureError,
-    }).pipe(Effect.onError(() => Effect.sync(releaseQueue)));
+    yield* options
+      .onResumeResolved()
+      .pipe(Effect.onError(() => Effect.sync(releaseQueue)));
     if (cancelled() || runs.isActiveOrResuming(runId)) {
       releaseQueue();
       return REFUSED;
@@ -305,15 +303,11 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   }
   if (resume.type === 'workflow' && !queueLease) {
     const launched = yield* Effect.result(
-      Effect.tryPromise({
-        try: () =>
-          options.executeWorkflow(
-            resume.agentConfig,
-            resume.runId,
-            resume.modelCompatibilityKey,
-          ),
-        catch: ensureError,
-      }),
+      options.executeWorkflow(
+        resume.agentConfig,
+        resume.runId,
+        resume.modelCompatibilityKey,
+      ),
     );
     if (Result.isFailure(launched)) {
       const refused = yield* refusalFor(launched.failure, session, runId);
@@ -374,7 +368,7 @@ const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
 );
 
 /**
- * The two expected launch failures a host words; anything else rejects.
+ * The two expected launch failures a host words; anything else fails.
  *
  * A refusal is also the one moment this process learns, for the run the user
  * just asked to open, that another live TeXRA process holds it. That fact is

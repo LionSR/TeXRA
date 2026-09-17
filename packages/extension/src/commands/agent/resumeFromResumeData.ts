@@ -48,7 +48,6 @@ export function tryResumeFromResumeData(
             runId: id,
             modelCompatibilityKey,
           },
-          runtime,
           session,
         ),
     },

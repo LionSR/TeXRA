@@ -382,19 +382,16 @@ function holdRun(runId: RunId): void {
 const STARTED = { started: true, delivered: true } as const;
 
 const defaultResumeRun = (_runId: RunId, options: ResumeRunOptions) =>
-  Effect.tryPromise({
-    try: async () => {
-      // The real `resumeRun` rearranges the host onto the resumed run only
-      // after its own retrieval succeeded, so every stand-in that reaches a launch
-      // must run the hook or the caller never adopts the run.
-      if (options.onResumeResolved) await options.onResumeResolved();
-      options.onFollowUpQueueReady?.({
-        runId: '7e5701' as RunId,
-        kind: 'recovery',
-      });
-      return STARTED;
-    },
-    catch: ensureError,
+  Effect.gen(function* () {
+    // The real `resumeRun` rearranges the host onto the resumed run only
+    // after its own retrieval succeeded, so every stand-in that reaches a launch
+    // must run the hook or the caller never adopts the run.
+    if (options.onResumeResolved) yield* options.onResumeResolved();
+    options.onFollowUpQueueReady?.({
+      runId: '7e5701' as RunId,
+      kind: 'recovery',
+    });
+    return STARTED;
   });
 
 function resumeWithAutoResumeData(): void {
@@ -959,12 +956,9 @@ describe('createChatSessionController', () => {
     const session = makeSession({ runCompleted: true });
     mocks.resumeRun.mockImplementationOnce(
       (_id: RunId, options: ResumeRunOptions) =>
-        Effect.tryPromise({
-          try: async () => {
-            await options.onResumeResolved?.();
-            return { ...STARTED, outcome: RUN_PHASE.WAITING };
-          },
-          catch: ensureError,
+        Effect.gen(function* () {
+          if (options.onResumeResolved) yield* options.onResumeResolved();
+          return { ...STARTED, outcome: RUN_PHASE.WAITING };
         }),
     );
     // A fake records reader, like every other resume test: the real
@@ -1074,14 +1068,11 @@ describe('createChatSessionController', () => {
     });
     mocks.resumeRun.mockImplementationOnce(
       (_id: RunId, options: ResumeRunOptions) =>
-        Effect.tryPromise({
-          try: async () => {
-            await options.onResumeResolved?.();
-            return options.isCancellationRequested?.()
-              ? { failed: 'not_resumable' as const }
-              : STARTED;
-          },
-          catch: ensureError,
+        Effect.gen(function* () {
+          if (options.onResumeResolved) yield* options.onResumeResolved();
+          return options.isCancellationRequested?.()
+            ? { failed: 'not_resumable' as const }
+            : STARTED;
         }),
     );
     const ctrl = createChatSessionController(makeInit({ session }));
@@ -1143,15 +1134,12 @@ describe('createChatSessionController', () => {
     });
     mocks.resumeRun.mockImplementationOnce(
       (_id: RunId, options: ResumeRunOptions) =>
-        Effect.tryPromise({
-          try: async () => {
-            await resumeReached.promise;
-            await options.onResumeResolved?.();
-            return options.isCancellationRequested?.()
-              ? { failed: 'not_resumable' as const }
-              : STARTED;
-          },
-          catch: ensureError,
+        Effect.gen(function* () {
+          yield* Effect.promise(() => resumeReached.promise);
+          if (options.onResumeResolved) yield* options.onResumeResolved();
+          return options.isCancellationRequested?.()
+            ? { failed: 'not_resumable' as const }
+            : STARTED;
         }),
     );
     const ctrl = createChatSessionController(makeInit({ session }));
@@ -1246,17 +1234,14 @@ describe('createChatSessionController', () => {
     const ctrl = createChatSessionController(makeInit({ session }));
     mocks.resumeRun.mockImplementationOnce(
       (_id: RunId, options: ResumeRunOptions) =>
-        Effect.tryPromise({
-          try: async () => {
-            await options.onResumeResolved?.();
-            return {
-              ...STARTED,
-              outcome: options.isCancellationRequested?.()
-                ? RUN_OUTCOME.CANCELLED
-                : RUN_OUTCOME.COMPLETED,
-            };
-          },
-          catch: ensureError,
+        Effect.gen(function* () {
+          if (options.onResumeResolved) yield* options.onResumeResolved();
+          return {
+            ...STARTED,
+            outcome: options.isCancellationRequested?.()
+              ? RUN_OUTCOME.CANCELLED
+              : RUN_OUTCOME.COMPLETED,
+          };
         }),
     );
 

@@ -169,23 +169,30 @@ export async function runResumeCommand(
       const resumed = yield* Effect.result(
         resumeRun(id, {
           session,
-          executeWorkflow: async (
-            workflowConfig,
-            runId,
-            modelCompatibilityKey,
-          ) => {
-            // Fast-fail on an unusable destination before the run restarts;
-            // `executeCliWorkflowConfig` reads the same persisted `cli` block.
-            await assertOutputFileAvailable(
-              resumeWorkflowOutputFile(workflowConfig),
-              context.cwd,
-            );
-            await assertOutputDirAvailable(
-              resumeWorkflowOutputDirectory(workflowConfig),
-              context.cwd,
-            );
-            exitCode = await stores.runtime.runPromise(
-              executeCliWorkflowConfig(
+          executeWorkflow: (workflowConfig, runId, modelCompatibilityKey) =>
+            Effect.gen(function* () {
+              // Fast-fail on an unusable destination before the run restarts;
+              // `executeCliWorkflowConfig` reads the same persisted `cli`
+              // block. The three preflight reads are Promise-native, so one
+              // lift carries all of them in the order they ran.
+              const recoveryInputIsDurable = yield* Effect.tryPromise({
+                try: async () => {
+                  await assertOutputFileAvailable(
+                    resumeWorkflowOutputFile(workflowConfig),
+                    context.cwd,
+                  );
+                  await assertOutputDirAvailable(
+                    resumeWorkflowOutputDirectory(workflowConfig),
+                    context.cwd,
+                  );
+                  return workflowRecoveryInputsAreDurable(
+                    workflowConfig,
+                    context.cwd,
+                  );
+                },
+                catch: ensureError,
+              });
+              exitCode = yield* executeCliWorkflowConfig(
                 workflowConfig,
                 buildHeadlessRunContext(context),
                 {
@@ -194,15 +201,10 @@ export async function runResumeCommand(
                   lifecycle: stores.lifecycle,
                   runId,
                   modelCompatibilityKey,
-                  recoveryInputIsDurable:
-                    await workflowRecoveryInputsAreDurable(
-                      workflowConfig,
-                      context.cwd,
-                    ),
+                  recoveryInputIsDurable,
                 },
-              ),
-            );
-          },
+              );
+            }),
         }),
       );
       if (Result.isSuccess(resumed)) {
