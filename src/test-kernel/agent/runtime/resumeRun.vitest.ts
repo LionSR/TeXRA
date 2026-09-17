@@ -137,9 +137,9 @@ function resumeClaimedOne(...args: Parameters<typeof resumeClaimedRun>) {
   return Effect.provide(resumeClaimedRun(...args), fakeProcessServices());
 }
 
-const executeWorkflow = vi.fn(async () => {
-  throw new Error('tool-use fixtures never launch a workflow');
-});
+const executeWorkflow = vi.fn(() =>
+  Effect.fail(new Error('tool-use fixtures never launch a workflow')),
+);
 
 describe('resumeRun tool-use queue ownership', () => {
   beforeEach(() => {
@@ -252,17 +252,16 @@ describe('resumeRun tool-use queue ownership', () => {
           yield* resumeOne(RUN, {
             session,
             executeWorkflow,
-            onResumeResolved: async () => {
-              expect(
-                await Effect.runPromise(
-                  session.followUps.submit(
+            onResumeResolved: () =>
+              Effect.gen(function* () {
+                expect(
+                  yield* session.followUps.submit(
                     RUN,
                     { text: 'second' },
                     'recoverable',
                   ),
-                ),
-              ).toEqual({ kind: 'queued' });
-            },
+                ).toEqual({ kind: 'queued' });
+              }),
           }),
         ).toEqual({
           started: true,
@@ -549,7 +548,7 @@ describe('resumeRun tool-use queue ownership', () => {
         vi.spyOn(session, 'claimOwner').mockReturnValue(
           Effect.succeed({ ownerId, liveness: 'alive' }),
         );
-        const onResumeResolved = vi.fn();
+        const onResumeResolved = vi.fn(() => Effect.void);
 
         expect(
           yield* resumeOne(RUN, {

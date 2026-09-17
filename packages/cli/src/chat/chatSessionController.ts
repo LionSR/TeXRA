@@ -547,11 +547,12 @@ export function createChatSessionController(
         launchRunId,
       ),
     runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
-    executeWorkflow: async (_config, runId) => {
-      throw new Error(
-        `Run ${runId} is a workflow; resume it with \`texra resume ${runId}\`.`,
-      );
-    },
+    executeWorkflow: (_config, runId) =>
+      Effect.fail(
+        new Error(
+          `Run ${runId} is a workflow; resume it with \`texra resume ${runId}\`.`,
+        ),
+      ),
   });
 
   // Per launch: attach the root's terminal-result presenter until it
@@ -732,11 +733,11 @@ export function createChatSessionController(
       // offered and refused; `resumeRun` calls this only once that state
       // loaded, so the refusal reaches the chat the user is looking at
       // instead of a cleared transcript switched onto a dead stream. A Ctrl-C
-      // during the awaits below lands as `session.stopRequested` and is
+      // during the steps below lands as `session.stopRequested` and is
       // honored by `isCancellationRequested`, which `resumeRun` re-reads once
       // this returns, rather than starting an agent the user cancelled.
-      const adoptResumedRun = async (): Promise<void> => {
-        await runtime.runPromise(setCliHelperModel(state, config.model));
+      const adoptResumedRun = Effect.fn('adoptResumedRun')(function* () {
+        yield* setCliHelperModel(state, config.model);
         adoptRunConfig(config, 'history');
         clearLocalTranscript();
         followUpQueue.clear();
@@ -754,12 +755,12 @@ export function createChatSessionController(
         // marks recoverable.
         if (session.stopRequested) interruptActiveRun();
 
-        await runtime.runPromise(runtimeSession.transcripts.ensureLoaded(id));
+        yield* runtimeSession.transcripts.ensureLoaded(id);
         // The transcript and the work plan are the fold's: the TUI
         // subscribes the run's aggregate and renders `transcript.rows`, and
         // an open `/plan` reader reads the same `RunView`.
         focusRun(id);
-      };
+      });
 
       // The seeded batch stays this call's until the stream queue takes it
       // over. Every refusal before that point (the stream already active

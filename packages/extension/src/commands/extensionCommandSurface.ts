@@ -143,7 +143,7 @@ export function createExtensionCommandActions(
     execute: (input) =>
       input === undefined
         ? progressViewProvider.submit()
-        : agentRunExecuteCommand(input, runtime, session),
+        : runtime.runPromise(agentRunExecuteCommand(input, session)),
   };
 }
 
