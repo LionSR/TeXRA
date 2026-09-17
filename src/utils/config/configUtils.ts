@@ -24,6 +24,24 @@ const log = createLog('configUtils');
  *
  * @param defaultValue Optional fallback for keys the catalog does not own
  * @returns The configured, catalog-default, or caller-fallback value
+ *
+ * This reads the config-tree slot only, and — unless the caller reaches for
+ * {@link getValidatedConfig} — does no runtime validation against the
+ * setting's schema, so a hand-edited `settings.json` value of the wrong
+ * shape passes through uninspected. It also only knows the catalog default
+ * for a `CORE_TREE_SETTINGS` entry; a `STATE_SETTINGS` key (one whose slot is
+ * `workspaceState`/`globalState` for this host) is invisible to it and
+ * silently falls back to `defaultValue` instead of the real persisted value.
+ * For a catalog-modeled setting whose slot is `workspaceState`/`globalState`
+ * for this host, use `readPlatformSetting` in `./platformSettings` instead —
+ * it resolves whichever slot the entry declares and always validates. But
+ * for a catalog-modeled config-slot key whose runtime must honor a workspace
+ * override over a `configTarget: 'global'` write (the Models-tab provider
+ * toggles — see `stateSettings.ts`'s note above `model.gpt5ReasoningSummary`,
+ * and their `readConfig` call sites in `modelBinding.ts`), keep reading
+ * through `getConfig`/`readConfig`/`getValidatedConfig`: `readPlatformSetting`
+ * resolves a `configTarget: 'global'` row to `inspect(key).globalValue` only
+ * and would silently drop the override.
  */
 export function getConfig<T>(path: string, defaultValue?: T): T {
   return readConfig(workspaceRoots().config, path, defaultValue);

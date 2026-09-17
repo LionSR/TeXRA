@@ -88,6 +88,25 @@ Things the tree won't tell you:
   `packages/extension/src/common/webview/`. <!-- guidance-refs-ignore -->
 - **No convenience barrels.** A barrel exists only for a documented public
   surface. Import the file that defines the symbol.
+- **Two families read settings, and they are not interchangeable.**
+  `src/utils/config/configUtils.ts`'s `getConfig`/`readConfig` read the
+  config-tree slot only, skip schema validation unless the caller opts into
+  `getValidatedConfig`, and cannot see a catalog key whose slot is
+  `workspaceState`/`globalState` for this host — such a key silently falls
+  back to the caller's hand-passed default instead of the real persisted
+  value. `src/utils/config/platformSettings.ts`'s `readPlatformSetting` /
+  `writePlatformSetting` resolve whichever slot the catalog entry declares
+  for the current host and always validate against its schema. For a
+  catalog-modeled setting whose slot is `workspaceState`/`globalState` for
+  this host, prefer `readPlatformSetting` — `getConfig` can't see it. But a
+  catalog-modeled config-slot key with `configTarget: 'global'` (the
+  Models-tab provider toggles, e.g. `model.gpt5ReasoningSummary` in
+  `stateSettings.ts`) is the one deliberate exception: its runtime reads keep
+  merged-config semantics via `readConfig`/`getValidatedConfig` so a
+  workspace override stays visible, because `readPlatformSetting` would
+  resolve it to the global value only and silently drop that override. For a
+  config-tree value the catalog does not model, `getConfig`/`readConfig` is
+  the only option.
 
 Two wiring points fail silently if you forget them: a new VS Code command must
 be registered through `packages/extension/src/commands.ts`, and a new setting
