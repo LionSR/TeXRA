@@ -222,8 +222,10 @@ export class ProgressWorkflowFileActionsController {
       const runBackups = this.modelOutputBackups.get(runId) ?? new Map();
       runBackups.set(file, content);
       this.modelOutputBackups.set(runId, runBackups);
-    } catch {
-      // Best-effort: backup only informs the accepted-edit follow-up.
+    } catch (error) {
+      // Best-effort: backup only informs the accepted-edit follow-up, but a
+      // later Accept then has no compare-time content to offer.
+      log.debug(`Could not back up model output for ${file}`, { data: error });
     }
   }
 

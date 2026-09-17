@@ -1,4 +1,5 @@
 // Local imports - shared constants
+import { createLog } from '@logger/logUtils';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,
@@ -12,6 +13,9 @@ import {
   SUPPORTED_LATEX_COMPILERS,
   type OSPlatform,
 } from '@shared/constants/latexToolchain';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const log = createLog('LatexToolingController');
 
 // `CORE_LATEX_TOOLS`/`IMAGE_TOOLS` (`@shared/constants/latexToolchain`) are the
 // single source of truth for the LaTeX toolchain probe set, shared with
@@ -79,6 +83,11 @@ export class LatexToolingController {
         packageManager: this.deps.detectPackageManager(),
       };
     } catch (error) {
+      // Every tool then reports as not installed, so the probe failure must
+      // not be indistinguishable from a machine with no TeX.
+      log.warn(`LaTeX tooling detection failed: ${toErrorMessage(error)}`, {
+        data: error,
+      });
       this.deps.onDetectionError?.(error);
       return {
         ...DEFAULT_LATEX_SETTINGS_STATUS,
