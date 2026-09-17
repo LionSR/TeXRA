@@ -20,12 +20,14 @@
 //       is a value the tree passes around deliberately (claim releases,
 //       `let program; program = this.executeGoal(...)`), and a syntax scan
 //       cannot tell a stored Effect that is run later from one that is not.
-//   4. an Effect returned directly from the thunk of `Effect.tryPromise` /
-//      `Effect.promise`. Only the direct form: a thunk returning
-//      Promise<Effect> (async or not) is accepted because the produced Effect
-//      may be executed by a later statement (`const projected = yield*
-//      Effect.promise(...); yield* projected;` is a real pattern), which this
-//      scan cannot distinguish from a dropped one.
+//   4. an Effect returned from the thunk of `Effect.tryPromise` /
+//      `Effect.promise`, whether directly (`() => effect`) or inside the
+//      thunk's Promise (`async () => effect`, any `Promise<Effect>`). The
+//      adapter awaits the thunk's Promise, not the inner Effect, so the
+//      produced Effect is unexecuted unless a later statement yields it —
+//      produce-now-execute-later through a Promise<Effect> is not a supported
+//      pattern: construct the value the Promise resolves to, then build and
+//      yield* the Effect from it.
 //
 // An expression is an Effect when its type carries the `~effect/Effect`
 // TypeId property (effect/Effect's `[TypeId]` variance key) AND its apparent
@@ -263,7 +265,13 @@ function scanSourceFile(checker, sourceFile) {
             .getCallSignatures();
           if (signatures.length === 1) {
             const returnType = checker.getReturnTypeOfSignature(signatures[0]);
-            if (isEffectType(returnType)) {
+            // The adapter awaits the thunk's Promise: an Effect nested under
+            // it is as unexecuted as one returned directly, so check the
+            // awaited type too (for a non-thenable return this is the type
+            // itself).
+            const awaitedReturn =
+              checker.getAwaitedType(returnType) ?? returnType;
+            if (isEffectType(returnType) || isEffectType(awaitedReturn)) {
               record('thunk', node, checker.typeToString(returnType));
             }
           }
@@ -347,7 +355,8 @@ const direct = Effect.tryPromise(() => eff); // thunk
 const namespaced = E.Effect.promise(() => eff); // thunk
 const imported = tryPromise(() => eff); // thunk
 const objectForm = Effect.tryPromise({ try: () => eff, catch: () => 'e' }); // thunk
-const asyncThunk = Effect.tryPromise(async () => eff); // clean: Promise<Effect> may be executed by a later statement
+const asyncThunk = Effect.tryPromise(async () => eff); // thunk
+const promiseThunk = Effect.tryPromise(() => Promise.resolve(eff)); // thunk
 const okDirect = Effect.tryPromise(() => Promise.resolve(1)); // clean
 const okAsync = Effect.tryPromise(async () => 1); // clean
 const okObject = Effect.tryPromise({ try: () => Promise.resolve(1), catch: () => 'e' }); // clean
@@ -357,6 +366,7 @@ err; // clean: a yieldable error class is data, not an unexecuted program
 exit; // clean: Exit is a result value
 await err; // clean
 const okExitThunk = Effect.tryPromise(async () => exit); // clean: awaited value is an Exit
+const okErrThunk = Effect.tryPromise(async () => err); // clean: awaited value is yieldable data
 
 let stored: Effect.Effect<number, Error>;
 stored = eff; // clean: an assignment stores the Effect for its consumer
@@ -421,6 +431,8 @@ const gen = Effect.gen(function* () {
     ['thunk', 28],
     ['thunk', 29],
     ['thunk', 30],
+    ['thunk', 31],
+    ['thunk', 32],
   ];
   const actual = scanSourceFile(program.getTypeChecker(), probeFile).map(
     ({ kind, line }) => [kind, line],
