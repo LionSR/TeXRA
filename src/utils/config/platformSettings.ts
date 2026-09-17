@@ -63,11 +63,18 @@ export function platformSettingsStores(): SettingsStores {
  * without the caller naming it. Host-specific convenience readers remain
  * preferable when they also own normalization or side effects.
  *
- * Prefer this over `configUtils.ts`'s `getConfig`/`readConfig` for any
- * catalog-modeled key: those read the config-tree slot only, skip schema
- * validation unless the caller opts into `getValidatedConfig`, and cannot see
- * a key whose catalog slot is `workspaceState`/`globalState`. `getConfig`
- * remains the right tool for a config-tree value the catalog does not model.
+ * Prefer this over `configUtils.ts`'s `getConfig`/`readConfig` for a
+ * catalog-modeled key whose slot is `workspaceState`/`globalState` for this
+ * host: those read the config-tree slot only, skip schema validation unless
+ * the caller opts into `getValidatedConfig`, and cannot see such a key at
+ * all. `getConfig`/`readConfig`/`getValidatedConfig` remain the right tool
+ * for a config-tree value the catalog does not model, and — this function's
+ * one carve-out — for a catalog-modeled `configTarget: 'global'` config-slot
+ * key whose runtime must honor a workspace override (the Models-tab provider
+ * toggles; see the note above `model.gpt5ReasoningSummary` in
+ * `stateSettings.ts` and their `readConfig` call sites in `modelBinding.ts`):
+ * this function resolves such a row to `inspect(key).globalValue` only and
+ * would silently drop the override.
  */
 export function readPlatformSetting<T>(key: string): T {
   return readSettingFrom<T>(platformSettingsStores(), key);

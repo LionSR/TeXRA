@@ -32,11 +32,16 @@ const log = createLog('configUtils');
  * for a `CORE_TREE_SETTINGS` entry; a `STATE_SETTINGS` key (one whose slot is
  * `workspaceState`/`globalState` for this host) is invisible to it and
  * silently falls back to `defaultValue` instead of the real persisted value.
- * For a catalog-modeled setting, prefer `readPlatformSetting` in
- * `./platformSettings`: it resolves whichever slot the entry declares for
- * the current host and always validates against the entry's schema. Reach
- * for `getConfig`/`readConfig` only for a config-tree value the catalog does
- * not (yet) model.
+ * For a catalog-modeled setting whose slot is `workspaceState`/`globalState`
+ * for this host, use `readPlatformSetting` in `./platformSettings` instead —
+ * it resolves whichever slot the entry declares and always validates. But
+ * for a catalog-modeled config-slot key whose runtime must honor a workspace
+ * override over a `configTarget: 'global'` write (the Models-tab provider
+ * toggles — see `stateSettings.ts`'s note above `model.gpt5ReasoningSummary`,
+ * and their `readConfig` call sites in `modelBinding.ts`), keep reading
+ * through `getConfig`/`readConfig`/`getValidatedConfig`: `readPlatformSetting`
+ * resolves a `configTarget: 'global'` row to `inspect(key).globalValue` only
+ * and would silently drop the override.
  */
 export function getConfig<T>(path: string, defaultValue?: T): T {
   return readConfig(workspaceRoots().config, path, defaultValue);
