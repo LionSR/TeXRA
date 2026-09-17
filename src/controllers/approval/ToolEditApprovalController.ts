@@ -69,13 +69,24 @@ export interface ToolEditApprovalHost {
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
   ): Promise<ToolEditPreview>;
-  /** Reopen the host surface containing the pending request's controls. */
-  revealApprovalSurface(): Promise<void>;
+  /**
+   * Reopen the host surface containing the pending request's controls, for a
+   * host that has one to reopen: the VS Code progress view is a panel the
+   * user can have closed, while the desktop prompt shows in whichever view is
+   * open. Optional rather than a no-op on the hosts that reveal nothing,
+   * which is what the rest of this repo's host ports do (`HostInteractions`).
+   */
+  revealApprovalSurface?(): Promise<void>;
   readonly openBuildDisplay: BuildDisplayFn;
   /**
    * Run a LaTeX preview program, or a temp-file removal one registered, on
    * the host's process runtime. The controller holds no runtime of its own,
-   * so every Effect it starts runs through here.
+   * so every Effect it starts runs through here: a run belongs at a host
+   * boundary (the Effect-4 migration's R1, frozen at zero below one by
+   * `config/ratchets/effect-migration-baseline.json`), and this controller is
+   * host-agnostic. This member is that boundary, not an indirection over it —
+   * it goes when the controller itself becomes Effect-native and its callers'
+   * fibers supply the runtime.
    */
   runPreview(
     program: Effect.Effect<void, unknown, FileSystem.FileSystem>,
@@ -131,9 +142,7 @@ interface InitializingToolEditApproval extends TrackedToolEditApproval {
 interface PendingToolEditApproval
   extends LatexPreviewEntry, TrackedToolEditApproval {
   readonly phase: 'pending';
-  readonly requestId: string;
   readonly request: ToolEditApprovalRequest;
-  readonly relativePath: string;
   readonly preview: ToolEditPreview;
   /** Resolve {@link LatexPreviewEntry.settled}: the release that drops the entry calls it. */
   readonly settle: () => void;
@@ -241,9 +250,7 @@ export class ToolEditApprovalController {
       });
       const staged: PendingToolEditApproval = {
         phase: 'pending',
-        requestId,
         request,
-        relativePath,
         preview,
         originalUri: { fsPath: preview.originalPath },
         proposedUri: { fsPath: preview.proposedPath },
@@ -265,9 +272,9 @@ export class ToolEditApprovalController {
 
       await staged.preview.present();
       if (!staged.isSettled()) {
-        void this.runAction(staged, () =>
-          this.options.host.revealApprovalSurface(),
-        );
+        void this.runAction(staged, async () => {
+          await this.options.host.revealApprovalSurface?.();
+        });
       }
     })();
     initialization.inFlight = operation.then(

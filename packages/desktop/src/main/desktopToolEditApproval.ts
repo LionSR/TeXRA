@@ -89,11 +89,8 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
     });
   }
 
-  /**
-   * Active-stream selection surfaces the prompt in whichever view is open, so nothing has
-   * to open ahead of it.
-   */
-  async revealApprovalSurface(): Promise<void> {}
+  // No `revealApprovalSurface`: active-stream selection surfaces the prompt
+  // in whichever view is open, so nothing has to open ahead of it.
 
   runPreview(
     program: Effect.Effect<void, unknown, FileSystem.FileSystem>,
