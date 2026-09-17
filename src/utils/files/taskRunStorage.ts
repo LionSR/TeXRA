@@ -284,9 +284,13 @@ export class TaskRunFileService {
           await fs.stat(snapshotAbsolute);
           sourceAbsolute = snapshotAbsolute;
         } catch (error) {
+          // No snapshot is the ordinary case for a read-only build asset.
+          // Any other failure means the round dir links the live workspace
+          // mirror in place of the pristine snapshot, which a later diff or
+          // revert would read as the base.
           if (!isFileNotFoundError(error)) {
-            log.debug(
-              `Unable to stat snapshot ${snapshotAbsolute}: ${toErrorMessage(error)}`,
+            log.warn(
+              `Unable to stat snapshot ${snapshotAbsolute}; linking the workspace mirror instead: ${toErrorMessage(error)}`,
             );
           }
         }
@@ -310,18 +314,22 @@ export class TaskRunFileService {
             return;
           }
         } catch (error) {
-          if (!isFileNotFoundError(error)) {
-            log.debug(
-              `Unable to stat ${destinationAbsolute}: ${toErrorMessage(error)}`,
-            );
-          }
           // ENOENT is the common case — no collision, proceed with the link.
+          // Any other failure leaves the collision unknown, and linking then
+          // replaces an EEXIST destination outright, so the guard fails
+          // closed rather than disarming itself.
+          if (!isFileNotFoundError(error)) {
+            log.warn(
+              `Skipping run-dir mirror of ${relativePath}: cannot stat the destination in ${relativeDirectory}: ${toErrorMessage(error)}`,
+            );
+            return;
+          }
         }
 
         try {
           await createSymlink(sourceAbsolute, destinationAbsolute);
         } catch (error) {
-          log.debug(
+          log.warn(
             `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
           );
         }

@@ -1,4 +1,5 @@
 import { createLog } from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AbsoluteFS } from './absoluteFS';
 import { workspaceAbsolutePath } from './workspaceFS';
@@ -33,9 +34,12 @@ export async function setVarFromFile(
     );
     return { file: filePath, content };
   } catch (error) {
-    log.debug(`Failed to read ${varName} from file ${filePath}`, {
-      data: error,
-    });
+    // The variable is simply absent from the prompt after this, so a
+    // mistyped path and a permission error must not read like a real absence.
+    log.warn(
+      `Failed to read ${varName} from file ${filePath}: ${toErrorMessage(error)}`,
+      { data: error },
+    );
     return null;
   }
 }

@@ -13,6 +13,7 @@ import which from 'which';
 import { createLog } from '@logger/logUtils';
 import { normalizeFilePath, unique } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * An existence probe that asserts an absolute path and then asks `node:fs`.
@@ -55,11 +56,13 @@ export function safeHomedir(): string | null {
   }
 }
 
-/** Glob matches sorted in descending order, ignoring glob errors. */
+/** Glob matches sorted in descending order. A failed glob drops a whole tool
+ *  directory from PATH, so it is named rather than silently empty. */
 function globDescending(pattern: string): string[] {
   try {
     return globSync(pattern).sort().reverse();
-  } catch {
+  } catch (err) {
+    log.warn(`Glob failed for ${pattern}: ${toErrorMessage(err)}`);
     return [];
   }
 }
