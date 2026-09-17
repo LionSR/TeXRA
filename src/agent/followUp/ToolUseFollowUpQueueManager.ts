@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Cause, Effect, Exit, Result } from 'effect';
 
+import { warnAndSwallow } from '@agent/runtime/failureRecovery';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
@@ -677,13 +678,11 @@ export class ToolUseFollowUpQueue {
     release: Effect.Effect<void, Error>,
   ): Effect.Effect<void> {
     return release.pipe(
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          logger.warn(
-            `Run ${runId}: the claim taken to queue a follow-up was not released`,
-            { data: error },
-          );
-        }),
+      Effect.catch(
+        warnAndSwallow(
+          logger,
+          `Run ${runId}: the claim taken to queue a follow-up was not released`,
+        ),
       ),
     );
   }

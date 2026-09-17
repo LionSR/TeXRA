@@ -15,6 +15,7 @@ import {
 } from '@agent/storage/runLifecycle';
 import { emptyRunEndOutput, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
+import { warnAndSwallow } from './failureRecovery';
 import type { RunHandle } from './RunHandle';
 import type { RunLanes } from './runLanes';
 
@@ -167,11 +168,9 @@ export class WaitingTermination {
         handle.isChild
           ? Effect.void
           : this.context.releaseRootRunLease(handle.runId).pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  logger.warn('Waiting-run artifact flush failed', {
-                    data: { runId: handle.runId, error },
-                  });
+              Effect.catch(
+                warnAndSwallow(logger, 'Waiting-run artifact flush failed', {
+                  runId: handle.runId,
                 }),
               ),
             ),

@@ -101,6 +101,7 @@ import {
   SessionHostInteractions,
   type HostInteractions,
 } from './HostInteractions';
+import { squashFailures, warnAndSwallow } from './failureRecovery';
 import { redactedForFact } from './loop/rows';
 import { runEventDraft } from './SessionEvents';
 import {
@@ -496,9 +497,12 @@ export class SessionHandle {
       const claimRelease = yield* Effect.exit(
         this.releaseClaims(qualifyAggregateId('run', runId)),
       );
-      const failures = [drained, finalized, published, claimRelease].flatMap(
-        (exit) => (Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : []),
-      );
+      const failures = squashFailures([
+        drained,
+        finalized,
+        published,
+        claimRelease,
+      ]);
       const primary = failures.shift();
       for (const error of failures)
         logger.warn(`Run ${runId}: claim release also failed`, {
@@ -1137,10 +1141,8 @@ export class SessionHandle {
               try: () => listener({ ...event, runId: target.id }),
               catch: (error) => error,
             }).pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  logger.warn('Session result listener threw', { data: error });
-                }),
+              Effect.catch(
+                warnAndSwallow(logger, 'Session result listener threw'),
               ),
             ),
           { discard: true },

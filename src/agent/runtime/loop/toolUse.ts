@@ -61,6 +61,7 @@ import {
 } from '../run/modelBinding';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
+import { warnAndSwallow } from '../failureRecovery';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
@@ -903,12 +904,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                   haltedStepRow(runId, state, outcome),
                 ])
                 .pipe(
-                  Effect.catch((error) =>
-                    Effect.sync(() =>
-                      logger.warn('Failed to record the run halt', {
-                        data: error,
-                      }),
-                    ),
+                  Effect.catch(
+                    warnAndSwallow(logger, 'Failed to record the run halt'),
                   ),
                 );
         const release = (next: 'recoverable' | 'terminal') =>

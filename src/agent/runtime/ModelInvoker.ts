@@ -77,6 +77,7 @@ import { generateShortId } from '@utils/core';
 import { readValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
+import { warnAndSwallow } from './failureRecovery';
 import { AgentRun } from './run/AgentRun';
 import { estimateInputTokensOrNull } from './run/estimateInputTokens';
 import {
@@ -1097,14 +1098,10 @@ export const modelInvokerLayer = (): Layer.Layer<
           // rest of this run. A rebind that fails leaves the run on the binding
           // it has, loudly.
           yield* rebind(selection, failed, declinedRoutes).pipe(
-            Effect.catch((error) =>
-              Effect.sync(() =>
-                logger.warn(
-                  'Failed to refresh the model binding before retry',
-                  {
-                    data: error,
-                  },
-                ),
+            Effect.catch(
+              warnAndSwallow(
+                logger,
+                'Failed to refresh the model binding before retry',
               ),
             ),
           );

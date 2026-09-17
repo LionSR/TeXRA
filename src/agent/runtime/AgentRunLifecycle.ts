@@ -33,6 +33,7 @@ import {
 } from '@shared/state/onboardingState';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { warnAndSwallow } from './failureRecovery';
 import { RunHandle, type AgentRunHandle } from './RunHandle';
 import { Runs } from './runRegistry';
 import {
@@ -167,11 +168,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
       try: () => stage.end(stageOutcome),
       catch: ensureError,
     }).pipe(
-      Effect.catch((stageErr) =>
-        Effect.sync(() => {
-          logger.warn('Failed to end parent stage', {
-            data: { agentIdentifier: handle.agentName, error: stageErr },
-          });
+      Effect.catch(
+        warnAndSwallow(logger, 'Failed to end parent stage', {
+          agentIdentifier: handle.agentName,
         }),
       ),
     );
@@ -261,11 +260,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
       try: async () => deliver(outcome),
       catch: ensureError,
     }).pipe(
-      Effect.catch((deliveryError) =>
-        Effect.sync(() => {
-          logger.warn('Terminal delivery hook failed', {
-            data: { agentIdentifier: handle.agentName, error: deliveryError },
-          });
+      Effect.catch(
+        warnAndSwallow(logger, 'Terminal delivery hook failed', {
+          agentIdentifier: handle.agentName,
         }),
       ),
     );
@@ -279,11 +276,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
     },
     catch: ensureError,
   }).pipe(
-    Effect.catch((cleanupErr) =>
-      Effect.sync(() => {
-        logger.warn('Post-terminal cleanup threw', {
-          data: { agentIdentifier: handle.agentName, error: cleanupErr },
-        });
+    Effect.catch(
+      warnAndSwallow(logger, 'Post-terminal cleanup threw', {
+        agentIdentifier: handle.agentName,
       }),
     ),
   );
@@ -428,12 +423,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         try: async () => onRun(handle),
         catch: ensureError,
       }).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            logger.warn('onRun callback failed', {
-              data: { agentIdentifier, error },
-            });
-          }),
+        Effect.catch(
+          warnAndSwallow(logger, 'onRun callback failed', { agentIdentifier }),
         ),
         Effect.forkDetach({ startImmediately: true }),
       );
@@ -662,12 +653,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
             ? Effect.void
             : setFirstRunDone(globalState, true)
         ).pipe(
-          Effect.catch((error) =>
-            Effect.sync(() =>
-              logger.warn('Failed to record the first completed run', {
-                data: error,
-              }),
-            ),
+          Effect.catch(
+            warnAndSwallow(logger, 'Failed to record the first completed run'),
           ),
         );
       }

@@ -20,6 +20,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
+import { squashFailures, warnAndSwallow } from '@agent/runtime/failureRecovery';
 import { stepRow } from '@agent/runtime/loop/rows';
 import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -945,7 +946,6 @@ export function startChildRunLoop<TTurn, R = never>(
     // starts; in both cases `run` never executes, so nothing else unwinds.
     const unwindSetup = (error: unknown): Effect.Effect<Error> =>
       Effect.gen(function* () {
-        const cleanupErrors: unknown[] = [];
         const cleanups = [
           () => sessionStage?.end(RUN_OUTCOME.FAILED),
           () => detachLoopInterrupt?.(),
@@ -956,11 +956,11 @@ export function startChildRunLoop<TTurn, R = never>(
           releaseChildActivation,
           releaseSessionOwnershipOnce,
         ];
-        for (const cleanup of cleanups) {
-          const result = yield* Effect.exit(Effect.sync(cleanup));
-          if (Exit.isFailure(result))
-            cleanupErrors.push(Cause.squash(result.cause));
-        }
+        const cleanupErrors = squashFailures(
+          yield* Effect.forEach(cleanups, (cleanup) =>
+            Effect.exit(Effect.sync(cleanup)),
+          ),
+        );
         return ensureError(
           aggregateError(
             [error, ...cleanupErrors],
@@ -1129,11 +1129,9 @@ export function startChildRunLoop<TTurn, R = never>(
           Effect.gen(function* () {
             const runNotice = (notice: Effect.Effect<void, Error>) =>
               notice.pipe(
-                Effect.catch((error) =>
-                  Effect.sync(() => {
-                    logger.warn('Child progress was not queued', {
-                      data: { runId, error },
-                    });
+                Effect.catch(
+                  warnAndSwallow(logger, 'Child progress was not queued', {
+                    runId,
                   }),
                 ),
               );
@@ -1329,10 +1327,8 @@ export function startChildRunLoop<TTurn, R = never>(
               try: async () => params.recordCost?.(bestCostUsd),
               catch: ensureError,
             }).pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  logger.warn('Child cost observer failed', { data: error });
-                }),
+              Effect.catch(
+                warnAndSwallow(logger, 'Child cost observer failed'),
               ),
             ),
             { startImmediately: true },
@@ -1387,9 +1383,7 @@ export function startChildRunLoop<TTurn, R = never>(
       const activation = yield* Effect.exit(
         Effect.sync(releaseChildActivation),
       );
-      const failures = [body, terminal, released, activation].flatMap((exit) =>
-        Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
-      );
+      const failures = squashFailures([body, terminal, released, activation]);
       if (failures.length > 0) {
         return yield* Effect.fail(
           ensureError(aggregateError(failures, 'Child run and cleanup failed')),

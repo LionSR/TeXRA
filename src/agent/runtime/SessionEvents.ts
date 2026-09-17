@@ -40,6 +40,8 @@ import {
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
+import { squashFailures } from './failureRecovery';
+
 const logger = createLog('sessionEvents');
 
 /** One unit of the publisher's work: a job over the log's append, and the
@@ -228,9 +230,7 @@ export const sessionEventsLayer = Layer.effect(
         ),
     ).pipe(
       Effect.flatMap((exits) => {
-        const failures = exits.flatMap((exit) =>
-          Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
-        );
+        const failures = squashFailures(exits);
         if (failures.length > 0) {
           return Effect.fail(
             ensureError(aggregateError(failures, 'Session publication failed')),

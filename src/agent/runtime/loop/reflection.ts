@@ -117,6 +117,7 @@ import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { turnText } from '../run/turnText';
+import { warnAndSwallow } from '../failureRecovery';
 import { ModelInvoker } from '../ModelInvoker';
 import {
   appendRow,
@@ -1333,12 +1334,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (
                   haltedStepRow(runId, coordinates(state), outcome),
                 ])
                 .pipe(
-                  Effect.catch((error) =>
-                    Effect.sync(() =>
-                      logger.warn('Failed to record the run halt', {
-                        data: error,
-                      }),
-                    ),
+                  Effect.catch(
+                    warnAndSwallow(logger, 'Failed to record the run halt'),
                   ),
                 );
         if (Exit.isSuccess(exit)) return yield* halt(exit.value.outcome);

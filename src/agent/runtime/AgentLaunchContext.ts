@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Cause, Deferred, Effect, Exit } from 'effect';
+import { Cause, Deferred, Effect } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
@@ -48,6 +48,7 @@ import {
 import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
+import { squashFailures } from './failureRecovery';
 import { createRunContext, runInSession, withRunContext } from './RunContext';
 import { createRunScope, type RunScope } from './RunScope';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
@@ -691,9 +692,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
                 }),
               ),
           );
-          const failures = disposals.flatMap((disposed) =>
-            Exit.isFailure(disposed) ? [Cause.squash(disposed.cause)] : [],
-          );
+          const failures = squashFailures(disposals);
           if (failures.length) {
             logger.warn(
               'Failed to release launch resources after a failed launch',
