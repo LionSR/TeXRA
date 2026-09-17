@@ -131,9 +131,7 @@ interface InitializingToolEditApproval extends TrackedToolEditApproval {
 interface PendingToolEditApproval
   extends LatexPreviewEntry, TrackedToolEditApproval {
   readonly phase: 'pending';
-  readonly requestId: string;
   readonly request: ToolEditApprovalRequest;
-  readonly relativePath: string;
   readonly preview: ToolEditPreview;
   /** Resolve {@link LatexPreviewEntry.settled}: the release that drops the entry calls it. */
   readonly settle: () => void;
@@ -241,9 +239,7 @@ export class ToolEditApprovalController {
       });
       const staged: PendingToolEditApproval = {
         phase: 'pending',
-        requestId,
         request,
-        relativePath,
         preview,
         originalUri: { fsPath: preview.originalPath },
         proposedUri: { fsPath: preview.proposedPath },

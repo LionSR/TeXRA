@@ -574,7 +574,13 @@ describe('desktop tool edit approval', () => {
         // the host build and join it at release, so the second argument is
         // checked structurally instead of against the host stub by identity.
         expect(runLatexdiff).toHaveBeenCalledWith(
-          expect.objectContaining({ requestId: request.requestId }),
+          expect.objectContaining({
+            request: expect.objectContaining({
+              permission: expect.objectContaining({
+                requestId: request.requestId,
+              }),
+            }),
+          }),
           expect.objectContaining({
             subtype: 'ONLYCHANGEDPAGE',
             openBuildDisplay: expect.any(Function),
