@@ -78,9 +78,6 @@ importers:
       arxiv-client:
         specifier: ^0.0.9
         version: 0.0.9(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
-      async-mutex:
-        specifier: ^0.5.0
-        version: 0.5.0
       bibtex:
         specifier: ^0.9.0
         version: 0.9.0
@@ -421,9 +418,6 @@ importers:
       arxiv-client:
         specifier: ^0.0.9
         version: 0.0.9(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
-      async-mutex:
-        specifier: ^0.5.0
-        version: 0.5.0
       bibtex:
         specifier: ^0.9.0
         version: 0.9.0
@@ -2868,9 +2862,6 @@ packages:
   async-exit-hook@2.0.1:
     resolution: {integrity: sha512-NW2cX8m1Q7KPA7a5M2ULQeZ2wR5qI5PAbw5L0UOMxdioVk9PMZ0h1TmyZEkPYrCvYjDlFICusOu1dlEKAAeXBw==}
     engines: {node: '>=0.12.0'}
-
-  async-mutex@0.5.0:
-    resolution: {integrity: sha512-1A94B18jkJ3DYq284ohPxoXbfTA5HsQ7/Mf4DEhcyLx3Bz27Rh59iScbB6EPiP+B+joue6YCxcMXSbFC1tZKwA==}
 
   async@3.2.6:
     resolution: {integrity: sha512-htCUDlxyyCLMgaM3xXg0C0LW2xqfuQ6p05pCEIsXuyQ+a1koYKTuBMzRNwmybfLgvJDMd0r1LTn4+E0Ti6C2AA==}
@@ -8112,10 +8103,6 @@ snapshots:
   astral-regex@2.0.0: {}
 
   async-exit-hook@2.0.1: {}
-
-  async-mutex@0.5.0:
-    dependencies:
-      tslib: 2.8.1
 
   async@3.2.6: {}
 

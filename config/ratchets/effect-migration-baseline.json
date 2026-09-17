@@ -33,9 +33,6 @@
       "src/platform/defaults/lifecycleHost.ts": 1,
       "src/tools/claudeAgent.ts": 1
     },
-    "import:async-mutex": {
-      "src/utils/core/keyedMutex.ts": 1
-    },
     "catch:effect-importer": {
       "packages/desktop/src/main/index.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 1
