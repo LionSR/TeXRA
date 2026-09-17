@@ -48,7 +48,7 @@ import {
 import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { createRunContext, runInSession, withRunContext } from './RunContext';
+import { runInSession } from './RunContext';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
 import type { RunScope } from './RunScope';
 import type { SessionHandle } from './SessionHandle';
@@ -63,10 +63,8 @@ const logger = createLog('AgentLaunchContext');
 /**
  * Immutable per-run tool policy, read from the run's `AgentRun` service.
  *
- * These are the launch-context tool-policy values that previously rode the
- * ambient `RunContext` (`approvalPromptsUnavailable`, `runtimeUnavailableTools`,
- * `stopAfterCycle`). A frozen value the loop takes from context runs without
- * an `AsyncLocalStorage` frame — the property an SDK embedder wants.
+ * A frozen value the loop takes from context runs without an
+ * `AsyncLocalStorage` frame — the property an SDK embedder wants.
  */
 export interface ToolPolicy {
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
@@ -78,7 +76,7 @@ export interface ToolPolicy {
 }
 
 export interface AgentLaunchContext {
-  /** Run identity and owning session; the same frozen object the ambient `RunContext` carries. */
+  /** Run identity and owning session. */
   readonly runScope: RunScope;
   /**
    * The registry config of the launch model. The run's `AgentRun` service
@@ -98,7 +96,7 @@ export interface AgentLaunchContext {
    * user's stored preferences are not touched; the choice is the run's.
    */
   readonly ownApiKeyFallback: boolean;
-  /** Immutable per-run tool policy; the loop reads it instead of the ambient RunContext. */
+  /** Immutable per-run tool policy. */
   readonly toolPolicy: ToolPolicy;
   /**
    * The process secret store and global state the launch read from its
@@ -197,33 +195,6 @@ export const failIfLaunchStopped = (
       ? Effect.fail(new DOMException('The launch was stopped.', 'AbortError'))
       : Effect.void,
   );
-
-export function withLaunchRunContext<T>(
-  ctx: AgentLaunchContext,
-  options: { onApprovalPolicyDenial?: () => void } = {},
-  fn: () => T,
-): T {
-  // Single owner of the launch-context → ambient-context mapping. The
-  // tool-policy fields (`approvalPromptsUnavailable`, `runtimeUnavailableTools`,
-  // `stopAfterCycle`) are projected straight from `ctx.toolPolicy` so callers
-  // can't drift a hand-maintained copy of the same values; only
-  // `onApprovalPolicyDenial` (a callback that is not part of ToolPolicy) is
-  // still supplied explicitly. Run identity (`runId`/`workingDirectory`)
-  // travels via `ctx.runScope` unchanged, and the model via `ctx.config`,
-  // which the run mirrors a mid-session switch into as soon as the new
-  // binding is live.
-  return withRunContext(
-    createRunContext({
-      runScope: ctx.runScope,
-      config: ctx.config,
-      approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
-      runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
-      stopAfterCycle: ctx.toolPolicy.stopAfterCycle,
-      onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-    }),
-    fn,
-  );
-}
 
 /**
  * Present a launch error through its targeted host notice (replayed if no
