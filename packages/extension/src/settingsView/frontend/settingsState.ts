@@ -52,7 +52,7 @@ import {
   type CodexReasoningEffort,
   type CodexSandboxMode,
   type CopilotRouteInfo,
-  type Goal,
+  type GoalListItem,
   type GrokAuthStatus,
   type MemoryViewItem,
   type ModelSelectionItem,
@@ -319,7 +319,7 @@ export const inlineCriticismEnabled = trackedSignal(() => false);
 // ---------------------------------------------------------------------------
 // Goal settings state
 // ---------------------------------------------------------------------------
-export const goalItems = trackedSignal<readonly Goal[]>(() => []);
+export const goalItems = trackedSignal<readonly GoalListItem[]>(() => []);
 
 // ---------------------------------------------------------------------------
 // Derived capability view: commands the active host's inbound registry

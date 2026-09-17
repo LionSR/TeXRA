@@ -25,7 +25,7 @@ import {
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
 } from './skillDisplay';
-import { GoalSchema } from './goal';
+import { GoalListItemSchema } from './goal';
 
 import {
   AgentCategorySchema,
@@ -59,10 +59,10 @@ import { WebviewReadyMessageSchema } from './commonViewMessages';
 // re-exported here for consumers that expect it from the schema module.
 export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 
-// Re-export the Goal type from its shared leaf module so this file (consumed by
-// webview frontends) does not pull in the goal-row runtime modules. The
-// goal helpers are imported from '@shared/schemas/goal' directly.
-export { type Goal } from './goal';
+// Re-export the goal-list row type from its shared leaf module so this file
+// (consumed by webview frontends) does not pull in the goal-row runtime
+// modules. The goal helpers are imported from '@shared/schemas/goal' directly.
+export { type GoalListItem } from './goal';
 
 // Re-export the types and values needed by settings consumers from the
 // individual view-message modules so the historical settings surface (single
@@ -587,7 +587,7 @@ const UpdateInlineCriticismEnabledMessageSchema = z.object({
 /** Outbound: pushed when the list changes or in response to GET_GOAL_LIST. */
 const UpdateGoalListMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST),
-  items: z.array(GoalSchema),
+  items: z.array(GoalListItemSchema),
 });
 
 /**
