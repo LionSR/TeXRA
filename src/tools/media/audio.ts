@@ -1,8 +1,8 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import * as path from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 
+import { Data, Effect, Ref } from 'effect';
 import { execa, type Subprocess } from 'execa';
 import OpenAI from 'openai';
 
@@ -32,20 +32,44 @@ export function recordingsDir(roots: WorkspaceRoots): string {
 }
 
 /**
+ * Why a recorder operation could not answer. `message` is the wording the
+ * caller shows the person — "Sox is required…", "Recording file is empty" —
+ * so a refusal reaches the draft request already worded and the caller never
+ * re-mints one.
+ */
+class AudioRecorderError extends Data.TaggedError('AudioRecorderError')<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+/** The failure a foreign call of `operation` carries back, logged once here
+ *  where the operation is named. */
+const recorderFailure =
+  (operation: string) =>
+  (cause: unknown): AudioRecorderError => {
+    const message = getSdkErrorMessage(cause);
+    log.error(`Error in ${operation}: ${message}`);
+    return new AudioRecorderError({ message, cause });
+  };
+
+/**
  * Upper bound on how long a SIGTERM'd sox may take to flush and exit before
  * `stopRecording` gives up waiting and reads the file anyway.
  */
 const SOX_SHUTDOWN_TIMEOUT_MS = 5000;
 
-// Store active recording process
-let activeRecordingProcess: Subprocess | null = null;
-let activeRecordingPath: string | null = null;
-
-/** Reset recording state to idle. */
-function resetRecordingState(): void {
-  activeRecordingProcess = null;
-  activeRecordingPath = null;
+interface ActiveRecording {
+  readonly process: Subprocess;
+  readonly path: string;
 }
+
+/**
+ * The one recorder of this process. Every entry point — a take's start and
+ * stop, sox exiting on its own, and the host shutdown hook — claims or
+ * releases the microphone through this cell, so the single-recorder invariant
+ * holds across all of them.
+ */
+const activeRecording = Ref.makeUnsafe<ActiveRecording | null>(null);
 
 /** Resolve the sox executable command from config or auto-detection. */
 function resolveSoxCommand(
@@ -73,63 +97,18 @@ function resolveSoxCommand(
   return BinaryResolver.resolveOptionalCommand('sox');
 }
 
-/** Start recording audio from the microphone under `roots`' storage. */
-export async function startRecording(roots: WorkspaceRoots): Promise<{
-  success: boolean;
-  recordingPath?: string;
-  error?: string;
-}> {
-  try {
-    if (activeRecordingProcess) {
-      return { success: false, error: 'Recording already in progress' };
-    }
-
-    const soxCommand = resolveSoxCommand(roots);
-    if (!soxCommand) {
-      return {
-        success: false,
-        error: 'Sox is required for audio recording. Please install it first.',
-      };
-    }
-
-    const directory = recordingsDir(roots);
-    await mkdir(directory, { recursive: true });
-    const absPath = path.join(directory, `record_${Date.now()}.wav`);
-
-    const soxArgs = [
-      '--default-device',
-      '--no-show-progress',
-      '--rate',
-      '16000',
-      '--channels',
-      '1',
-      '--encoding',
-      'signed-integer',
-      '--bits',
-      '16',
-      '--type',
-      'wav',
-      absPath,
-    ];
-
-    log.info(
-      `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
-    );
-
-    const subprocess = execa(
-      soxCommand.command,
-      [...soxCommand.args, ...soxArgs],
-      {
-        env: { ...process.env, PATH: extendEnvPath() },
-        reject: false,
-      },
-    );
-
-    activeRecordingProcess = subprocess;
-    activeRecordingPath = absPath;
-
-    subprocess
-      .then((result) => {
+/**
+ * Log how sox ended and release the recorder if this subprocess still holds
+ * it. Runs detached from whoever started the take: sox outlives the call, and
+ * its own exit is what frees the microphone when no Stop ever arrives.
+ */
+function watchRecorderExit(subprocess: Subprocess): Effect.Effect<void> {
+  return Effect.tryPromise({
+    try: () => subprocess,
+    catch: (cause) => cause,
+  }).pipe(
+    Effect.match({
+      onSuccess: (result) => {
         // On Windows, kill('SIGTERM') acts as force-kill and result.signal
         // may be 'SIGTERM' or null depending on Node version.  Also treat
         // SIGKILL as intentional since it can come from the force-kill path.
@@ -142,121 +121,180 @@ export async function startRecording(roots: WorkspaceRoots): Promise<{
         } else {
           log.info('Recording process completed successfully');
         }
-        if (activeRecordingProcess === subprocess) resetRecordingState();
-      })
-      .catch((error) => {
-        log.error(`Sox process error: ${error.message}`);
-        if (activeRecordingProcess === subprocess) resetRecordingState();
+      },
+      onFailure: (cause) => {
+        log.error(`Sox process error: ${getSdkErrorMessage(cause)}`);
+      },
+    }),
+    Effect.andThen(
+      Ref.update(activeRecording, (current) =>
+        current?.process === subprocess ? null : current,
+      ),
+    ),
+  );
+}
+
+/**
+ * Start recording audio from the microphone under `roots`' storage and answer
+ * with the file the take is captured into. The recorder is claimed only once
+ * every step that can fail has succeeded, so no failure path has state to undo.
+ */
+export function startRecording(
+  roots: WorkspaceRoots,
+): Effect.Effect<string, AudioRecorderError> {
+  return Effect.gen(function* () {
+    if ((yield* Ref.get(activeRecording)) !== null) {
+      return yield* new AudioRecorderError({
+        message: 'Recording already in progress',
       });
+    }
 
-    subprocess.stderr?.on('data', (data: Buffer) => {
-      log.debug(`Sox stderr: ${data.toString()}`);
+    // One foreign region: resolve sox, create the directory, spawn the
+    // recorder. Nothing in it has claimed the microphone yet, so a throw
+    // leaves no state to undo.
+    const started = yield* Effect.tryPromise({
+      try: async (): Promise<ActiveRecording | null> => {
+        const soxCommand = resolveSoxCommand(roots);
+        if (!soxCommand) return null;
+
+        const directory = recordingsDir(roots);
+        await mkdir(directory, { recursive: true });
+        const absPath = path.join(directory, `record_${Date.now()}.wav`);
+
+        const soxArgs = [
+          '--default-device',
+          '--no-show-progress',
+          '--rate',
+          '16000',
+          '--channels',
+          '1',
+          '--encoding',
+          'signed-integer',
+          '--bits',
+          '16',
+          '--type',
+          'wav',
+          absPath,
+        ];
+        log.info(
+          `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
+        );
+
+        const subprocess = execa(
+          soxCommand.command,
+          [...soxCommand.args, ...soxArgs],
+          {
+            env: { ...process.env, PATH: extendEnvPath() },
+            reject: false,
+          },
+        );
+        subprocess.stderr?.on('data', (data: Buffer) => {
+          log.debug(`Sox stderr: ${data.toString()}`);
+        });
+        return { process: subprocess, path: absPath };
+      },
+      catch: recorderFailure('startRecording'),
     });
+    if (!started) {
+      return yield* new AudioRecorderError({
+        message:
+          'Sox is required for audio recording. Please install it first.',
+      });
+    }
 
-    return { success: true, recordingPath: absPath };
-  } catch (err) {
-    const message = getSdkErrorMessage(err);
-    log.error(`Error in startRecording: ${message}`);
-    resetRecordingState();
-    return { success: false, error: message };
-  }
+    yield* Ref.set(activeRecording, started);
+    yield* Effect.forkDetach(watchRecorderExit(started.process));
+    return started.path;
+  });
 }
 
 /** Forcibly terminate the active recording process if one exists. */
-export function killActiveRecording(): void {
-  if (activeRecordingProcess) {
-    activeRecordingProcess.kill('SIGTERM');
-    resetRecordingState();
-  }
+export function killActiveRecording(): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    const active = yield* Ref.getAndSet(activeRecording, null);
+    if (active) active.process.kill('SIGTERM');
+  });
 }
 
 /**
  * Stop the current recording and hand back the file it captured.
  *
- * This is the termination step and it waits on nothing else: sox gets
- * SIGTERM and this module's recording state resets before the caller resolves
- * the transcription credential, so a slow, denied or failing keychain read
- * can never leave the microphone running. The captured file is validated
- * here too, because "what the take captured" is the answer this step owes its
- * caller.
+ * This is the termination step and it waits on nothing else: the recorder is
+ * released and sox gets SIGTERM before the caller resolves the transcription
+ * credential, so a slow, denied or failing keychain read can never leave the
+ * microphone running. The captured file is validated here too, because "what
+ * the take captured" is the answer this step owes its caller.
  */
-export async function stopRecording(): Promise<{
-  success: boolean;
-  recordingPath?: string;
-  error?: string;
-}> {
-  try {
-    if (!activeRecordingProcess || !activeRecordingPath) {
-      return { success: false, error: 'No active recording to stop' };
+export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
+  return Effect.gen(function* () {
+    const active = yield* Ref.getAndSet(activeRecording, null);
+    if (!active) {
+      return yield* new AudioRecorderError({
+        message: 'No active recording to stop',
+      });
     }
 
-    const recordingPath = activeRecordingPath;
-    const recording = activeRecordingProcess;
-    recording.kill('SIGTERM');
-    resetRecordingState();
+    yield* Effect.try({
+      try: () => active.process.kill('SIGTERM'),
+      catch: recorderFailure('stopRecording'),
+    });
 
     // Await the process this module already holds rather than guessing how
     // long sox needs to flush. `execa` was started with `reject: false`, so
-    // this settles on exit instead of throwing. The bounded race is a
+    // this settles on exit instead of throwing. The bounded wait is a
     // backstop for a wedged sox — without it a process that ignores SIGTERM
     // would hang the tool, which the old fixed sleep could not do.
-    await Promise.race([
-      recording.catch(() => undefined),
-      delay(SOX_SHUTDOWN_TIMEOUT_MS),
-    ]);
+    yield* Effect.tryPromise({
+      try: () => active.process,
+      catch: (cause) => cause,
+    }).pipe(Effect.ignore, Effect.timeoutOption(SOX_SHUTDOWN_TIMEOUT_MS));
 
-    if (!existsSync(recordingPath)) {
-      return { success: false, error: 'Recording file not found' };
+    const size = yield* Effect.try({
+      try: () => (existsSync(active.path) ? statSync(active.path).size : null),
+      catch: recorderFailure('stopRecording'),
+    });
+    if (size === null) {
+      return yield* new AudioRecorderError({
+        message: 'Recording file not found',
+      });
     }
-
-    const stats = statSync(recordingPath);
-    if (stats.size === 0) {
-      return { success: false, error: 'Recording file is empty' };
+    if (size === 0) {
+      return yield* new AudioRecorderError({
+        message: 'Recording file is empty',
+      });
     }
-
-    return { success: true, recordingPath };
-  } catch (err) {
-    const message = getSdkErrorMessage(err);
-    log.error(`Error in stopRecording: ${message}`);
-    resetRecordingState();
-    return { success: false, error: message };
-  }
+    return active.path;
+  });
 }
 
 /**
  * Transcribe a stopped recording with OpenAI. `credential` is the OpenAI
- * route the caller resolved: the key read is an Effect program now, and this
- * function is a promise the host settles, so the credential arrives as data
- * rather than as a store this function would have to read from. The recorder
- * is already terminated by the time this runs — it is {@link stopRecording}
- * that owns the microphone. Stale takes under the session's recordings
- * directory are swept by the host take fiber after a successful transcription.
+ * route the caller resolved, so it arrives as data rather than as a store
+ * this function would have to read from. The recorder is already terminated
+ * by the time this runs — it is {@link stopRecording} that owns the
+ * microphone. Stale takes under the session's recordings directory are swept
+ * by the host take fiber after a successful transcription.
  */
-export async function transcribeRecording(
+export function transcribeRecording(
   recordingPath: string,
   credential: ApiKeyRouteCredential,
-): Promise<{
-  success: boolean;
-  text: string;
-  error?: string;
-}> {
-  try {
+): Effect.Effect<string, AudioRecorderError> {
+  return Effect.tryPromise({
     // The transcription endpoint is an OpenAI SDK operation the llm package
-    // does not model, so the client is built here.
-    const client = new OpenAI({
-      apiKey: credential.apiKey,
-      baseURL: credential.endpoint,
-    });
-    const result = await client.audio.transcriptions.create({
-      file: createReadStream(recordingPath),
-      model: 'gpt-4o-transcribe',
-      response_format: 'json',
-    });
-
-    return { success: true, text: result.text };
-  } catch (err) {
-    const message = getSdkErrorMessage(err);
-    log.error(`Error in transcribeRecording: ${message}`);
-    return { success: false, text: '', error: message };
-  }
+    // does not model, so the client is built here — the one foreign call this
+    // module wraps.
+    try: async () => {
+      const client = new OpenAI({
+        apiKey: credential.apiKey,
+        baseURL: credential.endpoint,
+      });
+      const result = await client.audio.transcriptions.create({
+        file: createReadStream(recordingPath),
+        model: 'gpt-4o-transcribe',
+        response_format: 'json',
+      });
+      return result.text;
+    },
+    catch: recorderFailure('transcribeRecording'),
+  });
 }

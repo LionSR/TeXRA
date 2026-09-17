@@ -17,11 +17,13 @@ import { Secrets } from '@platform/secrets';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
+// The recorder module answers in Effects, so every double returns one: a
+// bare `vi.fn()` would hand the take fiber `undefined` to yield.
 const audio = vi.hoisted(() => ({
   startRecording: vi.fn(),
   stopRecording: vi.fn(),
   transcribeRecording: vi.fn(),
-  killActiveRecording: vi.fn(),
+  killActiveRecording: vi.fn(() => Effect.void),
   recordingsDir: vi.fn(
     (roots: { storage: string }) => `${roots.storage}/recordings`,
   ),
@@ -59,16 +61,16 @@ it.effect(
   'returns transcription to Start when another paper stops the process recorder',
   () =>
     Effect.gen(function* () {
-      const startup = pDefer<{ success: boolean }>();
-      audio.startRecording.mockReturnValue(startup.promise);
-      audio.stopRecording.mockResolvedValue({
-        success: true,
-        recordingPath: '/papers/first/recordings/take.wav',
-      });
-      audio.transcribeRecording.mockResolvedValue({
-        success: true,
-        text: 'A conserved quantity.',
-      });
+      const startup = pDefer<string>();
+      audio.startRecording.mockReturnValue(
+        Effect.promise(() => startup.promise),
+      );
+      audio.stopRecording.mockReturnValue(
+        Effect.succeed('/papers/first/recordings/take.wav'),
+      );
+      audio.transcribeRecording.mockReturnValue(
+        Effect.succeed('A conserved quantity.'),
+      );
       const requests = new HostDraftRequests();
       const first = { roots: { storage: '/papers/first' } } as SessionHandle;
       const second = { roots: { storage: '/papers/second' } } as SessionHandle;
@@ -111,7 +113,7 @@ it.effect(
         ),
       ).toEqual({ kind: 'done' });
       expect(audio.transcribeRecording).not.toHaveBeenCalled();
-      startup.resolve({ success: true });
+      startup.resolve('/papers/first/recordings/take.wav');
       expect(yield* Fiber.join(started)).toEqual({
         kind: 'text',
         text: 'A conserved quantity.',
@@ -122,10 +124,14 @@ it.effect(
 
       const killed = yield* Deferred.make<void>();
       audio.killActiveRecording.mockImplementation(() =>
-        Deferred.doneUnsafe(killed, Effect.void),
+        Effect.sync(() => {
+          Deferred.doneUnsafe(killed, Effect.void);
+        }),
       );
-      const nextStartup = pDefer<{ success: boolean }>();
-      audio.startRecording.mockReturnValueOnce(nextStartup.promise);
+      const nextStartup = pDefer<string>();
+      audio.startRecording.mockReturnValueOnce(
+        Effect.promise(() => nextStartup.promise),
+      );
       const nextTake = yield* Effect.forkChild(
         requests.handle(
           first,
@@ -143,7 +149,7 @@ it.effect(
         target: 'launch',
       });
       requests.cancel(first, 'origin');
-      nextStartup.resolve({ success: true });
+      nextStartup.resolve('/papers/first/recordings/take.wav');
       const cancelled = yield* Effect.flip(Fiber.join(nextTake));
       expect(cancelled).toMatchObject({ _tag: 'Cancelled' });
       // The cancelled take's kill runs on the detached take fiber.
@@ -162,11 +168,12 @@ it.effect(
       audio.startRecording.mockReset();
       audio.stopRecording.mockReset();
       audio.transcribeRecording.mockReset();
-      audio.startRecording.mockResolvedValue({ success: true });
-      audio.stopRecording.mockResolvedValue({
-        success: true,
-        recordingPath: '/papers/first/recordings/take.wav',
-      });
+      audio.startRecording.mockReturnValue(
+        Effect.succeed('/papers/first/recordings/take.wav'),
+      );
+      audio.stopRecording.mockReturnValue(
+        Effect.succeed('/papers/first/recordings/take.wav'),
+      );
       const requests = new HostDraftRequests();
       const session = { roots: { storage: '/papers/first' } } as SessionHandle;
 

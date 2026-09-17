@@ -1,6 +1,9 @@
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+import { Data, Effect } from 'effect';
+
 // Local imports
 import { THREE_DAYS_MS } from '@utils/config/constants';
 
@@ -55,11 +58,31 @@ export async function savePastedImageBuffer(
   return StorageFS.fullPath(relativePath);
 }
 
-/** base64 convenience wrapper around {@link savePastedImageBuffer} — used by
- *  the extension webview path, which receives base64 from the browser. */
+/** Why a pasted image could not be persisted, worded as the host shows it so
+ *  the caller yields this failure instead of re-minting one of its own. */
+class PastedImageSaveFailed extends Data.TaggedError('PastedImageSaveFailed')<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/**
+ * base64 form of {@link savePastedImageBuffer} — used by the extension
+ * webview path, which receives base64 from the browser. The write still goes
+ * through `StorageFS`'s ambient-rooted statics, so the one promise boundary
+ * is wrapped here rather than at the request handler; moving the write onto
+ * the rooted `StorageFs` view waits on #12421, which owes the three-day
+ * cleanup an equivalent.
+ */
 export function savePastedImageBase64(
   base64: string,
   fileName: string,
-): Promise<string> {
-  return savePastedImageBuffer(Buffer.from(base64, 'base64'), fileName);
+): Effect.Effect<string, PastedImageSaveFailed> {
+  return Effect.tryPromise({
+    try: () => savePastedImageBuffer(Buffer.from(base64, 'base64'), fileName),
+    catch: (cause) =>
+      new PastedImageSaveFailed({
+        message: 'The pasted image could not be saved.',
+        cause,
+      }),
+  });
 }

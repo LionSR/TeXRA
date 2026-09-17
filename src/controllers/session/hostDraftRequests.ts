@@ -1,7 +1,7 @@
 /** Shared draft operations and the process recorder's originating request. */
 import * as path from 'node:path';
 
-import { Data, Deferred, Effect, FileSystem, Option } from 'effect';
+import { Deferred, Effect, FileSystem, Option } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
@@ -81,27 +81,6 @@ function cleanupOldRecordings(
     );
   });
 }
-
-/**
- * A draft operation this controller drives faulted rather than reporting an
- * outcome. Every member below answers with a result object of its own —
- * "the microphone would not start", "transcription failed" — so reaching
- * here means the call itself threw.
- *
- * `savePastedImage` keeps its `Promise` shape deliberately: the write goes
- * through `StorageFS`'s ambient-rooted statics, and the three-day cleanup it
- * performs has no equivalent on the rooted `StorageFs` view yet, so moving it
- * is #12421's consumer work on `pastedImageUtils`, not a call-site change.
- */
-class DraftOperationFailed extends Data.TaggedError('DraftOperationFailed')<{
-  readonly member:
-    | 'savePastedImage'
-    | 'startRecording'
-    | 'stopRecording'
-    | 'transcribeRecording';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
 
 type DraftRequest = Extract<
   HostRequest,
@@ -187,15 +166,10 @@ export class HostDraftRequests {
       case 'savePastedImage':
         return {
           kind: 'savedImage',
-          fileName: yield* Effect.tryPromise({
-            try: () => savePastedImageBase64(request.base64, request.fileName),
-            catch: (cause) =>
-              new DraftOperationFailed({
-                member: 'savePastedImage',
-                message: 'The pasted image could not be saved.',
-                cause,
-              }),
-          }),
+          fileName: yield* savePastedImageBase64(
+            request.base64,
+            request.fileName,
+          ),
         };
       case 'record':
         if (request.action.kind === 'start') {
@@ -268,23 +242,12 @@ export class HostDraftRequests {
       // The recorder writes under the take's own session storage, so its
       // roots travel with the call instead of through a roots scope the
       // detached take fiber would have to stay inside.
-      const started = yield* Effect.tryPromise({
-        try: () => startRecording(take.session.roots),
-        catch: (cause) =>
-          new DraftOperationFailed({
-            member: 'startRecording',
-            message: 'The recorder could not be started.',
-            cause,
-          }),
-      });
-      if (!started.success) {
-        return yield* new Rejected({
-          reason: started.error ?? 'Recording could not start.',
-        });
-      }
+      yield* startRecording(take.session.roots).pipe(
+        Effect.mapError((error) => new Rejected({ reason: error.message })),
+      );
       yield* Deferred.await(take.settled);
       if (take.cancelled) {
-        killActiveRecording();
+        yield* killActiveRecording();
         return yield* new Rejected({
           reason: 'The recording was cancelled.',
         });
@@ -293,21 +256,9 @@ export class HostDraftRequests {
       // SIGTERM and the module's recording state resets here, so a slow,
       // denied or failing credential read below cannot delay the kill or
       // leave the microphone running when the take is rejected.
-      const stopped = yield* Effect.tryPromise({
-        try: () => stopRecording(),
-        catch: (cause) =>
-          new DraftOperationFailed({
-            member: 'stopRecording',
-            message: 'The recorder could not be stopped.',
-            cause,
-          }),
-      });
-      const recordingPath = stopped.recordingPath;
-      if (!stopped.success || recordingPath === undefined) {
-        return yield* new Rejected({
-          reason: stopped.error ?? 'The recording could not be stopped.',
-        });
-      }
+      const recordingPath = yield* stopRecording().pipe(
+        Effect.mapError((error) => new Rejected({ reason: error.message })),
+      );
       // The transcription endpoint is an OpenAI SDK operation the llm
       // package does not model, and the direct OpenAI route is deliberate:
       // `gpt-4o-transcribe` is an OpenAI-only endpoint model with no
@@ -323,24 +274,13 @@ export class HostDraftRequests {
       ).pipe(
         Effect.mapError((error) => new Rejected({ reason: error.message })),
       );
-      const result = yield* Effect.tryPromise({
-        try: () => transcribeRecording(recordingPath, credential),
-        catch: (cause) =>
-          new DraftOperationFailed({
-            member: 'transcribeRecording',
-            message: 'The recording could not be transcribed.',
-            cause,
-          }),
-      });
-      if (!result.success) {
-        return yield* new Rejected({
-          reason: result.error ?? 'Transcription failed.',
-        });
-      }
+      const text = yield* transcribeRecording(recordingPath, credential).pipe(
+        Effect.mapError((error) => new Rejected({ reason: error.message })),
+      );
       // The sweep is rooted by the take's storage root, as data, rather than
       // by an ambient read of the calling fiber's roots.
       yield* cleanupOldRecordings(take.session.roots);
-      return { kind: 'text', text: result.text };
+      return { kind: 'text', text };
     });
     // A cancelled take already has its answer; `into` leaves it in place.
     yield* takeProgram.pipe(
