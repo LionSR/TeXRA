@@ -14,7 +14,10 @@ import {
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { type TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { SignInFailed } from '@common/errors/signInFailed';
-import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
+import {
+  createSettingsAgentActions,
+  FAILURE_MESSAGES,
+} from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentCategoryLabel,
   templateAgentNamePrompt,
@@ -24,6 +27,7 @@ import { createSettingsAgentControllers } from '@controllers/settingsView/Settin
 import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
+import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -41,15 +45,15 @@ import {
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { createTexraTempDir } from '@utils/files/tempDir';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * One of the desktop-local calls this controller drives rejected. The members
- * are the agent-directory reads and writes, the temp-file copy the desktop
- * shows a packaged definition through, the hosted-prompt fetch, and the
- * catalog refresh that follows a mutation. Each is reported to the user by
- * the surrounding `catchCause`, which is why one tag with a member name is
- * the whole vocabulary any caller here reads.
+ * are the template write, the temp-file copy the desktop shows a packaged
+ * definition through, the hosted-prompt fetch, and the catalog refresh that
+ * follows a mutation. Each is reported to the user by the surrounding
+ * `catchCause`, which is why one tag with a member name is the whole
+ * vocabulary any caller here reads.
  *
  * `message` always ends with the rejection's own text, and never repeats what
  * the reporting `catchCause` already prefixes: the surrounding notification
@@ -60,7 +64,6 @@ class AgentSettingsActionFailed extends Data.TaggedError(
   'AgentSettingsActionFailed',
 )<{
   readonly member:
-    | 'getCustomAgentDirectory'
     | 'writeTemplateAgentFile'
     | 'createTempDir'
     | 'getRemoteAgentPrompt'
@@ -101,10 +104,16 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
     readonly getVisibleAgents: (category: AgentCategory) => AgentEntry[];
   };
   readonly directory: {
-    readonly getCustomAgentDirectory: () => Promise<string>;
+    /** The host's agent directories as `AgentDirectoriesPort` declares them:
+     *  Effects, so a directory that cannot be resolved reaches the report
+     *  that asked for it instead of an untyped rejection. */
+    readonly getCustomAgentDirectory: () => Effect.Effect<
+      string,
+      AgentDirectoriesFailed
+    >;
     readonly getSourceDirectory: (
       source: AgentSource,
-    ) => Promise<string | undefined>;
+    ) => Effect.Effect<string | undefined, AgentDirectoriesFailed>;
     readonly selectCustomAgentDirectory: () => Promise<string | undefined>;
     readonly openPath: (filePath: string) => Promise<void>;
     readonly revealPath: (filePath: string) => Promise<void>;
@@ -205,8 +214,10 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     const controllers = createSettingsAgentControllers({
       workspaceState,
       globalState,
-      getCustomAgentDirectory: directory.getCustomAgentDirectory,
-      getSourceDirectory: directory.getSourceDirectory,
+      getCustomAgentDirectory: () =>
+        this.runtime.runPromise(directory.getCustomAgentDirectory()),
+      getSourceDirectory: (source) =>
+        this.runtime.runPromise(directory.getSourceDirectory(source)),
       getAgents: registry.getAgents,
       getVisibleAgents: registry.getVisibleAgents,
     });
@@ -218,45 +229,83 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       findAgent: (source, name) => getAgent(agentKey(source, name)),
       getCustomAgentDirectory: directory.getCustomAgentDirectory,
       getSourceDirectory: directory.getSourceDirectory,
-      openDocument: directory.openPath,
+      openDocument: (filePath) =>
+        Effect.tryPromise({
+          try: () => directory.openPath(filePath),
+          catch: ensureError,
+        }),
       // The desktop has no editor of its own and hands the path to the OS,
       // so a packaged definition is shown through a temporary copy that the
       // external editor may save without touching the installed bundle.
       // Both paths are outside every root, so the copy goes through the
       // process filesystem.
-      openReadOnlyDocument: async (filePath) => {
-        const target = path.join(
-          await createTexraTempDir('texra-agent-yaml-'),
-          path.basename(filePath),
-        );
-        await this.runtime.runPromise(
-          FileSystem.FileSystem.use((fs) => fs.copyFile(filePath, target)),
-        );
-        await directory.openPath(target);
-      },
-      revealFile: directory.revealPath,
+      openReadOnlyDocument: (filePath) =>
+        Effect.gen(function* () {
+          const target = path.join(
+            yield* Effect.tryPromise({
+              try: () => createTexraTempDir('texra-agent-yaml-'),
+              catch: ensureError,
+            }),
+            path.basename(filePath),
+          );
+          yield* FileSystem.FileSystem.use((fs) =>
+            fs.copyFile(filePath, target),
+          );
+          yield* Effect.tryPromise({
+            try: () => directory.openPath(target),
+            catch: ensureError,
+          });
+        }),
+      revealFile: (filePath) =>
+        Effect.tryPromise({
+          try: () => directory.revealPath(filePath),
+          catch: ensureError,
+        }),
       confirmAction: (message, confirmLabel) =>
-        prompts.confirm({
-          title:
-            confirmLabel === 'Delete'
-              ? 'Delete custom agent?'
-              : 'Overwrite custom copy?',
-          message,
+        Effect.tryPromise({
+          try: () =>
+            prompts.confirm({
+              title:
+                confirmLabel === 'Delete'
+                  ? 'Delete custom agent?'
+                  : 'Overwrite custom copy?',
+              message,
+            }),
+          catch: ensureError,
         }),
       showInfoMessage: notifications.showInfoMessage,
       showErrorMessage: notifications.showErrorMessage,
-      refreshAfterMutation: () => this.refreshAfterAgentMutation(),
-      run: (failureMessage, action) => this.runReported(failureMessage, action),
+      refreshAfterMutation: () =>
+        Effect.tryPromise({
+          try: () => this.refreshAfterAgentMutation(),
+          catch: ensureError,
+        }),
     });
     this.handlers = {
       setAgentEnabled: (message) => this.updateAgentEnabled(message),
       setAllAgentsEnabled: (message) => this.updateAllAgentsEnabled(message),
-      openAgentYaml: this.agentActions.openAgentYaml,
+      openAgentYaml: (message) =>
+        this.runReported(
+          FAILURE_MESSAGES.openAgentYaml,
+          this.agentActions.openAgentYaml(message),
+        ),
       openAgentFolder: () => this.openAgentFolder(),
       createAgent: (message) => this.createAgent(message),
-      customizeAgent: this.agentActions.customizeAgent,
-      deleteCustomAgent: this.agentActions.deleteCustomAgent,
-      revealAgentFile: this.agentActions.revealAgentFile,
+      customizeAgent: (message) =>
+        this.runReported(
+          FAILURE_MESSAGES.customizeAgent,
+          this.agentActions.customizeAgent(message),
+        ),
+      deleteCustomAgent: (message) =>
+        this.runReported(
+          FAILURE_MESSAGES.deleteCustomAgent,
+          this.agentActions.deleteCustomAgent(message),
+        ),
+      revealAgentFile: (message) =>
+        this.runReported(
+          FAILURE_MESSAGES.revealAgentFile,
+          this.agentActions.revealAgentFile(message),
+        ),
       viewRemoteAgentPrompt: (message) => this.viewRemoteAgentPrompt(message),
       setCustomAgentDir: () => this.setCustomAgentDir(),
       resetCustomAgentDir: () => this.resetCustomAgentDir(),
@@ -436,15 +485,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await this.runReported(
       'Failed to create custom agent',
       Effect.gen({ self: this }, function* () {
-        const customDir = yield* Effect.tryPromise({
-          try: () => this.directory.getCustomAgentDirectory(),
-          catch: (cause) =>
-            new AgentSettingsActionFailed({
-              member: 'getCustomAgentDirectory',
-              message: `The custom agent directory could not be resolved: ${toErrorMessage(cause)}`,
-              cause,
-            }),
-        });
+        const customDir = yield* this.directory.getCustomAgentDirectory();
         const fs = yield* FileSystem.FileSystem;
         yield* fs.makeDirectory(customDir, { recursive: true });
 

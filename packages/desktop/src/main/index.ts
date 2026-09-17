@@ -562,9 +562,10 @@ function createWindow(options: {
   // Session requests present errors at their dispatcher. Menu, navigation,
   // and runtime preview callers retain the reporting host above.
   const requestPreviewHost = createDesktopPreviewHost(previewOptions);
+  /** The custom agents directory for the two shell surfaces that await it;
+   *  the settings controller takes the port's Effect unchanged. */
   const getCustomAgentDirectory = () =>
     options.runtime.runPromise(options.agentDirectories.custom());
-
   // Button labels for the instruction dialog below. Desktop has one settings
   // home (Settings tab), so SET_API_KEY opens it directly rather than the
   // extension's separate "enter a key" quick pick.
@@ -1202,24 +1203,18 @@ function createWindow(options: {
         getVisibleAgents,
       },
       directory: {
-        getCustomAgentDirectory,
+        getCustomAgentDirectory: () => options.agentDirectories.custom(),
         getSourceDirectory: (source: AgentSource) => {
           switch (source) {
             case 'custom':
-              return options.runtime.runPromise(
-                options.agentDirectories.custom(),
-              );
+              return options.agentDirectories.custom();
             case 'builtInWorkflow':
-              return options.runtime.runPromise(
-                options.agentDirectories.builtIn(),
-              );
+              return options.agentDirectories.builtIn();
             case 'builtInToolUse':
-              return options.runtime.runPromise(
-                options.agentDirectories.builtInToolUse(),
-              );
+              return options.agentDirectories.builtInToolUse();
             // No local directory: remote agents live in Supabase.
             case 'remote':
-              return Promise.resolve(undefined);
+              return Effect.succeed(undefined);
           }
         },
         selectCustomAgentDirectory: async () => {

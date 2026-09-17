@@ -40,7 +40,6 @@ interface ControllerFixtureOptions {
   >;
   readonly canAccessRemoteCatalog?: Effect.Effect<boolean>;
   readonly signInForRemoteCatalog?: () => Effect.Effect<boolean>;
-  readonly getCustomAgentDirectory?: () => Promise<string>;
   readonly selectCustomAgentDirectory?: () => Promise<string | undefined>;
 }
 
@@ -95,9 +94,8 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       getVisibleAgents: (category) => visibleCatalog[category],
     },
     directory: {
-      getCustomAgentDirectory:
-        options.getCustomAgentDirectory ?? (async () => '/agents/custom'),
-      getSourceDirectory: async (source) => `/agents/${source}`,
+      getCustomAgentDirectory: () => Effect.succeed('/agents/custom'),
+      getSourceDirectory: (source) => Effect.succeed(`/agents/${source}`),
       selectCustomAgentDirectory:
         options.selectCustomAgentDirectory ?? (async () => undefined),
       openPath: async (filePath) => {
