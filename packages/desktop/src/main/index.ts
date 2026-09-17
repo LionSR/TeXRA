@@ -1882,7 +1882,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       registerRuntimeShutdownHandlers(lifecycle, {
         runSettlement: (settlement) => runtime.runPromise(settlement),
         beforeAgentShutdown: [() => processResumeOwner.disable()],
-        afterAgentShutdown: [() => killActiveRecording()],
+        afterAgentShutdown: [() => runtime.runPromise(killActiveRecording())],
         // Agent shutdown runs first so its final events enter the
         // process-owned stores. Flush in BEFORE so persistence cannot be
         // delayed by a later ON-phase language-service disposal.

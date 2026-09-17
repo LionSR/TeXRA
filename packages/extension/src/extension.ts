@@ -697,7 +697,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   registerRuntimeShutdownHandlers(lifecycle, {
     runSettlement: (settlement) => runtime.runPromise(settlement),
     afterAgentShutdown: [
-      () => killActiveRecording(),
+      () => runtime.runPromise(killActiveRecording()),
       () => runtime.runPromise(UsageLogService.dispose()),
     ],
     flushArtifacts: () =>
