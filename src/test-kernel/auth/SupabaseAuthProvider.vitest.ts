@@ -357,9 +357,7 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
         Effect.succeed('authenticated'),
       );
 
-      expect(yield* Effect.promise(() => provider.clearStoredSession())).toBe(
-        false,
-      );
+      expect(yield* provider.clearStoredSession()).toBe(false);
 
       expect(clearSessionIfCurrent).not.toHaveBeenCalled();
     }),
@@ -416,9 +414,7 @@ describe('SupabaseAuthProvider model availability', () => {
         const signIn = provider.createSession([]).catch(() => null);
         yield* Effect.promise(() => browserLaunch);
 
-        expect(
-          yield* Effect.promise(() => provider.removeStoredSession()),
-        ).toBe(false);
+        expect(yield* provider.removeStoredSession()).toBe(false);
         yield* Effect.promise(() => signIn);
 
         const nonce = redirectTo.split('/').at(-1);

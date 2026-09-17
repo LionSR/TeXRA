@@ -4,9 +4,9 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
-  clearStoredSession: vi.fn(async () => true),
+  clearStoredSession: vi.fn(() => Effect.succeed(true)),
   getSession: vi.fn(),
-  removeStoredSession: vi.fn(async () => true),
+  removeStoredSession: vi.fn(() => Effect.succeed(true)),
   showInformationMessage: vi.fn(),
   showLoggedMessage: vi.fn(),
   showQuickPick: vi.fn(),
@@ -135,7 +135,7 @@ describe('auth commands for unavailable stored sessions', () => {
         ),
         user: Effect.succeed({ email: 'user@example.com' } as never),
       });
-      authMocks.clearStoredSession.mockResolvedValueOnce(false);
+      authMocks.clearStoredSession.mockReturnValueOnce(Effect.succeed(false));
       authMocks.getSession.mockResolvedValue({
         id: 'replacement',
         account: { id: 'user-id', label: 'user@example.com' },

@@ -1,6 +1,7 @@
-import { Data, Effect } from 'effect';
+import { type Cause, Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
+import { settleFailure } from '@auth/authProgram';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { type OAuthProvider } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
@@ -48,6 +49,16 @@ class AuthCommandFailed extends Data.TaggedError('AuthCommandFailed')<{
 
 const authCommandFailed = (cause: unknown): AuthCommandFailed =>
   new AuthCommandFailed({ message: toErrorMessage(cause), cause });
+
+/**
+ * One auth-provider program's failure as this command's own fault, folded
+ * through the auth subsystem's settle rule so the reported error is the port's
+ * own — the error its Promise edge used to reject with.
+ */
+const authCommandFault = (
+  cause: Cause.Cause<unknown>,
+): Effect.Effect<never, AuthCommandFailed> =>
+  Effect.fail(authCommandFailed(settleFailure(cause)));
 
 /** An information toast, on the fault path the commands already report. */
 const showInfo = (message: string): Effect.Effect<void, AuthCommandFailed> =>
@@ -102,12 +113,10 @@ export const signIn: Effect.Effect<boolean, never, SupabaseAuth> = Effect.gen(
 
     let storedSessionState = yield* auth.storedSessionState;
     if (storedSessionState === 'invalid') {
-      const cleared = yield* Effect.tryPromise({
-        try: async () =>
-          (await SupabaseAuthProvider.getInstance()?.clearStoredSession()) ??
-          false,
-        catch: authCommandFailed,
-      });
+      const cleared = yield* (
+        SupabaseAuthProvider.getInstance()?.clearStoredSession() ??
+        Effect.succeed(false)
+      ).pipe(Effect.catchCause(authCommandFault));
       storedSessionState = cleared ? 'none' : yield* auth.storedSessionState;
     }
     if (storedSessionState === 'transient') {
@@ -200,10 +209,9 @@ export const signOut: Effect.Effect<void, never, SupabaseAuth> = Effect.gen(
       );
       return;
     }
-    const removed = yield* Effect.tryPromise({
-      try: () => authProvider.removeStoredSession(),
-      catch: authCommandFailed,
-    });
+    const removed = yield* authProvider
+      .removeStoredSession()
+      .pipe(Effect.catchCause(authCommandFault));
     yield* showInfo(removed ? 'Signed out' : 'You were already signed out');
   },
 ).pipe(
