@@ -16,25 +16,12 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
 
-interface OpenAIResponseProviderCapabilities {
-  readonly backgroundMode: 'base' | 'disabled';
-  readonly streaming: 'base' | 'forced';
-  readonly webSocket: 'base' | 'global-toggle';
-  readonly supportsTokenCounting: boolean;
-  readonly supportsManualCompaction: boolean;
-  readonly supportsResponseChaining: boolean;
-  readonly storesResponsesServerSide: boolean;
-  readonly supportsInlineInputFileUpload: boolean;
-  readonly supportsToolResultFileUpload: boolean;
-}
-
 export interface ProviderCapabilityProfile {
   readonly contextWindow: number;
   readonly inputTokenLimit?: number;
   readonly inputPrice: number;
   readonly outputPrice: number;
   readonly usageRoute?: UsageRoute;
-  readonly openAIResponses?: OpenAIResponseProviderCapabilities;
 }
 
 interface ProviderCapabilityKey {
@@ -107,21 +94,6 @@ function resolveCodexSubscriptionProfile({
     ...zeroCostAccessOverrides(contextWindow),
     inputTokenLimit,
     usageRoute: 'chatgpt-subscription',
-    openAIResponses: {
-      backgroundMode: 'disabled',
-      streaming: 'forced',
-      webSocket: 'global-toggle',
-      supportsTokenCounting: false,
-      // This profile uses the client-side summarize-and-resend fallback
-      // (#7213). The public API's /responses/compact endpoint is stateless;
-      // store:false alone does not establish whether the separate ChatGPT
-      // subscription backend supports that endpoint.
-      supportsManualCompaction: true,
-      supportsResponseChaining: false,
-      storesResponsesServerSide: false,
-      supportsInlineInputFileUpload: false,
-      supportsToolResultFileUpload: false,
-    },
   };
 }
 

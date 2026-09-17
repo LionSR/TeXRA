@@ -4,7 +4,6 @@ import { Cause, Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import type { TurnRequest, VscodeLanguageModelConfiguration } from '@llm/turn';
-import { LANGUAGE_MODEL_PORT_ERROR_CODE } from '@platform/languageModel';
 
 class LanguageModelTextPart {
   constructor(public readonly value: string) {}
@@ -176,43 +175,13 @@ describe('createLanguageModelPort', () => {
     const nativeError = new Error('discovery failed');
     mocks.selectChatModels.mockRejectedValue(nativeError);
 
-    await expect(
-      createPort().selectModels({ vendor: 'copilot' }),
-    ).rejects.toMatchObject({
-      name: 'LanguageModelPortError',
-      code: LANGUAGE_MODEL_PORT_ERROR_CODE.UNKNOWN,
-      cause: nativeError,
-    });
+    await expect(createPort().selectModels({ vendor: 'copilot' })).rejects.toBe(
+      nativeError,
+    );
     expect(mocks.warn).toHaveBeenCalledWith(
       'LanguageModelPort',
-      'Could not discover editor-supplied language models.',
-      {
-        data: expect.objectContaining({
-          name: 'LanguageModelPortError',
-          code: LANGUAGE_MODEL_PORT_ERROR_CODE.UNKNOWN,
-        }),
-      },
+      'Could not discover editor-supplied language models: discovery failed',
     );
-  });
-
-  it.each([
-    ['NoPermissions', LANGUAGE_MODEL_PORT_ERROR_CODE.NO_PERMISSIONS],
-    ['Blocked', LANGUAGE_MODEL_PORT_ERROR_CODE.QUOTA_EXCEEDED],
-    ['NotFound', LANGUAGE_MODEL_PORT_ERROR_CODE.MODEL_UNAVAILABLE],
-    ['Unknown', LANGUAGE_MODEL_PORT_ERROR_CODE.UNKNOWN],
-  ])('translates VS Code %s errors', async (nativeCode, expectedCode) => {
-    const nativeError = Object.assign(new Error('native failure'), {
-      code: nativeCode,
-    });
-    mocks.selectChatModels.mockRejectedValue(nativeError);
-
-    await expect(
-      createPort().selectModels({ vendor: 'copilot' }),
-    ).rejects.toMatchObject({
-      name: 'LanguageModelPortError',
-      code: expectedCode,
-      cause: nativeError,
-    });
   });
 });
 
