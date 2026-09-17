@@ -677,10 +677,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       text = `${text}\n${OUTPUT_END_TAG}`;
     }
     logger.debug(`Stop reason: ${finish}`);
-    const scratchpad = yield* Effect.tryPromise({
-      try: () => extractScratchpad(text, SCRATCHPAD_TAG),
-      catch: ensureError,
-    });
+    const scratchpad = yield* extractScratchpad(text, SCRATCHPAD_TAG);
     if (scratchpad) {
       logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
     }

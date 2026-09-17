@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { addCdataToTagsMultiple, removeCDATA } from '@utils/text/xmlCdata';
 import { formatContent } from '@utils/text/xmlConversion';
-import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 // Pin the deterministic Turndown/regex fallback path: Pandoc availability is
 // environment-dependent, so the conversion tests below would otherwise assert
