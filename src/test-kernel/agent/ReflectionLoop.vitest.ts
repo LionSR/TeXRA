@@ -31,7 +31,6 @@ import {
 import { runReflection } from '@agent/runtime/loop/reflection';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runInSession } from '@agent/runtime/RunContext';
-import type { RunScope } from '@agent/runtime/RunScope';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { turnText } from '@agent/runtime/run/turnText';
@@ -424,10 +423,6 @@ function agentRunTestLayer(init: LoopInit) {
       const model = yield* SynchronizedRef.make(testBoundModel());
       const logger = init.logger ?? new TraceEmitter();
       const scope = yield* Effect.scope;
-      const runScope: RunScope = {
-        runId: init.runId,
-        session: init.session,
-      };
       return {
         runId: init.runId,
         parentRunId: null,
@@ -458,7 +453,7 @@ function agentRunTestLayer(init: LoopInit) {
         declinedRoutes: [],
         pendingModelSwitch: { value: null },
         inScope: <A>(operation: () => A): A =>
-          runInSession(runScope.session, operation),
+          runInSession(init.session, operation),
         usageMonitor: new UsageMonitor(
           {
             logger,

@@ -46,7 +46,7 @@ const settle = Effect.promise(
 function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
   return runFlowWithLifecycle(...args).pipe(
     Effect.provide(fakeProcessServices()),
-    Effect.provideService(Runs, args[0].runScope.session.runs),
+    Effect.provideService(Runs, args[0].session.runs),
   );
 }
 
@@ -65,7 +65,7 @@ function setupResultCase(session?: SessionHandle): {
   const n = counter++;
   const runId = `e${n.toString(16).padStart(5, '0')}` as RunId;
   const ctx = createTestLaunchContext({ runId, logger, session });
-  const runSession = ctx.runScope.session;
+  const runSession = ctx.session;
   // A caller that owns the session publishes the existence fact itself, with
   // the parent edge it is exercising.
   if (!session) publishTestRunStart(runSession, runId);
@@ -80,7 +80,7 @@ function setupResultCase(session?: SessionHandle): {
 function completedRun(ctx: AgentLaunchContext): AgentFlowResult {
   return {
     outcome: RUN_OUTCOME.COMPLETED,
-    runId: ctx.runScope.runId,
+    runId: ctx.runId,
     output: { category: 'toolUse', response: '', files: [] },
   };
 }
@@ -99,7 +99,7 @@ function expectSingleResult(
   expect(results).toHaveLength(1);
   expect(results[0]).toMatchObject({
     type: 'run.end',
-    runId: ctx.runScope.runId,
+    runId: ctx.runId,
     ...expected,
   });
 }
@@ -190,7 +190,7 @@ describe('terminal result event', () => {
         yield* runFlow(ctx, () =>
           Effect.succeed({
             outcome: RUN_OUTCOME.CANCELLED,
-            runId: ctx.runScope.runId,
+            runId: ctx.runId,
             output: { category: 'toolUse', response: '', files: [] },
           }),
         );
@@ -235,10 +235,10 @@ describe('terminal result event', () => {
       const onResult = vi.fn();
       const { logger, ctx } = setupResultCase(session);
       const parentRunId = publishTestRunStart(session);
-      publishTestRunStart(session, ctx.runScope.runId, {
+      publishTestRunStart(session, ctx.runId, {
         parent: parentRunId,
       });
-      const detach = session.attachRunTrace(logger, ctx.runScope.runId);
+      const detach = session.attachRunTrace(logger, ctx.runId);
       session.onResult(onResult);
       try {
         yield* runFlow(ctx, () => Effect.succeed(completedRun(ctx)), {
@@ -248,7 +248,7 @@ describe('terminal result event', () => {
         expect(onResult).toHaveBeenCalledOnce();
         expect(onResult.mock.calls[0][0]).toMatchObject({
           type: 'run.end',
-          runId: ctx.runScope.runId,
+          runId: ctx.runId,
           outcome: 'completed',
         });
       } finally {

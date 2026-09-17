@@ -50,7 +50,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runInSession } from './RunContext';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
-import type { RunScope } from './RunScope';
+import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
@@ -61,23 +61,32 @@ import type {
 const logger = createLog('AgentLaunchContext');
 
 /**
- * Immutable per-run tool policy, read from the run's `AgentRun` service.
- *
- * A frozen value the loop takes from context runs without an
- * `AsyncLocalStorage` frame — the property an SDK embedder wants.
+ * The run's own facts, declared once on {@link AgentRunShape}: the launch
+ * resolves them and the run's `AgentRun` service carries them for the rest of
+ * the run's life, so neither side can drift from the other. The run narrows
+ * `setting` to its resolved tool list; every other fact reaches the service
+ * exactly as the launch resolved it.
  */
-export interface ToolPolicy {
-  /** Hide tools whose approval prompts cannot be answered in this host mode. */
-  readonly approvalPromptsUnavailable?: boolean;
-  /** Hide tools unavailable because the current host/runtime cannot support them. */
-  readonly runtimeUnavailableTools?: readonly string[];
-  /** Stop a tool-use run after one model/tool cycle instead of waiting. */
-  readonly stopAfterCycle?: boolean;
-}
+type LaunchResolvedRunFacts = Pick<
+  AgentRunShape,
+  | 'runId'
+  | 'session'
+  | 'workingDirectory'
+  | 'delegationAgentScope'
+  | 'config'
+  | 'setting'
+  | 'prompt'
+  | 'logger'
+  | 'parentStage'
+  | 'toolPolicy'
+  | 'stores'
+  | 'userVarChannels'
+  | 'initialUserMessageForTranscript'
+  | 'usageMonitor'
+  | 'interrupt'
+>;
 
-export interface AgentLaunchContext {
-  /** Run identity and owning session. */
-  readonly runScope: RunScope;
+export interface AgentLaunchContext extends LaunchResolvedRunFacts {
   /**
    * The registry config of the launch model. The run's `AgentRun` service
    * binds it (or the model a resumed run's snapshot names) under the route
@@ -96,38 +105,16 @@ export interface AgentLaunchContext {
    * user's stored preferences are not touched; the choice is the run's.
    */
   readonly ownApiKeyFallback: boolean;
-  /** Immutable per-run tool policy. */
-  readonly toolPolicy: ToolPolicy;
-  /**
-   * The process secret store and global state the launch read from its
-   * `Secrets` / `AppState` services, so every Promise-tier read below the
-   * launch (routing, credentials, tool availability) uses the same stores.
-   */
-  readonly stores: ModelOptionStores;
-  config: AgentConfig;
-  setting: AgentSetting;
-  prompt: AgentPrompt;
-  logger: AgentTrace;
-  userVarChannels: UserVariableChannels;
-  /** Initial user row to log after the loop has inserted launch media. */
-  initialUserMessageForTranscript?: string;
   /** Description from the exact registry entry selected for this launch. */
-  resolvedAgentDescription?: string;
-  usageMonitor: UsageMonitor;
-  parentStage: StageHandle;
-  attachedMemoryMisses: AttachedMemoryMiss[];
+  readonly resolvedAgentDescription?: string;
+  readonly attachedMemoryMisses: AttachedMemoryMiss[];
   /**
-   * The run's one stop. Every stop entry — a host kill through the run
-   * handle, the live tool-use flow context, the launch handle's interrupt
-   * before the run has a handle of its own — completes
-   * {@link AgentLaunchContext.stopped}, and the run's program is interrupted
-   * from it. Nothing else stops a run.
-   */
-  interrupt: () => void;
-  /**
-   * Completed by {@link AgentLaunchContext.interrupt}. The runner races it
-   * once, at the boundary that owns the run's program, so a stop reaches the
-   * loop as a fiber interruption whose finalizers record the halt.
+   * The run's one stop, completed by {@link AgentRunShape.interrupt} — a host
+   * kill through the run handle, the live tool-use flow context, or the launch
+   * handle's interrupt before the run has a handle of its own. The runner
+   * races it once, at the boundary that owns the run's program, so a stop
+   * reaches the loop as a fiber interruption whose finalizers record the halt.
+   * Nothing else stops a run.
    */
   readonly stopped: Deferred.Deferred<void>;
   /**
@@ -202,7 +189,7 @@ export const failIfLaunchStopped = (
  * the `inScope` the run layer hands to everything below the launch.
  */
 export function runInLaunchSession<T>(ctx: AgentLaunchContext, fn: () => T): T {
-  return runInSession(ctx.runScope.session, fn);
+  return runInSession(ctx.session, fn);
 }
 
 /**
@@ -531,15 +518,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const stopRun = () => {
       Deferred.doneUnsafe(stopped, Effect.void);
     };
-    // Frozen here, at the run's one real construction site: a run's identity
-    // and owning session must not change under the loop that reads them, and
-    // `readonly` alone stops only the callers that kept their types.
-    const runScope: RunScope = Object.freeze({
-      runId,
-      workingDirectory,
-      delegationAgentScope: config.delegationAgentScope,
-      session,
-    });
     const buildVars = (stageId?: string) =>
       buildUserVars(
         config,
@@ -557,7 +535,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           // names, readable-file reads and CWD resolve against this project's
           // folder rather than whatever roots the calling fiber carries.
           workspacePath: session.roots.workspace,
-          delegationAgentScope: runScope.delegationAgentScope,
+          delegationAgentScope: config.delegationAgentScope,
           stageId,
         },
       );
@@ -600,7 +578,11 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         agentCategory: setting.agentCategory,
       },
     );
-    return {
+    const context: AgentLaunchContext = {
+      runId,
+      session,
+      workingDirectory,
+      delegationAgentScope: config.delegationAgentScope,
       config,
       resolvedAgentDescription: agentEntry.description,
       setting,
@@ -623,7 +605,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       userVarChannels,
       attachedMemoryMisses,
       usageMonitor,
-      runScope,
       interrupt: stopRun,
       stopped,
       initialUserMessageForTranscript: initialMediaMayBeInserted
@@ -631,6 +612,11 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         : undefined,
       disposeTrace: () => runTrace.dispose(),
     };
+    // Frozen at the run's one real construction site: a run's identity, its
+    // owning session, and the rest of what the launch resolved must not change
+    // under the loop that reads them, and `readonly` alone stops only the
+    // callers that kept their types.
+    return Object.freeze(context);
   },
 );
 

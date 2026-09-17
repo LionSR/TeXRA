@@ -38,7 +38,7 @@ interface XmlManagerOptions {
 
 /**
  * Minimal OutputDependencies for the output-extraction tests: the code under
- * test reads only `baseFiles`, `logger`, and `runScope.runId`.
+ * test reads only `baseFiles` and `logger`.
  */
 function processorDeps(overrides: {
   logger: AgentTrace;
@@ -47,7 +47,6 @@ function processorDeps(overrides: {
   return {
     baseFiles: overrides.baseFiles ?? [],
     logger: overrides.logger,
-    runScope: { runId: 'stream' },
   } as unknown as OutputDependencies;
 }
 

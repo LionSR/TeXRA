@@ -28,6 +28,7 @@ import type { LanguageModel } from '@platform/languageModel';
 import {
   AgentCategory,
   DeclinableUsageRouteSchema,
+  type AgentDelegationScope,
   type DeclinableUsageRoute,
   type JsonValue,
   type RunId,
@@ -45,8 +46,7 @@ import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
 import type { HttpClient } from 'effect/unstable/http';
-import type { AgentLaunchContext, ToolPolicy } from '../AgentLaunchContext';
-import type { RunScope } from '../RunScope';
+import type { AgentLaunchContext } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
 
 /**
@@ -58,6 +58,22 @@ function launchDeclinedRoutes(
   ctx: AgentLaunchContext,
 ): readonly DeclinableUsageRoute[] {
   return ctx.ownApiKeyFallback ? DeclinableUsageRouteSchema.options : [];
+}
+
+/**
+ * Immutable per-run tool policy, resolved by the launch and read from the
+ * run's `AgentRun` service.
+ *
+ * A frozen value the loop takes from context runs without an
+ * `AsyncLocalStorage` frame — the property an SDK embedder wants.
+ */
+export interface ToolPolicy {
+  /** Hide tools whose approval prompts cannot be answered in this host mode. */
+  readonly approvalPromptsUnavailable?: boolean;
+  /** Hide tools unavailable because the current host/runtime cannot support them. */
+  readonly runtimeUnavailableTools?: readonly string[];
+  /** Stop a tool-use run after one model/tool cycle instead of waiting. */
+  readonly stopAfterCycle?: boolean;
 }
 
 interface RunCallbacks {
@@ -83,7 +99,7 @@ export interface AgentRunShape {
   readonly parentStage: StageHandle;
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
-  readonly delegationAgentScope?: RunScope['delegationAgentScope'];
+  readonly delegationAgentScope?: AgentDelegationScope | null;
   readonly onApprovalPolicyDenial?: () => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
@@ -147,7 +163,6 @@ export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
 ) {}
 
 interface AgentRunLayerInput {
-  readonly setting: AgentSetting;
   readonly parentRunId: RunId | null;
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
@@ -175,7 +190,7 @@ export const agentRunLayer = (
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
-      const { runId, session } = ctx.runScope;
+      const { runId, session } = ctx;
       const { logger, config } = ctx;
       const ledger = yield* RunLedger;
       const layerScope = yield* Effect.scope;
@@ -185,8 +200,9 @@ export const agentRunLayer = (
       const scope = yield* Scope.fork(layerScope, 'parallel');
 
       const baseRegistry = getDefaultToolRegistry();
+      const { setting } = ctx;
       const resolvedTools = yield* resolveAgentTools({
-        tools: input.setting.tools,
+        tools: setting.tools,
         registry: baseRegistry,
         logger,
         approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
@@ -194,7 +210,7 @@ export const agentRunLayer = (
         toolInjections: input.toolInjections,
         config: session.roots.config,
         stores: ctx.stores,
-        delegationScope: ctx.runScope.delegationAgentScope ?? undefined,
+        delegationScope: ctx.delegationAgentScope ?? undefined,
         inScope: input.inScope,
       });
       const overlayTools: ITool[] = [];
@@ -279,7 +295,7 @@ export const agentRunLayer = (
         ownApiKeyFallback: ctx.ownApiKeyFallback,
         declinedRoutes,
         agentCategory: config.agentCategory,
-        temperature: input.setting.temperature,
+        temperature: setting.temperature,
         inScope: input.inScope,
       }).pipe(Scope.provide(scope));
       const model = yield* SynchronizedRef.make(bound);
@@ -290,13 +306,13 @@ export const agentRunLayer = (
         parentRunId: input.parentRunId,
         session,
         config,
-        setting: { ...input.setting, tools: resolvedTools },
+        setting: { ...setting, tools: resolvedTools },
         prompt: ctx.prompt,
         logger,
         parentStage: ctx.parentStage,
         toolPolicy: ctx.toolPolicy,
-        workingDirectory: ctx.runScope.workingDirectory,
-        delegationAgentScope: ctx.runScope.delegationAgentScope,
+        workingDirectory: ctx.workingDirectory,
+        delegationAgentScope: ctx.delegationAgentScope,
         onApprovalPolicyDenial: input.onApprovalPolicyDenial,
         stores: ctx.stores,
         userVarChannels: ctx.userVarChannels,
