@@ -16,6 +16,7 @@ import {
   AgentCategory,
   type AggregateTarget,
   type Goal,
+  type GoalListItem,
   type GoalState,
   type RunId,
 } from '@shared/schemas';
@@ -87,12 +88,16 @@ export function goalOf(session: GoalReader, runId: RunId): Goal | null {
   return goalOfRunView(runId, session.runView(runId));
 }
 
-/** Every in-flight goal in the session, for the cross-run goal list. */
-export function goalList(session: GoalReader): Goal[] {
-  const goals: Goal[] = [];
+/**
+ * Every in-flight goal in the session, for the cross-run goal list. Each row
+ * carries the run's fold-owned display label beside the goal, so the list
+ * renders a name rather than a hex id.
+ */
+export function goalList(session: GoalReader): GoalListItem[] {
+  const goals: GoalListItem[] = [];
   for (const [runId, run] of SubscriptionRef.getUnsafe(session.view).runs) {
     const goal = goalOfRunView(runId, run);
-    if (goal) goals.push(goal);
+    if (goal) goals.push({ ...goal, runLabel: run.label });
   }
   return goals;
 }

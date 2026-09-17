@@ -71,8 +71,7 @@ spread an object, and re-export shims — and recommend inlining them at the cal
 site or importing the source directly. Restrict this to indirection the pull
 request adds; do not flag pre-existing layers, and do not treat genuinely
 load-bearing thin layers as pass-throughs: dependency-injection seams,
-multi-caller DRY helpers, and the prescribed PocketFlow
-`Node.exec() -> createFlow() -> flow.run()` shape are thin by design, not
+host ports, and multi-caller DRY helpers are thin by design, not
 redundant.
 
 Prefer inline comments for local, actionable issues on changed diff lines; put

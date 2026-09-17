@@ -32,6 +32,14 @@ export interface CommandCatalogEntry {
    * mirrored.
    */
   extensionRegistry?: true;
+  /**
+   * Set on rows only the desktop app owns. They carry the same identity
+   * fields as every other row (title, category, keybinding), so the desktop
+   * menus, palette and shortcut registry read one table — but they have no VS
+   * Code registration, so {@link packageCommandContributions} filters them
+   * out of the extension manifest.
+   */
+  host?: 'desktop';
 }
 
 export const commandCatalog = [
@@ -389,6 +397,75 @@ export const commandCatalog = [
     category: 'TeXRA',
     icon: '$(history)',
   },
+  // Desktop-only rows (`host: 'desktop'`): no VS Code registration, so they
+  // stay out of the extension manifest. Icons are a desktop concern and live
+  // with the desktop menu wiring.
+  {
+    id: 'texra.desktop.showLogs',
+    host: 'desktop',
+    title: 'Show Logs',
+    category: 'TeXRA',
+  },
+  {
+    id: 'texra.desktop.openLogFolder',
+    host: 'desktop',
+    title: 'Open Logs Folder',
+    category: 'TeXRA',
+  },
+  {
+    id: 'texra.desktop.showCommands',
+    host: 'desktop',
+    title: 'Show Commands',
+    category: 'TeXRA',
+    keybinding: { key: 'ctrl+k', mac: 'cmd+k' },
+  },
+  {
+    id: 'texra.desktop.toggleBottomBar',
+    host: 'desktop',
+    title: 'Toggle Bottom Bar',
+    category: 'View',
+    keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
+  },
+  {
+    id: 'texra.desktop.toggleSidePanel',
+    host: 'desktop',
+    title: 'Toggle Side Panel',
+    category: 'View',
+    keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
+  },
+  {
+    id: 'texra.desktop.toggleSummaryBar',
+    host: 'desktop',
+    title: 'Toggle Summary Bar',
+    category: 'View',
+    keybinding: { key: 'ctrl+alt+s', mac: 'cmd+option+s' },
+  },
+  {
+    id: 'texra.desktop.saveFile',
+    host: 'desktop',
+    title: 'Save',
+    category: 'File',
+    keybinding: { key: 'ctrl+s', mac: 'cmd+s' },
+  },
+  {
+    id: 'texra.desktop.openWorkspaceFolder',
+    host: 'desktop',
+    title: 'Open Folder',
+    category: 'File',
+    keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
+  },
+  {
+    id: 'texra.desktop.showFirstRunWalkthrough',
+    host: 'desktop',
+    title: 'Show Startup Team Chooser',
+    category: 'Help',
+  },
+  {
+    id: 'texra.desktop.openDesktopDocs',
+    host: 'desktop',
+    title: 'Desktop Documentation',
+    category: 'Help',
+  },
 ] as const satisfies readonly CommandCatalogEntry[];
 
 export type CommandId = (typeof commandCatalog)[number]['id'];
@@ -413,14 +490,16 @@ interface PackageCommandContribution {
  */
 export const packageCommandContributions: PackageCommandContribution[] = (
   commandCatalog as readonly CommandCatalogEntry[]
-).map((entry) => ({
-  command: entry.id,
-  title: entry.title,
-  ...(entry.shortTitle === undefined ? {} : { shortTitle: entry.shortTitle }),
-  category: entry.category,
-  ...(entry.icon === undefined ? {} : { icon: entry.icon }),
-  ...(entry.enablement === undefined ? {} : { enablement: entry.enablement }),
-}));
+)
+  .filter((entry) => entry.host !== 'desktop')
+  .map((entry) => ({
+    command: entry.id,
+    title: entry.title,
+    ...(entry.shortTitle === undefined ? {} : { shortTitle: entry.shortTitle }),
+    category: entry.category,
+    ...(entry.icon === undefined ? {} : { icon: entry.icon }),
+    ...(entry.enablement === undefined ? {} : { enablement: entry.enablement }),
+  }));
 
 export const commandCatalogById = new Map<CommandId, CommandCatalogEntry>(
   commandCatalog.map((entry) => [entry.id, entry]),

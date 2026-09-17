@@ -6,7 +6,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { TickerController } from '@shared/litControllers/TickerController';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { goalElapsedMs, type Goal } from '@shared/schemas';
+import { goalElapsedMs, type GoalListItem } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -85,16 +85,10 @@ export class GoalTab extends LitElement {
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
       }
-
-      .run-id {
-        font-family: var(--wa-font-family-mono);
-        font-size: var(--font-size-xs);
-        color: var(--wa-color-text-quiet);
-      }
     `,
   ];
 
-  @property({ attribute: false }) items: readonly Goal[] = [];
+  @property({ attribute: false }) items: readonly GoalListItem[] = [];
 
   // Ticks the rows' `duration` readings: `goalElapsedMs` reads the clock when
   // the row renders, so a re-render is what keeps it current.
@@ -120,9 +114,9 @@ export class GoalTab extends LitElement {
     </div>`;
   }
 
-  private renderRow(item: Goal): TemplateResult {
+  private renderRow(item: GoalListItem): TemplateResult {
     const metaParts: MetaPart[] = [
-      html`<code class="run-id" dir="ltr">${item.runId}</code>`,
+      html`<bdi>${item.runLabel}</bdi>`,
       html`<span title="Wall-clock duration since this Goal started"
         >duration ${formatCompactDuration(goalElapsedMs(item))}</span
       >`,

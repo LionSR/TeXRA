@@ -50,8 +50,15 @@ const GUIDANCE_FILES = [
 // for citations *to* them (PATH_PREFIXES includes `.agents/`); they are not
 // scanned as sources here because several still inventory deleted files as
 // the work that landed.
+// `.github/prompts`, `.claude/agents` and `.claude/workflows` are read as
+// instructions by the CI review bots and the subagents, so a path that moves
+// out from under them is the same confidently-wrong answer (the PocketFlow
+// engine's retirement left four prompts citing a deleted module).
 const GUIDANCE_DIRS = [
   '.claude/skills',
+  '.claude/agents',
+  '.claude/workflows',
+  '.github/prompts',
   'docs/dev',
   'docs/architecture',
   'docs/guide',

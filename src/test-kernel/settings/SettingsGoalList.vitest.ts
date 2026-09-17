@@ -85,9 +85,11 @@ describe('settings goal list', () => {
 
     await createHandler().sendGoalList(webview);
 
+    // `runLabel` is the fold's `RunView.label` for this run: the fixture's
+    // `run.start` names the `chat` agent, whose display name is `chat`.
     expect(webview.postMessage).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-      items: [goal],
+      items: [{ ...goal, runLabel: 'chat' }],
     });
   });
 

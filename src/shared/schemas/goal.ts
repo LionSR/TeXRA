@@ -36,8 +36,18 @@ export const GoalStateSchema = z.discriminatedUnion('active', [
 export type GoalState = z.infer<typeof GoalStateSchema>;
 
 /** One row of a cross-run goal list: an in-flight goal and the run it drives. */
-export const GoalSchema = ActiveGoalSchema.extend({ runId: RunIdSchema });
+const GoalSchema = ActiveGoalSchema.extend({ runId: RunIdSchema });
 export type Goal = z.infer<typeof GoalSchema>;
+
+/**
+ * A goal-list row as the settings view receives it: the goal plus the run's
+ * display label (`RunView.label`, the identity's display name), so the list
+ * can name the run instead of showing its hex id. The label travels on the
+ * row because only the session fold owns it — a renderer must never re-derive
+ * it. The hex `runId` stays the reveal action's argument.
+ */
+export const GoalListItemSchema = GoalSchema.extend({ runLabel: z.string() });
+export type GoalListItem = z.infer<typeof GoalListItemSchema>;
 
 /**
  * Wall-clock elapsed time since the goal was started.

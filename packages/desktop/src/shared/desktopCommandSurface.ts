@@ -12,7 +12,6 @@ import {
   commandCatalogById,
   settingsTabByCommand,
   type CommandId,
-  type CommandKeybinding,
   type SettingsTabCommandId,
 } from '@shared/commands/catalog';
 import {
@@ -84,9 +83,7 @@ export const DESKTOP_MENU_GROUPS = [
     'texra.showMultiAgent',
     'texra.showGitSettings',
   ],
-] as const satisfies readonly (readonly (
-  CommandId | DesktopLocalCommandId
-)[])[];
+] as const satisfies readonly (readonly CommandId[])[];
 
 export const DESKTOP_FILE_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
@@ -181,84 +178,10 @@ interface DesktopSettingsTabMessage {
   agentSubTab?: AgentCategory;
 }
 
-/**
- * Desktop-only commands have no catalog row, so their label, category and
- * keybinding live here. Keybindings use the same `CommandKeybinding` tokens the
- * catalog uses so both branches of {@link getDesktopCommandMenuEntries} run
- * through `toElectronAccelerator` — the one spelling the renderer's keydown
- * comparison also produces.
- */
-type DesktopLocalCommandEntry = Omit<
-  DesktopCommandMenuEntry,
-  'id' | 'icon' | 'accelerator'
-> & {
-  keybinding?: CommandKeybinding;
-};
-
-const DESKTOP_LOCAL_COMMAND_ENTRIES: Record<
-  DesktopLocalCommandId,
-  DesktopLocalCommandEntry
-> = {
-  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: {
-    label: 'Save',
-    category: 'File',
-    keybinding: { key: 'ctrl+s', mac: 'cmd+s' },
-  },
-  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: {
-    label: 'Desktop Documentation',
-    category: 'Help',
-  },
-  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: {
-    label: 'Show Logs',
-    category: 'TeXRA',
-  },
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: {
-    label: 'Toggle Bottom Bar',
-    category: 'View',
-    keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
-  },
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: {
-    label: 'Toggle Side Panel',
-    category: 'View',
-    keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
-  },
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: {
-    label: 'Toggle Summary Bar',
-    category: 'View',
-    keybinding: { key: 'ctrl+alt+s', mac: 'cmd+option+s' },
-  },
-  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: {
-    label: 'Open Folder',
-    category: 'File',
-    keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
-  },
-  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: {
-    label: 'Open Logs Folder',
-    category: 'TeXRA',
-  },
-  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: {
-    label: 'Show Startup Team Chooser',
-    category: 'Help',
-  },
-};
-
 export function getDesktopCommandMenuEntries(
   platform: DesktopPlatform,
 ): DesktopCommandMenuEntry[] {
   return DESKTOP_COMMAND_IDS.map((id) => {
-    if (isDesktopLocalCommandId(id)) {
-      const { label, category, keybinding } = DESKTOP_LOCAL_COMMAND_ENTRIES[id];
-      const accelerator =
-        keybinding && toElectronAccelerator(keybinding, platform);
-      return {
-        id,
-        label,
-        category,
-        icon: DESKTOP_COMMAND_ICONS[id],
-        ...(accelerator && { accelerator }),
-      };
-    }
-
     const entry = commandCatalogById.get(id);
     if (!entry) throw new Error(`Missing command catalog entry: ${id}`);
 
@@ -346,10 +269,6 @@ export function dispatchDesktopCommand(
       console.error(`[desktop] dispatch: unhandled command ${failure.id}`);
     },
   );
-}
-
-function isDesktopLocalCommandId(id: string): id is DesktopLocalCommandId {
-  return Object.hasOwn(DESKTOP_LOCAL_COMMAND_ENTRIES, id);
 }
 
 export function buildDesktopSettingsTabMessage(
