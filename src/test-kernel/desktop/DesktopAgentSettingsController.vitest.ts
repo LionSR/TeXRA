@@ -79,17 +79,6 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
     registry: {
       loadAgents: options.loadAgents ?? (() => Effect.void),
       refreshAgents: options.refreshAgents ?? (() => Effect.void),
-      loadAgentOptionsData: () =>
-        Effect.succeed({
-          workflow: catalog.workflow.map((entry) => ({
-            value: `${entry.source}:${entry.name}`,
-            label: entry.name,
-          })),
-          toolUse: catalog.toolUse.map((entry) => ({
-            value: `${entry.source}:${entry.name}`,
-            label: entry.name,
-          })),
-        }),
       getAgents: (category) => catalog[category],
       getVisibleAgents: (category) => visibleCatalog[category],
     },

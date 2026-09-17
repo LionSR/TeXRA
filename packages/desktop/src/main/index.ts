@@ -17,7 +17,6 @@ import { Cause, Data, Effect, Exit, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 import { presentAgentFailure, runInSession } from '@agent/runtime';
 import {
-  computeAgentOptionsData,
   getAgentsByCategory,
   getVisibleAgents,
   loadAgents,
@@ -66,10 +65,7 @@ import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import {
-  getLastCheckResults,
-  refreshToolAvailability,
-} from '@tools/toolAvailability';
+import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -1198,7 +1194,6 @@ function createWindow(options: {
       registry: {
         loadAgents,
         refreshAgents: refresh,
-        loadAgentOptionsData: computeAgentOptionsData,
         getAgents: getAgentsByCategory,
         getVisibleAgents,
       },
@@ -1393,23 +1388,6 @@ function createWindow(options: {
         runtime,
         renderer: {
           postToRenderer: postForActiveProject,
-        },
-        dashboard: {
-          buildItems: async (cachedResults) => {
-            const { buildToolDashboardItems } =
-              await import('@controllers/settingsView/ToolDashboardData');
-            return runtime.runPromise(
-              buildToolDashboardItems('desktop', cachedResults),
-            );
-          },
-          getCachedCheckResults: async () => getLastCheckResults() ?? undefined,
-          refreshAvailability: () =>
-            runtime.runPromise(refreshToolAvailability()),
-          planTerminalAction: async (toolId, kind) => {
-            const { planToolTerminalAction } =
-              await import('@controllers/settingsView/ToolDashboardData');
-            return planToolTerminalAction({ toolId, commandKind: kind });
-          },
         },
         navigation: { openExternal: previewHost.openExternal },
         commands: {

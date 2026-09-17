@@ -5,7 +5,6 @@ import { Cause, Data, Effect, FileSystem } from 'effect';
 import {
   type AgentEntry,
   type AgentRosterController,
-  type computeAgentOptionsData,
   getAgent,
   getCustomAgentScanIssues,
   type loadAgents,
@@ -99,7 +98,6 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
   readonly registry: {
     readonly loadAgents: typeof loadAgents;
     readonly refreshAgents: typeof refresh;
-    readonly loadAgentOptionsData: typeof computeAgentOptionsData;
     readonly getAgents: (category: AgentCategory) => AgentEntry[];
     readonly getVisibleAgents: (category: AgentCategory) => AgentEntry[];
   };
