@@ -69,7 +69,9 @@ describe('maybeBuildGoalContinuation', () => {
 
   it('returns a rendered prompt when an active goal is present', async () => {
     await goalOnTheRun('Complete the refactor until pnpm test passes');
-    const out = await maybeBuildGoalContinuation(session, RUN_ID);
+    const out = await Effect.runPromise(
+      maybeBuildGoalContinuation(session, RUN_ID),
+    );
     expect(out).toMatch(/<goal_context>/);
     expect(out).toContain('Complete the refactor until pnpm test passes');
     expect(out).toContain('Autonomous objective active');
@@ -86,7 +88,9 @@ describe('maybeBuildGoalContinuation', () => {
     const objective =
       'Finish {% for x in y %}{{ 1 + 1 }}{# comment #}{% endfor %} the "quoted" \\task\\.';
     await goalOnTheRun(objective);
-    const out = await maybeBuildGoalContinuation(session, RUN_ID);
+    const out = await Effect.runPromise(
+      maybeBuildGoalContinuation(session, RUN_ID),
+    );
     expect(out).toContain(objective);
   });
 
@@ -102,7 +106,9 @@ describe('maybeBuildGoalContinuation', () => {
       vi.setSystemTime(
         new Date(startedAt + 2 * 60 * 60 * 1000 + 5 * 60 * 1000 + 1234),
       );
-      const out = await maybeBuildGoalContinuation(session, RUN_ID);
+      const out = await Effect.runPromise(
+        maybeBuildGoalContinuation(session, RUN_ID),
+      );
 
       expect(out).toContain('<goal_context>');
       expect(out).toContain(
@@ -122,12 +128,14 @@ describe('maybeBuildGoalContinuation', () => {
       GOAL_FEATURE_FLAG_KEY,
       false,
     );
-    expect(await maybeBuildGoalContinuation(session, RUN_ID)).toBeNull();
+    expect(
+      await Effect.runPromise(maybeBuildGoalContinuation(session, RUN_ID)),
+    ).toBeNull();
   });
 
   it('returns null when no goal exists for the stream', async () => {
     await expect(
-      maybeBuildGoalContinuation(session, RUN_ID),
+      Effect.runPromise(maybeBuildGoalContinuation(session, RUN_ID)),
     ).resolves.toBeNull();
   });
 
@@ -136,13 +144,13 @@ describe('maybeBuildGoalContinuation', () => {
     await effectRuntime().runPromise(pauseGoal(session, RUN_ID));
 
     await expect(
-      maybeBuildGoalContinuation(session, RUN_ID),
+      Effect.runPromise(maybeBuildGoalContinuation(session, RUN_ID)),
     ).resolves.toBeNull();
   });
 
   it('is a pure read — leaves the goal untouched', async () => {
     const before = await goalOnTheRun('objective');
-    await maybeBuildGoalContinuation(session, RUN_ID);
+    await Effect.runPromise(maybeBuildGoalContinuation(session, RUN_ID));
     await Effect.runPromise(session.settlePublications());
     // No counter, no audit log: the helper only reads. The loop runs until
     // the model completes or the user stops it.

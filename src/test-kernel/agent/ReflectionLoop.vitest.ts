@@ -224,14 +224,16 @@ vi.mock(
 );
 
 vi.mock('@agent/prompt/PromptBuilder', () => ({
-  getSystemPromptWithRules: vi.fn(async () => 'system'),
+  getSystemPromptWithRules: vi.fn(() => Effect.succeed('system')),
   PromptBuilder: class {
-    buildInitialPrompts = async () => ({
-      userPrefix: '',
-      userRequest: 'Write the document.',
-    });
+    buildInitialPrompts = () =>
+      Effect.succeed({
+        userPrefix: '',
+        userRequest: 'Write the document.',
+      });
 
-    buildUserRequest = async (round: number) => `Revise for round ${round}.`;
+    buildUserRequest = (round: number) =>
+      Effect.succeed(`Revise for round ${round}.`);
   },
 }));
 

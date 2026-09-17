@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
@@ -5,6 +8,7 @@ import type { TemplateVars } from '@agent/core/definition/AgentCycleOptions';
 
 // Local imports - utilities
 import { ensureArray } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import { renderPrompt } from '@utils/prompt';
 import { loadTexraRules } from '@utils/files/rulesUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
@@ -72,25 +76,33 @@ The /memories directory is shared with the orchestrator and other subagents. Che
  * @param workspace The run's workspace root, whose `.texrarules` applies
  * @returns Full system prompt string
  */
-export async function getSystemPromptWithRules(
-  systemPrompt: string,
-  userVars: TemplateVars,
-  workspace: string | undefined,
-): Promise<string> {
-  const basePrompt = await renderPrompt(systemPrompt, userVars);
-  const parts = [basePrompt];
+export const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(
+  function* (
+    systemPrompt: string,
+    userVars: TemplateVars,
+    workspace: string | undefined,
+  ): Effect.fn.Return<string, Error> {
+    const basePrompt = yield* Effect.tryPromise({
+      try: () => renderPrompt(systemPrompt, userVars),
+      catch: ensureError,
+    });
+    const parts = [basePrompt];
 
-  const rules = await loadTexraRules(workspace);
-  if (rules) parts.push(rules);
+    const rules = yield* Effect.tryPromise({
+      try: () => loadTexraRules(workspace),
+      catch: ensureError,
+    });
+    if (rules) parts.push(rules);
 
-  // Append attached memories (read-only context from orchestrator)
-  const attachedMemories = userVars.ATTACHED_MEMORIES;
-  if (typeof attachedMemories === 'string' && attachedMemories) {
-    parts.push(attachedMemories);
-  }
+    // Append attached memories (read-only context from orchestrator)
+    const attachedMemories = userVars.ATTACHED_MEMORIES;
+    if (typeof attachedMemories === 'string' && attachedMemories) {
+      parts.push(attachedMemories);
+    }
 
-  return parts.join('\n');
-}
+    return parts.join('\n');
+  },
+);
 
 /** The rendered round-0 prompts: system prompt, user prefix, and initial request. */
 export interface InitialPrompts {
@@ -110,8 +122,8 @@ export interface InitialPrompts {
  * @example
  * ```ts
  * const builder = new PromptBuilder(prompt, vars, workspace, logger);
- * const initial = await builder.buildInitialPrompts();
- * const firstRoundRequest = await builder.buildUserRequest(1);
+ * const initial = yield* builder.buildInitialPrompts();
+ * const firstRoundRequest = yield* builder.buildUserRequest(1);
  * ```
  */
 export class PromptBuilder {
@@ -126,18 +138,28 @@ export class PromptBuilder {
   /**
    * Render the initial system, prefix, and request prompts for round 0.
    */
-  public async buildInitialPrompts(): Promise<InitialPrompts> {
-    const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-      getSystemPromptWithRules(
-        this.agentPrompt.systemPrompt,
-        this.userVars,
-        this.workspace,
-      ),
-      this.buildUserRequest(0),
-      renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-    ]);
-
-    return { systemPrompt, userPrefix, userRequest };
+  public buildInitialPrompts(): Effect.Effect<InitialPrompts, Error> {
+    return Effect.all(
+      [
+        getSystemPromptWithRules(
+          this.agentPrompt.systemPrompt,
+          this.userVars,
+          this.workspace,
+        ),
+        this.buildUserRequest(0),
+        Effect.tryPromise({
+          try: () => renderPrompt(this.agentPrompt.userPrefix, this.userVars),
+          catch: ensureError,
+        }),
+      ],
+      { concurrency: 'unbounded' },
+    ).pipe(
+      Effect.map(([systemPrompt, userRequest, userPrefix]) => ({
+        systemPrompt,
+        userPrefix,
+        userRequest,
+      })),
+    );
   }
 
   /**
@@ -146,7 +168,7 @@ export class PromptBuilder {
    * @param currRound Zero-based round number (round 0 selects the initial template)
    * @remarks Rounds beyond the configured templates fall back to the second template (index 1).
    */
-  public async buildUserRequest(currRound: number): Promise<string> {
+  public buildUserRequest(currRound: number): Effect.Effect<string, Error> {
     const template = this.getRoundTemplate(currRound);
 
     if (!template) {
@@ -155,10 +177,13 @@ export class PromptBuilder {
           ? 'No initial user request configured. Returning empty prompt.'
           : `No prompt configured for round ${currRound}. Returning empty prompt.`,
       );
-      return '';
+      return Effect.succeed('');
     }
 
-    return renderPrompt(template, this.userVars);
+    return Effect.tryPromise({
+      try: () => renderPrompt(template, this.userVars),
+      catch: ensureError,
+    });
   }
 
   private getRoundTemplate(currRound: number): string | undefined {
@@ -183,43 +208,54 @@ export class PromptBuilder {
   }
 }
 
-export async function buildInitialToolUsePrompts(
-  agentPrompt: AgentPrompt,
-  userVars: TemplateVars,
-  logger: AgentTrace | undefined,
-  options: {
-    /** The run's workspace root: its `.texrarules` and `<workspace_info>`. */
-    workspace: string | undefined;
-    resolvedToolNames?: readonly string[];
-    hasDelegationTools?: boolean;
-    isChild?: boolean;
-  },
-): Promise<InitialPrompts & { instructionSuffix: string }> {
-  const builder = new PromptBuilder(
-    agentPrompt,
-    userVars,
-    options.workspace,
-    logger,
-  );
-  const initial = await builder.buildInitialPrompts();
+export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
+  function* (
+    agentPrompt: AgentPrompt,
+    userVars: TemplateVars,
+    logger: AgentTrace | undefined,
+    options: {
+      /** The run's workspace root: its `.texrarules` and `<workspace_info>`. */
+      workspace: string | undefined;
+      resolvedToolNames?: readonly string[];
+      hasDelegationTools?: boolean;
+      isChild?: boolean;
+    },
+  ): Effect.fn.Return<InitialPrompts & { instructionSuffix: string }, Error> {
+    const builder = new PromptBuilder(
+      agentPrompt,
+      userVars,
+      options.workspace,
+      logger,
+    );
+    const initial = yield* builder.buildInitialPrompts();
 
-  const memoryEnabled = options.resolvedToolNames?.includes('memory') ?? false;
+    const memoryEnabled =
+      options.resolvedToolNames?.includes('memory') ?? false;
 
-  // Build instruction suffix: always include tool-use instructions,
-  // optionally append memory instructions and workspace info
-  const suffixParts = [TOOL_USE_INSTRUCTIONS];
-  if (memoryEnabled) {
-    suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
-    if (options.hasDelegationTools) {
-      suffixParts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
-    } else if (options.isChild) {
-      suffixParts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
+    // Build instruction suffix: always include tool-use instructions,
+    // optionally append memory instructions and workspace info
+    const suffixParts = [TOOL_USE_INSTRUCTIONS];
+    if (memoryEnabled) {
+      suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
+      if (options.hasDelegationTools) {
+        suffixParts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
+      } else if (options.isChild) {
+        suffixParts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
+      }
     }
-  }
-  suffixParts.push(await buildWorkspaceInfoBlock(options.workspace));
+    suffixParts.push(
+      yield* Effect.tryPromise({
+        try: () => buildWorkspaceInfoBlock(options.workspace),
+        catch: ensureError,
+      }),
+    );
 
-  return {
-    ...initial,
-    instructionSuffix: await renderPrompt(suffixParts.join('\n'), userVars),
-  };
-}
+    return {
+      ...initial,
+      instructionSuffix: yield* Effect.tryPromise({
+        try: () => renderPrompt(suffixParts.join('\n'), userVars),
+        catch: ensureError,
+      }),
+    };
+  },
+);

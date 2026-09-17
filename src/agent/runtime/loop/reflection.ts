@@ -499,18 +499,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 
     let requestText: string;
     if (round === 0) {
-      const initialPrompts = yield* Effect.tryPromise({
-        try: () => promptBuilder.buildInitialPrompts(),
-        catch: ensureError,
-      });
+      const initialPrompts = yield* promptBuilder.buildInitialPrompts();
       const prefix = initialPrompts.userPrefix.trim();
       if (prefix) content.push({ kind: 'text', text: prefix });
       requestText = initialPrompts.userRequest.trim();
     } else {
-      const request = yield* Effect.tryPromise({
-        try: () => promptBuilder.buildUserRequest(round),
-        catch: ensureError,
-      });
+      const request = yield* promptBuilder.buildUserRequest(round);
       requestText = appendCompileFailureRoundContext(
         request,
         flow.compileFailureContext,
@@ -1097,15 +1091,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             state.lastTurn !== null &&
             state.phase !== 'model.ready';
           if (!unprocessed) {
-            const system = yield* Effect.tryPromise({
-              try: () =>
-                getSystemPromptWithRules(
-                  prompt.systemPrompt,
-                  run.userVarChannels,
-                  roots.workspace,
-                ),
-              catch: ensureError,
-            });
+            const system = yield* getSystemPromptWithRules(
+              prompt.systemPrompt,
+              run.userVarChannels,
+              roots.workspace,
+            );
             const outcome = yield* invoker.invoke(state, {
               system,
               tools: [],

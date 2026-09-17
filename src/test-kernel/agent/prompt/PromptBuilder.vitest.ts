@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
@@ -28,13 +29,13 @@ describe('PromptBuilder', () => {
     } as AgentPrompt;
 
     const builder = new PromptBuilder(prompt, { value: 'test' }, undefined);
-    const initial = await builder.buildInitialPrompts();
+    const initial = await Effect.runPromise(builder.buildInitialPrompts());
     expect(initial.userRequest).toBe('initial test');
 
-    const reflect = await builder.buildUserRequest(1);
+    const reflect = await Effect.runPromise(builder.buildUserRequest(1));
     expect(reflect).toBe('reflect test');
 
-    const fallback = await builder.buildUserRequest(3);
+    const fallback = await Effect.runPromise(builder.buildUserRequest(3));
     expect(fallback).toBe('reflect test');
   });
 
@@ -46,11 +47,11 @@ describe('PromptBuilder', () => {
     } as AgentPrompt;
 
     const builder = new PromptBuilder(prompt, {}, undefined);
-    const initial = await builder.buildInitialPrompts();
+    const initial = await Effect.runPromise(builder.buildInitialPrompts());
     expect(initial.userRequest).toBe('initial only');
 
     // Single-template agents reuse the template for subsequent rounds
-    const reflectPrompt = await builder.buildUserRequest(1);
+    const reflectPrompt = await Effect.runPromise(builder.buildUserRequest(1));
     expect(reflectPrompt).toBe('initial only');
   });
 
@@ -58,7 +59,7 @@ describe('PromptBuilder', () => {
     // Regression test for #7957: relevance gating (added in #7855) must not
     // silently drop pinned memories, which are documented as loading every
     // session (docs/guide/memory.md, MemoryTool's description).
-    const prompts = await buildMemoryPrompts();
+    const prompts = await Effect.runPromise(buildMemoryPrompts());
 
     // Behavioral contract, not exact prose (review note on #7959): pinned
     // files must be individually viewed at session start — a directory

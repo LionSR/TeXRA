@@ -1,6 +1,9 @@
+import { Effect } from 'effect';
+
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { goalElapsedMs, type RunId } from '@shared/schemas';
 import { goalOf, isGoalEnabled, type GoalReader } from '@tools/goal';
+import { ensureError } from '@utils/errors/errorMessage';
 import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
@@ -22,17 +25,23 @@ import { GOAL_CONTINUATION_TEMPLATE } from '../runtime/bundledPrompts';
  * wait blocks indefinitely on an empty queue, so the continuation cannot run
  * after it.
  */
-export async function maybeBuildGoalContinuation(
-  session: GoalReader & Pick<SessionHandle, 'roots'>,
-  runId: RunId,
-): Promise<string | null> {
-  const goal = goalOf(session, runId);
-  if (goal?.status !== 'active') return null;
+export const maybeBuildGoalContinuation = Effect.fn('goal.continuation')(
+  function* (
+    session: GoalReader & Pick<SessionHandle, 'roots'>,
+    runId: RunId,
+  ): Effect.fn.Return<string | null, Error> {
+    const goal = goalOf(session, runId);
+    if (goal?.status !== 'active') return null;
 
-  if (!isGoalEnabled(session.roots.config)) return null;
+    if (!isGoalEnabled(session.roots.config)) return null;
 
-  return renderPrompt(GOAL_CONTINUATION_TEMPLATE, {
-    objective: goal.objective,
-    timeUsed: formatCompactDuration(goalElapsedMs(goal)),
-  });
-}
+    return yield* Effect.tryPromise({
+      try: () =>
+        renderPrompt(GOAL_CONTINUATION_TEMPLATE, {
+          objective: goal.objective,
+          timeUsed: formatCompactDuration(goalElapsedMs(goal)),
+        }),
+      catch: ensureError,
+    });
+  },
+);
