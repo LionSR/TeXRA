@@ -40,6 +40,9 @@ export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &
   Pick<TokenUsageStats, 'usageRoute'>;
 
+/** The accumulating fields of a usage record: everything but the route. */
+type UsageCounter = keyof Omit<TokenUsageStats, 'usageRoute'>;
+
 /** Returns zero-initialized usage stats. */
 export function emptyUsageStats(): EmptyUsageStats {
   return {
@@ -53,17 +56,18 @@ export function emptyUsageStats(): EmptyUsageStats {
   };
 }
 
+/**
+ * The counters, read off the zero rather than named a second and third time.
+ * The literal above is total over the schema by its return type, so a counter
+ * added there joins the emptiness test and the sum instead of being dropped.
+ */
+const USAGE_COUNTERS = Object.keys(
+  emptyUsageStats(),
+) as readonly UsageCounter[];
+
 /** Whether usage stats are all zeros (effectively empty). */
 export function isEmptyUsage(usage: TokenUsageStats): boolean {
-  return (
-    usage.inputTokens === 0 &&
-    usage.outputTokens === 0 &&
-    usage.cost === 0 &&
-    (usage.cacheReadInputTokens ?? 0) === 0 &&
-    (usage.cacheMissInputTokens ?? 0) === 0 &&
-    (usage.cacheCreationInputTokens ?? 0) === 0 &&
-    (usage.reasoningTokens ?? 0) === 0
-  );
+  return USAGE_COUNTERS.every((counter) => (usage[counter] ?? 0) === 0);
 }
 
 /** Accumulates usage stats from an iterable into a single total. */
@@ -74,13 +78,9 @@ export function sumUsageStats(
   let commonUsageRoute: UsageRoute | undefined;
   let hasMixedOrMissingUsageRoute = false;
   for (const usage of items) {
-    total.inputTokens += usage.inputTokens;
-    total.outputTokens += usage.outputTokens;
-    total.cost += usage.cost;
-    total.cacheReadInputTokens += usage.cacheReadInputTokens ?? 0;
-    total.cacheMissInputTokens += usage.cacheMissInputTokens ?? 0;
-    total.cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
-    total.reasoningTokens += usage.reasoningTokens ?? 0;
+    for (const counter of USAGE_COUNTERS) {
+      total[counter] += usage[counter] ?? 0;
+    }
     if (!isEmptyUsage(usage)) {
       const usageRoute = usage.usageRoute;
       if (usageRoute == null) {
