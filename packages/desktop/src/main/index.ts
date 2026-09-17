@@ -17,7 +17,6 @@ import { Cause, Data, Effect, Exit, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 import { presentAgentFailure, runInSession } from '@agent/runtime';
 import {
-  computeAgentOptionsData,
   getAgentsByCategory,
   getVisibleAgents,
   loadAgents,
@@ -66,10 +65,7 @@ import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import {
-  getLastCheckResults,
-  refreshToolAvailability,
-} from '@tools/toolAvailability';
+import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -562,9 +558,10 @@ function createWindow(options: {
   // Session requests present errors at their dispatcher. Menu, navigation,
   // and runtime preview callers retain the reporting host above.
   const requestPreviewHost = createDesktopPreviewHost(previewOptions);
+  /** The custom agents directory for the two shell surfaces that await it;
+   *  the settings controller takes the port's Effect unchanged. */
   const getCustomAgentDirectory = () =>
     options.runtime.runPromise(options.agentDirectories.custom());
-
   // Button labels for the instruction dialog below. Desktop has one settings
   // home (Settings tab), so SET_API_KEY opens it directly rather than the
   // extension's separate "enter a key" quick pick.
@@ -1216,29 +1213,22 @@ function createWindow(options: {
       registry: {
         loadAgents,
         refreshAgents: refresh,
-        loadAgentOptionsData: computeAgentOptionsData,
         getAgents: getAgentsByCategory,
         getVisibleAgents,
       },
       directory: {
-        getCustomAgentDirectory,
+        getCustomAgentDirectory: () => options.agentDirectories.custom(),
         getSourceDirectory: (source: AgentSource) => {
           switch (source) {
             case 'custom':
-              return options.runtime.runPromise(
-                options.agentDirectories.custom(),
-              );
+              return options.agentDirectories.custom();
             case 'builtInWorkflow':
-              return options.runtime.runPromise(
-                options.agentDirectories.builtIn(),
-              );
+              return options.agentDirectories.builtIn();
             case 'builtInToolUse':
-              return options.runtime.runPromise(
-                options.agentDirectories.builtInToolUse(),
-              );
+              return options.agentDirectories.builtInToolUse();
             // No local directory: remote agents live in Supabase.
             case 'remote':
-              return Promise.resolve(undefined);
+              return Effect.succeed(undefined);
           }
         },
         selectCustomAgentDirectory: async () => {
@@ -1409,23 +1399,6 @@ function createWindow(options: {
         runtime,
         renderer: {
           postToRenderer: postForActiveProject,
-        },
-        dashboard: {
-          buildItems: async (cachedResults) => {
-            const { buildToolDashboardItems } =
-              await import('@controllers/settingsView/ToolDashboardData');
-            return runtime.runPromise(
-              buildToolDashboardItems('desktop', cachedResults),
-            );
-          },
-          getCachedCheckResults: async () => getLastCheckResults() ?? undefined,
-          refreshAvailability: () =>
-            runtime.runPromise(refreshToolAvailability()),
-          planTerminalAction: async (toolId, kind) => {
-            const { planToolTerminalAction } =
-              await import('@controllers/settingsView/ToolDashboardData');
-            return planToolTerminalAction({ toolId, commandKind: kind });
-          },
         },
         navigation: { openExternal: previewHost.openExternal },
         commands: {

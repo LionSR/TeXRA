@@ -359,14 +359,26 @@ export class SettingsViewMessageHandler {
         this.agentHandlers.handleSetAgentEnabled(message),
       setAllAgentsEnabled: (message) =>
         this.agentHandlers.handleSetAllAgentsEnabled(message),
-      openAgentYaml: this.agentHandlers.agentActions.openAgentYaml,
+      openAgentYaml: (message) =>
+        this.agentHandlers.runAgentFileAction(
+          'openAgentYaml',
+          this.agentHandlers.agentActions.openAgentYaml(message),
+        ),
       openAgentFolder: (message) =>
         this.agentHandlers.handleOpenAgentFolder(message),
       createAgent: (message) => this.agentHandlers.handleCreateAgent(message),
-      customizeAgent: this.agentHandlers.agentActions.customizeAgent,
+      customizeAgent: (message) =>
+        this.agentHandlers.runAgentFileAction(
+          'customizeAgent',
+          this.agentHandlers.agentActions.customizeAgent(message),
+        ),
       deleteCustomAgent: (message) =>
         this.agentHandlers.handleDeleteCustomAgent(message),
-      revealAgentFile: this.agentHandlers.agentActions.revealAgentFile,
+      revealAgentFile: (message) =>
+        this.agentHandlers.runAgentFileAction(
+          'revealAgentFile',
+          this.agentHandlers.agentActions.revealAgentFile(message),
+        ),
       viewRemoteAgentPrompt: (message) =>
         this.agentHandlers.handleViewRemoteAgentPrompt(message),
       setCustomAgentDir: () => this.agentHandlers.handleSetCustomAgentDir(),

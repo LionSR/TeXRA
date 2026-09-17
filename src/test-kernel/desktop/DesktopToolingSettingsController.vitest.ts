@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { appSignals } from '@eventBus/AppSignals';
 import { effectRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ToolDashboardItem } from '@shared/schemas';
+import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
@@ -13,6 +15,54 @@ import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
 import { commandOf } from './desktopSettingsTestSupport';
+
+/**
+ * The controller calls the host-neutral dashboard and availability functions
+ * directly, so the seam the fixtures drive is those modules — the doubles
+ * keep the real call shapes, and the probes never run.
+ */
+const toolData = vi.hoisted(() => ({
+  buildItems:
+    vi.fn<
+      (
+        host: string,
+        cached?: ExternalToolCheckResult[],
+      ) => Promise<ToolDashboardItem[]>
+    >(),
+  lastCheckResults: vi.fn<() => ExternalToolCheckResult[] | null>(),
+  refreshAvailability: vi.fn<() => Promise<void>>(),
+  planTerminalAction:
+    vi.fn<
+      (input: {
+        toolId: string;
+        commandKind: ToolCommandKind;
+      }) => ToolTerminalAction
+    >(),
+}));
+
+vi.mock(
+  '@controllers/settingsView/ToolDashboardData',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@controllers/settingsView/ToolDashboardData')
+    >()),
+    buildToolDashboardItems: (
+      host: string,
+      cached?: ExternalToolCheckResult[],
+    ) => Effect.promise(() => toolData.buildItems(host, cached)),
+    planToolTerminalAction: toolData.planTerminalAction,
+  }),
+);
+
+vi.mock('@tools/toolAvailability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/toolAvailability')>()),
+  getLastCheckResults: () => toolData.lastCheckResults(),
+  refreshToolAvailability: () =>
+    Effect.tryPromise({
+      try: () => toolData.refreshAvailability(),
+      catch: (cause) => cause as Error,
+    }),
+}));
 
 /**
  * Wraps `store.update` with a synchronous hook fired before the write, so a
@@ -50,34 +100,30 @@ type ControllerOptions = ConstructorParameters<
 
 const liveControllers: DefaultDesktopToolingSettingsController[] = [];
 
-/** Dashboard members not listed fall back to the fixture defaults below. */
-type FixtureOverrides = Partial<Omit<ControllerOptions, 'dashboard'>> & {
-  readonly dashboard?: Partial<ControllerOptions['dashboard']>;
-};
+/** Restores the doubles a test has not replaced. The refresh double emits as
+ *  the real `refreshToolAvailability` does once its probes land: that emit is
+ *  what repaints the dashboard, so a silent double would leave the controller
+ *  with nothing to react to. */
+function installDefaultToolDataDoubles(): void {
+  toolData.buildItems.mockImplementation(async () => [DASHBOARD_ITEM]);
+  toolData.lastCheckResults.mockImplementation(() => []);
+  toolData.refreshAvailability.mockImplementation(async () => {
+    appSignals.emit('toolAvailabilityChanged', undefined);
+  });
+  toolData.planTerminalAction.mockImplementation(({ toolId, commandKind }) => ({
+    kind: 'terminal',
+    name: toolId,
+    command: `${commandKind}:${toolId}`,
+  }));
+}
 
-function createFixture(overrides: FixtureOverrides = {}) {
+function createFixture(overrides: Partial<ControllerOptions> = {}) {
   const posted: unknown[] = [];
   const reportedErrors: unknown[] = [];
   const commands: string[] = [];
   const openedUrls: string[] = [];
   const globalState = overrides.globalState ?? new FakeStateStore();
   const workspaceState = overrides.workspaceState ?? new FakeStateStore();
-  const dashboard: ControllerOptions['dashboard'] = {
-    buildItems: async () => [DASHBOARD_ITEM],
-    getCachedCheckResults: async () => [],
-    // The real `refreshToolAvailability` always emits once the probes land,
-    // and that emit is what repaints the dashboard, so a fake that stays
-    // silent would leave the controller with nothing to react to.
-    refreshAvailability: async () => {
-      appSignals.emit('toolAvailabilityChanged', undefined);
-    },
-    planTerminalAction: async (toolId, kind) => ({
-      kind: 'terminal',
-      name: toolId,
-      command: `${kind}:${toolId}`,
-    }),
-    ...overrides.dashboard,
-  };
   const controller = new DefaultDesktopToolingSettingsController({
     onError: (error) => reportedErrors.push(error),
     config: new FakeConfigProvider(),
@@ -112,7 +158,6 @@ function createFixture(overrides: FixtureOverrides = {}) {
     // spread above makes any overridden member possibly undefined, so the
     // default is restated here rather than left to the fixture's shape.
     runtime: overrides.runtime ?? effectRuntime(),
-    dashboard,
   });
   // The controller subscribes to a process-global bus, so a fixture left
   // undisposed would keep reacting to later tests' emits.
@@ -130,6 +175,8 @@ function createFixture(overrides: FixtureOverrides = {}) {
 }
 
 describe('DefaultDesktopToolingSettingsController', () => {
+  beforeEach(installDefaultToolDataDoubles);
+
   afterEach(() => {
     for (const controller of liveControllers.splice(0)) controller.dispose();
   });
@@ -140,19 +187,16 @@ describe('DefaultDesktopToolingSettingsController', () => {
       finishRefresh = resolve;
     });
     const buildInputs: (ExternalToolCheckResult[] | undefined)[] = [];
-    const { controller, posted } = createFixture({
-      dashboard: {
-        buildItems: async (results) => {
-          buildInputs.push(results);
-          return [DASHBOARD_ITEM];
-        },
-        getCachedCheckResults: async () => undefined,
-        refreshAvailability: async () => {
-          await refreshPending;
-          appSignals.emit('toolAvailabilityChanged', undefined);
-        },
-      },
+    toolData.buildItems.mockImplementation(async (_host, results) => {
+      buildInputs.push(results);
+      return [DASHBOARD_ITEM];
     });
+    toolData.lastCheckResults.mockReturnValue(null);
+    toolData.refreshAvailability.mockImplementation(async () => {
+      await refreshPending;
+      appSignals.emit('toolAvailabilityChanged', undefined);
+    });
+    const { controller, posted } = createFixture();
 
     controller.postLatexConfigValues();
     await controller.postStartupData();
@@ -179,13 +223,8 @@ describe('DefaultDesktopToolingSettingsController', () => {
 
   it('reports a background tool refresh failure without blocking startup', async () => {
     const refreshError = new Error('tool probe failed');
-    const { controller, reportedErrors } = createFixture({
-      dashboard: {
-        refreshAvailability: async () => {
-          throw refreshError;
-        },
-      },
-    });
+    toolData.refreshAvailability.mockRejectedValue(refreshError);
+    const { controller, reportedErrors } = createFixture();
 
     await controller.postStartupData();
 
@@ -200,21 +239,19 @@ describe('DefaultDesktopToolingSettingsController', () => {
     const globalState = spyOnUpdate(new FakeStateStore(), () =>
       events.push('state:update'),
     );
+    toolData.buildItems.mockImplementation(async (_host, results) => {
+      expect(results).toBe(cachedResults);
+      events.push('dashboard:build');
+      return [DASHBOARD_ITEM];
+    });
+    toolData.lastCheckResults.mockImplementation(() => {
+      events.push('dashboard:cached');
+      return cachedResults;
+    });
     const { controller } = createFixture({
       globalState,
       renderer: {
         postToRenderer: () => events.push('renderer:post'),
-      },
-      dashboard: {
-        buildItems: async (results) => {
-          expect(results).toBe(cachedResults);
-          events.push('dashboard:build');
-          return [DASHBOARD_ITEM];
-        },
-        getCachedCheckResults: async () => {
-          events.push('dashboard:cached');
-          return cachedResults;
-        },
       },
     });
 
@@ -235,23 +272,21 @@ describe('DefaultDesktopToolingSettingsController', () => {
 
   it('completes a fresh availability check before rebuilding the dashboard', async () => {
     const events: string[] = [];
+    toolData.buildItems.mockImplementation(async () => {
+      events.push('dashboard:build');
+      return [DASHBOARD_ITEM];
+    });
+    toolData.lastCheckResults.mockImplementation(() => {
+      events.push('dashboard:cached');
+      return [];
+    });
+    toolData.refreshAvailability.mockImplementation(async () => {
+      events.push('dashboard:refresh');
+      appSignals.emit('toolAvailabilityChanged', undefined);
+    });
     const { controller } = createFixture({
       renderer: {
         postToRenderer: () => events.push('renderer:post'),
-      },
-      dashboard: {
-        buildItems: async () => {
-          events.push('dashboard:build');
-          return [DASHBOARD_ITEM];
-        },
-        getCachedCheckResults: async () => {
-          events.push('dashboard:cached');
-          return [];
-        },
-        refreshAvailability: async () => {
-          events.push('dashboard:refresh');
-          appSignals.emit('toolAvailabilityChanged', undefined);
-        },
       },
     });
 
@@ -271,20 +306,19 @@ describe('DefaultDesktopToolingSettingsController', () => {
   });
 
   it('runs planned tool commands and reports why a plan produced none', async () => {
-    const planTerminalAction = vi
-      .fn<ControllerOptions['dashboard']['planTerminalAction']>()
-      .mockResolvedValueOnce({
+    const plans: ToolTerminalAction[] = [
+      {
         kind: 'terminal',
         name: 'TeXRA: OpenAI Codex CLI',
         command: 'npm install codex',
-      })
-      .mockResolvedValueOnce({ kind: 'none', reason: 'missingCommand' });
-    const { controller, commands, reportedErrors } = createFixture({
-      dashboard: {
-        buildItems: async () => [],
-        planTerminalAction,
       },
-    });
+      { kind: 'none', reason: 'missingCommand' },
+    ];
+    toolData.buildItems.mockResolvedValue([]);
+    toolData.planTerminalAction.mockImplementation(
+      () => plans.shift() as ToolTerminalAction,
+    );
+    const { controller, commands, reportedErrors } = createFixture();
 
     await assertSupported(controller.toolHandlers.runToolCommand)({
       command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
@@ -297,8 +331,14 @@ describe('DefaultDesktopToolingSettingsController', () => {
       kind: 'auth',
     });
 
-    expect(planTerminalAction).toHaveBeenNthCalledWith(1, 'codex', 'install');
-    expect(planTerminalAction).toHaveBeenNthCalledWith(2, 'codex', 'auth');
+    expect(toolData.planTerminalAction).toHaveBeenNthCalledWith(1, {
+      toolId: 'codex',
+      commandKind: 'install',
+    });
+    expect(toolData.planTerminalAction).toHaveBeenNthCalledWith(2, {
+      toolId: 'codex',
+      commandKind: 'auth',
+    });
     expect(commands).toEqual(['npm install codex']);
     expect(reportedErrors.map((error) => (error as Error).message)).toEqual([
       'No auth command for tool "codex" (missingCommand)',
@@ -323,18 +363,15 @@ describe('DefaultDesktopToolingSettingsController', () => {
   });
 
   it('declares extension installs unsupported and strips their dashboard affordance', async () => {
-    const { controller, posted } = createFixture({
-      dashboard: {
-        buildItems: async () => [
-          {
-            ...DASHBOARD_ITEM,
-            installActions: [
-              { kind: 'extension', extensionId: 'leanprover.lean4' },
-            ],
-          },
+    toolData.buildItems.mockResolvedValue([
+      {
+        ...DASHBOARD_ITEM,
+        installActions: [
+          { kind: 'extension', extensionId: 'leanprover.lean4' },
         ],
       },
-    });
+    ]);
+    const { controller, posted } = createFixture();
 
     expect(isUnsupported(controller.toolHandlers.installToolExtension)).toBe(
       true,

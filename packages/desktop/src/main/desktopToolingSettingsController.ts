@@ -1,5 +1,8 @@
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
+import {
+  buildToolDashboardItems,
+  planToolTerminalAction,
+} from '@controllers/settingsView/ToolDashboardData';
 import { appSignals } from '@eventBus/AppSignals';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -12,7 +15,10 @@ import type {
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
-import type { ExternalToolCheckResult } from '@tools/toolAvailability';
+import {
+  getLastCheckResults,
+  refreshToolAvailability,
+} from '@tools/toolAvailability';
 import { setToolEnabled } from '@utils/config/constants';
 
 const NO_EXTENSION_HOSTING =
@@ -40,17 +46,6 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
   readonly onError: (error: unknown) => void;
   readonly renderer: {
     postToRenderer(message: unknown): void;
-  };
-  readonly dashboard: {
-    buildItems(
-      cachedResults?: ExternalToolCheckResult[],
-    ): Promise<ToolDashboardItem[]>;
-    getCachedCheckResults(): Promise<ExternalToolCheckResult[] | undefined>;
-    refreshAvailability(): Promise<void>;
-    planTerminalAction(
-      toolId: string,
-      kind: ToolCommandKind,
-    ): Promise<ToolTerminalAction>;
   };
   readonly navigation: {
     openExternal(url: string): Promise<void>;
@@ -88,7 +83,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       openToolInstallUrl: (message) =>
         options.navigation.openExternal(message.url),
       installToolExtension: unsupported(NO_EXTENSION_HOSTING),
-      recheckToolStatus: () => options.dashboard.refreshAvailability(),
+      recheckToolStatus: () => this.refreshToolAvailability(),
       toggleTool: (message) => this.toggleTool(message.toolId, message.enabled),
       runToolCommand: (message) => this.runToolCommand(message),
     };
@@ -136,14 +131,21 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       this.postToolDashboardData(),
       this.postLatexSettingsStatus(),
     ]);
-    void this.options.dashboard
-      .refreshAvailability()
-      .catch(this.options.onError);
+    void this.refreshToolAvailability().catch(this.options.onError);
+  }
+
+  /** Re-probe external tools. The probe's own `toolAvailabilityChanged`
+   *  signal is what repaints the dashboard, through the subscription above. */
+  private refreshToolAvailability(): Promise<void> {
+    return this.options.runtime.runPromise(refreshToolAvailability());
   }
 
   private async postToolDashboardData(): Promise<void> {
-    const cachedResults = await this.options.dashboard.getCachedCheckResults();
-    const items = await this.options.dashboard.buildItems(cachedResults);
+    // A cold probe cache stays `undefined` so the build runs the probes;
+    // coercing it to `[]` would render "zero external tools".
+    const items = await this.options.runtime.runPromise(
+      buildToolDashboardItems('desktop', getLastCheckResults() ?? undefined),
+    );
     this.options.renderer.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       items: items.map(withoutExtensionInstall),
@@ -169,10 +171,10 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     toolId: string;
     kind: ToolCommandKind;
   }): Promise<void> {
-    const action = await this.options.dashboard.planTerminalAction(
-      input.toolId,
-      input.kind,
-    );
+    const action = planToolTerminalAction({
+      toolId: input.toolId,
+      commandKind: input.kind,
+    });
     if (action.kind === 'none') {
       this.options.onError(
         new Error(

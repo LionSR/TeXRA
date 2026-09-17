@@ -130,6 +130,15 @@ function createHandlers(): AgentHandlers {
   );
 }
 
+/** The handlers hand back a program; the registry runs it on this host's
+ *  runtime, as the settings message dispatch does. */
+function customizeAgent(handlers: AgentHandlers): Promise<void> {
+  return handlers.runAgentFileAction(
+    'customizeAgent',
+    handlers.agentActions.customizeAgent(CUSTOMIZE_MY_AGENT),
+  );
+}
+
 const DELETE_MY_AGENT = {
   command: 'deleteCustomAgent',
   agentName: 'my-agent',
@@ -229,7 +238,7 @@ describe('AgentHandlers custom-agent file actions', () => {
       path.join(path.sep, 'bundled'),
     );
 
-    await createHandlers().agentActions.customizeAgent(CUSTOMIZE_MY_AGENT);
+    await customizeAgent(createHandlers());
 
     expect(mocks.copyFile).toHaveBeenCalledWith(
       path.join(path.sep, 'bundled', 'writing', 'my-agent.yaml'),
@@ -243,7 +252,7 @@ describe('AgentHandlers custom-agent file actions', () => {
     mocks.getAgent.mockReturnValueOnce({ path: '/outside/my-agent.yaml' });
     mocks.getSourceDirectory.mockResolvedValueOnce('/bundled');
 
-    await createHandlers().agentActions.customizeAgent(CUSTOMIZE_MY_AGENT);
+    await customizeAgent(createHandlers());
 
     expect(mocks.showLoggedMessage).toHaveBeenCalledWith(
       'test',

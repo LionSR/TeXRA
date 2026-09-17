@@ -21,7 +21,11 @@ import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
-import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
+import {
+  createSettingsAgentActions,
+  FAILURE_MESSAGES,
+  type AgentFileCommand,
+} from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentNamePrompt,
   writeTemplateAgentFile,
@@ -39,7 +43,7 @@ import {
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { NotificationFailed } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKey,
@@ -51,7 +55,7 @@ import {
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
@@ -93,34 +97,48 @@ export class AgentHandlers {
     this.agentActions = createSettingsAgentActions({
       directoryController: this.directoryController,
       findAgent: (source, name) => getAgent(agentKey(source, name)),
-      getCustomAgentDirectory: () =>
-        this.runtime.runPromise(agentDirectories.custom()),
-      getSourceDirectory: (source) =>
-        this.runtime.runPromise(agentDirectories.getDirectory(source)),
-      openDocument: async (filePath) => {
-        const doc = await vscode.workspace.openTextDocument(filePath);
-        await vscode.window.showTextDocument(doc, { preview: false });
-      },
+      getCustomAgentDirectory: () => agentDirectories.custom(),
+      getSourceDirectory: (source) => agentDirectories.getDirectory(source),
+      openDocument: (filePath) =>
+        Effect.tryPromise({
+          try: async () => {
+            const doc = await vscode.workspace.openTextDocument(filePath);
+            await vscode.window.showTextDocument(doc, { preview: false });
+          },
+          catch: ensureError,
+        }),
       // An untitled buffer holds the text, so Ctrl+S prompts for a new
       // location instead of writing back into the packaged resources.
-      openReadOnlyDocument: async (filePath) => {
-        const doc = await vscode.workspace.openTextDocument({
-          content: await this.runtime.runPromise(
-            Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-              Effect.map(fs.readFileString(filePath), normalizeLineEndings),
-            ),
+      openReadOnlyDocument: (filePath) =>
+        Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+          Effect.flatMap(fs.readFileString(filePath), (text) =>
+            Effect.tryPromise({
+              try: async () => {
+                const doc = await vscode.workspace.openTextDocument({
+                  content: normalizeLineEndings(text),
+                  language: 'yaml',
+                });
+                await vscode.window.showTextDocument(doc, { preview: false });
+              },
+              catch: ensureError,
+            }),
           ),
-          language: 'yaml',
-        });
-        await vscode.window.showTextDocument(doc, { preview: false });
-      },
-      revealFile: async (filePath) => {
-        await vscode.commands.executeCommand(
-          'revealFileInOS',
-          vscode.Uri.file(filePath),
-        );
-      },
-      confirmAction: confirmModal,
+        ),
+      revealFile: (filePath) =>
+        Effect.tryPromise({
+          try: async () => {
+            await vscode.commands.executeCommand(
+              'revealFileInOS',
+              vscode.Uri.file(filePath),
+            );
+          },
+          catch: ensureError,
+        }),
+      confirmAction: (message, confirmLabel) =>
+        Effect.tryPromise({
+          try: () => confirmModal(message, confirmLabel),
+          catch: ensureError,
+        }),
       showInfoMessage: (message) =>
         this.forkInfoNotice(message, 'Agent settings'),
       showErrorMessage: (message) =>
@@ -133,12 +151,26 @@ export class AgentHandlers {
               cause,
             }),
         }),
-      refreshAfterMutation: () => this.refreshAfterAgentMutation(),
-      run: (failureMessage, action) =>
-        withHandlerErrorHandling(this.ctx, failureMessage, () =>
-          this.runtime.runPromise(action),
-        ),
+      refreshAfterMutation: () =>
+        Effect.tryPromise({
+          try: () => this.refreshAfterAgentMutation(),
+          catch: ensureError,
+        }),
     });
+  }
+
+  /**
+   * The inbound registry's terminal for the four agent-file actions: run one
+   * on this host's runtime and report its failure on the settings channel, as
+   * every sibling handler in this class does.
+   */
+  runAgentFileAction(
+    command: AgentFileCommand,
+    action: Effect.Effect<void, Error, ProcessServices>,
+  ): Promise<void> {
+    return withHandlerErrorHandling(this.ctx, FAILURE_MESSAGES[command], () =>
+      this.runtime.runPromise(action),
+    );
   }
 
   // ── Agent selection data ──
@@ -268,7 +300,10 @@ export class AgentHandlers {
     this.activeCustomAgentDeletions.add(data.agentName);
 
     try {
-      await this.agentActions.deleteCustomAgent(data);
+      await this.runAgentFileAction(
+        'deleteCustomAgent',
+        this.agentActions.deleteCustomAgent(data),
+      );
     } finally {
       this.activeCustomAgentDeletions.delete(data.agentName);
     }

@@ -40,7 +40,6 @@ interface ControllerFixtureOptions {
   >;
   readonly canAccessRemoteCatalog?: Effect.Effect<boolean>;
   readonly signInForRemoteCatalog?: () => Effect.Effect<boolean>;
-  readonly getCustomAgentDirectory?: () => Promise<string>;
   readonly selectCustomAgentDirectory?: () => Promise<string | undefined>;
 }
 
@@ -80,24 +79,12 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
     registry: {
       loadAgents: options.loadAgents ?? (() => Effect.void),
       refreshAgents: options.refreshAgents ?? (() => Effect.void),
-      loadAgentOptionsData: () =>
-        Effect.succeed({
-          workflow: catalog.workflow.map((entry) => ({
-            value: `${entry.source}:${entry.name}`,
-            label: entry.name,
-          })),
-          toolUse: catalog.toolUse.map((entry) => ({
-            value: `${entry.source}:${entry.name}`,
-            label: entry.name,
-          })),
-        }),
       getAgents: (category) => catalog[category],
       getVisibleAgents: (category) => visibleCatalog[category],
     },
     directory: {
-      getCustomAgentDirectory:
-        options.getCustomAgentDirectory ?? (async () => '/agents/custom'),
-      getSourceDirectory: async (source) => `/agents/${source}`,
+      getCustomAgentDirectory: () => Effect.succeed('/agents/custom'),
+      getSourceDirectory: (source) => Effect.succeed(`/agents/${source}`),
       selectCustomAgentDirectory:
         options.selectCustomAgentDirectory ?? (async () => undefined),
       openPath: async (filePath) => {
