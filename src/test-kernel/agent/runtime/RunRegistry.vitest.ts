@@ -166,7 +166,7 @@ function createRegistry(
       Effect.sync(() => {
         events.published.push(...drafts);
       }),
-    approvals: createSessionApprovals({ setApprovalBypassState() {} }),
+    approvals: createSessionApprovals(),
     releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
     acquireRunClaim: () => Effect.succeed(Effect.void),
@@ -1506,7 +1506,7 @@ describe('runRegistry', () => {
   });
 
   it('preserves child approvals when detaching it from its parent', () => {
-    const approvals = createSessionApprovals({ setApprovalBypassState() {} });
+    const approvals = createSessionApprovals();
     const { registry } = createRegistry({ approvals });
     const parentRunId = generateRunId();
     const childRunId = generateRunId();

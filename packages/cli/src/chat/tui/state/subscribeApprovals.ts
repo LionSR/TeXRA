@@ -353,11 +353,6 @@ export function createTuiHostInteractions(
     releaseToolEdit(requestId) {
       dropPresentation(requestId);
     },
-    // The badge reads the fold's policy snapshot; the host only mirrors the
-    // change onto its NDJSON wire.
-    setApprovalBypassState(update) {
-      host.emitApprovalBypassState(update);
-    },
     dispose() {
       disposed = true;
       unsubscribe();

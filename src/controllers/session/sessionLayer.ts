@@ -354,9 +354,8 @@ const sessionHandleLayer = (
         // full policy snapshot on every effective bypass change;
         // `SessionHandle.setApprovalPolicy` publishes the same snapshot when
         // the policy half moves.
-        const approvals = createSessionApprovals(
-          session.interactions,
-          (runId) => session.publishApprovalPolicy(runId),
+        const approvals = createSessionApprovals((runId) =>
+          session.publishApprovalPolicy(runId),
         );
         return {
           events: reads,

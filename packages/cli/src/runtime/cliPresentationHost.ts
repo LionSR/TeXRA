@@ -1,14 +1,11 @@
 // Local imports - runtime
 import {
-  type HostApprovalBypassStateUpdate,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
   type SessionHandle,
 } from '@agent/runtime';
-import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { RunId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
 
@@ -17,7 +14,6 @@ import {
   createCliLogger,
   createCliLogSink,
   flushNdjsonStdout,
-  writeNdjsonStdout,
   type Logger,
   type LogSink,
 } from './logSinks';
@@ -35,15 +31,8 @@ export interface CliRuntimeHost {
     options?: { readonly runId?: RunId },
   ): () => void;
   prepareInteractivePrompt?: () => void;
-  emitApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
   close(): Promise<void>;
 }
-
-const ApprovalBypassNdjsonEvent = {
-  bash: 'updateBashApprovalBypassState',
-  toolEdit: 'updateToolEditApprovalBypassState',
-  superYolo: 'updateSuperYoloBypassState',
-} as const satisfies Record<ApprovalBypassKind, string>;
 
 /** `runtime` is the process runtime the caller holds: the progress renderer
  *  this host owns forks its view subscription on it for the host's lifetime. */
@@ -130,16 +119,6 @@ export function createCliRuntimeHost(
     attachRunProgressRenderer: (session, options) =>
       runProgress ? runProgress.attach(session, options) : () => undefined,
     prepareInteractivePrompt: () => runProgress?.preserve(),
-    emitApprovalBypassState({ runId, kind, bypassActive }) {
-      if (closed || !ndjson) return;
-      const record: CliNdjsonRecord = {
-        kind: 'progress',
-        event: ApprovalBypassNdjsonEvent[kind],
-        ts: new Date().toISOString(),
-        payload: { runId, bypassActive },
-      };
-      writeNdjsonStdout(record);
-    },
     emit<K extends RuntimePresentationEvent>(
       event: K,
       payload: RuntimePresentationEventPayloads[K],
@@ -151,8 +130,8 @@ export function createCliRuntimeHost(
       closed = true;
       runProgress?.clear();
       await sink?.flush?.();
-      // Approval-bypass records go through the module-level NDJSON queue via
-      // `writeNdjsonStdout`, which the lazily created `sink` may never cover.
+      // Other writers put records on the module-level NDJSON queue, which the
+      // lazily created `sink` may never cover.
       if (ndjson) await flushNdjsonStdout();
     },
   };

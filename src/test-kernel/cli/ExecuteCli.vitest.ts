@@ -335,7 +335,6 @@ async function stubExecuteCliDeps(): Promise<void> {
   });
   mocks.createCliRuntimeHost.mockReturnValue({
     emit: mocks.emit,
-    emitApprovalBypassState: vi.fn(),
     attachRunProgressRenderer: mocks.attachRunProgressRenderer,
     prepareInteractivePrompt: mocks.prepareInteractivePrompt,
     close: mocks.close,

@@ -41,7 +41,6 @@ export { runInSession } from './RunContext';
 // HostInteractions
 export { SessionHostInteractions } from './HostInteractions';
 export type {
-  HostApprovalBypassStateUpdate,
   HostInteractions,
   ManualCriticismEntry,
 } from './HostInteractions';

@@ -998,10 +998,10 @@ describe('an active goal at the wait', () => {
     'is paused, with its approval bypasses cleared, after a failure',
     () =>
       Effect.gen(function* () {
-        const setApprovalBypassState = vi.fn();
-        const session = yield* goalSession({ setApprovalBypassState });
+        const session = yield* goalSession();
         const runId = startedRun(session);
         yield* startGoal(session, runId, 'finish the refactor');
+        const recorded = recordSessionEvents(session);
 
         try {
           const { result } = yield* runLoop({
@@ -1015,13 +1015,17 @@ describe('an active goal at the wait', () => {
 
           expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
           expect(goalOf(session, runId)?.status).toBe('paused');
-          for (const kind of ['bash', 'toolEdit', 'superYolo']) {
-            expect(setApprovalBypassState).toHaveBeenCalledWith({
-              runId,
-              kind,
-              bypassActive: false,
-            });
-          }
+          // The cleared bypasses travel as the run's policy snapshot, the
+          // one channel this state has.
+          const policies = eventsOfType(
+            yield* Effect.promise(() => recorded.read()),
+            'approval.policy',
+          );
+          expect(policies.at(-1)?.snapshot.bypasses).toEqual({
+            bash: false,
+            toolEdit: false,
+            superYolo: false,
+          });
         } finally {
           yield* clearGoal(session, runId);
           releaseRunResources(runId, session);
@@ -1036,8 +1040,7 @@ describe('an active goal at the wait', () => {
         // Regression #9443: input queued for the child's resumed turn reaches
         // the model, so the error clears without pausing the goal or dropping
         // its unattended approvals first.
-        const setApprovalBypassState = vi.fn();
-        const session = yield* goalSession({ setApprovalBypassState });
+        const session = yield* goalSession();
         const runId = startedRun(session);
         const parentRunId = generateRunId();
         yield* startGoal(session, runId, 'finish the autonomous proof');
@@ -1056,7 +1059,7 @@ describe('an active goal at the wait', () => {
               },
             ],
           });
-          setApprovalBypassState.mockClear();
+          const recorded = recordSessionEvents(session);
           yield* enqueue(session, runId, [
             { text: 'try the other lemma', origin: 'user' },
           ]);
@@ -1072,7 +1075,12 @@ describe('an active goal at the wait', () => {
           expect(result.outcome).toBe(RUN_PHASE.WAITING);
           expect(userTexts(state)).toContain('try the other lemma');
           expect(goalOf(session, runId)?.status).toBe('active');
-          expect(setApprovalBypassState).not.toHaveBeenCalled();
+          expect(
+            eventsOfType(
+              yield* Effect.promise(() => recorded.read()),
+              'approval.policy',
+            ),
+          ).toEqual([]);
         } finally {
           yield* clearGoal(session, runId);
           releaseRunResources(runId, session);

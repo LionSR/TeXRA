@@ -294,8 +294,6 @@ export function executeCliRequest(
           if (event === 'requestShowError') failurePresented = true;
           return presentationHost.emit(event, payload);
         },
-        setApprovalBypassState: (update) =>
-          presentationHost.emitApprovalBypassState(update),
       }),
     );
     // Present terminal-error toasts from the run's `result` event through the same
