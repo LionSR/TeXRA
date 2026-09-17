@@ -210,10 +210,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
         });
       }
 
-      const parsed = yield* Effect.try({
-        try: () => parseApprovalAnswer(answer),
-        catch: (cause) => cause,
-      });
+      const parsed = parseApprovalAnswer(answer);
       let feedback = parsed.feedback;
       if (!parsed.accepted && parsed.shouldPromptForFeedback) {
         yield* beforePrompt;

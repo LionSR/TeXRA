@@ -106,16 +106,13 @@ export function executeCommandPaletteEntry(
   if (!entry) return false;
   // Sync handlers report their actual result; an async handler returns a
   // Promise, which counts as "handled" so the palette closes immediately and
-  // the work runs in the background. That background rejection would surface
-  // as an unhandled rejection at the host, so log it here without
-  // propagating; sync handler errors still throw and bubble to the caller.
+  // the work runs in the background. A background rejection is left to the
+  // renderer's `unhandledrejection` reporter, the one owner of asynchronous
+  // renderer failures, which logs it and tells the user instead of leaving a
+  // devtools-only line; sync handler errors still throw and bubble to the
+  // caller.
   const result = onExecute(entry.id);
-  if (isThenable(result)) {
-    result.catch((error) => {
-      console.error('[command-palette] async dispatch rejected', error);
-    });
-    return true;
-  }
+  if (isThenable(result)) return true;
   return result;
 }
 

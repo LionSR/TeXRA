@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Data, Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -17,7 +17,7 @@ import {
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -64,15 +64,6 @@ function selectLaunchModel(
 }
 
 /**
- * The restore write's own failure. It never leaves this module: the finalizer
- * logs it and continues, so a failed restore never masks the launch's own
- * outcome.
- */
-class OpenRouterFlagRestoreFailed extends Data.TaggedError(
-  'OpenRouterFlagRestoreFailed',
-)<{ readonly cause: unknown }> {}
-
-/**
  * Temporarily flip `useOpenRouter` on for the OR-only launch path and always
  * restore it, including failures before `executeAgent` starts. The flip is the
  * acquisition of an `Effect.acquireUseRelease`, so it is uninterruptible: a
@@ -96,13 +87,14 @@ function withOpenRouterFlagOn<A, E, R>(
     globalState.update(GlobalStateKey.USE_OPENROUTER, true).pipe(Effect.orDie),
     () => program,
     () =>
+      // The restore write's own failure never leaves this module: the
+      // finalizer logs it and continues, so a failed restore never masks the
+      // launch's own outcome. The handler names the whole channel, so a
+      // widened one fails to compile rather than escaping unlogged.
       globalState.update(GlobalStateKey.USE_OPENROUTER, false).pipe(
-        Effect.mapError((cause) => new OpenRouterFlagRestoreFailed({ cause })),
-        Effect.catchTag('OpenRouterFlagRestoreFailed', (failure) =>
+        Effect.catch((error: StateWriteFailed) =>
           Effect.sync(() => {
-            log.error('Failed to restore useOpenRouter flag.', {
-              data: failure.cause,
-            });
+            log.error('Failed to restore useOpenRouter flag.', { data: error });
           }),
         ),
       ),

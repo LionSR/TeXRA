@@ -9,6 +9,7 @@ import {
   type LoginFormValue,
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
+import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -83,6 +84,8 @@ import {
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
 
+const log = createLog('cli.tui');
+
 type SelectHandler<T> = (value: T) => void | Promise<void>;
 type FormActionResult =
   void | (Promise<void> & { readonly abort?: () => void });
@@ -139,8 +142,11 @@ function formSelectionHandler<T>({
         const canAbort = actionController.abort !== undefined;
         try {
           actionController.abort?.();
-        } catch {
+        } catch (error) {
           // Detaching must still restore the form boundary if abort fails.
+          log.warn(
+            `Aborting the running form action failed: ${toErrorMessage(error)}`,
+          );
         }
         formProgress.set(undefined);
         onDone(value);

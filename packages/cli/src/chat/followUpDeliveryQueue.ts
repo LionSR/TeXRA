@@ -1,4 +1,8 @@
 import { Cause, Effect, Latch, Queue, type Scope } from 'effect';
+import { createLog } from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const log = createLog('cli.chat');
 
 /**
  * The chat session's follow-up deliveries: one at a time, in the order they
@@ -18,7 +22,7 @@ import { Cause, Effect, Latch, Queue, type Scope } from 'effect';
  *   the count is zero.
  * - **A delivery cannot fail.** Its type admits no error, so the caller
  *   attaches recovery before the delivery enters the queue. A defect (a
- *   throw from the body) is recovered at the drain so the worker continues;
+ *   throw from the body) is logged at the drain and the worker continues;
  *   an interruption is the scope closing and stops the drain.
  *
  * A `Semaphore` with a `FiberSet` of forked deliveries was the alternative,
@@ -62,7 +66,11 @@ export const makeFollowUpDeliveryQueue = (
               Effect.catchCause((cause) =>
                 Cause.hasInterrupts(cause)
                   ? Effect.failCause(cause)
-                  : Effect.void,
+                  : Effect.sync(() =>
+                      log.warn(
+                        `A follow-up delivery failed: ${toErrorMessage(Cause.squash(cause))}`,
+                      ),
+                    ),
               ),
             ),
             Effect.sync(() => settle(1)),

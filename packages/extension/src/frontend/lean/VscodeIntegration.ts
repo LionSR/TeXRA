@@ -389,13 +389,16 @@ function sendPositionRequest<T>(
     const found = yield* Effect.result(
       Effect.try({
         try: () => provider.success.findClient(leanUri),
-        catch: () => undefined,
+        catch: (cause) => cause,
       }),
     );
     if (Result.isFailure(found)) {
+      // The lookup's own fault is the answer the caller needs: without it a
+      // real extension-API failure reads as "this file is not in a Lean
+      // project".
       return {
         data: null,
-        error: `Error finding Lean client for ${absolutePath}. Is this file in a Lean project?`,
+        error: `Error finding Lean client for ${absolutePath}. Is this file in a Lean project? ${toErrorMessage(found.failure)}`,
       };
     }
     const client = found.success;

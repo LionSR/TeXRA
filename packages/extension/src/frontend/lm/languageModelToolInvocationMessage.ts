@@ -10,13 +10,8 @@ const MAX_CONTEXT_LENGTH = 60;
 function readInputString(input: unknown, key: string): string | undefined {
   if (!isObject(input)) return undefined;
 
-  try {
-    const value = input[key];
-    return isNonEmptyString(value) ? value.trim() : undefined;
-  } catch {
-    // Treat unusual objects (such as a throwing Proxy) like malformed input.
-    return undefined;
-  }
+  const value = input[key];
+  return isNonEmptyString(value) ? value.trim() : undefined;
 }
 
 function searchMessage(service: string, input: unknown): string {

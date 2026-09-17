@@ -72,20 +72,18 @@ export function createDesktopShellActions(
   /**
    * Shell actions are fire-and-forget: the program runs on its own fiber and
    * a host rejection reaches the window's async-error reporter with the
-   * rejection value itself, which is what the reporter formats. Both failure
-   * tags carry the original rejection as `cause`.
+   * rejection value itself, which is what the reporter formats. The handler
+   * names the whole channel, so a tag added to it fails to compile rather
+   * than escaping the fork unreported.
    */
   function runShellAction(
     program: Effect.Effect<void, ShellActionFailed | NotificationFailed>,
   ): void {
     options.runtime.runFork(
       program.pipe(
-        Effect.catchTags({
-          ShellActionFailed: (failure) =>
-            Effect.sync(() => reportAsyncError(failure.cause)),
-          NotificationFailed: (failure) =>
-            Effect.sync(() => reportAsyncError(failure.cause)),
-        }),
+        Effect.catch((failure: ShellActionFailed | NotificationFailed) =>
+          Effect.sync(() => reportAsyncError(failure.cause)),
+        ),
       ),
     );
   }

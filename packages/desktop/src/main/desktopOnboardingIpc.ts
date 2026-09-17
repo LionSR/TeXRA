@@ -20,16 +20,6 @@ import type {
 } from './desktopIpcTypes.js';
 
 /**
- * The setup conversation the "Run Setup" card launched would not start, or
- * started and failed. The kickoff handler has already told the user, so this
- * only exists to carry the rejection out of the fiber and to release the
- * in-flight guard.
- */
-class SetupKickoffFailed extends Data.TaggedError('SetupKickoffFailed')<{
-  readonly cause: unknown;
-}> {}
-
-/**
  * The welcome card's dismissal did not land: either the flag write rejected or
  * the renderer refused the follow-up state message. Both are reported the same
  * way, through the host's asynchronous-error reporter, so they share one tag.
@@ -121,12 +111,9 @@ export function createDesktopOnboardingIpc(
     // otherwise a later "skip setup" / sign-out / credential-removal refresh
     // would queue behind the entire setup run, leaving the card stuck on 'setup'.
     options.runtime.runFork(
-      Effect.tryPromise({
-        try: () => options.kickoffSetup(),
-        catch: (cause) => new SetupKickoffFailed({ cause }),
-      }).pipe(
+      Effect.tryPromise(() => options.kickoffSetup()).pipe(
         // Swallow — the kickoff handler already surfaced the error to the user.
-        Effect.catchTag('SetupKickoffFailed', () => Effect.void),
+        Effect.ignore,
         // Clear the guard once the run settles (success or failure), not only on
         // error: while it's in flight the guard blocks a concurrent second run,
         // but afterwards another manual "Run Setup" click must be able to launch
