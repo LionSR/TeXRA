@@ -159,7 +159,9 @@ export class RunRegistry {
    *  ({@link throughStop}) or a new generation of it takes the lane
    *  ({@link launchRun}). Two overlapping stops of one parent each hold the
    *  gate they opened, so the first to settle cannot admit a child the
-   *  second's snapshot has already left behind. */
+   *  second's snapshot has already left behind. Once the last token lifts,
+   *  the fold's own `cancelled` carries the refusal — the token covers the
+   *  stop in flight, the fold covers the stop that landed. */
   private readonly stopping = new Map<RunId, Set<symbol>>();
   /** The children a detach in flight has snapshotted, each held until that
    *  detach settles ({@link throughDetach}). Its batch lands on the child's
@@ -229,9 +231,17 @@ export class RunRegistry {
    * child roster when a run's status changes (e.g. RUNNING to WAITING). Both
    * read the new phase from the view here, which is why the caller delivers
    * the row only once the view has folded it.
+   *
+   * A `run.end` folded to `cancelled` also closes the admission window its
+   * stop left: the stop's in-flight token lifts when its settlement does,
+   * which is before this fold, and a child registered in between is stopped
+   * here by the parent's own terminal fact ({@link sweepChildrenOfFoldedStop}).
    */
   handleStatus(runId: RunId): void {
     if (this.disposed) return;
+    if (this.runView(runId)?.status === RUN_PHASE.CANCELLED) {
+      this.sweepChildrenOfFoldedStop(runId);
+    }
     const handle = this.handles.get(runId);
     if (!handle) return;
     this.notifyWaiters(handle.runId);
@@ -390,19 +400,30 @@ export class RunRegistry {
 
   /**
    * Refuse a child admitted under a parent whose stop has begun
-   * ({@link beginStop}), the way {@link assertActive} refuses one admitted
-   * under a closing session.
+   * ({@link beginStop}) or whose stop has already folded, the way
+   * {@link assertActive} refuses one admitted under a closing session. The
+   * fold's `cancelled` is the authoritative stopped state, read from the
+   * session's view rather than remembered here: the in-flight token lifts
+   * when the stop's settlement does, which is before the fold moves, and a
+   * resume that folds the parent back to running reopens admission with
+   * nothing to clear.
    *
    * A child this registry already holds is not an admission: a native child's
    * activation and every turn handle it tracks re-enter here while the detach
    * runs, and those are the children the stop is severing, not new ones.
    */
   private assertAdmitsChild(parentRunId: RunId, childRunId: RunId): void {
-    if (!this.stopping.has(parentRunId)) return;
     if (this.hasRetainedOwner(childRunId)) return;
-    throw new Error(
-      `Cannot launch child run ${childRunId} under run ${parentRunId} while that run is stopping.`,
-    );
+    if (this.stopping.has(parentRunId)) {
+      throw new Error(
+        `Cannot launch child run ${childRunId} under run ${parentRunId} while that run is stopping.`,
+      );
+    }
+    if (this.runView(parentRunId)?.status === RUN_PHASE.CANCELLED) {
+      throw new Error(
+        `Cannot launch child run ${childRunId} under run ${parentRunId}: that run's stop has already folded.`,
+      );
+    }
   }
 
   /**
@@ -729,6 +750,27 @@ export class RunRegistry {
         this.terminate(handle, visited, cascadeChildren, settlements);
       }
     }
+  }
+
+  /**
+   * Stop every child still registered under a run whose stop has folded,
+   * through the same cascade the stop ran at admission. The stop itself
+   * handled the children it could see — a child it detached is no longer
+   * owned here, so its sever is preserved exactly, and one it interrupted
+   * takes the same interrupt again, which its already-latched stop absorbs —
+   * so the only child this reaches is one registered in the window between
+   * the stop's settlement and the fold ({@link assertAdmitsChild} refuses
+   * every later one). Runs at the terminal fold, where no caller owns a
+   * settlement: the parked-child teardowns it collects cannot fail (their
+   * recovery is logged inside), so the fork drops nothing observable.
+   */
+  private sweepChildrenOfFoldedStop(runId: RunId): void {
+    const settlements: Effect.Effect<void, Error>[] = [];
+    this.interruptActiveChildren(runId, new Set(), true, settlements);
+    if (settlements.length === 0) return;
+    Effect.runFork(
+      Effect.all(settlements, { concurrency: 'unbounded', discard: true }),
+    );
   }
 
   /**
