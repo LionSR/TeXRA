@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import type { SubscriptionDeviceCodePrompt } from '@controllers/modelAccess/subscriptionProviders';
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
+import { ExternalOpenFailed } from '@hosts/uiHosts';
 import * as logger from '@logger/logUtils';
 import { apiKeySecretName } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -30,7 +31,7 @@ const codexMocks = vi.hoisted(() => ({
   })),
   login: vi.fn(
     (_options: {
-      openBrowser(url: string): void | Promise<void>;
+      openBrowser(url: string): Effect.Effect<void, unknown>;
     }): Effect.Effect<{ email: string }, unknown> =>
       Effect.succeed({ email: 'user@example.com' }),
   ),
@@ -167,7 +168,7 @@ async function createFixture({
     },
     externalOpener: {
       openExternal: () => Effect.void,
-      openSubscriptionSignInUrl: async () => undefined,
+      openSubscriptionSignInUrl: () => Effect.void,
       presentSubscriptionSignInUrl: () => undefined,
       presentSubscriptionDeviceCode: () => undefined,
     },
@@ -414,9 +415,16 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   it('falls back without reporting the browser-open failure twice and logs its cause', async () => {
     const browserError = new Error('no browser handler');
     const openExternal = vi.fn(() => Effect.void);
-    const openSubscriptionSignInUrl = vi.fn(async () => {
-      throw browserError;
-    });
+    const openSubscriptionSignInUrl = vi.fn((url: string) =>
+      Effect.fail(
+        new ExternalOpenFailed({
+          kind: 'url',
+          target: url,
+          message: `The desktop could not open ${url} in the default browser.`,
+          cause: browserError,
+        }),
+      ),
+    );
     const presentSubscriptionSignInUrl = vi.fn();
     const presentSubscriptionDeviceCode = vi.fn();
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
@@ -429,13 +437,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       },
     });
     codexMocks.login.mockImplementationOnce(({ openBrowser }) =>
-      Effect.tryPromise({
-        try: async () => {
-          await openBrowser('https://auth.openai.com/authorize');
-          return { email: 'loopback@example.com' };
-        },
-        catch: (error) => error,
-      }),
+      openBrowser('https://auth.openai.com/authorize').pipe(
+        Effect.as({ email: 'loopback@example.com' }),
+      ),
     );
     codexMocks.loginWithDeviceCode.mockImplementationOnce(({ onPrompt }) =>
       Effect.sync(() => {

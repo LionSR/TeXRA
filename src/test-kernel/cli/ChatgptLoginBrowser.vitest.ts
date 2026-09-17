@@ -50,11 +50,9 @@ function loopbackSession() {
 
 /** Drive the loopback transport through the sign-in URL it would publish. */
 function publishLoopbackUrl(url: string): void {
-  mocks.loginWithLoopback.mockImplementation(({ openBrowser }) =>
-    Effect.promise(async () => {
-      await openBrowser(url);
-      return loopbackSession();
-    }),
+  mocks.loginWithLoopback.mockImplementation(
+    ({ openBrowser }: { openBrowser: (url: string) => Effect.Effect<void> }) =>
+      openBrowser(url).pipe(Effect.as(loopbackSession())),
   );
 }
 

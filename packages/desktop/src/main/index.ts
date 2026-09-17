@@ -573,6 +573,25 @@ function createWindow(options: {
     [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'Configuration Guide',
     [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model Documentation',
   };
+  /**
+   * The shell-facing `openExternal` as the Effect-typed port's member.
+   * `reportFailure: false` leaves the window's own "could not open" dialog
+   * out, for a caller that reports the failure itself.
+   */
+  const openExternalProgram = (
+    url: string,
+    reportFailure: boolean,
+  ): Effect.Effect<void, ExternalOpenFailed> =>
+    Effect.tryPromise({
+      try: () => previewHost.openExternal(url, { reportFailure }),
+      catch: (cause) =>
+        new ExternalOpenFailed({
+          kind: 'url',
+          target: url,
+          message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    });
   /** Open a documentation URL without keeping the caller waiting; the browser
    *  never opening is reported, not swallowed. */
   const openExternalInBackground = (url: string): void => {
@@ -1316,20 +1335,12 @@ function createWindow(options: {
         },
         externalOpener: {
           // The desktop's shell-facing openExternal stays Promise-shaped by
-          // ruling; this is the one adapter onto the Effect-typed port.
-          openExternal: (url) =>
-            Effect.tryPromise({
-              try: () => previewHost.openExternal(url),
-              catch: (cause) =>
-                new ExternalOpenFailed({
-                  kind: 'url',
-                  target: url,
-                  message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
-                  cause,
-                }),
-            }),
-          openSubscriptionSignInUrl: (url) =>
-            previewHost.openExternal(url, { reportFailure: false }),
+          // ruling; this is the one adapter onto the Effect-typed port. The
+          // sign-in variant is the same adapter with the window's own
+          // "could not open" dialog suppressed — the sign-in flow reports a
+          // missing browser itself and falls back to a device code.
+          openExternal: (url) => openExternalProgram(url, true),
+          openSubscriptionSignInUrl: (url) => openExternalProgram(url, false),
           presentSubscriptionSignInUrl: async (url, productName) => {
             const result = await dialog.showMessageBox(window, {
               type: 'info',

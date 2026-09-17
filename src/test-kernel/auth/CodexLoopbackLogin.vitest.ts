@@ -53,9 +53,10 @@ describe('Codex loopback login', () => {
       const fiber = yield* Effect.forkChild(
         login({
           coordinator: coordinatorStub(),
-          openBrowser: () => {
-            host.fiber?.interruptUnsafe();
-          },
+          openBrowser: () =>
+            Effect.sync(() => {
+              host.fiber?.interruptUnsafe();
+            }),
         }),
       );
       host.fiber = fiber;
@@ -68,17 +69,14 @@ describe('Codex loopback login', () => {
     'settles cancellation while the browser launcher remains pending',
     () =>
       Effect.gen(function* () {
-        let finishBrowserLaunch!: () => void;
+        const browserLaunched = yield* Deferred.make<void>();
         // startImmediately is load-bearing: the fiber has to reach the
         // uninterruptible setup before the interrupt, so the launcher is
         // still invoked and the interrupt lands at the launcher join.
         const fiber = yield* Effect.forkChild(
           login({
             coordinator: coordinatorStub(),
-            openBrowser: () =>
-              new Promise<void>((resolve) => {
-                finishBrowserLaunch = resolve;
-              }),
+            openBrowser: () => Deferred.await(browserLaunched),
           }),
           { startImmediately: true },
         );
@@ -86,7 +84,7 @@ describe('Codex loopback login', () => {
         yield* Fiber.interrupt(fiber);
 
         expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
-        finishBrowserLaunch();
+        Deferred.doneUnsafe(browserLaunched, Effect.void);
       }),
   );
 
@@ -115,14 +113,15 @@ describe('Codex loopback login', () => {
               },
               loginWithCode,
             }),
-            openBrowser: async () => {
-              const callback = new URL(request.redirectUri);
-              callback.searchParams.set('state', request.state);
-              callback.searchParams.set('code', 'authorization-code');
-              await fetch(callback);
-              Deferred.doneUnsafe(delivered, Effect.void);
-              await launcherHeld;
-            },
+            openBrowser: () =>
+              Effect.promise(async () => {
+                const callback = new URL(request.redirectUri);
+                callback.searchParams.set('state', request.state);
+                callback.searchParams.set('code', 'authorization-code');
+                await fetch(callback);
+                Deferred.doneUnsafe(delivered, Effect.void);
+                await launcherHeld;
+              }),
           }),
         );
 
@@ -165,22 +164,23 @@ describe('Codex loopback login', () => {
 
         const session = yield* login({
           coordinator,
-          openBrowser: async () => {
-            const callback = new URL(request.redirectUri);
-            callback.hostname = '127.0.0.1';
+          openBrowser: () =>
+            Effect.promise(async () => {
+              const callback = new URL(request.redirectUri);
+              callback.hostname = '127.0.0.1';
 
-            callback.search = new URLSearchParams({
-              state: 'stale-state',
-              code: 'stale-code',
-            }).toString();
-            expect((await fetch(callback)).status).toBe(400);
+              callback.search = new URLSearchParams({
+                state: 'stale-state',
+                code: 'stale-code',
+              }).toString();
+              expect((await fetch(callback)).status).toBe(400);
 
-            callback.search = new URLSearchParams({
-              state,
-              code: 'valid-code',
-            }).toString();
-            expect((await fetch(callback)).status).toBe(200);
-          },
+              callback.search = new URLSearchParams({
+                state,
+                code: 'valid-code',
+              }).toString();
+              expect((await fetch(callback)).status).toBe(200);
+            }),
         });
 
         expect(session).toEqual(expectedSession);

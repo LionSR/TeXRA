@@ -71,13 +71,14 @@ export interface SubscriptionSignInPresenter {
    */
   presentDeviceCode(prompt: SubscriptionDeviceCodePrompt): void;
   /**
-   * Show (and normally open) the loopback consent URL. Awaited before the
-   * callback wait begins, so a host may block on a browser-choice dialog.
-   * Throw to cancel the sign-in; throw {@link LoopbackTransportUnavailableError}
-   * when no browser could be reached at all, which is what lets `'auto'` fall
-   * back to the device-code transport.
+   * Show (and normally open) the loopback consent URL. The program runs to
+   * completion before the callback wait begins, so a host may block on a
+   * browser-choice dialog. Fail to cancel the sign-in; fail with
+   * {@link LoopbackTransportUnavailableError} when no browser could be
+   * reached at all, which is what lets `'auto'` fall back to the device-code
+   * transport.
    */
-  presentSignInUrl(url: string): void | Promise<void>;
+  presentSignInUrl(url: string): Effect.Effect<void, unknown>;
 }
 
 /** A signed-in (or known-signed-out) subscription account, host-neutral. */
@@ -167,7 +168,7 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   }) => Effect.Effect<Session, unknown, HttpClient.HttpClient>;
   readonly loginWithLoopback: (options: {
     coordinator: Coordinator;
-    openBrowser: (url: string) => void | Promise<void>;
+    openBrowser: (url: string) => Effect.Effect<void, unknown>;
   }) => Effect.Effect<Session, unknown, HttpClient.HttpClient>;
   readonly accountLabel: (
     account:
