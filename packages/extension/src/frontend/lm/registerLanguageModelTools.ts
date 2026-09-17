@@ -10,7 +10,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Effect, Fiber } from 'effect';
+import { Effect } from 'effect';
 
 import {
   FileInteractionState,
@@ -94,44 +94,49 @@ export function registerLanguageModelTools(
                 command: 'search',
               }
             : options.input;
-        const invocation = runtime.runFork(
-          Effect.scoped(
-            Effect.gen(function* () {
-              const fiber = yield* Effect.fiber;
-              yield* Effect.acquireRelease(
-                Effect.sync(() =>
-                  token.onCancellationRequested(() => {
-                    runtime.runFork(Fiber.interrupt(fiber));
-                  }),
-                ),
-                (subscription) => Effect.sync(() => subscription.dispose()),
-              );
-              if (token.isCancellationRequested) return yield* Effect.interrupt;
-              return yield* tool.call(input).pipe(
-                Effect.provideService(ToolCall, {
-                  roots: session.roots,
-                  tracker: new FileInteractionState(),
-                  run: undefined,
-                  inScope: (operation) => operation(),
-                }),
-                Effect.provideService(Runs, session.runs),
-                // Every `WorkspaceFs`/`StorageFs` service read in this call
-                // resolves against this session's folders. `inScope` above is
-                // deliberately a no-op: it installs the ambient workspace-roots
-                // frame (`withRunContext`), which nothing on this path needs —
-                // the tools this manifest registers resolve no path through the
-                // `WorkspaceFS` statics that read it. A registration that did
-                // (the latex tools) would read the process's roots here, not
-                // this session's; the statics are deleted next.
-                Effect.provide(sessionFsLayer(session.roots)),
-              );
-            }),
-          ),
+        // Run the invocation on the process runtime with the VS Code
+        // cancellation token bridged to an AbortSignal: a joined/awaited
+        // fiber's failure is delivered to the LM caller only, never to the
+        // fork-failure reporting seam (#12663).
+        const controller = new AbortController();
+        const subscription = token.onCancellationRequested(() =>
+          controller.abort(),
         );
-        const result = await runtime.runPromise(Fiber.join(invocation));
-        return new vscode.LanguageModelToolResult([
-          new vscode.LanguageModelTextPart(toResultText(result)),
-        ]);
+        if (token.isCancellationRequested) controller.abort();
+        try {
+          const result = await runtime.runPromise(
+            Effect.scoped(
+              Effect.gen(function* () {
+                if (token.isCancellationRequested)
+                  return yield* Effect.interrupt;
+                return yield* tool.call(input).pipe(
+                  Effect.provideService(ToolCall, {
+                    roots: session.roots,
+                    tracker: new FileInteractionState(),
+                    run: undefined,
+                    inScope: (operation) => operation(),
+                  }),
+                  Effect.provideService(Runs, session.runs),
+                  // Every `WorkspaceFs`/`StorageFs` service read in this call
+                  // resolves against this session's folders. `inScope` above is
+                  // deliberately a no-op: it installs the ambient workspace-roots
+                  // frame (`withRunContext`), which nothing on this path needs —
+                  // the tools this manifest registers resolve no path through the
+                  // `WorkspaceFS` statics that read it. A registration that did
+                  // (the latex tools) would read the process's roots here, not
+                  // this session's; the statics are deleted next.
+                  Effect.provide(sessionFsLayer(session.roots)),
+                );
+              }),
+            ),
+            { signal: controller.signal },
+          );
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(toResultText(result)),
+          ]);
+        } finally {
+          subscription.dispose();
+        }
       },
     });
     context.subscriptions.push(disposable);

@@ -222,20 +222,34 @@ return await agent('Inspect', { id: 'inspect' })`,
   tasks: [{ id: 'inspect', label: 'Inspect source', phase: 'Research' }],
 }`;
 
-        const projected = yield* Effect.promise(() =>
+        // The projection captures the active stage at construction, so it is
+        // built inside the parent's stage scope; the run it describes is then
+        // yielded directly.
+        const projection = yield* Effect.promise(() =>
           parent.within(() =>
-            runScript(
-              trace,
-              'phase-log',
-              `${plannedMeta}
+            projectWorkflowScriptProgress(trace, {
+              session: testDefaultSession(),
+              parentRunId,
+              checkpointId: 'phase-log',
+              script: `${plannedMeta}
 log('Preparing the workflow')
 phase('Research')
 log('Checking the source')
 return await agent('Inspect', { id: 'inspect' })`,
-            ),
+              runAgent: () =>
+                Effect.sync(function () {
+                  return 'done';
+                }),
+            }),
           ),
         );
-        yield* projected;
+        yield* runPersistedWorkflowScript(projection.options).pipe(
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              projection.settle(exit);
+            }),
+          ),
+        );
 
         const phaseId = stageId(events, 'Research');
         expect(events).toContainEqual(
