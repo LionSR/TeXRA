@@ -63,7 +63,7 @@ const cleanups: Array<() => void> = [];
  * answers it (one run model, 3.7).
  */
 function planSession(runId: RunId) {
-  const { events, interactions } = createRecordingHost();
+  const { interactions } = createRecordingHost();
   const session = sessionWithInteractions(interactions);
   publishTestRunStart(session, runId);
   const requests = autoDecideRequests(session, () => null);
@@ -90,7 +90,7 @@ function planSession(runId: RunId) {
     };
   };
 
-  return { events, session, awaitPlanRequest };
+  return { session, awaitPlanRequest };
 }
 
 function startPlanUpdate(
@@ -100,7 +100,7 @@ function startPlanUpdate(
   seed?: (session: SessionHandle) => Promise<void>,
 ) {
   return Effect.gen(function* () {
-    const { events, session, awaitPlanRequest } = planSession(runId);
+    const { session, awaitPlanRequest } = planSession(runId);
     if (seed) yield* Effect.promise(() => seed(session));
     const workPlanState = new WorkPlanState();
     const tool = new PlanTool();
@@ -121,7 +121,6 @@ function startPlanUpdate(
     );
     return {
       result: Fiber.join(resultFiber),
-      events,
       session,
       workPlanState,
       permission,
@@ -247,7 +246,7 @@ describe('PlanTool — update (plan approval)', () => {
           const runId = generateRunId();
           yield* Effect.tryPromise(() => installPlatform(true));
 
-          const { result, events, session, permission, decide } =
+          const { result, session, permission, decide } =
             yield* startPlanUpdate(runId, plan.objective);
           try {
             expect(permission.goalEnabled).toBe(true);
@@ -265,24 +264,6 @@ describe('PlanTool — update (plan approval)', () => {
             expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
               false,
             );
-            expect(
-              events.filter(
-                (entry) => entry.event === 'setApprovalBypassState',
-              ),
-            ).toEqual([
-              {
-                event: 'setApprovalBypassState',
-                payload: { runId, kind: 'toolEdit', bypassActive: false },
-              },
-              {
-                event: 'setApprovalBypassState',
-                payload: { runId, kind: 'superYolo', bypassActive: false },
-              },
-              {
-                event: 'setApprovalBypassState',
-                payload: { runId, kind: 'bash', bypassActive: true },
-              },
-            ]);
           } finally {
             yield* clearGoal(session, runId);
             releaseRunResources(runId, session);
@@ -299,7 +280,7 @@ describe('PlanTool — update (plan approval)', () => {
           const runId = generateRunId();
           yield* Effect.tryPromise(() => installPlatform(true));
 
-          const { result, events, session, decide } = yield* startPlanUpdate(
+          const { result, session, decide } = yield* startPlanUpdate(
             runId,
             plan.objective,
           );
@@ -314,24 +295,6 @@ describe('PlanTool — update (plan approval)', () => {
               true,
             );
             expect(session.approvals.proposal.isBypassed(runId)).toBe(true);
-            expect(
-              events.filter(
-                (entry) => entry.event === 'setApprovalBypassState',
-              ),
-            ).toEqual([
-              {
-                event: 'setApprovalBypassState',
-                payload: { runId, kind: 'superYolo', bypassActive: true },
-              },
-              {
-                event: 'setApprovalBypassState',
-                payload: { runId, kind: 'toolEdit', bypassActive: true },
-              },
-              {
-                event: 'setApprovalBypassState',
-                payload: { runId, kind: 'bash', bypassActive: true },
-              },
-            ]);
           } finally {
             yield* clearGoal(session, runId);
             releaseRunResources(runId, session);

@@ -367,7 +367,7 @@ describe('runAgent run ownership', () => {
         const runs = new RunRegistry({
           runView: () => undefined,
           commit: () => Effect.void,
-          approvals: createSessionApprovals({ setApprovalBypassState() {} }),
+          approvals: createSessionApprovals(),
           releaseRootRunLease: () => Effect.void,
           finalizeRun: finalizeParked as never,
           acquireRunClaim: () => Effect.succeed(Effect.void),

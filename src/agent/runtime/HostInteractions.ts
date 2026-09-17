@@ -1,7 +1,6 @@
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import { createLog } from '@logger/logUtils';
-import type { FileLocation, RunId } from '@shared/schemas';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import type { FileLocation } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type { Effect } from 'effect';
@@ -78,12 +77,6 @@ type ReportReviewIssueSink = (report: ReviewIssueReport) => {
   readonly reason?: string;
 };
 
-export interface HostApprovalBypassStateUpdate {
-  readonly runId: RunId;
-  readonly kind: ApprovalBypassKind;
-  readonly bypassActive: boolean;
-}
-
 /**
  * The host's presentation surface for a session (ruling A9-3): what a host
  * can show or do on the runtime's behalf. It answers nothing. Every request a
@@ -132,7 +125,6 @@ export interface HostInteractions {
    * the session can wait for the cleanup it asked for.
    */
   releaseToolEdit?(requestId: string): Promise<void> | void;
-  setApprovalBypassState?(update: HostApprovalBypassStateUpdate): void;
   dispose?(): void;
 }
 
@@ -255,10 +247,6 @@ export class SessionHostInteractions implements HostInteractions {
         );
       }
     };
-  }
-
-  setApprovalBypassState(update: HostApprovalBypassStateUpdate): void {
-    this.activeAttachment?.interactions.setApprovalBypassState?.(update);
   }
 
   dispose(): void {

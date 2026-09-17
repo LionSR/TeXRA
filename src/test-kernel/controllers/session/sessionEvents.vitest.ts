@@ -676,7 +676,7 @@ describe('Sessions owner', () => {
         } as unknown as SessionHandle;
         const requests = sessionRequests(
           session,
-          createSessionApprovals({ setApprovalBypassState() {} }),
+          createSessionApprovals(),
           db,
           local,
           yield* InquiryRecords,

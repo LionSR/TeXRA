@@ -11,11 +11,7 @@
  */
 import { Effect, Exit, Fiber, Result, Stream, SubscriptionRef } from 'effect';
 
-import {
-  type HostApprovalBypassStateUpdate,
-  type HostInteractions,
-  type SessionHandle,
-} from '@agent/runtime';
+import { type HostInteractions, type SessionHandle } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { requestParksItsCaller } from '@shared/schemas';
@@ -56,9 +52,6 @@ import { writeTextStderr } from './logSinks';
 
 interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
   readonly emit?: HostInteractions['emit'];
-  readonly setApprovalBypassState?: (
-    update: HostApprovalBypassStateUpdate,
-  ) => void;
 }
 
 /**
@@ -331,7 +324,6 @@ export function createHeadlessCliHostInteractions(
 
   return {
     emit: hooks.emit,
-    setApprovalBypassState: hooks.setApprovalBypassState,
     presentToolEdit(request) {
       previews.set(request.permission.requestId, request);
     },

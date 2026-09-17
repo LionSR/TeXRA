@@ -5,7 +5,7 @@
  * The controllers encapsulate the shared concerns of bash and tool-edit
  * approvals:
  *   - serialized request queues (one prompt at a time per run)
- *   - per-run bypass state announced over a bound progress event
+ *   - per-run bypass state, published as the run's `approval.policy` row
  *
  * Controller instances live on {@link SessionApprovals}, one per session
  * (#8144) — there is no process-global controller, so two sessions queue,
@@ -16,7 +16,6 @@
 
 import { Context, Effect } from 'effect';
 
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type {
   ApprovalPolicySnapshot,
   CommitOrdinal,
@@ -27,13 +26,12 @@ import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
-import type { SessionHostInteractions } from './HostInteractions';
-
 /**
- * Per-run bypass state bound to the host interaction that announces it.
+ * Per-run bypass state. Its one announcement channel is the run's
+ * `approval.policy` row, published by the session through `onPolicyChanged`.
  *
  * Single implementation behind the tool-edit, bash, and proposal (super-YOLO)
- * bypass values, so set/clear semantics and UI notification stay uniform
+ * bypass values, so set/clear semantics and publication stay uniform
  * across approval kinds.
  *
  * A run with no explicit bypass value of its own defers to its ancestor
@@ -45,9 +43,9 @@ import type { SessionHostInteractions } from './HostInteractions';
 export interface RunApprovalBypass {
   isBypassed(runId: RunId): boolean;
   /**
-   * Set bypass for a run. Notifies the active host interaction (unless
-   * `silent`); omit the interaction host for pre-activation setup where no UI
-   * exists yet.
+   * Set bypass for a run. Publishes the run's new `approval.policy` snapshot
+   * unless `silent`, which is pre-activation setup for a run no surface
+   * shows yet.
    */
   setBypass(
     runId: RunId,
@@ -68,8 +66,6 @@ interface RunApprovalBypassState extends RunApprovalBypass {
 }
 
 function createRunApprovalBypass(
-  kind: ApprovalBypassKind,
-  interactions: Pick<SessionHostInteractions, 'setApprovalBypassState'>,
   resolveParent: (runId: RunId) => RunId | undefined,
   resolveDescendants: (runId: RunId) => readonly RunId[],
   onEffectiveChange: (runId: RunId) => void,
@@ -103,20 +99,9 @@ function createRunApprovalBypass(
       descendants.map((descendant) => [descendant, resolve(descendant)]),
     );
     byRun.set(runId, enabled);
-    interactions.setApprovalBypassState({
-      runId,
-      kind,
-      bypassActive: enabled,
-    });
     onEffectiveChange(runId);
     for (const descendant of descendants) {
-      const bypassActive = resolve(descendant);
-      if (previousDescendantStates.get(descendant) !== bypassActive) {
-        interactions.setApprovalBypassState({
-          runId: descendant,
-          kind,
-          bypassActive,
-        });
+      if (previousDescendantStates.get(descendant) !== resolve(descendant)) {
         onEffectiveChange(descendant);
       }
     }
@@ -251,11 +236,10 @@ export interface SessionApprovals {
  * run and each affected descendant, and `registerRunParent` reports
  * the child and each of its descendants whose inherited value the new edge
  * changed. The session publishes that run's `approval.policy` snapshot
- * from it. Silent writes are pre-activation setup for a run no host shows
- * yet and publish nothing, exactly as they notify no host.
+ * from it — the one channel this state travels. Silent writes are
+ * pre-activation setup for a run no surface shows yet and publish nothing.
  */
 export function createSessionApprovals(
-  interactions: Pick<SessionHostInteractions, 'setApprovalBypassState'>,
   onPolicyChanged: (runId: RunId) => void = () => {},
 ): SessionApprovals {
   // One ancestry graph: "who is this run's parent" is kind-independent.
@@ -282,15 +266,11 @@ export function createSessionApprovals(
   };
 
   const toolEditBypass = createRunApprovalBypass(
-    'toolEdit',
-    interactions,
     resolveParent,
     resolveDescendants,
     onPolicyChanged,
   );
   const bashBypass = createRunApprovalBypass(
-    'bash',
-    interactions,
     resolveParent,
     resolveDescendants,
     onPolicyChanged,
@@ -298,8 +278,6 @@ export function createSessionApprovals(
   const toolEdit = createRunApprovalController(toolEditBypass);
   const bash = createRunApprovalController(bashBypass);
   const proposal = createRunApprovalBypass(
-    'superYolo',
-    interactions,
     resolveParent,
     resolveDescendants,
     onPolicyChanged,

@@ -7,7 +7,6 @@ import {
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
@@ -179,8 +178,6 @@ export function createRecordingHost(): {
     emit: (event, payload) => {
       events.push({ event, payload });
     },
-    setApprovalBypassState: (update) =>
-      events.push({ event: 'setApprovalBypassState', payload: update }),
     presentToolEdit: (request) =>
       events.push({ event: 'presentToolEdit', payload: request.permission }),
   };
@@ -327,10 +324,9 @@ export function sessionWithInteractions(
 ): SessionHandle {
   const session = createTestSession();
   if (interactions instanceof SessionHostInteractions) {
-    Object.assign(session, {
-      interactions,
-      approvals: createSessionApprovals(interactions),
-    });
+    // The session's own approvals stay: they are already bound to its
+    // `publishApprovalPolicy`, the one channel bypass state travels.
+    Object.assign(session, { interactions });
     return session;
   }
   if (interactions) session.interactions.use(interactions);

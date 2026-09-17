@@ -14,7 +14,6 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { proposalApprovals } from '@tools/approval';
 import { AskUserQuestionTool } from '@tools/userQuestion/UserQuestionTool';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
@@ -157,52 +156,6 @@ describe('human prompt progress events', () => {
           decided.detach();
         }
       }).pipe(Effect.provide(nativeToolTestLayer())),
-  );
-
-  it.each([
-    {
-      label: 'tool-edit',
-      kind: 'toolEdit',
-      setBypass: (runId: RunId, enabled: boolean) =>
-        testDefaultSession().approvals.toolEdit.bypass.setBypass(
-          runId,
-          enabled,
-        ),
-    },
-    {
-      label: 'bash',
-      kind: 'bash',
-      setBypass: (runId: RunId, enabled: boolean) =>
-        testDefaultSession().approvals.bash.bypass.setBypass(runId, enabled),
-    },
-    {
-      label: 'proposal',
-      kind: 'superYolo',
-      setBypass: (runId: RunId, enabled: boolean) =>
-        proposalApprovals(testDefaultSession()).setBypass(runId, enabled),
-    },
-  ])(
-    'publishes $label bypass changes through the explicit runtime host',
-    ({ kind, setBypass }) => {
-      const explicit = createRecordingHost();
-      const runId = generateRunId();
-      const detach = testDefaultSession().interactions.use(
-        explicit.interactions,
-      );
-
-      try {
-        setBypass(runId, true);
-
-        expect(explicit.events).toEqual([
-          {
-            event: 'setApprovalBypassState',
-            payload: { runId, kind, bypassActive: true },
-          },
-        ]);
-      } finally {
-        detach();
-      }
-    },
   );
 
   it.live('keeps bash and edit session bypasses independent', () =>

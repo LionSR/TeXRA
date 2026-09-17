@@ -48,8 +48,8 @@ export function configureDelegatedChildApprovals(
     session.approvals.registerRunParent(childRunId, parentRunId);
   }
   // The child's `run.start` is published by the time this runs, so the
-  // write is not pre-activation setup: it notifies the host and publishes
-  // the child's `approval.policy` like any other bypass change.
+  // write is not pre-activation setup: it publishes the child's
+  // `approval.policy` like any other bypass change.
   if (policy === 'auto-approved') {
     session.approvals.toolEdit.bypass.setBypass(childRunId, true);
   }

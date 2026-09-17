@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports
 
+import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunId } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
@@ -13,8 +14,6 @@ import {
   releaseRunResources,
 } from '@tools/approval';
 import { generateRunId } from '@utils/core';
-
-import { createRecordingHost } from '../progressTestUtils';
 
 function runPair(): {
   parent: RunId;
@@ -154,78 +153,26 @@ describe('child subagent stream approval inheritance', () => {
     ).toBe(false);
   });
 
-  it('announces inherited edit-bypass changes for visible descendants', () => {
-    const { events, interactions } = createRecordingHost();
-    const detach = testDefaultSession().interactions.use(interactions);
+  it('reports every visible descendant whose inherited edit bypass moved', () => {
+    // The one channel this state travels: `onPolicyChanged`, which the
+    // session layer binds to `publishApprovalPolicy`, so each reported run
+    // becomes that run's `approval.policy` row.
+    const changed: RunId[] = [];
+    const approvals = createSessionApprovals((runId) => changed.push(runId));
     const { parent, child } = runPair();
     const grandchild = generateRunId();
     const pinnedChild = generateRunId();
-    testDefaultSession().approvals.toolEdit.bypass.setBypass(parent, true, {
-      silent: true,
-    });
-    configureDelegatedChildApprovals(
-      child,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-    configureDelegatedChildApprovals(
-      grandchild,
-      child,
-      undefined,
-      testDefaultSession(),
-    );
-    configureDelegatedChildApprovals(
-      pinnedChild,
-      parent,
-      undefined,
-      testDefaultSession(),
-    );
-    testDefaultSession().approvals.toolEdit.bypass.setBypass(
-      pinnedChild,
-      true,
-      {
-        silent: true,
-      },
-    );
+    approvals.toolEdit.bypass.setBypass(parent, true, { silent: true });
+    approvals.registerRunParent(child, parent);
+    approvals.registerRunParent(grandchild, child);
+    approvals.registerRunParent(pinnedChild, parent);
+    approvals.toolEdit.bypass.setBypass(pinnedChild, true, { silent: true });
+    changed.length = 0;
 
-    try {
-      testDefaultSession().approvals.toolEdit.bypass.setBypass(parent, false);
+    approvals.toolEdit.bypass.setBypass(parent, false);
 
-      expect(
-        events.filter(({ event }) => event === 'setApprovalBypassState'),
-      ).toEqual([
-        {
-          event: 'setApprovalBypassState',
-          payload: {
-            runId: parent,
-            kind: 'toolEdit',
-            bypassActive: false,
-          },
-        },
-        {
-          event: 'setApprovalBypassState',
-          payload: {
-            runId: child,
-            kind: 'toolEdit',
-            bypassActive: false,
-          },
-        },
-        {
-          event: 'setApprovalBypassState',
-          payload: {
-            runId: grandchild,
-            kind: 'toolEdit',
-            bypassActive: false,
-          },
-        },
-      ]);
-      expect(
-        testDefaultSession().approvals.toolEdit.bypass.isBypassed(pinnedChild),
-      ).toBe(true);
-    } finally {
-      detach();
-    }
+    expect(changed).toEqual([parent, child, grandchild]);
+    expect(approvals.toolEdit.bypass.isBypassed(pinnedChild)).toBe(true);
   });
 
   it('lets a conversation round inherit bypass from the previous round via the session-level ancestry link', () => {

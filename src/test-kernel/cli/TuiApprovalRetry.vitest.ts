@@ -111,7 +111,6 @@ let detachHost = (): void => {};
 function host(): CliRuntimeHost {
   return {
     emit: vi.fn(),
-    emitApprovalBypassState: vi.fn(),
     close: vi.fn(async () => undefined),
   } as unknown as CliRuntimeHost;
 }
@@ -482,9 +481,9 @@ describe('TUI request decisions', () => {
       }),
   );
 
-  it.effect('updates TUI bash bypass state at the approval decision site', () =>
+  it.effect('sets the run bash bypass at the approval decision site', () =>
     Effect.gen(function* () {
-      const { presentationHost } = tui();
+      tui();
       const runId = runIdFor('bash-bypass');
       const pending = yield* Effect.forkChild(
         openRequest(runId, {
@@ -498,42 +497,36 @@ describe('TUI request decisions', () => {
 
       expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
       yield* waitFor(() =>
-        expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-          runId,
-          kind: 'bash',
-          bypassActive: true,
-        }),
+        expect(
+          testDefaultSession().approvals.bash.bypass.isBypassed(runId),
+        ).toBe(true),
       );
     }),
   );
 
   it.effect(
-    'updates TUI command bypass state when goal auto-approval is enabled and cleared',
+    'sets the run command bypass when goal auto-approval is enabled and cleared',
     () =>
       Effect.gen(function* () {
-        const { presentationHost } = tui();
+        tui();
         const runId = runIdFor('goal-bypass');
         yield* ensureRun(runId);
 
         setGoalSessionAutoApproval(testDefaultSession(), runId, 'commands');
-        expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-          runId,
-          kind: 'bash',
-          bypassActive: true,
-        });
+        expect(
+          testDefaultSession().approvals.bash.bypass.isBypassed(runId),
+        ).toBe(true);
 
         setGoalSessionAutoApproval(testDefaultSession(), runId, false);
-        expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-          runId,
-          kind: 'bash',
-          bypassActive: false,
-        });
+        expect(
+          testDefaultSession().approvals.bash.bypass.isBypassed(runId),
+        ).toBe(false);
       }),
   );
 
-  it.effect('updates TUI edit bypass state at the approval decision site', () =>
+  it.effect('sets the run edit bypass at the approval decision site', () =>
     Effect.gen(function* () {
-      const { presentationHost } = tui();
+      tui();
       const runId = runIdFor('edit-bypass');
       yield* ensureRun(runId);
       const applied = yield* Effect.forkChild(requestEdit(runId));
@@ -546,11 +539,9 @@ describe('TUI request decisions', () => {
         appliedContent: 'new',
       });
       yield* waitFor(() =>
-        expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-          runId,
-          kind: 'toolEdit',
-          bypassActive: true,
-        }),
+        expect(
+          testDefaultSession().approvals.toolEdit.bypass.isBypassed(runId),
+        ).toBe(true),
       );
     }),
   );
@@ -559,7 +550,7 @@ describe('TUI request decisions', () => {
     'enables the complete delegated-task approval mode at the proposal decision site',
     () =>
       Effect.gen(function* () {
-        const { presentationHost } = tui();
+        tui();
         const runId = runIdFor('proposal-bypass');
         const pending = yield* Effect.forkChild(
           openRequest(runId, {
@@ -585,11 +576,6 @@ describe('TUI request decisions', () => {
             testDefaultSession().approvals.bash.bypass.isBypassed(runId),
           ).toBe(true);
         });
-        for (const kind of ['superYolo', 'toolEdit', 'bash'] as const) {
-          expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith(
-            { runId, kind, bypassActive: true },
-          );
-        }
       }),
   );
 
