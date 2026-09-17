@@ -1799,6 +1799,142 @@ export const parseInboundToolArguments = (
       }),
   });
 
+/** One indexed tool-call fragment of a Chat Completions delta. */
+export interface ChatToolCallFragment {
+  readonly index: number;
+  readonly id?: string | null | undefined;
+  readonly type?: 'function' | null | undefined;
+  readonly function?:
+    | {
+        readonly name?: string | null | undefined;
+        readonly arguments?: string | null | undefined;
+      }
+    | null
+    | undefined;
+}
+
+/** A tool call assembled from the indexed fragments of a Chat stream. */
+export interface ChatToolCall {
+  id?: string;
+  name?: string;
+  type?: 'function';
+  /**
+   * The provider's exact returned bytes, concatenated in arrival order. The
+   * `argumentsText` contract forbids reformatting them, so nothing here
+   * parses, re-serializes or normalizes this text.
+   */
+  arguments: string;
+}
+
+/**
+ * What a Chat Completions stream carries across its chunks: which visible
+ * phase is open, the message parts accumulated so far, and the tool calls
+ * assembled from indexed fragments. OpenAI Chat and OpenRouter decode
+ * different chunk schemas onto this one machine.
+ */
+export interface ChatStreamState {
+  activePhase: 'reasoning' | 'text' | undefined;
+  readonly textParts: { kind: 'text' | 'refusal'; text: string }[];
+  readonly calls: Map<number, ChatToolCall>;
+}
+
+export const chatStreamState = (): ChatStreamState => ({
+  activePhase: undefined,
+  textParts: [],
+  calls: new Map(),
+});
+
+/** Ends the open phase, if one is open. */
+export const endChatPhase = (
+  state: ChatStreamState,
+  events: TurnEvent[],
+): void => {
+  if (state.activePhase === undefined) return;
+  events.push({
+    kind: 'phase',
+    part: state.activePhase,
+    boundary: 'end',
+    providerItemIndex: null,
+  });
+  state.activePhase = undefined;
+};
+
+/**
+ * Emits one chunk's reasoning, text and refusal deltas in that order, opening
+ * and closing phase boundaries as the emitted part crosses between reasoning
+ * and the visible message, and accumulating the non-reasoning text into the
+ * message parts the completed result carries. An absent or empty delta emits
+ * nothing.
+ */
+export const chatPhaseDeltas = (
+  state: ChatStreamState,
+  deltas: {
+    readonly reasoning?: string | null | undefined;
+    readonly text?: string | null | undefined;
+    readonly refusal?: string | null | undefined;
+  },
+  events: TurnEvent[],
+): void => {
+  for (const [part, text] of [
+    ['reasoning', deltas.reasoning],
+    ['text', deltas.text],
+    ['refusal', deltas.refusal],
+  ] as const) {
+    if (text == null || text === '') continue;
+    const phase = part === 'reasoning' ? 'reasoning' : 'text';
+    if (state.activePhase !== phase) {
+      endChatPhase(state, events);
+      events.push({
+        kind: 'phase',
+        part: phase,
+        boundary: 'start',
+        providerItemIndex: null,
+      });
+      state.activePhase = phase;
+    }
+    if (part !== 'reasoning') {
+      const previous = state.textParts.at(-1);
+      if (previous?.kind === part) previous.text += text;
+      else state.textParts.push({ kind: part, text });
+    }
+    events.push({ kind: 'delta', part, text, providerItemIndex: null });
+  }
+};
+
+/**
+ * Folds one chunk's tool-call fragments into the assembled calls. A fragment
+ * that renames or re-identifies an index fails with `identityChanged`, which
+ * names the provider; the argument bytes are appended, never rewritten.
+ */
+export const absorbChatToolCalls = (
+  state: ChatStreamState,
+  fragments: readonly ChatToolCallFragment[] | null | undefined,
+  identityChanged: string,
+): Effect.Effect<void, ModelError> =>
+  Effect.gen(function* () {
+    for (const fragment of fragments ?? []) {
+      const call = state.calls.get(fragment.index) ?? { arguments: '' };
+      if (
+        (fragment.id != null &&
+          call.id !== undefined &&
+          fragment.id !== call.id) ||
+        (fragment.function?.name != null &&
+          call.name !== undefined &&
+          fragment.function.name !== call.name)
+      ) {
+        return yield* new ModelError({
+          kind: 'malformed-output',
+          message: identityChanged,
+        });
+      }
+      call.id = fragment.id ?? call.id;
+      call.name = fragment.function?.name ?? call.name;
+      call.type = fragment.type ?? call.type;
+      call.arguments += fragment.function?.arguments ?? '';
+      state.calls.set(fragment.index, call);
+    }
+  });
+
 /**
  * A tool-result row translated to its Chat wire shape: OpenAI Chat and
  * OpenRouter build this identically (materialize the text parts, an error

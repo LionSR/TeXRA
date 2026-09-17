@@ -9,7 +9,11 @@ import {
   InputTokenEstimateSchema,
   ModelConfigurationSchema,
   ModelError,
+  absorbChatToolCalls,
+  chatPhaseDeltas,
+  chatStreamState,
   chatToolResultMessages,
+  endChatPhase,
   enrichModelError,
   hasErrorField,
   parseInboundToolArguments,
@@ -1053,18 +1057,9 @@ export function openaiChatModel(
           let miniMaxContentSeen = false;
           let miniMaxEvidence: ReturnType<typeof miniMaxDetection> = {};
           let miniMaxReceipt: z.infer<typeof MiniMaxUsageSchema> | undefined;
-          let activePhase: 'reasoning' | 'text' | undefined;
           let receivedSentinel = false;
-          const content: Array<{ kind: 'text' | 'refusal'; text: string }> = [];
-          const calls = new Map<
-            number,
-            {
-              id?: string;
-              name?: string;
-              type?: 'function';
-              arguments: string;
-            }
-          >();
+          const state = chatStreamState();
+          const { textParts: content, calls } = state;
 
           const bytes = pullStream(() => body.read(), openaiFailure);
           const chunks = sseEvents(
@@ -1341,78 +1336,23 @@ export function openaiChatModel(
                       'This reasoning Chat protocol does not support a refusal field.',
                   });
                 }
-                for (const [part, text] of [
-                  [
-                    'reasoning',
-                    miniMaxReasoningDelta || choice.delta.reasoning_content,
-                  ],
-                  ['text', choice.delta.content],
-                  ['refusal', choice.delta.refusal],
-                ] as const) {
-                  if (text == null || text === '') continue;
-                  const phase = part === 'reasoning' ? 'reasoning' : 'text';
-                  if (activePhase !== phase) {
-                    if (activePhase !== undefined)
-                      events.push({
-                        kind: 'phase',
-                        part: activePhase,
-                        boundary: 'end',
-                        providerItemIndex: null,
-                      });
-                    events.push({
-                      kind: 'phase',
-                      part: phase,
-                      boundary: 'start',
-                      providerItemIndex: null,
-                    });
-                    activePhase = phase;
-                  }
-                  if (part !== 'reasoning') {
-                    const previous = content.at(-1);
-                    if (previous?.kind === part) previous.text += text;
-                    else content.push({ kind: part, text });
-                  }
-                  events.push({
-                    kind: 'delta',
-                    part,
-                    text,
-                    providerItemIndex: null,
-                  });
-                }
-                for (const delta of choice.delta.tool_calls ?? []) {
-                  const call = calls.get(delta.index) ?? { arguments: '' };
-                  if (
-                    (delta.id != null &&
-                      call.id !== undefined &&
-                      delta.id !== call.id) ||
-                    (delta.function?.name != null &&
-                      call.name !== undefined &&
-                      delta.function.name !== call.name)
-                  ) {
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The model changed a streamed tool call identity.',
-                    });
-                  }
-                  call.id = delta.id ?? call.id;
-                  call.name = delta.function?.name ?? call.name;
-                  call.type = delta.type ?? call.type;
-                  call.arguments += delta.function?.arguments ?? '';
-                  calls.set(delta.index, call);
-                }
-                if (
-                  choice.delta.tool_calls?.length &&
-                  activePhase !== undefined
-                ) {
-                  events.push({
-                    kind: 'phase',
-                    part: activePhase,
-                    boundary: 'end',
-                    providerItemIndex: null,
-                  });
-                  activePhase = undefined;
-                }
+                chatPhaseDeltas(
+                  state,
+                  {
+                    reasoning:
+                      miniMaxReasoningDelta || choice.delta.reasoning_content,
+                    text: choice.delta.content,
+                    refusal: choice.delta.refusal,
+                  },
+                  events,
+                );
+                yield* absorbChatToolCalls(
+                  state,
+                  choice.delta.tool_calls,
+                  'The model changed a streamed tool call identity.',
+                );
+                if (choice.delta.tool_calls?.length)
+                  endChatPhase(state, events);
                 if (
                   choice.finish_reason != null &&
                   choice.finish_reason !== 'end_turn'
@@ -1596,13 +1536,7 @@ export function openaiChatModel(
                 });
               }
               const events: TurnEvent[] = [];
-              if (activePhase !== undefined)
-                events.push({
-                  kind: 'phase',
-                  part: activePhase,
-                  boundary: 'end',
-                  providerItemIndex: null,
-                });
+              endChatPhase(state, events);
               events.push({ kind: 'completed', result: parsedResult.data });
               return events;
             }),

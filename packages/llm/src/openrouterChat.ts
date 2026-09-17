@@ -9,8 +9,12 @@ import { z } from 'zod';
 import {
   ModelConfigurationSchema,
   ModelError,
+  absorbChatToolCalls,
   authOrRejectionKind,
+  chatPhaseDeltas,
+  chatStreamState,
   chatToolResultMessages,
+  endChatPhase,
   enrichModelError,
   hasErrorField,
   parseInboundToolArguments,
@@ -792,15 +796,10 @@ export function openrouterChatModel(
           let plain: string | null | undefined;
           let details:
             NonNullable<Reasoning['details']>[number][] | null | undefined;
-          let activePhase: 'reasoning' | 'text' | undefined;
           let sentinel = false;
-          const textParts: Array<{ kind: 'text' | 'refusal'; text: string }> =
-            [];
+          const state = chatStreamState();
+          const { textParts, calls } = state;
           const annotations: Annotation[] = [];
-          const calls = new Map<
-            number,
-            { id?: string; name?: string; arguments: string }
-          >();
           const progress = sseEvents(
             bytes,
             'OpenRouter returned malformed SSE.',
@@ -938,41 +937,15 @@ export function openrouterChatModel(
                         })
                         .join('')
                     : (delta.reasoning ?? '');
-                  for (const [part, text] of [
-                    ['reasoning', visibleReasoning],
-                    ['text', delta.content],
-                    ['refusal', delta.refusal],
-                  ] as const) {
-                    if (text == null || text === '') continue;
-                    const phase = part === 'reasoning' ? 'reasoning' : 'text';
-                    if (activePhase !== phase) {
-                      if (activePhase !== undefined)
-                        events.push({
-                          kind: 'phase',
-                          part: activePhase,
-                          boundary: 'end',
-                          providerItemIndex: null,
-                        });
-                      events.push({
-                        kind: 'phase',
-                        part: phase,
-                        boundary: 'start',
-                        providerItemIndex: null,
-                      });
-                      activePhase = phase;
-                    }
-                    events.push({
-                      kind: 'delta',
-                      part,
-                      text,
-                      providerItemIndex: null,
-                    });
-                    if (part !== 'reasoning') {
-                      const previous = textParts.at(-1);
-                      if (previous?.kind === part) previous.text += text;
-                      else textParts.push({ kind: part, text });
-                    }
-                  }
+                  chatPhaseDeltas(
+                    state,
+                    {
+                      reasoning: visibleReasoning,
+                      text: delta.content,
+                      refusal: delta.refusal,
+                    },
+                    events,
+                  );
                   for (const annotation of delta.annotations ?? []) {
                     if (annotation.kind === 'file-annotation') {
                       const previous = annotations.find(
@@ -992,38 +965,13 @@ export function openrouterChatModel(
                     }
                     annotations.push(annotation);
                   }
-                  if (
-                    (delta.tool_calls?.length ?? 0) > 0 &&
-                    activePhase !== undefined
-                  ) {
-                    events.push({
-                      kind: 'phase',
-                      part: activePhase,
-                      boundary: 'end',
-                      providerItemIndex: null,
-                    });
-                    activePhase = undefined;
-                  }
-                  for (const fragment of delta.tool_calls ?? []) {
-                    const call = calls.get(fragment.index) ?? { arguments: '' };
-                    if (
-                      (fragment.id != null &&
-                        call.id !== undefined &&
-                        fragment.id !== call.id) ||
-                      (fragment.function?.name != null &&
-                        call.name !== undefined &&
-                        fragment.function.name !== call.name)
-                    )
-                      return yield* new ModelError({
-                        kind: 'malformed-output',
-                        message:
-                          'OpenRouter changed a local tool-call identity.',
-                      });
-                    call.id ??= fragment.id ?? undefined;
-                    call.name ??= fragment.function?.name ?? undefined;
-                    call.arguments += fragment.function?.arguments ?? '';
-                    calls.set(fragment.index, call);
-                  }
+                  if ((delta.tool_calls?.length ?? 0) > 0)
+                    endChatPhase(state, events);
+                  yield* absorbChatToolCalls(
+                    state,
+                    delta.tool_calls,
+                    'OpenRouter changed a local tool-call identity.',
+                  );
                 }
                 if (choice?.native_finish_reason !== undefined) {
                   if (
@@ -1159,13 +1107,7 @@ export function openrouterChatModel(
                   cause: result.error,
                 });
               const events: TurnEvent[] = [];
-              if (activePhase !== undefined)
-                events.push({
-                  kind: 'phase',
-                  part: activePhase,
-                  boundary: 'end',
-                  providerItemIndex: null,
-                });
+              endChatPhase(state, events);
               events.push({ kind: 'completed', result: result.data });
               return events;
             }),
