@@ -49,8 +49,8 @@ import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, runInSession, withRunContext } from './RunContext';
-import { createRunScope, type RunScope } from './RunScope';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
+import type { RunScope } from './RunScope';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
@@ -552,7 +552,10 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const stopRun = () => {
       Deferred.doneUnsafe(stopped, Effect.void);
     };
-    const runScope = createRunScope({
+    // Frozen here, at the run's one real construction site: a run's identity
+    // and owning session must not change under the loop that reads them, and
+    // `readonly` alone stops only the callers that kept their types.
+    const runScope: RunScope = Object.freeze({
       runId,
       workingDirectory,
       delegationAgentScope: config.delegationAgentScope,
