@@ -866,12 +866,6 @@
       "name": "selectSetupCredentialModelExcludingOpenRouter"
     },
     {
-      "file": "src/latex/acceptedFileTarget.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "cleanupStaleDiffFile"
-    },
-    {
       "file": "src/latex/arxivProcessor.ts",
       "category": "production-dead",
       "kind": "exports",
