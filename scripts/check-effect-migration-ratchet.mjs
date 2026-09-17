@@ -61,6 +61,10 @@ const SUPERSEDED_PACKAGES = ['p-queue', 'p-defer', 'async-mutex'];
 const RETIRED_ROW_IDS = new Set([
   'import:p-queue',
   'import:p-defer',
+  // #12696 deleted this row and kept the package in SUPERSEDED_PACKAGES; without
+  // the ID here, `--update` would read the absent row as newly introduced and
+  // reseed a future import instead of failing it.
+  'import:async-mutex',
   'effectRuntime()',
 ]);
 const PLATFORM_MODULE = '@platform/platform';
@@ -453,6 +457,16 @@ const ROWS = [
     id: ROW_AMBIENT,
     rule: `${INJECTION_PLAN} §3.2 and §6 steps 6, 7, 10, 11: the AsyncLocalStorage carriers (workspace roots, run context, tool call context) become Context services and Context.Reference values on the fiber; a new call of one of their readers is a new dependency on the carrier being deleted`,
   },
+  // At its floor (#12422, #12073): the four files it carries are the adapters
+  // that stay, and the counts are their allowlist — a fifth file fails as new
+  // debt. claudeAgent.ts: the Claude Agent SDK takes a controller, not a signal.
+  // lifecycleHost.ts: the shutdown phase deadline, which fires after the
+  // runtime's own fibers are gone. childRunLoop.ts: the one signal every
+  // child-run turn runs under, handed straight to execa's cancelSignal, the
+  // Codex SDK and the Claude Agent SDK; the loop's stop must not interrupt its
+  // fiber, because the turn's settlement, parent delivery and finalization all
+  // run after it. slashContext.ts: the chat TUI's busy-form abort, the one
+  // bridge from that synchronous abort into runPromise's `signal` option.
   {
     id: ROW_ABORT_CONTROLLER,
     rule: `${PRD} R5: interruption replaces internal abort choreography; an AbortController is adapted only where an external SDK or host API requires a signal`,
@@ -465,6 +479,11 @@ const ROWS = [
     id: ROW_RUN_BOUNDARY,
     rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli, plus runs on a local or parameter runtime in the named runtime entries: ${RUNTIME_ENTRY_NAMES.join(', ')} — owner ruling 2026-09-14), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
   },
+  // At its floor (#12073): both remaining catches sit in a plane of the catch
+  // budget. desktop/src/main/index.ts is the process entry's foreign boundary,
+  // guarding initializeElectronPlatform — which is what builds the runtime a
+  // fold would need. PollingSourceBase.ts is listener fan-out isolation on the
+  // synchronous onKeysChanged/Disposable contract, invoked outside any fiber.
   {
     id: ROW_CATCH,
     rule: `${PRD} R7 and execution rule 2 (one pass per file): a file that imports 'effect' converts its catch sites in the same pass — typed recovery, scope finalizers, or Exit folds; a raw catch remains only inside a named foreign-runtime adapter`,
