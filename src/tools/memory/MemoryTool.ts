@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
+import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
@@ -57,6 +58,8 @@ import {
   formatAttribution,
   type MemoryFileMeta,
 } from './memoryMeta';
+
+const log = createLog('MemoryTool');
 
 /** Create a memory directory and its parents. */
 const ensureMemoryDir = Effect.fn('MemoryTool.ensureMemoryDir')(function* (
@@ -333,9 +336,15 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       resolvedPath,
       invocation.storageRoot,
     ).pipe(
-      Effect.catchTag('MemoryEntryUnreadable', () =>
-        Effect.fail(new ToolError(errorMsg)),
-      ),
+      // The collapse is deliberate, but the real error is kept on the
+      // ToolError and named in the log, so a permission fault is not lost
+      // behind "does not exist".
+      Effect.catchTag('MemoryEntryUnreadable', (error) => {
+        log.warn(
+          `Memory entry ${inputPath} could not be read: ${toErrorMessage(error.cause)}`,
+        );
+        return Effect.fail(new ToolError(errorMsg, { cause: error.cause }));
+      }),
     );
     if (isDirectory(stats.type)) {
       return yield* Effect.fail(new ToolError(errorMsg));

@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Cause, Effect, FileSystem, Path } from 'effect';
+import { Effect, FileSystem, Path } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -83,15 +83,11 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
     autoIndent: input.autoIndent,
     destination: input.destination,
   }).pipe(
-    Effect.catchCause((cause) =>
-      Effect.failCause(
-        Cause.map(
-          cause,
-          (error: ArxivSourceError) =>
-            new ToolError(`Failed to download arXiv source: ${error.message}`, {
-              cause: error,
-            }),
-        ),
+    Effect.catch((error: ArxivSourceError) =>
+      Effect.fail(
+        new ToolError(`Failed to download arXiv source: ${error.message}`, {
+          cause: error,
+        }),
       ),
     ),
   );
