@@ -11,6 +11,7 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
+import type { RunScope } from '@agent/runtime/RunScope';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { workspaceRoots } from '@platform/workspaceRoots';
@@ -77,7 +78,7 @@ export function createTestLaunchContext({
     ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
     stores: { secrets: new FakeSecrets(), globalState: new FakeStateStore() },
-    runScope: { runId, session },
+    runScope: { runId, session } satisfies RunScope,
     logger,
     parentStage: logger.openStage(`Run: ${config.agent}`),
     userVarChannels: {},

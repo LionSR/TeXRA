@@ -552,8 +552,9 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const stopRun = () => {
       Deferred.doneUnsafe(stopped, Effect.void);
     };
-    // Frozen: the scope is shared across the ALS for the run's lifetime, so
-    // no fiber may mutate it (see #7669).
+    // Frozen here, at the run's one real construction site: a run's identity
+    // and owning session must not change under the loop that reads them, and
+    // `readonly` alone stops only the callers that kept their types.
     const runScope: RunScope = Object.freeze({
       runId,
       workingDirectory,

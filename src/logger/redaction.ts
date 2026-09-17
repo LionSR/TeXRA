@@ -15,67 +15,32 @@ const XAI_API_KEY_PATTERN = /\bxai-[A-Za-z0-9_-]{12,}\b/g;
 
 type ApiKeyProviderId = (typeof API_KEY_PROVIDER_IDS)[number];
 
-interface ProviderKeyRedactionRule {
-  readonly examples: readonly string[];
-  readonly patterns: readonly RegExp[];
-}
+const OPENAI_COMPATIBLE_PATTERNS = [OPENAI_COMPATIBLE_API_KEY_PATTERN];
 
-const OPENAI_COMPATIBLE_REDACTION = {
-  examples: ['sk-provider-redaction-example-1234567890abcdef'],
-  patterns: [OPENAI_COMPATIBLE_API_KEY_PATTERN],
-} as const satisfies ProviderKeyRedactionRule;
-
-export const PROVIDER_KEY_REDACTION_RULES = {
-  openai: {
-    examples: ['sk-proj-redaction-example-1234567890abcdef'],
-    patterns: [OPENAI_COMPATIBLE_API_KEY_PATTERN],
-  },
-  anthropic: {
-    examples: ['sk-ant-api03-redaction-example-1234567890abcdef'],
-    patterns: [OPENAI_COMPATIBLE_API_KEY_PATTERN],
-  },
-  openRouter: {
-    examples: ['sk-or-v1-redaction-example-1234567890abcdef'],
-    patterns: [OPENAI_COMPATIBLE_API_KEY_PATTERN],
-  },
-  google: {
-    examples: [
-      'AIzaSyRedactionExample1234567890abcdef',
-      'AQ.AbRedactionExample1234567890abcdef',
-    ],
-    patterns: [GOOGLE_STANDARD_API_KEY_PATTERN, GOOGLE_AUTH_API_KEY_PATTERN],
-  },
-  xai: {
-    examples: ['xai-redaction-example-1234567890abcdef'],
-    patterns: [XAI_API_KEY_PATTERN],
-  },
-  deepseek: OPENAI_COMPATIBLE_REDACTION,
-  moonshot: {
-    examples: ['sk-kimi-redaction-example-1234567890abcdef'],
-    patterns: [OPENAI_COMPATIBLE_API_KEY_PATTERN],
-  },
-  dashscope: {
-    examples: [
-      'sk-redaction-example-1234567890abcdef',
-      'sk-ws-redaction-example-1234567890abcdef',
-    ],
-    patterns: [OPENAI_COMPATIBLE_API_KEY_PATTERN],
-  },
-  minimax: {
-    examples: ['sk-cp-redaction-example-1234567890abcdef'],
-    patterns: [OPENAI_COMPATIBLE_API_KEY_PATTERN],
-  },
-  glm: OPENAI_COMPATIBLE_REDACTION,
-  meta: OPENAI_COMPATIBLE_REDACTION,
-  kimiCode: OPENAI_COMPATIBLE_REDACTION,
-} as const satisfies Record<ApiKeyProviderId, ProviderKeyRedactionRule>;
+/**
+ * The key shapes each configurable provider issues. The `satisfies` is the
+ * point of the table: adding a provider to `API_KEY_PROVIDER_IDS` without
+ * naming its key shape here is a compile error, so a new provider cannot ship
+ * with its keys unredacted. Representative keys for each shape are the
+ * redaction test's own fixture, not production data.
+ */
+const PROVIDER_KEY_PATTERNS_BY_PROVIDER = {
+  openai: OPENAI_COMPATIBLE_PATTERNS,
+  anthropic: OPENAI_COMPATIBLE_PATTERNS,
+  openRouter: OPENAI_COMPATIBLE_PATTERNS,
+  google: [GOOGLE_STANDARD_API_KEY_PATTERN, GOOGLE_AUTH_API_KEY_PATTERN],
+  xai: [XAI_API_KEY_PATTERN],
+  deepseek: OPENAI_COMPATIBLE_PATTERNS,
+  moonshot: OPENAI_COMPATIBLE_PATTERNS,
+  dashscope: OPENAI_COMPATIBLE_PATTERNS,
+  minimax: OPENAI_COMPATIBLE_PATTERNS,
+  glm: OPENAI_COMPATIBLE_PATTERNS,
+  meta: OPENAI_COMPATIBLE_PATTERNS,
+  kimiCode: OPENAI_COMPATIBLE_PATTERNS,
+} as const satisfies Record<ApiKeyProviderId, readonly RegExp[]>;
 
 const PROVIDER_KEY_PATTERNS = [
-  ...new Set(
-    Object.values(PROVIDER_KEY_REDACTION_RULES).flatMap(
-      (rule) => rule.patterns,
-    ),
-  ),
+  ...new Set(Object.values(PROVIDER_KEY_PATTERNS_BY_PROVIDER).flat()),
 ];
 
 /**

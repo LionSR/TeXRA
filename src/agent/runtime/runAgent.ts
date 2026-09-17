@@ -1,4 +1,5 @@
 import { Cause, Deferred, Effect, Exit } from 'effect';
+import stableStringify from 'safe-stable-stringify';
 
 import { registerRun, getRunRecords } from '@agent/storage';
 import {
@@ -303,7 +304,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
             if (Exit.isFailure(current)) {
               failures.push(Cause.squash(current.cause));
             } else if (
-              JSON.stringify(current.value) === JSON.stringify(priorEnd)
+              stableStringify(current.value) === stableStringify(priorEnd)
             ) {
               const finalization = yield* Effect.exit(
                 finalizeRun(runSession, {
