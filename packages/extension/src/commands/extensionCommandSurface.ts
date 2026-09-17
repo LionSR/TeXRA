@@ -89,12 +89,7 @@ export function createExtensionCommandActions(
       runtime.runPromise(latexHandleCompare(baseLocation, editedLocation)),
     acceptEdited: (baseLocation, editedLocation, copyMeta) =>
       runtime.runPromise(
-        latexHandleAcceptEdited(
-          baseLocation,
-          editedLocation,
-          runtime,
-          copyMeta,
-        ),
+        latexHandleAcceptEdited(baseLocation, editedLocation, copyMeta),
       ),
     indentTeX: () => handleIndentTeX(session),
     signIn: () => runtime.runPromise(authSignIn),

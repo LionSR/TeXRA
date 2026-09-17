@@ -119,51 +119,25 @@ export class DesktopProgressFileActions {
   }
 
   /**
-   * A location's absolute path is where its file is, inside the project or
-   * not, so every read and write here goes through the process filesystem at
-   * that path, settled on the window's runtime.
+   * The bridge's Promise face over the host-neutral accept sequence: its reads
+   * and writes are the sequence's own, against the `FileSystem` the window's
+   * runtime carries, so this settles the whole program in one place.
    */
-  async acceptEditedFile(
-    baseFile: string,
-    editedFile: string,
-  ): Promise<boolean> {
-    const { runtime } = this.host;
-    const fs = await runtime.runPromise(Effect.service(FileSystem.FileSystem));
-    return acceptEditedFileReplace(
-      pathToLocation(baseFile),
-      pathToLocation(editedFile),
-      {
-        exists: (location) =>
-          runtime.runPromise(fs.exists(location.absolutePath)),
-        readFile: (location) =>
-          runtime.runPromise(fs.readFileString(location.absolutePath)),
-        writeFile: (location, content) =>
-          runtime.runPromise(
-            fs.writeFileString(location.absolutePath, content),
-          ),
-        confirm: (message) => this.ui.confirmAcceptFile(message),
-        emitWritten: (absolutePath) =>
-          appSignals.emit('workspaceFilesWritten', {
-            absolutePaths: [absolutePath],
-          }),
-        showInfo: (message) =>
-          this.host.runtime.runPromise(this.ui.showInfoMessage(message)),
-        // Diff-file cleanup is a best-effort side effect of accepting a file:
-        // a file already gone is the post-condition, and any other failure (a
-        // locked file) is reported without failing the accept.
-        deleteFile: (location) =>
-          runtime.runPromise(
-            fs.remove(location.absolutePath, { force: true }).pipe(
-              Effect.catchTag('PlatformError', (error) =>
-                Effect.sync(() => {
-                  console.warn(
-                    `Could not remove the stale diff file ${location.absolutePath}: ${error.message}`,
-                  );
-                }),
-              ),
-            ),
-          ),
-      },
+  acceptEditedFile(baseFile: string, editedFile: string): Promise<boolean> {
+    return this.host.runtime.runPromise(
+      acceptEditedFileReplace(
+        pathToLocation(baseFile),
+        pathToLocation(editedFile),
+        {
+          confirm: (message) =>
+            Effect.promise(() => this.ui.confirmAcceptFile(message)),
+          emitWritten: (absolutePath) =>
+            appSignals.emit('workspaceFilesWritten', {
+              absolutePaths: [absolutePath],
+            }),
+          showInfo: (message) => this.ui.showInfoMessage(message),
+        },
+      ),
     );
   }
 

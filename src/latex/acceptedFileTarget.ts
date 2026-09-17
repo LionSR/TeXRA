@@ -1,8 +1,12 @@
 // Node imports
 import path from 'node:path';
 
+// Third-party imports
+import { Effect, FileSystem, type PlatformError } from 'effect';
+
 // Local imports
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -12,6 +16,9 @@ import {
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 import { getExtensionLowercase } from '@utils/core/pathCore';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
+
+const log = createLog('AcceptedFileTarget');
 
 export type AcceptedFileTarget = {
   targetLocation: FileLocation;
@@ -90,37 +97,29 @@ function buildAcceptSuccessMessage(
 }
 
 /**
- * Host capabilities the accept-edited commit step reaches through: writing
- * the edited content into the resolved target, notifying the host, cleaning
- * up the stale diff companion, and reporting success. Shared by every accept
- * path (replace, save-as-copy) across every host (VS Code command, desktop
- * bridge) so none of them re-implement the write / emit / cleanup / success
- * sequence.
+ * Host capabilities the accept-edited commit step reaches through that the
+ * filesystem cannot answer: notifying the host of a workspace write and
+ * reporting success. The reads, writes and deletions themselves go through
+ * the `FileSystem` the returned program requires, so no host re-implements
+ * them. `E` is the failure the host's own notification can report.
  */
-export interface CommitAcceptedFilePorts {
-  readFile: (location: FileLocation) => Promise<string>;
-  writeFile: (location: FileLocation, content: string) => Promise<void>;
+export interface CommitAcceptedFilePorts<E = never> {
   /** Notify the host that a workspace file was written at this absolute path. */
   emitWritten: (absolutePath: string) => void;
-  showInfo: (message: string) => void | Promise<void>;
-  /**
-   * Remove the stale `_diff` companion file left over from the run that
-   * produced `editedLocation`, if any. Errors (e.g. the file was already
-   * gone) are non-fatal and should be swallowed by the port implementation.
-   */
-  deleteFile: (location: FileLocation) => Promise<void>;
+  showInfo: (message: string) => Effect.Effect<void, E>;
 }
 
 /**
  * Host capabilities the accept-edited replace flow reaches through, so the
- * host-neutral orchestration can run on both the VS Code command (AbsoluteFS,
- * warning dialog, app signals) and the desktop bridge (node fs, dialog IPC)
- * without each side re-implementing the confirm / commit sequence.
+ * host-neutral orchestration can run on both the VS Code command (warning
+ * dialog, app signals) and the desktop bridge (dialog IPC) without each side
+ * re-implementing the confirm / commit sequence.
  */
-export interface AcceptEditedFileReplacePorts extends CommitAcceptedFilePorts {
-  exists: (location: FileLocation) => Promise<boolean>;
+export interface AcceptEditedFileReplacePorts<
+  E = never,
+> extends CommitAcceptedFilePorts<E> {
   /** Confirm the (possibly overwriting) write; return false to abort. */
-  confirm: (message: string) => Promise<boolean>;
+  confirm: (message: string) => Effect.Effect<boolean, E>;
 }
 
 /**
@@ -132,33 +131,55 @@ export interface AcceptEditedFileReplacePorts extends CommitAcceptedFilePorts {
  * already had content, for the "replaced" vs "created" wording) is the
  * caller's to compute, since the replace path already needs it to word its
  * confirmation prompt and shouldn't check twice.
+ *
+ * A location's absolute path is where its file is, inside the workspace or
+ * not, so every read and write goes through the `FileSystem` the caller's
+ * runtime carries, at that path.
  */
-export async function commitAcceptedFile(
+export function commitAcceptedFile<E>(
   baseLocation: FileLocation,
   editedLocation: FileLocation,
   target: { targetLocation: FileLocation; targetFileName: string },
   targetExisted: boolean,
-  ports: CommitAcceptedFilePorts,
-): Promise<void> {
-  const { targetLocation, targetFileName } = target;
-  const editedPath = editedLocation.absolutePath;
+  ports: CommitAcceptedFilePorts<E>,
+): Effect.Effect<void, E | PlatformError.PlatformError, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const { targetLocation, targetFileName } = target;
+    const editedPath = editedLocation.absolutePath;
 
-  const editedContent = await ports.readFile(editedLocation);
-  await ports.writeFile(targetLocation, editedContent);
-  if (targetLocation.kind === 'workspace') {
-    ports.emitWritten(targetLocation.absolutePath);
-  }
+    const editedContent = normalizeLineEndings(
+      yield* fs.readFileString(editedPath),
+    );
+    yield* fs.writeFileString(targetLocation.absolutePath, editedContent);
+    if (targetLocation.kind === 'workspace') {
+      ports.emitWritten(targetLocation.absolutePath);
+    }
 
-  await cleanupStaleDiffFile(
-    baseLocation,
-    editedPath,
-    targetLocation,
-    ports.deleteFile,
-  );
+    const stale = staleDiffFileLocation(
+      baseLocation,
+      editedPath,
+      targetLocation,
+    );
+    if (stale) {
+      // Diff-file cleanup is a best-effort side effect of accepting a file: a
+      // file already gone is the post-condition, and any other failure (a
+      // locked file) is reported without failing the accept.
+      yield* fs.remove(stale.absolutePath, { force: true }).pipe(
+        Effect.catchTag('PlatformError', (error) =>
+          Effect.sync(() => {
+            log.warn(
+              `Could not remove the stale diff file ${stale.absolutePath}: ${error.message}`,
+            );
+          }),
+        ),
+      );
+    }
 
-  await ports.showInfo(
-    buildAcceptSuccessMessage(targetFileName, editedPath, targetExisted),
-  );
+    yield* ports.showInfo(
+      buildAcceptSuccessMessage(targetFileName, editedPath, targetExisted),
+    );
+  });
 }
 
 /**
@@ -169,55 +190,49 @@ export async function commitAcceptedFile(
  * latter wraps this with its own replace-vs-copy quick pick when run
  * metadata is available.
  */
-export async function acceptEditedFileReplace(
+export function acceptEditedFileReplace<E>(
   baseLocation: FileLocation,
   editedLocation: FileLocation,
-  ports: AcceptEditedFileReplacePorts,
-): Promise<boolean> {
-  const editedPath = editedLocation.absolutePath;
-  const target = getAcceptedFileTarget(baseLocation, editedPath);
-  const { targetLocation, isNewFile } = target;
-  const targetExists = isNewFile && (await ports.exists(targetLocation));
+  ports: AcceptEditedFileReplacePorts<E>,
+): Effect.Effect<
+  boolean,
+  E | PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const editedPath = editedLocation.absolutePath;
+    const target = getAcceptedFileTarget(baseLocation, editedPath);
+    const { targetLocation, isNewFile } = target;
+    const targetExists =
+      isNewFile && (yield* fs.exists(targetLocation.absolutePath));
 
-  const confirmed = await ports.confirm(
-    buildAcceptConfirmMessage(
+    const confirmed = yield* ports.confirm(
+      buildAcceptConfirmMessage(
+        target,
+        baseLocation.absolutePath,
+        editedPath,
+        targetExists,
+      ),
+    );
+    if (!confirmed) return false;
+
+    yield* commitAcceptedFile(
+      baseLocation,
+      editedLocation,
       target,
-      baseLocation.absolutePath,
-      editedPath,
-      targetExists,
-    ),
-  );
-  if (!confirmed) return false;
-
-  await commitAcceptedFile(
-    baseLocation,
-    editedLocation,
-    target,
-    !isNewFile || targetExists,
-    ports,
-  );
-  return true;
+      !isNewFile || targetExists,
+      ports,
+    );
+    return true;
+  });
 }
 
 /**
- * Location of the stale `_diff` companion file that a prior latexdiff run
- * would have generated for the `baseLocation` / `editedPath` pair, sitting
- * beside `baseLocation`. Shared by every "accept edited content" path so the
- * diff-naming convention (see {@link generateDiffFileName}) is computed once.
- */
-function diffFileLocation(
-  baseLocation: FileLocation,
-  editedPath: string,
-): FileLocation {
-  return siblingLocation(
-    baseLocation,
-    generateDiffFileName(editedPath, '_diff'),
-  );
-}
-
-/**
- * Delete the stale `_diff` companion file for (baseLocation, editedPath) via
- * `deleteFile`. No-ops in two cases:
+ * The stale `_diff` companion file a prior latexdiff run would have generated
+ * for the `baseLocation` / `editedPath` pair (see {@link generateDiffFileName}),
+ * sitting beside `baseLocation` — or `undefined` when accepting leaves no
+ * stale diff behind:
  *
  * - `targetLocation` isn't `baseLocation` itself: a copy/sibling write (an
  *   extension mismatch resolving to a new file via {@link getAcceptedFileTarget},
@@ -228,20 +243,23 @@ function diffFileLocation(
  *   pattern for `editedPath` (e.g. accepting into a base literally named
  *   `<edited-stem>_diff.tex`, or accepting directly into a latexdiff
  *   artifact) — deleting it would delete the file just accepted.
- *
- * `deleteFile` is expected to swallow its own errors (missing/locked file);
- * this only guards against deleting content that was never stale.
  */
-export async function cleanupStaleDiffFile(
+function staleDiffFileLocation(
   baseLocation: FileLocation,
   editedPath: string,
   targetLocation: FileLocation,
-  deleteFile: (location: FileLocation) => Promise<void>,
-): Promise<void> {
-  if (targetLocation.absolutePath !== baseLocation.absolutePath) return;
-  const diffLocation = diffFileLocation(baseLocation, editedPath);
-  if (diffLocation.absolutePath === targetLocation.absolutePath) return;
-  await deleteFile(diffLocation);
+): FileLocation | undefined {
+  if (targetLocation.absolutePath !== baseLocation.absolutePath) {
+    return undefined;
+  }
+  const diffLocation = siblingLocation(
+    baseLocation,
+    generateDiffFileName(editedPath, '_diff'),
+  );
+  if (diffLocation.absolutePath === targetLocation.absolutePath) {
+    return undefined;
+  }
+  return diffLocation;
 }
 
 /** Remove stale diff companions after accepting workspace outputs, keeping successful paths. */
@@ -252,22 +270,15 @@ export async function cleanupAcceptedWorkspaceDiffFiles(
     entries.map(async ({ outputPath, originalPath }) => {
       const original = WorkspaceFS.locatePath(originalPath);
       if (original.kind === 'external') return [];
-      const removed: string[] = [];
-      await cleanupStaleDiffFile(
-        original,
-        outputPath,
-        original,
-        async (location) => {
-          if (location.kind === 'external') return;
-          try {
-            await WorkspaceFS.delete(location.relativePath);
-            removed.push(location.relativePath);
-          } catch {
-            // A missing or locked diff companion does not undo an accepted file.
-          }
-        },
-      );
-      return removed;
+      const stale = staleDiffFileLocation(original, outputPath, original);
+      if (!stale || stale.kind === 'external') return [];
+      try {
+        await WorkspaceFS.delete(stale.relativePath);
+        return [stale.relativePath];
+      } catch {
+        // A missing or locked diff companion does not undo an accepted file.
+        return [];
+      }
     }),
   );
   return results.flat();

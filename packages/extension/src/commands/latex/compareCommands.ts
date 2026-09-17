@@ -18,16 +18,13 @@ import {
   commitAcceptedFile,
   getAcceptedFileTarget,
   siblingLocation,
-  type AcceptEditedFileReplacePorts,
   type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latexTiming';
 import { workflowOutputCopyStem } from '@shared/constants/workflowOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'CompareCommands';
 const log = createLog(CHANNEL);
@@ -84,51 +81,32 @@ class AcceptEditedFailed extends Data.TaggedError('AcceptEditedFailed')<{
   readonly cause: unknown;
 }> {}
 
+/** Word one step's rejection as the failure the reporting tail shows. */
+const acceptEditedFailure =
+  (step: AcceptEditedFailed['step'], summary: string) => (cause: unknown) =>
+    new AcceptEditedFailed({
+      step,
+      message: `${summary}: ${toErrorMessage(cause)}`,
+      cause,
+    });
+
 /**
- * VS Code bindings for the host-neutral accept-edited sequence, shared by
- * the replace and save-as-copy paths. A location's absolute path is where its
- * file is, so every read and write goes through the process filesystem the
- * command runs with, at that path, settled on the host entry's runtime.
+ * VS Code bindings for the host-neutral accept-edited sequence that the
+ * filesystem cannot answer, shared by the replace and save-as-copy paths.
+ * The reads and writes themselves are the sequence's own, against the
+ * `FileSystem` the host entry's runtime carries.
  */
-function acceptPorts(
-  fs: FileSystem.FileSystem,
-  runtime: ProcessRuntime,
-): CommitAcceptedFilePorts & Pick<AcceptEditedFileReplacePorts, 'exists'> {
-  return {
-    readFile: (location) =>
-      runtime.runPromise(
-        fs
-          .readFileString(location.absolutePath)
-          .pipe(Effect.map(normalizeLineEndings)),
-      ),
-    writeFile: (location, content) =>
-      runtime.runPromise(fs.writeFileString(location.absolutePath, content)),
-    exists: (location) => runtime.runPromise(fs.exists(location.absolutePath)),
-    emitWritten: (absolutePath) =>
-      appSignals.emit('workspaceFilesWritten', {
-        absolutePaths: [absolutePath],
-      }),
-    showInfo: (message) => {
+const acceptPorts: CommitAcceptedFilePorts = {
+  emitWritten: (absolutePath) =>
+    appSignals.emit('workspaceFilesWritten', {
+      absolutePaths: [absolutePath],
+    }),
+  showInfo: (message) =>
+    Effect.sync(() => {
       vscode.window.showInformationMessage(message);
       log.info(message);
-    },
-    // Diff-file cleanup is a best-effort side effect of accepting a file: a
-    // file already gone is the post-condition, and any other failure (a
-    // locked file) is reported without failing the accept.
-    deleteFile: (location) =>
-      runtime.runPromise(
-        fs.remove(location.absolutePath, { force: true }).pipe(
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              log.warn(
-                `Could not remove the stale diff file ${location.absolutePath}: ${error.message}`,
-              );
-            }),
-          ),
-        ),
-      ),
-  };
-}
+    }),
+};
 
 const validateFilesExist = Effect.fnUntraced(function* (
   baseLocation: FileLocation,
@@ -274,31 +252,31 @@ export const handleAcceptEdited = Effect.fn(
   function* (
     baseLocation: FileLocation,
     editedLocation: FileLocation,
-    runtime: ProcessRuntime,
     copyMeta?: AcceptCopyMeta,
   ) {
     if (!(yield* validateFilesExist(baseLocation, editedLocation))) {
       return false;
     }
     const fs = yield* FileSystem.FileSystem;
-    const ports = acceptPorts(fs, runtime);
 
     // No run metadata: single-confirm replace flow shared with the desktop host.
     if (!copyMeta) {
-      return yield* Effect.tryPromise({
-        try: () =>
-          acceptEditedFileReplace(baseLocation, editedLocation, {
-            ...ports,
-            confirm: (message) =>
-              confirmModal(message, 'Replace file', 'Cancel'),
+      const replaceFailed = acceptEditedFailure(
+        'replace',
+        'The edited file could not replace the original',
+      );
+      return yield* acceptEditedFileReplace(baseLocation, editedLocation, {
+        ...acceptPorts,
+        confirm: (message) =>
+          Effect.tryPromise({
+            try: () => confirmModal(message, 'Replace file', 'Cancel'),
+            catch: replaceFailed,
           }),
-        catch: (cause) =>
-          new AcceptEditedFailed({
-            step: 'replace',
-            message: `The edited file could not replace the original: ${toErrorMessage(cause)}`,
-            cause,
-          }),
-      });
+      }).pipe(
+        Effect.catchTag('PlatformError', (error) =>
+          Effect.fail(replaceFailed(error)),
+        ),
+      );
     }
 
     // Run metadata present: let the user replace the original or save a
@@ -310,12 +288,10 @@ export const handleAcceptEdited = Effect.fn(
           editedLocation.absolutePath,
           copyMeta,
         ),
-      catch: (cause) =>
-        new AcceptEditedFailed({
-          step: 'pick-target',
-          message: `The accept target could not be chosen: ${toErrorMessage(cause)}`,
-          cause,
-        }),
+      catch: acceptEditedFailure(
+        'pick-target',
+        'The accept target could not be chosen',
+      ),
     });
     if (!resolved) return false;
 
@@ -323,22 +299,20 @@ export const handleAcceptEdited = Effect.fn(
       resolved.targetLocation.absolutePath,
     );
 
-    yield* Effect.tryPromise({
-      try: () =>
-        commitAcceptedFile(
-          baseLocation,
-          editedLocation,
-          resolved,
-          targetExisted,
-          ports,
+    yield* commitAcceptedFile(
+      baseLocation,
+      editedLocation,
+      resolved,
+      targetExisted,
+      acceptPorts,
+    ).pipe(
+      Effect.mapError(
+        acceptEditedFailure(
+          'commit',
+          'The accepted file could not be committed',
         ),
-      catch: (cause) =>
-        new AcceptEditedFailed({
-          step: 'commit',
-          message: `The accepted file could not be committed: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    });
+      ),
+    );
     return true;
   },
   Effect.catchCause((cause) =>
