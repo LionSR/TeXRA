@@ -243,8 +243,6 @@ the same POLICY implemented per host, the simplification is to hoist it:
 - Run-scoped facts extend `AgentEvent`; session-authored facts extend the
   `SessionEvent` schema and publish via `SessionHandle.publish`.
   No new `bus.emit` from a VS Code-free zone.
-- The flow engine is local (`src/agent/node/index.ts`); no upstream
-  PocketFlow BatchNode/params concepts.
 - No new `@agent/*` deep-import specifiers from hosts (ratchet-frozen); use
   repo-root path aliases.
 

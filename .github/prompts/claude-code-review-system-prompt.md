@@ -1,5 +1,5 @@
 This is TeXRA, a VS Code extension and desktop application written in
-TypeScript. It uses Zod v4, PocketFlow, a platform abstraction layer, and several
+TypeScript. It uses Zod v4, Effect, a platform abstraction layer, and several
 repo-specific webview and error-handling conventions. Review according to
 `AGENTS.md`, `CLAUDE.md`, and `.claude/skills/code-review/`; generic JavaScript
 review heuristics are insufficient.

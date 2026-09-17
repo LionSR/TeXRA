@@ -311,7 +311,7 @@ const GENERAL_LENSES = [
   {
     key: 'pass-through-elimination',
     brief:
-      'Find methods, functions, one-call factories, wrappers, and re-export facades that only forward. Count every caller and name the exact target. Keep deliberate interfaces, host ports, PocketFlow hooks, test seams, and semantic boundaries; collapse only indirection that adds no contract or behavior.',
+      'Find methods, functions, one-call factories, wrappers, and re-export facades that only forward. Count every caller and name the exact target. Keep deliberate interfaces, host ports, test seams, and semantic boundaries; collapse only indirection that adds no contract or behavior.',
   },
   {
     key: 'open-structural-simplification',

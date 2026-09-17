@@ -692,28 +692,26 @@ When refactoring, eliminate unnecessary wrapper functions and indirection layers
 **Anti-pattern (too many layers):**
 
 ```
-Node.exec()
+executeAgent()
   → wrapperFunction()
     → coreFunction()
-      → createFlow()
-      → flow.run()
+      → runToolUse()
 ```
 
 **Preferred (direct execution):**
 
 ```
-Node.exec()
-  → createFlow()
-  → flow.run()
+executeAgent()
+  → runToolUse()
 ```
 
 **Guidelines:**
 
-- Nodes should create and run flows directly in `exec()`, not delegate to wrapper functions
-- If a wrapper only creates state + runs flow + interprets results, inline it
+- Entry points should run the loop program directly, not delegate to wrapper functions
+- If a wrapper only creates state + runs the program + interprets results, inline it
 - Delete wrapper files entirely when they become unused (don't leave empty re-exports)
-- Update tests to use the underlying flow directly rather than through wrappers
-- Update imports to point to the source of truth (e.g., `CycleServices` not re-exporting files)
+- Update tests to exercise the underlying program directly rather than through wrappers
+- Update imports to point to the module that defines the symbol, never a re-exporting file
 
 ### Discouraged factory patterns
 
