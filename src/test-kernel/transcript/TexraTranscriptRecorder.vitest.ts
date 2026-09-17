@@ -67,15 +67,11 @@ describe('attachTestTranscriptFold RunPhase-native group rows (issue #7993)', ()
     expect(dataOf(endEntry).status).toBe(RUN_OUTCOME.COMPLETED);
   });
 
-  it('defaults a stage.run() failure to RunOutcome.FAILED', async () => {
+  it('records a failed stage end as RunOutcome.FAILED', () => {
     const { trace, row } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
-    await expect(
-      stage.run(() => {
-        throw new Error('boom');
-      }),
-    ).rejects.toThrow('boom');
+    stage.end(RUN_OUTCOME.FAILED);
 
     const endEntry = row(stage.id);
 
@@ -189,20 +185,18 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     const { trace, rows } = attachRecorder();
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
-    round.run(() => {
-      const toolRequest = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-      toolRequest.append('I will inspect the file.');
-      toolRequest.finalize();
+    const toolRequest = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
+    toolRequest.append('I will inspect the file.');
+    toolRequest.finalize();
 
-      trace.toolStart({
-        logId: 'tool:read',
-        toolName: 'read',
-        input: { path: 'paper.tex' },
-      });
-      trace.toolEnd({ logId: 'tool:read', status: 'completed' });
-
-      trace.responseFinalized('The file contains the theorem statement.');
+    trace.toolStart({
+      logId: 'tool:read',
+      toolName: 'read',
+      input: { path: 'paper.tex' },
     });
+    trace.toolEnd({ logId: 'tool:read', status: 'completed' });
+
+    trace.responseFinalized('The file contains the theorem statement.');
     round.end();
 
     const modelResponseEntries = rows().filter(

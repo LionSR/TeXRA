@@ -214,7 +214,6 @@ return await agent('Inspect', { id: 'inspect' })`,
     () =>
       Effect.gen(function* () {
         const { trace, events } = recordingTrace();
-        const parent = trace.openStage('Parent');
         const plannedMeta = `export const meta = {
   name: 'planned-progress-test',
   description: 'tests planned workflow progress projection',
@@ -222,27 +221,22 @@ return await agent('Inspect', { id: 'inspect' })`,
   tasks: [{ id: 'inspect', label: 'Inspect source', phase: 'Research' }],
 }`;
 
-        const projected = yield* Effect.promise(() =>
-          parent.within(() =>
-            runScript(
-              trace,
-              'phase-log',
-              `${plannedMeta}
+        yield* runScript(
+          trace,
+          'phase-log',
+          `${plannedMeta}
 log('Preparing the workflow')
 phase('Research')
 log('Checking the source')
 return await agent('Inspect', { id: 'inspect' })`,
-            ),
-          ),
         );
-        yield* projected;
 
         const phaseId = stageId(events, 'Research');
         expect(events).toContainEqual(
           expect.objectContaining({
             type: 'log',
             message: 'Preparing the workflow',
-            stageId: parent.id,
+            stageId: undefined,
           }),
         );
         const queued = workflowCallEvent(events, 'Inspect source', 'queued');
@@ -275,7 +269,7 @@ return await agent('Inspect', { id: 'inspect' })`,
           expect.objectContaining({
             type: 'stage.start',
             id: phaseId,
-            parentId: parent.id,
+            parentId: undefined,
             kind: 'phase',
             index: 0,
             total: 2,

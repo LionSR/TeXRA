@@ -159,13 +159,11 @@ describe('AgentTrace stream output', () => {
 });
 
 describe('tool-use card input redaction', () => {
-  it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
+  it('reuses the captured groupId when endToolUseCard is called with no explicit stage', () => {
     const store = new StreamLog();
     const logger = createTestRunTrace('stream' as RunId, store).trace;
     const outer = logger.openStage('outer');
-    const ref = await outer.within(async () =>
-      startToolUseCard(logger, 'demoTool', { arg: 1 }),
-    );
+    const ref = startToolUseCard(logger, 'demoTool', { arg: 1 }, outer.id);
 
     expect(ref.groupId).toBeDefined();
 
@@ -180,31 +178,5 @@ describe('tool-use card input redaction', () => {
     const entries = streamEntries(store);
     const toolEntry = entries.find((e) => e.id === ref.logId);
     expect(toolEntry?.groupId).toBe(ref.groupId);
-  });
-});
-
-describe('per-trace stage scope (cross-trace isolation)', () => {
-  it('a run stage opened on its own trace does not inherit an active stage from another trace', async () => {
-    const store = new StreamLog();
-
-    // Orchestrator trace with an active "Task:" stage — mirrors a subagent
-    // launched from inside a delegation tool's stage scope.
-    const orchestrator = createTestRunTrace('orchestrator' as RunId).trace;
-    const taskStage = orchestrator.openStage('Task: orchestrator');
-
-    // Subagent run on a SEPARATE trace/stream, opened *inside* the
-    // orchestrator's stage scope. With a per-instance stage scope the
-    // orchestrator's active stage cannot leak across traces, so the
-    // subagent's run stage is a root on its own stream with no extra flag.
-    // (A module-level shared scope would orphan it under the cross-trace id.)
-    await taskStage.within(async () => {
-      const subagent = createTestRunTrace('subagent' as RunId, store).trace;
-      subagent.openStage('Run: subagent');
-    });
-
-    const entries = store.toJSON();
-    const runStage = entries.find((e) => e.text === 'Run: subagent');
-    expect(runStage).toBeDefined();
-    expect(runStage?.groupId).toBeUndefined();
   });
 });

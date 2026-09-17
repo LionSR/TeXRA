@@ -102,7 +102,6 @@ export function dispatchFactsFor(
     if (!(parallelSafe && previousSafe)) partition += 1;
     previousSafe = parallelSafe;
     const primaryIndex = duplicates?.get(call.callId);
-    const stageId = logger.activeStageId() ?? null;
     return {
       callId: call.callId,
       toolName: call.name,
@@ -112,7 +111,7 @@ export function dispatchFactsFor(
       duplicateOf:
         primaryIndex === undefined ? null : parsed[primaryIndex].callId,
       logId: mintLogId(),
-      stageId,
+      stageId: null,
     };
   });
 }

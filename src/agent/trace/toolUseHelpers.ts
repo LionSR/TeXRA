@@ -33,9 +33,8 @@ export function startToolUseCard(
   stageId?: string,
 ): ToolUseCardRef {
   const logId = generateShortId();
-  const groupId = stageId ?? trace.activeStageId();
-  trace.toolStart({ logId, toolName, input }, { stageId: groupId });
-  return { logId, groupId };
+  trace.toolStart({ logId, toolName, input }, { stageId });
+  return { logId, groupId: stageId };
 }
 
 /**

@@ -315,10 +315,9 @@ const inferLaunchModelCompatibilityKey = Effect.fn(
  * its timestamp precedes the stage's startTime. The chronological timeline
  * therefore renders the instruction before the run group.
  *
- * ROOT INVARIANT: each run trace owns its stage scope (per-instance
- * AsyncLocalStorage in TraceEmitter), so this opens as a root — it cannot
- * inherit a cross-trace ambient stage from a parent run (e.g. an
- * orchestrator's tool-use stage when this is a subagent). That isolation is
+ * ROOT INVARIANT: a stage parents only to the handle or id its opener names,
+ * so this opens as a root — it cannot inherit a stage from a parent run (e.g.
+ * an orchestrator's tool-use stage when this is a subagent). That isolation is
  * what keeps a subagent's "Run:"/Init/r0/r1 subtree from orphaning in its own
  * transcript. See .agents/docs/archived/bug-fix/2026-05-30-progress-grouping-refactor.md (R1).
  */

@@ -17,12 +17,6 @@ const NOOP: () => void = () => undefined;
 class NoopStageHandle implements StageHandle {
   constructor(readonly id: string | undefined) {}
   end(_status?: RunOutcome): void {}
-  async within<T>(fn: () => Promise<T> | T): Promise<T> {
-    return fn();
-  }
-  async run<T>(fn: () => Promise<T> | T): Promise<T> {
-    return this.within(fn);
-  }
   child(_label: string, _options?: StageOptions): StageHandle {
     return new NoopStageHandle(generateShortId());
   }
@@ -39,7 +33,6 @@ class NoopStreamHandle implements StreamHandle {
 export const noopTrace: AgentTrace = {
   emit: NOOP,
   subscribe: () => NOOP,
-  activeStageId: () => undefined,
 
   debug: NOOP,
   info: NOOP,
