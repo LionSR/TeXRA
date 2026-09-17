@@ -17,6 +17,11 @@ import {
   RunRecordSchema,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
+import type {
+  DatabaseNotOwner,
+  DatabaseReadFailed,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import {
   ResultMetaSchema,
   aggregateId,
@@ -71,7 +76,7 @@ const sameTurn = (a: ChildTurnKey, b: ChildTurnKey): boolean =>
 export function readChildTurnState(
   session: SessionHandle,
   runId: RunId,
-): Effect.Effect<ChildTurnState, Error> {
+): Effect.Effect<ChildTurnState, DatabaseReadFailed> {
   return session.readAggregate(aggregateId('run', runId)).pipe(
     Effect.map((rows) => {
       let active: ChildTurnKey | null = null;
@@ -88,7 +93,6 @@ export function readChildTurnState(
       }
       return { active, lastCompleted };
     }),
-    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
   );
 }
 
@@ -150,11 +154,10 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       Effect.map(select),
       Effect.catchCause((cause) => Effect.fail(asError(cause))),
     );
-  const write = (draft: SessionEventDraft): Effect.Effect<void, Error> =>
-    session.commit([draft]).pipe(
-      Effect.asVoid,
-      Effect.catchCause((cause) => Effect.fail(asError(cause))),
-    );
+  const write = (
+    draft: SessionEventDraft,
+  ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> =>
+    session.commit([draft]).pipe(Effect.asVoid);
   /** The latest `run.record` row; the database reads a closed run as absent. */
   const recordOf = (rows: readonly SessionEvent[]): RunRecord | null => {
     const event = rows.findLast(
@@ -180,13 +183,12 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
      * and an id with nothing behind it is free to start. Reads the aggregate,
      * because a closed run's records are no longer listed.
      */
-    isRemoved: (): Effect.Effect<boolean, Error> =>
-      session.readAggregate(id).pipe(
-        Effect.map((rows) => rows.some((row) => row.type === 'run.removed')),
-        Effect.catchCause((cause) =>
-          Effect.fail(ensureError(Cause.squash(cause))),
+    isRemoved: (): Effect.Effect<boolean, DatabaseReadFailed> =>
+      session
+        .readAggregate(id)
+        .pipe(
+          Effect.map((rows) => rows.some((row) => row.type === 'run.removed')),
         ),
-      ),
     /**
      * How many times this run has been activated: once when registration
      * committed it, once more for every resume. It is the identity of a
@@ -196,15 +198,14 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
      * same outcome. Reads the aggregate, because the record read keeps only
      * the latest row of each type.
      */
-    countActivations: (): Effect.Effect<number, Error> =>
-      session.readAggregate(id).pipe(
-        Effect.map(
-          (rows) => rows.filter((row) => row.type === 'run.activate').length,
+    countActivations: (): Effect.Effect<number, DatabaseReadFailed> =>
+      session
+        .readAggregate(id)
+        .pipe(
+          Effect.map(
+            (rows) => rows.filter((row) => row.type === 'run.activate').length,
+          ),
         ),
-        Effect.catchCause((cause) =>
-          Effect.fail(ensureError(Cause.squash(cause))),
-        ),
-      ),
     readRunRecord: (): Effect.Effect<RunRecord | null, Error> => read(recordOf),
     readConfig: (): Effect.Effect<AgentConfig | null, Error> =>
       read((rows) => {

@@ -14,7 +14,8 @@ import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Result } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
-import { ensureError } from '@utils/errors/errorMessage';
+import { DatabaseWriteFailed } from '@shared/session/database';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -62,7 +63,8 @@ vi.mock('@agent/storage', async (importOriginal) => {
         writeResultMeta: (meta) =>
           Effect.tryPromise({
             try: () => mocks.writeResultMeta(meta),
-            catch: ensureError,
+            catch: (cause) =>
+              new DatabaseWriteFailed({ path: 'fake-session', cause }),
           }),
       }),
     ),
@@ -818,7 +820,7 @@ describe('CLI run command, workflow agents', () => {
               createRunCommandCliContext({ cwd: root }),
             ),
           );
-          expect(error.message).toContain('metadata disk full');
+          expect(toErrorMessage(error.cause)).toContain('metadata disk full');
 
           expect(
             yield* Effect.promise(() =>
