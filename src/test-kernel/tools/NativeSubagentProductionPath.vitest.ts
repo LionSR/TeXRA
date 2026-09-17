@@ -311,9 +311,9 @@ async function integrationPlatform(): Promise<FakeHost> {
   );
   return {
     ...host,
+    agentResume: { tryResumeRun: resumePersistedRun },
     platform: {
       ...host.platform,
-      agentResume: { tryResumeRun: resumePersistedRun },
       agentDirectories: {
         custom: () => Effect.sync(() => agentsDir),
         builtIn: () => Effect.sync(() => agentsDir),

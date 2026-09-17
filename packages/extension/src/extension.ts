@@ -84,7 +84,10 @@ import { installLongRunningModelDispatcher } from '@platform/defaults/longRunnin
 import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { tryProcessRuntime } from '@platform/processRuntime';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
+import {
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelPort,
+} from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   initProcessWorkspaceRoots,
@@ -191,10 +194,10 @@ async function initVscodePlatform(
    *  platform must exist before `initializeDefaultSession` can run, so the
    *  session cannot be a value here. */
   getSession: () => SessionHandle,
-  extras: Pick<
-    NodePlatformServices,
-    'languageModel' | 'toolMissingHandler'
-  > = {},
+  extras: Pick<NodePlatformServices, 'toolMissingHandler'> & {
+    /** The editor's LM bridge, served as `LanguageModel` below. */
+    readonly languageModel?: LanguageModelPort;
+  } = {},
 ): Promise<{
   secrets: PlatformSecrets;
   runtime: ProcessRuntime;
@@ -236,8 +239,7 @@ async function initVscodePlatform(
   );
   // The resume port closes over the runtime installed just below: a resume
   // attempt runs on it, and the port is only invoked after activation has
-  // returned. One value serves both the runtime's `AgentResume` service and
-  // the platform port.
+  // returned. It is served as the runtime's `AgentResume` service.
   const agentResume: AgentResumePort = {
     tryResumeRun: (runId, recovery) =>
       tryResumeFromResumeData(runId, runtime, getSession(), recovery),
@@ -249,9 +251,8 @@ async function initVscodePlatform(
     secrets,
     appState: globalState,
     auth,
-    // The same bridge the platform wires below (nodeHost applies the same
-    // fallback): the editor's LM API on the workspace path, unavailable on
-    // the credential-only one.
+    // The editor's LM API on the workspace path, unavailable on the
+    // credential-only one. The one defaulting site for this host.
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
     setup: vscodeSetupPlatform,
@@ -283,8 +284,7 @@ async function initVscodePlatform(
     createNodePlatform({
       lifecycle,
       agentDirectories,
-      agentResume,
-      ...extras,
+      toolMissingHandler: extras.toolMissingHandler,
     }),
   );
   const roots = createNodeWorkspaceRoots({

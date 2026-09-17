@@ -32,7 +32,10 @@ import type {
   AppState,
   StateStore,
 } from '@platform/interfaces';
-import type { LanguageModelPort } from '@platform/languageModel';
+import {
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelPort,
+} from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -62,6 +65,10 @@ export interface FakeHost {
   readonly roots: WorkspaceRoots;
   /** The store the host's `Secrets` service reads, as a root's own local. */
   readonly secrets: PlatformSecrets;
+  /** The two ports a real root hands `installProcessRuntime`, held here as
+   *  its own locals because the platform object carries no copy. */
+  readonly agentResume: AgentResumePort;
+  readonly languageModel: LanguageModelPort;
   readonly setup?: SetupPlatformShape;
   /** The host's account plane; absent hosts answer signed-out. */
   readonly auth?: SupabaseAuthShape;
@@ -108,6 +115,8 @@ export function createFakeHost(
     workspaceState,
     globalState,
     secrets,
+    agentResume,
+    languageModel,
     setup,
     auth,
     ...platformOverrides
@@ -120,6 +129,8 @@ export function createFakeHost(
       globalState,
     }),
     secrets: secrets ?? new FakeSecrets(options.secrets, options.secretsEnv),
+    agentResume: agentResume ?? { tryResumeRun: () => Effect.succeed(false) },
+    languageModel: languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     ...(setup ? { setup } : {}),
     ...(auth ? { auth } : {}),
   };
@@ -260,11 +271,11 @@ export const fakeHostAuth: SupabaseAuthShape = {
  * module instance while the host's port is swapped per test.
  */
 export const fakeHostLanguageModel: LanguageModelPort = {
-  isAvailable: () => installedHost().platform.languageModel.isAvailable(),
+  isAvailable: () => installedHost().languageModel.isAvailable(),
   selectModels: (selector) =>
-    installedHost().platform.languageModel.selectModels(selector),
+    installedHost().languageModel.selectModels(selector),
   onDidChange: (listener) =>
-    installedHost().platform.languageModel.onDidChange(listener),
+    installedHost().languageModel.onDidChange(listener),
 };
 
 /** The `AgentResume` service of every test runtime, delegating per call for
@@ -273,7 +284,7 @@ export const fakeHostLanguageModel: LanguageModelPort = {
 export const fakeHostAgentResume: AgentResumePort = {
   tryResumeRun: (runId, recovery) =>
     Effect.suspend(() =>
-      installedHost().platform.agentResume.tryResumeRun(runId, recovery),
+      installedHost().agentResume.tryResumeRun(runId, recovery),
     ),
 };
 

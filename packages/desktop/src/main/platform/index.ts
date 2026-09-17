@@ -199,7 +199,7 @@ export async function initializeElectronPlatform(
     secrets,
     appState: globalStateStore,
     auth: supabaseAuth,
-    // No editor in this process: the same port nodeHost installs below.
+    // No editor in this process.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
     setup: setupAuth.platform,
@@ -220,7 +220,6 @@ export async function initializeElectronPlatform(
   initPlatform(
     createNodePlatform({
       lifecycle,
-      agentResume,
       agentDirectories,
     }),
   );

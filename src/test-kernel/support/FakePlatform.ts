@@ -17,6 +17,7 @@ import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   type AgentDirectoriesPort,
+  type AgentResumePort,
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
@@ -24,7 +25,7 @@ import {
   type StateStore,
   type StateWriteFailed,
 } from '@platform/interfaces';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
+import type { LanguageModelPort } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -458,13 +459,17 @@ export interface FakePlatformOptions {
 /**
  * Overrides for one fake host: the process platform's ports, the two
  * workspace-root ports a suite substitutes (a scoped config provider, a
- * hand-built state store), and the setup platform a setup-tool suite
+ * hand-built state store), the process ports a root hands
+ * `installProcessRuntime`, and the setup platform a setup-tool suite
  * provides. The workspace and storage paths come from `FakePlatformOptions`.
  */
 export type FakeHostOverrides = Partial<Platform> &
   Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState' | 'globalState'>> & {
     /** The store the host's `Secrets` service reads, as a root's own local. */
     readonly secrets?: PlatformSecrets;
+    /** The two process ports, as `FakeHost` holds them. */
+    readonly agentResume?: AgentResumePort;
+    readonly languageModel?: LanguageModelPort;
     readonly setup?: SetupPlatformShape;
     /** The account plane the host's `SupabaseAuth` service reads. Absent hosts
      *  answer signed-out. */
@@ -507,9 +512,7 @@ export function createFakePlatform(
   return {
     fs: nodeFilesystem,
     lifecycle: createLifecycleHost(),
-    agentResume: { tryResumeRun: () => Effect.succeed(false) },
     agentDirectories: FAKE_AGENT_DIRECTORIES,
-    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     toolMissingHandler: () => {},
     ...overrides,
   };

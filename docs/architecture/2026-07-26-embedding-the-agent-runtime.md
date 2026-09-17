@@ -40,10 +40,9 @@ stores the services object (`src/platform/platform.ts:65-67`).
 
 `createNodePlatform` (`src/platform/defaults/nodeHost.ts:94-118`) fills in the
 Node defaults — `nodeFilesystem`, `createNodeWorkspace`, `JsonConfigProvider`,
-`nodeFileLocks`, the unavailable language-model port, and the no-op
-tool-availability host — and requires the host to supply the rest:
-`configStores`, `globalState`, `workspaceState`, `storage`, `secrets`,
-`lifecycle`, `agentResume`, `agentDirectories`, `getWorkspacePath`
+`nodeFileLocks` and the no-op tool-availability host — and requires the host
+to supply the rest: `configStores`, `globalState`, `workspaceState`,
+`storage`, `secrets`, `lifecycle`, `agentDirectories`, `getWorkspacePath`
 (`src/platform/defaults/nodeHost.ts:53-69`).
 
 When Step 3 will copy the packaged bundle, `agentDirectories` must be the

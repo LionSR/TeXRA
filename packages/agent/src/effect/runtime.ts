@@ -34,6 +34,8 @@ import {
 } from '@controllers/session/sessionLayer';
 import { tryProcessRuntime } from '@platform/processRuntime';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
+import type { AgentResumePort } from '@platform/interfaces';
+import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   initProcessWorkspaceRoots,
@@ -59,6 +61,11 @@ export interface AgentPlatform extends Platform {
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
+  /** The port this process's `AgentResume` service forwards to. */
+  readonly agentResume: AgentResumePort;
+  /** The bridge its `LanguageModel` service serves; an embedder with no
+   *  editor passes `UNAVAILABLE_LANGUAGE_MODEL_PORT`, as `nodePlatform()`. */
+  readonly languageModel: LanguageModelPort;
 }
 
 /** The composed process, as the package's services read it. */
