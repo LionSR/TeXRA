@@ -14,6 +14,7 @@ import {
   toElectronAccelerator,
   type DesktopPlatform,
 } from '@shared/commands/accelerators';
+import { commandCatalogById } from '@shared/commands/catalog';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
@@ -25,22 +26,25 @@ import { getRendererPlatform } from './rendererPlatform';
 export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
 
 /**
- * The command palette has no menu entry, so its shortcut is declared here
+ * The command palette has no menu entry, so its catalog row is read here
  * rather than coming from `getDesktopCommandMenuEntries`. Sole owner of that
- * declaration: the shell's accelerator hints read it too, before this registry
+ * read: the shell's accelerator hints call it too, before this registry
  * exists (a bootstrap failure leaves no registry at all).
  */
 export function desktopCommandPaletteShortcut(
   platform: DesktopPlatform,
 ): DesktopShortcutEntry {
+  const entry = commandCatalogById.get(DESKTOP_COMMAND_PALETTE_ID);
+  if (!entry?.keybinding) {
+    throw new Error(
+      `Missing command catalog entry: ${DESKTOP_COMMAND_PALETTE_ID}`,
+    );
+  }
   return {
     id: DESKTOP_COMMAND_PALETTE_ID,
-    label: 'Show Commands',
-    category: 'TeXRA',
-    accelerator: toElectronAccelerator(
-      { key: 'ctrl+k', mac: 'cmd+k' },
-      platform,
-    ),
+    label: entry.shortTitle ?? entry.title,
+    category: entry.category,
+    accelerator: toElectronAccelerator(entry.keybinding, platform),
   };
 }
 

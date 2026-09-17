@@ -45,9 +45,14 @@ describe('commandCatalog', () => {
   it('covers every catalog entry that carries a keybinding', () => {
     // `as const satisfies` yields a union of per-entry shapes; only some
     // members declare `keybinding`, so widen to the catalog entry surface.
+    // Desktop-only rows carry keybindings the desktop shortcut registry owns;
+    // `commandKeybindings` is the VS Code manifest's list, so scope to rows
+    // that reach the manifest.
     const keybindingEntryCount = (
       commandCatalog as readonly CommandCatalogEntry[]
-    ).filter((entry) => entry.keybinding !== undefined).length;
+    ).filter(
+      (entry) => entry.host !== 'desktop' && entry.keybinding !== undefined,
+    ).length;
     assert.strictEqual(keybindingEntryCount, commandKeybindings.length);
   });
 });
