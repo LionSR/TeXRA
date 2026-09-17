@@ -264,7 +264,7 @@ frozen deep-import lists, not another lint rule.
   - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`)
     - `utils/core/boundedIdSet.ts` - `createBoundedIdSet` (LRU-capped `Set<Id>` for "seen id" guards)
     - `utils/core/idHash.ts` - Node-only deterministic execution-ID derivation
-    - `utils/core/keyedMutex.ts` - `KeyedMutex` for independently serialized asynchronous work by key
+    - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)
     - `utils/core/pathCore.ts` - sibling Node-only path module
   - `utils/files/` - Filesystem utilities, rules, and vars
   - `utils/config/` - Settings helpers: raw path reads (`getConfig`, `getValidatedConfig` in `src/utils/config/configUtils.ts`) and catalog-modeled settings (`readPlatformSetting`, `writePlatformSetting` in `src/utils/config/platformSettings.ts`)
@@ -771,7 +771,7 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 - **No bare module-level mutable singletons in tested code.** State that tests need to isolate belongs behind an injectable, resettable handle, not a bare module-level variable. The only test flake hit during the 2026-07 campaign was a module-level session singleton colliding across suites.
 
-- **Serialize asynchronous work through Effect.** Use Effect concurrency primitives or the existing Effect-based per-key ordering helper when operations must run one at a time. Resource ownership must be released on success, failure, and interruption. Do not introduce `p-queue` orchestration or hand-written Promise chains; follow the TeXRA 1.0 direction above.
+- **Serialize asynchronous work through Effect.** Use Effect concurrency primitives or `withPerKeyLane` (`src/utils/core/perKeyQueue.ts`) when operations must run one at a time per key. Resource ownership must be released on success, failure, and interruption. Do not introduce `p-queue` orchestration or hand-written Promise chains; follow the TeXRA 1.0 direction above.
 
 ### Test fixtures and fakes
 

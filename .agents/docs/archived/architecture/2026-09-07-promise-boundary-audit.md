@@ -1,11 +1,42 @@
 # Promise-boundary audit: every `Effect.tryPromise` and `Effect.promise` in production
 
-Status: proposed
+Status: archived — the census is stale by more than a factor of four and four
+of its conclusions were overturned.
+Archived: 2026-09-18
+
+**Why this is archived.** The note classified 86 production sites (73
+`Effect.tryPromise`, 13 `Effect.promise`) on a 2026-09-07 rebase. The same
+grep on `main` returns **397** (340 `tryPromise`, 57 `promise`), so the
+taxonomy tables, the "12 of 98 are interruption-wired" finding and every
+`file:line` key in §3 describe a tree that no longer exists; nine of the
+source files the note keys on are deleted (`effectPort.ts`, `executionLease.ts`,
+`SessionStores.ts`, `fileLocks.ts`, `desktopPapers.ts`, `clipboardText.ts`,
+`OnboardingRefreshQueue.ts`, `SettingsViewHost.ts`,
+`StreamSubscriptionRegistry.ts`). Four conclusions are overturned outright:
+the 2026-09-13 filesystem ruling (Effect's own `FileSystem`/`Path`,
+[rulings ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md#r-1--q1--the-filesystem-effects-own-filesystempath-ruled-2026-09-13-supersedes-the-2026-09-11-deferral))
+supersedes §2.5 and W7 and reframes W1 as an adoption lane rather than a
+blocked one; #12537 deleted the `hostPort` helper that §9 had just created;
+the #12421 lane landed a rooted `FileSystem` foundation beside the statics,
+which W1 said could not exist; and W1's "atomic, or it needs a temporary adapter"
+claim was disproved by nine incremental PRs (#12573, #12575, #12616, #12617,
+#12619, #12621, #12648, #12664, #12695) that converted the filesystem
+consumers in slices without one adapter. Its four still-live rows were folded
+into the tracking issues on 2026-09-18 — filesystem statics into
+[#12421](https://github.com/LionSR/TeXRA/issues/12421), the ambient carriers
+into [#12078](https://github.com/LionSR/TeXRA/issues/12078), and `ky` beside
+`effect/unstable/http` and `execa` beside `effect/unstable/process` into
+[#12422](https://github.com/LionSR/TeXRA/issues/12422). Read what follows as
+the 2026-09-07 record of how the repo reasoned about Promise wraps, not as a
+count, a file map, or a work order. The rule in §2 — a wrap is legitimate
+exactly when the thing on the other side will never be an Effect — is the one
+part still quoted, and it survives in R1 of the
+[Effect-4 PRD](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md#r1-effect-exists-inside-promises-at-the-boundary).
 
 Every production `Effect.tryPromise` and `Effect.promise` site is classified
 here as a **legitimate foreign edge** or a **Promise-typed surface that has
 not been converted yet**, so the migration lanes of
-[2026-08-26-effect-4-runtime-migration.md](./2026-08-26-effect-4-runtime-migration.md)
+[2026-08-26-effect-4-runtime-migration.md](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md)
 can be aimed at the second set and stop worrying about the first.
 
 The audit answers a question that keeps recurring in review: is wrapping a

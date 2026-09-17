@@ -11,6 +11,42 @@ This note examines `main` at `2b4e9ffcba` on 2026-09-10, the commit after
 against live code before this was written; the corrections that came out of
 that are in section 8, so nobody re-derives them.
 
+## Corrections (2026-09-18)
+
+Written back from the
+[round-trip and dual-system survey](../../proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md),
+re-verified against `main`.
+
+- **Every step landed, including S3.** The status line above is current: S0
+  through S6 are all merged. A later survey pass re-read S3 as pending; it is
+  not (#12329).
+- **Section 3.10: the per-run service is `AgentRun`, and `RunContext` was
+  deleted rather than merged.** The section presents "the runtime note's
+  `RunContext`, the injection note's `AgentRun`, the code's `RunScope`" as
+  three names for one service to be unified as `Run`. What happened instead:
+  `AgentRun` (`src/agent/runtime/run/AgentRun.ts`) is the per-run service, and
+  #12705 deleted the `RunContext` `AsyncLocalStorage` carrier outright as
+  write-only — nothing in the repo read its store. `RunContext.ts` survives as
+  a 13-line file holding only `runInSession`, which is a workspace-roots
+  helper and not a run carrier. So that sentence should read: two of the three
+  names resolved to `AgentRun`, and the third was not a service at all.
+- **The `normalizeToolUseData` row over-promised.** Section 4 lists
+  "`normalizeToolUseData`, `ToolUseLog.isError`, the second tool status enum"
+  as ~60 lines of deletion, and section 3.3 describes it as render-time
+  compensation for a lossy write. Re-measured, only one part of that was debt:
+  the exit-code synonym repair, which landed in #12701 (`exitCode` is written
+  once; `normalizedExitCode`, `EXIT_CODE_PROSE` and three synonym reads are
+  gone). The rest of the row was already resolved by the S2 vocabulary work
+  and should not be re-opened as outstanding deletion.
+- **The `stream_id` rename is struck.** Section 3.10's "'execution' survives
+  nowhere" rule was read as reaching the `log-usage` edge function's
+  `stream_id` column (see the section 8 bullet on Supabase). It does not.
+  `stream_id` is ruled the one permanently frozen external spelling of the run
+  id, on the same minimum-supported-client basis already ruled for the
+  usage-route tolerance; see the
+  [rulings ledger](2026-08-01-architecture-rulings-ledger.md). The column
+  stays as it is spelled today.
+
 ## 1. The cause, and why the census is a local minimum
 
 The census counted eight families of duplicated vocabulary. Read together
@@ -400,6 +436,10 @@ The same rule binds the proposal tree. The injection note's `AgentRun` and
 the runtime note's `RunContext` are the `Run` service; the PR1 note's
 `RunAggregates` is the run id; nothing new is named with either retired word.
 
+_(Corrected 2026-09-18: the landed service is `AgentRun`, and `RunContext` was
+not folded into it — #12705 deleted the carrier as write-only. `RunContext.ts`
+now holds only `runInSession`.)_
+
 ## 4. What this deletes
 
 | Deleted                                                                                                                                                                                                               | Lines (measured)       |
@@ -408,7 +448,7 @@ the runtime note's `RunContext` are the `Run` service; the PR1 note's
 | `StreamSnapshotStore.ts`, `streamSnapshot.ts`, `executionMetaFromEvents`                                                                                                                                              | 382 + meta fold        |
 | `AgentEvent` hand interfaces in `events.ts` (kept: the `.pick()` type)                                                                                                                                                | most of 295            |
 | `AgentFlowResult.ts`, `AgentFinalResult.ts`, `executionRecords.ts` result arms (kept: `z.infer`s)                                                                                                                     | most of 317            |
-| `normalizeToolUseData`, `ToolUseLog.isError`, the second tool status enum                                                                                                                                             | ~60                    |
+| `normalizeToolUseData`, `ToolUseLog.isError`, the second tool status enum (over-promised; only the exit-code synonym repair was debt, landed in #12701 — see the corrections block)                                   | ~60                    |
 | `SessionHostInteractions.pending`, the inquiry continuation module, three refusal tables, three of four decision vocabularies                                                                                         | ~400 of 1001 + 262     |
 | `goalPaused`, the `status`/`result` twin, `ExecutionMeta.outcome`, the description pair, `parentStreamId`, `isSubagent`, `background`, five parent carriers, the second `isChild` impl, the second workflow-call enum | scattered              |
 | One aggregate kind, one sequence counter, one claim per run; `RunAggregates`                                                                                                                                          | in PR1 before it lands |
@@ -512,7 +552,8 @@ The re-investigation refuted or amended these census claims:
 - `runId` appears on no frozen boundary. `storageKey` does, in the NDJSON
   table.
 - Supabase carries a `stream_id` only in the usage-log edge function; there
-  is no execution table. SQLite stores the id inside the aggregate key, so
+  is no execution table. _(2026-09-18: and that column is now ruled
+  permanently frozen — it is not renamed. See the corrections block above.)_ SQLite stores the id inside the aggregate key, so
   the collapse changes the key's contents, not a column.
 - `RunKind`, `RunDescriptor`, and `ExecutionMeta.category` do not exist; an
   earlier consolidation note that named them is historical.

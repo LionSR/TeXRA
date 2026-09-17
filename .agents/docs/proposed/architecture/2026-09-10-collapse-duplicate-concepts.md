@@ -11,6 +11,48 @@ at `487f5c1` on 2026-09-10. It applies one rule from the accepted
 supported APIs and one coherent implementation" — to the project's own
 vocabulary rather than to its dependencies.
 
+## Corrections (2026-09-18)
+
+Written back from the
+[round-trip and dual-system survey](../simplification/2026-09-17-effect-round-trips-and-dual-systems.md),
+re-verified against `main`. Read Section 3 with these in hand.
+
+- **The survivor is `RunId`, not `ExecutionId`.** `ExecutionIdSchema` no
+  longer exists. `RunIdSchema` in
+  [identifiers.ts](../../../../src/shared/schemas/identifiers.ts) is the one
+  run identifier, branded as step 1 required, and `RunSelectionSchema` is
+  built on it. Section 3's "`ExecutionIdSchema` becomes the one run
+  identifier" reads correctly only with that substitution; the
+  [one run model](../../implemented/architecture/2026-09-10-one-run-model.md)
+  §3.10 is why the word changed.
+- **Section 3 landed; its blast radius is now zero.** `StreamTabId` has zero
+  occurrences in the repo, `src/agent/runtime/streamTab.ts` is deleted, and
+  so are `getStreamTabId`, `BASH_CHILD_STREAM_PREFIX`, the four prefix
+  literals, the `streamPrefix` option, `streamTabIdOverride`, the
+  `endsWith('#' + executionId)` guard and `getAgentHandleByStream`. The "784
+  occurrences across 146 production files / 1557 `streamId` occurrences / 88
+  files carrying both" figures are a 2026-09-10 measurement of work that is
+  finished, not an estimate of work outstanding.
+- **Step 6 did not happen as written.** `CLI_LOCAL_STREAM_ID` was **deleted**,
+  not given its own type; it has zero occurrences. The "two live values that
+  are stream ids but not execution ids" counterargument therefore has one
+  survivor, the empty-string selection sentinel, which `RunSelectionSchema`
+  carries as a union member.
+- **Section 7 pins the wrong RC.** The manifests pin `effect` at
+  `4.0.0-rc.115`, not rc.112. The constraints in that section are unaffected;
+  the version sentence is not. Note also that `await effect` does not work in
+  rc.115 (an Effect is not thenable), so "confirm APIs against the installed
+  package" is a live instruction, not a formality.
+- **Section 8 is half repaired, and the other half is now fixed.** The
+  `p-queue` sentence it flagged is gone from `CLAUDE.md`. Its replacement
+  still blessed "the existing per-key ordering helper" as a nameless thing
+  after #12696 retired `KeyedMutex` and dropped `async-mutex`, and `AGENTS.md`
+  still listed a deleted `utils/core/keyedMutex.ts`. Both now name
+  `withPerKeyLane` (`src/utils/core/perKeyQueue.ts`), which is the single
+  surviving per-key lane. The defect this section describes was real twice
+  over; the lesson is that correcting guidance to point at "the existing
+  helper" rather than at a symbol reproduces it.
+
 ## 1. The rule being applied
 
 A finding qualifies only when two or more **named** things are **one** concept:

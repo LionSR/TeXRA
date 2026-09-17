@@ -8,6 +8,26 @@ release direction: projects, fresh SQLite application state, Effect-native
 execution, no legacy JSON migration, and no temporary replacement systems.
 The policy is accepted; the specific design choices below are recommendations.
 
+## Corrections (2026-09-18)
+
+Written back from the 2026-09-17 round-trip and dual-system survey
+(`.agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md`,
+[#12681](https://github.com/LionSR/TeXRA/pull/12681)) and re-verified against
+`main`. Sections 2 and 3 described a runtime that no longer exists; section 2
+is rewritten below and section 3's rows now carry their outcome. Section 1
+(release separation) and sections 4 to 6 still read correctly as direction.
+Section 7 is a snapshot of seven pull requests as they stood on 2026-09-09 and
+is stale as a disposition list; it is kept as the record of the decision
+point, not as current advice.
+
+Two things that appear in the neighbourhood of section 3 are **not**
+retirement targets and never were: the **model compatibility key**
+(`resolveModelCompatibilityKey` in `modelRoutes.ts`) is the live routing
+input the bound model is selected with, and **conversation compaction**
+(`run/compaction.ts`) is a current run-loop step that writes the
+`model.compaction` row. Both were re-examined by the survey and refuted as
+duplicates. Do not schedule either for deletion on the strength of this plan.
+
 ## 1. Release separation
 
 `release/0.40` has been created locally and on GitHub at `v0.40.10`
@@ -38,47 +58,67 @@ existing control flow, without importing the later Effect rewrite.
 
 ## 2. What the implementation actually contains
 
-The SQLite session store and shared session view are substantial completed
-work. They should be retained. However, they do not yet replace the execution
-engine or execution persistence.
+_Rewritten 2026-09-18 against `main`. The 2026-09-09 text below the heading
+described the pre-ledger runtime and every file it cited is deleted; it is
+replaced rather than annotated, because none of its sentences survives._
 
-- [`executeAgent.ts`](../../../../src/agent/runtime/executeAgent.ts) still
-  calls `runToolUseFlow` and `runReflectionFlow` from an asynchronous body
-  enclosed by Effect.
-- [`runToolUseFlow.ts`](../../../../src/agent/implementations/flows/tooluse/runToolUseFlow.ts)
-  obtains an execution KV store and constructs a persisted flow. Reflection
-  uses `RoundPersistedFlow`.
-- [`persistedFlow.ts`](../../../../src/agent/node/persistedFlow.ts) stores a
-  graph cursor through `ExecutionKVStore`. Reimplementing that KV interface
-  with SQLite would retain the old engine and checkpoint representation.
-- [`AgentLaunchContext.ts`](../../../../src/agent/runtime/AgentLaunchContext.ts)
-  resolves the route and compatibility key through
-  [`modelRoutes.ts`](../../../../src/agent/runtime/modelRoutes.ts), and
-  [`run/modelBinding.ts`](../../../../src/agent/runtime/run/modelBinding.ts)
-  binds the [`packages/llm`](../../../../packages/llm/src/turn.ts)
-  Effect/Stream model the production execution path calls.
-- [`sessionLayer.ts`](../../../../src/controllers/session/sessionLayer.ts),
-  [`SessionView.ts`](../../../../src/controllers/session/SessionView.ts), and
-  the shared session fold already provide useful scoped services and a common
-  view for the hosts. Replacing the execution engine does not require another
-  UI rewrite.
+The execution engine the 2026-09-09 assessment said had not been replaced has
+been replaced. There is no flow engine, no graph cursor and no execution KV
+store. A run is one Effect program that appends rows to the run ledger
+(`src/shared/session/runLedger.ts`) and continues from the folded `RunState`
+each `appendBatch` returns; resume is the same function reading the same rows.
+The two run programs are `src/agent/runtime/loop/toolUse.ts` and
+`loop/reflection.ts`, plain Effect loops, and the per-run services they take
+from context live in `src/agent/runtime/run/`. `executeAgent.ts` is an Effect
+program end to end, not an asynchronous body enclosed by Effect.
+
+Provider calls go through one service. `runtime/ModelInvoker.ts` is the only
+caller of the `packages/llm` `Model`, bound by `runtime/run/modelBinding.ts`.
+Retry has two owners inside that service: an automatic route-scoped batch
+under the session's `ModelRetryGate`, and a durable human permit
+(`approval.requested` plus the snapshot's `pendingRetry`). The old
+model-handler hierarchy is gone.
+
+Persistence is SQLite through Effect SQL. `src/controllers/session/Database.ts`
+owns the schema, the claims and the committed wake levels over
+`@effect/sql-sqlite-node`; the official Node driver owns the scoped
+connection. The file-based execution lease, `fileLocks`, `KVStore`,
+`ExecutionKVStore`, `PersistedFlow`, `RoundPersistedFlow` and
+`scripts/native-cleanup` have zero references in the tree. Session state is a
+`LayerMap` keyed by session (`sessionLayer.ts`, `webviewSessionLayer.ts`) on
+one `ManagedRuntime` per host, so a process holding several open projects does
+not share one set of stores between them.
+
+What the assessment got right and still holds: the SQLite session store and
+the shared session view were substantial completed work and were retained.
+Replacing the execution engine did not require another UI rewrite, and did
+not cause one. The three hosts still render one in-memory fold.
+
+What remains is not engine replacement. It is the residue the surveys now
+track: the Promise filesystem statics and their ambient roots carrier
+(#12421), the remaining Node capability adoption (#12078), runtime boundary
+residue and resource lifetime (#12422), and the release gates in section 6,
+which are the actual shipping blockers (#12168).
 
 ## 3. Retirement boundary
 
-These are removal targets, not an invitation to improve their internal design.
+These were removal targets, not an invitation to improve their internal design.
+_Status column added 2026-09-18: every mechanism below has zero references on
+`main` except where the row says otherwise._
 
-| Current mechanism                                               | Final treatment                                                                                                                                          |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `KVStore` and `ExecutionKVStore`                                | Delete with their execution-state consumers. Introduce typed Effect database operations directly; do not implement the old interface over SQL.           |
-| `PersistedFlow`, graph-cursor checkpoints, `RoundPersistedFlow` | Replace with the final Effect loops and durable model/tool/workflow state, then delete the old interpreter and its dedicated tests.                      |
-| File-based `executionLease`                                     | Replace ownership admission and write checks with database transactions; delete lease files, polling, legacy readers, and compatibility writes together. |
-| Application-state uses of `JsonStore`                           | Move host state and mutable application records to SQLite. Do not migrate their old contents.                                                            |
-| Legacy workspace-directory rename and sidecar registry          | Remove when selecting fresh 1.0 state locations and project identity.                                                                                    |
-| JSON-state file locks, caches, directory indexes, atomic writes | Delete when their state owner is replaced, rather than converting these mechanisms to Effect first.                                                      |
-| `scripts/native-cleanup`                                        | Remove with the final generated-file ownership change, including the loader, binaries, build jobs, packaging hooks, and addon-only tests.                |
-| Old model-handler hierarchy                                     | Retire after both agent execution and helper calls use the new provider contract.                                                                        |
+| Current mechanism                                               | Final treatment                                                                                                                                          | Status (2026-09-18)                                                                                                                                                                             |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `KVStore` and `ExecutionKVStore`                                | Delete with their execution-state consumers. Introduce typed Effect database operations directly; do not implement the old interface over SQL.           | **Done.** Zero references; the run ledger over SQLite replaced both.                                                                                                                            |
+| `PersistedFlow`, graph-cursor checkpoints, `RoundPersistedFlow` | Replace with the final Effect loops and durable model/tool/workflow state, then delete the old interpreter and its dedicated tests.                      | **Done.** Zero references; the two Effect run loops append rows and fold `RunState`.                                                                                                            |
+| File-based `executionLease`                                     | Replace ownership admission and write checks with database transactions; delete lease files, polling, legacy readers, and compatibility writes together. | **Done.** Zero references; ownership is a database claim. `leaseOwnerLiveness` survives as `Database.ts`'s liveness check, as this section anticipated.                                         |
+| Application-state uses of `JsonStore`                           | Move host state and mutable application records to SQLite. Do not migrate their old contents.                                                            | **Done** for application state; configuration and credentials deliberately stay JSON, per the caveat below.                                                                                     |
+| Legacy workspace-directory rename and sidecar registry          | Remove when selecting fresh 1.0 state locations and project identity.                                                                                    | **Struck.** `workspaceStorage.ts` no longer renames a legacy directory; the fresh-state work in 4A owns what is left.                                                                           |
+| JSON-state file locks, caches, directory indexes, atomic writes | Delete when their state owner is replaced, rather than converting these mechanisms to Effect first.                                                      | **Partly done.** `fileLocks` is gone; so are the JSON-state caches and directory indexes. `writeAtomic` stays, for the deliberately editable memory files, which is the caveat below, not debt. |
+| `scripts/native-cleanup`                                        | Remove with the final generated-file ownership change, including the loader, binaries, build jobs, packaging hooks, and addon-only tests.                | **Done.** The script, loader, binaries and packaging hooks are gone.                                                                                                                            |
+| Old model-handler hierarchy                                     | Retire after both agent execution and helper calls use the new provider contract.                                                                        | **Done.** `ModelInvoker` over the `packages/llm` `Model` is the one path, for agent runs and helper calls alike.                                                                                |
 
-Some similarly named facilities have independent consumers:
+Some similarly named facilities have independent consumers, and these four
+caveats are why three of the rows above are not simply "deleted":
 
 - `fileLocks` also coordinates copying bundled agent directories. Prefer
   reading immutable packaged defaults and separate user-managed agent files
@@ -249,6 +289,12 @@ state is not imported. Removing legacy migration does not remove the need to
 identify the current database format and reject unsupported state clearly.
 
 ## 7. Open PR disposition at the decision point
+
+_Stale as of 2026-09-18: this is a snapshot of seven pull requests as they
+stood on 2026-09-09, kept as the record of the decision point. Do not act on
+the dispositions — the runtime they were judged against is the one section 2
+describes as replaced, and each PR has since been merged, closed or
+superseded. Check the pull request itself._
 
 The seven pre-existing open PRs inspected on 2026-09-09 all target `main`.
 Creating the maintenance branch did not move, close, or merge them. The

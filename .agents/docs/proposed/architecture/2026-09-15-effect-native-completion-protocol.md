@@ -45,6 +45,29 @@ This document supplies a current work order and acceptance criteria. Earlier
 audits remain historical evidence. Their old counts, removed-file inventories,
 and superseded deferrals must not be used as current implementation orders.
 
+## Corrections (2026-09-18)
+
+Written back from the 2026-09-17 round-trip and dual-system survey
+(`.agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md`,
+[#12681](https://github.com/LionSR/TeXRA/pull/12681)) and re-measured against
+`main`. The section 2 table and the six call sites named in section 4A were
+the parts that went stale; both are corrected in place below. The definition
+of completion in section 3 is unchanged and still governs.
+
+Two further corrections that do not belong to a single section:
+
+- **`currentSession` and `defaultSession` do not exist in production.** The
+  ambient session fallback that section 2's "Session execution" row and
+  package B name as remaining work is already gone. The only surviving
+  spellings are `src/test-kernel/support/defaultSessionTestSetup.ts` (test
+  support), Electron's own `session.defaultSession`, and two unrelated CLI
+  locals (`currentSessionContext`, `currentSessionRunIds`).
+- **The built SDK still advertises them.** `packages/agent/dist/types`
+  in a built checkout still declares `currentSession` and `defaultSession`;
+  the source does not. That is a stale build artifact, not a surviving
+  fallback. Rebuild `packages/agent` before reading `dist/types` as evidence
+  of the SDK's surface, and before the Tier-1 manifest is pinned against it.
+
 ## 2. Established work and remaining evidence
 
 The old flow engine and model-handler hierarchy are retired. The production
@@ -54,20 +77,31 @@ is already a session service, and since the first audit `Requests` is one too
 (#12577). These components are the starting point, not
 replacement targets.
 
-Running `node scripts/check-effect-migration-ratchet.mjs` against the pinned
-source passed over **1,410 production files**:
+Running `node scripts/check-effect-migration-ratchet.mjs` passed over
+**1,411 production files**. The right-hand pair is the 2026-09-18
+re-measurement; the left is the 2026-09-15 reading this protocol was written
+against, kept so the direction of travel is visible.
 
-| Survey category                             | Files | Sites |
-| ------------------------------------------- | ----: | ----: |
-| `platform()`                                |     9 |    19 |
-| `effectRuntime()`                           |     0 |     0 |
-| Surveyed async-local operations and readers |    19 |    29 |
-| `new AbortController()`                     |     4 |     4 |
-| `p-queue` imports                           |     0 |     0 |
-| `p-defer` imports                           |     0 |     0 |
-| `async-mutex` imports                       |     1 |     1 |
-| Non-exempt `Effect.run*` calls              |     0 |     0 |
-| Raw catches in runtime Effect importers     |     4 |     5 |
+| Survey category                             | Files (09-15) | Sites (09-15) | Files (09-18) | Sites (09-18) |
+| ------------------------------------------- | ------------: | ------------: | ------------: | ------------: |
+| `platform()`                                |             9 |            19 |         **4** |        **13** |
+| `effectRuntime()`                           |             0 |             0 |             0 |             0 |
+| Surveyed async-local operations and readers |            19 |            29 |        **18** |        **24** |
+| `new AbortController()`                     |             4 |             4 |             4 |             4 |
+| `p-queue` imports                           |             0 |             0 |             0 |             0 |
+| `p-defer` imports                           |             0 |             0 |             0 |             0 |
+| `async-mutex` imports                       |             1 |             1 |         **0** |         **0** |
+| Non-exempt `Effect.run*` calls              |             0 |             0 |             0 |             0 |
+| Raw catches in runtime Effect importers     |             4 |             5 |         **2** |         **2** |
+
+The two small rows are now short enough to name in full. `platform()`:
+`src/utils/files/baseFS.ts` (10), `src/agent/index/agentRegistry.ts`,
+`src/tools/github/PollingSourceBase.ts`, `src/utils/system/toolUtils.ts` (1
+each). Raw catches: `packages/desktop/src/main/index.ts` and
+`src/tools/github/PollingSourceBase.ts` (1 each). `new AbortController()` is
+at its floor with its four residents named permanently (#12700); see the
+[rulings ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md).
+The script takes no `--report` flag: run it with no arguments.
 
 The rows overlap. The survey excludes tests and several script directories;
 it also excludes the established host and SDK boundary kinds. Shared getters
@@ -128,16 +162,21 @@ are not automatically converted to SQLite merely because they use JSON.
 **Existing trackers:** [#12421](https://github.com/LionSR/TeXRA/issues/12421),
 [#12433](https://github.com/LionSR/TeXRA/issues/12433).
 
-Start with run-reachable readers. `run/modelBinding.ts` still reads model
-options through `getConfig` (:335, :380, :469, :684); `ModelInvoker`'s
-automatic-attempt limit still reads `getValidatedConfig` at invoke time (:149);
-compaction still reads its threshold the same way (`run/compaction.ts:119`).
-`debugMessageSaver.ts` has moved to `src/agent/debug/` and now takes the
-process filesystem from context and the run's roots as data, but it still
-gates on an ambient `getConfig` read (:66). `RunSubscriptionRegistry.bind`
-still resolves `currentSession()` (:106). Approval helpers belong in this
-inventory too. The reported contention failure explains why these reads
-are consequential, rather than merely stylistic.
+Start with run-reachable readers. _(Re-measured 2026-09-18: all six call sites
+named in the paragraph below are stale, and four of them are closed. The
+paragraph is kept because its reasoning about live-read semantics still binds
+the remaining conversions; its citations do not.)_ `run/modelBinding.ts`'s
+four `getConfig` reads are one `readSettingFrom` call at `:861`;
+`ModelInvoker`'s automatic-attempt limit reads `readSettingFrom` at `:1153`,
+not `getValidatedConfig` at `:149`; compaction's threshold read moved to
+`run/compaction.ts:166`. `debugMessageSaver.ts`'s ambient `getConfig` gate is
+gone: the file reads no setting. `RunSubscriptionRegistry` moved to
+`src/tools/github/` and `bind` now takes the owning `SessionHandle` as a
+parameter (#12639), so it resolves no ambient session — and `currentSession()`
+no longer exists to resolve. What is left of this package is the
+`platform()` row's four files and the ambient-roots carrier, both #12421 work.
+Approval helpers belong in this inventory too. The reported contention failure
+explains why these reads are consequential, rather than merely stylistic.
 
 Provide project configuration and rooted filesystem values when acquiring the
 session or run. Read changing configuration from the explicitly selected
@@ -368,13 +407,27 @@ Test-suite housekeeping, such as the four follow-ups in
 its own merits. It is not a reason to rewrite every suite or a substitute for
 the ownership and recovery evidence above.
 
-Measure cold open, live idle and replay memory, commit latency under
-contention, two-project operation, and stop latency with controlled non-zero
-work. Keep the database open while measuring idle memory; measure replay
-paths separately; distinguish bytes written from retained file size; count
-missed event-loop deadlines. Record the machine, dataset, revision, units,
-method, readings, and proposed numeric budgets. No performance improvement
-or satisfied budget is claimed without those readings.
+_Amended 2026-09-18 (recommended option taken)._ Three measurements stay, and
+each is a **to be measured once** item rather than a standing gate:
+
+1. **Cold open.**
+2. **Stop latency with controlled non-zero work.**
+3. **Commit latency under contention.**
+
+Every other performance criterion this section carried is **struck**: live
+idle memory, replay memory, two-project operation, bytes written versus
+retained file size, and missed event-loop deadlines. Each was unfalsifiable as
+written — no budget, no workload, no threshold that could fail — so none of
+them could ever have blocked or released the release, and an acceptance
+criterion that cannot fail is not one. The three that stay are kept only
+because a regression in any of them is user-visible and each has an obvious
+workload.
+
+For those three, record the machine, dataset, revision, units, method,
+readings, and a proposed numeric budget in one measurement record (#12076).
+No performance improvement or satisfied budget is claimed without those
+readings. A single record closes this item; it is not re-measured per pull
+request.
 
 ## 6. Change and completion records
 

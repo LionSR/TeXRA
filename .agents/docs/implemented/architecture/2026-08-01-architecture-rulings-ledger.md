@@ -225,3 +225,182 @@ fenced, and the self-tests pin a sibling on each side (`ProgressApp.ts`,
 `sessionFold.ts`) as below the boundary. Adding an entry is a ruling, not a refactor, and an
 entry must hold its runtime as a local or take it as a parameter; a module that reaches the
 process-global `effectRuntime()` does not qualify.
+
+## `effect/unstable/*`: five families are admitted, each with a stated exit (ruled 2026-09-18)
+
+**Question.** The Effect-4 PRD's non-goal 4 and §11 bar `effect/unstable/*`
+"without a separate decision naming its replacement or exit plan". Five
+families are in the tree. Which decision admitted them, and what is each
+one's exit?
+
+**Ruling.** All five are admitted. The 2026-09-13 filesystem ruling ("adopt
+Effect's own file system as much as possible") settled the general question
+the PRD reserved; what was missing is the per-family record the PRD asks for,
+and it is this:
+
+| Family                       | Used for                                                                     | Stabilization or exit                                                                                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `effect/unstable/http`       | `HttpClient` on the auth, model and telemetry paths (27 sites)               | Stays; follows the module when Effect promotes it. Exit is `ky`, which still serves 8 tool and remote-agent call sites and is not being deleted yet. |
+| `effect/unstable/process`    | Type-only, the two Lean direct-server files                                  | Stays type-only until the process edges convert (#12078). Exit is `execa`, which every other spawn site already uses.                                |
+| `effect/unstable/sql`        | `SqlClient` under `@effect/sql-sqlite-node`, the one session database        | Stays; the repo already depends on the same RC line. Exit is the official Node SQLite driver directly, which the client only wraps.                  |
+| `effect/unstable/reactivity` | `Reactivity.layer` behind the database's invalidation signal (`Database.ts`) | Stays with `sql`; it is that client's own invalidation contract. Exit is an in-repo emitter over the committed-wake levels the layer already owns.   |
+| `effect/unstable/encoding`   | `Sse.makeParser` for provider token streams (`packages/llm/src/turn.ts`)     | Stays; it replaced a hand-rolled SSE parser. Exit is restoring that parser, which is a single function over one `Stream`.                            |
+
+**Evidence.** `rg "effect/unstable/"` returns exactly these five families and
+no others. Every exit named above is a path the repository has already walked
+or is still standing on, so none of them is speculative.
+
+**Forbids.** A sixth family without its own row here. Adopting one of these
+for a second purpose without checking that the exit still holds. Treating
+"unstable" as a reason to keep a duplicate in-repo implementation warm beside
+it; the exits above are what happens if a module is withdrawn, not a system
+maintained in parallel.
+
+## Per-session `LayerMap`, per-run `Layer.effect`: decision 8's "one provide at the process entry" is amended (ruled 2026-09-18)
+
+**Question.** Decision 8 of the
+[Effect-4 PRD §15](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md#15-open-decisions-for-ratification)
+ratified Effect's best-practice guides, including "one `provide` at the
+process entry". The landed runtime provides services at three lifetimes, not
+one. Is that a deviation to repair?
+
+**Ruling.** No. The guide's sentence is about there being one composition
+root, not one `provide` call. The landed shape is correct and is the
+amendment: the process entry provides the process services once; each session
+is a `LayerMap` entry keyed by session, built on that one `ManagedRuntime`
+(`sessionLayer.ts`, `webviewSessionLayer.ts`); each run takes its services
+from a `Layer.effect` scoped to the run (`run/AgentRun.ts`, `ModelInvoker.ts`,
+`SessionEvents.ts`, `FollowUps.ts`, `RunLedger.ts`). A session's services
+release when its `LayerMap` entry does, and a run's when its scope closes.
+
+**Evidence.** `LayerMap` is what makes "one session, one owner" hold without a
+global session registry: the desktop opens several sessions in one process,
+and a single process-wide `provide` would give them one set of stores. The
+same argument at the run lifetime is R3 of the PRD ("layers follow actual
+lifetimes"), and §8.1's carrier table already names three lifetimes, so
+decision 8 and §8.1 were in tension and §8.1 wins.
+
+**Forbids.** Flattening the session or run layers into the process layer to
+satisfy a literal reading of decision 8. A fourth lifetime without a carrier
+row in §8.1. Reintroducing a process-global lookup for anything a session or
+run layer already provides.
+
+## The four permanent `AbortController` residents (ruled 2026-09-18; named in the ratchet by [#12700](https://github.com/LionSR/TeXRA/pull/12700))
+
+**Question.** The `new AbortController(` ratchet row is a shrink-only count.
+It has four files left. Are they debt to convert to fiber interruption, or
+the floor?
+
+**Ruling.** The floor. The four files are the adapters that stay, and the
+row's counts are their allowlist: a fifth file fails as new debt. The reasons
+are recorded in `scripts/check-effect-migration-ratchet.mjs` beside the row
+and are each a foreign API that takes a controller rather than offering
+cancellation:
+
+- `src/tools/claudeAgent.ts` — the Claude Agent SDK takes a controller, not a
+  signal.
+- `src/platform/defaults/lifecycleHost.ts` — the shutdown phase deadline,
+  which fires after the runtime's own fibers are gone, so there is no fiber
+  left to interrupt.
+- `src/agent/runtime/childRunLoop.ts` — the one signal every child-run turn
+  runs under, handed straight to `execa`'s `cancelSignal`, the Codex SDK and
+  the Claude Agent SDK. The loop's stop must not interrupt its fiber: the
+  turn's settlement, parent delivery and finalization all run after it.
+- `packages/cli/src/chat/tui/commands/handlers/slashContext.ts` — the chat
+  TUI's busy-form abort, the one bridge from that synchronous abort into
+  `runPromise`'s `signal` option.
+
+**Evidence.** The row is at 4 files / 4 sites and has been re-measured at that
+floor. The survey's D25 lane had proposed converting `childRunLoop` to fiber
+interruption and `slashContext` to `Effect.abortSignal`; the third bullet
+above is why the first half of that is wrong, and the fourth is why the second
+half is not an improvement.
+
+**Forbids.** Adding a fifth `new AbortController()` anywhere in production.
+Deleting the row (the allowlist is the ruling, and a zeroed row would stop
+naming these four). Building a second internal cancellation tree beside the
+fiber's, which is what converting these to signals-of-signals would produce.
+
+## Runtime threading: each composition root holds its `ManagedRuntime` in a local (ruled 2026-09-18; answers [Effect-4 PRD §15](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md#15-open-decisions-for-ratification) decision 2)
+
+**Question.** Decision 2 asked whether the host managed runtime belongs
+directly in each composition root or behind one host-neutral
+`ApplicationRuntime` adapter. Decision 9 narrowed it ("whatever hosts the
+managed runtime, it is not an adapter layer") without answering it.
+
+**Ruling.** Directly in each composition root, held in a local and threaded as
+a parameter where a callee genuinely needs it. There is no `ApplicationRuntime`
+type, no host-neutral runtime module, and no process-global accessor below the
+entries: code below a composition root runs as an Effect program that is
+already on the runtime rather than fetching one.
+
+**Evidence.** The `effectRuntime()` ratchet row is 0 files / 0 sites in
+production (retired by #12507); the export survives only for
+`packages/cli/scripts/tui-harness.tsx`, which is a script outside the survey.
+The webview runtime-entry ruling above already requires an admitted entry to
+"hold its runtime as a local or take it as a parameter", and says a module
+that reaches the process-global `effectRuntime()` does not qualify. This
+ruling is that rule stated for every host, not only the webviews. It
+supersedes the disposition recorded for injection carrier 11 in
+[the injection note](../../proposed/architecture/2026-09-10-effect-native-injection-context-pipelines.md)
+§5, which reads as a pending conversion; the conversion is done and the answer
+is the shape above.
+
+**Forbids.** An `ApplicationRuntime` adapter layer, a host-neutral runtime
+facade, and any new reader of the `effectRuntime` export. Reintroducing a
+module-global runtime slot to avoid threading a parameter.
+
+## Eight rulings from the 2026-09-17 round-trip and dual-system survey (recorded 2026-09-18)
+
+**Question.** The
+round-trip and dual-system survey (`.agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md`,
+[#12681](https://github.com/LionSR/TeXRA/pull/12681))
+raised eight open questions across its lanes. Under the standing owner
+instruction the recommended option is taken; this is the record so the lanes
+do not re-open them.
+
+**Ruling**, one line each:
+
+1. **The desktop preview host's Promise face is an adapter, not a permanent
+   boundary.** `src/hosts/uiHosts.ts` and
+   `packages/desktop/src/main/desktopPreviewHost.ts` record an earlier ruling
+   that the `openExternal` / `openPath` / `openBuildDisplay` fan-out stays
+   Promise-shaped; under the 1.0 clean rule it is an R1 adapter and converts
+   after the host-request lanes, which is also what `ExternalOpener` already
+   did.
+2. **A layer may capture its own runtime for an outbound foreign Promise
+   contract.** `SupabaseAuth.onFlowState` owes `@supabase/auth-js` a Promise
+   storage callback; `Effect.runtime()` inside the layer is the standard
+   bridge, and the auth program edge that existed to avoid it can be deleted.
+3. **The auth probes need no workspace-roots frame.** `getCodexStatus` and
+   `getXaiStatus` read no ambient roots, so the `inScope` wrap around them in
+   `computeModelOptions.ts` is defensive; an Effect probe closed over the
+   secret store needs no frame.
+4. **A host's webview inbound handler registry is an R1(a) terminal.** So
+   `SettingsAgentActionsOptions.run` can be deleted and failure reporting
+   moves to each host's registry; `FAILURE_MESSAGES` stays exported from the
+   shared module.
+5. **`stream_id` stays frozen** in the `log-usage` edge function as the one
+   permanently frozen external spelling of the run id, on the same
+   minimum-supported-client basis already ruled for the usage-route tolerance.
+   The rename proposed by the one-run-model note is struck.
+6. **`texra tools list --json` and `texra skills list --json` change shape**
+   when the CLI renders the shared projections. The change is user-facing and
+   goes in the changelog, because `texra-action` consumes CLI result JSON.
+7. **The CLI keeps its cheap built-in default model.** The constant is renamed
+   to say it is a deliberate cheap-start choice derived from the shared table,
+   rather than deleted in favour of the shared default.
+8. **`AgentPlatform` re-declares `agentResume` and `languageModel`** so the
+   embedder contract is unchanged while `Platform` loses both fields (#12697).
+
+**Evidence.** Each was verified against `main` by the survey's two
+independent refuters before being recorded. Ruling 8 is visible in the tree:
+`src/platform/platform.ts` declares only `fs`, `lifecycle`,
+`agentDirectories` and `toolMissingHandler`, while
+`packages/agent/src/effect/runtime.ts` declares both fields on
+`AgentPlatform`.
+
+**Forbids.** Re-opening any of the eight inside a lane. In particular: do not
+propose renaming the edge function's `stream_id` column, and do not delete
+`AgentPlatform`'s two fields on the grounds that `Platform` no longer has
+them.
