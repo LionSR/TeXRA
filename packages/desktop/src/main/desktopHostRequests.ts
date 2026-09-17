@@ -637,8 +637,9 @@ export function createDesktopHostRequests(
   /**
    * One program per request. The arms are Effects; the capabilities that
    * still answer with a promise are lifted once through `fromHost`, so the
-   * failure channel is the value the arm failed or rejected with and nothing
-   * re-enters the runtime between here and `handle`.
+   * failure channel is the value the arm failed or rejected with and no
+   * dispatch arm re-enters the runtime between here and `handle` (a lifted
+   * capability may still run its own program behind its promise face).
    */
   function dispatch(
     request: HostRequest,
