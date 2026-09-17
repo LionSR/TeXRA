@@ -145,30 +145,25 @@ export async function initializeLatexSupport(
   );
 
   await runtime.runPromise(
-    Effect.tryPromise({
-      try: async () => {
-        const latexWorkshop = vscode.extensions.getExtension(
-          LATEX_WORKSHOP_EXT_ID,
-        );
+    Effect.promise(async () => {
+      const latexWorkshop = vscode.extensions.getExtension(
+        LATEX_WORKSHOP_EXT_ID,
+      );
 
-        if (!latexWorkshop && (await workspaceContainsLatexFiles())) {
-          // Only nag if the workspace actually contains LaTeX files; a user
-          // evaluating TeXRA or using it on a non-LaTeX project should not be
-          // prompted to install a TeX extension they don't need. They'll still
-          // discover it via the LaTeX settings tab or compile errors later.
-          log.info(
-            'LaTeX Workshop extension not found, prompting installation',
-          );
-          await promptExtensionInstall(globalState, {
-            suppressKey: 'latex-workshop-install',
-            message:
-              'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
-            extensionId: LATEX_WORKSHOP_EXT_ID,
-            channel: 'extension',
-          });
-        }
-      },
-      catch: (err) => err,
+      if (!latexWorkshop && (await workspaceContainsLatexFiles())) {
+        // Only nag if the workspace actually contains LaTeX files; a user
+        // evaluating TeXRA or using it on a non-LaTeX project should not be
+        // prompted to install a TeX extension they don't need. They'll still
+        // discover it via the LaTeX settings tab or compile errors later.
+        log.info('LaTeX Workshop extension not found, prompting installation');
+        await promptExtensionInstall(globalState, {
+          suppressKey: 'latex-workshop-install',
+          message:
+            'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
+          extensionId: LATEX_WORKSHOP_EXT_ID,
+          channel: 'extension',
+        });
+      }
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.sync(() => {

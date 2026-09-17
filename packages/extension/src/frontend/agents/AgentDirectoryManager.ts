@@ -129,15 +129,13 @@ class AgentDirectoryManager {
     }
 
     // The picked folder is the user's, outside every session root. A
-    // directory already there is the post-condition.
+    // directory already there is the post-condition, and a recursive
+    // makeDirectory is a no-op on one, so nothing here is recovered: a real
+    // fault (the path is a file, the volume is read-only) rejects and
+    // surfaces instead of writing the setting anyway.
     await this.getHost().runtime.runPromise(
       Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
         fs.makeDirectory(selectedPath, { recursive: true }),
-      ).pipe(
-        Effect.catchIf(
-          (error) => error.reason._tag === 'AlreadyExists',
-          () => Effect.void,
-        ),
       ),
     );
 
