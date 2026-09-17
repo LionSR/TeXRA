@@ -17,8 +17,11 @@ import {
 import { z } from 'zod';
 
 // Local imports - utilities
+import { createLog } from '@logger/logUtils';
 import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const log = createLog('workflowSandbox');
 
 export interface SandboxHostBridge {
   /** Async primitives. Arguments and results cross as JSON text only. */
@@ -315,8 +318,10 @@ export async function runScriptInSandbox(
       timeoutNotified = true;
       try {
         options.onTimeout?.();
-      } catch {
-        // Timeout settlement must not depend on the caller's abort callback.
+      } catch (err) {
+        // Timeout settlement must not depend on the caller's abort callback,
+        // but a callback that throws is a fault of its own, not silence.
+        log.warn(`Workflow timeout callback threw: ${toErrorMessage(err)}`);
       }
     }
     wake();

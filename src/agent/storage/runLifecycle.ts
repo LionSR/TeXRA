@@ -161,13 +161,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
           aggregateId: target,
           description: options.description,
         });
-      yield* session
-        .commitRegistration(events)
-        .pipe(
-          Effect.catchCause((cause) =>
-            Effect.fail(ensureError(Cause.squash(cause))),
-          ),
-        );
+      yield* session.commitRegistration(events);
     }),
   );
   if (Exit.isFailure(registration)) {

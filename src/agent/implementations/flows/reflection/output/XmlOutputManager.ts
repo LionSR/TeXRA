@@ -209,8 +209,16 @@ export class XmlOutputManager {
             .pipe(
               // An unreadable base file becomes '': it will score near-zero
               // similarity against any real fenced block rather than aborting
-              // the whole recovery pass.
-              Effect.orElseSucceed(() => ''),
+              // the whole recovery pass. The cause is named, so an empty
+              // score is never mistaken for an empty file.
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  this.logger.warn(
+                    `Base file ${loc.absolutePath} unreadable during similarity recovery: ${toErrorMessage(error)}`,
+                  );
+                  return '';
+                }),
+              ),
               Effect.map((content) => ({ name: inputFiles[idx], content })),
             ),
         { concurrency: 'unbounded' },

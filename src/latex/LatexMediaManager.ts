@@ -494,10 +494,17 @@ export class LatexMediaManager {
         files,
         (file) =>
           extractFigurePathsFromLatex(file).pipe(
-            // Silent skip: malformed or unreadable .tex files should not abort
-            // the surrounding fan-out. Existence/format errors here are common
-            // (e.g. file deleted mid-run) and not worth user-visible noise.
-            Effect.catch(() => Effect.succeed<readonly string[]>([])),
+            // A malformed or unreadable .tex file contributes no figures
+            // rather than aborting the surrounding fan-out, but the document
+            // then compiles without them, so the cause is named.
+            Effect.catch((error) =>
+              Effect.sync((): readonly string[] => {
+                this.logger.warn('Unable to extract figure paths', {
+                  data: { path: file.absolutePath, error },
+                });
+                return [];
+              }),
+            ),
             Effect.map((figures) => ({ file, figures })),
           ),
         { concurrency: LATEX_CONCURRENCY },
@@ -569,10 +576,18 @@ export class LatexMediaManager {
         files,
         (file) =>
           TikzPictureManager.compile(file, this.config).pipe(
-            // Silent skip: TikZ compilation failures are reported by the
-            // TikzPictureManager itself; the fan-out must continue past
-            // individual failures.
-            Effect.catch(() => Effect.succeed<FileLocation[]>([])),
+            // The fan-out continues past an individual failure. A failed
+            // compile is reported by TikzPictureManager itself; everything
+            // else (standalone generation, the filesystem) lands here and
+            // would otherwise vanish.
+            Effect.catch((error) =>
+              Effect.sync((): FileLocation[] => {
+                this.logger.warn('TikZ extraction failed', {
+                  data: { path: file.absolutePath, error },
+                });
+                return [];
+              }),
+            ),
           ),
         { concurrency: LATEX_CONCURRENCY },
       );

@@ -10,9 +10,10 @@
  * tool call: a retry after a timeout or an interruption resumes the same
  * aggregate through `run.start.checkpointId`, never through the run's id.
  */
-import { Cause, Effect } from 'effect';
+import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import {
   aggregateId,
   JsonValueSchema,
@@ -183,7 +184,7 @@ export function readWorkflowCallAttempt(
   session: SessionHandle,
   checkpointId: string,
   key: string,
-): Effect.Effect<WorkflowCallAttemptMark, Error> {
+): Effect.Effect<WorkflowCallAttemptMark, DatabaseReadFailed> {
   return session.readAggregate(checkpointAggregate(checkpointId)).pipe(
     Effect.map((rows) =>
       rows.reduce<WorkflowCallAttemptMark>(
@@ -202,7 +203,6 @@ export function readWorkflowCallAttempt(
         { attempt: null, superseded: [] },
       ),
     ),
-    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
   );
 }
 

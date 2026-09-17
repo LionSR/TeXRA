@@ -132,8 +132,9 @@ export function startFollowUpWake(
     // it asked for. This handler is what releases the lease on that path; the
     // success path releases it in the `tap` above unless the host accepted the
     // resume, in which case the resumed run owns it.
-    Effect.catch(() =>
+    Effect.catch((error) =>
       Effect.sync(() => {
+        logger.warn(`Resume attempt failed for run ${runId}`, { data: error });
         session.followUps.release(recovery, 'recoverable');
         return false;
       }),

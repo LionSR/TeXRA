@@ -2,6 +2,7 @@ import { LRUCache } from 'lru-cache';
 
 import { runAuthProgram } from '@auth/authProgram';
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
+import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
@@ -13,6 +14,7 @@ import type {
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
 import { coalesceAsync } from '@utils/core';
 import { useChinaRegion } from '@utils/config/providerConfig';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   fetchChatGptUsage,
@@ -29,6 +31,8 @@ import {
   type ParsedSubscriptionUsage,
   type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
+
+const log = createLog('SubscriptionUsage');
 
 const DEFAULT_CACHE_TTL_MS = 30_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
@@ -243,7 +247,11 @@ export class SubscriptionUsageService {
     let variant: boolean | undefined;
     try {
       variant = await adapter.resolveVariant?.();
-    } catch {
+    } catch (error) {
+      log.warn(
+        `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
+        { data: error },
+      );
       return this.unavailable(provider, 'request_failed');
     }
     const key = `${provider}:${variant ?? 'default'}`;
@@ -326,6 +334,12 @@ export class SubscriptionUsageService {
     } catch (error: unknown) {
       // The reason a failed fetch maps to, most specific cause first. The
       // failure classes are disjoint, so at most one of these checks holds.
+      // The reason alone cannot tell a routine refusal from an unexpected
+      // fault, so the cause is named once here.
+      log.warn(
+        `Subscription usage fetch failed for ${provider}: ${toErrorMessage(error)}`,
+        { data: error },
+      );
       const invalidCredentials =
         (error instanceof CodexAuthError && error.needsReauth) ||
         (error instanceof SubscriptionUsageHttpError &&

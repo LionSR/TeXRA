@@ -12,13 +12,14 @@
  */
 
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Cause, Data, Effect } from 'effect';
 
 // Local imports
 import {
   causeChain,
   isModuleNotFoundError,
 } from '@common/errors/errorPredicates';
+import { createLog } from '@logger/logUtils';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
 import type { ToolCategory } from '@shared/schemas';
@@ -58,6 +59,8 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getProcessSettingHost } from '@utils/config/platformSettings';
 
+const log = createLog('externalToolDefs');
+
 /**
  * Node.js semver range the `texra` CLI supports; the same value
  * `packages/cli/package.json` declares as `engines.node`, so `texra doctor`
@@ -86,8 +89,7 @@ type ToolProbeFailureReason =
   | 'module-not-found'
   | 'sdk-import-failed'
   | 'binary-lookup-failed'
-  | 'probe-request-failed'
-  | 'probe-timed-out';
+  | 'probe-request-failed';
 
 /**
  * The one failure of this module's probes. `reason` is what a caller reads:
@@ -160,7 +162,10 @@ export interface ExternalToolDef {
 function fetchLocalhost(
   url: string,
   timeoutMs = ZOTERO_PROBE_TIMEOUT_MS,
-): Effect.Effect<Pick<Response, 'ok' | 'status'>, ToolProbeFailed> {
+): Effect.Effect<
+  Pick<Response, 'ok' | 'status'>,
+  ToolProbeFailed | Cause.TimeoutError
+> {
   // The deadline sits on the request itself, which stays interruptible. A
   // bracket would not do: its acquire phase is uninterruptible, so a timeout
   // around one cannot cut a connection that never returns headers — exactly
@@ -176,15 +181,10 @@ function fetchLocalhost(
         cause,
       }),
   }).pipe(
+    // A deadline that expires fails as `TimeoutError`: both callers fold
+    // every failure of this probe to `false`, so re-minting it as a
+    // `ToolProbeFailed` told nobody anything.
     Effect.timeout(timeoutMs),
-    Effect.catchTag('TimeoutError', () =>
-      Effect.fail(
-        new ToolProbeFailed({
-          reason: 'probe-timed-out',
-          message: `Probe request to ${url} did not answer within ${timeoutMs}ms.`,
-        }),
-      ),
-    ),
     // Status is read off the response before anything can suspend; cancelling
     // the body then frees the socket, since the probe never reads it, and a
     // cancel that itself fails says nothing about availability. An interrupt
@@ -764,8 +764,15 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
       const secrets = yield* Secrets;
       const keyOrigin = yield* lookupApiKeyOrigin(secrets, 'anthropic').pipe(
-        Effect.catchTag('SecretsFailed', () =>
-          Effect.succeed(process.env[anthropicApiKeyEnv] ? 'env' : 'none'),
+        // A secret store that will not answer is not the same fact as an
+        // unset key, so the environment fallback names the failure.
+        Effect.catchTag('SecretsFailed', (failure) =>
+          Effect.sync(() => {
+            log.warn(
+              `Reading the Anthropic API key failed; reporting the environment instead: ${failure.message}`,
+            );
+            return process.env[anthropicApiKeyEnv] ? 'env' : 'none';
+          }),
         ),
       );
       const hasOauthToken = hasClaudeCodeOauthToken();

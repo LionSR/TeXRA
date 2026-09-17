@@ -84,7 +84,16 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         ),
       ),
       getChatGptSubscriptionStatus().pipe(
-        Effect.catch(() => Effect.succeed({ signedIn: false, enabled: false })),
+        // A probe that fails is not the fact "signed out"; setup advice built
+        // on it would tell a signed-in user to sign in.
+        Effect.catch((failure) =>
+          Effect.sync(() => {
+            credentialLog.warn(
+              `ChatGPT subscription probe failed; reporting signed-out: ${failure.message}`,
+            );
+            return { signedIn: false, enabled: false };
+          }),
+        ),
       ),
     ],
     { concurrency: 'unbounded' },
