@@ -14,9 +14,12 @@ Status: implemented
 > [`implemented/simplification/`](./) — the routine did not file on those days —
 > so `-09-14` is the immediately prior pass and the lineage has no gap in
 > substance, only in calendar dates. Facts below are re-derived by direct
-> inspection at branch HEAD `3d5fbda` (`main` tip, 2026-09-17) and carry a
-> `file:line`, config path, or count; every citation matches what a reader sees
-> on that tree.
+> inspection at `3d5fbda`, which was the `main` tip when this pass ran. `main`
+> has since advanced to `8cd31c2` (#12670), whose two files
+> (`packages/cli/src/commands/_helpers/dispatch.ts`,
+> `src/shared/session/runStateFold.ts`) are cited nowhere here, so every
+> citation holds against that base as well. Each carries a `file:line`, config
+> path, or count.
 
 > **Correction note (same-day).** The first draft of this record carried
 > `-09-14` §4's "Tier-1 manifest re-enumeration owed" forward as an open item
@@ -64,12 +67,23 @@ passes named:
   open work — "shrinking the frozen deep-import lists" — is progressing; no
   baseline widened.
 
-The 50 commits between `-09-14` (`d5e95a89`) and this HEAD (`3d5fbda`) are
-convergent cleanup, net-negative in the four spot-checked recent commits (e.g.
-`6bbfea1` "delete dead BaseFS/RelativeFS layers and Promise-era shims", −236/+52;
-`124ec8e` "drop Promise shims over synchronous run-loop work"; `a87461f` "inline
-processServicesLayer, make storage roots data"). None introduces a new exported
-class, wrapper layer, or one-implementor interface in the four audited areas.
+`d5e95a89..3d5fbda` is **174 commits**, **70** of which touch the four audited
+areas. (An earlier draft said "50" — a `--since` count taken on a shallow clone
+that could not see the range. The figure and the characterization resting on it
+are corrected here; the count was re-derived after deepening the clone.) The
+range is **not** uniformly cleanup: alongside the refactors it carries fixes
+(`e6526295` "report unhandled failures in forked fibers", `697663ef` an approval
+fix), CI work (`06e165c6` "fail on unexecuted Effect values"), a dependency bump
+(`0c3ae8d5`), and test/doc commits.
+
+What this pass actually inspected is the end state, plus four spot-checked
+commits, each net-negative (`6bbfea1` "delete dead BaseFS/RelativeFS layers and
+Promise-era shims", −236/+52; `124ec8e` "drop Promise shims over synchronous
+run-loop work"; `a87461f` "inline processServicesLayer, make storage roots
+data"). The structural conclusion — no new exported class, wrapper layer, or
+one-implementor interface in the four audited areas — is an **end-state**
+property, resting on the §1 audits and the ratchets that would reject such an
+addition, **not** a per-commit review of all 174.
 
 The routine's standing default would have made this a **recorded, not acted on**
 pass: a scheduled firing carries no maintainer request, and none of the
@@ -94,14 +108,17 @@ multiple callers, real logic, class construction, or captured context).
 
 Silent-degradation spot check: `grep` for empty `catch {}` blocks across
 `src/agent`, `src/model`, `src/logger`, `packages/llm`, and `packages/agent`
-(test-excluded) returns **zero** hits. Consistent with prior passes, no `??` in
-the four areas covers a failed read.
+(test-excluded) returns **zero** hits — an exhaustive result for that pattern.
+The companion claim, that no `??` in the four areas covers a failed read, is a
+**spot check** of the sites the area audits opened, not an exhaustive sweep of
+every `??` in those trees; prior passes reached the same reading on the same
+basis.
 
 The per-commit diffstat trend-line accounting is not reproduced here (this
 session inspected the end-state tree, sufficient for the standing question — is
 there unnecessary abstraction _now_).
 
-## 2. Tracked structural facts — re-verified against `main` (`3d5fbda`)
+## 2. Tracked structural facts — re-verified at `3d5fbda`
 
 | Item                                             | `-09-14` state                         | This pass (`3d5fbda`)                                                                                                                                                 |
 | ------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
