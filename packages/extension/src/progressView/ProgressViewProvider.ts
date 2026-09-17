@@ -188,8 +188,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       globalState,
       workspaceState: roots.workspaceState,
       secrets,
-      // One session per extension host: the calling frame is this session's.
-      inScope: (read) => read(),
       fileOptions: () =>
         workspaceFileOptions(roots.workspace).pipe(
           Effect.mapError(

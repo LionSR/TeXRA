@@ -13,6 +13,7 @@ import { Effect } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createLog } from '@logger/logUtils';
 import {
+  CALLING_SCOPE,
   modelUnavailableReasonFrom,
   readModelAvailabilityInputs,
   type ModelAvailabilityScope,
@@ -42,7 +43,7 @@ export const applyHelperModelPreference = Effect.fn(
 )(function* (
   config: AgentConfig,
   stores: ModelOptionStores,
-  inScope: ModelAvailabilityScope = (read) => read(),
+  inScope: ModelAvailabilityScope = CALLING_SCOPE,
 ) {
   const helperModel = getHelperModelName(stores.globalState);
   if (helperModel === config.model) return config;

@@ -17,7 +17,6 @@ import {
   buildCodexMcpToolLog,
   buildCodexTodoToolLog,
   buildCodexTurnToolLog,
-  buildCodexUsageStats,
 } from '@tools/codexShared';
 
 describe('toCodexCliReasoningEffort', () => {
@@ -125,25 +124,6 @@ describe('buildCodexCommandToolLog', () => {
       output: 'sandbox denied',
       error: 'Command failed (exit 0)',
       status: 'failed',
-    });
-  });
-});
-
-describe('buildCodexUsageStats', () => {
-  it('maps Codex SDK usage into the shared token usage panel shape', () => {
-    const usage = buildCodexUsageStats({
-      input_tokens: 1200,
-      output_tokens: 80,
-      cached_input_tokens: 300,
-      cache_write_input_tokens: 0,
-      reasoning_output_tokens: 0,
-    });
-
-    assert.deepEqual(usage, {
-      inputTokens: 1200,
-      outputTokens: 80,
-      cost: 0,
-      cacheReadInputTokens: 300,
     });
   });
 });

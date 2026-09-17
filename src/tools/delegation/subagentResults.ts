@@ -334,7 +334,7 @@ interface DiffFileInfo {
  *
  * Files without an original (new files) or where reading fails are omitted.
  */
-export async function computeAndWriteWorkflowDiffs(
+async function computeAndWriteWorkflowDiffs(
   runId: RunId,
   outputs: OutputFileSummary[],
 ): Promise<Map<string, DiffFileInfo>> {

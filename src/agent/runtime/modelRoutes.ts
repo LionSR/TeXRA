@@ -33,7 +33,10 @@ import {
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
 import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
-import type { ModelAvailabilityScope } from '@model/computeModelOptions';
+import {
+  CALLING_SCOPE,
+  type ModelAvailabilityScope,
+} from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
@@ -326,7 +329,7 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
     config: ModelConfig,
     useOpenRouter: boolean,
     secrets: PlatformSecrets,
-    inScope: ModelAvailabilityScope,
+    inScope: ModelAvailabilityScope = CALLING_SCOPE,
     declinedRoutes?: readonly DeclinableUsageRoute[],
   ) {
     const provider = useOpenRouter

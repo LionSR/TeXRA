@@ -70,7 +70,6 @@ export const helperModel = Effect.fn('helperModel')(function* (
     agentCategory: AgentCategory.Workflow,
     // Helper calls are deterministic one-shots, never sampled.
     temperature: 0,
-    inScope: (operation) => operation(),
   });
 });
 

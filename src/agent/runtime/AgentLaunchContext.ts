@@ -49,8 +49,8 @@ import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, runInSession, withRunContext } from './RunContext';
-import { createRunScope, type RunScope } from './RunScope';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
+import type { RunScope } from './RunScope';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
@@ -552,7 +552,9 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const stopRun = () => {
       Deferred.doneUnsafe(stopped, Effect.void);
     };
-    const runScope = createRunScope({
+    // Frozen: the scope is shared across the ALS for the run's lifetime, so
+    // no fiber may mutate it (see #7669).
+    const runScope: RunScope = Object.freeze({
       runId,
       workingDirectory,
       delegationAgentScope: config.delegationAgentScope,

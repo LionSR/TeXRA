@@ -10,7 +10,6 @@ import { ClaudeBackgroundTaskTracker } from '@tools/claudeAgentBackgroundTasks';
 import {
   aggregateClaudeModelUsage,
   buildClaudeToolUseLog,
-  buildClaudeUsageStats,
 } from '@tools/claudeAgentShared';
 
 function fakeTrace(): {
@@ -62,14 +61,6 @@ describe('Claude Agent SDK adapter', () => {
       cache_read_input_tokens: 50,
       cache_creation_input_tokens: 7,
       cost_usd: 0.03,
-    });
-    if (!usage) throw new Error('Expected folded Claude usage');
-    expect(buildClaudeUsageStats(usage)).toMatchObject({
-      inputTokens: 170,
-      outputTokens: 50,
-      cacheReadInputTokens: 50,
-      cacheCreationInputTokens: 7,
-      cost: 0.03,
     });
   });
 

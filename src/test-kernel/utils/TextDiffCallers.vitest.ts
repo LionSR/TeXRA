@@ -14,11 +14,15 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
-import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
+import {
+  fileLocationDisplayPath,
+  RUN_OUTCOME,
+  type RunId,
+} from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { computeAndWriteWorkflowDiffs } from '@tools/delegation/subagentResults';
+import { buildSubagentResult } from '@tools/delegation/subagentResults';
 import {
   computeLineChangeSummary,
   firstChangedLine,
@@ -49,25 +53,46 @@ describe('shared text-diff caller fixtures', () => {
         }),
       );
       const runId = 'abcdef' as RunId;
+      const absolutePath = fakePath('workspace/out/section/paper.tex');
 
-      const result = yield* Effect.tryPromise(() =>
-        computeAndWriteWorkflowDiffs(runId, [
+      const meta = yield* Effect.tryPromise(() =>
+        buildSubagentResult(
+          runId,
+          'workflow-subagent',
           {
-            round: 0,
-            relativePath: 'section/paper.tex',
-            absolutePath: fakePath('workspace/out/section/paper.tex'),
-            location: 'workspace',
-            originalPath: fakePath('workspace/original.tex'),
-            added: 2,
-            removed: 1,
+            runId,
+            outcome: RUN_OUTCOME.COMPLETED,
+            output: {
+              category: 'workflow',
+              outputs: [
+                {
+                  round: 0,
+                  relativePath: 'section/paper.tex',
+                  absolutePath,
+                  location: 'workspace',
+                  originalPath: fakePath('workspace/original.tex'),
+                  added: 2,
+                  removed: 1,
+                },
+              ],
+              compileFailures: [],
+              diffs: [],
+            },
           },
-        ]),
+          { startedAt: Date.now() },
+        ),
       );
 
-      expect(result.get(fakePath('workspace/out/section/paper.tex'))).toEqual({
-        diffRelPath: 'diffs/section_paper.tex.diff',
-        largeChange: true,
-      });
+      if (meta.output.category !== 'workflow') {
+        throw new Error('Expected a workflow subagent result.');
+      }
+      expect(meta.output.diffs).toEqual([
+        {
+          path: absolutePath,
+          diffRelPath: 'diffs/section_paper.tex.diff',
+          largeChange: true,
+        },
+      ]);
       expect(
         yield* Effect.tryPromise(() =>
           AbsoluteFS.read(

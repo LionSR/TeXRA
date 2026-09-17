@@ -20,6 +20,7 @@ const getRuntimeModelConfig = vi.hoisted(() => vi.fn());
 
 vi.mock('@agent/runtime/helperModelName', () => ({ getHelperModelName }));
 vi.mock('@model/computeModelOptions', () => ({
+  CALLING_SCOPE: <A>(read: () => A): A => read(),
   readModelAvailabilityInputs,
   modelUnavailableReasonFrom,
 }));

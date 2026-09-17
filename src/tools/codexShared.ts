@@ -6,7 +6,6 @@ import type {
   CodexTodoToolInput,
   CodexTurnState,
   CodexTurnToolInput,
-  TokenUsageStats,
   ToolUseLog,
   ToolCallStatus,
 } from '@shared/schemas';
@@ -25,7 +24,6 @@ import type {
   McpToolCallItem,
   ThreadStartedEvent,
   TodoListItem,
-  Usage,
 } from '@openai/codex-sdk';
 
 export const CODEX_AGENT_NAME = 'codex';
@@ -203,16 +201,5 @@ export function buildCodexTurnToolLog(options?: {
     // / stream error) but omitted for abort or an early stream end.
     ...(state === 'failed' && options?.error && { error: options.error }),
     status: codexCardStatus(state === 'running', state === 'failed'),
-  };
-}
-
-export function buildCodexUsageStats(usage: Usage): TokenUsageStats {
-  return {
-    inputTokens: usage.input_tokens,
-    outputTokens: usage.output_tokens,
-    cost: 0,
-    ...(usage.cached_input_tokens > 0 && {
-      cacheReadInputTokens: usage.cached_input_tokens,
-    }),
   };
 }

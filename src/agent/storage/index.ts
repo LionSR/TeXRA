@@ -10,7 +10,7 @@
  */
 
 export { type ChildRecord, getRunRecords } from './runRecords';
-export { buildCliWorkflowResultMeta, unwrapResultMeta } from './resultMeta';
+export { unwrapResultMeta } from './resultMeta';
 export {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,

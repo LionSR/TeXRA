@@ -213,9 +213,7 @@ function teamExecutionFields<T extends TeamCatalogAgent>(
   };
 }
 
-export function buildTeamOptions(
-  plans: readonly TeamRunPlan[],
-): TeamOptionData[] {
+function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
   const builtInOrder = new Map(
     AGENT_MODE_PRESETS.map((preset, index) => [preset.id, index]),
   );

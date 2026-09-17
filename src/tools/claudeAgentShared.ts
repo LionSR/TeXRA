@@ -3,7 +3,6 @@
 import { warn } from '@logger/logUtils';
 import type {
   ClaudeAgentEffort,
-  TokenUsageStats,
   ToolUseLog,
   ToolCallStatus,
 } from '@shared/schemas';
@@ -77,23 +76,6 @@ export function aggregateClaudeModelUsage(
     cost_usd: sum((model) => model.costUSD),
   };
   return usage;
-}
-
-/** Format a usage object into TeXRA's TokenUsageStats. */
-export function buildClaudeUsageStats(usage: ClaudeTurnUsage): TokenUsageStats {
-  return {
-    inputTokens: usage.input_tokens ?? 0,
-    outputTokens: usage.output_tokens ?? 0,
-    cost: usage.cost_usd ?? 0,
-    ...(usage.cache_read_input_tokens != null &&
-      usage.cache_read_input_tokens > 0 && {
-        cacheReadInputTokens: usage.cache_read_input_tokens,
-      }),
-    ...(usage.cache_creation_input_tokens != null &&
-      usage.cache_creation_input_tokens > 0 && {
-        cacheCreationInputTokens: usage.cache_creation_input_tokens,
-      }),
-  };
 }
 
 /** Narrow an SDK-sourced value to a plain record, the way every built-in
