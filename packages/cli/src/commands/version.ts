@@ -6,10 +6,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { emitCliResult } from './_helpers/output';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
-import {
-  CLI_OUTPUT_FORMATS,
-  type CliOutputFormat,
-} from '../schemas/cliSettings';
+import { CLI_OUTPUT_FORMATS, type CliOutputFormat } from '@shared/schemas';
 
 function isCliOutputFormat(value: unknown): value is CliOutputFormat {
   return (
