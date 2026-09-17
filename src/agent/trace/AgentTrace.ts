@@ -28,7 +28,7 @@ export type AgentTraceSubscriber = (event: AgentEvent) => void;
 export interface StageOptions {
   /** Explicit id; otherwise a fresh one is generated. */
   readonly id?: string;
-  /** Parent stage id; otherwise the active stage from the run scope. */
+  /** Parent stage id; otherwise the stage opens as a root. */
   readonly parentId?: string;
   /** Semantic stage kind consumed by host progress surfaces. */
   readonly kind?: 'run' | 'round' | 'phase' | 'session';
@@ -38,24 +38,20 @@ export interface StageOptions {
   readonly total?: number;
   /**
    * Skip stage creation but propagate parent context to nested calls.
-   * `handle.id` is undefined; `handle.within(fn)` runs `fn` in the parent
-   * scope. Used by output sub-stages that don't need their own group.
+   * `handle.id` is undefined; `handle.child(...)` parents to this handle's
+   * own parent. Used by output sub-stages that don't need their own group.
    */
   readonly skip?: boolean;
   /** Parent handle for nested-stage chains. */
   readonly parent?: StageHandle;
 }
 
-/** Handle returned by `openStage` — wraps a stage with run/within/end ops. */
+/** Handle returned by `openStage` — wraps a stage with end/child ops. */
 export interface StageHandle {
   /** Stage id; undefined for skipped (passthrough) stages. */
   readonly id: string | undefined;
   /** Emit `stage.end` with the given outcome. Idempotent. */
   end(status?: RunOutcome): void;
-  /** Run `fn` with this stage as the active stamp. */
-  within<T>(fn: () => Promise<T> | T): Promise<T>;
-  /** `within(fn)` + auto-end on success/failure with success/error status. */
-  run<T>(fn: () => Promise<T> | T): Promise<T>;
   /** Open a nested stage parented to this one. */
   child(label: string, options?: StageOptions): StageHandle;
 }
@@ -64,7 +60,7 @@ export interface StageHandle {
 export interface StreamOptions {
   /** Explicit id; otherwise a fresh one is generated. */
   readonly id?: string;
-  /** Stage id stamped on the start event; defaults to the active scope. */
+  /** Stage id stamped on the start event; none stamps no stage. */
   readonly stageId?: string;
   /**
    * When false, chunks are accumulated locally without emitting. `finalize`
@@ -121,9 +117,8 @@ export interface LogOptions {
   readonly messageType?: string;
   readonly verbose?: boolean;
   /**
-   * Explicit stage override — bypasses the AsyncLocalStorage default for
-   * callers that captured a group id earlier and want to attach this entry
-   * to it.
+   * Stage to attach this entry to, for callers that captured a group id
+   * earlier. Without one the entry belongs to no stage.
    */
   readonly stageId?: string;
 }
@@ -146,7 +141,6 @@ export interface AgentTrace {
   // ─── SSoT primitives ────────────────────────────────────────────────
   emit(event: AgentEvent): void;
   subscribe(subscriber: AgentTraceSubscriber): () => void;
-  activeStageId(): string | undefined;
 
   // ─── Plain logging (sugar over emit) ────────────────────────────────
   debug(message: string, options?: LogOptions): void;

@@ -45,22 +45,6 @@ describe('TraceEmitter stage metadata', () => {
   });
 });
 
-describe('TraceEmitter responseFinalized', () => {
-  it('stamps the ambient stage id when no explicit stageId is given', () => {
-    let stageId: string | undefined;
-    const events = collectEvents((trace) => {
-      const stage = trace.openStage('r0', { kind: 'round' });
-      stageId = stage.id;
-      void stage.within(() => {
-        trace.responseFinalized('Final answer.');
-      });
-    });
-
-    const finalized = events.find((e) => e.type === 'response.finalized');
-    expect(finalized).toMatchObject({ stageId });
-  });
-});
-
 type ToolUseCard = Parameters<typeof emitToolUseCard>[1];
 
 /** Emit a card on a fresh trace and return only its tool.start/tool.end events. */

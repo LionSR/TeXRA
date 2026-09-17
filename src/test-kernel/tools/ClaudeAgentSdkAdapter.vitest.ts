@@ -21,7 +21,6 @@ function fakeTrace(): {
   const toolEnd = vi.fn();
   return {
     trace: {
-      activeStageId: () => undefined,
       toolStart,
       toolEnd,
     } as unknown as AgentTrace,

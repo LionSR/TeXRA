@@ -146,7 +146,6 @@ export function projectWorkflowScriptProgress<R>(
   options: WorkflowScriptRunWithProgressOptions<R>,
 ): WorkflowScriptProgressProjection<R> {
   const { onActivity, ...runOptions } = options;
-  const parentStageId = trace.activeStageId();
   const phases = new Map<string, StageHandle>();
   const phaseTitles = new Set<string>();
   // A deterministic workflow stream appends every relaunch to one transcript.
@@ -165,7 +164,6 @@ export function projectWorkflowScriptProgress<R>(
     if (existing) return existing;
     const handle = trace.openStage(title, {
       kind: 'phase',
-      parentId: parentStageId,
       index,
       total,
     });
@@ -179,7 +177,7 @@ export function projectWorkflowScriptProgress<R>(
    * phase it sits under, so its row lands beneath that header.
    */
   const openPhaseHandle = (phase: string | undefined): string | undefined =>
-    phase ? phaseFor(phase).id : parentStageId;
+    phase ? phaseFor(phase).id : undefined;
 
   /**
    * A card's `phase` is the engine's own record: pinned when the call is
@@ -211,7 +209,6 @@ export function projectWorkflowScriptProgress<R>(
         trace.emit({
           type: 'workflow.plan',
           attemptId: projectionId,
-          stageId: parentStageId,
           phases: event.plan.phases,
           tasks: event.plan.tasks,
         });

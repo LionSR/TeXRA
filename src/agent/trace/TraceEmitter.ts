@@ -6,12 +6,9 @@
  * `toolUseHelpers.ts` that operate on the emitted event stream.
  *
  * Responsibilities at the emit boundary (one place, not many):
- *   - stamp `stageId` from the AsyncLocalStorage scope
  *   - fan out to subscribers
  *   - swallow per-subscriber exceptions so one bad sink can't break the run
  */
-import { AsyncLocalStorage } from 'node:async_hooks';
-
 import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
@@ -50,21 +47,6 @@ export class TraceEmitter implements AgentTrace {
    */
   private readonly subscribers = new Set<AgentTraceSubscriber>();
 
-  /**
-   * Per-instance stage scope. Kept on the instance — NOT a module singleton —
-   * so a stage opened on one trace can never leak as the ambient parent of a
-   * DIFFERENT trace. Cross-trace inheritance is the bug class behind orphaned
-   * subagent transcripts (a child run's "Run:" stage inheriting the
-   * orchestrator's tool-use stage id, absent from the child's own stream).
-   * Within a single trace, ambient nesting works exactly as before.
-   * See .agents/docs/archived/bug-fix/2026-05-30-progress-grouping-refactor.md (R1).
-   */
-  private readonly stageScope = new AsyncLocalStorage<string[]>();
-
-  private currentStageStack(): string[] {
-    return this.stageScope.getStore() ?? [];
-  }
-
   // ─── SSoT primitives ───────────────────────────────────────────────
 
   subscribe(subscriber: AgentTraceSubscriber): () => void {
@@ -75,16 +57,9 @@ export class TraceEmitter implements AgentTrace {
   }
 
   emit(event: AgentEvent): void {
-    // Single resolve point — stage stamp wins from the event itself if
-    // the caller supplied one; otherwise fall back to the active scope.
-    const stamped: AgentEvent =
-      event.stageId !== undefined
-        ? event
-        : { ...event, stageId: this.currentStageStack().at(-1) };
-
     for (const sub of this.subscribers) {
       try {
-        sub(stamped);
+        sub(event);
       } catch (err) {
         // A misbehaving subscriber must not break the run. Log via the
         // output-channel logger (not back through this emitter) so a throwing
@@ -98,19 +73,6 @@ export class TraceEmitter implements AgentTrace {
         );
       }
     }
-  }
-
-  activeStageId(): string | undefined {
-    return this.currentStageStack().at(-1);
-  }
-
-  withStage<T>(
-    stageId: string | undefined,
-    fn: () => Promise<T> | T,
-  ): Promise<T> {
-    if (!stageId) return Promise.resolve(fn());
-    const nextStack = [...this.currentStageStack(), stageId];
-    return this.stageScope.run(nextStack, () => Promise.resolve(fn()));
   }
 
   // ─── Plain logging ─────────────────────────────────────────────────
@@ -218,8 +180,7 @@ export class TraceEmitter implements AgentTrace {
   // ─── Stages ────────────────────────────────────────────────────────
 
   openStage(label: string, options: StageOptions = {}): StageHandle {
-    const parentId =
-      options.parent?.id ?? options.parentId ?? this.activeStageId();
+    const parentId = options.parent?.id ?? options.parentId;
 
     if (options.skip) {
       return new SkippedStageHandle(this, parentId);
@@ -251,11 +212,8 @@ export class TraceEmitter implements AgentTrace {
     }
 
     const emit: TraceEmitFn = (event) => this.emit(event);
-    // Resolve the stage now so a deferred start lands in the same group an
-    // eager start would have used, not whatever scope is active when the
-    // first chunk finally arrives.
-    const stageId = options.stageId ?? this.activeStageId();
-    const emitStart = () => emit({ type: 'stream.start', id, kind, stageId });
+    const emitStart = () =>
+      emit({ type: 'stream.start', id, kind, stageId: options.stageId });
 
     if (options.deferStart) {
       return new StreamHandleImpl(emit, id, phaseOnly, emitStart);
@@ -289,21 +247,6 @@ class StageHandleImpl implements StageHandle {
     });
   }
 
-  async within<T>(fn: () => Promise<T> | T): Promise<T> {
-    return this.trace.withStage(this.id, fn);
-  }
-
-  async run<T>(fn: () => Promise<T> | T): Promise<T> {
-    try {
-      const result = await this.within(fn);
-      this.end();
-      return result;
-    } catch (err) {
-      this.end(RUN_OUTCOME.FAILED);
-      throw err;
-    }
-  }
-
   child(label: string, options: StageOptions = {}): StageHandle {
     return this.trace.openStage(label, { ...options, parent: this });
   }
@@ -320,14 +263,6 @@ class SkippedStageHandle implements StageHandle {
 
   end(_status?: RunOutcome): void {
     // Skipped stages never opened a group; nothing to end.
-  }
-
-  async within<T>(fn: () => Promise<T> | T): Promise<T> {
-    return this.trace.withStage(this.parentId, fn);
-  }
-
-  async run<T>(fn: () => Promise<T> | T): Promise<T> {
-    return this.within(fn);
   }
 
   child(label: string, options: StageOptions = {}): StageHandle {

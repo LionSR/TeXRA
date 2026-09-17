@@ -60,8 +60,7 @@ type UsageMonitorModelInfo = Pick<ModelConfig, 'fullName'> & {
  *
  * - logger: For error logging and the single `usage` trace event
  * - runId: The run whose usage this is; keys its usage map (immutable)
- * - runStageId: The run stage this run opened, used only to stamp the
- *   trace event when usage is logged outside an ambient stage
+ * - runStageId: The run stage this run opened, which stamps the trace event
  */
 interface UsageMonitorContext {
   logger: AgentTrace;
@@ -187,10 +186,7 @@ export class UsageMonitor {
         { runId, usage: payload },
         {
           recordTranscript: agentCategory === AgentCategory.Workflow,
-          // The ambient stage's AsyncLocalStorage scope stamps its structural
-          // id onto emitted events; fall back to this run's own stage when
-          // usage is logged outside a stage.
-          stageId: logger.activeStageId() ?? runStageId,
+          stageId: runStageId,
         },
       );
 
