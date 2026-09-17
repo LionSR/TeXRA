@@ -43,8 +43,6 @@ export interface ExternalToolCheckResult {
   readonly tools: readonly RegisteredToolName[];
   readonly name: string;
   readonly status: 'available' | 'not-found' | 'unknown';
-  /** Raw external dependency probe result; null when the probe failed. */
-  readonly detected: boolean | null;
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;
   /** Human-readable status detail from the group's `detailCheck`, if any. */
@@ -255,7 +253,6 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
     tools,
     name,
     status,
-    detected: status === 'unknown' ? null : status === 'available',
     statusLabel,
     statusDetail,
   };
