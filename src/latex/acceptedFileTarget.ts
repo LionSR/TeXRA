@@ -9,6 +9,7 @@ import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   createExternalLocation,
@@ -266,22 +267,28 @@ function staleDiffFileLocation(
 export async function cleanupAcceptedWorkspaceDiffFiles(
   entries: readonly { outputPath: string; originalPath: string }[],
 ): Promise<string[]> {
-  const results = await Promise.all(
-    entries.map(async ({ outputPath, originalPath }) => {
-      const original = WorkspaceFS.locatePath(originalPath);
-      if (original.kind === 'external') return [];
-      const stale = staleDiffFileLocation(original, outputPath, original);
-      if (!stale || stale.kind === 'external') return [];
-      try {
-        await WorkspaceFS.delete(stale.relativePath);
-        return [stale.relativePath];
-      } catch {
-        // A missing or locked diff companion does not undo an accepted file.
-        return [];
-      }
-    }),
+  const stale = entries.flatMap(({ outputPath, originalPath }) => {
+    const original = WorkspaceFS.locatePath(originalPath);
+    if (original.kind === 'external') return [];
+    const diffLocation = staleDiffFileLocation(original, outputPath, original);
+    if (!diffLocation || diffLocation.kind === 'external') return [];
+    return [diffLocation.relativePath];
+  });
+
+  // A missing or locked diff companion does not undo an accepted file, so the
+  // sweep keeps every deletion that worked and names the ones that did not
+  // rather than dropping them silently.
+  const settled = await Promise.allSettled(
+    stale.map((relativePath) => WorkspaceFS.delete(relativePath)),
   );
-  return results.flat();
+  return stale.filter((relativePath, index) => {
+    const result = settled[index];
+    if (result.status === 'fulfilled') return true;
+    log.warn(
+      `Could not remove the stale diff file ${relativePath}: ${toErrorMessage(result.reason)}`,
+    );
+    return false;
+  });
 }
 
 export function getAcceptedFileTarget(
