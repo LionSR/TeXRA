@@ -319,7 +319,6 @@ describe('NativeSubagentStrategy', () => {
       const params = {
         ...baseParams(),
         runMode: 'single-cycle' as const,
-        workflowPhase: 'review',
       };
       const strategy = createNativeSubagentStrategy(params);
       const ports = fakePorts();
@@ -345,7 +344,6 @@ describe('NativeSubagentStrategy', () => {
         expect.objectContaining({
           parentRunId: params.parentRunId,
           stopAfterCycle: true,
-          workflowPhase: 'review',
         }),
       );
       expect(params.onRunResolved).toHaveBeenCalledWith(CHILD_RUN_ID);

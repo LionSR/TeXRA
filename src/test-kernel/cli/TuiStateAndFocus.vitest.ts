@@ -46,7 +46,6 @@ import {
   RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   TODO_STATUS,
-  type ActiveChildInfo,
   type RunId,
   type ExtendedTokenUsageStats,
   type Plan,

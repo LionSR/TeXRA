@@ -22,10 +22,10 @@ import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   RUN_PHASE,
-  type ActiveChildInfo,
   type ConversationProgress,
   type RunId,
   type InstructionAction,
+  type RunIdentity,
   type RunPhase,
   AgentCategory,
   emptyRunEndOutput,
@@ -185,9 +185,14 @@ type RunConfigOverrides = {
   agentCategory?: AgentCategory;
   inputFiles?: string[];
 };
-function subagentChild(
-  overrides: Partial<ActiveChildInfo> = {},
-): ActiveChildInfo {
+/** A child the fold holds under its parent, as these cases name one. */
+type ChildRow = {
+  readonly childRunId: RunId;
+  readonly agentName: string;
+  readonly identity: RunIdentity;
+  readonly status?: RunPhase;
+};
+function subagentChild(overrides: Partial<ChildRow> = {}): ChildRow {
   return {
     childRunId: 'child-stream' as RunId,
     agentName: 'review',
@@ -261,7 +266,7 @@ async function handleRunDescription(
 async function handleActiveSubagents(
   renderer: TestRunProgressRenderer,
   parentRunId: string,
-  children: readonly ActiveChildInfo[],
+  children: readonly ChildRow[],
 ): Promise<void> {
   const parent = parentRunId as RunId;
   const named = children.filter((child) => child.agentName);
@@ -1137,52 +1142,51 @@ describe('CLI run progress renderer', () => {
   });
 
   it('writes projected subagent progress records to stdout in ndjson mode', async () => {
+    const parentRunId = 'a1a1a1' as RunId;
+    const childRunId = 'b1b1b1' as RunId;
     const output = await captureStreamWrites(process.stdout, async () => {
       const session = createTestSession();
-      // The roster is the registry's, not the log's: the projection hears
-      // it through `onChildActivity`, so the case plays the listener.
-      let roster:
-        ((parentRunId: RunId, items: ActiveChildInfo[]) => void) | undefined;
-      const detach = attachCliSessionProgressProjection(effectRuntime(), {
-        events: session.events,
-        now: () => session.now(),
-        runs: {
-          onChildActivity: (listener) => {
-            roster = listener;
-            return () => {
-              roster = undefined;
-            };
-          },
-        },
-      });
-      roster?.('parent-stream' as RunId, [
+      publishTestRunStart(session, parentRunId);
+      await settle();
+      // The roster is the fold's: the parent's `childIds` and the child's own
+      // row, derived beside the line that folded them.
+      const detach = attachCliSessionProgressProjection(
+        effectRuntime(),
+        session,
+      );
+      session.publish([
         {
-          childRunId: 'child-stream' as RunId,
-          agentName: 'review',
-          identity: { kind: 'agent' as const, agent: 'review' },
-          status: 'running',
+          type: 'run.start',
+          aggregateId: qualifyAggregateId('run', childRunId),
+          identity: { kind: 'agent', agent: 'review' },
+          userFollowUpSupport: 'unsupported',
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+          parent: { id: parentRunId },
         },
       ]);
       await settle();
-      detach();
+      await detach();
     });
 
-    const records = ndjsonRecords(output);
+    const records = ndjsonRecords(output).filter(
+      (record) => record.event === 'run.children',
+    );
 
     expect(records).toEqual([
       expect.objectContaining({
         kind: 'progress',
         event: 'run.children',
-        // The roster rows go out verbatim: the child's run id and identity
-        // under their own names.
+        // The row carries the child's run id and identity under their own
+        // names; `ready` is the fold's phase before the activation lands.
         payload: {
-          runId: 'parent-stream',
+          runId: parentRunId,
           children: [
             {
-              childRunId: 'child-stream',
+              childRunId,
               agentName: 'review',
               identity: { kind: 'agent', agent: 'review' },
-              status: 'running',
+              status: 'ready',
             },
           ],
         },

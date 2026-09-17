@@ -103,8 +103,7 @@ export class RunHandle<
    * Epoch ms when this handle generation was created. The value remains on a
    * handle while it is parked at WAITING. Resume constructs and tracks a
    * replacement handle, whose `startedAt` is stamped anew. This feeds the
-   * roster's `ActiveChildInfo.startedAt` and the `executions` tool's `Started:`
-   * line.
+   * `executions` tool's `Started:` line.
    * Durable run creation time is `RunView.launchedAt`.
    */
   readonly startedAt = Date.now();
@@ -117,14 +116,6 @@ export class RunHandle<
   private interruptHandler?: RunInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
   private suspension?: RunSuspension;
-
-  /**
-   * Workflow-script phase owning this run, when it is an `agent()` grandchild
-   * of a workflow-script run. A mutable display-field slot, assigned between
-   * construction and `track()`, so the first roster emission already carries
-   * it.
-   */
-  workflowPhase?: string;
 
   /** Whether a caller has claimed the run's exactly-once terminal outcome. */
   private terminalClaimed = false;

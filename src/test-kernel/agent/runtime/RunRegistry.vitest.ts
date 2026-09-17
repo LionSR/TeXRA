@@ -36,7 +36,7 @@ import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { eventsOfType, recordChildRosters } from '../progressTestUtils';
+import { eventsOfType } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
@@ -1037,12 +1037,10 @@ describe('runRegistry', () => {
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).not.toHaveBeenCalled();
       expect(grandchildInterrupt).not.toHaveBeenCalled();
-      expect(registry.getActiveChildren(rootRunId)).toHaveLength(0);
+      expect(registry.hasActiveChildren(rootRunId)).toBe(false);
       expect(registry.getHandle(childRunId)?.parent).toBeNull();
       expect(registry.getHandle(grandchildRunId)?.parent).toBe(childRunId);
-      expect(registry.getActiveChildren(childRunId)).toEqual([
-        expect.objectContaining({ childRunId: grandchildRunId }),
-      ]);
+      expect(registry.hasActiveChildren(childRunId)).toBe(true);
       expect(eventsOfType(recorded.events, 'run.detach')).toContainEqual({
         type: 'run.detach',
         aggregateId: qualifyAggregateId('run', childRunId),
@@ -1266,14 +1264,10 @@ describe('runRegistry', () => {
 
     try {
       phases.set(runId, RUN_PHASE.WAITING);
-      registry.track(createHandle(runId, parentRunId));
+      const handle = createHandle(runId, parentRunId);
+      registry.track(handle);
 
-      expect(registry.getActiveChildren(parentRunId)).toEqual([
-        expect.objectContaining({
-          childRunId: runId,
-          status: RUN_PHASE.WAITING,
-        }),
-      ]);
+      expect(registry.getStatus(handle).status).toBe(RUN_PHASE.WAITING);
     } finally {
       registry.dispose();
     }
@@ -1297,8 +1291,6 @@ describe('runRegistry', () => {
         status: RUN_PHASE.RUNNING,
         elapsed: '4s',
       });
-      expect(registry.getActiveChildren(parentRunId)[0]?.startedAt).toBe(1_000);
-
       phases.set(runId, RUN_PHASE.RUNNING);
       expect(registry.getStatus(handle).elapsed).toBeNull();
     } finally {
@@ -1337,10 +1329,9 @@ describe('runRegistry', () => {
     }
   });
 
-  it('projects handle updates from session events', () => {
+  it('registers a child without publishing its parent edge', () => {
     const { events, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
-    const rosters = recordChildRosters(registry);
     const parentRunId = generateRunId();
     const runId = generateRunId();
 
@@ -1348,24 +1339,12 @@ describe('runRegistry', () => {
       const handle = createHandle(runId, parentRunId);
 
       registry.track(handle);
+      expect(registry.hasActiveChildren(parentRunId)).toBe(true);
       registry.untrack(runId);
 
-      const childActivity = rosters.rosters;
-      expect(childActivity[0]).toMatchObject({
-        parentRunId,
-        items: [
-          {
-            childRunId: runId,
-            agentName: 'test-subagent',
-          },
-        ],
-      });
       // The parent edge is a `run.start` fact, so tracking publishes none.
       expect(recorded.events).toEqual([]);
-      expect(childActivity.at(-1)).toMatchObject({
-        parentRunId,
-        items: [],
-      });
+      expect(registry.hasActiveChildren(parentRunId)).toBe(false);
     } finally {
       registry.dispose();
     }
@@ -1477,7 +1456,6 @@ describe('runRegistry', () => {
   it('projects detach updates from session events', () => {
     const { events, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
-    const rosters = recordChildRosters(registry);
     const parentRunId = generateRunId();
     const runId = generateRunId();
 
@@ -1498,10 +1476,7 @@ describe('runRegistry', () => {
         type: 'run.detach',
         aggregateId: qualifyAggregateId('run', runId),
       });
-      expect(rosters.rosters.at(-1)).toMatchObject({
-        parentRunId,
-        items: [],
-      });
+      expect(registry.hasActiveChildren(parentRunId)).toBe(false);
     } finally {
       registry.dispose();
     }
@@ -1524,7 +1499,7 @@ describe('runRegistry', () => {
       registry.track(lifecycle);
 
       expect(lifecycle.deliveryTarget).toBeUndefined();
-      expect(registry.getActiveChildren(parentRunId)).toEqual([]);
+      expect(registry.hasActiveChildren(parentRunId)).toBe(false);
     } finally {
       registry.dispose();
     }
@@ -1550,22 +1525,6 @@ describe('runRegistry', () => {
     } finally {
       registry.dispose();
     }
-  });
-
-  it('ignores phase facts once disposed', () => {
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-
-    registry.track(createHandle(runId, parentRunId));
-    const rosters = recordChildRosters(registry);
-    registry.dispose();
-
-    phases.set(runId, RUN_PHASE.RUNNING);
-
-    // The registry contributes no roster emission once its subscription is
-    // gone.
-    expect(rosters.rosters).toEqual([]);
   });
 });
 

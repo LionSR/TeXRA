@@ -39,11 +39,7 @@ import {
 } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
 
-import {
-  eventsOfType,
-  recordChildRosters,
-  recordSessionEvents,
-} from '../progressTestUtils';
+import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
@@ -372,42 +368,6 @@ describe('runFlowWithLifecycle', () => {
         }
       }),
   );
-
-  it('carries workflowPhase on the first child roster emission', async () => {
-    const { runId, ctx } = lifecycleFixture();
-    const parentRunId = generateRunId();
-    const rosters = recordChildRosters(ctx.runScope.session.runs);
-    // `track()` emits the roster synchronously, so onRun — which fires after
-    // tracking — is structurally too late to stamp a display field.
-    let rosterEmissionsBeforeOnRun = -1;
-
-    try {
-      await Effect.runPromise(
-        runFlow(
-          ctx,
-          () => Effect.succeed(toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
-          {
-            parentRunId,
-            workflowPhase: 'Reduce',
-            onRun: async () => {
-              rosterEmissionsBeforeOnRun = rosters.rosters.length;
-            },
-          },
-        ),
-      );
-
-      const [firstRoster] = rosters.rosters;
-      expect(firstRoster?.items).toEqual([
-        expect.objectContaining({
-          childRunId: runId,
-          workflowPhase: 'Reduce',
-        }),
-      ]);
-      expect(rosterEmissionsBeforeOnRun).toBeGreaterThan(0);
-    } finally {
-      testDefaultSession().runs.untrack(runId);
-    }
-  });
 
   it.effect('carries a stop requested by onRun into the run stop', () =>
     Effect.gen(function* () {

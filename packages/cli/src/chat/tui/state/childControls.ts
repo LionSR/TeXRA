@@ -6,11 +6,15 @@
  */
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
-import { childElapsedMs } from '@shared/runs/childElapsed';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 import { focusRun, openWorkflowPopup } from './cliState';
 import { currentView, runViewOf } from './sessionView';
 
+/**
+ * How long a running child has been at it, formatted: the caller selects the
+ * window (the fold's active-phase `runStartedAt`), and a child that is not
+ * running shows none.
+ */
 export function childElapsed(
   child: {
     readonly status: RunPhase | undefined;
@@ -21,8 +25,8 @@ export function childElapsed(
   if (child.status !== undefined && child.status !== RUN_PHASE.RUNNING) {
     return undefined;
   }
-  const elapsedMs = childElapsedMs(child, nowMs);
-  return elapsedMs === undefined ? undefined : formatCompactDuration(elapsedMs);
+  if (child.startedAt === undefined) return undefined;
+  return formatCompactDuration(Math.max(0, nowMs - child.startedAt));
 }
 
 function hasChildren(view: SessionView, runId: RunId): boolean {

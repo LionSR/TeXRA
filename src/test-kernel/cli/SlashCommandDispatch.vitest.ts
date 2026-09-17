@@ -62,9 +62,9 @@ import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
   RUN_PHASE,
-  type ActiveChildInfo,
   type RunId,
   type Plan,
+  type RunIdentity,
   type RunPhase,
   type TodoItem,
 } from '@shared/schemas';
@@ -126,10 +126,14 @@ function seedWorkPlan(
   } as RunView);
   syncSeededView();
 }
-function seedChildRoster(
-  parentRunId: RunId,
-  rows: readonly ActiveChildInfo[],
-): void {
+/** A child the fold holds under its parent, as these cases name one. */
+type ChildRow = {
+  readonly childRunId: RunId;
+  readonly agentName: string;
+  readonly identity: RunIdentity;
+  readonly status?: RunPhase;
+};
+function seedChildRoster(parentRunId: RunId, rows: readonly ChildRow[]): void {
   ensureRun(parentRunId);
   const parent = seeded.get(parentRunId);
   for (const row of rows) {
@@ -760,7 +764,6 @@ describe('handleTuiSlashCommand', () => {
         identity: { kind: 'agent', agent: 'critic' },
         agentName: 'critic',
         status: RUN_PHASE.RUNNING,
-        startedAt: 1,
         childRunId,
       },
     ]);

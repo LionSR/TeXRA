@@ -14,7 +14,6 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   RUN_SUBSTATE,
-  type ActiveChildInfo,
   type RunId,
   type SessionEventDraft,
   type RunPhase,
@@ -171,9 +170,6 @@ export class RunRegistry {
   private readonly commit: (
     events: readonly SessionEventDraft[],
   ) => Effect.Effect<void, Error>;
-  private readonly childActivityListeners = new Set<
-    (parentRunId: RunId, items: readonly ActiveChildInfo[]) => void
-  >();
   private readonly approvals: SessionApprovals;
   private readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
   private readonly finalizeRun: WaitingTerminationContext['finalizeRun'];
@@ -207,41 +203,22 @@ export class RunRegistry {
   }
 
   /**
-   * The live child roster of a parent run, as this registry holds it:
-   * live-only presentation state (never a plane row, contract C3), told to
-   * the renderers that still draw a roster until the fold's `childIds` and
-   * `rollup` replace it (PRD 5.1). Called on every roster change: a child
-   * tracked, untracked, detached, or moved by a phase-moving row.
-   */
-  onChildActivity(
-    listener: (parentRunId: RunId, items: readonly ActiveChildInfo[]) => void,
-  ): () => void {
-    this.childActivityListeners.add(listener);
-    return () => {
-      this.childActivityListeners.delete(listener);
-    };
-  }
-
-  /**
    * One phase-moving row this process committed (`run.activate`, the
    * `waiting` step and the step that leaves it, `run.end`), from the
-   * session's fold-gated tail in commit order: notify waiters and refresh the
-   * child roster when a run's status changes (e.g. RUNNING to WAITING). Both
-   * read the new phase from the view here, which is why the caller delivers
-   * the row only once the view has folded it.
+   * session's fold-gated tail in commit order: notify the waiters on this
+   * run, which read the new phase from the view here — why the caller
+   * delivers the row only once the view has folded it.
    */
   handleStatus(runId: RunId): void {
     if (this.disposed) return;
     const handle = this.handles.get(runId);
     if (!handle) return;
     this.notifyWaiters(handle.runId);
-    if (handle.parent !== null) this.emitChildActivity(handle.parent);
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.childActivityListeners.clear();
     const disposal = new Error(
       'Cannot register run work after session disposal.',
     );
@@ -362,9 +339,6 @@ export class RunRegistry {
       handle.interrupt();
     }
     this.handles.set(handle.runId, handle);
-    // The parent edge is already durable on the child's `run.start`; the
-    // roster is the only thing a tracked child moves here.
-    if (handle.parent !== null) this.emitChildActivity(handle.parent);
     this.notifyWaiters(handle.runId);
   }
 
@@ -487,7 +461,6 @@ export class RunRegistry {
   private untrackHandle(handle: RunHandle): void {
     this.handles.delete(handle.runId);
     this.notifyWaiters(handle.runId);
-    if (handle.parent !== null) this.emitChildActivity(handle.parent);
   }
 
   getHandle(runId: RunId): RunHandle | undefined {
@@ -742,7 +715,7 @@ export class RunRegistry {
    * durable parent edges and the local relationships standing, so a retry
    * still finds the children to detach. It carries every severed child at
    * once — activations included, which is why a caller must not re-derive the
-   * set from `getActiveChildren` (handles only) and publish `run.detach` for
+   * set from the tracked handles alone and publish `run.detach` for
    * the difference: a native child between turns would be published twice —
    * and a batch spanning run ids belongs to no single run, so no run's own
    * drain would ever hear it refused. A stop that reported done over a
@@ -840,7 +813,6 @@ export class RunRegistry {
       const handle = this.handles.get(childRunId);
       if (handle?.isOwnedBy(parentRunId) === true) handle.detach();
     }
-    this.emitChildActivity(parentRunId);
   }
 
   /**
@@ -982,33 +954,6 @@ export class RunRegistry {
     this.assertAdmitsChild(activation.parentRunId, activation.runId);
     this.childActivations.set(activation.runId, activation);
     return () => this.releaseChildActivation(activation.runId, activation);
-  }
-
-  private emitChildActivity(parentRunId: RunId): void {
-    const items = this.getActiveChildren(parentRunId);
-    for (const listener of [...this.childActivityListeners]) {
-      listener(parentRunId, items);
-    }
-  }
-
-  /** Get active subagent children for a parent run. */
-  getActiveChildren(parentRunId: RunId): ActiveChildInfo[] {
-    const result: ActiveChildInfo[] = [];
-    for (const handle of this.handles.values()) {
-      if (!handle.isOwnedBy(parentRunId)) continue;
-      const { status } = this.getStatus(handle);
-      result.push({
-        identity: handle.identity,
-        agentName: handle.agentName,
-        status,
-        startedAt: handle.startedAt,
-        childRunId: handle.runId,
-        ...(handle.workflowPhase
-          ? { workflowPhase: handle.workflowPhase }
-          : {}),
-      });
-    }
-    return result;
   }
 
   hasActiveChildren(parentRunId: RunId): boolean {
