@@ -8,10 +8,12 @@ import {
   formatCliSkillList,
   readCliRuntimeSkills,
   readCliSkills,
-  skillListRecord,
 } from '@cli/runtime/skills';
 import { defaultSkillSources } from '@skills/skillSources';
-import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import {
+  setRuntimeSkillSources,
+  skillDisplayItem,
+} from '@skills/runtimeSkills';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -95,18 +97,20 @@ describe('CLI skills runtime', () => {
       },
     );
 
-    expect(result.skills.map(skillListRecord)).toMatchObject([
-      {
-        name: 'custom-only',
-        description: 'The custom-only skill.',
-        scope: 'custom',
-      },
-      {
-        name: 'shared-skill',
-        description: 'The custom skill.',
-        scope: 'custom',
-      },
-    ]);
+    expect(result.skills.map((entry) => skillDisplayItem(entry))).toMatchObject(
+      [
+        {
+          name: 'custom-only',
+          description: 'The custom-only skill.',
+          scope: 'custom',
+        },
+        {
+          name: 'shared-skill',
+          description: 'The custom skill.',
+          scope: 'custom',
+        },
+      ],
+    );
     const formatted = formatCliSkillList(result.skills);
     expect(formatted).toContain('custom\tshared-skill\tThe custom skill.');
     expect(formatted).not.toContain(
@@ -179,14 +183,16 @@ describe('CLI skills runtime', () => {
 
     const result = await readCliRuntimeSkills();
 
-    expect(result.skills.map(skillListRecord)).toMatchObject([
-      {
-        name: 'proof-audit',
-        description: 'Review mathematical proof steps.',
-        scope: 'project',
-        sourceLabel: 'project',
-      },
-    ]);
+    expect(result.skills.map((entry) => skillDisplayItem(entry))).toMatchObject(
+      [
+        {
+          name: 'proof-audit',
+          description: 'Review mathematical proof steps.',
+          scope: 'project',
+          label: 'project',
+        },
+      ],
+    );
     expect(result.errors).toEqual([]);
   });
 });

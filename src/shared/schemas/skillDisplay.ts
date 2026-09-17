@@ -10,6 +10,8 @@ export const SkillDisplayItemSchema = z.strictObject({
   scope: ActiveSkillSourceScopeSchema,
   label: z.string(),
   path: z.string(),
+  /** The directory the skill was discovered under, i.e. its source's path. */
+  sourcePath: z.string(),
   enabled: z.boolean(),
 });
 

@@ -3,7 +3,6 @@ import {
   discoverSkillSources,
   type DiscoverSkillSourcesResult,
   type SkillLoadIssue,
-  type SkillSource,
   type SourcedSkill,
 } from '@skills/loadSkills';
 import {
@@ -17,26 +16,6 @@ import {
 
 // Local imports - CLI runtime
 import type { CliContext } from './cliContext';
-
-interface CliSkillRecord {
-  readonly name: string;
-  readonly description: string;
-  readonly scope: SkillSource['scope'];
-  readonly sourceLabel: string;
-  readonly source: string;
-  readonly path: string;
-}
-
-export function skillListRecord(entry: SourcedSkill): CliSkillRecord {
-  return {
-    name: entry.skill.name,
-    description: entry.skill.description,
-    scope: entry.source.scope,
-    sourceLabel: entry.source.label ?? entry.source.scope,
-    source: entry.source.path,
-    path: entry.skill.path,
-  };
-}
 
 export async function readCliSkills(
   context: Pick<CliContext, 'cwd' | 'resourcesPath'>,

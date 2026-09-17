@@ -4,10 +4,13 @@
 
 import { Text } from 'ink';
 
-import { readCliRuntimeSkills, skillListRecord } from '@cli/runtime/skills';
+import { readCliRuntimeSkills } from '@cli/runtime/skills';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { escapeText } from '@shared/utils/xmlEscape';
-import { formatRuntimeSkillActivation } from '@skills/runtimeSkills';
+import {
+  formatRuntimeSkillActivation,
+  skillDisplayItem,
+} from '@skills/runtimeSkills';
 import type {
   DiscoverSkillSourcesResult,
   SourcedSkill,
@@ -45,14 +48,14 @@ export function skillSelectItemsForTui(
   skills: readonly SourcedSkill[],
 ): SelectItem<SkillActivation>[] {
   return skills.map((skill) => {
-    const record = skillListRecord(skill);
+    const item = skillDisplayItem(skill);
     return {
       value: {
-        name: record.name,
+        name: item.name,
         activationPrompt: formatSkillActivationPrompt(skill),
       },
-      label: record.name,
-      description: `${record.sourceLabel} · ${record.description}`,
+      label: item.name,
+      description: `${item.label} · ${item.description}`,
     };
   });
 }
