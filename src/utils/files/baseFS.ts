@@ -182,40 +182,17 @@ export abstract class BaseFS {
 
   // ===== Stream Methods =====
 
+  /**
+   * A read stream over `target`, for the one reader that takes a byte range
+   * off the head of a file instead of loading it whole. No write counterpart:
+   * every writer here goes through {@link write} or {@link writeAtomic}.
+   */
   public static createReadStream(
     this: typeof BaseFS,
     target: string,
-    options?:
-      | BufferEncoding
-      | (fs.ObjectEncodingOptions & {
-          flags?: string;
-          encoding?: BufferEncoding;
-          fd?: number;
-          mode?: number;
-          autoClose?: boolean;
-          start?: number;
-          end?: number;
-          highWaterMark?: number;
-        }),
+    options: { start: number; end: number },
   ): fs.ReadStream {
     return fs.createReadStream(this.preparePath(target), options);
-  }
-
-  public static createWriteStream(
-    this: typeof BaseFS,
-    target: string,
-    options?:
-      | BufferEncoding
-      | (fs.ObjectEncodingOptions & {
-          flags?: string;
-          encoding?: BufferEncoding;
-          fd?: number;
-          mode?: number;
-          autoClose?: boolean;
-          start?: number;
-        }),
-  ): fs.WriteStream {
-    return fs.createWriteStream(this.preparePath(target), options);
   }
 
   // ===== Utility helpers =====

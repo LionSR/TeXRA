@@ -21,6 +21,7 @@ export const workspacePath = fakePath('workspace');
 export const compileFsLayer = rootedFsLayer({
   workspace: workspacePath,
   storage: storagePath,
+  globalStorage: fakePath('global-storage'),
 });
 
 export function runDir(runId: RunId): string {

@@ -1,7 +1,7 @@
 /**
- * The two rooted filesystems of a session, as Effect services (injection
- * plan §5, steps 9-10): the workspace the session works on, and the storage
- * root it keeps its own state under.
+ * The rooted filesystems of a session, as Effect services (injection
+ * plan §5, steps 9-10): the workspace the session works on, the storage
+ * root it keeps its own state under, and the cross-workspace global root.
  *
  * Each value is a {@link RootedFileSystem} — the standard library's
  * `FileSystem` confined to one root — and each layer captures that root when
@@ -34,6 +34,16 @@ export class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
   '@texra/platform/StorageFs',
 ) {}
 
+/**
+ * The cross-workspace global storage root, shared by every session of the
+ * process. The third of the roots `WorkspaceRoots` carries, and the one
+ * `GlobalStorageFS` resolves its paths against.
+ */
+export class GlobalStorageFs extends Context.Service<
+  GlobalStorageFs,
+  RootedFileSystem
+>()('@texra/platform/GlobalStorageFs') {}
+
 /** A rooted view built from the `FileSystem` and `Path` the process provides. */
 function rootedLayer<I>(
   tag: Context.Key<I, RootedFileSystem>,
@@ -49,7 +59,7 @@ function rootedLayer<I>(
 }
 
 /**
- * Both rooted filesystems of one session, for the host boundaries that hold
+ * Every rooted filesystem of one session, for the host boundaries that hold
  * a session's roots and run a program over its files. `roots.workspace` is
  * `undefined` for the session with no folder open: the view still exists, and
  * every operation on it fails with `BadArgument` instead of resolving against
@@ -58,15 +68,16 @@ function rootedLayer<I>(
  * filesystem here would be a second base.
  */
 export function sessionFsLayer(
-  roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
+  roots: Pick<WorkspaceRoots, 'workspace' | 'storage' | 'globalStorage'>,
 ): Layer.Layer<
-  WorkspaceFs | StorageFs,
+  WorkspaceFs | StorageFs | GlobalStorageFs,
   never,
   FileSystem.FileSystem | Path.Path
 > {
-  return Layer.merge(
+  return Layer.mergeAll(
     rootedLayer(WorkspaceFs, roots.workspace),
     rootedLayer(StorageFs, roots.storage),
+    rootedLayer(GlobalStorageFs, roots.globalStorage),
   );
 }
 
@@ -76,12 +87,14 @@ export function sessionFsLayer(
  * have to name `Effect` as a value to provide a layer.
  */
 export function withSessionFs<A, E, R>(
-  roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
-  program: Effect.Effect<A, E, R | WorkspaceFs | StorageFs>,
+  roots: Pick<WorkspaceRoots, 'workspace' | 'storage' | 'globalStorage'>,
+  program: Effect.Effect<A, E, R | WorkspaceFs | StorageFs | GlobalStorageFs>,
 ): Effect.Effect<
   A,
   E,
-  Exclude<R, WorkspaceFs | StorageFs> | FileSystem.FileSystem | Path.Path
+  | Exclude<R, WorkspaceFs | StorageFs | GlobalStorageFs>
+  | FileSystem.FileSystem
+  | Path.Path
 > {
   return Effect.provide(program, sessionFsLayer(roots));
 }

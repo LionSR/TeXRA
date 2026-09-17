@@ -71,6 +71,7 @@ describe('Save-as-copy stem and workspace pack', () => {
             rootedFsLayer({
               workspace: workspacePath,
               storage: path.join(workspacePath, '.texra'),
+              globalStorage: path.join(workspacePath, '.texra-global'),
             }),
           ),
         );
@@ -125,6 +126,7 @@ describe('Save-as-copy stem and workspace pack', () => {
           rootedFsLayer({
             workspace: workspacePath,
             storage: path.join(workspacePath, '.texra'),
+            globalStorage: path.join(workspacePath, '.texra-global'),
           }),
         ),
       );
@@ -163,6 +165,7 @@ describe('Save-as-copy stem and workspace pack', () => {
             rootedFsLayer({
               workspace: workspacePath,
               storage: path.join(workspacePath, '.texra'),
+              globalStorage: path.join(workspacePath, '.texra-global'),
             }),
           ),
         );
